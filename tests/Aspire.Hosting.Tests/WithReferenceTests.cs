@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Tests;
 
@@ -853,6 +856,109 @@ public class WithReferenceTests
             relationships.Any(relationship => ReferenceEquals(relationship.Resource, annotatedPropertyParameter.Resource)));
     }
 
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    public async Task ThrowingConnectionMetadataDoesNotPreventModelConstruction(
+        bool throwOnConnectionString,
+        bool throwOnConnectionProperties,
+        bool throwOnNestedConnectionString)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var connectionStringParameter = builder.AddParameter("connectionStringParameter", () => "connection-value");
+        var connectionPropertyParameter = builder.AddParameter("connectionPropertyParameter", () => "property-value");
+        var annotatedPropertyParameter = builder.AddParameter("annotatedPropertyParameter", () => "annotated-value");
+        var exception = new InvalidOperationException("Invalid connection metadata.");
+        var resource = builder.AddResource(new TestResourceWithReferencedProperties(
+            "resource", connectionStringParameter.Resource, connectionPropertyParameter.Resource)
+        {
+            ConnectionStringException = throwOnConnectionString ? exception : null,
+            ConnectionPropertiesException = throwOnConnectionProperties ? exception : null
+        });
+        if (throwOnNestedConnectionString)
+        {
+            var nestedResource = builder.AddResource(new TestResourceWithReferencedProperties(
+                "nested", connectionStringParameter.Resource, connectionPropertyParameter.Resource)
+            {
+                ConnectionStringException = exception
+            });
+            resource.WithConnectionProperty("nested", ReferenceExpression.Create($"{nestedResource.Resource}"));
+        }
+        resource.WithConnectionProperty("annotated", ReferenceExpression.Create($"{annotatedPropertyParameter}"));
+        var consumer = builder.AddExecutable("consumer", "unused", ".").WithReference(resource);
+
+        using var app = builder.Build();
+
+        var expectedReferences = new List<IResource> { resource.Resource };
+        if (!throwOnConnectionString)
+        {
+            expectedReferences.Add(connectionStringParameter.Resource);
+        }
+        expectedReferences.Add(connectionPropertyParameter.Resource);
+        expectedReferences.Add(annotatedPropertyParameter.Resource);
+        Assert.Equal(
+            expectedReferences,
+            consumer.Resource.Annotations.OfType<ResourceRelationshipAnnotation>().Select(relationship => relationship.Resource));
+
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(
+            app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()), CancellationToken.None).DefaultTimeout();
+
+        var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        var discoveryLogs = new ConcurrentQueue<string>();
+        // BeforeStartEvent assigns the DCP instance name used by resource loggers.
+        using var subscription = resourceLoggerService.Subscribe(consumer.Resource.GetResolvedResourceName(), logs =>
+        {
+            foreach (var log in logs)
+            {
+                discoveryLogs.Enqueue(log.Content);
+            }
+        });
+        Assert.Equal(
+            (throwOnConnectionString ? 1 : 0) + (throwOnConnectionProperties ? 1 : 0) + (throwOnNestedConnectionString ? 1 : 0),
+            discoveryLogs.Count);
+        Assert.All(discoveryLogs, log =>
+        {
+            Assert.Contains("Failed to discover referenced parameters for resource 'resource'.", log);
+            Assert.Contains(exception.Message, log);
+        });
+
+        var logger = new FakeLogger();
+        var configurationTask = ExecutionConfigurationBuilder.Create(consumer.Resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(builder.ExecutionContext, logger, CancellationToken.None);
+
+        if (throwOnConnectionProperties)
+        {
+            Assert.Same(exception, await Assert.ThrowsAsync<InvalidOperationException>(() => configurationTask).DefaultTimeout());
+        }
+        else
+        {
+            var configuration = await configurationTask.DefaultTimeout();
+            var aggregate = Assert.IsType<AggregateException>(configuration.Exception);
+            Assert.Same(exception, Assert.Single(aggregate.InnerExceptions));
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ConnectionMetadataDiscoveryPreservesCancellation(bool throwOnConnectionString)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var parameter = builder.AddParameter("value");
+        var exception = new OperationCanceledException();
+        var resource = builder.AddResource(new TestResourceWithReferencedProperties("resource", parameter.Resource, parameter.Resource)
+        {
+            ConnectionStringException = throwOnConnectionString ? exception : null,
+            ConnectionPropertiesException = throwOnConnectionString ? null : exception
+        });
+        var consumer = builder.AddExecutable("consumer", "unused", ".");
+
+        Assert.Same(exception, Assert.Throws<OperationCanceledException>(() => consumer.WithReference(resource)));
+    }
+
     [Fact]
     public async Task ResourceWithConnectionPropertiesExtensionOverridesDefault()
     {
@@ -1244,11 +1350,22 @@ public class WithReferenceTests
         ParameterResource connectionStringParameter,
         ParameterResource connectionPropertyParameter) : Resource(name), IResourceWithConnectionString
     {
-        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"Value={connectionStringParameter}");
+        public Exception? ConnectionStringException { get; init; }
+
+        public Exception? ConnectionPropertiesException { get; init; }
+
+        public ReferenceExpression ConnectionStringExpression => ConnectionStringException is { } exception
+            ? throw exception
+            : ReferenceExpression.Create($"Value={connectionStringParameter}");
 
         public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties()
         {
             yield return new("Property", ReferenceExpression.Create($"{connectionPropertyParameter}"));
+
+            if (ConnectionPropertiesException is { } exception)
+            {
+                throw exception;
+            }
         }
     }
 

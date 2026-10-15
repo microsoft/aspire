@@ -1962,6 +1962,74 @@ public class ParameterProcessorTests
         Assert.Equal("newValue", await existingValueTask.DefaultTimeout());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeleteParameterCoreAsync_WithOverlappingValueChange_NotifiesReplacementValueTask(bool replaceValueTask)
+    {
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var processor = CreateParameterProcessor(interactionService: interactionService);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+        await processor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        var notificationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resumeNotification = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var notifiedValueTasks = new List<Task<string?>?>();
+        processor.ParameterBecameUnresolved += async changedParameter =>
+        {
+            Assert.Same(parameter, changedParameter);
+            notifiedValueTasks.Add(changedParameter.WaitForValueTcs?.Task);
+            if (notifiedValueTasks.Count == 1)
+            {
+                notificationStarted.SetResult();
+                await resumeNotification.Task;
+            }
+        };
+
+        var firstDelete = processor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None);
+        Task valueChange = Task.CompletedTask;
+        Task<ExecuteCommandResult>? secondDelete = null;
+        try
+        {
+            await notificationStarted.Task.DefaultTimeout();
+            var originalValueTask = parameter.WaitForValueTcs?.Task;
+            Assert.NotNull(originalValueTask);
+            Assert.False(originalValueTask.IsCompleted);
+
+            // Keep the first unresolved notification inside the per-parameter lock while a set
+            // completes its task and a subsequent delete replaces it before the set is observed.
+            if (replaceValueTask)
+            {
+                valueChange = parameter.SetValueAsync("supersededValue");
+                Assert.True(originalValueTask.IsCompletedSuccessfully);
+            }
+            secondDelete = processor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None);
+            var currentValueTask = parameter.WaitForValueTcs?.Task;
+            Assert.NotNull(currentValueTask);
+            Assert.False(currentValueTask.IsCompleted);
+            Assert.Equal(replaceValueTask, !ReferenceEquals(originalValueTask, currentValueTask));
+
+            resumeNotification.SetResult();
+            await Task.WhenAll(firstDelete, valueChange, secondDelete).DefaultTimeout();
+            Assert.True((await firstDelete).Success);
+            Assert.True((await secondDelete).Success);
+            Assert.Equal(
+                replaceValueTask ? [originalValueTask, currentValueTask] : new[] { originalValueTask },
+                notifiedValueTasks);
+        }
+        finally
+        {
+            resumeNotification.TrySetResult();
+            await firstDelete.DefaultTimeout();
+            await valueChange.DefaultTimeout();
+            if (secondDelete is not null)
+            {
+                await secondDelete.DefaultTimeout();
+            }
+            await parameter.SetValueAsync("cleanupValue").DefaultTimeout();
+        }
+    }
+
     [Fact]
     public async Task DeleteParameterCoreAsync_ForOptionalParameterClearsValueWithoutPrompting()
     {

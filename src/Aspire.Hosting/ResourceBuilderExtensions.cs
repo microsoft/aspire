@@ -559,7 +559,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(value);
 
-        WalkAndLinkResourceReferences(builder, [value], ResourceLinkTargets.All);
+        WalkAndLinkResourceReferences(builder, [value], ResourceLinkTargets.All, onDiscoveryFailure: null);
 
         return builder.WithEnvironment(context =>
         {
@@ -586,7 +586,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(value);
 
-        WalkAndLinkResourceReferences(builder, [value], ResourceLinkTargets.All);
+        WalkAndLinkResourceReferences(builder, [value], ResourceLinkTargets.All, onDiscoveryFailure: null);
 
         return builder.WithEnvironment(context =>
         {
@@ -948,7 +948,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(args);
 
-        WalkAndLinkResourceReferences(builder, args, ResourceLinkTargets.All);
+        WalkAndLinkResourceReferences(builder, args, ResourceLinkTargets.All, onDiscoveryFailure: null);
 
         return builder.WithArgs(context => context.Args.AddRange(args));
     }
@@ -1383,16 +1383,31 @@ public static class ResourceBuilderExtensions
         var injectedValues = new List<object>();
         if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
         {
-            injectedValues.Add(resource.ConnectionStringExpression);
+            try
+            {
+                injectedValues.Add(resource.ConnectionStringExpression);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                LogDiscoveryFailure(ex);
+            }
         }
 
         if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionProperties))
         {
-            injectedValues.AddRange(resource.GetConnectionProperties().Select(static property => property.Value));
+            try
+            {
+                injectedValues.AddRange(resource.GetConnectionProperties().Select(static property => property.Value));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                LogDiscoveryFailure(ex);
+            }
+
             injectedValues.AddRange(resource.Annotations.OfType<ConnectionPropertyAnnotation>().Select(static annotation => annotation.Value));
         }
 
-        WalkAndLinkResourceReferences(builder, injectedValues, ResourceLinkTargets.Parameters);
+        WalkAndLinkResourceReferences(builder, injectedValues, ResourceLinkTargets.Parameters, LogDiscoveryFailure);
 
         return builder.WithEnvironment(context =>
         {
@@ -1426,6 +1441,19 @@ public static class ResourceBuilderExtensions
                 }
             }
         });
+
+        void LogDiscoveryFailure(Exception exception)
+        {
+            // Discovery is informational. Defer diagnostics until a logger is available and let
+            // normal environment evaluation report invalid metadata through the resource lifecycle.
+            builder.ApplicationBuilder.OnBeforeStart((@event, _) =>
+            {
+                builder.Resource.GetLogger(@event.Services).LogDebug(
+                    exception, "Failed to discover referenced parameters for resource '{ResourceName}'.", resource.Name);
+
+                return Task.CompletedTask;
+            });
+        }
     }
 
     internal static void ValidateConnectionStringReference(EnvironmentCallbackContext context, ConnectionStringReference candidate)
@@ -4922,7 +4950,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(expression);
 
-        WalkAndLinkResourceReferences(builder, expression.ValueProviders, ResourceLinkTargets.All);
+        WalkAndLinkResourceReferences(builder, expression.ValueProviders, ResourceLinkTargets.All, onDiscoveryFailure: null);
 
         return builder;
     }
@@ -4936,7 +4964,11 @@ public static class ResourceBuilderExtensions
         All = Resources | Parameters
     }
 
-    private static void WalkAndLinkResourceReferences<T>(IResourceBuilder<T> builder, IEnumerable<object> values, ResourceLinkTargets linkTargets)
+    private static void WalkAndLinkResourceReferences<T>(
+        IResourceBuilder<T> builder,
+        IEnumerable<object> values,
+        ResourceLinkTargets linkTargets,
+        Action<Exception>? onDiscoveryFailure)
         where T : IResource
     {
         var processed = new HashSet<(object Value, ResourceLinkTargets LinkTargets)>();
@@ -4976,9 +5008,16 @@ public static class ResourceBuilderExtensions
 
             if (value is IValueWithReferences valueWithReferences)
             {
-                foreach (var reference in valueWithReferences.References)
+                try
                 {
-                    Walk(reference, linkTargets);
+                    foreach (var reference in valueWithReferences.References)
+                    {
+                        Walk(reference, linkTargets);
+                    }
+                }
+                catch (Exception ex) when (onDiscoveryFailure is not null && ex is not OperationCanceledException)
+                {
+                    onDiscoveryFailure(ex);
                 }
             }
         }

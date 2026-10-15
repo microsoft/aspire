@@ -1632,8 +1632,10 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         }
     }
 
-    [Fact]
-    public async Task OnResourceStarting_ParameterDeletedWhileWaitingForDependency_TracksReplacementValue()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnResourceStarting_ParameterDeletedWhileWaitingForDependency_TracksReplacementValue(bool overlapValueChanges)
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
@@ -1679,7 +1681,40 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             container.Resource.Name,
             e => e.Snapshot.State?.Text == KnownResourceStates.UnresolvedParameters &&
                 e.Snapshot.Properties.Any(p => p.Name == KnownProperties.Resource.WaitingFor));
-        await parameterProcessor.DeleteParameterCoreAsync(parameter.Resource, new InteractionInputCollection([]), CancellationToken.None);
+        if (overlapValueChanges)
+        {
+            var notificationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var resumeNotification = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var notificationCount = 0;
+            parameterProcessor.ParameterBecameUnresolved += async _ =>
+            {
+                if (Interlocked.Increment(ref notificationCount) == 1)
+                {
+                    notificationStarted.SetResult();
+                    await resumeNotification.Task;
+                }
+            };
+
+            var firstDelete = parameterProcessor.DeleteParameterCoreAsync(parameter.Resource, new InteractionInputCollection([]), CancellationToken.None);
+            Task valueChange;
+            Task secondDelete;
+            try
+            {
+                await notificationStarted.Task.DefaultTimeout();
+                valueChange = parameter.Resource.SetValueAsync("superseded-value");
+                secondDelete = parameterProcessor.DeleteParameterCoreAsync(parameter.Resource, new InteractionInputCollection([]), CancellationToken.None);
+            }
+            finally
+            {
+                resumeNotification.TrySetResult();
+            }
+            await Task.WhenAll(firstDelete, valueChange, secondDelete).DefaultTimeout();
+            Assert.Equal(2, Volatile.Read(ref notificationCount));
+        }
+        else
+        {
+            await parameterProcessor.DeleteParameterCoreAsync(parameter.Resource, new InteractionInputCollection([]), CancellationToken.None);
+        }
         _ = await replacementBlockerTask.DefaultTimeout();
 
         var configurationTask = ExecutionConfigurationBuilder.Create(container.Resource)

@@ -28,7 +28,7 @@ public sealed class ParameterProcessor(
     internal const string SetParameterValueName = "Value";
 
     private readonly List<ParameterResource> _unresolvedParameters = [];
-    private readonly Dictionary<ParameterResource, long> _unresolvedParameterVersions = [];
+    private readonly Dictionary<ParameterResource, (long Version, Task<string?>? ValueTask)> _unresolvedParameterStates = [];
     private readonly HashSet<ParameterResource> _observedParameters = [];
     private readonly Dictionary<ParameterResource, SemaphoreSlim> _parameterUpdateLocks = [];
     private readonly object _observedParametersLock = new();
@@ -838,7 +838,7 @@ public sealed class ParameterProcessor(
             lock (_unresolvedParametersLock)
             {
                 unresolvedParameters.Remove(parameter);
-                _unresolvedParameterVersions.Remove(parameter);
+                _unresolvedParameterStates.Remove(parameter);
 
                 if (unresolvedParameters.Count == 0 && _allParametersResolvedCts is { IsCancellationRequested: false } cts)
                 {
@@ -858,14 +858,18 @@ public sealed class ParameterProcessor(
     {
         lock (_unresolvedParametersLock)
         {
-            if (_unresolvedParameters.Contains(parameter))
+            var valueTask = parameter.WaitForValueTcs?.Task;
+            if (_unresolvedParameterStates.TryGetValue(parameter, out var previousState))
             {
-                _unresolvedParameterVersions[parameter] = version;
-                return false;
+                _unresolvedParameterStates[parameter] = (version, valueTask);
+
+                // A set can be superseded by a delete before its observer removes the parameter.
+                // A replacement value task still needs a new dependent-resource monitor.
+                return !ReferenceEquals(previousState.ValueTask, valueTask);
             }
 
             _unresolvedParameters.Add(parameter);
-            _unresolvedParameterVersions.Add(parameter, version);
+            _unresolvedParameterStates.Add(parameter, (version, valueTask));
             return true;
         }
     }
@@ -909,7 +913,7 @@ public sealed class ParameterProcessor(
         {
             lock (_unresolvedParametersLock)
             {
-                return [.. unresolvedParameters.Select(parameter => (parameter, _unresolvedParameterVersions[parameter]))];
+                return [.. unresolvedParameters.Select(parameter => (parameter, _unresolvedParameterStates[parameter].Version))];
             }
         }
 
