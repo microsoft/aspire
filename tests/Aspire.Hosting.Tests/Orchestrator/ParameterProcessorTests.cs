@@ -1904,6 +1904,66 @@ public class ParameterProcessorTests
     }
 
     [Fact]
+    public async Task DeleteParameterCoreAsync_WithoutInteraction_TracksUnresolvedParameterWithoutPrompting()
+    {
+        var interactionService = new TestInteractionService { IsAvailable = false };
+        var processor = CreateParameterProcessor(interactionService: interactionService);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+        var notifications = new List<ParameterResource>();
+        processor.ParameterBecameUnresolved += changedParameter =>
+        {
+            notifications.Add(changedParameter);
+            return Task.CompletedTask;
+        };
+
+        await processor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        var result = await processor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.True(processor.HasUnresolvedParameters);
+        Assert.True(processor.IsParameterUnresolved(parameter));
+        Assert.Same(parameter, Assert.Single(notifications));
+        Assert.NotNull(parameter.WaitForValueTcs);
+        Assert.False(parameter.WaitForValueTcs.Task.IsCompleted);
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
+
+        await parameter.SetValueAsync("resolvedValue").DefaultTimeout();
+
+        Assert.False(processor.HasUnresolvedParameters);
+        Assert.False(processor.IsParameterUnresolved(parameter));
+        Assert.Equal("resolvedValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task DeleteParameterCoreAsync_WhenInteractionBecomesAvailable_PromptsForExistingPendingValue()
+    {
+        var interactionService = new TestInteractionService { IsAvailable = false };
+        var processor = CreateParameterProcessor(interactionService: interactionService);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+
+        await processor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        await processor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None).DefaultTimeout();
+        var pendingValueTask = parameter.WaitForValueTcs?.Task;
+        Assert.NotNull(pendingValueTask);
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
+
+        try
+        {
+            interactionService.IsAvailable = true;
+            await processor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None).DefaultTimeout();
+
+            Assert.Same(pendingValueTask, parameter.WaitForValueTcs?.Task);
+            var notification = await interactionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+            Assert.Equal(InteractionStrings.ParametersBarTitle, notification.Title);
+        }
+        finally
+        {
+            await parameter.SetValueAsync("cleanupValue").DefaultTimeout();
+        }
+    }
+
+    [Fact]
     public async Task DeleteParameterCoreAsync_DuringResolutionCancellationStartsNewResolutionTask()
     {
         var testInteractionService = new TestInteractionService { IsAvailable = true };

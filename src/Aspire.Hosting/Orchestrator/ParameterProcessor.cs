@@ -296,9 +296,14 @@ public sealed class ParameterProcessor(
 
             if (eventArgs.Exception is MissingParameterValueException)
             {
-                if (interactionService.IsAvailable && AddUnresolvedParameter(parameterResource, eventArgs.Version))
+                // Non-interactive commands suppress prompts, not tracking of startup blockers.
+                if (AddUnresolvedParameter(parameterResource, eventArgs.Version))
                 {
                     await NotifyParameterBecameUnresolvedAsync(parameterResource).ConfigureAwait(false);
+                }
+
+                if (interactionService.IsAvailable)
+                {
                     _ = EnsureParameterResolutionTaskRunningAsync();
                 }
 

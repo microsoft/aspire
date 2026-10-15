@@ -1899,8 +1899,10 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             Assert.IsType<string[]>(Assert.Single(unresolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
     }
 
-    [Fact]
-    public async Task OnResourceStarting_AfterParameterValueDeleted_PublishesParameterName()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnResourceStarting_AfterParameterValueDeleted_PublishesParameterName(bool nonInteractive)
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
@@ -1922,14 +1924,19 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         await appOrchestrator.RunApplicationAsync();
         await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
 
-        await parameterProcessor.DeleteParameterCoreAsync(parameter.Resource, new InteractionInputCollection([]), CancellationToken.None);
-        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Container, container.Resource, "api-dcp"));
+        using (var scope = nonInteractive ? InteractionService.StartNonInteractiveScope() : default)
+        {
+            await parameterProcessor.DeleteParameterCoreAsync(parameter.Resource, new InteractionInputCollection([]), CancellationToken.None).DefaultTimeout();
+            await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Container, container.Resource, "api-dcp")).DefaultTimeout();
+        }
 
         Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var unresolvedEvent));
         Assert.Equal(KnownResourceStates.UnresolvedParameters, unresolvedEvent.Snapshot.State?.Text);
         Assert.Equal(
             ["value"],
             Assert.IsType<string[]>(Assert.Single(unresolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+
+        await parameter.Resource.SetValueAsync("cleanup-value").DefaultTimeout();
     }
 
     [Fact]
