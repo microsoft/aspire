@@ -1834,6 +1834,97 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MonitorUnresolvedParameters_WhenMissingValuesAreReplaced_CompletesSupersededMonitors(bool faultReplacementValue)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var first = builder.AddParameter("first", () => "first-value");
+        var second = builder.AddParameter("second", () => throw new MissingParameterValueException("Missing second parameter."));
+        var container = builder.AddContainer("api", "test-image")
+            .WithEnvironment("FIRST", first)
+            .WithEnvironment("SECOND", second);
+
+        using var app = builder.Build();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var orchestrator = CreateOrchestrator(model, notifications, out var processor, dcpEvents: events);
+        await orchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(cts.Token)).DefaultTimeout();
+
+        var resourceIds = new[] { container.Resource.Name, "api-dcp" };
+        foreach (var resourceId in resourceIds)
+        {
+            await notifications.PublishUpdateAsync(container.Resource, resourceId, snapshot => snapshot with
+            {
+                State = new ResourceStateSnapshot(KnownResourceStates.UnresolvedParameters, KnownResourceStateStyles.Warn),
+                Properties = snapshot.Properties.SetResourceProperty(KnownProperties.Resource.UnresolvedParameters, new[] { second.Resource.Name })
+            }).DefaultTimeout();
+        }
+
+        var secondValueTask = second.Resource.WaitForValueTcs!.Task;
+        try
+        {
+            for (var i = 0; i < 10; i++)
+            {
+                await first.Resource.SetValueAsync("first-value", cts.Token).DefaultTimeout();
+                var valueTasks = CaptureValueTasks();
+                var monitors = resourceIds.Select(resourceId =>
+                    orchestrator.MonitorUnresolvedParametersAsync(container.Resource, resourceId, valueTasks, cts.Token)).ToArray();
+
+                Assert.All(monitors, monitor => Assert.False(monitor.IsCompleted));
+                if (faultReplacementValue)
+                {
+                    await first.Resource.SetValueAsync(null, cts.Token).DefaultTimeout();
+                }
+                else
+                {
+                    var result = await processor.DeleteParameterCoreAsync(first.Resource, new InteractionInputCollection([]), cts.Token).DefaultTimeout();
+                    Assert.True(result.Success);
+                }
+
+                // Retire every old scope without resolving or canceling the other parameter's shared task.
+                await Task.WhenAll(monitors).DefaultTimeout();
+                Assert.False(secondValueTask.IsCompleted);
+                Assert.Same(secondValueTask, second.Resource.WaitForValueTcs!.Task);
+                Assert.True(notifications.TryGetCurrentState(container.Resource.Name, out var unresolvedEvent));
+                Assert.Equal(KnownResourceStates.UnresolvedParameters, unresolvedEvent.Snapshot.State?.Text);
+                Assert.Equal(
+                    faultReplacementValue ? ["second"] : new[] { "first", "second" },
+                    Assert.IsType<string[]>(Assert.Single(unresolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+            }
+
+            var currentValueTasks = CaptureValueTasks();
+            var currentMonitors = resourceIds.Select(resourceId =>
+                orchestrator.MonitorUnresolvedParametersAsync(container.Resource, resourceId, currentValueTasks, cts.Token)).ToArray();
+            await first.Resource.SetValueAsync("final-first-value", cts.Token).DefaultTimeout();
+            Assert.All(currentMonitors, monitor => Assert.False(monitor.IsCompleted));
+            await second.Resource.SetValueAsync("second-value", cts.Token).DefaultTimeout();
+            await Task.WhenAll(currentMonitors).DefaultTimeout();
+
+            foreach (var resourceId in resourceIds)
+            {
+                Assert.True(notifications.TryGetCurrentState(resourceId, out var startingEvent));
+                Assert.Equal(KnownResourceStates.Starting, startingEvent.Snapshot.State?.Text);
+            }
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            await first.Resource.SetValueAsync("cleanup-first-value").DefaultTimeout();
+            await second.Resource.SetValueAsync("cleanup-second-value").DefaultTimeout();
+        }
+
+        Dictionary<ParameterResource, Task<string?>?> CaptureValueTasks() => new()
+        {
+            [first.Resource] = first.Resource.WaitForValueTcs!.Task,
+            [second.Resource] = second.Resource.WaitForValueTcs!.Task
+        };
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -2088,6 +2179,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         // The third parameter covers both an incomplete old list and an old list with no blockers left.
         var staleMonitorTask = appOrchestrator.MonitorUnresolvedParametersAsync(
             container.Resource, container.Resource.Name, previousValueTasks, TestContext.Current.CancellationToken);
+        await staleMonitorTask.DefaultTimeout();
         Assert.True(resourceNotificationService.TryGetCurrentState(container.Resource.Name, out var currentEvent));
         Assert.Equal(KnownResourceStates.UnresolvedParameters, currentEvent.Snapshot.State?.Text);
         Assert.Equal(replacementEvent.Snapshot.Version, currentEvent.Snapshot.Version);
@@ -2103,12 +2195,74 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             await third.Resource.SetValueAsync("third-value", TestContext.Current.CancellationToken).DefaultTimeout();
         }
 
-        await staleMonitorTask.DefaultTimeout();
         await startingTask.DefaultTimeout();
     }
 
     [Fact]
-    public async Task MonitorUnresolvedParameters_WhenResolvedValueIsReassigned_StillClearsOtherBlockers()
+    public async Task MonitorUnresolvedParameters_WhenCapturedObserverRunsAfterCancellation_DoesNotFailValueChange()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var first = builder.AddParameter("first", () => "first-value");
+        var second = builder.AddParameter("second", () => throw new MissingParameterValueException("Missing second parameter."));
+        var container = builder.AddContainer("api", "test-image")
+            .WithEnvironment("FIRST", first)
+            .WithEnvironment("SECOND", second);
+
+        using var app = builder.Build();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var orchestrator = CreateOrchestrator(model, notifications, out var processor, dcpEvents: events);
+        await orchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(cts.Token)).DefaultTimeout();
+
+        var notificationCaptured = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resumeNotification = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        first.Resource.ValueChanged += PauseNotificationAsync;
+        var monitorTask = orchestrator.MonitorUnresolvedParametersAsync(
+            container.Resource, container.Resource.Name,
+            new Dictionary<ParameterResource, Task<string?>?>
+            {
+                [first.Resource] = first.Resource.WaitForValueTcs!.Task,
+                [second.Resource] = second.Resource.WaitForValueTcs!.Task
+            }, cts.Token);
+        var deleteTask = processor.DeleteParameterCoreAsync(first.Resource, new InteractionInputCollection([]), CancellationToken.None);
+
+        try
+        {
+            await notificationCaptured.Task.DefaultTimeout();
+            await cts.CancelAsync();
+            await monitorTask.DefaultTimeout();
+            Assert.False(second.Resource.WaitForValueTcs!.Task.IsCompleted);
+
+            resumeNotification.SetResult();
+            Assert.True((await deleteTask.DefaultTimeout()).Success);
+        }
+        finally
+        {
+            resumeNotification.TrySetResult();
+            await deleteTask.DefaultTimeout();
+            first.Resource.ValueChanged -= PauseNotificationAsync;
+            await cts.CancelAsync();
+            await first.Resource.SetValueAsync("cleanup-first-value").DefaultTimeout();
+            await second.Resource.SetValueAsync("cleanup-second-value").DefaultTimeout();
+        }
+
+        async Task PauseNotificationAsync(ParameterResource parameter, ParameterResourceValueChangedEventArgs eventArgs, CancellationToken token)
+        {
+            if (eventArgs.Exception is MissingParameterValueException)
+            {
+                notificationCaptured.TrySetResult();
+                await resumeNotification.Task;
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MonitorUnresolvedParameters_WhenResolvedValueIsReassigned_StillClearsOtherBlockers(bool failReassignment)
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
@@ -2135,7 +2289,14 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             [second.Resource] = second.Resource.WaitForValueTcs!.Task
         };
         await first.Resource.SetValueAsync("first-value", TestContext.Current.CancellationToken).DefaultTimeout();
-        await first.Resource.SetValueAsync("updated-value", TestContext.Current.CancellationToken).DefaultTimeout();
+        if (failReassignment)
+        {
+            await first.Resource.SetExceptionAsync(new InvalidOperationException("Invalid first parameter."), TestContext.Current.CancellationToken).DefaultTimeout();
+        }
+        else
+        {
+            await first.Resource.SetValueAsync("updated-value", TestContext.Current.CancellationToken).DefaultTimeout();
+        }
         Assert.NotSame(previousValueTasks[first.Resource], first.Resource.WaitForValueTcs!.Task);
 
         var monitorTask = appOrchestrator.MonitorUnresolvedParametersAsync(

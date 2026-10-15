@@ -412,43 +412,90 @@ internal sealed class ApplicationOrchestrator
         IReadOnlyDictionary<ParameterResource, Task<string?>?> parameterValueTasks,
         CancellationToken cancellationToken)
     {
+        using var monitorCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCancellation.Token);
+        var monitorToken = monitorCancellation.Token;
+        var superseded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Subscribe before checking generations so a replacement cannot be missed.
+        foreach (var parameter in parameterValueTasks.Keys)
+        {
+            parameter.ValueChanged += OnParameterValueChangedAsync;
+        }
+
         try
         {
-            await Task.WhenAll(parameterValueTasks.Values.Select(WaitForParameterAsync)).ConfigureAwait(false);
-
-            async Task WaitForParameterAsync(Task<string?>? parameterTask)
+            if (parameterValueTasks.Any(parameter => IsParameterValueTaskSuperseded(parameter.Key, parameter.Value)))
             {
-                if (parameterTask is null)
-                {
-                    return;
-                }
-
-                try
-                {
-                    await parameterTask.WaitAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch
-                {
-                    // A completed parameter task no longer blocks startup. The normal resource
-                    // startup path reports the parameter failure separately.
-                }
-
-                cancellationToken.ThrowIfCancellationRequested();
-                await PublishUnresolvedParametersUpdateAsync(resource, resourceId, parameterValueTasks).ConfigureAwait(false);
+                return;
             }
+
+            var waitTask = Task.WhenAll(parameterValueTasks.Values.Select(WaitForParameterAsync));
+            if (await Task.WhenAny(waitTask, superseded.Task).ConfigureAwait(false) == superseded.Task)
+            {
+                // Cancel only this monitor's waits; shared parameter tasks still gate startup.
+                await monitorCancellation.CancelAsync().ConfigureAwait(false);
+            }
+
+            await waitTask.ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (monitorToken.IsCancellationRequested)
         {
         }
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Failed to update unresolved parameters for resource '{ResourceName}'.", resource.Name);
         }
+        finally
+        {
+            foreach (var parameter in parameterValueTasks.Keys)
+            {
+                parameter.ValueChanged -= OnParameterValueChangedAsync;
+            }
+        }
+
+        Task OnParameterValueChangedAsync(ParameterResource parameter, ParameterResourceValueChangedEventArgs eventArgs, CancellationToken token)
+        {
+            if (IsParameterValueTaskSuperseded(parameter, parameterValueTasks[parameter]))
+            {
+                // A captured observer can run after unsubscription and token-source disposal.
+                // Signaling a task avoids canceling a disposed source from that observer.
+                superseded.TrySetResult();
+            }
+
+            return Task.CompletedTask;
+        }
+
+        async Task WaitForParameterAsync(Task<string?>? parameterTask)
+        {
+            if (parameterTask is null)
+            {
+                return;
+            }
+
+            try
+            {
+                await parameterTask.WaitAsync(monitorToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (monitorToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                // A completed parameter task no longer blocks startup. The normal resource
+                // startup path reports the parameter failure separately.
+            }
+
+            monitorToken.ThrowIfCancellationRequested();
+            await PublishUnresolvedParametersUpdateAsync(resource, resourceId, parameterValueTasks).ConfigureAwait(false);
+        }
     }
+
+    // Pending and missing-value replacements start successor monitors; successful assignments and ordinary failures do not.
+    private static bool IsParameterValueTaskSuperseded(ParameterResource parameter, Task<string?>? valueTask) =>
+        parameter.WaitForValueTcs?.Task is { } currentValueTask &&
+        !ReferenceEquals(currentValueTask, valueTask) &&
+        (!currentValueTask.IsCompleted || currentValueTask.Exception?.InnerException is MissingParameterValueException);
 
     private async Task OnParameterBecameUnresolved(ParameterResource parameter)
     {
@@ -474,12 +521,10 @@ internal sealed class ApplicationOrchestrator
         CustomResourceSnapshot UpdateSnapshot(CustomResourceSnapshot snapshot)
         {
             // Capture all referenced value tasks, including resolved ones. A clear can replace any of them
-            // while an older monitor's continuation is pending. Validate pending generations under the snapshot
+            // while an older monitor's continuation is pending. Validate unresolved generations under the snapshot
             // publication lock so an obsolete monitor cannot overwrite newer blockers. Reassigning an already
             // resolved value does not introduce a blocker or start a new monitor, so it must not invalidate this one.
-            if (parameterValueTasks.Any(parameter =>
-                parameter.Key.WaitForValueTcs?.Task is { IsCompleted: false } currentValueTask &&
-                !ReferenceEquals(currentValueTask, parameter.Value)))
+            if (parameterValueTasks.Any(parameter => IsParameterValueTaskSuperseded(parameter.Key, parameter.Value)))
             {
                 return snapshot;
             }
