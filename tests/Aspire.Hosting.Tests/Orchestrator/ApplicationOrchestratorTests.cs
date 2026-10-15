@@ -14,6 +14,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests.Orchestrator;
@@ -1629,6 +1630,98 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             return await ExecutionConfigurationBuilder.Create(container.Resource)
                 .WithEnvironmentVariablesConfig()
                 .BuildAsync(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run), NullLogger.Instance);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnResourceBeforeStart_ParameterResolvesBeforeDependencyBlockersArePublished_StillWaits(bool forceStart)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var parameter = builder.AddParameter("value", () => throw new MissingParameterValueException("Missing parameter."));
+        var dependency = builder.AddContainer("dependency", "test-image");
+        var container = builder.AddContainer("api", "test-image")
+            .WithEnvironment("VALUE", parameter)
+            .WaitFor(dependency);
+
+        using var app = builder.Build();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var events = new DcpExecutorEvents();
+        var sink = new TestSink();
+        using var loggerFactory = new TestLoggerFactory(sink, enabled: true);
+        using var notifications = ResourceNotificationServiceTestHelpers.Create(new TestLogger<ResourceNotificationService>(loggerFactory));
+        var orchestrator = CreateOrchestrator(model, notifications, dcpEvents: events);
+        await orchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(cts.Token));
+        await events.PublishAsync(new OnResourceStartingContext(
+            cts.Token, KnownResourceTypes.Container, container.Resource, container.Resource.Name));
+
+        var parameterValueTasks = new Dictionary<ParameterResource, Task<string?>?>
+        {
+            [parameter.Resource] = parameter.Resource.WaitForValueTcs!.Task
+        };
+        var parameterResolutionStarted = 0;
+        Task parameterResolutionTask = Task.CompletedTask;
+        Task monitorTask = Task.CompletedTask;
+        sink.MessageLogged += context =>
+        {
+            // This message is emitted after the force-start watcher subscribes and replays the
+            // parameter-only snapshot, but before WaitForDependenciesAsync publishes its blockers.
+            if (context.Message != "Waiting for resource 'api' to match predicate." ||
+                Interlocked.Exchange(ref parameterResolutionStarted, 1) != 0)
+            {
+                return;
+            }
+
+            parameterResolutionTask = parameter.Resource.SetValueAsync("resolved-value", cts.Token);
+            // Run the same monitor synchronously with its now-completed value task to place the
+            // resulting Starting update inside that window without racing a background continuation.
+            monitorTask = orchestrator.MonitorUnresolvedParametersAsync(
+                container.Resource, container.Resource.Name, parameterValueTasks, cts.Token);
+            Assert.True(notifications.TryGetCurrentState(container.Resource.Name, out var parameterResolvedEvent));
+            Assert.Equal(KnownResourceStates.Starting, parameterResolvedEvent.Snapshot.State?.Text);
+            Assert.All(parameterResolvedEvent.Snapshot.Properties, property => Assert.NotEqual(KnownProperties.Resource.WaitingFor, property.Name));
+        };
+
+        var startingTask = events.PublishAsync(new OnResourceBeforeStartContext(cts.Token, container.Resource, container.Resource.Name));
+        try
+        {
+            await Task.WhenAll(parameterResolutionTask, monitorTask).DefaultTimeout();
+            Assert.Equal(1, Volatile.Read(ref parameterResolutionStarted));
+            var waitingEvent = await notifications.WaitForResourceAsync(
+                container.Resource.Name, resourceEvent => resourceEvent.Snapshot.State?.Text == KnownResourceStates.Waiting, cts.Token).DefaultTimeout();
+            Assert.Equal(
+                [dependency.Resource.Name],
+                Assert.IsType<string[]>(Assert.Single(waitingEvent.Snapshot.Properties, property => property.Name == KnownProperties.Resource.WaitingFor).Value));
+
+            // Give the watcher time to reject the queued Starting update. A late watcher can only
+            // hide the regression here, not fail a correct dependency wait.
+            await Task.WhenAny(startingTask, Task.Delay(TimeSpan.FromMilliseconds(250), cts.Token)).DefaultTimeout();
+            Assert.False(startingTask.IsCompleted, "Resolving a parameter must not force-start a resource with an unavailable dependency.");
+
+            if (forceStart)
+            {
+                await notifications.PublishUpdateAsync(container.Resource, snapshot => snapshot with
+                {
+                    State = KnownResourceStates.Starting
+                }).DefaultTimeout();
+            }
+            else
+            {
+                await notifications.PublishUpdateAsync(dependency.Resource, snapshot => snapshot with
+                {
+                    State = KnownResourceStates.Running,
+                    ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+                }).DefaultTimeout();
+            }
+
+            await startingTask.DefaultTimeout();
+        }
+        finally
+        {
+            cts.Cancel();
         }
     }
 

@@ -132,8 +132,9 @@ internal sealed class ApplicationOrchestrator
         // Wait for either dependencies to be ready or for someone to move the resource out of a waiting state.
         // This happens when resource start command is run, which forces the status to "Starting".
         //
-        // A resource instance has to be observed in "Waiting" or "UnresolvedParameters" first, and then leave both, for a non-waiting state
-        // to count as the release signal. WaitForResourceAsync only filters on the model resource name, so this
+        // A resource instance has to be observed in "Waiting", or "UnresolvedParameters" with dependency blockers,
+        // and then leave both states for a non-waiting state to count as the release signal.
+        // WaitForResourceAsync only filters on the model resource name, so this
         // predicate is fed events for every instance, and both halves of the condition matter:
         //   - Without "was seen waiting", the very first replayed event of a resource that never entered
         //     "Waiting" satisfies the predicate, and the resource starts with unmet dependencies.
@@ -161,14 +162,16 @@ internal sealed class ApplicationOrchestrator
                     return false;
                 }
 
-                if (e.Snapshot.State?.Text == KnownResourceStates.Waiting ||
-                    e.Snapshot.State?.Text == KnownResourceStates.UnresolvedParameters)
+                if (IsWaitingForDependencies(e.Snapshot))
                 {
                     _ = waitingResourceIds.Add(e.ResourceId);
                     return false;
                 }
 
-                return waitingResourceIds.Contains(e.ResourceId);
+                // An already-armed watcher must keep waiting on parameter-only unresolved states;
+                // leaving the dependency wait alone does not mean the resource was force-started.
+                return e.Snapshot.State?.Text != KnownResourceStates.UnresolvedParameters &&
+                    waitingResourceIds.Contains(e.ResourceId);
             },
             cts.Token);
 
@@ -196,6 +199,15 @@ internal sealed class ApplicationOrchestrator
         {
             // Ensure both wait tasks are cancelled.
             cts.Cancel();
+        }
+
+        static bool IsWaitingForDependencies(CustomResourceSnapshot snapshot)
+        {
+            // Parameter-only snapshots can precede dependency wait setup. Resolving those
+            // parameters is not a force-start request.
+            return snapshot.State?.Text == KnownResourceStates.Waiting ||
+                (snapshot.State?.Text == KnownResourceStates.UnresolvedParameters &&
+                    snapshot.Properties.Any(static property => property.Name == KnownProperties.Resource.WaitingFor));
         }
     }
 
