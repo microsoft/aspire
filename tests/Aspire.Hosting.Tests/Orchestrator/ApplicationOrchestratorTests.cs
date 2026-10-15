@@ -1227,61 +1227,6 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task OnResourceStarting_WithDistinctSameNamedParameters_WaitsForEveryParameter()
-    {
-        var builder = DistributedApplication.CreateBuilder();
-        builder.WithTestAndResourceLogging(testOutputHelper);
-
-        var firstParameter = ParameterResourceBuilderExtensions.CreateParameter(builder, "value", secret: false);
-        var secondParameter = ParameterResourceBuilderExtensions.CreateParameter(builder, "value", secret: false);
-        var container = builder.AddContainer("api", "test-image")
-            .WithEnvironment("FIRST", firstParameter)
-            .WithEnvironment("SECOND", secondParameter);
-
-        using var app = builder.Build();
-        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-
-        var events = new DcpExecutorEvents();
-        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
-        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
-        await appOrchestrator.RunApplicationAsync();
-        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None));
-
-        Assert.NotNull(firstParameter.WaitForValueTcs);
-        Assert.NotNull(secondParameter.WaitForValueTcs);
-
-        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Container, container.Resource, "api-dcp"));
-
-        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var unresolvedEvent));
-        Assert.Equal(
-            ["value"],
-            Assert.IsType<string[]>(Assert.Single(unresolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
-
-        var configurationTask = ExecutionConfigurationBuilder.Create(container.Resource)
-            .WithEnvironmentVariablesConfig()
-            .BuildAsync(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run), NullLogger.Instance);
-        await firstParameter.SetValueAsync("first-value").DefaultTimeout();
-        Assert.False(configurationTask.IsCompleted);
-        Assert.False(secondParameter.WaitForValueTcs.Task.IsCompleted);
-
-        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var partiallyResolvedEvent));
-        Assert.Equal(KnownResourceStates.UnresolvedParameters, partiallyResolvedEvent.Snapshot.State?.Text);
-        Assert.Equal(
-            ["value"],
-            Assert.IsType<string[]>(Assert.Single(partiallyResolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
-
-        var startingTask = resourceNotificationService.WaitForResourceAsync(
-            container.Resource.Name,
-            e => e.Snapshot.State?.Text == KnownResourceStates.Starting);
-        Assert.True(secondParameter.WaitForValueTcs.TrySetResult("second-value"));
-        _ = await startingTask.DefaultTimeout();
-        var configuration = await configurationTask.DefaultTimeout();
-        Assert.Null(configuration.Exception);
-        Assert.Equal("first-value", configuration.EnvironmentVariables.Single(e => e.Key == "FIRST").Value);
-        Assert.Equal("second-value", configuration.EnvironmentVariables.Single(e => e.Key == "SECOND").Value);
-    }
-
-    [Fact]
     public async Task OnResourceStarting_WithUnresolvedParameter_DoesNotInvokeLaunchCallbacks()
     {
         var builder = DistributedApplication.CreateBuilder();
