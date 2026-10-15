@@ -460,6 +460,47 @@ public class WithEnvironmentTests
             projectA.WithEnvironment("TEST_VAR", (TestValueAndManifestProvider)null!));
     }
 
+    [Theory]
+    [InlineData(ReferenceUsage.Environment)]
+    [InlineData(ReferenceUsage.GenericEnvironment)]
+    [InlineData(ReferenceUsage.Arguments)]
+    [InlineData(ReferenceUsage.Relationship)]
+    public void ReferenceDiscoveryPreservesNonResourceValidationFailures(ReferenceUsage usage)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddContainer("resource", "image");
+        var exception = new InvalidOperationException("Invalid value references.");
+        var value = new TestValueWithReferences("value", resource.Resource)
+        {
+            ReferencesException = exception
+        };
+        var consumer = builder.AddExecutable("consumer", "unused", ".");
+        var expression = ReferenceExpression.Create($"{value}");
+
+        var actual = Assert.Throws<InvalidOperationException>(() =>
+        {
+            switch (usage)
+            {
+                case ReferenceUsage.Environment:
+                    consumer.WithEnvironment("VALUE", expression);
+                    break;
+                case ReferenceUsage.GenericEnvironment:
+                    consumer.WithEnvironment("VALUE", value);
+                    break;
+                case ReferenceUsage.Arguments:
+                    consumer.WithArgs(value);
+                    break;
+                case ReferenceUsage.Relationship:
+                    consumer.WithReferenceRelationship(expression);
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unexpected usage '{usage}'.");
+            }
+        });
+
+        Assert.Same(exception, actual);
+    }
+
     [Fact]
     public async Task GenericWithEnvironmentWorksWithEndpointProperty()
     {
@@ -506,6 +547,8 @@ public class WithEnvironmentTests
         private readonly string _value;
         private readonly IResource _referencedResource;
 
+        public Exception? ReferencesException { get; init; }
+
         public TestValueWithReferences(string value, IResource referencedResource)
         {
             _value = value;
@@ -519,7 +562,9 @@ public class WithEnvironmentTests
 
         public string ValueExpression => _value;
 
-        public IEnumerable<object> References => [_referencedResource];
+        public IEnumerable<object> References => ReferencesException is { } exception
+            ? throw exception
+            : [_referencedResource];
     }
 
     private sealed class TestResource(string name, string connectionString) : Resource(name), IResourceWithConnectionString

@@ -734,12 +734,12 @@ public class WithReferenceTests
     }
 
     [Theory]
-    [InlineData("Reference")]
-    [InlineData("Environment")]
-    [InlineData("GenericEnvironment")]
-    [InlineData("Arguments")]
-    [InlineData("Relationship")]
-    public void TransitiveConnectionStringReferencesOnlyLinkParameters(string usage)
+    [InlineData(ReferenceUsage.Reference)]
+    [InlineData(ReferenceUsage.Environment)]
+    [InlineData(ReferenceUsage.GenericEnvironment)]
+    [InlineData(ReferenceUsage.Arguments)]
+    [InlineData(ReferenceUsage.Relationship)]
+    public void TransitiveConnectionStringReferencesOnlyLinkParameters(ReferenceUsage usage)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var connectionStringParameter = builder.AddParameter("connectionStringParameter");
@@ -752,19 +752,19 @@ public class WithReferenceTests
 
         switch (usage)
         {
-            case "Reference":
+            case ReferenceUsage.Reference:
                 consumer.WithReference(child);
                 break;
-            case "Environment":
+            case ReferenceUsage.Environment:
                 consumer.WithEnvironment("VALUE", expression);
                 break;
-            case "GenericEnvironment":
+            case ReferenceUsage.GenericEnvironment:
                 consumer.WithEnvironment<ExecutableResource, ReferenceExpression>("VALUE", expression);
                 break;
-            case "Arguments":
+            case ReferenceUsage.Arguments:
                 consumer.WithArgs(expression);
                 break;
-            case "Relationship":
+            case ReferenceUsage.Relationship:
                 consumer.WithReferenceRelationship(expression);
                 break;
             default:
@@ -957,6 +957,105 @@ public class WithReferenceTests
         var consumer = builder.AddExecutable("consumer", "unused", ".");
 
         Assert.Same(exception, Assert.Throws<OperationCanceledException>(() => consumer.WithReference(resource)));
+    }
+
+    [Theory]
+    [InlineData(ReferenceUsage.Environment, true)]
+    [InlineData(ReferenceUsage.Environment, false)]
+    [InlineData(ReferenceUsage.GenericEnvironment, true)]
+    [InlineData(ReferenceUsage.GenericEnvironment, false)]
+    [InlineData(ReferenceUsage.Arguments, true)]
+    [InlineData(ReferenceUsage.Arguments, false)]
+    [InlineData(ReferenceUsage.Relationship, true)]
+    [InlineData(ReferenceUsage.Relationship, false)]
+    public async Task ConnectionMetadataDiscoveryForReferencesAllowsDeferredConfiguration(ReferenceUsage usage, bool completeConfiguration)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var parameter = builder.AddParameter("value", () => "connection-value");
+        var other = builder.AddParameter("other", () => "other-value");
+        var exception = new InvalidOperationException("Connection metadata is not configured yet.");
+        var resource = builder.AddResource(new TestResourceWithReferencedProperties("resource", parameter.Resource, parameter.Resource)
+        {
+            ConnectionStringException = exception
+        });
+        var consumer = builder.AddExecutable("consumer", "unused", ".");
+
+        AddConnectionMetadataReference(consumer, resource.Resource, other.Resource, usage);
+
+        Assert.Collection(consumer.Resource.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            relationship => Assert.Same(resource.Resource, relationship.Resource),
+            relationship => Assert.Same(other.Resource, relationship.Resource));
+
+        if (completeConfiguration)
+        {
+            resource.Resource.ConnectionStringException = null;
+        }
+
+        using var app = builder.Build();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(
+            app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()), CancellationToken.None).DefaultTimeout();
+
+        var discoveryLogs = new ConcurrentQueue<string>();
+        var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        using var subscription = resourceLoggerService.Subscribe(consumer.Resource.GetResolvedResourceName(), logs =>
+        {
+            foreach (var log in logs)
+            {
+                discoveryLogs.Enqueue(log.Content);
+            }
+        });
+        var discoveryLog = Assert.Single(discoveryLogs);
+        Assert.Contains("Failed to discover referenced parameters for resource 'resource'.", discoveryLog);
+        Assert.Contains(exception.Message, discoveryLog);
+
+        var configuration = await ExecutionConfigurationBuilder.Create(consumer.Resource)
+            .WithArgumentsConfig()
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(builder.ExecutionContext, new FakeLogger(), CancellationToken.None).DefaultTimeout();
+
+        if (!completeConfiguration)
+        {
+            var aggregate = Assert.IsType<AggregateException>(configuration.Exception);
+            Assert.Same(exception, Assert.Single(aggregate.InnerExceptions));
+        }
+        else
+        {
+            Assert.Null(configuration.Exception);
+            if (usage == ReferenceUsage.Arguments)
+            {
+                Assert.Collection(configuration.Arguments,
+                    argument => Assert.Equal("Value=connection-value", argument.Value),
+                    argument => Assert.Equal("other-value", argument.Value));
+                Assert.Empty(configuration.EnvironmentVariables);
+            }
+            else
+            {
+                var variable = Assert.Single(configuration.EnvironmentVariables);
+                Assert.Equal("VALUE", variable.Key);
+                Assert.Equal("Value=connection-value;Other=other-value", variable.Value);
+                Assert.Empty(configuration.Arguments);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(ReferenceUsage.Environment)]
+    [InlineData(ReferenceUsage.GenericEnvironment)]
+    [InlineData(ReferenceUsage.Arguments)]
+    [InlineData(ReferenceUsage.Relationship)]
+    public void ConnectionMetadataDiscoveryForReferencesPreservesCancellation(ReferenceUsage usage)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var parameter = builder.AddParameter("value");
+        var exception = new OperationCanceledException();
+        var resource = builder.AddResource(new TestResourceWithReferencedProperties("resource", parameter.Resource, parameter.Resource)
+        {
+            ConnectionStringException = exception
+        });
+        var consumer = builder.AddExecutable("consumer", "unused", ".");
+
+        Assert.Same(exception, Assert.Throws<OperationCanceledException>(() =>
+            AddConnectionMetadataReference(consumer, resource.Resource, parameter.Resource, usage)));
     }
 
     [Fact]
@@ -1331,6 +1430,33 @@ public class WithReferenceTests
         Assert.Equal("Host=after", config["ConnectionStrings__my_db"]);
     }
 
+    private static void AddConnectionMetadataReference(
+        IResourceBuilder<ExecutableResource> consumer,
+        IResourceWithConnectionString resource,
+        ParameterResource parameter,
+        ReferenceUsage usage)
+    {
+        var expression = ReferenceExpression.Create($"{resource};Other={parameter}");
+        switch (usage)
+        {
+            case ReferenceUsage.Environment:
+                consumer.WithEnvironment("VALUE", expression);
+                break;
+            case ReferenceUsage.GenericEnvironment:
+                consumer.WithEnvironment<ExecutableResource, ReferenceExpression>("VALUE", expression);
+                break;
+            case ReferenceUsage.Arguments:
+                consumer.WithArgs(resource, parameter);
+                break;
+            case ReferenceUsage.Relationship:
+                consumer.WithReferenceRelationship(expression);
+                consumer.WithEnvironment(context => context.EnvironmentVariables["VALUE"] = expression);
+                break;
+            default:
+                throw new InvalidOperationException($"Unexpected usage '{usage}'.");
+        }
+    }
+
     private sealed class TestResourceWithProperties(string name) : Resource(name), IResourceWithConnectionString
     {
         public string? ConnectionString { get; set; }
@@ -1350,7 +1476,7 @@ public class WithReferenceTests
         ParameterResource connectionStringParameter,
         ParameterResource connectionPropertyParameter) : Resource(name), IResourceWithConnectionString
     {
-        public Exception? ConnectionStringException { get; init; }
+        public Exception? ConnectionStringException { get; set; }
 
         public Exception? ConnectionPropertiesException { get; init; }
 

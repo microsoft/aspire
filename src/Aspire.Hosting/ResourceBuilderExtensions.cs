@@ -1444,15 +1444,7 @@ public static class ResourceBuilderExtensions
 
         void LogDiscoveryFailure(Exception exception)
         {
-            // Discovery is informational. Defer diagnostics until a logger is available and let
-            // normal environment evaluation report invalid metadata through the resource lifecycle.
-            builder.ApplicationBuilder.OnBeforeStart((@event, _) =>
-            {
-                builder.Resource.GetLogger(@event.Services).LogDebug(
-                    exception, "Failed to discover referenced parameters for resource '{ResourceName}'.", resource.Name);
-
-                return Task.CompletedTask;
-            });
+            LogReferenceDiscoveryFailure(builder, resource.Name, exception);
         }
     }
 
@@ -5019,6 +5011,12 @@ public static class ResourceBuilderExtensions
                 {
                     onDiscoveryFailure(ex);
                 }
+                catch (Exception ex) when (value is IResource referencedResource && ex is not OperationCanceledException)
+                {
+                    // Resources can be configured after a reference is added. Defer only their
+                    // metadata failures; other value providers retain construction-time validation.
+                    LogReferenceDiscoveryFailure(builder, referencedResource.Name, ex);
+                }
             }
         }
 
@@ -5026,6 +5024,20 @@ public static class ResourceBuilderExtensions
         {
             Walk(value, linkTargets);
         }
+    }
+
+    private static void LogReferenceDiscoveryFailure<T>(IResourceBuilder<T> builder, string resourceName, Exception exception)
+        where T : IResource
+    {
+        // Discovery is informational. Defer diagnostics until a logger is available and let
+        // normal configuration evaluation report invalid metadata through the resource lifecycle.
+        builder.ApplicationBuilder.OnBeforeStart((@event, _) =>
+        {
+            builder.Resource.GetLogger(@event.Services).LogDebug(
+                exception, "Failed to discover referenced parameters for resource '{ResourceName}'.", resourceName);
+
+            return Task.CompletedTask;
+        });
     }
 
     /// <summary>
