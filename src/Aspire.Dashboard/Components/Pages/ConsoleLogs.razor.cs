@@ -142,7 +142,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     private readonly CancellationTokenSource _resourceSubscriptionCts = new();
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
-    private readonly Channel<LogEntryToWrite> _logEntryChannel = Channel.CreateUnbounded<LogEntryToWrite>(new UnboundedChannelOptions
+    private readonly Channel<IReadOnlyList<LogEntryToWrite>> _logEntryChannel = Channel.CreateUnbounded<IReadOnlyList<LogEntryToWrite>>(new UnboundedChannelOptions
     {
         SingleReader = true,
         SingleWriter = false
@@ -342,7 +342,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             var hasNewLogEntry = false;
             lock (_updateLogsLock)
             {
-                foreach (var (resourceName, logEntry, lineNumber) in batch)
+                foreach (var (resourceName, logEntry, lineNumber) in batch.SelectMany(entries => entries))
                 {
                     // Console logs are filtered in the UI by the timestamp of the log entry.
                     var timestampFilterDate = ConsoleLogsManager.GetFilterDate(resourceName);
@@ -830,7 +830,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
                     foreach (var priorPause in pauseIntervals)
                     {
-                        _logEntryChannel.Writer.TryWrite(new LogEntryToWrite(subscription.Resource.Name, LogEntry.CreatePause(GetResourceName(subscription.Resource), priorPause.Start, priorPause.End), LineNumber: null));
+                        _logEntryChannel.Writer.TryWrite([new LogEntryToWrite(subscription.Resource.Name, LogEntry.CreatePause(GetResourceName(subscription.Resource), priorPause.Start, priorPause.End), LineNumber: null)]);
                     }
                 }
 
@@ -846,12 +846,16 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                         continue;
                     }
 
+                    var logEntriesToWrite = new List<LogEntryToWrite>(batch.Count);
                     foreach (var (lineNumber, content, isErrorOutput) in batch)
                     {
                         var logEntry = logParser.CreateLogEntry(content, isErrorOutput, resourcePrefix);
 
-                        _logEntryChannel.Writer.TryWrite(new LogEntryToWrite(subscription.Resource.Name, logEntry, lineNumber));
+                        logEntriesToWrite.Add(new LogEntryToWrite(subscription.Resource.Name, logEntry, lineNumber));
                     }
+
+                    // Keep the incoming batch together so the viewer cannot refresh midway through parsing.
+                    _logEntryChannel.Writer.TryWrite(logEntriesToWrite);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -1003,7 +1007,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     foreach (var subscription in _consoleLogsSubscriptions.Values)
                     {
                         Logger.LogDebug("Inserting new pause log entry for {Resource} starting at {StartTimestamp}.", subscription.Resource.Name, timestamp);
-                        _logEntryChannel.Writer.TryWrite(new LogEntryToWrite(subscription.Resource.Name, LogEntry.CreatePause(GetResourceName(subscription.Resource), timestamp), LineNumber: null));
+                        _logEntryChannel.Writer.TryWrite([new LogEntryToWrite(subscription.Resource.Name, LogEntry.CreatePause(GetResourceName(subscription.Resource), timestamp), LineNumber: null)]);
                     }
                 }
                 else

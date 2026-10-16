@@ -1,6 +1,7 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections;
 using System.Globalization;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
@@ -399,6 +400,69 @@ public partial class ConsoleLogsTests : DashboardTestContext
         liveConsoleLogsChannel.Writer.TryWrite([new ResourceLogLine(1, "Live log", IsErrorMessage: false)]);
         cut.WaitForState(() => cut.Instance._logEntries.EntriesCount == 1);
         Assert.Equal("Live log", Assert.Single(cut.Instance._logEntries.GetEntries()).RawContent);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(32)]
+    [InlineData(384)]
+    public async Task IncomingBatch_WhileStillBeingParsed_DoesNotPublishPartialLogs(int prefixLength)
+    {
+        var batchResource = ModelTestHelpers.CreateResource(resourceName: "batch-resource", state: KnownResourceState.Running);
+        var otherResource = ModelTestHelpers.CreateResource(resourceName: "other-resource", state: KnownResourceState.Running);
+        var batchChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var otherChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: name => name == batchResource.Name ? batchChannel : otherChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [batchResource, otherResource]);
+        SetupConsoleLogsServices(dashboardClient);
+        JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true).SetVoidResult();
+        JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.TextInput.attachImmediateEvent", _ => true).SetVoidResult();
+        JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Select.Initialize", _ => true).SetVoidResult();
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
+
+        var cut = RenderConsoleLogsPage(CreateViewport(isDesktop: true), resourceName: string.Empty);
+        Assert.True(batchChannel.Writer.TryWrite([new ResourceLogLine(1, "Existing log", IsErrorMessage: false)]));
+        cut.WaitForAssertion(() => Assert.EndsWith(
+            "Existing log", Assert.Single(cut.FindAll(".log-content")).TextContent.Trim()));
+
+        var prefixRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var releaseBatch = new ManualResetEventSlim();
+        var lines = Enumerable.Range(2, 385)
+            .Select(lineNumber => new ResourceLogLine(lineNumber, $"Batch log {lineNumber}", IsErrorMessage: lineNumber == 386))
+            .ToArray();
+        string?[] publishedWhileParsing;
+        try
+        {
+            Assert.True(batchChannel.Writer.TryWrite(new GatedLogBatch(lines, prefixLength, prefixRead, releaseBatch)));
+            await prefixRead.Task.DefaultTimeout();
+
+            // A different resource proves the consumer has drained the queue while this batch is incomplete.
+            Assert.True(otherChannel.Writer.TryWrite([new ResourceLogLine(1, "Other resource log", IsErrorMessage: false)]));
+            cut.WaitForState(() => cut.Instance._logEntries.EntriesCount >= 2
+                && cut.Instance._logEntries.GetEntries()[^1].RawContent == "Other resource log");
+            publishedWhileParsing = cut.Instance._logEntries.GetEntries().Select(entry => entry.RawContent).ToArray();
+        }
+        finally
+        {
+            releaseBatch.Set();
+        }
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(387, cut.Instance._logEntries.EntriesCount);
+            Assert.Equal(
+                lines.Select(line => line.Content),
+                cut.Instance._logEntries.GetEntries()
+                    .Where(entry => entry.RawContent?.StartsWith("Batch log ", StringComparison.Ordinal) == true)
+                    .Select(entry => entry.RawContent));
+            Assert.Equal(LogEntryType.Error, cut.Instance._logEntries.GetEntries()[^1].Type);
+        });
+
+        Assert.Equal(["Existing log", "Other resource log"], publishedWhileParsing);
     }
 
     [Theory]
@@ -1164,5 +1228,35 @@ public partial class ConsoleLogsTests : DashboardTestContext
             }));
             builder.CloseComponent();
         });
+    }
+
+    private sealed class GatedLogBatch(
+        IReadOnlyList<ResourceLogLine> lines,
+        int prefixLength,
+        TaskCompletionSource prefixRead,
+        ManualResetEventSlim releaseBatch) : IReadOnlyList<ResourceLogLine>
+    {
+        public int Count => lines.Count;
+
+        public ResourceLogLine this[int index] => lines[index];
+
+        public IEnumerator<ResourceLogLine> GetEnumerator()
+        {
+            for (var index = 0; index < lines.Count; index++)
+            {
+                if (index == prefixLength)
+                {
+                    prefixRead.TrySetResult();
+                    if (!releaseBatch.Wait(TimeSpan.FromSeconds(30)))
+                    {
+                        throw new TimeoutException("The test did not release the incoming log batch.");
+                    }
+                }
+
+                yield return lines[index];
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }
