@@ -1296,6 +1296,7 @@ builder.Build().Run();
     <add key="dotnet-eng" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json" />
     <add key="dotnet9" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
     <add key="dotnet10" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet10/nuget/v3/index.json" />
+    <add key="dotnet11" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet11/nuget/v3/index.json" />
     <add key="dotnet-libraries" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-libraries/nuget/v3/index.json" />
   </packageSources>
   <packageSourceMapping>
@@ -1316,6 +1317,9 @@ builder.Build().Run();
       <package pattern="*" />
     </packageSource>
     <packageSource key="dotnet10">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="dotnet11">
       <package pattern="*" />
     </packageSource>
     <packageSource key="dotnet-libraries">

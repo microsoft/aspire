@@ -170,7 +170,18 @@ Each managed proof uses a separate browser profile under the test run's temporar
 
 The Windows shard launches VS Code with `__COMPAT_LAYER=DetectorsAppHealth` to cover [Edge's compatibility-layer relaunch](https://github.com/microsoft/aspire/issues/20151). The extension explicitly unsets this variable only in Edge's browser-launch environment so js-debug can track the original browser process through managed breakpoint discovery.
 
-The E2E fixtures target .NET 10, matching the SDK pinned by the repository's `global.json`. Both Azure Functions shards require Azure Functions Core Tools v4 (`func`) on `PATH`, plus the real .NET Install Tool and C# extensions because they debug the generated C# AppHost. The .NET Functions shard additionally installs Azure Resource Groups and Azure Functions into the isolated VS Code instance, generates a dedicated HTTPS certificate with shell-sensitive arguments, and activates the Azure Functions extension so it registers its `func` task definition and listeners. Aspire then creates and runs a registered `func: host start` task for the generated .NET isolated Functions resource; the shard probes its HTTPS endpoint and verifies that stopping the Aspire resource ends the same VS Code task.
+Aspire-owned native Blazor WASM launches use a loopback WebSocket relay to isolate
+js-debug's two-second opening deadline from cold C# bridge startup. The relay
+acknowledges the local connection first and connects to the bridge only after the
+IDE sends a command, so abandoned opening attempts cannot claim the native debugger
+connection ([dotnet/vscode-csharp#9890](https://github.com/dotnet/vscode-csharp/issues/9890)).
+It preserves the selected debugger, protocol messages, and launch timeout, and
+stops with its resource run. Generic browser launches and the legacy WASM backend
+keep their existing transports.
+
+The browser debugger fixtures target the .NET version pinned by the repository's `global.json`. Their NuGet sources must include the matching daily feed because the standalone Blazor gateway is acquired as a .NET tool at run time.
+
+Both Azure Functions shards require Azure Functions Core Tools v4 (`func`) on `PATH`, plus the real .NET Install Tool and C# extensions because they debug the generated C# AppHost. The .NET Functions shard additionally installs Azure Resource Groups and Azure Functions into the isolated VS Code instance, generates a dedicated HTTPS certificate with shell-sensitive arguments, and activates the Azure Functions extension so it registers its `func` task definition and listeners. Aspire then creates and runs a registered `func: host start` task for the generated .NET isolated Functions resource; the shard probes its HTTPS endpoint and verifies that stopping the Aspire resource ends the same VS Code task.
 
 The separate `azure-functions-node` shard runs `azureFunctionsNode.e2e.test.ts`, which uses a dependency-free Node v3 HTTP Functions fixture and the source-built hosting integration to verify Core Tools startup, a real `pwa-node` inspector attachment, an HTTP-handler breakpoint with a matching source stack frame, and task/process/inspector cleanup. It does not install the Azure Resource Groups or Azure Functions extensions because the Node worker attaches directly through VS Code's built-in JavaScript debugger. With Core Tools on `PATH`, run that proof using:
 
