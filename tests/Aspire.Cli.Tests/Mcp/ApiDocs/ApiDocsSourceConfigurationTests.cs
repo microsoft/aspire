@@ -30,7 +30,7 @@ public class ApiDocsSourceConfigurationTests
 
         var sitemapUrl = ApiDocsSourceConfiguration.GetSitemapUrl(configuration);
 
-        Assert.Equal(ApiDocsSourceConfiguration.DefaultSitemapUrl, sitemapUrl);
+        Assert.Equal("https://aspire.dev/sitemap-index.xml", sitemapUrl);
     }
 
     [Fact]

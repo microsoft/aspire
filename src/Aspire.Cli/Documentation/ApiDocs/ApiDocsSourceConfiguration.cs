@@ -20,9 +20,14 @@ internal static partial class ApiDocsSourceConfiguration
     public const string SitemapUrlConfigPath = "docs:api:sitemapUrl";
 
     /// <summary>
-    /// Default sitemap URL for Aspire API reference pages.
+    /// Default sitemap index URL for Aspire API reference pages.
     /// </summary>
-    public const string DefaultSitemapUrl = "https://aspire.dev/sitemap-0.xml";
+    /// <remarks>
+    /// The index lets sites list API routes in more than one sitemap, such as <c>sitemap-0.xml</c> for a fully
+    /// static build and <c>sitemap-api.xml</c> for a build that renders API pages on demand. A plain
+    /// <c>urlset</c> sitemap is still accepted when overridden with <see cref="SitemapUrlConfigPath"/>.
+    /// </remarks>
+    public const string DefaultSitemapUrl = "https://aspire.dev/sitemap-index.xml";
 
     /// <summary>
     /// Gets the sitemap URL used to build the API index.
