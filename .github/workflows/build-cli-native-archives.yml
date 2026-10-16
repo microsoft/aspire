@@ -120,6 +120,7 @@ jobs:
           /p:TargetRid=${{ matrix.targets.rids }}
           /p:BundleVersion=ci-bundlepayload
           /p:SkipNativeBuild=true
+          /p:SkipDashboardPublish=true
           /p:ContinuousIntegrationBuild=true
           /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
           ${{ inputs.versionOverrideArg }}

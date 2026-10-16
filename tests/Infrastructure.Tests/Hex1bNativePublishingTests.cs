@@ -395,6 +395,83 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         Assert.Contains("eq(parameters.agentOs, 'macos')", cleanup);
     }
 
+    [Theory]
+    [InlineData("linux-x64", false)]
+    [InlineData("win-arm64", false)]
+    [InlineData("osx-arm64", false)]
+    [InlineData("linux-x64", true)]
+    public async Task BundleReusesPreparedDashboardWithoutRepublishing(string rid, bool missingDashboard)
+    {
+        var dashboard = Path.Combine(_workspace.Path, "artifacts", "bin", "Aspire.Dashboard", rid,
+            "Release", "net11.0", rid, "publish", rid.StartsWith("win-", StringComparison.Ordinal) ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
+        if (!missingDashboard)
+        {
+            WriteFile(dashboard, "prepared Dashboard");
+        }
+        var project = CreateBundlePublishProject(dashboard);
+        var result = await RunDotNetAsync(
+            ["msbuild", project, "-nologo", "-t:_PublishManagedProjects", "-p:Configuration=Release",
+             $"-p:TargetRid={rid}", "-p:SkipDashboardPublish=true"]);
+
+        Assert.Equal(!missingDashboard, result.ExitCode == 0);
+        Assert.Equal(missingDashboard ? ["managed"] : ["managed", "terminalhost"],
+            File.ReadAllLines(Path.Combine(_workspace.Path, "published.txt")));
+        if (missingDashboard)
+        {
+            Assert.Contains("Prepared Native AOT Dashboard was not found", result.Output);
+        }
+        else
+        {
+            Assert.Equal("prepared Dashboard", File.ReadAllText(dashboard));
+        }
+    }
+
+    [Fact]
+    public async Task StandaloneBundleStillPublishesDashboardByDefault()
+    {
+        var dashboard = Path.Combine(_workspace.Path, "dashboard");
+        var project = CreateBundlePublishProject(dashboard);
+        var result = await RunDotNetAsync(
+            ["msbuild", project, "-nologo", "-t:_PublishManagedProjects", "-p:Configuration=Release"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(["managed", "dashboard", "terminalhost"],
+            File.ReadAllLines(Path.Combine(_workspace.Path, "published.txt")));
+        Assert.Equal("new Dashboard", File.ReadAllText(dashboard).Trim());
+    }
+
+    private string CreateBundlePublishProject(string dashboard)
+    {
+        foreach (var component in new[] { "managed", "dashboard", "terminalhost" })
+        {
+            var publish = new XElement("Target", new XAttribute("Name", "Publish"),
+                new XElement("WriteLinesToFile",
+                    new XAttribute("File", Path.Combine(_workspace.Path, "published.txt")),
+                    new XAttribute("Lines", component)));
+            if (component == "dashboard")
+            {
+                publish.Add(new XElement("WriteLinesToFile",
+                    new XAttribute("File", dashboard),
+                    new XAttribute("Lines", "new Dashboard"),
+                    new XAttribute("Overwrite", "true")));
+            }
+            new XDocument(new XElement("Project",
+                new XElement("Target", new XAttribute("Name", "Restore")), publish))
+                .Save(Path.Combine(_workspace.Path, component + ".proj"));
+        }
+
+        var project = Path.Combine(_workspace.Path, "BundlePublish.proj");
+        new XDocument(new XElement("Project",
+            new XElement("Import", new XAttribute("Project", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"))),
+            new XElement("PropertyGroup",
+                new XElement("ArtifactsDir", Path.Combine(_workspace.Path, "artifacts") + Path.DirectorySeparatorChar),
+                new XElement("ManagedProjectPath", Path.Combine(_workspace.Path, "managed.proj")),
+                new XElement("DashboardProjectPath", Path.Combine(_workspace.Path, "dashboard.proj")),
+                new XElement("TerminalHostProjectPath", Path.Combine(_workspace.Path, "terminalhost.proj")))))
+            .Save(project);
+        return project;
+    }
+
     private string CreatePublishProject(string rid, bool singleFile, bool duplicateUnrelatedAsset)
     {
         var nativeItems = new XElement("ItemGroup");

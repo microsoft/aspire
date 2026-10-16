@@ -14,6 +14,7 @@
     Options:
     - SkipNativeBuild=true: Skip building native CLI (use pre-built from artifacts)
     - SkipManagedBuild=true: Skip building managed projects (use pre-built)
+    - SkipDashboardPublish=true: Reuse the RID-specific Dashboard publish from dashboardpack
     - SkipTrayBuild=true: Use a pre-built native tray (required after official signing)
     - TrayAppPath: Override the pre-built macOS app directory
     - WindowsTrayPath: Override the pre-built Windows tray publish directory
@@ -122,8 +123,17 @@
     <Message Importance="high" Text="Publishing aspire-managed (self-contained)..." />
     <!-- Publish as self-contained single-file for the target RID -->
     <Exec Command="dotnet publish &quot;$(ManagedProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_ManagedBinlog)" />
-    <Message Importance="high" Text="Publishing Aspire Dashboard (Native AOT)..." />
-    <Exec Command="dotnet publish &quot;$(DashboardProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:PlatformName=$(TargetRid) /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_DashboardBinlog)" />
+    <!-- dashboardpack already publishes this RID's Dashboard in CI. Do not replace
+         the output used by its NuGet package and standalone archive. -->
+    <PropertyGroup Condition="'$(SkipDashboardPublish)' == 'true'">
+      <_DashboardExecutableName>Aspire.Dashboard</_DashboardExecutableName>
+      <_DashboardExecutableName Condition="$(TargetRid.StartsWith('win-'))">Aspire.Dashboard.exe</_DashboardExecutableName>
+      <_DashboardPublishPath>$(ArtifactsDir)bin\Aspire.Dashboard\$(TargetRid)\$(Configuration)\net11.0\$(TargetRid)\publish\$(_DashboardExecutableName)</_DashboardPublishPath>
+    </PropertyGroup>
+    <Error Condition="'$(SkipDashboardPublish)' == 'true' and !Exists('$(_DashboardPublishPath)')"
+           Text="Prepared Native AOT Dashboard was not found at '$(_DashboardPublishPath)'. Build the RID-specific Dashboard package before using SkipDashboardPublish=true." />
+    <Message Importance="high" Text="Publishing Aspire Dashboard (Native AOT)..." Condition="'$(SkipDashboardPublish)' != 'true'" />
+    <Exec Command="dotnet publish &quot;$(DashboardProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:PlatformName=$(TargetRid) /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_DashboardBinlog)" Condition="'$(SkipDashboardPublish)' != 'true'" />
     <Message Importance="high" Text="Publishing Aspire TerminalHost (Native AOT)..." />
     <Exec Command="dotnet publish &quot;$(TerminalHostProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_TerminalHostBinlog)" />
   </Target>

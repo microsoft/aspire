@@ -140,6 +140,13 @@ Each CLI archive job:
 
 This makes the archive job self-sufficient for the RID-specific artifacts it needs.
 
+The bundle step reuses the Dashboard publish produced by `dashboardpack`, so
+each job compiles Dashboard only once. Its NuGet package, standalone archive,
+and embedded bundle consume the same publish output. The existing warning
+check still checks that compilation, and missing prepared output fails rather
+than triggering another publish. Standalone bundle builds continue to publish
+Dashboard by default; official signing and packaging keep their existing flow.
+
 ### Native CLI packaging
 
 The CLI archive jobs also produce RID-specific native CLI artifacts used by tests and downstream packaging. For details about native CLI archive signing, dotnet-tool package construction, and why signed builds consume the signed archive payload, see [Native CLI Packaging](native-cli-packaging.md).
