@@ -1011,14 +1011,8 @@ internal sealed class ApplicationOrchestrator
 
     private async Task PublishResourcesInitialStateAsync(CancellationToken cancellationToken)
     {
-        // Parameters referenced by declarative values and connection expressions aren't necessarily added
-        // to the model, but their inspectable references let us initialize them without invoking callbacks.
-        var parameterResources = _model.Resources.OfType<ParameterResource>()
-            .Concat(_model.Resources.SelectMany(GetReferencedParameters))
-            .Distinct<ParameterResource>(ReferenceEqualityComparer.Instance);
-        await _parameterProcessor.InitializeParametersAsync(parameterResources, waitForResolution: false).ConfigureAwait(false);
-
-        // Publish the initial state of the resources that have a snapshot annotation.
+        // Reserve model-resource snapshot ownership before referenced-only parameters can publish
+        // snapshots with the same IDs.
         foreach (var resource in _model.Resources)
         {
             // Process relationships for the resource.
@@ -1038,7 +1032,17 @@ internal sealed class ApplicationOrchestrator
                     HealthReports = GetInitialHealthReports(resource)
                 };
             }).ConfigureAwait(false);
+        }
 
+        // Parameters referenced by declarative values and connection expressions aren't necessarily added
+        // to the model, but their inspectable references let us initialize them without invoking callbacks.
+        var parameterResources = _model.Resources.OfType<ParameterResource>()
+            .Concat(_model.Resources.SelectMany(GetReferencedParameters))
+            .Distinct<ParameterResource>(ReferenceEqualityComparer.Instance);
+        await _parameterProcessor.InitializeParametersAsync(parameterResources, waitForResolution: false).ConfigureAwait(false);
+
+        foreach (var resource in _model.Resources)
+        {
             // Custom resources can await parameters during initialization without a DCP starting event.
             await PublishUnresolvedParametersStateAsync(resource, resourceId: null, cancellationToken).ConfigureAwait(false);
 

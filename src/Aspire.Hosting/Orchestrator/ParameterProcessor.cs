@@ -970,9 +970,8 @@ public sealed class ParameterProcessor(
 
     private async Task UpdateParameterStateAsync(ParameterResource parameterResource, string? value, ResourceStateSnapshot? state)
     {
-        // Referenced parameters do not have to be model resources, so distinct instances can share a name.
-        // The notification service has one snapshot per resource name; keep the first instance as its owner
-        // while still processing every instance's value task and unresolved state.
+        // Referenced-only parameters may share an ID with a model resource. Preserve the existing
+        // snapshot owner without skipping the parameter's value task or unresolved-state processing.
         if (notificationService.TryGetCurrentState(parameterResource.Name, out var currentState) &&
             !ReferenceEquals(currentState.Resource, parameterResource))
         {

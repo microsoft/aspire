@@ -1778,6 +1778,111 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task OnResourcesPrepared_ReferencedParameterWithModelResourceName_PreservesSnapshotOwner(bool initiallyMissing, bool useConnectionString)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var parameter = new ParameterResource("shared", _ => initiallyMissing
+            ? throw new MissingParameterValueException("Missing parameter.")
+            : "initial-value");
+        var owner = builder.AddConnectionString("shared", ReferenceExpression.Create($"Value=constant"));
+        var initialized = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        owner.OnInitializeResource((_, _, _) =>
+        {
+            initialized.TrySetResult(parameter.WaitForValueTcs is not null);
+            return Task.CompletedTask;
+        });
+        var consumer = builder.AddContainer("consumer", "test-image");
+        if (useConnectionString)
+        {
+            var source = builder.AddResource(new ParameterConnectionStringResource("source", parameter));
+            consumer.WithReference(source);
+        }
+        else
+        {
+            consumer.WithEnvironment("VALUE", parameter);
+        }
+
+        using var app = builder.Build();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        Assert.False(model.Resources.Contains(parameter));
+        Assert.Equal(["shared"], owner.Resource.GetResolvedResourceNames());
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var orchestrator = CreateOrchestrator(model, notifications, out var processor,
+            dcpEvents: events, applicationEventing: builder.Eventing);
+        await orchestrator.RunApplicationAsync();
+
+        try
+        {
+            await events.PublishAsync(new OnResourcesPreparedContext(cts.Token)).DefaultTimeout();
+            Assert.True(await initialized.Task.DefaultTimeout());
+            Assert.NotNull(parameter.WaitForValueTcs);
+            Assert.Equal(!initiallyMissing, parameter.WaitForValueTcs.Task.IsCompletedSuccessfully);
+            Assert.True(notifications.TryGetCurrentState(owner.Resource.Name, out var ownerEvent));
+            Assert.Same(owner.Resource, ownerEvent.Resource);
+            Assert.Equal(KnownResourceTypes.ConnectionString, ownerEvent.Snapshot.ResourceType);
+
+            await notifications.PublishUpdateAsync(owner.Resource, s => s with { State = KnownResourceStates.Running }).DefaultTimeout();
+            Assert.True(notifications.TryGetCurrentState(owner.Resource.Name, out var ownerSnapshot));
+            await events.PublishAsync(new OnResourceStartingContext(
+                cts.Token, KnownResourceTypes.Container, consumer.Resource, consumer.Resource.Name)).DefaultTimeout();
+            Assert.True(notifications.TryGetCurrentState(consumer.Resource.Name, out var starting));
+            Assert.Equal(initiallyMissing ? KnownResourceStates.UnresolvedParameters : KnownResourceStates.Starting, starting.Snapshot.State?.Text);
+            if (initiallyMissing)
+            {
+                Assert.Equal(
+                    ["shared"],
+                    Assert.IsType<string[]>(Assert.Single(starting.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+            }
+            else
+            {
+                Assert.Empty(starting.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
+            }
+
+            var configurationTask = ExecutionConfigurationBuilder.Create(consumer.Resource)
+                .WithEnvironmentVariablesConfig()
+                .BuildAsync(builder.ExecutionContext, NullLogger.Instance, cts.Token);
+            if (initiallyMissing)
+            {
+                Assert.False(configurationTask.IsCompleted);
+                await parameter.SetValueAsync("resolved-value", cts.Token).DefaultTimeout();
+                await notifications.WaitForResourceAsync(consumer.Resource.Name, KnownResourceStates.Starting, cts.Token).DefaultTimeout();
+            }
+
+            var configuration = await configurationTask.DefaultTimeout();
+            Assert.Null(configuration.Exception);
+            var expectedValue = initiallyMissing ? "resolved-value" : "initial-value";
+            Assert.Equal(expectedValue, await parameter.GetValueAsync(cts.Token).AsTask().DefaultTimeout());
+            var environmentVariable = Assert.Single(configuration.EnvironmentVariables);
+            Assert.Equal(useConnectionString ? "ConnectionStrings__source" : "VALUE", environmentVariable.Key);
+            Assert.Equal(useConnectionString ? $"Value={expectedValue}" : expectedValue, environmentVariable.Value);
+
+            var deleted = await processor.DeleteParameterCoreAsync(parameter, new InteractionInputCollection([]), cts.Token).DefaultTimeout();
+            Assert.True(deleted.Success);
+            Assert.True(notifications.TryGetCurrentState(consumer.Resource.Name, out var unresolved));
+            Assert.Equal(KnownResourceStates.UnresolvedParameters, unresolved.Snapshot.State?.Text);
+            Assert.Equal(
+                ["shared"],
+                Assert.IsType<string[]>(Assert.Single(unresolved.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+            await parameter.SetValueAsync("replacement-value", cts.Token).DefaultTimeout();
+            await notifications.WaitForResourceAsync(consumer.Resource.Name, KnownResourceStates.Starting, cts.Token).DefaultTimeout();
+            Assert.True(notifications.TryGetCurrentState(owner.Resource.Name, out var unchangedOwner));
+            Assert.Same(owner.Resource, unchangedOwner.Resource);
+            Assert.Same(ownerSnapshot.Snapshot, unchangedOwner.Snapshot);
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            await parameter.SetValueAsync("cleanup-value").DefaultTimeout();
+        }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task OnResourceStarting_WithReferencedOnlyParameterInReferencedConnectionString_PublishesParameterName(bool useConnectionStringEnvironment)
