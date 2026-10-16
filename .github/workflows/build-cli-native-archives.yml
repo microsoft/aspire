@@ -68,7 +68,7 @@ jobs:
       # runners ship Node by default, but installing it explicitly pins the
       # version and avoids relying on the runner image.
       - name: Install node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22.x
 
@@ -267,7 +267,7 @@ jobs:
 
       # Upload DCP, Dashboard, and CLI tool packages so test/polyglot jobs can download them
       - name: Upload RID-specific packages
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: built-nugets-for-${{ matrix.targets.rids }}
           path: |
@@ -280,7 +280,7 @@ jobs:
 
       - name: Upload CLI archives
         if: success()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cli-native-archives-${{ matrix.targets.rids }}
           path: artifacts/packages/**/aspire-cli*
@@ -289,7 +289,7 @@ jobs:
 
       - name: Upload Native AOT Dashboard archive
         if: success()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-dashboard-${{ matrix.targets.rids }}
           path: artifacts/DashboardArtifacts/${{ inputs.configuration }}/${{ matrix.targets.rids }}/aspire-dashboard-${{ matrix.targets.rids }}.zip
@@ -298,7 +298,7 @@ jobs:
 
       - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cli-native-logs-${{ matrix.targets.rids }}
           path: artifacts/log/**
