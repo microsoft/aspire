@@ -135,8 +135,9 @@ internal static class CommandsConfigurationExtensions
         // There is a situation where a container can be stopped with this state: https://github.com/microsoft/aspire/issues/5977
         static bool IsStopped(string? state) => KnownResourceStates.TerminalStates.Contains(state) || state == KnownResourceStates.NotStarted || state == "Unknown";
         static bool IsStopping(string? state) => state == KnownResourceStates.Stopping;
-        static bool IsStarting(string? state) => state == KnownResourceStates.Starting;
-        static bool IsWaiting(string? state) => state == KnownResourceStates.Waiting;
+        // Parameter-blocked startup is also waiting, but missing values cannot be bypassed by the start command.
+        static bool IsStarting(string? state) => state == KnownResourceStates.Starting || state == KnownResourceStates.UnresolvedParameters;
+        static bool IsWaiting(string? state) => KnownResourceStates.WaitingStates.Contains(state);
         static bool IsBuilding(string? state) => state == KnownResourceStates.Building;
         static bool IsRuntimeUnhealthy(string? state) => state == KnownResourceStates.RuntimeUnhealthy;
         static bool HasNoState(string? state) => string.IsNullOrEmpty(state);
@@ -219,21 +220,20 @@ internal static class CommandsConfigurationExtensions
             }
         }
 
-        // Stop non-waiting replicas. Waiting replicas have no running process — their DCP
-        // lifecycle is blocked at WaitForInBeforeResourceStartedEvent waiting for dependencies.
-        // Attempting to stop them would fail because no DCP Executable has been created yet.
+        // Startup-blocked replicas have no running process. Stopping them would wait for
+        // dependencies or parameter values instead of letting the rebuild proceed.
         var replicasToStop = replicaNames.Where(name =>
             !preRebuildStates.TryGetValue(name, out var state)
-            || state != KnownResourceStates.Waiting);
+            || !KnownResourceStates.WaitingStates.Contains(state));
 
         LogBuildInformation(mainLogger, buildOutput, "Stopping resource for rebuild...");
         await Task.WhenAll(replicasToStop.Select(name => orchestrator.StopResourceAsync(name, cancellationToken))).ConfigureAwait(false);
 
-        // Set state to Building after replicas are stopped. Leave Waiting replicas in their
-        // current state — changing their state text would unblock WaitForInBeforeResourceStartedEvent,
-        // causing CreateExecutableAsync to launch the OLD binary while the build is in progress.
+        // Set state to Building after replicas are stopped. Leave startup-blocked replicas in their
+        // current state — changing their state text could release the dependency wait and launch
+        // the OLD binary while the build is in progress.
         await resourceNotificationService.PublishUpdateAsync(projectResource, s =>
-            s.State?.Text == KnownResourceStates.Waiting
+            KnownResourceStates.WaitingStates.Contains(s.State?.Text)
                 ? s
                 : s with { State = new ResourceStateSnapshot(KnownResourceStates.Building, KnownResourceStateStyles.Info) }
         ).ConfigureAwait(false);
@@ -302,8 +302,8 @@ internal static class CommandsConfigurationExtensions
             if (exitCode == 0)
             {
                 // Restart replicas that were Running before the rebuild.
-                // Waiting replicas are already in the startup pipeline — when their deps become
-                // ready, CreateExecutableAsync will launch the freshly-built binary automatically.
+                // Waiting replicas are already in the startup pipeline — when their blockers are
+                // resolved, CreateExecutableAsync will launch the freshly-built binary automatically.
                 LogBuildInformation(mainLogger, buildOutput, "Build succeeded. Restarting resource...");
                 var anyRestarted = false;
                 foreach (var name in replicaNames)
@@ -312,14 +312,14 @@ internal static class CommandsConfigurationExtensions
                         && priorState == KnownResourceStates.Running;
 
                     var wasWaiting = preRebuildStates.TryGetValue(name, out var waitState)
-                        && waitState == KnownResourceStates.Waiting;
+                        && KnownResourceStates.WaitingStates.Contains(waitState);
 
                     if (wasWaiting)
                     {
-                        // The resource is still waiting for dependencies. The build output on disk
-                        // has been updated, so when dependencies become ready the new binary will
+                        // The resource is still waiting for dependencies or parameter values. The build output on disk
+                        // has been updated, so when those blockers are resolved the new binary will
                         // be launched. Log a message so the user knows the build succeeded.
-                        LogBuildInformation(mainLogger, buildOutput, "Build succeeded. Resource will start with the updated binary when dependencies are ready.");
+                        LogBuildInformation(mainLogger, buildOutput, "Build succeeded. Resource will start with the updated binary when startup blockers are resolved.");
                         anyRestarted = true;
                     }
                     else if (wasActive)

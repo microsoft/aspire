@@ -305,7 +305,7 @@ internal static class DotnetProjectBuildCoordinator
                     rebuildEvent.Snapshot.State?.Text is { } state &&
                     (state == KnownResourceStates.Starting ||
                      state == KnownResourceStates.Running ||
-                     state == KnownResourceStates.Waiting ||
+                     KnownResourceStates.WaitingStates.Contains(state) ||
                      state == KnownResourceStates.Building ||
                      state == KnownResourceStates.Stopping ||
                      KnownResourceStates.TerminalStates.Contains(state)))

@@ -638,11 +638,7 @@ public class ResourceNotificationService : IDisposable
 
         return PublishUpdateAsync(resource, s =>
             CanTransitionToWaiting(s.State?.Text, allowNotStarted)
-                ? s with
-                {
-                    State = KnownResourceStates.Waiting,
-                    Properties = s.Properties.SetResourceProperty(KnownProperties.Resource.WaitingFor, waitingFor)
-                }
+                ? UpdateStartupBlocker(s with { State = KnownResourceStates.Waiting }, KnownProperties.Resource.WaitingFor, waitingFor)
                 : s);
     }
 
@@ -650,14 +646,42 @@ public class ResourceNotificationService : IDisposable
         state is null
         || (allowNotStarted && state == KnownResourceStates.NotStarted)
         || state == KnownResourceStates.Starting
-        || state == KnownResourceStates.Waiting;
+        || KnownResourceStates.WaitingStates.Contains(state);
 
     private Task ClearWaitingForDependenciesAsync(IResource resource)
     {
-        return PublishUpdateAsync(resource, s => s with
+        return PublishUpdateAsync(resource, s => UpdateStartupBlocker(s, KnownProperties.Resource.WaitingFor, []));
+    }
+
+    internal static CustomResourceSnapshot UpdateStartupBlocker(
+        CustomResourceSnapshot snapshot,
+        string propertyName,
+        IReadOnlyCollection<string> blockers)
+    {
+        var properties = blockers.Count > 0
+            ? snapshot.Properties.SetResourceProperty(propertyName, blockers.ToArray())
+            : snapshot.Properties.RemoveResourceProperty(propertyName);
+
+        var state = snapshot.State?.Text;
+        if (state is not null &&
+            state != KnownResourceStates.Starting &&
+            !KnownResourceStates.WaitingStates.Contains(state))
         {
-            Properties = s.Properties.RemoveResourceProperty(KnownProperties.Resource.WaitingFor)
-        });
+            return snapshot with { Properties = properties };
+        }
+
+        var hasUnresolvedParameters = properties.Any(
+            static property => string.Equals(property.Name, KnownProperties.Resource.UnresolvedParameters, StringComparisons.ResourcePropertyName));
+        var isWaitingForDependencies = properties.Any(
+            static property => string.Equals(property.Name, KnownProperties.Resource.WaitingFor, StringComparisons.ResourcePropertyName));
+
+        return snapshot with
+        {
+            State = hasUnresolvedParameters
+                ? new ResourceStateSnapshot(KnownResourceStates.UnresolvedParameters, KnownResourceStateStyles.Warn)
+                : isWaitingForDependencies ? KnownResourceStates.Waiting : KnownResourceStates.Starting,
+            Properties = properties
+        };
     }
 
     /// <summary>
@@ -876,11 +900,19 @@ public class ResourceNotificationService : IDisposable
 
             var newState = stateFactory(previousState);
 
-            if (!string.Equals(newState.State?.Text, KnownResourceStates.Waiting, StringComparisons.ResourceState))
+            if (!KnownResourceStates.WaitingStates.Contains(newState.State?.Text, StringComparers.ResourceState))
             {
                 newState = newState with
                 {
                     Properties = newState.Properties.RemoveResourceProperty(KnownProperties.Resource.WaitingFor)
+                };
+            }
+
+            if (!string.Equals(newState.State?.Text, KnownResourceStates.UnresolvedParameters, StringComparisons.ResourceState))
+            {
+                newState = newState with
+                {
+                    Properties = newState.Properties.RemoveResourceProperty(KnownProperties.Resource.UnresolvedParameters)
                 };
             }
 

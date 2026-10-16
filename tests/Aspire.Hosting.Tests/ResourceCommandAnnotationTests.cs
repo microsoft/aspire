@@ -4,8 +4,11 @@
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
 
 using Aspire.Dashboard.Model;
+using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Resources;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,6 +18,14 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "2")]
 public class ResourceCommandAnnotationTests
 {
+    [Fact]
+    public void WaitingStates_ContainsOnlyStartupBlockers()
+    {
+        Assert.Equal(
+            new[] { KnownResourceStates.Waiting, KnownResourceStates.UnresolvedParameters },
+            KnownResourceStates.WaitingStates);
+    }
+
     [Theory]
     [InlineData("start", "Starting", ResourceCommandState.Disabled)]
     [InlineData("start", "Stopping", ResourceCommandState.Hidden)]
@@ -24,6 +35,7 @@ public class ResourceCommandAnnotationTests
     [InlineData("start", "FailedToStart", ResourceCommandState.Enabled)]
     [InlineData("start", "Unknown", ResourceCommandState.Enabled)]
     [InlineData("start", "Waiting", ResourceCommandState.Enabled)]
+    [InlineData("start", "UnresolvedParameters", ResourceCommandState.Disabled)]
     [InlineData("start", "Building", ResourceCommandState.Disabled)]
     [InlineData("start", "RuntimeUnhealthy", ResourceCommandState.Disabled)]
     [InlineData("start", "", ResourceCommandState.Disabled)]
@@ -36,6 +48,7 @@ public class ResourceCommandAnnotationTests
     [InlineData("stop", "FailedToStart", ResourceCommandState.Hidden)]
     [InlineData("stop", "Unknown", ResourceCommandState.Hidden)]
     [InlineData("stop", "Waiting", ResourceCommandState.Hidden)]
+    [InlineData("stop", "UnresolvedParameters", ResourceCommandState.Hidden)]
     [InlineData("stop", "Building", ResourceCommandState.Hidden)]
     [InlineData("stop", "RuntimeUnhealthy", ResourceCommandState.Hidden)]
     [InlineData("stop", "", ResourceCommandState.Hidden)]
@@ -48,6 +61,7 @@ public class ResourceCommandAnnotationTests
     [InlineData("restart", "FailedToStart", ResourceCommandState.Disabled)]
     [InlineData("restart", "Unknown", ResourceCommandState.Disabled)]
     [InlineData("restart", "Waiting", ResourceCommandState.Disabled)]
+    [InlineData("restart", "UnresolvedParameters", ResourceCommandState.Disabled)]
     [InlineData("restart", "Building", ResourceCommandState.Disabled)]
     [InlineData("restart", "RuntimeUnhealthy", ResourceCommandState.Disabled)]
     [InlineData("restart", "", ResourceCommandState.Disabled)]
@@ -131,6 +145,7 @@ public class ResourceCommandAnnotationTests
     [InlineData("rebuild", "FailedToStart", ResourceCommandState.Enabled)]
     [InlineData("rebuild", "Unknown", ResourceCommandState.Disabled)]
     [InlineData("rebuild", "Waiting", ResourceCommandState.Enabled)]
+    [InlineData("rebuild", "UnresolvedParameters", ResourceCommandState.Enabled)]
     [InlineData("rebuild", "RuntimeUnhealthy", ResourceCommandState.Disabled)]
     [InlineData("rebuild", "Building", ResourceCommandState.Disabled)]
     [InlineData("rebuild", "", ResourceCommandState.Disabled)]
@@ -181,6 +196,118 @@ public class ResourceCommandAnnotationTests
 
         Assert.Equal(CommandStrings.RebuildName, rebuildCommand.DisplayName);
         Assert.Equal(CommandStrings.RebuildDescription, rebuildCommand.DisplayDescription);
+    }
+
+    [Theory]
+    [InlineData(nameof(KnownResourceStates.Waiting), true, false)]
+    [InlineData(nameof(KnownResourceStates.Waiting), true, true)]
+    [InlineData(nameof(KnownResourceStates.UnresolvedParameters), false, false)]
+    [InlineData(nameof(KnownResourceStates.UnresolvedParameters), false, true)]
+    [InlineData(nameof(KnownResourceStates.UnresolvedParameters), true, false)]
+    [InlineData(nameof(KnownResourceStates.UnresolvedParameters), true, true)]
+    public async Task RebuildCommand_PreservesStartupBlockedReplicas(string waitingState, bool waitForDependencies, bool hasRunningReplica)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var parameter = builder.AddParameter("value");
+        var project = builder.AddProject<Projects.ServiceA>("project", options => options.ExcludeLaunchProfile = true)
+            .WithEnvironment("VALUE", parameter);
+        if (waitForDependencies)
+        {
+            project.WaitFor(builder.AddContainer("dependency", "image"));
+        }
+
+        const string blockedName = "project-blocked";
+        const string runningName = "project-running";
+        var instances = new List<DcpInstance> { new(blockedName, "blocked", 0) };
+        if (hasRunningReplica)
+        {
+            instances.Add(new(runningName, "running", 1));
+        }
+        project.Resource.Annotations.Add(new DcpInstancesAnnotation([.. instances]));
+        project.Resource.AddLifeCycleCommands();
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        var executor = new TestDcpExecutor();
+        executor.AddResource(project.Resource, blockedName);
+        if (hasRunningReplica)
+        {
+            executor.AddResource(project.Resource, runningName);
+        }
+        executor.AddResource(rebuilder, rebuilder.Name);
+        builder.Services.AddSingleton<IDcpExecutor>(executor);
+
+        using var app = builder.Build();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        var properties = new List<ResourcePropertySnapshot>();
+        if (waitingState == KnownResourceStates.UnresolvedParameters)
+        {
+            properties.Add(new(KnownProperties.Resource.UnresolvedParameters, new[] { parameter.Resource.Name }));
+        }
+        if (waitForDependencies)
+        {
+            properties.Add(new(KnownProperties.Resource.WaitingFor, new[] { "dependency" }));
+        }
+        await notifications.PublishUpdateAsync(project.Resource, blockedName, snapshot => snapshot with
+        {
+            State = new ResourceStateSnapshot(waitingState,
+                waitingState == KnownResourceStates.UnresolvedParameters ? KnownResourceStateStyles.Warn : KnownResourceStateStyles.Info),
+            Properties = [.. properties]
+        });
+        Assert.True(notifications.TryGetCurrentState(blockedName, out var initialBlockedEvent));
+
+        if (hasRunningReplica)
+        {
+            await notifications.PublishUpdateAsync(project.Resource, runningName, snapshot => snapshot with
+            {
+                State = KnownResourceStates.Running
+            });
+        }
+
+        executor.StartResourceCallback = async (reference, _) =>
+        {
+            Assert.True(notifications.TryGetCurrentState(blockedName, out var blockedEvent));
+            Assert.Equal(initialBlockedEvent.Snapshot.State, blockedEvent.Snapshot.State);
+            Assert.Equal(initialBlockedEvent.Snapshot.Properties, blockedEvent.Snapshot.Properties);
+
+            if (ReferenceEquals(reference.ModelResource, rebuilder))
+            {
+                Assert.Equal(hasRunningReplica ? [runningName] : Array.Empty<string>(), executor.StoppedResources);
+                if (hasRunningReplica)
+                {
+                    Assert.True(notifications.TryGetCurrentState(runningName, out var buildingEvent));
+                    Assert.Equal(KnownResourceStates.Building, buildingEvent.Snapshot.State?.Text);
+                }
+                await notifications.PublishUpdateAsync(rebuilder, snapshot => snapshot with
+                {
+                    State = KnownResourceStates.Finished,
+                    ExitCode = 0
+                });
+            }
+            else
+            {
+                Assert.Equal(runningName, reference.DcpResourceName);
+                await notifications.PublishUpdateAsync(project.Resource, runningName, snapshot => snapshot with
+                {
+                    State = KnownResourceStates.Running
+                });
+            }
+        };
+
+        var command = Assert.Single(project.Resource.Annotations.OfType<ResourceCommandAnnotation>(),
+            annotation => annotation.Name == KnownResourceCommands.RebuildCommand);
+        var result = await command.ExecuteCommand(new ExecuteCommandContext
+        {
+            ResourceName = hasRunningReplica ? runningName : blockedName,
+            Services = app.Services,
+            CancellationToken = TestContext.Current.CancellationToken,
+            Arguments = new InteractionInputCollection([]),
+            Logger = NullLogger.Instance
+        }).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal(hasRunningReplica ? [rebuilder.Name, runningName] : [rebuilder.Name], executor.StartedResources);
+        Assert.True(notifications.TryGetCurrentState(blockedName, out var finalBlockedEvent));
+        Assert.Equal(initialBlockedEvent.Snapshot.State, finalBlockedEvent.Snapshot.State);
+        Assert.Equal(initialBlockedEvent.Snapshot.Properties, finalBlockedEvent.Snapshot.Properties);
     }
 
     [Theory]
