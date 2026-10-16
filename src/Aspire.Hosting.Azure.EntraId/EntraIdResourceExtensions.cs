@@ -815,7 +815,57 @@ public static class EntraIdResourceExtensions
             ArgumentException.ThrowIfNullOrWhiteSpace(redirectUri, nameof(redirectUris));
         }
 
-        builder.Resource.RedirectUris.AddRange(redirectUris);
+        foreach (var redirectUri in redirectUris)
+        {
+            builder.Resource.AddRedirectUri(redirectUri);
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds parameters whose values supply web redirect URIs to a registration created by Aspire.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="redirectUris">Parameters whose values are the redirect URIs. Each value may contain several URIs separated by commas.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/>, <paramref name="redirectUris"/>, or one of its elements is null.</exception>
+    /// <remarks>
+    /// <para>
+    /// Use this overload when the externally visible callback URIs (for example, behind a gateway, reverse proxy,
+    /// or custom domain) are supplied per environment at deployment time. The values are split on commas in the
+    /// generated infrastructure, so a URI supplied through a parameter can't contain a comma and entries must not
+    /// have surrounding whitespace. Literal URIs can be mixed with parameter-backed URIs by also calling
+    /// <see cref="WithRedirectUris(IResourceBuilder{EntraIdApplicationResource}, string[])"/>; URIs are registered in call order.
+    /// </para>
+    /// <para>
+    /// Endpoints are not discovered automatically. Existing registrations are not modified.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var signIn = builder.AddParameter("web-signin-redirect-uri");
+    /// var signOut = builder.AddParameter("web-signout-redirect-uri");
+    /// var entraWeb = builder.AddEntraIdApplication("entra-web")
+    ///     .WithRedirectUris(signIn, signOut);
+    /// </code>
+    /// </example>
+    public static IResourceBuilder<EntraIdApplicationResource> WithRedirectUris(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        params IResourceBuilder<ParameterResource>[] redirectUris)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(redirectUris);
+        foreach (var redirectUri in redirectUris)
+        {
+            ArgumentNullException.ThrowIfNull(redirectUri, nameof(redirectUris));
+        }
+
+        foreach (var redirectUri in redirectUris)
+        {
+            builder.Resource.AddRedirectUri(redirectUri.Resource);
+        }
+
         return builder;
     }
 
