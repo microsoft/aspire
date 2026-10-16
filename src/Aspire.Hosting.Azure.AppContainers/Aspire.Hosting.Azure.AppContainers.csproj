@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
+    <!-- Transitive through Azure.Provisioning.Storage; remove when 1.2.0 ships stable. -->
+    <NoWarn Condition="'$(StabilizePackageVersion)' == 'true'">$(NoWarn);NU5104</NoWarn>
     <PackageTags>aspire integration hosting azure container cloud appcontainers</PackageTags>
     <Description>Azure container apps resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>

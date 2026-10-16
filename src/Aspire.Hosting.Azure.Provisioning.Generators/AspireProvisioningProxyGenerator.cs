@@ -31,6 +31,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     private const string DiagnosticCategory = "Aspire.Hosting.Azure.Provisioning";
     private const string ExperimentalDiagnosticId = "ASPIREAZUREPROVISIONING001";
     private const string ExperimentalUrlFormat = "https://aka.ms/aspire/diagnostics/{0}";
+    private const string ObsoleteAttributeMetadataName = "System.ObsoleteAttribute";
 
     private static readonly DiagnosticDescriptor s_unsupportedProperty = new(
         id: "ASPIREAZUREPROVISIONING002",
@@ -318,7 +319,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
     private static IEnumerable<INamedTypeSymbol> EnumeratePublicProxyTypes(INamedTypeSymbol type)
     {
-        if (type.DeclaredAccessibility != Accessibility.Public)
+        if (type.DeclaredAccessibility != Accessibility.Public || IsObsolete(type))
         {
             yield break;
         }
@@ -479,6 +480,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             type = (INamedTypeSymbol)type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
             if (CanGenerateProxy(type) &&
                 !IsMutableStruct(type) &&
+                !IsObsolete(type) &&
                 seenTypes.Add(type))
             {
                 types.Add(type);
@@ -1760,7 +1762,8 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 property.IsStatic &&
                 !property.IsIndexer &&
                 property.DeclaredAccessibility == Accessibility.Public &&
-                property.GetMethod?.DeclaredAccessibility == Accessibility.Public)
+                property.GetMethod?.DeclaredAccessibility == Accessibility.Public &&
+                !IsObsolete(property))
             .OrderBy(static property => property.Name, StringComparer.Ordinal))
         {
             if (!TryMapType(property.Type, proxyNames, collectionNames, out var mappedType))
@@ -1845,7 +1848,9 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     {
         var constructors = new List<SelectedConstructor>();
         foreach (var constructor in type.InstanceConstructors.Where(
-            static constructor => constructor.DeclaredAccessibility == Accessibility.Public))
+            static constructor =>
+                constructor.DeclaredAccessibility == Accessibility.Public &&
+                !IsObsolete(constructor)))
         {
             var mappedParameters = new List<MappedParameter>();
             var canMap = true;
@@ -2360,6 +2365,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             {
                 if (!property.IsStatic &&
                     property.DeclaredAccessibility == Accessibility.Public &&
+                    !IsObsolete(property) &&
                     seenPropertyNames.Add(property.Name))
                 {
                     yield return property;
@@ -2392,6 +2398,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                     method.MethodKind == MethodKind.Ordinary &&
                     method.Name is not nameof(ToString) and not nameof(Equals) and not nameof(GetHashCode) &&
                     method.DeclaredAccessibility == Accessibility.Public &&
+                    !IsObsolete(method) &&
                     seenSignatures.Add(GetMethodSignature(method)))
                 {
                     yield return method;
@@ -2591,6 +2598,12 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     private static bool IsMutableStruct(INamedTypeSymbol type)
     {
         return type.TypeKind == TypeKind.Struct && !type.IsReadOnly;
+    }
+
+    private static bool IsObsolete(ISymbol symbol)
+    {
+        return symbol.GetAttributes().Any(static attribute =>
+            attribute.AttributeClass?.ToDisplayString() == ObsoleteAttributeMetadataName);
     }
 
     private static Location GetDiagnosticLocation(ISymbol symbol)
