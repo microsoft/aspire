@@ -1435,6 +1435,137 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
+    [InlineData(ReferenceUsage.Reference, false)]
+    [InlineData(ReferenceUsage.Reference, true)]
+    [InlineData(ReferenceUsage.Environment, false)]
+    [InlineData(ReferenceUsage.Environment, true)]
+    [InlineData(ReferenceUsage.ConnectionStringEnvironment, false)]
+    [InlineData(ReferenceUsage.ConnectionStringEnvironment, true)]
+    [InlineData(ReferenceUsage.GenericEnvironment, false)]
+    [InlineData(ReferenceUsage.GenericEnvironment, true)]
+    [InlineData(ReferenceUsage.Arguments, false)]
+    [InlineData(ReferenceUsage.Arguments, true)]
+    [InlineData(ReferenceUsage.Relationship, false)]
+    [InlineData(ReferenceUsage.Relationship, true)]
+    public async Task OnResourceStarting_EndpointReferencesOnlyTrackConsumedParameters(ReferenceUsage usage, bool includeConnectionString)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var password = builder.AddParameter("password", secret: true);
+        var source = builder.AddResource(new ParameterConnectionStringResource("server", password.Resource) { IsConfigured = false })
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithEndpoint("http", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5001));
+        var endpoint = source.GetEndpoint("http");
+        var expression = includeConnectionString
+            ? ReferenceExpression.Create($"Endpoint={endpoint};{source.Resource}")
+            : ReferenceExpression.Create($"Endpoint={endpoint}");
+        var consumer = builder.AddExecutable("consumer", "unused", ".").WaitFor(source);
+
+        switch (usage)
+        {
+            case ReferenceUsage.Reference:
+                consumer.WithReference(builder.AddConnectionString("connection", expression));
+                break;
+            case ReferenceUsage.Environment:
+                consumer.WithEnvironment("VALUE", expression);
+                break;
+            case ReferenceUsage.ConnectionStringEnvironment:
+                consumer.WithEnvironment("VALUE", builder.AddConnectionString("connection", expression));
+                break;
+            case ReferenceUsage.GenericEnvironment:
+                consumer.WithEnvironment<ExecutableResource, ReferenceExpression>("VALUE", expression);
+                break;
+            case ReferenceUsage.Arguments:
+                consumer.WithArgs(expression);
+                break;
+            case ReferenceUsage.Relationship:
+                consumer.WithReferenceRelationship(expression);
+                consumer.WithEnvironment(context => context.EnvironmentVariables["VALUE"] = expression);
+                break;
+            default:
+                throw new InvalidOperationException($"Unexpected usage '{usage}'.");
+        }
+
+        var callbackCount = 0;
+        consumer.WithEnvironment(_ => Interlocked.Increment(ref callbackCount));
+        // Configure the connection metadata after linking to exercise startup discovery independently.
+        source.Resource.IsConfigured = true;
+
+        using var app = builder.Build();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var executor = new TestDcpExecutor();
+        executor.AddResource(consumer.Resource, consumer.Resource.Name);
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(), notifications,
+            dcpEvents: events, dcpExecutor: executor);
+        await orchestrator.RunApplicationAsync();
+
+        try
+        {
+            await events.PublishAsync(new OnResourcesPreparedContext(cts.Token)).DefaultTimeout();
+            await events.PublishAsync(new OnResourceStartingContext(
+                cts.Token, KnownResourceTypes.Executable, consumer.Resource, consumer.Resource.Name)).DefaultTimeout();
+            Assert.True(notifications.TryGetCurrentState(consumer.Resource.Name, out var starting));
+            Assert.Equal(includeConnectionString ? KnownResourceStates.UnresolvedParameters : KnownResourceStates.Starting, starting.Snapshot.State?.Text);
+            Assert.Equal(0, callbackCount);
+            if (includeConnectionString)
+            {
+                Assert.Equal(
+                    ["password"],
+                    Assert.IsType<string[]>(Assert.Single(starting.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+            }
+            else
+            {
+                Assert.Empty(starting.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
+            }
+
+            var beforeStartTask = events.PublishAsync(new OnResourceBeforeStartContext(cts.Token, consumer.Resource, consumer.Resource.Name));
+            var waiting = await notifications.WaitForResourceAsync(consumer.Resource.Name,
+                e => e.Snapshot.Properties.Any(p => p.Name == KnownProperties.Resource.WaitingFor), cts.Token).DefaultTimeout();
+            Assert.Equal(includeConnectionString ? KnownResourceStates.UnresolvedParameters : KnownResourceStates.Waiting, waiting.Snapshot.State?.Text);
+            Assert.False(beforeStartTask.IsCompleted);
+            if (includeConnectionString)
+            {
+                await password.Resource.SetValueAsync("resolved-password", cts.Token).DefaultTimeout();
+                await notifications.WaitForResourceAsync(consumer.Resource.Name, KnownResourceStates.Waiting, cts.Token).DefaultTimeout();
+            }
+
+            await orchestrator.StartResourceAsync(consumer.Resource.Name, cts.Token).DefaultTimeout();
+            await beforeStartTask.DefaultTimeout();
+            Assert.Empty(executor.StartedResources);
+
+            var configuration = await ExecutionConfigurationBuilder.Create(consumer.Resource)
+                .WithEnvironmentVariablesConfig()
+                .WithArgumentsConfig()
+                .BuildAsync(builder.ExecutionContext, NullLogger.Instance, cts.Token).DefaultTimeout();
+            Assert.Null(configuration.Exception);
+            Assert.Equal(1, callbackCount);
+            var expected = includeConnectionString
+                ? "Endpoint=http://localhost:5001;Value=resolved-password"
+                : "Endpoint=http://localhost:5001";
+            if (usage == ReferenceUsage.Arguments)
+            {
+                Assert.Equal(expected, Assert.Single(configuration.Arguments).Value);
+                Assert.Empty(configuration.EnvironmentVariables);
+            }
+            else
+            {
+                var environmentVariable = Assert.Single(configuration.EnvironmentVariables);
+                Assert.Equal(usage == ReferenceUsage.Reference ? "ConnectionStrings__connection" : "VALUE", environmentVariable.Key);
+                Assert.Equal(expected, environmentVariable.Value);
+                Assert.Empty(configuration.Arguments);
+            }
+            Assert.Equal(includeConnectionString, password.Resource.WaitForValueTcs!.Task.IsCompleted);
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            await password.Resource.SetValueAsync("cleanup-password").DefaultTimeout();
+        }
+    }
+
+    [Theory]
     [InlineData(ReferenceEnvironmentInjectionFlags.None, false)]
     [InlineData(ReferenceEnvironmentInjectionFlags.None, true)]
     [InlineData(ReferenceEnvironmentInjectionFlags.ConnectionString, false)]
@@ -2898,7 +3029,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     private sealed class ParameterConnectionStringResource(string name, ParameterResource parameter)
-        : Resource(name), IResourceWithConnectionString
+        : Resource(name), IResourceWithConnectionString, IResourceWithEndpoints
     {
         public bool IsConfigured { get; set; } = true;
 

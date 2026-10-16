@@ -4908,7 +4908,10 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="expression">The reference expression.</param>
     /// <returns>A resource builder.</returns>
-    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    /// <remarks>
+    /// Endpoint references link to their owners without traversing the owners' connection metadata.
+    /// This method is not available in polyglot app hosts.
+    /// </remarks>
     [AspireExportIgnore(Reason = "Low-level relationship tracking — raw IResource interface, not intended for polyglot use.")]
     public static IResourceBuilder<T> WithReferenceRelationship<T>(
         this IResourceBuilder<T> builder,
@@ -4951,7 +4954,13 @@ public static class ResourceBuilderExtensions
                 value = resourceBuilder.Resource;
             }
 
-            if (value is IResource resource)
+            var resource = value switch
+            {
+                IResource referencedResource => referencedResource,
+                EndpointReference endpoint => endpoint.Resource,
+                _ => null
+            };
+            if (resource is not null)
             {
                 var target = resource switch
                 {
@@ -4962,6 +4971,12 @@ public static class ResourceBuilderExtensions
                 if (linkTargets.HasFlag(target) && linkedResources.Add(resource))
                 {
                     builder.WithReferenceRelationship(resource);
+                }
+
+                // Endpoint ownership is a relationship, not consumption of the owner's connection metadata.
+                if (value is EndpointReference)
+                {
+                    return;
                 }
 
                 // A resource's internal dependencies are not direct consumer references (e.g. a database's

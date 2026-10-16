@@ -7,6 +7,7 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Tests;
@@ -731,6 +732,111 @@ public class WithReferenceTests
         // Verify connection properties ARE present
         Assert.Contains(config, kvp => kvp.Key == "RESOURCE_HOST" && kvp.Value == "localhost");
         Assert.Contains(config, kvp => kvp.Key == "RESOURCE_PORT" && kvp.Value == "5432");
+    }
+
+    [Theory]
+    [InlineData(ReferenceUsage.Environment, false)]
+    [InlineData(ReferenceUsage.Environment, true)]
+    [InlineData(ReferenceUsage.GenericEnvironment, false)]
+    [InlineData(ReferenceUsage.GenericEnvironment, true)]
+    [InlineData(ReferenceUsage.Arguments, false)]
+    [InlineData(ReferenceUsage.Arguments, true)]
+    [InlineData(ReferenceUsage.Relationship, false)]
+    [InlineData(ReferenceUsage.Relationship, true)]
+    public async Task EndpointOnlyReferencesLinkOwnerWithoutCredentials(ReferenceUsage usage, bool useProperty)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var password = builder.AddParameter("password", secret: true);
+        var property = builder.AddParameter("property");
+        var source = builder.AddResource(new TestResourceWithReferencedProperties("server", password.Resource, property.Resource))
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithEndpoint("http", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5001));
+        var endpoint = source.GetEndpoint("http");
+        IExpressionValue value = useProperty ? endpoint.Property(EndpointProperty.Host) : endpoint;
+        var expression = ReferenceExpression.Create($"Endpoint={value}");
+        var consumer = builder.AddExecutable("consumer", "unused", ".");
+
+        switch (usage)
+        {
+            case ReferenceUsage.Environment:
+                consumer.WithEnvironment("VALUE", expression);
+                break;
+            case ReferenceUsage.GenericEnvironment:
+                consumer.WithEnvironment<ExecutableResource, ReferenceExpression>("VALUE", expression);
+                break;
+            case ReferenceUsage.Arguments:
+                consumer.WithArgs(value);
+                break;
+            case ReferenceUsage.Relationship:
+                consumer.WithReferenceRelationship(expression);
+                consumer.WithEnvironment(context => context.EnvironmentVariables["VALUE"] = expression);
+                break;
+            default:
+                throw new InvalidOperationException($"Unexpected usage '{usage}'.");
+        }
+
+        Assert.Collection(consumer.Resource.Annotations.OfType<ResourceRelationshipAnnotation>(), relationship =>
+        {
+            Assert.Equal(KnownRelationshipTypes.Reference, relationship.Type);
+            Assert.Same(source.Resource, relationship.Resource);
+        });
+
+        foreach (var operation in new[] { DistributedApplicationOperation.Run, DistributedApplicationOperation.Publish })
+        {
+            var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(operation)
+            {
+                Services = TestServiceProvider.Instance
+            });
+            var configuration = await ExecutionConfigurationBuilder.Create(consumer.Resource)
+                .WithEnvironmentVariablesConfig()
+                .WithArgumentsConfig()
+                .BuildAsync(context, NullLogger.Instance, TestContext.Current.CancellationToken).DefaultTimeout();
+            Assert.Null(configuration.Exception);
+            var expected = operation == DistributedApplicationOperation.Run
+                ? useProperty ? "localhost" : "http://localhost:5001"
+                : useProperty ? "{server.bindings.http.host}" : "{server.bindings.http.url}";
+            if (usage == ReferenceUsage.Arguments)
+            {
+                Assert.Equal(expected, Assert.Single(configuration.Arguments).Value);
+                Assert.Empty(configuration.EnvironmentVariables);
+            }
+            else
+            {
+                var environmentVariable = Assert.Single(configuration.EnvironmentVariables);
+                Assert.Equal("VALUE", environmentVariable.Key);
+                Assert.Equal($"Endpoint={expected}", environmentVariable.Value);
+                Assert.Empty(configuration.Arguments);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EndpointAndConnectionStringReferencesStillLinkCredentials(bool endpointFirst)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var password = builder.AddParameter("password", secret: true);
+        var property = builder.AddParameter("property");
+        var source = builder.AddResource(new TestResourceWithReferencedProperties("server", password.Resource, property.Resource))
+            .WithHttpEndpoint(name: "http", targetPort: 8080);
+        var endpoint = source.GetEndpoint("http");
+        var expression = endpointFirst
+            ? ReferenceExpression.Create($"{endpoint};{source.Resource}")
+            : ReferenceExpression.Create($"{source.Resource};{endpoint}");
+        var consumer = builder.AddExecutable("consumer", "unused", ".").WithArgs(expression);
+
+        Assert.Collection(consumer.Resource.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            relationship =>
+            {
+                Assert.Equal(KnownRelationshipTypes.Reference, relationship.Type);
+                Assert.Same(source.Resource, relationship.Resource);
+            },
+            relationship =>
+            {
+                Assert.Equal(KnownRelationshipTypes.Reference, relationship.Type);
+                Assert.Same(password.Resource, relationship.Resource);
+            });
     }
 
     [Theory]
@@ -1478,7 +1584,7 @@ public class WithReferenceTests
     private sealed class TestResourceWithReferencedProperties(
         string name,
         ParameterResource connectionStringParameter,
-        ParameterResource connectionPropertyParameter) : Resource(name), IResourceWithConnectionString
+        ParameterResource connectionPropertyParameter) : Resource(name), IResourceWithConnectionString, IResourceWithEndpoints
     {
         public Exception? ConnectionStringException { get; set; }
 

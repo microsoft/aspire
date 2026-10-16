@@ -415,7 +415,8 @@ internal sealed class ApplicationOrchestrator
                 value = resourceBuilder.Resource;
             }
 
-            if (value is null || !visited.Add(value))
+            // Endpoint values do not consume their owner's connection string or credential parameters.
+            if (value is null or EndpointReference || !visited.Add(value))
             {
                 return;
             }
