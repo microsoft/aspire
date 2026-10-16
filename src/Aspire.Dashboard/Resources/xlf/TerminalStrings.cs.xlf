@@ -202,6 +202,71 @@
         <target state="new">The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalStatusAuth">
+        <source>Authentication required</source>
+        <target state="new">Authentication required</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalStatusBlocked">
+        <source>Blocked</source>
+        <target state="new">Blocked</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalStatusDone">
+        <source>Done</source>
+        <target state="new">Done</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalStatusEmpty">
+        <source>No program status reported.</source>
+        <target state="new">No program status reported.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalStatusError">
+        <source>Error</source>
+        <target state="new">Error</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalStatusIdle">
+        <source>Idle</source>
+        <target state="new">Idle</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalStatusPermission">
+        <source>Permission required</source>
+        <target state="new">Permission required</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalStatusQuestion">
+        <source>Question</source>
+        <target state="new">Question</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalStatusRoot">
+        <source>Program</source>
+        <target state="new">Program</target>
+        <note>Fallback name for the root program status record when no title is reported.</note>
+      </trans-unit>
+      <trans-unit id="TerminalStatusTitle">
+        <source>Program status</source>
+        <target state="new">Program status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalStatusToggle">
+        <source>Toggle program status panel</source>
+        <target state="new">Toggle program status panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalStatusUnfinishedChildren">
+        <source>Unfinished child tasks</source>
+        <target state="new">Unfinished child tasks</target>
+        <note>Accessible description of a grouping row with no reported status, when a descendant is not done or error.</note>
+      </trans-unit>
+      <trans-unit id="TerminalStatusWorking">
+        <source>Working</source>
+        <target state="new">Working</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalTitle">
         <source>Terminal</source>
         <target state="new">Terminal</target>

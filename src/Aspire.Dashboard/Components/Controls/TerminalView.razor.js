@@ -236,6 +236,39 @@ function cancelReconnect(state) {
     }
 }
 
+function notifyProgramStatus(state) {
+    if (state.disposed || state.programStatusFrame !== null) {
+        return;
+    }
+    // HWT1 exposes a complete inventory, e.g. { records: [{ id: "deploy/east", state: "working", ... }] }.
+    // Coalesce inventories separately from high-frequency toolbar/geometry updates.
+    state.programStatusFrame = requestAnimationFrame(() => {
+        state.programStatusFrame = null;
+        if (state.disposed || !state.dotNetRef) {
+            return;
+        }
+        const snapshot = {
+            terminalId: state.id,
+            generation: state.generation,
+            hasStatus: state.hasProgramStatus,
+            records: state.programStatus.records,
+        };
+        const json = JSON.stringify(snapshot);
+        if (json === state.lastProgramStatusJson) {
+            return;
+        }
+        state.lastProgramStatusJson = json;
+        Promise.resolve().then(() =>
+            state.dotNetRef?.invokeMethodAsync("OnTerminalProgramStatusChanged", snapshot)
+        ).catch(error => {
+            if (!state.disposed) {
+                state.lastProgramStatusJson = null;
+                console.warn("Dashboard terminal program status update failed.", error);
+            }
+        });
+    });
+}
+
 function releaseClient(state) {
     state.inspectionObserver?.disconnect();
     state.inspectionObserver = null;
@@ -569,6 +602,7 @@ function connectClient(state) {
     state.autoFitPending = state.autoFit;
     state.waitingForVisibility = false;
     notifyToolbar(state);
+    notifyProgramStatus(state);
     // A hidden Console view must not spend the package's first-frame timeout.
     if (!isVisible(state)) {
         state.waitingForVisibility = true;
@@ -630,6 +664,13 @@ async function mountClient(state, generation, controller) {
                 if (current()) {
                     state.progress = progress;
                     notifyToolbar(state);
+                }
+            },
+            onProgramStatusChange(status) {
+                if (current()) {
+                    state.programStatus = status;
+                    state.hasProgramStatus ||= status.records.length > 0;
+                    notifyProgramStatus(state);
                 }
             },
             onInput: input => inputPolicy(state, input),
@@ -789,6 +830,10 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         workingDirectory: null,
         workingDirectoryUri: null,
         progress: { state: "none", percentage: null },
+        programStatus: { records: [] },
+        hasProgramStatus: false,
+        programStatusFrame: null,
+        lastProgramStatusJson: null,
         peer: { id: null, primaryId: null, isPrimary: false },
         geometry: null,
         sizing: { mode: "auto", fontSize },
@@ -878,6 +923,8 @@ export function reconnectTerminal(id, wsUrl) {
         state.workingDirectory = null;
         state.workingDirectoryUri = null;
         state.progress = { state: "none", percentage: null };
+        state.programStatus = { records: [] };
+        state.hasProgramStatus = false;
     }
     state.wsUrl = wsUrl;
     state.ended = false;
@@ -898,6 +945,9 @@ export function disposeTerminal(id) {
     cancelReconnect(state);
     if (state.toolbarFrame !== null) {
         cancelAnimationFrame(state.toolbarFrame);
+    }
+    if (state.programStatusFrame !== null) {
+        cancelAnimationFrame(state.programStatusFrame);
     }
     state.observer.disconnect();
     state.themeObserver.disconnect();

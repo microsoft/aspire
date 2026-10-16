@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Lifecycle;
@@ -88,6 +89,46 @@ public class WithTerminalTests : IAsyncLifetime
     }
 
     [Fact]
+    public void WithTerminalSizingPreferenceFlowsToResourceSnapshot()
+    {
+        using var builder = CreateBuilder();
+        var resource = builder.AddExecutable("myapp", "myapp", ".").WithTerminal();
+
+        var properties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource.Resource, resource.Resource.Name, []);
+        var autoFit = Assert.Single(properties, p => p.Name == KnownProperties.Terminal.AutoFit);
+        Assert.Equal("true", autoFit.Value);
+        Assert.False(autoFit.IsSensitive);
+    }
+
+    [Theory]
+    [InlineData(null, null, true)]
+    [InlineData(132, null, false)]
+    [InlineData(null, 50, false)]
+    [InlineData(200, null, false)]
+    [InlineData(null, 40, false)]
+    [InlineData(200, 40, false)]
+    public void WithTerminalConfiguredSizingPreferenceFlowsToResourceSnapshot(int? columns, int? rows, bool expectedAutoFit)
+    {
+        using var builder = CreateBuilder();
+        var resource = builder.AddExecutable("myapp", "myapp", ".").WithTerminal(options =>
+        {
+            if (columns is { } configuredColumns)
+            {
+                options.Columns = configuredColumns;
+            }
+            if (rows is { } configuredRows)
+            {
+                options.Rows = configuredRows;
+            }
+        });
+
+        var properties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource.Resource, resource.Resource.Name, []);
+        var autoFit = Assert.Single(properties, p => p.Name == KnownProperties.Terminal.AutoFit);
+        Assert.Equal(expectedAutoFit ? "true" : "false", autoFit.Value);
+        Assert.False(autoFit.IsSensitive);
+    }
+
+    [Fact]
     public void WithTerminalOptionsCallbackUpdatesAnnotation()
     {
         // Scope: this test verifies only the TerminalAnnotation captured on the parent
@@ -149,6 +190,7 @@ public class WithTerminalTests : IAsyncLifetime
 
         Assert.Throws<ArgumentOutOfRangeException>(() => options.Columns = 0);
         Assert.Throws<ArgumentOutOfRangeException>(() => options.Rows = -5);
+        Assert.False(options.HasExplicitDimensions);
 
         // A valid assignment still succeeds, and the boundary value 1 is accepted.
         options.Columns = 1;

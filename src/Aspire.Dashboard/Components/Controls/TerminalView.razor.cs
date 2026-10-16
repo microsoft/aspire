@@ -40,6 +40,11 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private static readonly string[] s_paletteChoices = ["light", "dark"];
     private readonly string _sizeSelectId = $"terminal-size-{Guid.NewGuid():N}";
     private readonly string _paletteSelectId = $"terminal-palette-{Guid.NewGuid():N}";
+    private readonly string _programStatusPanelId = $"terminal-status-{Guid.NewGuid():N}";
+    private readonly HashSet<string> _collapsedStatusIds = new(StringComparer.Ordinal);
+    private IReadOnlyList<TerminalProgramStatusNode> _programStatusNodes = [];
+    private bool _hasProgramStatus;
+    private bool _showProgramStatus;
 
     /// <summary>Gets or sets the unique instance name of the resource that owns the terminal.</summary>
     [Parameter]
@@ -127,7 +132,10 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             !string.Equals(_sessionEndpoint, ResolveEndpoint(), StringComparison.Ordinal);
     }
 
-    protected override Task OnAfterRenderAsync(bool firstRender) => ReconcileAsync();
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await ReconcileAsync();
+    }
 
     private async Task ReconcileAsync()
     {
@@ -255,6 +263,22 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             return;
         }
 
+        if (!string.IsNullOrEmpty(newEndpoint))
+        {
+            // Registry identity must match Request.PathBase + Request.Path + Request.QueryString,
+            // including when a caller supplied a relative explicit endpoint.
+            newEndpoint = new Uri(new Uri(NavigationManager.BaseUri), newEndpoint).PathAndQuery;
+        }
+
+        if (!string.Equals(newEndpoint, _connectedEndpoint, StringComparison.Ordinal))
+        {
+            _hasProgramStatus = false;
+            _showProgramStatus = false;
+            _programStatusNodes = [];
+            _collapsedStatusIds.Clear();
+            StateHasChanged();
+        }
+
         if (string.IsNullOrEmpty(newEndpoint))
         {
             ReleaseViewSession();
@@ -274,9 +298,6 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         }
         else
         {
-            // Registry identity must match Request.PathBase + Request.Path + Request.QueryString,
-            // including when a caller supplied a relative explicit endpoint.
-            newEndpoint = new Uri(new Uri(NavigationManager.BaseUri), newEndpoint).PathAndQuery;
             EnsureViewSession(newEndpoint);
             if (_terminalId == 0)
             {
@@ -334,6 +355,33 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             StateHasChanged();
         }
         await OnToolbarStateChanged.InvokeAsync(state);
+    }
+
+    [JSInvokable]
+    public void OnTerminalProgramStatusChanged(TerminalProgramStatus status)
+    {
+        if (_disposed || (_terminalId != 0 && status.TerminalId != _terminalId) ||
+            (_terminalId == 0 && _initializationTask is not { IsCompleted: false }) ||
+            status.Generation < _connectedGeneration)
+        {
+            return;
+        }
+
+        _connectedGeneration = status.Generation;
+        if (!_hasProgramStatus && status.HasStatus)
+        {
+            _hasProgramStatus = true;
+            _showProgramStatus = true;
+        }
+        _programStatusNodes = TerminalProgramStatusNode.CreateTree(status.Records);
+        _collapsedStatusIds.RemoveWhere(id => !status.Records.Any(record =>
+            record.Id == id || record.Id.StartsWith(id + "/", StringComparison.Ordinal)));
+        StateHasChanged();
+    }
+
+    private void ToggleProgramStatus()
+    {
+        _showProgramStatus = !_showProgramStatus;
     }
 
     /// <summary>Sets the font size in automatic sizing mode, clamped to the package's public bounds.</summary>

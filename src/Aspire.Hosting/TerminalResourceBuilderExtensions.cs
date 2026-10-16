@@ -34,6 +34,9 @@ public static class TerminalResourceBuilderExtensions
     /// (PTY) per replica and a hidden terminal host process bridges the PTY traffic over Hex1b's
     /// HMP v1 protocol. The terminal session can be accessed from the Aspire Dashboard's terminal
     /// page or via the <c>aspire terminal</c> CLI command.
+    /// When neither <see cref="TerminalOptions.Columns"/> nor <see cref="TerminalOptions.Rows"/>
+    /// is configured, opening the dashboard terminal automatically fits the grid to the view.
+    /// Explicit dimensions retain the producer's current grid until the viewer requests a resize.
     /// Terminal host resources can be revealed using the dashboard's Show hidden resources control
     /// to inspect their state and diagnostic telemetry. Terminal host telemetry is disabled when
     /// <see cref="DistributedApplicationOptions.DisableDashboard"/> is <see langword="true"/>.
@@ -117,7 +120,8 @@ public static class TerminalResourceBuilderExtensions
     /// Polyglot dispatcher for <see cref="WithTerminal{T}(IResourceBuilder{T}, Action{TerminalOptions}?)"/>.
     /// Exposed to non-C# AppHosts via ATS as <c>withTerminal</c> — they cannot pass a
     /// C# <see cref="Action{T}"/>, so this overload simply applies the defaults from
-    /// <see cref="TerminalOptions"/> (132×50). Polyglot AppHosts that need to customise
+    /// <see cref="TerminalOptions"/> (initially 132×50, automatically fitted when opened in the dashboard).
+    /// Polyglot AppHosts that need to customise
     /// the terminal dimensions can wait for a future overload that accepts a DTO.
     /// </summary>
     /// <ats-summary>Adds an interactive terminal session to a resource using the default terminal options.</ats-summary>

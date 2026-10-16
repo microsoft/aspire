@@ -66,6 +66,7 @@
             @if (GetSelectedResource() is { } resource && resource.HasTerminal())
             {
                 <TerminalView ResourceName="@resource.Name" ShowOpenInWindow="true"
+                              AutoFit="@resource.ShouldAutoFitTerminal()"
                               WindowResourceName="@GetResourceName(PageViewModel.SelectedResource)"
                               ResourceIcon="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)" />
             }

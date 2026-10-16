@@ -27,22 +27,47 @@
                 }
             </div>
         }
-        <div class="terminal-body">
-            <div class="terminal-container" @ref="_terminalElement"></div>
-            @if (_terminalError is not null)
-            {
-                <div class="terminal-error">
-                    <span role="alert">@GetErrorMessage()</span>
-                    @if (_terminalError is "input-failed" or "sizing-failed" or "palette-failed")
+        <div class="terminal-content">
+            <FluentMultiSplitter Orientation="Orientation.Horizontal" BarSize="5px">
+                <FluentMultiSplitterPane Size="70%" Min="15%" Max="85%">
+                    <div class="terminal-body">
+                        <div class="terminal-container" @ref="_terminalElement"></div>
+                        @if (_terminalError is not null)
+                        {
+                            <div class="terminal-error">
+                                <span role="alert">@GetErrorMessage()</span>
+                                @if (_terminalError is "input-failed" or "sizing-failed" or "palette-failed")
+                                {
+                                    <FluentButton OnClick="DismissErrorAsync">@Loc[nameof(Resources.TerminalStrings.TerminalDismissError)]</FluentButton>
+                                }
+                                else
+                                {
+                                    <FluentButton OnClick="RetryAsync">@Loc[nameof(Resources.TerminalStrings.TerminalRetry)]</FluentButton>
+                                }
+                            </div>
+                        }
+                    </div>
+                </FluentMultiSplitterPane>
+                <FluentMultiSplitterPane Size="30%" Min="15%" Max="85%" Collapsed="@(!_showProgramStatus)">
+                    @if (_showProgramStatus)
                     {
-                        <FluentButton OnClick="DismissErrorAsync">@Loc[nameof(Resources.TerminalStrings.TerminalDismissError)]</FluentButton>
+                        <aside class="terminal-status-panel" id="@_programStatusPanelId" aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalStatusTitle)]">
+                            <div class="terminal-status-content">
+                                @if (_programStatusNodes.Count == 0)
+                                {
+                                    <span class="terminal-status-empty">@Loc[nameof(Resources.TerminalStrings.TerminalStatusEmpty)]</span>
+                                }
+                                else
+                                {
+                                    <FluentTreeView aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalStatusTitle)]" Size="TreeSize.Medium">
+                                        <TerminalProgramStatusTree Nodes="@_programStatusNodes" CollapsedIds="@_collapsedStatusIds" />
+                                    </FluentTreeView>
+                                }
+                            </div>
+                        </aside>
                     }
-                    else
-                    {
-                        <FluentButton OnClick="RetryAsync">@Loc[nameof(Resources.TerminalStrings.TerminalRetry)]</FluentButton>
-                    }
-                </div>
-            }
+                </FluentMultiSplitterPane>
+            </FluentMultiSplitter>
         </div>
         <div class="terminal-footer" tabindex="-1" @ref="_footerElement">
             <span class="terminal-focus-hint"><kbd>F6</kbd>: @Loc[nameof(Resources.TerminalStrings.TerminalFocusControlsDescription)]</span>
@@ -84,6 +109,17 @@
                               Disabled="@(_terminalId == 0)"
                               Title="@Loc[nameof(Resources.TerminalStrings.TerminalPalette)]"
                               AriaLabel="@Loc[nameof(Resources.TerminalStrings.TerminalPalette)]" />
+                @if (_hasProgramStatus)
+                {
+                    <FluentButton Class="terminal-status-toggle toolbar-button" Appearance="ButtonAppearance.Default" IconOnly="true"
+                                  Title="@Loc[nameof(Resources.TerminalStrings.TerminalStatusToggle)]"
+                                  aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalStatusToggle)]"
+                                  aria-expanded="@(_showProgramStatus ? "true" : "false")"
+                                  aria-controls="@_programStatusPanelId"
+                                  OnClick="ToggleProgramStatus">
+                        <FluentIcon Icon="Icons.Regular.Size20.PanelRightExpand" Width="16px" Color="Color.Primary" />
+                    </FluentButton>
+                }
             </div>
         </div>
     </div>

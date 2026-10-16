@@ -157,6 +157,19 @@
     white-space: nowrap;
 }
 
+.terminal-content {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+}
+
+.terminal-content ::deep .fluent-multi-splitter-pane {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+}
+
 .terminal-body {
     position: relative;
     flex: 1;
@@ -164,6 +177,96 @@
     min-height: 0;
     padding: 12px;
     box-sizing: border-box;
+}
+
+.terminal-status-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    background: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground1);
+}
+
+.terminal-status-content {
+    --terminal-status-row-height: 32px;
+    --terminal-status-indent: 24px;
+    /* Align connectors with the glyph center after the content inset, without a chevron track. */
+    --terminal-status-icon-center: 22px;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 8px;
+}
+
+.terminal-status-content ::deep fluent-tree-item::part(positioning-region),
+.terminal-status-content ::deep fluent-tree-item::part(content) {
+    height: auto;
+    min-height: var(--terminal-status-row-height);
+    align-items: center;
+    margin-inline-start: 0;
+    box-sizing: border-box;
+}
+
+.terminal-status-content ::deep fluent-tree-item::part(chevron) {
+    display: none;
+}
+
+.terminal-status-content ::deep fluent-tree-item:hover::part(positioning-region) {
+    background: transparent;
+}
+
+.terminal-status-content ::deep .terminal-status-branch::part(positioning-region) {
+    cursor: pointer;
+}
+
+.terminal-status-content ::deep fluent-tree-item::part(content) {
+    min-width: 0;
+    padding-block: 0;
+}
+
+.terminal-status-content ::deep fluent-tree-item {
+    position: relative;
+    --terminal-status-connector-color: var(--colorNeutralStroke2);
+}
+
+.terminal-status-content ::deep fluent-tree {
+    min-width: max-content;
+}
+
+.terminal-status-content ::deep fluent-tree-item::part(items) {
+    margin-inline-start: var(--terminal-status-indent);
+    padding-inline-start: 0;
+}
+
+.terminal-status-content ::deep fluent-tree-item fluent-tree-item::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: calc(var(--terminal-status-icon-center) - var(--terminal-status-indent));
+    top: calc(var(--terminal-status-row-height) / -2);
+    width: var(--terminal-status-indent);
+    height: var(--terminal-status-row-height);
+    border-inline-start: 1px solid var(--terminal-status-connector-color);
+    border-block-end: 1px solid var(--terminal-status-connector-color);
+    border-end-start-radius: 6px;
+    pointer-events: none;
+}
+
+.terminal-status-content ::deep fluent-tree-item fluent-tree-item:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: calc(var(--terminal-status-icon-center) - var(--terminal-status-indent));
+    top: calc(var(--terminal-status-row-height) / 2);
+    bottom: 0;
+    border-inline-start: 1px solid var(--terminal-status-connector-color);
+    pointer-events: none;
+}
+
+.terminal-status-empty {
+    color: var(--colorNeutralForeground2);
+    font-size: var(--fontSizeBase200);
 }
 
 .terminal-container {

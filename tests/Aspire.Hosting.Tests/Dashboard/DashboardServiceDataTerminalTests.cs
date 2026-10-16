@@ -40,7 +40,7 @@ public class DashboardServiceDataTerminalTests
     }
 
     [Fact]
-    public async Task Snapshot_WithTerminal_SingleReplica_StampsAllFourPropertiesAndMarksUdsPathSensitive()
+    public async Task Snapshot_WithTerminal_SingleReplica_StampsTerminalPropertiesAndMarksUdsPathSensitive()
     {
         var (data, notifications, resource) = CreateHarness(
             addTerminal: true,
@@ -52,12 +52,15 @@ public class DashboardServiceDataTerminalTests
         var snapshot = await data.WaitForResourceAsync(resource.Name, r => HasTerminalProperty(r, "terminal.enabled")).DefaultTimeout();
 
         var enabled = GetTerminalProperty(snapshot, "terminal.enabled");
+        var autoFit = GetTerminalProperty(snapshot, "terminal.autoFit");
         var index = GetTerminalProperty(snapshot, "terminal.replicaIndex");
         var count = GetTerminalProperty(snapshot, "terminal.replicaCount");
         var path = GetTerminalProperty(snapshot, "terminal.consumerUdsPath");
 
         Assert.Equal("true", enabled.Value.StringValue);
         Assert.False(enabled.IsSensitive);
+        Assert.Equal("false", autoFit.Value.StringValue);
+        Assert.False(autoFit.IsSensitive);
         Assert.Equal("0", index.Value.StringValue);
         Assert.False(index.IsSensitive);
         Assert.Equal("1", count.Value.StringValue);

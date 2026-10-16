@@ -23,6 +23,7 @@ let timers;
 let frames;
 let ids;
 let snapshots;
+let programStatuses;
 let serial;
 const globals = new Map();
 let originalMount;
@@ -43,6 +44,7 @@ beforeEach(() => {
     frames = new Map();
     ids = [];
     snapshots = [];
+    programStatuses = [];
     serial = 0;
     themeObservers = [];
     mediaQueries = new Map();
@@ -272,6 +274,10 @@ function mount({ visible = true, dotNetRef, options = {} } = {}) {
     const viewId = options.viewId ?? `view-${++serial}`;
     const id = terminal.initTerminal(element, "wss://dashboard/api/terminal?resource=app-instance-1",
         dotNetRef ?? { invokeMethodAsync: (name, value) => {
+            if (name === "OnTerminalProgramStatusChanged") {
+                programStatuses.push(value);
+                return;
+            }
             assert.equal(name, "OnTerminalStateChanged");
             snapshots.push(value);
         } },
@@ -298,6 +304,71 @@ function retry() {
     callback();
     return delay;
 }
+
+test("program status is delivered before mount resolves and coalesces the latest inventory", async () => {
+    const { id } = mount();
+    const first = { records: [{ id: "", state: "working", progress: 0 }] };
+    const latest = { records: [{ id: "build/tests", state: "blocked", kind: "question", message: "Choose a suite" }] };
+    attempts[0].options.onProgramStatusChange(first);
+    attempts[0].options.onProgramStatusChange(latest);
+    await settle();
+    assert.deepEqual(programStatuses, [{ terminalId: id, generation: 1, hasStatus: true, records: latest.records }]);
+    assert.equal(attempts[0].client.disposed, false);
+
+    attempts[0].options.onProgramStatusChange(latest);
+    await settle();
+    assert.equal(programStatuses.length, 1, "Repeated inventories must not cross interop again");
+});
+
+test("a status followed by clearing in one frame still records first observation", async () => {
+    mount();
+    attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "done" }] });
+    attempts[0].options.onProgramStatusChange({ records: [] });
+    await settle();
+    assert.equal(programStatuses[0].hasStatus, true);
+    assert.deepEqual(programStatuses[0].records, []);
+});
+
+test("initial empty inventories do not make status controls available", async () => {
+    mount();
+    attempts[0].options.onProgramStatusChange({ records: [] });
+    await settle();
+    assert.deepEqual(programStatuses.map(s => [s.hasStatus, s.records]), [[false, []]]);
+});
+
+test("program status survives same-terminal reconnect and rejects old mount callbacks", async () => {
+    const { id } = mount();
+    const records = [{ id: "build", state: "done", message: "Ready" }];
+    attempts[0].options.onProgramStatusChange({ records });
+    attempts[0].resolve();
+    await settle();
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=app-instance-1");
+    attempts[0].options.onProgramStatusChange({ records: [] });
+    await settle();
+    assert.deepEqual(programStatuses.at(-1), { terminalId: id, generation: 2, hasStatus: true, records });
+    attempts[1].options.onProgramStatusChange({ records: [] });
+    await settle();
+    assert.deepEqual(programStatuses.at(-1).records, []);
+    assert.equal(programStatuses.at(-1).hasStatus, true);
+});
+
+test("rebinding to another endpoint resets the inventory and first observation", async () => {
+    const { id } = mount();
+    attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "error" }] });
+    await settle();
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=other");
+    await settle();
+    assert.deepEqual(programStatuses.at(-1), { terminalId: id, generation: 2, hasStatus: false, records: [] });
+});
+
+test("disposal cancels queued status delivery and ignores further reports", async () => {
+    const { id } = mount();
+    attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "working" }] });
+    terminal.disposeTerminal(id);
+    attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "done" }] });
+    await settle();
+    assert.deepEqual(programStatuses, []);
+});
 
 test("pointer focus styling ends on keyboard input without changing terminal focus", async () => {
     const { element } = mount();
@@ -2098,7 +2169,7 @@ test("frontend manifest, lockfile, minified bundle and backend use the exact pai
     const lockfile = JSON.parse(await readFile(new URL("package-lock.json", dashboard), "utf8"));
     const bundle = await readFile(new URL("dist/index.min.js", assets), "utf8");
     const version = manifest.dependencies["@hex1b/web-terminal"];
-    assert.equal(version, "0.172.0");
+    assert.equal(version, "0.175.0-alpha.1963.1.e84f086");
     assert.equal(bundle.split(/\r?\n/, 1)[0], `// @hex1b/web-terminal ${version}; minified with Terser. See ../LICENSE.`);
     assert.equal(lockfile.packages[""].dependencies["@hex1b/web-terminal"], version);
     assert.equal(lockfile.packages["node_modules/@hex1b/web-terminal"].version, version);

@@ -120,6 +120,47 @@
   <data name="TerminalProgress" xml:space="preserve">
     <value>Terminal progress</value>
   </data>
+  <data name="TerminalStatusTitle" xml:space="preserve">
+    <value>Program status</value>
+  </data>
+  <data name="TerminalStatusToggle" xml:space="preserve">
+    <value>Toggle program status panel</value>
+  </data>
+  <data name="TerminalStatusEmpty" xml:space="preserve">
+    <value>No program status reported.</value>
+  </data>
+  <data name="TerminalStatusRoot" xml:space="preserve">
+    <value>Program</value>
+    <comment>Fallback name for the root program status record when no title is reported.</comment>
+  </data>
+  <data name="TerminalStatusIdle" xml:space="preserve">
+    <value>Idle</value>
+  </data>
+  <data name="TerminalStatusWorking" xml:space="preserve">
+    <value>Working</value>
+  </data>
+  <data name="TerminalStatusUnfinishedChildren" xml:space="preserve">
+    <value>Unfinished child tasks</value>
+    <comment>Accessible description of a grouping row with no reported status, when a descendant is not done or error.</comment>
+  </data>
+  <data name="TerminalStatusBlocked" xml:space="preserve">
+    <value>Blocked</value>
+  </data>
+  <data name="TerminalStatusDone" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="TerminalStatusError" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="TerminalStatusPermission" xml:space="preserve">
+    <value>Permission required</value>
+  </data>
+  <data name="TerminalStatusQuestion" xml:space="preserve">
+    <value>Question</value>
+  </data>
+  <data name="TerminalStatusAuth" xml:space="preserve">
+    <value>Authentication required</value>
+  </data>
   <data name="TerminalPalette" xml:space="preserve">
     <value>Terminal palette</value>
   </data>

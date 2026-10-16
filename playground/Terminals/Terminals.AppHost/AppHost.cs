@@ -17,11 +17,7 @@ builder.AddCSharpApp("palette-test", "Scripts/palette-test.cs")
     });
 
 builder.AddCSharpApp("terminal-features", "Scripts/terminal-features.cs")
-    .WithTerminal(options =>
-    {
-        options.Columns = 120;
-        options.Rows = 32;
-    });
+    .WithTerminal();
 #pragma warning restore CS0618
 
 builder.AddPostgres("postgres").WithRepl();
@@ -112,6 +108,19 @@ else
     // same as a normal terminal session.
     builder.AddExecutable("shell", "/bin/bash", ".", "-i", "-l")
         .WithTerminal();
+}
+
+foreach (var (columns, rows) in new[] { (80, 24), (90, 30) })
+{
+    var name = $"shell{columns}x{rows}";
+    var shell = OperatingSystem.IsWindows()
+        ? builder.AddExecutable(name, "cmd.exe", ".")
+        : builder.AddExecutable(name, "/bin/bash", ".", "-i", "-l");
+    shell.WithTerminal(options =>
+    {
+        options.Columns = columns;
+        options.Rows = rows;
+    });
 }
 
 builder.AddDockerfile("notcurses", "../Terminals.Notcurses")

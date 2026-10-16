@@ -26,6 +26,323 @@ public class TerminalViewTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentButton(this);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ProgramStatus_OpensOnceAndCanBeClosedAndRestored(bool chromeless, bool readOnly)
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        var cut = Render<TerminalView>(builder => builder
+            .Add(p => p.ResourceName, "shell")
+            .Add(p => p.Chromeless, chromeless)
+            .Add(p => p.ReadOnly, readOnly));
+        Assert.Empty(cut.FindAll(".terminal-status-panel"));
+        Assert.Empty(cut.FindAll(".terminal-status-toggle"));
+        Assert.True(cut.FindComponents<FluentMultiSplitterPane>()[1].Instance.Collapsed);
+        var status = new TerminalProgramStatus
+        {
+            TerminalId = 1, Generation = 1, HasStatus = true,
+            Records = [new() { Id = "", State = "working", Title = "Build", Progress = 0 }]
+        };
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status));
+        Assert.Single(cut.FindAll(".terminal-status-panel"));
+        Assert.Equal("terminal-status-content", Assert.Single(cut.Find(".terminal-status-panel").Children).ClassName);
+        Assert.False(cut.FindComponents<FluentMultiSplitterPane>()[1].Instance.Collapsed);
+        Assert.Equal("true", cut.Find(".terminal-status-toggle").GetAttribute("aria-expanded"));
+        Assert.Equal(cut.Find(".terminal-status-panel").Id, cut.Find(".terminal-status-toggle").GetAttribute("aria-controls"));
+        Assert.Equal(Resources.TerminalStrings.TerminalStatusTitle, cut.Find(".terminal-status-panel").GetAttribute("aria-label"));
+        Assert.Equal(Resources.TerminalStrings.TerminalStatusToggle, cut.Find(".terminal-status-toggle").GetAttribute("aria-label"));
+        Assert.Equal("terminal-status-toggle toolbar-button", cut.Find(".terminal-controls").LastElementChild!.ClassName);
+        Assert.Equal("0%", cut.Find(".terminal-status-progress").TextContent);
+
+        cut.Find(".terminal-status-toggle").Click();
+        Assert.Empty(cut.FindAll(".terminal-status-panel"));
+        Assert.True(cut.FindComponents<FluentMultiSplitterPane>()[1].Instance.Collapsed);
+        Assert.Equal("false", cut.Find(".terminal-status-toggle").GetAttribute("aria-expanded"));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with
+        {
+            Generation = 2, Records = [new() { Id = "", State = "done" }]
+        }));
+        Assert.Empty(cut.FindAll(".terminal-status-panel"));
+        cut.Find(".terminal-status-toggle").Click();
+        Assert.Single(cut.FindAll(".terminal-status-panel"));
+        Assert.Equal($"Program{Environment.NewLine}{Resources.TerminalStrings.TerminalStatusDone}",
+            cut.Find(".terminal-status-node").GetAttribute("aria-label"));
+
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with { Generation = 2, Records = [] }));
+        Assert.Equal(Resources.TerminalStrings.TerminalStatusEmpty, cut.Find(".terminal-status-empty").TextContent);
+        Assert.Equal(["initTerminal"], JSInterop.Invocations
+            .Where(i => i.Identifier is "initTerminal" or "reconnectTerminal").Select(i => i.Identifier));
+    }
+
+    [Fact]
+    public async Task ProgramStatus_SplitterRetainsResizedPanesAcrossStatusUpdatesAndVisibilityChanges()
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var status = new TerminalProgramStatus
+        {
+            TerminalId = 1, Generation = 1, HasStatus = true,
+            Records = [new() { Id = "", State = "working", Title = "Build" }]
+        };
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status));
+        var splitter = cut.FindComponent<FluentMultiSplitter>();
+        var initialStyle = cut.Find(".fluent-multi-splitter-pane").GetAttribute("style");
+        await cut.InvokeAsync(() => splitter.Instance.OnPaneResizedAsync(0, 55, 1, 45));
+        var resizedStyle = cut.Find(".fluent-multi-splitter-pane").GetAttribute("style");
+        Assert.NotEqual(initialStyle, resizedStyle);
+
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with
+        {
+            Records = [new() { Id = "", State = "done", Title = "Complete" }]
+        }));
+        Assert.Equal(resizedStyle, cut.Find(".fluent-multi-splitter-pane").GetAttribute("style"));
+        cut.Find(".terminal-status-toggle").Click();
+        cut.Find(".terminal-status-toggle").Click();
+        Assert.Same(splitter.Instance, cut.FindComponent<FluentMultiSplitter>().Instance);
+        Assert.Equal(resizedStyle, cut.Find(".fluent-multi-splitter-pane").GetAttribute("style"));
+        Assert.False(cut.FindComponents<FluentMultiSplitterPane>()[1].Instance.Collapsed);
+        Assert.Equal(["initTerminal"], JSInterop.Invocations
+            .Where(i => i.Identifier is "initTerminal" or "reconnectTerminal").Select(i => i.Identifier));
+    }
+
+    [Fact]
+    public async Task ProgramStatus_ProgressRingTracksIndeterminateDeterminateAndBlockedStates()
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var status = new TerminalProgramStatus { TerminalId = 1, Generation = 1, HasStatus = true };
+
+        int?[] percentages = [null, 0, 42, 100, null];
+        foreach (var progress in percentages)
+        {
+            await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with
+            {
+                Records = [new() { Id = "", State = "working", Title = "Build", Progress = progress }]
+            }));
+            var ring = Assert.Single(cut.FindComponents<AspireProgressRing>());
+            Assert.Equal((double?)progress, ring.Instance.Value);
+            Assert.Equal("16px", ring.Instance.Width);
+            Assert.Equal(cut.Find(".terminal-status-node").GetAttribute("aria-label"), ring.Instance.AriaLabel);
+            Assert.Equal(progress?.ToString(), cut.Find(".terminal-status-state [role=progressbar]").GetAttribute("aria-valuenow"));
+            Assert.Equal(progress is null ? null : $"{progress}%", cut.FindAll(".terminal-status-progress").SingleOrDefault()?.TextContent);
+        }
+
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with
+        {
+            Records = [new() { Id = "", State = "blocked", Progress = 60, Kind = "permission" }]
+        }));
+        Assert.Equal(60, Assert.Single(cut.FindComponents<AspireProgressRing>()).Instance.Value);
+        Assert.Equal("blocked", cut.Find(".terminal-status-record").GetAttribute("data-state"));
+
+        foreach (var state in new[] { "blocked", "done", "error", "idle" })
+        {
+            await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with
+            {
+                Records = [new() { Id = "", State = state }]
+            }));
+            Assert.Empty(cut.FindComponents<AspireProgressRing>());
+            Assert.Single(cut.FindAll(".terminal-status-state svg"));
+        }
+    }
+
+    [Fact]
+    public async Task ProgramStatus_SameEndpointRetryPreservesDismissalAndTreeState()
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var status = new TerminalProgramStatus
+        {
+            TerminalId = 1, Generation = 1, HasStatus = true,
+            Records = [new() { Id = "", State = "done", Title = "Retained" }]
+        };
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status));
+        cut.Find(".terminal-status-toggle").Click();
+        await cut.InvokeAsync(() => cut.Instance.ReconnectAsync("api/terminal?resource=shell"));
+        Assert.Empty(cut.FindAll(".terminal-status-panel"));
+        Assert.Single(cut.FindAll(".terminal-status-toggle"));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with { Generation = 2 }));
+        Assert.Empty(cut.FindAll(".terminal-status-panel"));
+        cut.Find(".terminal-status-toggle").Click();
+        Assert.Equal("Retained", cut.Find(".terminal-status-title").TextContent);
+        Assert.Single(JSInterop.Invocations, i => i.Identifier == "reconnectTerminal");
+    }
+
+    [Fact]
+    public async Task ProgramStatus_RebindingResetsVisibilityAndRejectsStaleReports()
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "first"));
+        var status = new TerminalProgramStatus
+        {
+            TerminalId = 1, Generation = 1, HasStatus = true,
+            Records = [new() { Id = "", State = "done" }]
+        };
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status));
+        cut.Render(builder => builder.Add(p => p.ResourceName, "second"));
+        Assert.Empty(cut.FindAll(".terminal-status-panel"));
+        Assert.Empty(cut.FindAll(".terminal-status-toggle"));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with { TerminalId = 99, Generation = 2 }));
+        Assert.Empty(cut.FindAll(".terminal-status-toggle"));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with { Generation = 2 }));
+        Assert.Single(cut.FindAll(".terminal-status-panel"));
+    }
+
+    [Fact]
+    public async Task ProgramStatus_RendersHierarchyWithoutInventingParentStateAndPreservesExpansion()
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var status = new TerminalProgramStatus
+        {
+            TerminalId = 1, Generation = 1, HasStatus = true,
+            Records =
+            [
+                new() { Id = "", State = "idle" },
+                new() { Id = "deploy/east", State = "blocked", Kind = "permission", Progress = 100, EffectiveApp = "demo" },
+                new() { Id = "deployment", State = "error", Title = "<script>bad()</script>\u202e", Message = "Hello\u200b world \U0001f680" }
+            ]
+        };
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status));
+        Assert.Equal(["", "deploy", "deploy/east", "deployment"],
+            cut.FindAll("fluent-tree-item").Select(item => item.GetAttribute("data-status-id")));
+        var parent = cut.Find("[data-status-id=deploy]");
+        Assert.Equal("deploy", parent.QuerySelector(".terminal-status-title")!.TextContent);
+        Assert.Equal($"deploy{Environment.NewLine}{Resources.TerminalStrings.TerminalStatusUnfinishedChildren}",
+            parent.GetAttribute("aria-label"));
+        Assert.Equal($"Program{Environment.NewLine}{Resources.TerminalStrings.TerminalStatusIdle}",
+            cut.Find("[data-status-id='']").GetAttribute("aria-label"));
+        var child = cut.Find("[data-status-id='deploy/east']");
+        Assert.Equal(string.Join(Environment.NewLine, "east", Resources.TerminalStrings.TerminalStatusBlocked,
+            Resources.TerminalStrings.TerminalStatusPermission, "100%", "demo"), child.GetAttribute("title"));
+        Assert.Equal(child.GetAttribute("title"), child.GetAttribute("aria-label"));
+        Assert.Equal("100%", cut.Find(".terminal-status-progress").TextContent);
+        Assert.Equal("<script>bad()</script>", cut.Find("[data-status-id=deployment] .terminal-status-title").TextContent);
+        Assert.Equal(string.Join(Environment.NewLine, "<script>bad()</script>", Resources.TerminalStrings.TerminalStatusError,
+            "Hello world \U0001f680"), cut.Find("[data-status-id=deployment]").GetAttribute("aria-label"));
+        Assert.Empty(cut.FindAll(".terminal-status-panel script"));
+
+        var item = cut.FindComponents<FluentTreeItem>().Single(i => i.Find("fluent-tree-item").GetAttribute("data-status-id") == "deploy");
+        await cut.InvokeAsync(() => item.Instance.ExpandedChanged.InvokeAsync(false));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with
+        {
+            Records = [.. status.Records, new() { Id = "deploy/west", State = "working" }]
+        }));
+        var updated = cut.FindComponents<FluentTreeItem>().Single(i => i.Find("fluent-tree-item").GetAttribute("data-status-id") == "deploy");
+        Assert.False(updated.Instance.Expanded);
+    }
+
+    [Theory]
+    [InlineData("idle", true)]
+    [InlineData("working", true)]
+    [InlineData("blocked", true)]
+    [InlineData("done", false)]
+    [InlineData("error", false)]
+    public async Task ProgramStatus_GroupingParentsReflectUnfinishedDescendantsWithoutOverridingReportedStatus(string state, bool unfinished)
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var status = new TerminalProgramStatus
+        {
+            TerminalId = 1, Generation = 1, HasStatus = true,
+            Records =
+            [
+                new() { Id = "", State = "done", Title = "Reported parent" },
+                new() { Id = "build/phase/task", State = state }
+            ]
+        };
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status));
+        Assert.Empty(cut.FindAll("[data-status-id=''] > .terminal-status-record .aspire-progress-ring"));
+        foreach (var id in new[] { "build", "build/phase" })
+        {
+            var rings = cut.FindAll($"[data-status-id='{id}'] > .terminal-status-record .aspire-progress-ring");
+            Assert.Equal(unfinished ? 1 : 0, rings.Count);
+            if (unfinished)
+            {
+                Assert.Null(rings[0].GetAttribute("aria-valuenow"));
+                Assert.Equal($"{id.Split('/')[^1]}{Environment.NewLine}{Resources.TerminalStrings.TerminalStatusUnfinishedChildren}",
+                    cut.Find($"[data-status-id='{id}']").GetAttribute("aria-label"));
+            }
+        }
+
+        cut.Find("[data-status-id='build'] > .terminal-status-record").Click();
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with
+        {
+            Records =
+            [
+                new() { Id = "", State = "working", Progress = 42 },
+                new() { Id = "build/phase/task", State = "done" }
+            ]
+        }));
+        Assert.Equal(42d, Assert.Single(cut.FindComponents<AspireProgressRing>()).Instance.Value);
+        Assert.Single(cut.FindAll("[data-status-id='build'] > .terminal-status-record .terminal-status-collapsed-indicator"));
+        Assert.Empty(cut.FindAll("[data-status-id='build'] > .terminal-status-record .aspire-progress-ring"));
+        Assert.Empty(cut.FindAll("[data-status-id='build/phase'] > .terminal-status-record .aspire-progress-ring"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("deploy")]
+    public async Task ProgramStatus_ClickingParentRowTogglesOnlyThatBranch(string parentId)
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var status = new TerminalProgramStatus
+        {
+            TerminalId = 1, Generation = 1, HasStatus = true,
+            Records =
+            [
+                new() { Id = "", State = "working" },
+                new() { Id = "deploy/east", State = "working" }
+            ]
+        };
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status));
+        FluentTreeItem GetItem(string id) => cut.FindComponents<FluentTreeItem>()
+            .Single(item => item.Find("fluent-tree-item").GetAttribute("data-status-id") == id).Instance;
+
+        Assert.Empty(cut.FindAll(".terminal-status-collapsed-indicator"));
+        cut.Find($"[data-status-id='{parentId}'] > .terminal-status-record").Click();
+        Assert.False(GetItem(parentId).Expanded);
+        Assert.Single(cut.FindAll($"[data-status-id='{parentId}'] > .terminal-status-record .terminal-status-collapsed-indicator"));
+        Assert.True(GetItem(parentId.Length == 0 ? "deploy" : "").Expanded);
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status));
+        Assert.False(GetItem(parentId).Expanded);
+        Assert.Single(cut.FindAll(".terminal-status-collapsed-indicator"));
+        cut.Find($"[data-status-id='{parentId}'] > .terminal-status-record").Click();
+        Assert.True(GetItem(parentId).Expanded);
+        Assert.Empty(cut.FindAll(".terminal-status-collapsed-indicator"));
+        cut.Find("[data-status-id='deploy/east'] > .terminal-status-record").Click();
+        Assert.True(GetItem("deploy").Expanded);
+        Assert.True(GetItem("").Expanded);
+    }
+
+    [Theory]
+    [InlineData("idle", null, "Idle", null)]
+    [InlineData("working", null, "Working", null)]
+    [InlineData("blocked", "permission", "Blocked", "Permission required")]
+    [InlineData("blocked", "question", "Blocked", "Question")]
+    [InlineData("blocked", "auth", "Blocked", "Authentication required")]
+    [InlineData("done", null, "Done", null)]
+    [InlineData("error", null, "Error", null)]
+    public async Task ProgramStatus_LocalizesStatesAndKinds(string state, string? kind, string label, string? kindLabel)
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(new()
+        {
+            TerminalId = 1, Generation = 1, HasStatus = true,
+            Records = [new() { Id = "", State = state, Kind = kind }]
+        }));
+        var expected = string.Join(Environment.NewLine,
+            kindLabel is null ? ["Program", label] : new[] { "Program", label, kindLabel });
+        Assert.Equal(expected, cut.Find(".terminal-status-node").GetAttribute("aria-label"));
+        Assert.Equal(expected, cut.Find(".terminal-status-node").GetAttribute("title"));
+        Assert.Equal("true", cut.Find(".terminal-status-state").GetAttribute("aria-hidden"));
+        Assert.Single(cut.FindAll(".terminal-status-state svg"));
+    }
+
     [Fact]
     public void Initialization_ProvidesLocalizedCopyAndInputControlsWithoutHostSubscriber()
     {
