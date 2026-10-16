@@ -18,7 +18,13 @@ Whether you want to contribute to Aspire, or just use the latest build of Aspire
 
 WSLc version 3.0.2.0 or later is supported for local development on Windows. `aspire doctor` checks the explicitly configured runtime, or reports all installed runtimes among Docker, Podman, and WSLc. Configured runtimes are marked "explicitly selected" in the report. Failures for non-selected alternatives are non-blocking when a healthy runtime is available; Docker in Windows-container mode remains an error when Docker is selected. When multiple healthy runtimes are available, Docker remains the default; set `ASPIRE_CONTAINER_RUNTIME=wslc` to select WSLc explicitly. WSLc is not supported when Aspire runs inside a Linux WSL distribution.
 
-WSLc is currently only supported for local development. Publish and deployment support will be added soon. See the [container runtime prerequisites](https://aka.ms/aspire/containers).
+WSLc also supports a limited set of publish and deployment operations on Windows: local Dockerfile image builds, tagging, pushing, registry login, image removal, and local image configuration inspection. Dockerfile builds must leave `TargetPlatform` unset; publish defaults to `linux/amd64`, so use `WithContainerBuildOptions(options => options.TargetPlatform = null)` only when building for the WSLc host platform is appropriate. Aspire does not silently omit a selected platform or switch runtimes.
+
+Single-platform .NET SDK images can be published to WSLc's local image store using the SDK's native `LocalRegistry=Wslc` support. This requires a .NET SDK with WSLc support; older SDKs report an unsupported local registry rather than falling back to another runtime.
+
+Multi-platform image loading requires OCI image-layout support in WSLc, tracked by [microsoft/WSL#41123](https://github.com/microsoft/WSL/issues/41123).
+
+Use Docker or Podman for Docker Compose deployment, platform-selected Dockerfile builds, Dockerfile image archive output or OCI format selection, image manifest inspection, multi-platform .NET SDK publishing to the local image store, and `PublishWithContainerFiles` layering (which requires a platform-selected Dockerfile build). These operations are not supported with WSLc and fail explicitly. Daemon-free .NET SDK archive publishing, including multi-platform archives, remains supported: set `Destination = ContainerImageDestination.Archive` and `OutputPath`, without container-file layering. Aspire does not add an archive/load bridge. See the [container runtime prerequisites](https://aka.ms/aspire/containers).
 
 Doctor reports an error when the selected WSLc client or session manager is below version 3.0.2.0, including prereleases of that minimum release, or when required version metadata cannot be validated.
 

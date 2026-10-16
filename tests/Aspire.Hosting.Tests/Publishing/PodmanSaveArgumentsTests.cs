@@ -187,7 +187,7 @@ public class PodmanSaveArgumentsTests
         await BuildImageAsync(runtime, options);
 
         var buildSpec = Assert.Single(processRunner.ProcessSpecs);
-        Assert.StartsWith("build ", Assert.IsType<string>(buildSpec.Arguments), StringComparison.Ordinal);
+        Assert.Equal("build", buildSpec.ArgumentList![0]);
     }
 
     [Fact]
@@ -209,7 +209,7 @@ public class PodmanSaveArgumentsTests
 
         Assert.Collection(
             processRunner.ProcessSpecs,
-            buildSpec => Assert.StartsWith("build ", Assert.IsType<string>(buildSpec.Arguments), StringComparison.Ordinal),
+            buildSpec => Assert.Equal("build", buildSpec.ArgumentList![0]),
             saveSpec => Assert.Equal(PodmanContainerRuntime.BuildSaveArguments("myapp:latest", options), saveSpec.Arguments));
     }
 
@@ -255,7 +255,7 @@ public class PodmanSaveArgumentsTests
         Assert.Contains("save failed", exception.Message);
         Assert.Collection(
             processRunner.ProcessSpecs,
-            buildSpec => Assert.StartsWith("build ", Assert.IsType<string>(buildSpec.Arguments), StringComparison.Ordinal),
+            buildSpec => Assert.Equal("build", buildSpec.ArgumentList![0]),
             saveSpec => Assert.StartsWith("save ", Assert.IsType<string>(saveSpec.Arguments), StringComparison.Ordinal));
     }
 
