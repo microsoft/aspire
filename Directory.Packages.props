@@ -6,7 +6,7 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-    <MicrosoftFluentUIAspNetCoreComponentsVersion>5.0.0</MicrosoftFluentUIAspNetCoreComponentsVersion>
+    <MicrosoftFluentUIAspNetCoreComponentsVersion>5.0.1</MicrosoftFluentUIAspNetCoreComponentsVersion>
     <MicrosoftFluentUIAspNetCoreComponentsIsPreview>false</MicrosoftFluentUIAspNetCoreComponentsIsPreview>
   </PropertyGroup>
   <ItemGroup>
@@ -134,7 +134,7 @@
     <PackageVersion Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
     <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="10.0.12" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="$(MicrosoftFluentUIAspNetCoreComponentsVersion)" />
-    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="5.0.0" />
+    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="5.0.1" />
     <PackageVersion Include="Milvus.Client" Version="2.3.0-preview.1" /> <!-- No stable release available -->
     <PackageVersion Include="ModelContextProtocol" Version="1.4.1" />
     <PackageVersion Include="MongoDB.Driver" Version="3.12.0" />
