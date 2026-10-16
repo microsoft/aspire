@@ -371,28 +371,56 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             windowsManagedFiles);
     }
 
-    [Fact]
-    public async Task MacOSNativeBundleDebugSymbolsAreRemovedBeforeSigning()
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public async Task MacOSNativeBundleDebugSymbolsAreRemovedWithoutChangingPayloads(bool terminalSymbols, bool trailingSeparator)
     {
-        var pipeline = await File.ReadAllTextAsync(Path.Combine(
-            RepoRoot.Path, "eng", "pipelines", "templates", "build_sign_native.yml"));
+        var dashboard = Path.Combine(_workspace.Path, "Dashboard publish");
+        var terminal = Path.Combine(_workspace.Path, "TerminalHost publish");
+        WriteFile(Path.Combine(dashboard, "Aspire.Dashboard"), "dashboard payload");
+        WriteFile(Path.Combine(terminal, "Aspire.TerminalHost"), "terminal payload");
+        WriteFile(Path.Combine(dashboard, "Aspire.Dashboard.dSYM", "Contents", "Resources", "DWARF", "Aspire.Dashboard"), "dashboard symbols");
+        if (terminalSymbols)
+        {
+            WriteFile(Path.Combine(terminal, "Aspire.TerminalHost.dSYM", "Contents", "Resources", "DWARF", "Aspire.TerminalHost"), "terminal symbols");
+        }
 
-        var prepareDashboardIndex = pipeline.IndexOf("displayName: 🟣Prepare Native AOT Dashboard", StringComparison.Ordinal);
-        var removeSymbolsIndex = pipeline.IndexOf("displayName: 🟣Remove Native AOT bundle debug symbols", StringComparison.Ordinal);
-        var signManagedIndex = pipeline.IndexOf("displayName: 🟣Sign bundle components", StringComparison.Ordinal);
-        var buildNativeIndex = pipeline.IndexOf("displayName: 🟣Build native packages", StringComparison.Ordinal);
+        var result = await RunDotNetAsync(
+            ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo",
+             "-t:_RemoveMacOSBundleDebugSymbols", "-p:TargetRid=osx-arm64", "-p:Sign=true",
+             $"-p:DashboardPublishDir={dashboard}{(trailingSeparator ? Path.DirectorySeparatorChar.ToString() : "")}",
+             $"-p:TerminalHostPublishDir={terminal}{(trailingSeparator ? Path.DirectorySeparatorChar.ToString() : "")}"]);
 
-        Assert.True(prepareDashboardIndex >= 0);
-        Assert.True(prepareDashboardIndex < removeSymbolsIndex);
-        Assert.True(removeSymbolsIndex < signManagedIndex);
-        Assert.True(signManagedIndex < buildNativeIndex);
-        var cleanupStart = pipeline.LastIndexOf("          - ${{ if ", removeSymbolsIndex, StringComparison.Ordinal);
-        Assert.True(cleanupStart >= 0);
-        var cleanup = pipeline[cleanupStart..removeSymbolsIndex];
-        Assert.Contains("Aspire.Dashboard.dSYM", cleanup);
-        Assert.Contains("Aspire.TerminalHost.dSYM", cleanup);
-        Assert.Contains("Remove-Item", cleanup);
-        Assert.Contains("eq(parameters.agentOs, 'macos')", cleanup);
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(["Aspire.Dashboard"], Directory.GetFileSystemEntries(dashboard).Select(Path.GetFileName));
+        Assert.Equal(["Aspire.TerminalHost"], Directory.GetFileSystemEntries(terminal).Select(Path.GetFileName));
+        Assert.Equal("dashboard payload", await File.ReadAllTextAsync(Path.Combine(dashboard, "Aspire.Dashboard")));
+        Assert.Equal("terminal payload", await File.ReadAllTextAsync(Path.Combine(terminal, "Aspire.TerminalHost")));
+    }
+
+    [Theory]
+    [InlineData("Debug", "osx-arm64")]
+    [InlineData("Release", "osx-x64")]
+    public async Task BundleResolvesProductTrayProjectAndOutputDirectory(string configuration, string rid)
+    {
+        var result = await RunDotNetAsync(
+            ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo",
+             $"-p:Configuration={configuration}", $"-p:TargetRid={rid}",
+             "-getProperty:TrayProjectPath,TrayAppPath,DefaultTargetFramework"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        var properties = document.RootElement.GetProperty("Properties");
+        Assert.Equal(
+            Path.Combine(RepoRoot.Path, "src", "Aspire.Tray", "Mac", "Aspire.Tray.Mac.csproj"),
+            Path.GetFullPath(properties.GetProperty("TrayProjectPath").GetString()!));
+        Assert.Equal(
+            Path.Combine(RepoRoot.Path, "artifacts", "bin", "Aspire.Tray.Mac", configuration,
+                properties.GetProperty("DefaultTargetFramework").GetString()!, rid, "app", "Aspire Tray.app"),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(properties.GetProperty("TrayAppPath").GetString()!)));
     }
 
     [Theory]
@@ -403,7 +431,8 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     public async Task BundleReusesPreparedDashboardWithoutRepublishing(string rid, bool missingDashboard)
     {
         var dashboard = Path.Combine(_workspace.Path, "artifacts", "bin", "Aspire.Dashboard", rid,
-            "Release", "net11.0", rid, "publish", rid.StartsWith("win-", StringComparison.Ordinal) ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
+            "Release", "net11.0", rid, "publish",
+            rid.StartsWith("win-", StringComparison.Ordinal) ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
         if (!missingDashboard)
         {
             WriteFile(dashboard, "prepared Dashboard");
@@ -411,7 +440,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var project = CreateBundlePublishProject(dashboard);
         var result = await RunDotNetAsync(
             ["msbuild", project, "-nologo", "-t:_PublishManagedProjects", "-p:Configuration=Release",
-             $"-p:TargetRid={rid}", "-p:SkipDashboardPublish=true"]);
+             $"-p:TargetRid={rid}", "-p:AspireDashboardTargetFramework=net11.0", "-p:SkipDashboardPublish=true"]);
 
         Assert.Equal(!missingDashboard, result.ExitCode == 0);
         Assert.Equal(missingDashboard ? ["managed"] : ["managed", "terminalhost"],
@@ -465,6 +494,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             new XElement("Import", new XAttribute("Project", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"))),
             new XElement("PropertyGroup",
                 new XElement("ArtifactsDir", Path.Combine(_workspace.Path, "artifacts") + Path.DirectorySeparatorChar),
+                new XElement("DashboardPublishDir", Path.GetDirectoryName(dashboard) + Path.DirectorySeparatorChar),
                 new XElement("ManagedProjectPath", Path.Combine(_workspace.Path, "managed.proj")),
                 new XElement("DashboardProjectPath", Path.Combine(_workspace.Path, "dashboard.proj")),
                 new XElement("TerminalHostProjectPath", Path.Combine(_workspace.Path, "terminalhost.proj")))))

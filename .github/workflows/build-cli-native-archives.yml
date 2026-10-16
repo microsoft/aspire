@@ -71,58 +71,42 @@ jobs:
         with:
           node-version: 22.x
 
-      # Build RID-specific NuGet packages (DCP + Dashboard) locally instead of
-      # downloading them from the build_packages job. This allows the CLI archive
-      # build to run in parallel with build_packages.
-      #
-      # Capture the complete build output so the expected framework-owned IL2026
-      # can remain visible while verification rejects any additional IL2026 warnings.
-      - name: Build RID-specific packages
+      # Bundle.proj owns publish, warning validation, signing, payload assembly,
+      # and the clipack build/sign/pack flow in both CI systems.
+      - name: Build native bundle and CLI packages
         shell: pwsh
+        env:
+          BUNDLE_CONFIGURATION: ${{ inputs.configuration }}
+          BUNDLE_TARGET_RID: ${{ matrix.targets.rids }}
+          VERSION_OVERRIDE_ARGS: ${{ inputs.versionOverrideArg }}
         run: |
-          $ErrorActionPreference = 'Stop'
-          $buildLog = '${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.log'
-          # Repository cleanup can remove artifacts/log while the build is streaming output.
-          $temporaryLog = Join-Path '${{ runner.temp }}' 'BuildBundleDeps.log'
-          & '${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}' `
-            -ci `
-            -restore `
-            -build `
-            -pack `
-            -configuration '${{ inputs.configuration }}' `
-            '/bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.binlog' `
-            /p:ContinuousIntegrationBuild=true `
-            /p:BuildBundleDepsOnly=true `
-            /p:TargetRids=${{ matrix.targets.rids }} `
-            /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }} `
-            ${{ inputs.versionOverrideArg }} 2>&1 | Tee-Object -FilePath $temporaryLog
-          $buildExitCode = $LASTEXITCODE
-          New-Item -ItemType Directory -Force -Path (Split-Path $buildLog -Parent) | Out-Null
-          Copy-Item -LiteralPath $temporaryLog -Destination $buildLog
-          exit $buildExitCode
+          $dotnetScript = if ($IsWindows) { "./dotnet.cmd" } else { "./dotnet.sh" }
+          $arguments = @(
+            "msbuild",
+            "eng/Bundle.proj",
+            "/t:BuildNativeBundle",
+            "/p:Configuration=$env:BUNDLE_CONFIGURATION",
+            "/p:TargetRid=$env:BUNDLE_TARGET_RID",
+            "/p:BundleVersion=ci-bundlepayload",
+            "/p:PackDcpPackage=true",
+            "/p:ContinuousIntegrationBuild=true",
+            "/p:AspireCliChannel=$env:ASPIRE_CLI_CHANNEL",
+            "/bl:$env:GITHUB_WORKSPACE/artifacts/log/$env:BUNDLE_CONFIGURATION/BuildNativeBundle.binlog"
+          )
+          if (-not [string]::IsNullOrWhiteSpace($env:VERSION_OVERRIDE_ARGS)) {
+            # For example: /p:VersionSuffix=pr.123.gabcdef12 /p:DotNetFinalVersionKind=prerelease
+            # "--" leaves response-file parsing to MSBuild; dotnet otherwise
+            # expands each response-file line as a single argument.
+            $responseFile = Join-Path $env:GITHUB_WORKSPACE "artifacts/log/$env:BUNDLE_CONFIGURATION/NativeVersionOverride.rsp"
+            New-Item -ItemType Directory -Path (Split-Path $responseFile) -Force | Out-Null
+            Set-Content -LiteralPath $responseFile -Value $env:VERSION_OVERRIDE_ARGS -Encoding utf8
+            $arguments += "--", "@$responseFile", "/p:DotNetFinalVersionKind=prerelease"
+          }
 
-      - name: Verify Native AOT Dashboard warnings
-        shell: pwsh
-        run: >
-          ./eng/scripts/verify-native-dashboard-warnings.ps1
-          -BuildLog "${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.log"
-
-      - name: Build bundle payload archive
-        # SkipNativeBuild skips only the outer CLI. Bundle.proj still publishes
-        # native tray payloads on Windows/macOS and verifies the actual archive.
-        run: >
-          ${{ runner.os == 'Windows' && './dotnet.cmd' || './dotnet.sh' }}
-          msbuild
-          eng/Bundle.proj
-          /restore
-          /p:Configuration=${{ inputs.configuration }}
-          /p:TargetRid=${{ matrix.targets.rids }}
-          /p:BundleVersion=ci-bundlepayload
-          /p:SkipNativeBuild=true
-          /p:SkipDashboardPublish=true
-          /p:ContinuousIntegrationBuild=true
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
-          ${{ inputs.versionOverrideArg }}
+          & $dotnetScript @arguments
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
       - name: Smoke test bundled Native AOT TerminalHost
         if: ${{ !contains(matrix.targets.rids, 'musl') && ((runner.arch == 'ARM64' && endsWith(matrix.targets.rids, 'arm64')) || (runner.arch == 'X64' && endsWith(matrix.targets.rids, 'x64'))) }}
@@ -130,22 +114,6 @@ jobs:
         run: >
           ./eng/scripts/test-native-terminalhost.ps1
           -TerminalHostPath "${{ github.workspace }}/artifacts/bundle/${{ matrix.targets.rids }}/terminalhost/Aspire.TerminalHost${{ runner.os == 'Windows' && '.exe' || '' }}"
-
-      - name: Build CLI packages
-        run: >
-          ${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}
-          -ci
-          -build
-          -pack
-          -restore
-          -configuration ${{ inputs.configuration }}
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildCli.binlog
-          /p:ContinuousIntegrationBuild=true
-          /p:SkipManagedBuild=true
-          /p:TargetRids=${{ matrix.targets.rids }}
-          /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
-          /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }}
-          ${{ inputs.versionOverrideArg }}
 
       - name: Verify CLI tool nupkg
         shell: pwsh

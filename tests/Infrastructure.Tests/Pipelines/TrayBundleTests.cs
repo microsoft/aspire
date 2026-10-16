@@ -121,22 +121,6 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void BundlePublishesTrayBeforeLayoutIndependentlyOfNativeCliSkip()
-    {
-        var project = LoadProject("eng/Bundle.proj");
-        var build = Target(project, "Build");
-        var dependencies = build.Attribute("DependsOnTargets")!.Value.Split(';', StringSplitOptions.TrimEntries);
-        Assert.True(Array.IndexOf(dependencies, "_PublishNativeTray") < Array.IndexOf(dependencies, "_RunCreateLayout"));
-        Assert.Equal("($(TargetRid.StartsWith('osx-')) or $(TargetRid.StartsWith('win-'))) and '$(SkipTrayBuild)' != 'true'", Target(project, "_PublishNativeTray").Attribute("Condition")!.Value);
-        Assert.Equal("'$(SkipNativeBuild)' != 'true'", Target(project, "_PublishNativeCli").Attribute("Condition")!.Value);
-        Assert.Contains("--tray-app \"$(TrayAppPath)\"", Target(project, "_RunCreateLayout").Value);
-        Assert.Contains("--tray-windows \"$(WindowsTrayPath)\"", Target(project, "_RunCreateLayout").Value);
-        var cliPublish = Target(project, "_PublishNativeCli");
-        Assert.Equal("--output \"$(CliPublishDir)\"", Assert.Single(cliPublish.Descendants("_CliPublishOutputArg")).Value);
-        Assert.Contains("$(_CliPublishOutputArg)", Assert.Single(cliPublish.Elements("Exec")).Attribute("Command")!.Value);
-    }
-
-    [Fact]
     public void WholeAppSigningBypassesArcadeAndRestoresWithoutPublishing()
     {
         var project = LoadProject("src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj");
@@ -164,14 +148,6 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         Assert.Equal(["@(_TrayToSign)", "@(_TrayToNotarize)"],
             signTray.Elements("SignFiles").Select(task => task.Attribute("Files")!.Value));
 
-        var pipeline = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng/pipelines/templates/build_sign_native.yml"));
-        var prepare = pipeline.IndexOf("/t:PrepareTraySigning", StringComparison.Ordinal);
-        var sign = pipeline.IndexOf("SignManaged.binlog", StringComparison.Ordinal);
-        var signApp = pipeline.IndexOf("/t:SignTray", StringComparison.Ordinal);
-        var restoreApp = pipeline.IndexOf("/t:RestoreSignedTray", StringComparison.Ordinal);
-        var layout = pipeline.IndexOf("/t:_RestoreDcpPackage;_RunCreateLayout", StringComparison.Ordinal);
-        Assert.True(prepare >= 0 && prepare < sign && sign < signApp && signApp < restoreApp && restoreApp < layout);
-        Assert.Contains("/p:SkipTrayBuild=true", pipeline);
     }
 
     [Fact]
@@ -260,16 +236,6 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
             result.Jobs.Order(StringComparer.Ordinal));
     }
 
-    [Fact]
-    public void BundleUsesProductTrayProjectAndOutputDirectory()
-    {
-        var project = LoadProject("eng/Bundle.proj");
-        Assert.Equal(@"$(RepoRoot)src\Aspire.Tray\Mac\Aspire.Tray.Mac.csproj", Assert.Single(project.Descendants("TrayProjectPath")).Value);
-        Assert.Equal(@"$(ArtifactsDir)bin\Aspire.Tray.Mac\$(Configuration)\net10.0\$(TargetRid)\app\Aspire Tray.app", Assert.Single(project.Descendants("TrayAppPath")).Value);
-        Assert.All(Target(project, "_PublishNativeTray").Elements("Exec"),
-            exec => Assert.Contains("$(_OfficialBuildIdArg)", exec.Attribute("Command")!.Value));
-    }
-
     [Theory]
     [InlineData("win-x64")]
     [InlineData("win-arm64")]
@@ -356,11 +322,6 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         Assert.Equal("$(TargetRid.StartsWith('win-'))", verify.Attribute("Condition")!.Value);
         Assert.All(verify.Elements("Exec"),
             exec => Assert.Contains("verify-windows-tray-payload.ps1", exec.Attribute("Command")!.Value));
-        var pipeline = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng/pipelines/templates/build_sign_native.yml"));
-        Assert.Contains("if in(parameters.agentOs, 'macos', 'windows')", pipeline);
-        Assert.Contains("/p:RequireWindowsTraySignature=${{ parameters.codeSign }}", pipeline);
-        Assert.True(pipeline.IndexOf("/t:_PublishNativeTray", StringComparison.Ordinal) <
-            pipeline.IndexOf("SignManaged.binlog", StringComparison.Ordinal));
     }
 
     [Fact]

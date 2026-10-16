@@ -140,27 +140,6 @@ public sealed class SelectTestsWorkflowTests
         Assert.DoesNotContain("\"runner\": \"windows-11-arm\", \"rids\": \"win-arm64\"", nativeArchivesYml);
     }
 
-    [Fact]
-    public void NativeArchiveDependencyPackagesUseMatrixRid()
-    {
-        var yaml = new YamlStream();
-        using var reader = new StringReader(File.ReadAllText(BuildCliNativeArchivesWorkflowPath));
-        yaml.Load(reader);
-
-        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
-        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-        var archiveJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("build_cli_archives")];
-        var steps = (YamlSequenceNode)archiveJob.Children[new YamlScalarNode("steps")];
-        var packageBuild = Assert.Single(
-            steps.Cast<YamlMappingNode>(),
-            step => step.Children.TryGetValue(new YamlScalarNode("name"), out var name) &&
-                    name.ToString() == "Build RID-specific packages");
-        var command = packageBuild.Children[new YamlScalarNode("run")].ToString();
-
-        Assert.Contains("/p:BuildBundleDepsOnly=true", command);
-        Assert.Contains("/p:TargetRids=${{ matrix.targets.rids }}", command);
-    }
-
     // The comment_selection job posts one comment per pushed commit (createComment for a new commit,
     // updateComment for a re-run of the same commit) and collapses superseded comments with
     // minimizeComment -- it must never delete. This guard fails if deletion is introduced or the

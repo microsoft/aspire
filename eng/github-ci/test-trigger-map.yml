@@ -407,8 +407,9 @@ path_rules:
     reason: native Dashboard archive production and packaged runtime validation
   - paths:
       - eng/scripts/verify-native-dashboard-warnings.ps1
-    targets: [test:Infrastructure.Tests, job:native-dashboard-validation]
-    reason: validates the Native AOT Dashboard publish warning policy
+      - eng/aspire-managed-entitlements.plist
+    targets: [CLI_ARCHIVE_CONSUMERS, test:Infrastructure.Tests]
+    reason: native bundle warning validation and macOS JIT signing inputs
 
   # --- outerloop / e2e test targets: loose paths (production projects in affected_project_rules) --------
   - paths:
@@ -581,6 +582,10 @@ path_rules:
       - tools/CreateLayout/**
     targets: [CLI_BUNDLE, test:Infrastructure.Tests]
     reason: assembles and validates native CLI bundle payloads
+  - paths:
+      - eng/Bundle.proj
+    targets: [test:Aspire.Templates.Tests, job:native-dashboard-validation, job:polyglot]
+    reason: shared bundle phases produce RID runtime packages and the standalone Dashboard archive
   - paths:
       - src/Aspire.Cli/Aspire.Cli.csproj
       - src/Aspire.TerminalHost/Aspire.TerminalHost.csproj

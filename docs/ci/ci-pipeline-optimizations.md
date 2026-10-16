@@ -26,7 +26,7 @@ The main test workflow in `.github/workflows/tests.yml` is organized into these 
 
 3. `build_cli_archive_linux`, `build_cli_archive_windows`, `build_cli_archive_macos`
    - Build native CLI archives per RID
-   - Build the matching RID-specific DCP and Dashboard packages locally with `BuildBundleDepsOnly`
+   - Prepare and package RID-specific bundle components with the shared `eng/Bundle.proj` phases
    - Upload `built-nugets-for-{rid}` artifacts for downstream tests
    - Upload `cli-native-archives-{rid}` artifacts for archive consumers such as polyglot validation
 
@@ -102,7 +102,8 @@ That makes Linux the best place to spend extra build capacity: finishing the sha
 
 ### 2. `build_packages` skips RID-specific bundle dependencies
 
-`build_packages` uses `SkipBundleDeps=true`, while the CLI archive jobs use `BuildBundleDepsOnly=true`.
+`build_packages` uses `SkipBundleDeps=true`, while the CLI archive jobs prepare
+and package their RID-specific components through `eng/Bundle.proj`.
 
 Those two settings work together:
 
@@ -132,20 +133,109 @@ That keeps `build_packages` focused on the shared package feed, and because `ext
 
 Each CLI archive job:
 
-1. Builds RID-specific DCP and Dashboard packages locally
-2. Uploads them as `built-nugets-for-{rid}`
-3. Builds the bundle payload
-4. Builds the native CLI archive
-5. Uploads the native archive as `cli-native-archives-{rid}`
+1. Installs Node for npm packaging.
+2. Invokes `BuildNativeBundle` with `PackDcpPackage=true` to publish, validate,
+   assemble the bundle, and build the CLI archive/tool/npm packages.
+3. Smoke-tests the prepared payload and verifies the final packages.
+4. Uploads packages as `built-nugets-for-{rid}` and archives as
+   `cli-native-archives-{rid}`.
 
 This makes the archive job self-sufficient for the RID-specific artifacts it needs.
 
-The bundle step reuses the Dashboard publish produced by `dashboardpack`, so
-each job compiles Dashboard only once. Its NuGet package, standalone archive,
-and embedded bundle consume the same publish output. The existing warning
-check still checks that compilation, and missing prepared output fails rather
-than triggering another publish. Standalone bundle builds continue to publish
-Dashboard by default; official signing and packaging keep their existing flow.
+### Shared native bundle orchestration
+
+`eng/Bundle.proj` owns the ordered build used by GitHub and
+`eng/pipelines/templates/build_sign_native.yml`:
+
+```bash
+./dotnet.sh msbuild eng/Bundle.proj /t:BuildNativeBundle /p:Configuration=Release /p:TargetRid=linux-x64 /p:ContinuousIntegrationBuild=true /p:BundleVersion=ci-bundlepayload /p:PackDcpPackage=true
+```
+
+The two production entry points serve different callers:
+
+- `Build` is the default, used by `eng/build.sh`, `eng/build.ps1`, and the
+  deployment-tests workflow. It validates configuration, cleans CI caches,
+  publishes components, restores DCP, assembles/verifies the layout, and
+  publishes the CLI unless `SkipNativeBuild=true`. It retains standalone skip
+  options without producing Dashboard/DCP or CLI tool/npm packages.
+- `BuildNativeBundle` is selected explicitly by the GitHub native-archive
+  workflow and the official Azure native template. It validates signing inputs,
+  publishes components once, validates Dashboard warnings, prepares macOS signing
+  inputs, optionally signs components and the tray, restores Unix execute
+  permissions, packages the prepared payload, and invokes the existing CLI
+  build/sign/pack flow.
+
+`BuildDependsOn` and `BuildNativeBundleDependsOn` define those ordered target
+lists near the top of `eng/Bundle.proj`. They compose the shared
+`PublishBundleComponentsDependsOn` list and, for native packaging,
+`PackageBundlePayloadDependsOn`. These are dependency properties, not separately
+callable production targets or a phase framework. Packaging never includes
+publishing, which would overwrite signed files. Behavioral fixtures provide
+test-only entry points into the shared lists to exercise publishing and packaging
+independently.
+
+All entry points require exactly one supported RID and enforce Release in CI.
+Child processes explicitly receive configuration, RID, CI identity, version
+suffix, official build ID, release-version policy, and CLI channel. Orchestration
+switches such as `SkipNativeBuild` are not propagated into children. The native
+GitHub workflow uses the shared `versionOverrideArg` MSBuild argument string,
+passing it through a response file so MSBuild handles multiple switches and
+quoted values without shell evaluation. When an override is present, the native
+calling script appends `DotNetFinalVersionKind=prerelease` after the response
+file. The existing CI producer and nonnative consumers keep their version
+arguments unchanged.
+
+On cold CI agents without `NUGET_PACKAGES`, child restores use the repository
+`.packages` cache that Arcade selects for package-target imports. Otherwise,
+NuGet's user-cache default can leave build targets such as Grpc.Tools unimported
+even after restore succeeds. CreateLayout receives that same effective cache
+through `NUGET_PACKAGES`, so DCP discovery does not depend on a warm user cache.
+Caller-supplied `NUGET_PACKAGES` remains respected; an explicit
+`RestorePackagesPath` takes precedence. Subprocesses receive the matching
+`NUGET_PACKAGES` environment; tray task calls receive matching restore and package
+root properties. CreateLayout uses the environment for DCP discovery too.
+
+Packaging validates the expected RID/configuration publish files before doing
+work. Missing files fail rather than trigger a fallback publish.
+Dashboard packages, standalone ZIPs, and the bundle consume the same prepared
+Dashboard, excluding symbols. The default standalone `Build` retains its skip
+options and creates the bundle without adding Dashboard/DCP packages.
+
+Signing is explicit: `Sign=false` is unsigned; `Sign=true` requires
+`DotNetSignType=test` or `real`. Real signing additionally requires the
+MicroBuild plugin and an official build identity without dry-run overrides.
+Plugin availability is validated in the signing projects after their MicroBuild
+imports, not in standalone `Bundle.proj`. `MicroBuild_SigningEnabled` is a
+computed plugin property, not a pipeline setup environment flag.
+Identity alone never enables signing. Linux lanes disable signing, and public/PR
+official-pipeline runs use their unsigned/test policy rather than attempting real
+tray signing. Only real macOS signing prepares, notarizes, restores, and verifies
+the whole signed tray app. Unsigned macOS still receives ad-hoc JIT entitlements.
+
+Fresh build-wrapper processes evaluate Arcade signing globs after component
+publishing and after final CLI archive creation. The standalone bundle project
+does not import `Signing.props`. The existing clipack/`AfterSigning.targets` flow
+is the sole final CLI publisher and builds tool/npm packages from the final
+archive. Final npm signing stays in the cross-RID Windows assembly stage.
+
+The pipeline retains SDK/plugin bootstrap, authentication, agents, artifact
+uploads, and smoke tests. Official DCP packages remain managed-build-owned;
+only GitHub sets `PackDcpPackage=true`. Custom tray paths and signing archives
+are forwarded to preparation and restoration. macOS debug-symbol cleanup uses
+MSBuild's `RemoveDir` before signing discovery. Missing Dashboard symbols fail
+the cleanup; TerminalHost symbols are optional.
+
+Tray archive preparation and signed-app restoration use the `MSBuild` task
+with explicit identity, cache, and path properties. They operate on files inside
+their targets and do not require fresh project evaluation. Tray signing retains
+`dotnet msbuild -restore` so restored MicroBuild targets are imported before
+`SignTray` executes.
+
+Behavioral tests run the production MSBuild target graph with small subprocess
+fixtures, validating ordering, failure stops, signed-byte preservation, and fresh
+archive discovery. Real service signing, notarization, and cross-platform Native
+AOT still require GitHub/internal pipeline validation. Matching orchestration
+does not imply byte equality across signing identities or toolchains.
 
 ### Native CLI packaging
 

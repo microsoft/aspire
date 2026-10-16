@@ -111,16 +111,22 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             result.SkippedJobs[0].Reason);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("Run tests (Windows)")]
+    [InlineData("Publish bundle components")]
+    [InlineData("Build native bundle and CLI packages")]
+    [InlineData("Build bundle payload archive")]
     [RequiresTools(["node"])]
-    public async Task AllowsNarrowOverrideForExplicitJobLevelInfrastructureAnnotationsOnIgnoredSteps()
+    public async Task AllowsNarrowOverrideForExplicitJobLevelInfrastructureAnnotationsOnIgnoredSteps(string failedStep)
     {
-        WorkflowJob job = CreateJob(failedSteps: ["Run tests (Windows)"]);
+        WorkflowJob job = CreateJob(failedSteps: [failedStep]);
 
         AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "The hosted runner lost communication with the server.");
 
-        Assert.Single(result.RetryableJobs);
-        Assert.Equal("Ignored failed step 'Run tests (Windows)' matched the job-level infrastructure override allowlist.", result.RetryableJobs[0].Reason);
+        Assert.Empty(result.SkippedJobs);
+        Assert.Equal(
+            $"Ignored failed step '{failedStep}' matched the job-level infrastructure override allowlist.",
+            Assert.Single(result.RetryableJobs).Reason);
     }
 
     [Fact]
@@ -251,6 +257,23 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Equal(
             "Failed step 'Build RID-specific packages' will be retried because the job log shows a likely transient infrastructure network failure. Matched pattern: `/Unable to read data from the transport connection: Connection reset by peer/i`.",
             result.RetryableJobs[0].Reason);
+    }
+
+    [Theory]
+    [InlineData("Publish bundle components")]
+    [InlineData("Build native bundle and CLI packages")]
+    [InlineData("Build bundle payload archive")]
+    [RequiresTools(["node"])]
+    public async Task DoesNotRetryBundlePhasesForGenericExitCodeAnnotations(string failedStep)
+    {
+        WorkflowJob job = CreateJob(failedSteps: [failedStep]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Process completed with exit code 1.");
+
+        Assert.Empty(result.RetryableJobs);
+        Assert.Equal(
+            $"Failed step '{failedStep}' is only retried when the job shows a high-confidence infrastructure override, and none was found.",
+            Assert.Single(result.SkippedJobs).Reason);
     }
 
     [Fact]
