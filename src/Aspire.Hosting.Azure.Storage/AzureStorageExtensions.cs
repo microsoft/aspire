@@ -78,7 +78,7 @@ public static class AzureStorageExtensions
                         },
                         // Set the minimum TLS version to 1.2 to ensure resources provisioned are compliant
                         // with the pending deprecation of TLS 1.0 and 1.1.
-                        MinimumTlsVersion = StorageMinimumTlsVersion.Tls1_2,
+                        MinimumTlsVersion = StorageMinimumTlsVersion.Tls12,
                         // Disable shared key access to the storage account as managed identity is configured
                         // to access the storage account by default.
                         AllowSharedKeyAccess = false,
