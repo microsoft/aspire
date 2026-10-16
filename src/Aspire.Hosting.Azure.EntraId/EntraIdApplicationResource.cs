@@ -172,12 +172,20 @@ public class EntraIdApplicationResource : AzureProvisioningResource
             RedirectUris = [.. resource.RedirectUris],
             EnableIdTokenIssuance = resource.EnableIdTokenIssuance
         };
+        if (resource.ApplicationOwners.Count > 0)
+        {
+            application.Owners = CreateOwnerList(infrastructure, resource.ApplicationOwners, "applicationOwner");
+        }
         infrastructure.Add(application);
 
         var servicePrincipal = new MicrosoftGraphServicePrincipal("servicePrincipal")
         {
             AppId = application.AppId
         };
+        if (resource.ServicePrincipalOwners.Count > 0)
+        {
+            servicePrincipal.Owners = CreateOwnerList(infrastructure, resource.ServicePrincipalOwners, "servicePrincipalOwner");
+        }
         infrastructure.Add(servicePrincipal);
 
         infrastructure.Add(new ProvisioningOutput(EntraIdBicepConstants.ClientIdOutputName, typeof(string)) { Value = application.AppId.ToBicepExpression() });
@@ -254,6 +262,29 @@ public class EntraIdApplicationResource : AzureProvisioningResource
     /// and existing registrations are not modified.
     /// </remarks>
     public List<string> RedirectUris { get; } = [];
+
+    // Each entry is either a literal directory object ID (string) or a ParameterResource holding one.
+    internal List<object> ApplicationOwners { get; } = [];
+
+    internal List<object> ServicePrincipalOwners { get; } = [];
+
+    private static BicepList<string> CreateOwnerList(AzureResourceInfrastructure infrastructure, IEnumerable<object> owners, string prefix)
+    {
+        var list = new BicepList<string>();
+        var index = 0;
+        foreach (var owner in owners)
+        {
+            // Only parameters need a Bicep identifier, so number just those.
+            BicepValue<string> value = owner switch
+            {
+                ParameterResource parameter => parameter.AsProvisioningParameter(infrastructure, $"{prefix}{index++}"),
+                string id => id,
+                _ => throw new InvalidOperationException("Unsupported owner type.")
+            };
+            list.Add(value);
+        }
+        return list;
+    }
 
     /// <summary>
     /// Gets or sets whether a created registration can issue ID tokens through implicit and hybrid flows.

@@ -820,6 +820,155 @@ public static class EntraIdResourceExtensions
     }
 
     /// <summary>
+    /// Adds explicit owners to the application registration created by Aspire.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="ownerObjectIds">The object IDs (GUIDs) of the Microsoft Entra users or service principals to add as owners.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="ownerObjectIds"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when an owner ID is not a GUID.</exception>
+    /// <remarks>
+    /// <para>
+    /// Owners can manage the application registration, so grant ownership deliberately. By default, Aspire sets no owners
+    /// and Microsoft Entra's default ownership behavior applies. The owners are not necessarily the identity that runs the deployment.
+    /// </para>
+    /// <para>
+    /// Owners are added with append semantics: existing owners are never removed. The deploying identity needs permission to
+    /// manage application owners (for example the <c>Application.ReadWrite.All</c> Microsoft Graph permission or a directory
+    /// role such as Application Administrator).
+    /// </para>
+    /// <para>
+    /// Application and service principal ownership are separate; use <see cref="WithServicePrincipalOwners(IResourceBuilder{EntraIdApplicationResource}, string[])"/>
+    /// for the enterprise application. This setting only affects registrations created by Aspire; existing registrations are not modified.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var entraApi = builder.AddEntraIdApplication("entra-api")
+    ///     .WithApplicationOwners("00000000-0000-0000-0000-000000000001");
+    /// </code>
+    /// </example>
+    public static IResourceBuilder<EntraIdApplicationResource> WithApplicationOwners(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        params string[] ownerObjectIds)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        AddOwners(builder.Resource.ApplicationOwners, ownerObjectIds, nameof(ownerObjectIds));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds explicit owners, supplied by parameters, to the application registration created by Aspire.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="ownerObjectIds">Parameters whose values are the object IDs of the users or service principals to add as owners.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="ownerObjectIds"/> is null.</exception>
+    /// <remarks>
+    /// See <see cref="WithApplicationOwners(IResourceBuilder{EntraIdApplicationResource}, string[])"/> for permission and append semantics.
+    /// </remarks>
+    public static IResourceBuilder<EntraIdApplicationResource> WithApplicationOwners(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        params IResourceBuilder<ParameterResource>[] ownerObjectIds)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(ownerObjectIds);
+        builder.Resource.ApplicationOwners.AddRange(ownerObjectIds.Select(p => (object)p.Resource));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds explicit owners to the service principal (enterprise application) created by Aspire.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="ownerObjectIds">The object IDs (GUIDs) of the Microsoft Entra users or service principals to add as owners.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="ownerObjectIds"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when an owner ID is not a GUID.</exception>
+    /// <remarks>
+    /// Service principal ownership is independent of application registration ownership and has the same
+    /// append semantics and permission requirements as <see cref="WithApplicationOwners(IResourceBuilder{EntraIdApplicationResource}, string[])"/>.
+    /// This setting only affects registrations created by Aspire.
+    /// </remarks>
+    public static IResourceBuilder<EntraIdApplicationResource> WithServicePrincipalOwners(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        params string[] ownerObjectIds)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        AddOwners(builder.Resource.ServicePrincipalOwners, ownerObjectIds, nameof(ownerObjectIds));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds explicit owners, supplied by parameters, to the service principal (enterprise application) created by Aspire.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="ownerObjectIds">Parameters whose values are the object IDs of the users or service principals to add as owners.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="ownerObjectIds"/> is null.</exception>
+    public static IResourceBuilder<EntraIdApplicationResource> WithServicePrincipalOwners(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        params IResourceBuilder<ParameterResource>[] ownerObjectIds)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(ownerObjectIds);
+        builder.Resource.ServicePrincipalOwners.AddRange(ownerObjectIds.Select(p => (object)p.Resource));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds explicit owners to both the application registration and the service principal created by Aspire.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="ownerObjectIds">The object IDs (GUIDs) of the Microsoft Entra users or service principals to add as owners.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <remarks>
+    /// Equivalent to calling <see cref="WithApplicationOwners(IResourceBuilder{EntraIdApplicationResource}, string[])"/> and
+    /// <see cref="WithServicePrincipalOwners(IResourceBuilder{EntraIdApplicationResource}, string[])"/> with the same IDs.
+    /// </remarks>
+    public static IResourceBuilder<EntraIdApplicationResource> WithOwners(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        params string[] ownerObjectIds)
+    {
+        return builder.WithApplicationOwners(ownerObjectIds).WithServicePrincipalOwners(ownerObjectIds);
+    }
+
+    /// <summary>
+    /// Adds explicit owners, supplied by parameters, to both the application registration and the service principal created by Aspire.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="ownerObjectIds">Parameters whose values are the object IDs of the users or service principals to add as owners.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    public static IResourceBuilder<EntraIdApplicationResource> WithOwners(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        params IResourceBuilder<ParameterResource>[] ownerObjectIds)
+    {
+        return builder.WithApplicationOwners(ownerObjectIds).WithServicePrincipalOwners(ownerObjectIds);
+    }
+
+    private static void AddOwners(List<object> target, string[] ownerObjectIds, string paramName)
+    {
+        ArgumentNullException.ThrowIfNull(ownerObjectIds, paramName);
+        foreach (var id in ownerObjectIds)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(id, paramName);
+            if (!Guid.TryParse(id, out _))
+            {
+                throw new ArgumentException($"'{id}' is not a valid directory object ID. Owner IDs must be GUIDs.", paramName);
+            }
+        }
+
+        // Duplicate owner IDs would be rejected by Microsoft Graph, so skip ones that are already present.
+        foreach (var id in ownerObjectIds)
+        {
+            if (!target.Any(o => o is string s && string.Equals(s, id, StringComparison.OrdinalIgnoreCase)))
+            {
+                target.Add(id);
+            }
+        }
+    }
+
+    /// <summary>
     /// Enables ID-token issuance through implicit and hybrid flows for a registration created by Aspire.
     /// </summary>
     /// <param name="builder">The resource builder.</param>

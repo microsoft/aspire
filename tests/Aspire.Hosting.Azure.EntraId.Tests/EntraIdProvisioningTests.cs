@@ -25,6 +25,53 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     private const string ClientId = "00001111-aaaa-2222-bbbb-3333cccc4444";
 
     [Fact]
+    public async Task WithOwners_GeneratesOwnerRelationships()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var spOwner = builder.AddParameter("sp-owner");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithApplicationOwners("00001111-aaaa-2222-bbbb-3333cccc4444", "00001111-AAAA-2222-bbbb-3333cccc4444")
+            .WithServicePrincipalOwners("11112222-aaaa-3333-bbbb-4444cccc5555")
+            .WithServicePrincipalOwners(spOwner);
+
+        await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
+    }
+
+    [Fact]
+    public void WithOwners_ValidatesIds()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddEntraIdApplication("entra-web");
+
+        Assert.Throws<ArgumentException>(() => entra.WithApplicationOwners("not-a-guid"));
+        Assert.Throws<ArgumentException>(() => entra.WithServicePrincipalOwners(" "));
+        Assert.Empty(entra.Resource.ApplicationOwners);
+    }
+
+    [Fact]
+    public async Task WithOwners_SetsApplicationAndServicePrincipalOwners()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var param = builder.AddParameter("owner");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithOwners("00001111-aaaa-2222-bbbb-3333cccc4444")
+            .WithOwners(param);
+
+        Assert.Equal(2, entra.Resource.ApplicationOwners.Count);
+        Assert.Equal(entra.Resource.ApplicationOwners, entra.Resource.ServicePrincipalOwners);
+        await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
+    }
+
+    [Fact]
+    public void DefaultProvisioning_HasNoOwners()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddEntraIdApplication("entra-web");
+
+        Assert.DoesNotContain("owners", entra.Resource.GetBicepTemplateString());
+    }
+
+    [Fact]
     public async Task AddEntraIdApplication_GeneratesGraphBicep()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

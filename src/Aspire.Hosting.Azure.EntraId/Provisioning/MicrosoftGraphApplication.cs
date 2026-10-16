@@ -66,6 +66,13 @@ internal sealed class MicrosoftGraphApplication(string bicepIdentifier)
     }
     private BicepValue<bool>? _enableIdTokenIssuance;
 
+    public BicepList<string> Owners
+    {
+        get { Initialize(); return _owners!; }
+        set { Initialize(); _owners!.Assign(value); }
+    }
+    private BicepList<string>? _owners;
+
     protected override void DefineProvisionableProperties()
     {
         base.DefineProvisionableProperties();
@@ -77,5 +84,6 @@ internal sealed class MicrosoftGraphApplication(string bicepIdentifier)
         _requestedAccessTokenVersion = DefineProperty<int>(nameof(RequestedAccessTokenVersion), ["api", "requestedAccessTokenVersion"]);
         _redirectUris = DefineListProperty<string>(nameof(RedirectUris), ["web", "redirectUris"]);
         _enableIdTokenIssuance = DefineProperty<bool>(nameof(EnableIdTokenIssuance), ["web", "implicitGrantSettings", "enableIdTokenIssuance"]);
+        _owners = DefineListProperty<string>(nameof(Owners), ["owners", "relationships"]);
     }
 }

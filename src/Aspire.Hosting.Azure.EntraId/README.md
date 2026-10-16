@@ -91,6 +91,21 @@ ID-token issuance through implicit or hybrid flows is disabled by default. `With
 
 Creating a registration does not protect a workload's routes or authorize API requests. Configure authentication and authorization in the consuming application using Microsoft.Identity.Web or the corresponding library for that language. A web-to-API flow additionally requires an API identifier URI, exposed scopes, client permissions/consent, a client credential, and scope or role validation in the API. These are not provisioned by this initial increment.
 
+### Assign explicit owners
+
+By default Aspire assigns no owners, so Microsoft Entra's default ownership behavior applies. To opt in, pass directory object IDs (users or service principals) as literals or parameters. Application and service principal ownership are configured separately:
+
+```csharp
+var ownerId = builder.AddParameter("entra-owner-id");
+
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .WithOwners(ownerId);
+```
+
+`WithOwners` sets both; use `WithApplicationOwners` / `WithServicePrincipalOwners` to configure them independently.
+
+Owners are appended; existing owners are never removed. Owners can manage the registration, and the deploying identity needs permission to manage owners (for example `Application.ReadWrite.All`). Existing registrations are not modified.
+
 ### Clean up created registrations
 
 Registrations live in the tenant and **are not deleted when the resource group is deleted**. The deployment outputs include `objectId`, `servicePrincipalId`, and `uniqueName` for locating the objects.
