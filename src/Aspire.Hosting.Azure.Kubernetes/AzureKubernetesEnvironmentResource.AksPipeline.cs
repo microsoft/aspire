@@ -50,10 +50,9 @@ public partial class AzureKubernetesEnvironmentResource
 
         logger.LogInformation("Processing AKS environment '{Name}'", Name);
 
-        // Ensure a default user node pool exists for workload scheduling.
-        // The system pool should only run system pods; application workloads
-        // need a user pool.
-        var defaultUserPool = EnsureDefaultUserNodePool(this, appModel);
+        // New clusters get a user pool for application workloads. Existing clusters own their
+        // node pools; do not assume a pool named "workload" exists.
+        var defaultUserPool = this.IsExisting() ? null : EnsureDefaultUserNodePool(this, appModel);
 
         foreach (var r in appModel.GetComputeResources())
         {
@@ -246,7 +245,7 @@ public partial class AzureKubernetesEnvironmentResource
                 {
                     // Resolve the scope this cluster actually lives in before touching the CLI. A cluster
                     // adopted via AsExistingInResourceGroup(...) can sit outside the app's own
-                    // subscription/resource group, and the provisioner already targets that scope.
+                    // subscription/resource group, and its Bicep reference targets that scope.
                     var (scopedSubscription, scopedResourceGroup) = GetExplicitScopeValues();
                     (subscriptionId, savedResourceGroup) = await ResolveDeploymentScopeAsync(
                         scopedSubscription,
@@ -395,51 +394,14 @@ public partial class AzureKubernetesEnvironmentResource
                 $"The Azure deployment state for AKS environment '{Name}' does not contain the deployed cluster identity.");
         }
 
-        // Scope is persisted as a JSON string using the same shape produced by
-        // BicepUtilities.SetScopeAsync:
-        //   { "resourceGroup": "shared-rg", "subscription": "00000000-..." }
-        // A missing property means the resource did not pin that scope value, so only that value
-        // falls back to global Azure deployment state. Older state without Scope uses the persisted
-        // resource ID so a changed AppHost scope cannot redirect cleanup to another cluster or wait
-        // on provisioning that is not part of the destroy graph.
-        string subscriptionId;
-        string? resourceGroupName;
-        if (deploymentStateSection.Data["Scope"] is not null)
-        {
-            string? scopedSubscription;
-            string? scopedResourceGroup;
-            try
-            {
-                var scopeJson = deploymentStateSection.Data["Scope"]!.GetValue<string>();
-                var scope = JsonNode.Parse(scopeJson)?.AsObject()
-                    ?? throw new InvalidOperationException("The persisted scope is not a JSON object.");
-                scopedSubscription = scope["subscription"]?.GetValue<string>();
-                scopedResourceGroup = scope["resourceGroup"]?.GetValue<string>();
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                throw new InvalidOperationException(
-                    $"The Azure deployment state for AKS environment '{Name}' contains an invalid scope.",
-                    ex);
-            }
-
-            (subscriptionId, resourceGroupName) = await ResolveDeploymentScopeAsync(
-                scopedSubscription,
-                scopedResourceGroup,
-                context.Services,
-                context.CancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            subscriptionId = clusterResourceId.SubscriptionId!;
-            resourceGroupName = clusterResourceId.ResourceGroupName!;
-        }
-
+        // The module's saved scope describes supporting infrastructure, which can be in a
+        // different resource group than an existing cluster. The persisted cluster ID is
+        // authoritative and cannot be redirected by a changed AppHost or deployment scope.
         await GetAksCredentialsAsync(
             context,
             clusterResourceId.Name,
-            resourceGroupName,
-            subscriptionId,
+            clusterResourceId.ResourceGroupName,
+            clusterResourceId.SubscriptionId,
             verifyClusterExists: true).ConfigureAwait(false);
     }
 
@@ -737,15 +699,20 @@ public partial class AzureKubernetesEnvironmentResource
     /// Gets the subscription and resource group this resource explicitly targets, if any.
     /// </summary>
     /// <remarks>
-    /// Mirrors the precedence in <c>BicepUtilities.GetExistingResourceScope</c>: an explicitly
-    /// assigned <see cref="AzureBicepResource.Scope"/> (which <c>ConfigureInfrastructure</c> can set)
-    /// wins over the <see cref="ExistingAzureResourceAnnotation"/> that <c>AsExistingInResourceGroup</c>
-    /// and friends attach. The credential fetch has to agree with whatever the provisioner deployed
-    /// against. Values are returned unresolved because they may be a literal string, a
+    /// Explicit existing-cluster scopes take precedence over the module's
+    /// <see cref="AzureBicepResource.Scope"/>, which controls supporting infrastructure
+    /// and locally scoped cluster references. Values are returned unresolved because they may be a literal string, a
     /// <see cref="ParameterResource"/>, or a <see cref="BicepOutputReference"/>.
     /// </remarks>
     private (object? Subscription, object? ResourceGroup) GetExplicitScopeValues()
     {
+        if (this.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existing) &&
+            !existing.IsTenantScope && (existing.ResourceGroup is not null || existing.Subscription is not null))
+        {
+            // A resource-group-only reference inherits its subscription from the Bicep module.
+            return (existing.Subscription ?? Scope?.Subscription, existing.ResourceGroup);
+        }
+
         if (Scope is not null)
         {
             // A tenant-scoped resource pins neither value. HasResourceGroup must be checked first
@@ -753,11 +720,6 @@ public partial class AzureKubernetesEnvironmentResource
             return Scope.IsTenantScope
                 ? (null, null)
                 : (Scope.Subscription, Scope.HasResourceGroup ? Scope.ResourceGroup : null);
-        }
-
-        if (this.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existing) && !existing.IsTenantScope)
-        {
-            return (existing.Subscription, existing.ResourceGroup);
         }
 
         return (null, null);
@@ -811,7 +773,7 @@ public partial class AzureKubernetesEnvironmentResource
     /// <remarks>
     /// A cluster adopted with <c>AsExistingInResourceGroup(...)</c> can sit in a different
     /// subscription and resource group than the one Aspire deploys the rest of the app into, and the
-    /// provisioner targets that per-resource scope. The Azure CLI calls here have to agree with it,
+    /// cluster's Bicep reference targets that scope. The Azure CLI calls here have to agree with it,
     /// otherwise we would authenticate against the wrong subscription and could even find a
     /// same-named cluster in the wrong place. Values the resource does not pin fall back to the
     /// global deployment state.

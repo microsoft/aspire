@@ -252,22 +252,88 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
         Assert.IsAssignableFrom<IAzureNspAssociationTarget>(aks.Resource);
     }
 
-    [Fact]
-    public void AsExisting_WorksOnAksResource()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AsExisting_GeneratesExistingCluster(bool crossResourceGroup)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var builder = AzureKubernetesTestBuilder.Create(
-            outputHelper,
-            workspace,
-            operation: DistributedApplicationOperation.Run);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
-        var nameParam = builder.AddParameter("aks-name");
-        var rgParam = builder.AddParameter("aks-rg");
+        var name = builder.AddParameter("cluster-name");
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        if (crossResourceGroup)
+        {
+            aks.AsExistingInResourceGroup(
+                name,
+                builder.AddParameter("cluster-rg"),
+                builder.AddParameter("cluster-subscription"));
+        }
+        else
+        {
+            aks.AsExisting(name, null);
+        }
 
-        var aks = builder.AddAzureKubernetesEnvironment("aks")
-            .AsExisting(nameParam, rgParam);
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        await Verify(manifest.BicepText, extension: "bicep").UseParameters(crossResourceGroup);
+    }
 
-        Assert.NotNull(aks);
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, "AsExisting", true)]
+    [InlineData(DistributedApplicationOperation.Publish, "AsExisting", true)]
+    [InlineData(DistributedApplicationOperation.Run, "RunAsExisting", true)]
+    [InlineData(DistributedApplicationOperation.Publish, "RunAsExisting", false)]
+    [InlineData(DistributedApplicationOperation.Run, "PublishAsExisting", false)]
+    [InlineData(DistributedApplicationOperation.Publish, "PublishAsExisting", true)]
+    public async Task ExistingResourceApis_RespectExecutionMode(
+        DistributedApplicationOperation operation,
+        string method,
+        bool existing)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace, operation);
+        var name = builder.AddParameter("cluster-name");
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        _ = method switch
+        {
+            "AsExisting" => aks.AsExisting(name, null),
+            "RunAsExisting" => aks.RunAsExisting(name, null),
+            "PublishAsExisting" => aks.PublishAsExisting(name, null),
+            _ => throw new InvalidOperationException($"Unexpected API '{method}'.")
+        };
+
+        aks.ConfigureInfrastructure(infrastructure =>
+        {
+            var cluster = Assert.Single(infrastructure.GetProvisionableResources().OfType<ContainerServiceManagedCluster>());
+            Assert.Equal(existing, cluster.IsExistingResource);
+        });
+        await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AddAsExistingResource_ReusesReference(bool existing)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        if (existing)
+        {
+            aks.AsExistingInResourceGroup("existing-cluster", "existing-rg", "existing-subscription");
+        }
+
+        var referenceResource = new AzureProvisioningResource("reference", infrastructure =>
+        {
+            var first = aks.Resource.AddAsExistingResource(infrastructure);
+            var second = aks.Resource.AddAsExistingResource(infrastructure);
+            Assert.Same(first, second);
+            Assert.Single(infrastructure.GetProvisionableResources().OfType<ContainerServiceManagedCluster>());
+        });
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(referenceResource);
+        await Verify(manifest.BicepText, extension: "bicep").UseParameters(existing);
     }
 
     [Fact]
@@ -573,8 +639,10 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
         Assert.Contains("installation: 'Standard'", manifest.BicepText);
     }
 
-    [Fact]
-    public async Task AddLoadBalancer_BicepEnablesIngressProfileAndUsesPreviewApi()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AddLoadBalancer_BicepEnablesIngressProfileAndUsesPreviewApi(bool existing)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
@@ -584,10 +652,15 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
         var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
 
         var aks = builder.AddAzureKubernetesEnvironment("aks").WithSubnet(aksSubnet);
+        if (existing)
+        {
+            aks.AsExisting(builder.AddParameter("cluster-name"), null);
+        }
+
         aks.AddLoadBalancer("lb", albSubnet);
 
         var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
-        await Verify(manifest.BicepText, extension: "bicep");
+        await Verify(manifest.BicepText, extension: "bicep").UseParameters(existing);
     }
 
     [Fact]

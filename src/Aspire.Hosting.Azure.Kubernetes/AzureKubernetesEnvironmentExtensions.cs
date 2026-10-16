@@ -507,10 +507,10 @@ public static class AzureKubernetesEnvironmentExtensions
         return builder;
     }
 
-    private static void ConfigureAksInfrastructure(AzureResourceInfrastructure infrastructure)
+    private static ContainerServiceManagedCluster CreateAksCluster(
+        AzureResourceInfrastructure infrastructure,
+        AzureKubernetesEnvironmentResource aksResource)
     {
-        var aksResource = (AzureKubernetesEnvironmentResource)infrastructure.AspireResource;
-
         // Create the AKS managed cluster
         var aks = new ContainerServiceManagedCluster(aksResource.GetBicepIdentifier())
         {
@@ -656,7 +656,7 @@ public static class AzureKubernetesEnvironmentExtensions
             // the SDK's stable API version. Gateway API alone uses the stable default.
             if (aksResource.RequiresPreviewIngressApi)
             {
-                aks.ResourceVersion = "2026-07-02-preview";
+                aks.ResourceVersion = AzureKubernetesEnvironmentResource.PreviewIngressApiVersion;
             }
 
             var ingressProfile = new AksPreviewIngressProfile();
@@ -670,6 +670,16 @@ public static class AzureKubernetesEnvironmentExtensions
             }
             aks.IngressProfile = ingressProfile;
         }
+
+        return aks;
+    }
+
+    private static void ConfigureAksInfrastructure(AzureResourceInfrastructure infrastructure)
+    {
+        var aksResource = (AzureKubernetesEnvironmentResource)infrastructure.AspireResource;
+        var aks = aksResource.IsExisting()
+            ? (ContainerServiceManagedCluster)aksResource.AddAsExistingResource(infrastructure)
+            : CreateAksCluster(infrastructure, aksResource);
 
         // ACR pull role assignment for kubelet identity
         if (aksResource.DefaultContainerRegistry is not null || aksResource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out _))
@@ -797,15 +807,22 @@ public static class AzureKubernetesEnvironmentExtensions
         {
             Value = new MemberExpression(new MemberExpression(aksId, "properties"), "fqdn")
         });
-        // OIDC issuer URL and kubelet identity outputs are only valid when the
-        // corresponding features are enabled on the cluster.
+        // Existing clusters can omit the OIDC profile or issuer URL when OIDC is disabled.
+        // Federated credentials below still require an issuer when workload identity is used.
         if (aksResource.OidcIssuerEnabled)
         {
             infrastructure.Add(new ProvisioningOutput("oidcIssuerUrl", typeof(string))
             {
-                Value = new MemberExpression(
-                    new MemberExpression(new MemberExpression(aksId, "properties"), "oidcIssuerProfile"),
-                    "issuerURL")
+                Value = aksResource.IsExisting()
+                    ? new BinaryExpression(
+                        new SafeMemberExpression(
+                            new SafeMemberExpression(new MemberExpression(aksId, "properties"), "oidcIssuerProfile"),
+                            "issuerURL"),
+                        BinaryBicepOperator.Coalesce,
+                        new StringLiteralExpression(""))
+                    : new MemberExpression(
+                        new MemberExpression(new MemberExpression(aksId, "properties"), "oidcIssuerProfile"),
+                        "issuerURL")
             });
         }
 

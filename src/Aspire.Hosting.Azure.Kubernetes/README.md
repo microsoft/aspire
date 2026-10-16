@@ -41,6 +41,25 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
     .withComputeEnvironment(aks);
 ```
 
+### Existing clusters
+
+Use the shared Azure existing-resource APIs to deploy to a pre-provisioned AKS cluster:
+
+```csharp
+var clusterName = builder.AddParameter("cluster-name");
+var resourceGroup = builder.AddParameter("cluster-resource-group");
+var subscription = builder.AddParameter("cluster-subscription");
+
+var aks = builder.AddAzureKubernetesEnvironment("aks")
+    .AsExistingInResourceGroup(clusterName, resourceGroup, subscription);
+```
+
+Use `AsExisting(clusterName, null)` when the cluster is in the application's Azure resource group. `PublishAsExisting` applies only when publishing/deploying; `RunAsExisting` applies only in run mode.
+
+Aspire references the cluster without changing its node pools, networking, or add-ons, and does not assign workloads to an automatically created `workload` node pool. Cluster-creation settings do not reconfigure an existing cluster. Explicit node-pool affinity must name a pool that already exists. The cluster must have a kubelet managed identity for registry access; workloads using Azure workload identity also require OIDC and workload identity to be enabled beforehand. Any ingress add-ons used by the application must already be installed and configured.
+
+Aspire still provisions the default container registry, grants the cluster's kubelet identity `AcrPull` access, and creates workload identity federated credentials when needed. The deploying identity needs permission to create these supporting resources and role assignments, retrieve AKS credentials, and deploy Kubernetes workloads. `aspire destroy` removes the application's workloads and deletes the application's Azure resource group. Keep the existing cluster in a separate resource group if it must survive `aspire destroy`.
+
 ### Cluster tier
 
 AKS clusters use the **Standard** control-plane tier by default, providing an uptime SLA for production workloads. Standard includes a cluster-management charge in addition to the underlying Azure resource costs. See [AKS pricing tiers](https://learn.microsoft.com/azure/aks/free-standard-pricing-tiers) for current details.
