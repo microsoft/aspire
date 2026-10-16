@@ -10,6 +10,39 @@
         "DOTNET_ENVIRONMENT": "Development"
       }
     },
+    "https_catalog": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "dotnetRunMessages": true,
+      "applicationUrl": "https://TestShop.dev.localhost:16319;http://TestShop.dev.localhost:16320",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "LaunchGroup": "catalog"
+      }
+    },
+    "https_basket": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "dotnetRunMessages": true,
+      "applicationUrl": "https://TestShop.dev.localhost:16319;http://TestShop.dev.localhost:16320",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "LaunchGroup": "basket"
+      }
+    },
+    "https_frontend": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "dotnetRunMessages": true,
+      "applicationUrl": "https://TestShop.dev.localhost:16319;http://TestShop.dev.localhost:16320",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "LaunchGroup": "frontend"
+      }
+    },
     "https (profiling)": {
       "commandName": "Project",
       "launchBrowser": true,

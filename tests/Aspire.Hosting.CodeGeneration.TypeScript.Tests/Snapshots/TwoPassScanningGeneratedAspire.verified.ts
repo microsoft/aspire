@@ -9828,6 +9828,19 @@ export interface DistributedApplicationBuilder {
     /** Adds an external service resource */
     addExternalService(name: string, url: string | ParameterResource | Awaitable<ParameterResource>): ExternalServiceResourcePromise;
     /**
+     * Adds launch group support and optionally declares the valid launch group names.
+     *
+     * Select one group using the `LaunchGroup` configuration setting, for example an environment
+     * variable in an AppHost launch profile or `dotnet run -- LaunchGroup=catalog`.
+     * Names are case-insensitive. If no valid names are declared, resource membership defines the valid names.
+     * Without a selection, the full application runs normally. With a selection, ungrouped resources,
+     * group members, and their dependencies start normally; other resources remain available for explicit
+     * starts. Existing explicit-start settings are preserved. Launch groups do not affect publishing.
+     * @param launchGroupNames The valid group names, combined with the `LaunchGroups` configuration array.
+     * @returns The application builder.
+     */
+    addLaunchGroups(launchGroupNames: string[]): DistributedApplicationBuilderPromise;
+    /**
      * Adds a parameter resource
      * @param options Additional options.
      */
@@ -10043,6 +10056,19 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     addExecutable(name: string, command: string, workingDirectory: string, args: string[]): ExecutableResourcePromise;
     /** Adds an external service resource */
     addExternalService(name: string, url: string | ParameterResource | Awaitable<ParameterResource>): ExternalServiceResourcePromise;
+    /**
+     * Adds launch group support and optionally declares the valid launch group names.
+     *
+     * Select one group using the `LaunchGroup` configuration setting, for example an environment
+     * variable in an AppHost launch profile or `dotnet run -- LaunchGroup=catalog`.
+     * Names are case-insensitive. If no valid names are declared, resource membership defines the valid names.
+     * Without a selection, the full application runs normally. With a selection, ungrouped resources,
+     * group members, and their dependencies start normally; other resources remain available for explicit
+     * starts. Existing explicit-start settings are preserved. Launch groups do not affect publishing.
+     * @param launchGroupNames The valid group names, combined with the `LaunchGroups` configuration array.
+     * @returns The application builder.
+     */
+    addLaunchGroups(launchGroupNames: string[]): DistributedApplicationBuilderPromise;
     /**
      * Adds a parameter resource
      * @param options Additional options.
@@ -10446,6 +10472,32 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     /** @internal */
+    async _addLaunchGroupsInternal(launchGroupNames: string[]): Promise<DistributedApplicationBuilder> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<IDistributedApplicationBuilderHandle>(
+            'Aspire.Hosting/addLaunchGroups',
+            rpcArgs
+        );
+        return new DistributedApplicationBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Adds launch group support and optionally declares the valid launch group names.
+     *
+     * Select one group using the `LaunchGroup` configuration setting, for example an environment
+     * variable in an AppHost launch profile or `dotnet run -- LaunchGroup=catalog`.
+     * Names are case-insensitive. If no valid names are declared, resource membership defines the valid names.
+     * Without a selection, the full application runs normally. With a selection, ungrouped resources,
+     * group members, and their dependencies start normally; other resources remain available for explicit
+     * starts. Existing explicit-start settings are preserved. Launch groups do not affect publishing.
+     * @param launchGroupNames The valid group names, combined with the `LaunchGroups` configuration array.
+     * @returns The application builder.
+     */
+    addLaunchGroups(launchGroupNames: string[]): DistributedApplicationBuilderPromise {
+        return new DistributedApplicationBuilderPromiseImpl(this._addLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
     async _addParameterInternal(name: string, value?: string, publishValueAsDefault?: boolean, secret?: boolean): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
         if (value !== undefined) rpcArgs.value = value;
@@ -10822,6 +10874,7 @@ const DistributedApplicationBuilderPromiseImpl = $aspireCreateFluentPromiseClass
     ["addDotnetTool"]: () => DotnetToolResourcePromiseImpl,
     ["addExecutable"]: () => ExecutableResourcePromiseImpl,
     ["addExternalService"]: () => ExternalServiceResourcePromiseImpl,
+    ["addLaunchGroups"]: () => DistributedApplicationBuilderPromiseImpl,
     ["addParameter"]: () => ParameterResourcePromiseImpl,
     ["addParameterFromConfiguration"]: () => ParameterResourcePromiseImpl,
     ["addParameterWithGeneratedValue"]: () => ParameterResourcePromiseImpl,
@@ -12994,6 +13047,25 @@ export interface ContainerRegistryResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
     /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ContainerRegistryResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ContainerRegistryResourcePromise;
+    /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
      * The command is considered valid if either:
@@ -13332,6 +13404,25 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ContainerRegistryResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ContainerRegistryResourcePromise;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -13708,6 +13799,51 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new ContainerRegistryResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupInternal(launchGroupName: string): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupName };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withLaunchGroup',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
     }
 
     /** @internal */
@@ -14974,6 +15110,8 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
 const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRegistryResource, ContainerRegistryResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ContainerRegistryResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withLaunchGroup"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ContainerRegistryResourcePromiseImpl,
     ["withRequiredCommand"]: () => ContainerRegistryResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ContainerRegistryResourcePromiseImpl,
     ["withSessionLifetime"]: () => ContainerRegistryResourcePromiseImpl,
@@ -15240,6 +15378,25 @@ export interface ContainerResource {
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): ContainerResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ContainerResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ContainerResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -16075,6 +16232,25 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): ContainerResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ContainerResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ContainerResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -17246,6 +17422,51 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      */
     withContainerNetworkAlias(alias: string): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withContainerNetworkAliasInternal(alias), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupInternal(launchGroupName: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupName };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withLaunchGroup',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
     }
 
     /** @internal */
@@ -19548,6 +19769,8 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withDockerfileBuilder"]: () => ContainerResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ContainerResourcePromiseImpl,
     ["withContainerNetworkAlias"]: () => ContainerResourcePromiseImpl,
+    ["withLaunchGroup"]: () => ContainerResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ContainerResourcePromiseImpl,
     ["withMcpServer"]: () => ContainerResourcePromiseImpl,
     ["withOtlpExporter"]: () => ContainerResourcePromiseImpl,
     ["publishAsConnectionString"]: () => ContainerResourcePromiseImpl,
@@ -19673,6 +19896,25 @@ export interface CSharpAppResource {
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): CSharpAppResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): CSharpAppResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -20348,6 +20590,25 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): CSharpAppResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): CSharpAppResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -21060,6 +21321,51 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new CSharpAppResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupInternal(launchGroupName: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupName };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withLaunchGroup',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
     }
 
     /** @internal */
@@ -23420,6 +23726,8 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppResource, CSharpAppResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => CSharpAppResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => CSharpAppResourcePromiseImpl,
+    ["withLaunchGroup"]: () => CSharpAppResourcePromiseImpl,
+    ["withLaunchGroups"]: () => CSharpAppResourcePromiseImpl,
     ["withMcpServer"]: () => CSharpAppResourcePromiseImpl,
     ["withOtlpExporter"]: () => CSharpAppResourcePromiseImpl,
     ["withReplicas"]: () => CSharpAppResourcePromiseImpl,
@@ -23610,6 +23918,25 @@ export interface DotnetToolResource {
      * @returns The resource builder.
      */
     withWorkingDirectory(workingDirectory: string): DotnetToolResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): DotnetToolResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): DotnetToolResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -24321,6 +24648,25 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The resource builder.
      */
     withWorkingDirectory(workingDirectory: string): DotnetToolResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): DotnetToolResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): DotnetToolResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -25191,6 +25537,51 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      */
     withWorkingDirectory(workingDirectory: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withWorkingDirectoryInternal(workingDirectory), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupInternal(launchGroupName: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupName };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withLaunchGroup',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
     }
 
     /** @internal */
@@ -27479,6 +27870,8 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["publishAsDockerFile"]: () => DotnetToolResourcePromiseImpl,
     ["withExecutableCommand"]: () => DotnetToolResourcePromiseImpl,
     ["withWorkingDirectory"]: () => DotnetToolResourcePromiseImpl,
+    ["withLaunchGroup"]: () => DotnetToolResourcePromiseImpl,
+    ["withLaunchGroups"]: () => DotnetToolResourcePromiseImpl,
     ["withMcpServer"]: () => DotnetToolResourcePromiseImpl,
     ["withOtlpExporter"]: () => DotnetToolResourcePromiseImpl,
     ["withRequiredCommand"]: () => DotnetToolResourcePromiseImpl,
@@ -27633,6 +28026,25 @@ export interface ExecutableResource {
      * @returns The resource builder.
      */
     withWorkingDirectory(workingDirectory: string): ExecutableResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ExecutableResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ExecutableResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -28305,6 +28717,25 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The resource builder.
      */
     withWorkingDirectory(workingDirectory: string): ExecutableResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ExecutableResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ExecutableResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -29065,6 +29496,51 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      */
     withWorkingDirectory(workingDirectory: string): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withWorkingDirectoryInternal(workingDirectory), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupInternal(launchGroupName: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupName };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withLaunchGroup',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
     }
 
     /** @internal */
@@ -31347,6 +31823,8 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["publishAsDockerFile"]: () => ExecutableResourcePromiseImpl,
     ["withExecutableCommand"]: () => ExecutableResourcePromiseImpl,
     ["withWorkingDirectory"]: () => ExecutableResourcePromiseImpl,
+    ["withLaunchGroup"]: () => ExecutableResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ExecutableResourcePromiseImpl,
     ["withMcpServer"]: () => ExecutableResourcePromiseImpl,
     ["withOtlpExporter"]: () => ExecutableResourcePromiseImpl,
     ["withRequiredCommand"]: () => ExecutableResourcePromiseImpl,
@@ -31477,6 +31955,25 @@ export interface ExternalServiceResource {
      * @param options Additional options.
      */
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ExternalServiceResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ExternalServiceResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ExternalServiceResourcePromise;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -31821,6 +32318,25 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @param options Additional options.
      */
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ExternalServiceResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ExternalServiceResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ExternalServiceResourcePromise;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -32221,6 +32737,51 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
         const statusCode = options?.statusCode;
         const endpointName = options?.endpointName;
         return new ExternalServiceResourcePromiseImpl(this._withHttpHealthCheckInternal(path, statusCode, endpointName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupInternal(launchGroupName: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupName };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withLaunchGroup',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
     }
 
     /** @internal */
@@ -33488,6 +34049,8 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["withContainerRegistry"]: () => ExternalServiceResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ExternalServiceResourcePromiseImpl,
     ["withHttpHealthCheck"]: () => ExternalServiceResourcePromiseImpl,
+    ["withLaunchGroup"]: () => ExternalServiceResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ExternalServiceResourcePromiseImpl,
     ["withRequiredCommand"]: () => ExternalServiceResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ExternalServiceResourcePromiseImpl,
     ["withSessionLifetime"]: () => ExternalServiceResourcePromiseImpl,
@@ -33574,6 +34137,25 @@ export interface ParameterResource {
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ParameterResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ParameterResourcePromise;
     /**
      * Sets the description of the parameter resource.
      * @param description The parameter description.
@@ -33960,6 +34542,25 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ParameterResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ParameterResourcePromise;
     /**
      * Sets the description of the parameter resource.
      * @param description The parameter description.
@@ -34384,6 +34985,51 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new ParameterResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupInternal(launchGroupName: string): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupName };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withLaunchGroup',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
     }
 
     /** @internal */
@@ -35771,6 +36417,8 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
 const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterResource, ParameterResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ParameterResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ParameterResourcePromiseImpl,
+    ["withLaunchGroup"]: () => ParameterResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ParameterResourcePromiseImpl,
     ["withDescription"]: () => ParameterResourcePromiseImpl,
     ["withOptional"]: () => ParameterResourcePromiseImpl,
     ["withRequired"]: () => ParameterResourcePromiseImpl,
@@ -35863,6 +36511,25 @@ export interface ProjectResource {
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ProjectResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ProjectResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -36538,6 +37205,25 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ProjectResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ProjectResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -37251,6 +37937,51 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new ProjectResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupInternal(launchGroupName: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupName };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withLaunchGroup',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
     }
 
     /** @internal */
@@ -39611,6 +40342,8 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResource, ProjectResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ProjectResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ProjectResourcePromiseImpl,
+    ["withLaunchGroup"]: () => ProjectResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ProjectResourcePromiseImpl,
     ["withMcpServer"]: () => ProjectResourcePromiseImpl,
     ["withOtlpExporter"]: () => ProjectResourcePromiseImpl,
     ["withReplicas"]: () => ProjectResourcePromiseImpl,
@@ -39920,6 +40653,25 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestDatabaseResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): TestDatabaseResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestDatabaseResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -40755,6 +41507,25 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestDatabaseResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): TestDatabaseResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestDatabaseResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -41925,6 +42696,51 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      */
     withContainerNetworkAlias(alias: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withContainerNetworkAliasInternal(alias), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupInternal(launchGroupName: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupName };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withLaunchGroup',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
     }
 
     /** @internal */
@@ -44227,6 +45043,8 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withDockerfileBuilder"]: () => TestDatabaseResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => TestDatabaseResourcePromiseImpl,
     ["withContainerNetworkAlias"]: () => TestDatabaseResourcePromiseImpl,
+    ["withLaunchGroup"]: () => TestDatabaseResourcePromiseImpl,
+    ["withLaunchGroups"]: () => TestDatabaseResourcePromiseImpl,
     ["withMcpServer"]: () => TestDatabaseResourcePromiseImpl,
     ["withOtlpExporter"]: () => TestDatabaseResourcePromiseImpl,
     ["publishAsConnectionString"]: () => TestDatabaseResourcePromiseImpl,
@@ -44532,6 +45350,25 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestRedisResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): TestRedisResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestRedisResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -45451,6 +46288,25 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestRedisResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): TestRedisResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestRedisResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -46705,6 +47561,51 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      */
     withContainerNetworkAlias(alias: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withContainerNetworkAliasInternal(alias), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupInternal(launchGroupName: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupName };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withLaunchGroup',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
     }
 
     /** @internal */
@@ -49318,6 +50219,8 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withDockerfileBuilder"]: () => TestRedisResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => TestRedisResourcePromiseImpl,
     ["withContainerNetworkAlias"]: () => TestRedisResourcePromiseImpl,
+    ["withLaunchGroup"]: () => TestRedisResourcePromiseImpl,
+    ["withLaunchGroups"]: () => TestRedisResourcePromiseImpl,
     ["withMcpServer"]: () => TestRedisResourcePromiseImpl,
     ["withOtlpExporter"]: () => TestRedisResourcePromiseImpl,
     ["publishAsConnectionString"]: () => TestRedisResourcePromiseImpl,
@@ -49641,6 +50544,25 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestVaultResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): TestVaultResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestVaultResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -50478,6 +51400,25 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestVaultResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): TestVaultResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestVaultResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -51650,6 +52591,51 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      */
     withContainerNetworkAlias(alias: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withContainerNetworkAliasInternal(alias), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupInternal(launchGroupName: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupName };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withLaunchGroup',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
     }
 
     /** @internal */
@@ -53967,6 +54953,8 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withDockerfileBuilder"]: () => TestVaultResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => TestVaultResourcePromiseImpl,
     ["withContainerNetworkAlias"]: () => TestVaultResourcePromiseImpl,
+    ["withLaunchGroup"]: () => TestVaultResourcePromiseImpl,
+    ["withLaunchGroups"]: () => TestVaultResourcePromiseImpl,
     ["withMcpServer"]: () => TestVaultResourcePromiseImpl,
     ["withOtlpExporter"]: () => TestVaultResourcePromiseImpl,
     ["publishAsConnectionString"]: () => TestVaultResourcePromiseImpl,
@@ -54378,6 +55366,25 @@ export interface Resource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
     /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ResourcePromise;
+    /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
      * The command is considered valid if either:
@@ -54716,6 +55723,25 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ResourcePromise;
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ResourcePromise;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -55093,6 +56119,51 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new ResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupInternal(launchGroupName: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupName };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withLaunchGroup',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to a launch group.
+     *
+     * Membership is additive. Select one group with the `LaunchGroup` configuration setting.
+     * Dependencies of selected resources are included even if they belong to another group.
+     * Ungrouped children inherit their parent's membership.
+     * @param launchGroupName The case-insensitive launch group name.
+     * @returns The resource builder.
+     */
+    withLaunchGroup(launchGroupName: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to multiple launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. No selection preserves normal startup.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     */
+    withLaunchGroups(launchGroupNames: string[]): ResourcePromise {
+        return new ResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
     }
 
     /** @internal */
@@ -56359,6 +57430,8 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
 const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ResourcePromiseImpl,
+    ["withLaunchGroup"]: () => ResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ResourcePromiseImpl,
     ["withRequiredCommand"]: () => ResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ResourcePromiseImpl,
     ["withSessionLifetime"]: () => ResourcePromiseImpl,

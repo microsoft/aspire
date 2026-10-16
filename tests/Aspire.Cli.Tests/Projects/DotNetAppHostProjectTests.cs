@@ -313,8 +313,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
     }
 
-    [Fact]
-    public async Task RunAsync_SingleFileAppHostWithoutRunJsonPassesDevelopmentEnvironmentToRunner()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("catalog")]
+    public async Task RunAsync_SingleFileAppHostWithoutRunJsonPassesDevelopmentEnvironmentToRunner(string? launchGroup)
     {
         var appHostFile = CreateSingleFileAppHost();
         var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
@@ -342,6 +344,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
             Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
             Assert.Equal(expectedWorkloadId, env[KnownConfigNames.DcpWorkloadId]);
+            Assert.Equal(launchGroup is null ? [] : new[] { "--LaunchGroup=catalog" }, args);
             return Task.FromResult(0);
         };
 
@@ -350,6 +353,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             AppHostFile = appHostFile,
             NoBuild = true,
             NoRestore = true,
+            LaunchGroup = launchGroup,
             WorkingDirectory = _workspace.WorkspaceRoot,
             EnvironmentVariables = new Dictionary<string, string>()
         }, CancellationToken.None);
@@ -1132,8 +1136,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(123, exitCode);
     }
 
-    [Fact]
-    public async Task RunAsync_ProjectAppHostDirectLaunchAppliesSelectedLaunchProfile()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("catalog")]
+    public async Task RunAsync_ProjectAppHostDirectLaunchAppliesSelectedLaunchProfile(string? launchGroup)
     {
         var appHostFile = CreateProjectAppHost();
         var appHostCommand = CreateBuiltAppHostCommand("AppHost");
@@ -1157,7 +1163,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                   "workingDirectory": true,
                   "environmentVariables": {
                     "SELECTED_PROFILE": "E2E",
-                    "PROFILE_ONLY": "E2E"
+                    "PROFILE_ONLY": "E2E",
+                    "LaunchGroup": "basket"
                   }
                 }
               }
@@ -1190,7 +1197,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         {
             Assert.Equal(appHostCommand.FullName, command);
             Assert.Equal("e2e", options.LaunchProfile);
-            Assert.Equal(["--from-profile", "E2E"], args);
+            Assert.Equal(launchGroup is null ? ["--from-profile", "E2E"] : ["--from-profile", "E2E", "--LaunchGroup=catalog"], args);
             Assert.NotNull(env);
             Assert.Equal("e2e", env["DOTNET_LAUNCH_PROFILE"]);
             Assert.Equal("http://localhost:16000", env[KnownAspNetCoreConfigNames.Urls]);
@@ -1203,6 +1210,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         {
             AppHostFile = appHostFile,
             LaunchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption),
+            LaunchGroup = launchGroup,
             NoBuild = false,
             NoRestore = false,
             UnmatchedTokens = parseResult.UnmatchedTokens.ToArray(),
@@ -1664,6 +1672,57 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         }, CancellationToken.None);
 
         Assert.Equal(77, exitCode);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RunAsync_LaunchGroupPreservesProfileArgumentsOnSdkAndWatchPaths(bool watch, bool explicitAppHostArguments)
+    {
+        var appHostFile = CreateProjectAppHost();
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "E2E": {
+                  "commandName": "Project",
+                  "commandLineArgs": "--FeatureX=true --LaunchGroup=basket",
+                  "environmentVariables": { "LaunchGroup": "basket" }
+                }
+              }
+            }
+            """);
+        WriteAspireConfigJson(appHostFile.DirectoryName!, """{ "dotnetAppHostDirectLaunchDisabled": "true" }""");
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: "dotnet")),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("Expected SDK launch.")
+        };
+        var project = CreateDotNetAppHostProject(runner, configureServices: options =>
+            options.EnabledFeatures = watch ? [KnownFeatures.DefaultWatchEnabled] : []);
+        runner.RunAsyncCallback = (_, actualWatch, _, _, args, _, _, options, _) =>
+        {
+            Assert.Equal(watch, actualWatch);
+            Assert.Equal("E2E", options.LaunchProfile);
+            Assert.Equal(explicitAppHostArguments
+                ? ["--UserOption=true", "--LaunchGroup=catalog"]
+                : ["--FeatureX=true", "--LaunchGroup=basket", "--LaunchGroup=catalog"], args);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = "E2E",
+            LaunchGroup = "catalog",
+            UnmatchedTokens = explicitAppHostArguments ? ["--UserOption=true"] : [],
+            WorkingDirectory = _workspace.WorkspaceRoot
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
     }
 
     [Fact]

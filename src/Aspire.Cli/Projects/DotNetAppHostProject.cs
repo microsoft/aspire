@@ -1632,7 +1632,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     effectiveAppHostFile,
                     directRun.Command,
                     directRun.WorkingDirectory,
-                    directRun.Arguments,
+                    context.LaunchGroup is { } directLaunchGroup
+                        ? [.. directRun.Arguments, $"--LaunchGroup={directLaunchGroup}"]
+                        : directRun.Arguments,
                     directRun.Environment,
                     backchannelCompletionSource,
                     directRunOptions,
@@ -1641,12 +1643,27 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
             await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(env, appHostDirectory, cancellationToken);
 
+            var appHostArguments = context.UnmatchedTokens.ToList();
+            if (context.LaunchGroup is { } launchGroup)
+            {
+                // dotnet run replaces profile commandLineArgs whenever any explicit application arguments
+                // are supplied. Preserve the selected profile's arguments when only the CLI selector was added.
+                if (appHostArguments.Count == 0)
+                {
+                    TryApplyProjectLaunchSettings(effectiveAppHostFile, new Dictionary<string, string>(), appHostArguments,
+                        runOptions.NoLaunchProfile, runOptions.LaunchProfile,
+                        hasExplicitApplicationArgs: false, hasRunArguments: false);
+                }
+
+                appHostArguments.Add($"--LaunchGroup={launchGroup}");
+            }
+
             return await _runner.RunAsync(
                 effectiveAppHostFile,
                 watch,
                 noBuild,
                 noRestore,
-                context.UnmatchedTokens,
+                [.. appHostArguments],
                 env,
                 backchannelCompletionSource,
                 runOptions,
