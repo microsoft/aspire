@@ -732,6 +732,22 @@ public static class GoHostingExtensions
 
         var resource = builder.Resource;
 
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            // Append after model configuration so GOFLAGS set by a later WithEnvironment call
+            // participates in the merge instead of replacing it.
+            builder.ApplicationBuilder.OnBeforeStart((_, _) =>
+            {
+                if (!resource.HasAnnotationOfType<GoDelveServerAnnotation>() &&
+                    !resource.HasAnnotationOfType<GoLdFlagsAnnotation>())
+                {
+                    builder.WithEnvironment(GoRunDebugging.ConfigureEnvironmentAsync);
+                }
+
+                return Task.CompletedTask;
+            });
+        }
+
         return builder.WithDebugSupport(
             mode =>
             {
@@ -781,7 +797,6 @@ public static class GoHostingExtensions
                 {
                     ctx.Args.Add($"-ldflags={ldFlagsAnnotation.Flags}");
                 }
-
                 if (ctx.Resource.TryGetLastAnnotation<GoGcFlagsAnnotation>(out var gcFlagsAnnotation))
                 {
                     ctx.Args.Add($"-gcflags={gcFlagsAnnotation.Flags}");

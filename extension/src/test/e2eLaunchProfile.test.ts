@@ -711,7 +711,7 @@ suite('E2E launch profile', () => {
         assert.ok(workflow.includes('global-json-file: global.json'));
         assert.deepStrictEqual(runnerTargetFrameworks, ['net11.0', 'net10.0', 'net10.0-windows10.0.19041.0', 'net10.0', 'net10.0']);
         assert.deepStrictEqual(fixtureTargetFrameworks, ['net10.0', 'net10.0']);
-        assert.ok(debuggerPrerequisiteStep.includes('if: ${{ matrix.installDotnetDebugger || matrix.installAzureFunctions }}'));
+        assert.ok(debuggerPrerequisiteStep.includes('if: ${{ matrix.installDotnetDebugger || matrix.installAzureFunctions || matrix.installResourceDebug }}'));
         assert.ok(debuggerPrerequisiteStep.includes('vscode-dotnet-runtime/3.1.0/vspackage'));
         assert.ok(debuggerPrerequisiteStep.includes('8e675ffe5f3674430d63e28d2dc05ab40f36c8494e9549e79d3995d721b13f5a'));
         assert.strictEqual(csharpVersion, '2.148.23');
@@ -745,10 +745,10 @@ suite('E2E launch profile', () => {
         assert.ok(csharpInstallIndex > dotnetRuntimeInstallIndex);
         assert.ok(resourceGroupsInstallIndex > csharpInstallIndex);
         assert.ok(functionsInstallIndex > resourceGroupsInstallIndex);
-        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX')"));
-        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX')"));
-        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX')"));
-        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX')"));
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX', selectingFeatureFlag)"));
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX', selectingFeatureFlag)"));
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS')"));
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS')"));
         assert.ok(runner.includes("const executable = isWindows ? (process.env.ComSpec || 'cmd.exe') : displayName;"));
         assert.ok(runner.includes("const args = isWindows ? ['/d', '/s', '/c', 'func.cmd --version'] : ['--version'];"));
         assert.ok(runner.includes("const certificatePassword = String.raw`Aspire E2E p@ss'\\word`;"));
@@ -776,7 +776,7 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes(`const browserDebuggerTargetFramework = '${repositoryTargetFramework}';`));
         assert.ok(runner.includes("const e2eBrowser = process.platform === 'win32' ? 'msedge' : 'chrome';"));
         assert.ok(runner.includes("const enableNodeFunctionsE2E = shardName === 'azure-functions-node';"));
-        assert.ok(runner.includes('const enableDebuggerExtensions = installAzureFunctionsVsix || enableBrowserDebuggerE2E || enableNodeFunctionsE2E || enableWinUiE2E;'));
+        assert.ok(runner.includes('const enableDebuggerExtensions = installAzureFunctionsVsix || enableBrowserDebuggerE2E || enableNodeFunctionsE2E || enableWinUiE2E || enableResourceDebugE2E;'));
         assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazorwasm', '--name', 'StandaloneClient', '--output', standaloneDirectory, '--framework', browserDebuggerTargetFramework, '--no-https', '--no-restore']);"));
         assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazor', '--name', 'HostedGlobal', '--output', hostedGlobalDirectory, '--framework', browserDebuggerTargetFramework, '--interactivity', 'WebAssembly', '--all-interactive', '--no-https', '--no-restore']);"));
         assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazor', '--name', 'HostedPerPage', '--output', hostedPerPageDirectory, '--framework', browserDebuggerTargetFramework, '--interactivity', 'WebAssembly', '--no-https', '--no-restore']);"));
@@ -1009,7 +1009,7 @@ builder.Build().Run();
         }
     });
 
-    test('requires only the debugger VSIX dependencies shared by browser and Azure Functions shards', () => {
+    test('requires shared debugger VSIX dependencies once and gates each shard-specific dependency', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
         const debuggerVsixStart = runner.indexOf('function resolveDebuggerVsixPaths()');
@@ -1017,11 +1017,13 @@ builder.Build().Run();
         const debuggerVsixResolver = runner.slice(debuggerVsixStart, debuggerVsixEnd);
 
         assert.ok(debuggerVsixStart >= 0);
-        assert.ok(debuggerVsixResolver.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX')"));
-        assert.ok(debuggerVsixResolver.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX')"));
+        assert.ok(debuggerVsixResolver.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX', selectingFeatureFlag)"));
+        assert.ok(debuggerVsixResolver.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX', selectingFeatureFlag)"));
         assert.ok(debuggerVsixResolver.includes('if (installAzureFunctionsVsix)'));
-        assert.ok(debuggerVsixResolver.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX')"));
-        assert.ok(debuggerVsixResolver.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX')"));
+        assert.ok(debuggerVsixResolver.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS')"));
+        assert.ok(debuggerVsixResolver.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS')"));
+        assert.ok(debuggerVsixResolver.includes('if (enableResourceDebugE2E)'));
+        assert.ok(debuggerVsixResolver.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_GO_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG')"));
         assert.ok(runner.includes('is required when a debugger-backed E2E shard is enabled.'));
     });
 
@@ -1036,7 +1038,7 @@ builder.Build().Run();
         assert.ok(runner.includes('if (enableBrowserDebuggerE2E) {'));
         assert.ok(runner.includes("writeBrowserDebuggerAppHostProject('AspireE2E.Blazor.AppHost', resolvedAppHostSdkVersion);"));
         assert.ok(runner.includes("writeWorkerProject('AspireE2E.Worker');"));
-        assert.ok(runner.includes("writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E, enableWinUiE2E);"));
+        assert.ok(runner.includes("writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E, enableWinUiE2E, enableResourceDebugE2E);"));
         assert.ok(nodeFunctionsSpec.includes('const appHostVersion = process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION;'));
         assert.ok(nodeFunctionsSpec.includes('<Project Sdk="Microsoft.NET.Sdk">'));
         assert.ok(nodeFunctionsSpec.includes('<AspireUseCliBundle>true</AspireUseCliBundle>'));
@@ -1138,6 +1140,72 @@ builder.Build().Run();
             setTimeout: (callback: () => void) => callback(),
         });
         assert.strictEqual(probes, definitions.length);
+    });
+
+    test('reports missing debugger dependencies for enabled E2E features', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
+        const names = ['resolveDebuggerVsixPaths', 'resolveRequiredVsixPath'];
+        const declarations = source.statements.filter(statement =>
+            ts.isFunctionDeclaration(statement) && names.includes(statement.name?.text ?? ''));
+        assert.strictEqual(declarations.length, names.length);
+        const invoke = `${declarations.map(declaration => declaration.getText(source)).join('\n')}\nresolveDebuggerVsixPaths();`;
+
+        for (const scenario of [
+            { azure: true, azureVsix: true, resource: false, flag: 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS' },
+            { azure: false, azureVsix: false, resource: true, flag: 'ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG' },
+            { azure: true, azureVsix: true, resource: true, flag: 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS' },
+            { azure: false, azureVsix: false, resource: false, flag: undefined },
+        ]) {
+            const context = {
+                enableDebuggerExtensions: true,
+                enableAzureFunctionsE2E: scenario.azure,
+                enableResourceDebugE2E: scenario.resource,
+                installAzureFunctionsVsix: scenario.azureVsix,
+                path,
+                fs: { existsSync: () => false },
+            };
+            const missingSuffix = scenario.flag
+                ? `when ${scenario.flag}=true.`
+                : 'when a debugger-backed E2E shard is enabled.';
+            assert.throws(() => vm.runInNewContext(invoke, { ...context, process: { env: {} } }), {
+                message: `ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX is required ${missingSuffix}`,
+            });
+
+            const missingPath = path.resolve('missing-debugger.vsix');
+            const fileSuffix = scenario.flag ? `. It is required when ${scenario.flag}=true.` : '';
+            assert.throws(() => vm.runInNewContext(invoke, {
+                ...context,
+                process: { env: { ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX: missingPath } },
+            }), {
+                message: `ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX points to a missing file: ${missingPath}${fileSuffix}`,
+            });
+        }
+    });
+
+    test('configures Linux ptrace access for packaged Go resource attach', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const resourceDebugPrerequisites = workflow.slice(
+            workflow.indexOf('- name: Install resource debug E2E prerequisites'),
+            workflow.indexOf('- name: Set up the JDK for the Java E2E specs'));
+
+        assert.ok(resourceDebugPrerequisites.includes('sudo sysctl --write kernel.yama.ptrace_scope=0'));
+        assert.ok(runner.includes("const ptraceScopePath = '/proc/sys/kernel/yama/ptrace_scope';"));
+        assert.ok(runner.includes('The resource debug E2E shard requires kernel.yama.ptrace_scope=0'));
+    });
+
+    test('keeps packaged attach failures diagnosable before the outer timeout', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const bridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const resourceDebugSpec = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'resourceDebugTools.e2e.test.ts'), 'utf8');
+
+        assert.ok(bridge.includes('Resource debug E2E ${session.type} setBreakpoints response:'));
+        assert.ok(bridge.includes('Resource debug E2E first traffic response for resource'));
+        assert.ok(bridge.includes('Resource debug E2E attach proof failed:'));
+        assert.ok(resourceDebugSpec.includes('{ timeoutMs: 360000 }'));
     });
 
     test('wires structured E2E harness failures into advisory handling', () => {

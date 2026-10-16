@@ -28,11 +28,11 @@ internal static class KnownProperties
         public const string ConnectionString = "resource.connectionString";
         public const string ConnectionProperties = "resource.connectionProperties";
         public const string ParentName = "resource.parentName";
+        public const string LaunchConfigurationType = "resource.launchConfigurationType";
         public const string AppArgs = "resource.appArgs";
         public const string AppArgsSensitivity = "resource.appArgsSensitivity";
         public const string ExcludeFromMcp = "resource.excludeFromMcp";
         public const string WaitingFor = "resource.waitingFor";
-        public const string LaunchConfigurationType = "resource.launchConfigurationType";
     }
 
     public static class Container
@@ -57,6 +57,9 @@ internal static class KnownProperties
     {
         public const string Path = "project.path";
         public const string LaunchProfile = "project.launchProfile";
+        public const string LaunchCommand = "project.launchCommand";
+        public const string Configuration = "project.configuration";
+        public const string TargetFramework = "project.targetFramework";
     }
 
     public static class Terminal

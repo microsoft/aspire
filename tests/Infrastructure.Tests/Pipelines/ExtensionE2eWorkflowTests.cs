@@ -86,6 +86,21 @@ public sealed class ExtensionE2eWorkflowTests
     }
 
     [Fact]
+    public void ResourceDebugShardsCoverNativeAttachmentAndMissingDebuggers()
+    {
+        var job = LoadExtensionE2eJob();
+        var rows = MatrixIncludeRows(job)
+            .Where(row => Scalar(row, "spec") == "out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js")
+            .ToList();
+
+        Assert.Equal(["Linux", "Windows"], rows
+            .Where(row => Scalar(row, "installResourceDebug") == "true")
+            .Select(row => Scalar(row, "name"))
+            .Order(StringComparer.Ordinal));
+        Assert.Contains(rows, row => Scalar(row, "name") == "Windows" && Scalar(row, "installResourceDebug") != "true");
+    }
+
+    [Fact]
     public void SelectedExtensionE2eWorkflowMustRun()
     {
         var yaml = new YamlStream();

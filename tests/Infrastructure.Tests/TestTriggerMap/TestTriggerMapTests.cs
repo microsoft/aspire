@@ -182,6 +182,19 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
+    public void GoHostingChangesSelectExtensionE2e()
+    {
+        const string path = "src/Aspire.Hosting.Go/GoHostingExtensions.cs";
+        var result = SelectWithRealMap(path, "Aspire.Hosting.Go");
+        var fallbackTargets = s_map.PathRules
+            .Where(rule => rule.Paths.Any(glob => TestTriggerMap.GlobMatches(glob, path)))
+            .SelectMany(rule => rule.Targets);
+
+        Assert.Contains("job:extension-e2e", result.Jobs);
+        Assert.Contains("job:extension-e2e", fallbackTargets);
+    }
+
+    [Fact]
     public void RulesAreWellFormed()
     {
         // Structural hygiene: a path rule with no globs, or globs but no targets, is dead weight
