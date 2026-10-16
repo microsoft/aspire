@@ -1,0 +1,8 @@
+﻿{
+  "mcp": {
+    "servers": []
+  },
+  "skills": [
+    "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"
+  ]
+}

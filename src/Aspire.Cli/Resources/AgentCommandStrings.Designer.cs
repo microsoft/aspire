@@ -779,5 +779,37 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SkippedMalformedConfigFile", resourceCulture);
             }
         }
+
+        internal static string Configuration_ConcurrentChange => ResourceManager.GetString("Configuration_ConcurrentChange", resourceCulture);
+        internal static string Configuration_Conflict => ResourceManager.GetString("Configuration_Conflict", resourceCulture);
+        internal static string Configuration_Disabled => ResourceManager.GetString("Configuration_Disabled", resourceCulture);
+        internal static string Configuration_MalformedJson => ResourceManager.GetString("Configuration_MalformedJson", resourceCulture);
+        internal static string Configuration_OpenCodeSchemaConflict => ResourceManager.GetString("Configuration_OpenCodeSchemaConflict", resourceCulture);
+        internal static string Configuration_PolicyBlocked => ResourceManager.GetString("Configuration_PolicyBlocked", resourceCulture);
+        internal static string Configuration_ReadWriteFailed => ResourceManager.GetString("Configuration_ReadWriteFailed", resourceCulture);
+        internal static string Configuration_UnexpectedShape => ResourceManager.GetString("Configuration_UnexpectedShape", resourceCulture);
+        internal static string Configuration_UnsafeLink => ResourceManager.GetString("Configuration_UnsafeLink", resourceCulture);
+        internal static string InitCommand_AspireSkillsAsset => ResourceManager.GetString("InitCommand_AspireSkillsAsset", resourceCulture);
+        internal static string InitCommand_AspireSkillsOptionDescription => ResourceManager.GetString("InitCommand_AspireSkillsOptionDescription", resourceCulture);
+        internal static string InitCommand_BlockedTarget => ResourceManager.GetString("InitCommand_BlockedTarget", resourceCulture);
+        internal static string InitCommand_BundledSkillsChoice => ResourceManager.GetString("InitCommand_BundledSkillsChoice", resourceCulture);
+        internal static string InitCommand_ClientAcquisitionNotice => ResourceManager.GetString("InitCommand_ClientAcquisitionNotice", resourceCulture);
+        internal static string InitCommand_ConfigureAspireSkillsPrompt => ResourceManager.GetString("InitCommand_ConfigureAspireSkillsPrompt", resourceCulture);
+        internal static string InitCommand_ConfigureDotnetInspectPrompt => ResourceManager.GetString("InitCommand_ConfigureDotnetInspectPrompt", resourceCulture);
+        internal static string InitCommand_DirectSkillsAlternative => ResourceManager.GetString("InitCommand_DirectSkillsAlternative", resourceCulture);
+        internal static string InitCommand_DotnetInspectOptionDescription => ResourceManager.GetString("InitCommand_DotnetInspectOptionDescription", resourceCulture);
+        internal static string InitCommand_FailedTarget => ResourceManager.GetString("InitCommand_FailedTarget", resourceCulture);
+        internal static string InitCommand_InvalidAspireSkillsMode => ResourceManager.GetString("InitCommand_InvalidAspireSkillsMode", resourceCulture);
+        internal static string InitCommand_InvalidAssetValue => ResourceManager.GetString("InitCommand_InvalidAssetValue", resourceCulture);
+        internal static string InitCommand_LocalSkillsConflict => ResourceManager.GetString("InitCommand_LocalSkillsConflict", resourceCulture);
+        internal static string InitCommand_NativeSkillsChoice => ResourceManager.GetString("InitCommand_NativeSkillsChoice", resourceCulture);
+        internal static string InitCommand_NativeSkillsConflict => ResourceManager.GetString("InitCommand_NativeSkillsConflict", resourceCulture);
+        internal static string InitCommand_NoSkillsChoice => ResourceManager.GetString("InitCommand_NoSkillsChoice", resourceCulture);
+        internal static string InitCommand_PlaywrightOptionDescription => ResourceManager.GetString("InitCommand_PlaywrightOptionDescription", resourceCulture);
+        internal static string InitCommand_PluginRiskWarning => ResourceManager.GetString("InitCommand_PluginRiskWarning", resourceCulture);
+        internal static string InitCommand_RegisteredTarget => ResourceManager.GetString("InitCommand_RegisteredTarget", resourceCulture);
+        internal static string InitCommand_SkippedTarget => ResourceManager.GetString("InitCommand_SkippedTarget", resourceCulture);
+        internal static string InitCommand_UnchangedTarget => ResourceManager.GetString("InitCommand_UnchangedTarget", resourceCulture);
+        internal static string LocalSkills_ReadFailed => ResourceManager.GetString("LocalSkills_ReadFailed", resourceCulture);
     }
 }

@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.OpenCode;
+using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
@@ -60,15 +61,4 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
         Assert.Equal(before, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories));
     }
 
-    private sealed class FakeOpenCodeCliRunner(SemVersion? version) : IOpenCodeCliRunner
-    {
-        public bool WasCalled { get; private set; }
-
-        public Task<SemVersion?> GetVersionAsync(CancellationToken cancellationToken)
-        {
-            WasCalled = true;
-
-            return Task.FromResult(version);
-        }
-    }
 }

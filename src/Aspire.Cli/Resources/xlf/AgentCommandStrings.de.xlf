@@ -87,6 +87,51 @@
         <target state="translated">In den folgenden Agentkonfigurationen wird der veraltete Befehl „mcp start“ verwendet. Aktualisieren?</target>
         <note />
       </trans-unit>
+      <trans-unit id="Configuration_ConcurrentChange">
+        <source>The configuration or one of its overrides changed during setup. Retry after the other writer has finished.</source>
+        <target state="new">The configuration or one of its overrides changed during setup. Retry after the other writer has finished.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Configuration_Conflict">
+        <source>An existing Aspire entry has a different source or command; it was not replaced.</source>
+        <target state="new">An existing Aspire entry has a different source or command; it was not replaced.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Configuration_Disabled">
+        <source>An existing disabled choice was preserved; this entry was not enabled.</source>
+        <target state="new">An existing disabled choice was preserved; this entry was not enabled.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Configuration_MalformedJson">
+        <source>The configuration is not valid JSON/JSONC; the file was left unchanged.</source>
+        <target state="new">The configuration is not valid JSON/JSONC; the file was left unchanged.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Configuration_OpenCodeSchemaConflict">
+        <source>OpenCode configuration evidence does not establish one compatible V1 or V2 schema. Existing files were not converted.</source>
+        <target state="new">OpenCode configuration evidence does not establish one compatible V1 or V2 schema. Existing files were not converted.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Configuration_PolicyBlocked">
+        <source>An existing policy or higher-precedence override controls this entry. It was preserved; review it in the client before enabling Aspire.</source>
+        <target state="new">An existing policy or higher-precedence override controls this entry. It was preserved; review it in the client before enabling Aspire.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Configuration_ReadWriteFailed">
+        <source>Could not read or write the configuration: {0}</source>
+        <target state="new">Could not read or write the configuration: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Configuration_UnexpectedShape">
+        <source>The configuration has an unsupported JSON shape at '{0}'; this entry was left unchanged.</source>
+        <target state="new">The configuration has an unsupported JSON shape at '{0}'; this entry was left unchanged.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Configuration_UnsafeLink">
+        <source>The configuration link '{0}' could not be resolved safely; it was left unchanged.</source>
+        <target state="new">The configuration link '{0}' could not be resolved safely; it was left unchanged.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeprecatedConfigFix">
         <source>Run 'aspire agent init' to update configuration</source>
         <target state="translated">Führen Sie „aspire agent init“ aus, um die Konfiguration zu aktualisieren</target>
@@ -122,6 +167,41 @@
         <target state="new">OpenCode</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_AspireSkillsAsset">
+        <source>Aspire source</source>
+        <target state="new">Aspire source</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_AspireSkillsOptionDescription">
+        <source>Aspire skills source: bundled (copy all applicable skills), native (register the plugin/catalog), or none (default: bundled)</source>
+        <target state="new">Aspire skills source: bundled (copy all applicable skills), native (register the plugin/catalog), or none (default: bundled)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_BlockedTarget">
+        <source>Blocked {0} for {1} ({2}): {3}</source>
+        <target state="new">Blocked {0} for {1} ({2}): {3}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_BundledSkillsChoice">
+        <source>Bundled (copy all applicable Aspire skills)</source>
+        <target state="new">Bundled (copy all applicable Aspire skills)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ClientAcquisitionNotice">
+        <source>Native clients control content acquisition, trust, activation, and MCP startup. Registration does not mean Aspire content is installed or loaded; some policies and runtime overrides cannot be verified offline.</source>
+        <target state="new">Native clients control content acquisition, trust, activation, and MCP startup. Registration does not mean Aspire content is installed or loaded; some policies and runtime overrides cannot be verified offline.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigureAspireSkillsPrompt">
+        <source>How do you want to configure Aspire skills?</source>
+        <target state="new">How do you want to configure Aspire skills?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigureDotnetInspectPrompt">
+        <source>Install the dotnet-inspect bootstrap skill?</source>
+        <target state="new">Install the dotnet-inspect bootstrap skill?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
         <target state="new">Install Aspire MCP server</target>
@@ -137,6 +217,16 @@
         <target state="needs-review-translation">Initialisieren Sie die Agent-Umgebungskonfiguration für erkannte Agenten.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_DirectSkillsAlternative">
+        <source>Prefer not to use the plugin? Install the skills directly from {0} instead.</source>
+        <target state="new">Prefer not to use the plugin? Install the skills directly from {0} instead.</target>
+        <note>{0} is the official Aspire skills repository URL.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_DotnetInspectOptionDescription">
+        <source>Install the dotnet-inspect bootstrap skill for the selected agents (y/n or true/false; default: no)</source>
+        <target state="new">Install the dotnet-inspect bootstrap skill for the selected agents (y/n or true/false; default: no)</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_EnvironmentLocationDescription">
         <source>{0}: {1}</source>
         <target state="new">{0}: {1}</target>
@@ -145,6 +235,11 @@
       <trans-unit id="InitCommand_EnvironmentsOptionDescription">
         <source>Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</source>
         <target state="new">Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_FailedTarget">
+        <source>Failed to configure {0} for {1} ({2}): {3}</source>
+        <target state="new">Failed to configure {0} for {1} ({2}): {3}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_FailedToInstallSkill">
@@ -182,6 +277,16 @@
         <target state="new">Skills: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_InvalidAspireSkillsMode">
+        <source>Invalid Aspire skills source '{0}'. Use 'bundled', 'native', or 'none'.</source>
+        <target state="new">Invalid Aspire skills source '{0}'. Use 'bundled', 'native', or 'none'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InvalidAssetValue">
+        <source>Invalid value '{1}' for '{0}'. Use y/n or true/false.</source>
+        <target state="new">Invalid value '{1}' for '{0}'. Use y/n or true/false.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_InvalidEnvironments">
         <source>Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
         <target state="new">Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
@@ -191,6 +296,15 @@
         <source>Invalid scope '{0}'. Use 'project' or 'global'.</source>
         <target state="new">Invalid scope '{0}'. Use 'project' or 'global'.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_LocalSkillsConflict">
+        <source>Native Aspire skills cannot be registered while these local Aspire skills are present:
+{0}
+No files were changed. Keep bundled mode, or remove these skills after preserving any customizations before choosing native mode.</source>
+        <target state="new">Native Aspire skills cannot be registered while these local Aspire skills are present:
+{0}
+No files were changed. Keep bundled mode, or remove these skills after preserving any customizations before choosing native mode.</target>
+        <note>{0} lists the local skill entry-point paths, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_McpConfigurationDescription">
         <source>Configure Aspire MCP for {0} at {1}</source>
@@ -207,9 +321,24 @@
         <target state="new">Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_NativeSkillsChoice">
+        <source>Native (register the Aspire plugin/catalog)</source>
+        <target state="new">Native (register the Aspire plugin/catalog)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NativeSkillsConflict">
+        <source>A native Aspire plugin/catalog is already enabled. Bundled skills were not installed and no configuration was changed. Keep native mode, or disable the native Aspire registration before choosing bundled mode.</source>
+        <target state="new">A native Aspire plugin/catalog is already enabled. Bundled skills were not installed and no configuration was changed. Keep native mode, or disable the native Aspire registration before choosing bundled mode.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_NoConfigurationSelected">
         <source>No agent configuration selected. Existing configuration was left unchanged.</source>
         <target state="new">No agent configuration selected. Existing configuration was left unchanged.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NoSkillsChoice">
+        <source>None (leave Aspire skills unchanged)</source>
+        <target state="new">None (leave Aspire skills unchanged)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
@@ -217,9 +346,24 @@
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_PlaywrightOptionDescription">
+        <source>Install Playwright CLI and its skills for the selected agents (y/n or true/false; default: no)</source>
+        <target state="new">Install Playwright CLI and its skills for the selected agents (y/n or true/false; default: no)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_PluginRiskWarning">
+        <source>Install and use Aspire plugins or catalog content at your own risk. Review the source before enabling it: plugin-provided tools and scripts can execute code with your permissions.</source>
+        <target state="new">Install and use Aspire plugins or catalog content at your own risk. Review the source before enabling it: plugin-provided tools and scripts can execute code with your permissions.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>
         <target state="new">Project (Install in your workspace root; committed with your project)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RegisteredTarget">
+        <source>Registered {0} for {1} ({2}): {3}</source>
+        <target state="new">Registered {0} for {1} ({2}): {3}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -257,6 +401,11 @@
         <target state="new">Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_SkippedTarget">
+        <source>Skipped {0} for {1} ({2}): {3}</source>
+        <target state="new">Skipped {0} for {1} ({2}): {3}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
         <source>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</source>
         <target state="new">Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</target>
@@ -277,6 +426,11 @@
         <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_UnchangedTarget">
+        <source>Already configured {0} for {1} ({2}): {3}</source>
+        <target state="new">Already configured {0} for {1} ({2}): {3}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
         <target state="new">Path to the workspace root directory</target>
@@ -290,6 +444,11 @@
       <trans-unit id="AspireSkillsInstaller_InvalidBundle">
         <source>The Aspire skills bundle is invalid: {0}</source>
         <target state="new">The Aspire skills bundle is invalid: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalSkills_ReadFailed">
+        <source>Could not check local Aspire skills at '{0}': {1}</source>
+        <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="McpServerContainerMustBeJsonObject">

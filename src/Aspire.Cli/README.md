@@ -74,6 +74,25 @@ C# AppHosts created with Aspire 17 or later use package directives instead of th
 | `docs` | Browse and search Aspire documentation and API reference from aspire.dev. |
 | `agent` | Manage AI agent specific setup. |
 
+### Agent setup
+
+`aspire agent init` configures only selected clients. Detection supplies selection
+defaults; explicitly selected clients can be configured even when undetected.
+Native skills registration and MCP configuration have independent consent and
+execution phases. MCP configuration is available only from standalone
+`aspire agent init`, not the follow-up flows in `aspire new` or `aspire init`.
+
+`IAgentClient` is the DI contract for Copilot, Claude Code, and OpenCode. Commands
+consume the registered `IEnumerable<IAgentClient>`; the same clients supply
+`--agents` help, validation, completion, and selection without a separate catalog.
+Each implementation owns its identity, paths, and configuration semantics and
+prepares edits;
+`AgentInitCommand` owns selection, consent, scope, acquisition, and sequencing.
+`AgentConfigurationEditor` groups edits to the same physical file, validates every
+selected consumer, and publishes within each independent feature phase. Detected
+runtime/editor surfaces remain separate from clients so telemetry hooks can be
+limited to selected, previously detected environments.
+
 ### Updating .NET AppHosts
 
 `aspire update` preserves package-only AppHosts: it updates their

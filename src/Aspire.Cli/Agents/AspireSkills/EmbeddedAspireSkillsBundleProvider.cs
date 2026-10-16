@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Formats.Tar;
+using System.IO.Compression;
 using System.Text.Json;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
@@ -47,6 +49,48 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
     }
 
     public EmbeddedAspireSkillsBundleMetadata? Metadata => _metadata.Value;
+
+    internal static IReadOnlyList<string> GetSkillNames()
+    {
+        // Conflict preflight must read the inventory without extracting a bundle,
+        // creating its cache, or enabling remote acquisition.
+        using var archive = typeof(EmbeddedAspireSkillsBundleProvider).Assembly.GetManifestResourceStream(ArchiveResourceName)
+            ?? throw new InvalidDataException("The embedded Aspire skills archive was not found.");
+        using var gzip = new GZipStream(archive, CompressionMode.Decompress);
+        using var reader = new TarReader(gzip);
+        while (reader.GetNextEntry() is { } entry)
+        {
+            // Bundle roots can be packaged as "skill-manifest.json" or "package/skill-manifest.json".
+            if (entry.Name != AspireSkillsBundleLayout.ManifestFileName &&
+                !entry.Name.EndsWith("/" + AspireSkillsBundleLayout.ManifestFileName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (entry.DataStream is null)
+            {
+                break;
+            }
+
+            try
+            {
+                var manifest = JsonSerializer.Deserialize(entry.DataStream, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
+                if (manifest?.Skills is not { Length: > 0 } skills)
+                {
+                    throw new InvalidDataException("The embedded Aspire skills manifest does not contain any skills.");
+                }
+
+                return skills.Select(skill => skill?.Name
+                    ?? throw new InvalidDataException("The embedded Aspire skills manifest contains a skill without a name.")).ToArray();
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidDataException("The embedded Aspire skills manifest is invalid.", ex);
+            }
+        }
+
+        throw new InvalidDataException("The embedded Aspire skills manifest was not found.");
+    }
 
     public async Task<AspireSkillsBundle?> CreateBundleAsync(
         DirectoryInfo bundleDirectory,

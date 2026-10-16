@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Xml.Linq;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Commands;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -2335,7 +2336,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandNonInteractive_WithClientAndSkills_InstallsOnlySpecifiedSkills()
+    public async Task NewCommandNonInteractive_WithClient_InstallsBundledSkills()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
@@ -2349,7 +2350,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --agents copilot --skills {CommonAgentApplicators.AspireSkillName}");
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --agents copilot --aspire-skills bundled");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -2358,8 +2359,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var aspireSkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
         Assert.True(File.Exists(aspireSkillPath), $"Expected aspire skill file at {aspireSkillPath}");
 
-        var aspireifySkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
-        Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
+        var aspireifySkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
+        Assert.True(File.Exists(aspireifySkillPath), $"Expected bundled aspireify skill file at {aspireifySkillPath}");
     }
 
     [Fact]
@@ -2671,7 +2672,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None --suppress-agent-init");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2730,7 +2731,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None --suppress-agent-init");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2849,7 +2850,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             using var provider = services.BuildServiceProvider();
 
             var command = provider.GetRequiredService<RootCommand>();
-            var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+            var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None --suppress-agent-init");
 
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2911,7 +2912,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false --suppress-agent-init");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2974,7 +2975,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false --suppress-agent-init");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -3250,7 +3251,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false --suppress-agent-init");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -3269,22 +3270,11 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             ConfirmCallback = (_, defaultValue) => defaultValue,
         };
-        var promptedSkills = new List<SkillDefinition>();
         interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
         {
             var items = choices.Cast<object>().ToList();
-            if (items.FirstOrDefault() is AgentClient)
-            {
-                return [AgentClient.Copilot];
-            }
-
-            Assert.All(items, static item => Assert.IsType<SkillDefinition>(item));
-            promptedSkills.AddRange(items.Cast<SkillDefinition>());
-            return items
-                .Cast<SkillDefinition>()
-                .Where(static skill => skill.IsDefault)
-                .Cast<object>()
-                .ToList();
+            Assert.All(items, static item => Assert.IsAssignableFrom<IAgentClient>(item));
+            return items.Cast<IAgentClient>().Where(client => client.Id == "copilot").Cast<object>().ToArray();
         };
 
         var services = CreateServiceCollection(workspace, options =>
@@ -3299,7 +3289,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Contains(promptedSkills, static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName));
+        Assert.Equal(
+            [SharedCommandStrings.PromptRunAgentInit, McpCommandStrings.InitCommand_ConfigurePlaywrightPrompt, AgentCommandStrings.InitCommand_ConfigureDotnetInspectPrompt],
+            interactionService.BooleanPromptCalls.Select(call => call.PromptText));
         var aspireifySkillPath = Path.Combine(
             workspace.WorkspaceRoot.FullName,
             "output",
@@ -3407,11 +3399,17 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var result = provider.GetRequiredService<NewCommand>().Parse(
-            "new aspire-empty --name TestApp --output ./output --agents claude --scope global --skills aspireify");
+            "new aspire-empty --name TestApp --output ./output --agents claude --scope global --aspire-skills bundled");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal(
-            [Path.Combine(homeDirectory.FullName, ".claude", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md")],
-            Directory.EnumerateFiles(homeDirectory.FullName, "*", SearchOption.AllDirectories));
+        var bundle = Assert.IsType<AspireSkillsBundle>(
+            (await provider.GetRequiredService<IAspireSkillsInstaller>().InstallAsync(CancellationToken.None)).Bundle);
+        var expectedFiles = new List<string>();
+        foreach (var skill in bundle.GetSkillDefinitions())
+        {
+            expectedFiles.AddRange((await bundle.GetSkillFilesAsync(skill, CancellationToken.None))
+                .Select(file => Path.Combine(homeDirectory.FullName, ".claude", "skills", skill.Name, file.RelativePath)));
+        }
+        Assert.Equal(expectedFiles.Order(), Directory.EnumerateFiles(homeDirectory.FullName, "*", SearchOption.AllDirectories).Order());
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".claude", "skills")));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));

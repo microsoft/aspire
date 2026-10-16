@@ -28,7 +28,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         interactionService.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
             .Where(choice => choice switch
             {
-                AgentClient client => client == AgentClient.Copilot,
+                IAgentClient client => client.Id == "copilot",
                 SkillDefinition skill => skill.HasName(CommonAgentApplicators.AspireSkillName),
                 _ => false
             })
@@ -48,7 +48,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         var expectedSummary = string.Join(Environment.NewLine,
             AgentCommandStrings.InitCommand_InstalledSkillsSummary,
-            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills, CommonAgentApplicators.AspireSkillName)}",
+            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills,
+                $"{CommonAgentApplicators.AspireSkillName}, {CommonAgentApplicators.AspireDeploymentSkillName}, {FakeAspireSkillsInstaller.AspireInitSkillName}, {FakeAspireSkillsInstaller.AspireMonitoringSkillName}, {FakeAspireSkillsInstaller.AspireOrchestrationSkillName}, {FakeAspireSkillsInstaller.AspireProjectV2MigrationSkillName}, {CommonAgentApplicators.AspireifySkillName}")}",
             $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, "~/.agents/skills")}");
 
         Assert.Contains(
@@ -106,7 +107,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         interactionService.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
             .Where(choice => choice switch
             {
-                AgentClient client => client == AgentClient.Copilot,
+                IAgentClient client => client.Id == "copilot",
                 SkillDefinition skill => skill.HasName(CommonAgentApplicators.AspireSkillName),
                 _ => false
             })
@@ -140,7 +141,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents all --skills all");
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents all --aspire-skills bundled --playwright --dotnet-inspect");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -172,224 +173,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
-    [Fact]
-    public async Task AgentInitCommand_InteractiveSkillPrompt_IncludesAllBundleSkills()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var promptedSkillNames = new List<string>();
-        var interactionService = new TestInteractionService();
-        interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
-        interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
-        {
-            var items = choices.Cast<object>().ToList();
-            if (items.FirstOrDefault() is AgentClient)
-            {
-                return [AgentClient.Copilot];
-            }
-
-            promptedSkillNames.AddRange(items.OfType<SkillDefinition>().Select(static skill => skill.Name));
-            return [];
-        };
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.InteractionServiceFactory = _ => interactionService;
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("agent init");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Contains(CommonAgentApplicators.AspireSkillName, promptedSkillNames);
-        Assert.Contains(CommonAgentApplicators.AspireifySkillName, promptedSkillNames);
-        Assert.Contains(CommonAgentApplicators.AspireDeploymentSkillName, promptedSkillNames);
-        Assert.Contains(FakeAspireSkillsInstaller.AspireInitSkillName, promptedSkillNames);
-        Assert.Contains(FakeAspireSkillsInstaller.AspireMonitoringSkillName, promptedSkillNames);
-        Assert.Contains(FakeAspireSkillsInstaller.AspireOrchestrationSkillName, promptedSkillNames);
-        Assert.Contains(FakeAspireSkillsInstaller.AspireProjectV2MigrationSkillName, promptedSkillNames);
-    }
-
-    [Fact]
-    public async Task AgentInitCommand_InteractiveSkillPrompt_EscapesBundleDescriptions()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var bundle = await CreateBundleAsync(
-            workspace.WorkspaceRoot,
-            (FakeAspireSkillsInstaller.AspireMonitoringSkillName, "Observe [danger] apps"));
-        string? formattedSkill = null;
-        var interactionService = new TestInteractionService();
-        interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
-        interactionService.PromptForSelectionsCallback = (_, choices, formatter, _) =>
-        {
-            var items = choices.Cast<object>().ToList();
-            if (items.FirstOrDefault() is AgentClient)
-            {
-                return [AgentClient.Copilot];
-            }
-
-            var skill = Assert.Single(items.OfType<SkillDefinition>(), static skill => skill.HasName(FakeAspireSkillsInstaller.AspireMonitoringSkillName));
-            formattedSkill = formatter(skill);
-            return [];
-        };
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.InteractionServiceFactory = _ => interactionService;
-            options.AspireSkillsInstallerFactory = serviceProvider => new FakeAspireSkillsInstaller(
-                serviceProvider.GetRequiredService<CliExecutionContext>(),
-                AspireSkillsInstallResult.Installed(bundle));
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("agent init");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.NotNull(formattedSkill);
-        Assert.Contains("Observe [[danger]] apps", formattedSkill);
-    }
-
-    [Theory]
-    [InlineData("", "")]
-    [InlineData("   ", "   ")]
-    [InlineData("Short description", "Short description")]
-    [InlineData("Short description.", "Short description.")]
-    [InlineData("First sentence. Second sentence.", "First sentence.")]
-    [InlineData("**WORKFLOW SKILL** - Top-level router for Aspire 13.4 distributed apps. Detects the AppHost.", "Top-level router for Aspire 13.4 distributed apps.")]
-    [InlineData("**ANALYSIS SKILL** — Observe Aspire apps. USE FOR: aspire logs.", "Observe Aspire apps.")]
-    [InlineData("**SETUP SKILL**: One-time setup of resources. INVOKES: aspire add.", "One-time setup of resources.")]
-    [InlineData("Visit github.com for docs. Then run the tool.", "Visit github.com for docs.")]
-    [InlineData("**TYPE** -", "")]
-    // Fix 1 regression: a leading separator that does NOT follow a "**TYPE**" prefix must be preserved.
-    // The earlier implementation unconditionally trimmed leading separators after the bold-prefix
-    // branch, which silently mutated bundle descriptions that happened to start with '-' or ':'.
-    [InlineData("-Quickly do X.", "-Quickly do X.")]
-    [InlineData(":memo notes", ":memo notes")]
-    public void SimplifyDescription_ProducesExpectedSummary(string input, string expected)
-    {
-        Assert.Equal(expected, AgentInitCommand.SimplifyDescription(input));
-    }
-
-    [Fact]
-    public async Task AgentInitCommand_InteractiveSkillPrompt_StripsVerboseBundleDescription()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var bundle = await CreateBundleAsync(
-            workspace.WorkspaceRoot,
-            (FakeAspireSkillsInstaller.AspireMonitoringSkillName,
-             "**ANALYSIS SKILL** - Observe Aspire apps. USE FOR: aspire logs, aspire traces. INVOKES: aspire CLI."));
-        string? formattedSkill = null;
-        var interactionService = new TestInteractionService();
-        interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
-        interactionService.PromptForSelectionsCallback = (_, choices, formatter, _) =>
-        {
-            var items = choices.Cast<object>().ToList();
-            if (items.FirstOrDefault() is AgentClient)
-            {
-                return [AgentClient.Copilot];
-            }
-
-            var skill = Assert.Single(items.OfType<SkillDefinition>(), static skill => skill.HasName(FakeAspireSkillsInstaller.AspireMonitoringSkillName));
-            formattedSkill = formatter(skill);
-            return [];
-        };
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.InteractionServiceFactory = _ => interactionService;
-            options.AspireSkillsInstallerFactory = serviceProvider => new FakeAspireSkillsInstaller(
-                serviceProvider.GetRequiredService<CliExecutionContext>(),
-                AspireSkillsInstallResult.Installed(bundle));
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("agent init");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.NotNull(formattedSkill);
-        Assert.Contains("Observe Aspire apps.", formattedSkill);
-        Assert.DoesNotContain("ANALYSIS SKILL", formattedSkill);
-        Assert.DoesNotContain("USE FOR", formattedSkill);
-        Assert.DoesNotContain("INVOKES", formattedSkill);
-    }
-
-    [Fact]
-    public async Task AgentInitCommand_InteractiveSkillPrompt_OrdersSkillsAlphabetically()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        // Intentionally pass bundle skills in non-alphabetical order to confirm the prompt sorts deterministically.
-        var bundle = await CreateBundleAsync(
-            workspace.WorkspaceRoot,
-            ("zeta-bundle-skill", "Zeta skill"),
-            ("alpha-bundle-skill", "Alpha skill"),
-            ("middle-bundle-skill", "Middle skill"));
-        var promptedSkillNames = new List<string>();
-        var interactionService = new TestInteractionService();
-        interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
-        interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
-        {
-            var items = choices.Cast<object>().ToList();
-            if (items.FirstOrDefault() is AgentClient)
-            {
-                return [AgentClient.Copilot];
-            }
-
-            promptedSkillNames.AddRange(items.OfType<SkillDefinition>().Select(static skill => skill.Name));
-            return [];
-        };
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.InteractionServiceFactory = _ => interactionService;
-            options.AspireSkillsInstallerFactory = serviceProvider => new FakeAspireSkillsInstaller(
-                serviceProvider.GetRequiredService<CliExecutionContext>(),
-                AspireSkillsInstallResult.Installed(bundle));
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("agent init");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.NotEmpty(promptedSkillNames);
-        var sorted = promptedSkillNames.OrderBy(static name => name, StringComparer.OrdinalIgnoreCase).ToList();
-        Assert.Equal(sorted, promptedSkillNames);
-    }
-
-    [Fact]
-    public async Task AgentInitCommand_NonInteractive_WithSpecificBundleSkill_InstallsSkillFiles()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents all --skills {FakeAspireSkillsInstaller.AspireMonitoringSkillName}");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
-        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".claude", "skills"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
-        Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "skills")));
-        Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".opencode", "skill")));
-    }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task AgentInitCommand_NonInteractive_InstallsProjectV2MigrationSkillWithReferences(bool selectByName)
+    public async Task AgentInitCommand_NonInteractive_InstallsProjectV2MigrationSkillWithReferences(bool explicitBundled)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
@@ -417,7 +204,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             expectedFiles.Select(file => file.RelativePath));
 
         var command = provider.GetRequiredService<RootCommand>();
-        var selection = selectByName ? $" --skills {skill.Name}" : string.Empty;
+        var selection = explicitBundled ? " --aspire-skills bundled" : string.Empty;
         var result = command.Parse($"agent init --workspace-root \"{workspace.WorkspaceRoot.FullName}\" --agents all --scope project{selection}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
@@ -445,75 +232,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AgentInitCommand_NonInteractive_WithCliDefinedSkillDifferentCasing_DoesNotResolveBundle()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string installFailureMessage = "Aspire skills bundle is unavailable.";
-        var interactionService = new TestInteractionService();
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.InteractionServiceFactory = _ => interactionService;
-            options.AspireSkillsInstallerFactory = serviceProvider => new FakeAspireSkillsInstaller(
-                serviceProvider.GetRequiredService<CliExecutionContext>(),
-                AspireSkillsInstallResult.Failed(installFailureMessage));
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents all --skills PLAYWRIGHT-CLI");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.DoesNotContain(
-            interactionService.DisplayedMessages,
-            message => message.Emoji.Equals(KnownEmojis.Warning) && message.Message == installFailureMessage);
-    }
-
-    [Fact]
-    public async Task AgentInitCommand_InteractiveSkillPrompt_CliDefinedSkillsWinBundleNameCollisions()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var bundle = await CreateBundleAsync(
-            workspace.WorkspaceRoot,
-            (CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps"),
-            (SkillDefinition.PlaywrightCli.Name, "Bundle-provided Playwright collision"));
-        var promptedSkills = new List<SkillDefinition>();
-        var interactionService = new TestInteractionService();
-        interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
-        interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
-        {
-            var items = choices.Cast<object>().ToList();
-            if (items.FirstOrDefault() is AgentClient)
-            {
-                return [AgentClient.Copilot];
-            }
-
-            promptedSkills.AddRange(items.OfType<SkillDefinition>());
-            return [];
-        };
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.InteractionServiceFactory = _ => interactionService;
-            options.AspireSkillsInstallerFactory = serviceProvider => new FakeAspireSkillsInstaller(
-                serviceProvider.GetRequiredService<CliExecutionContext>(),
-                AspireSkillsInstallResult.Installed(bundle));
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("agent init");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        var playwrightSkill = Assert.Single(promptedSkills, static skill => skill.HasName(SkillDefinition.PlaywrightCli.Name, StringComparison.OrdinalIgnoreCase));
-        Assert.Same(SkillDefinition.PlaywrightCli, playwrightSkill);
-    }
-
-    [Fact]
     public async Task AgentInitCommand_NonInteractive_WithNoClients_SucceedsWithNoSkillsInstalled()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -522,7 +240,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents none --skills all");
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents none --aspire-skills bundled");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -542,7 +260,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skills none");
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --aspire-skills none");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -576,35 +294,21 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AgentInitCommand_NonInteractive_AllBundleSkills_AreInstallableByName()
+    public async Task AgentInitCommand_NonInteractive_BundledInstallsEveryApplicableManifestSkill()
     {
-        // Regression guard for the original issue: the bundle ships skills (aspire-init,
-        // aspire-monitoring, aspire-orchestration) that were not surfaced by the CLI because the
-        // install prompt was driven by a hardcoded list. After the refactor, the catalog comes
-        // from the bundle manifest.
-        //
-        // The assertion is data-driven against the bundle's own manifest so this test stays
-        // accurate as the fixture (or, one day, the real bundle) evolves — adding or removing
-        // a skill in FakeAspireSkillsInstaller doesn't require updating the test body.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
-        // Prime the bundle and read the list of skills it actually surfaces. The fake
-        // installer's InstallAsync is idempotent, so the subsequent CLI invocation will reuse
-        // this same bundle directory.
         var installer = provider.GetRequiredService<IAspireSkillsInstaller>();
         var installResult = await installer.InstallAsync(TestContext.Current.CancellationToken).DefaultTimeout();
         Assert.NotNull(installResult.Bundle);
         var bundleSkillNames = installResult.Bundle.GetSkillDefinitions().Select(static s => s.Name).ToList();
         Assert.NotEmpty(bundleSkillNames);
 
-        // Explicit names instead of `all` keeps the assertion focused on bundle skills and
-        // avoids dragging in Playwright/dotnet-inspect, which would attempt real network calls.
-        var skillsArg = string.Join(",", bundleSkillNames);
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents all --skills {skillsArg}");
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents all --aspire-skills bundled");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -616,29 +320,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AgentInitCommand_NonInteractive_WithExplicitBundleSkillName_InstallsBundleSkill()
-    {
-        // Regression guard: bundle-only skill names (e.g. aspire-orchestration) must be selectable
-        // via --skills by name now that the catalog comes from the manifest rather than the
-        // hardcoded CLI list.
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents all --skills {FakeAspireSkillsInstaller.AspireOrchestrationSkillName}");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-
-        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireOrchestrationSkillName);
-        var aspireSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireSkillName);
-        Assert.False(Directory.Exists(aspireSkillPath), $"Expected only the selected skill but found {aspireSkillPath}");
-    }
-
-    [Fact]
     public async Task AgentInitCommand_NonInteractive_WithInvalidClient_FailsValidation()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -647,7 +328,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents invalid --skills all");
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents invalid --aspire-skills bundled");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -680,7 +361,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AgentInitCommand_NonInteractive_WithUnavailableAspireSkillsBundle_SucceedsWithoutWarningOrSelectedAspireSkills()
+    public async Task AgentInitCommand_NonInteractive_WithUnavailableAspireSkillsBundle_FailsExplicitly()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string installFailureMessage = "Aspire skills bundle is unavailable.";
@@ -700,16 +381,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.DoesNotContain(installFailureMessage, interactionService.DisplayedErrors);
-        Assert.DoesNotContain(
-            interactionService.DisplayedMessages,
-            message => message.Emoji.Equals(KnownEmojis.Warning) && message.Message == installFailureMessage);
-        Assert.Empty(interactionService.DisplayedErrors);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(installFailureMessage, Assert.Single(interactionService.DisplayedErrors));
     }
 
     [Fact]
-    public async Task PromptAndChainAsync_WithUnavailableAspireSkillsBundle_SucceedsWithoutWarningOrSelectedAspireSkills()
+    public async Task PromptAndChainAsync_WithUnavailableAspireSkillsBundle_FailsExplicitly()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string installFailureMessage = "Aspire skills bundle is unavailable.";
@@ -733,16 +410,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
             PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
+            PromptBinding.CreateDefault(false),
+            PromptBinding.CreateDefault(false),
+            PromptBinding.CreateDefault(AspireSkillsMode.Bundled),
             PromptBinding.CreateDefault(AgentConfigurationScope.Project),
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.Success, result.ExitCode);
-        Assert.DoesNotContain(result.SelectedSkills, static skill => skill.SourceKind is SkillSourceKind.AspireSkillsBundle);
-        Assert.DoesNotContain(
-            interactionService.DisplayedMessages,
-            message => message.Emoji.Equals(KnownEmojis.Warning) && message.Message == installFailureMessage);
-        Assert.Empty(interactionService.DisplayedErrors);
+        Assert.Equal(CliExitCodes.InvalidCommand, result.ExitCode);
+        Assert.Empty(result.SelectedSkills);
+        Assert.Equal(installFailureMessage, Assert.Single(interactionService.DisplayedErrors));
     }
 
     [Fact]
@@ -768,7 +444,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
             PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
+            PromptBinding.CreateDefault(false),
+            PromptBinding.CreateDefault(false),
+            PromptBinding.CreateDefault(AspireSkillsMode.Bundled),
             PromptBinding.CreateDefault(AgentConfigurationScope.Project),
             CancellationToken.None).DefaultTimeout();
 
@@ -788,7 +466,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents all --skills none");
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents all --aspire-skills none");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -859,43 +537,44 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents none --skills all");
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents none --aspire-skills bundled");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // With --agents none, no skill files should be installed even when --skills all is passed.
+        // With --agents none, no skill files should be installed even when --aspire-skills bundled is passed.
         var agentsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills");
         Assert.False(Directory.Exists(agentsDir), $"Expected no agents/skills directory but found {agentsDir}");
-    }
-
-    [Fact]
-    public async Task AgentInitCommand_NonInteractive_WithClientAndSkills_InstallsOnlySpecifiedSkills()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents copilot --skills {CommonAgentApplicators.AspireSkillName}");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-
-        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireSkillName);
-
-        // aspireify was not requested, so it should not be installed.
-        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
-        Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
     }
 
     private static void AssertSkillFileExists(DirectoryInfo workspaceRoot, string relativeSkillDirectory, string skillName)
     {
         var skillPath = Path.Combine(workspaceRoot.FullName, relativeSkillDirectory, skillName, "SKILL.md");
         Assert.True(File.Exists(skillPath), $"Expected skill file at {skillPath}");
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_BundledUsesTheManifestWithoutEnablingIndependentTools()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var bundle = await CreateBundleAsync(workspace.WorkspaceRoot,
+            ("zeta-custom", "Additional bundle skill"), ("alpha-custom", "Another bundle skill"),
+            (SkillDefinition.PlaywrightCli.Name, "Must not replace the independently selected tool"));
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AspireSkillsInstallerFactory = provider => new FakeAspireSkillsInstaller(
+                provider.GetRequiredService<CliExecutionContext>(), AspireSkillsInstallResult.Installed(bundle));
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse("agent init --agents copilot --aspire-skills bundled");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        var directory = Path.Combine(workspace.Path, ".agents", "skills");
+        Assert.Equal(["alpha-custom", "zeta-custom"], Directory.EnumerateDirectories(directory).Select(Path.GetFileName).Order());
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), "alpha-custom");
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), "zeta-custom");
     }
 
     private static async Task<AspireSkillsBundle> CreateBundleAsync(DirectoryInfo workspaceRoot, params (string Name, string Description)[] skills)
@@ -976,7 +655,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents copilot --scope global --skills aspire");
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents copilot --scope global --aspire-skills bundled");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -1010,7 +689,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents copilot --scope global --skills aspire");
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents copilot --scope global --aspire-skills bundled");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 

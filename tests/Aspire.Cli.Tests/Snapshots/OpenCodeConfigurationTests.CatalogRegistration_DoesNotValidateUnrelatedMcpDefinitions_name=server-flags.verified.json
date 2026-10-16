@@ -1,0 +1,16 @@
+﻿{
+  "mcp": {
+    "servers": {
+      "custom": {
+        "enabled": false,
+        "command": [
+          "custom"
+        ]
+      },
+      "external": "managed"
+    }
+  },
+  "skills": [
+    "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"
+  ]
+}

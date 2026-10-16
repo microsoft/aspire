@@ -85,12 +85,13 @@ internal sealed class PlaywrightCliInstaller(
     /// This must match the directory that the playwright-cli binary actually writes to.
     /// See: https://github.com/microsoft/playwright-cli/issues/294
     /// </summary>
-    internal static readonly string s_primarySkillBaseDirectory = AgentClient.ClaudeCode.ProjectSkillsDirectory;
+    internal static readonly string s_primarySkillBaseDirectory = Path.Combine(".claude", "skills");
 
     // These are upstream-generated paths to clean up in staging, not installation targets.
     private static readonly string[] s_generatedSkillBaseDirectories =
     [
-        .. AgentClient.All.Select(static client => client.ProjectSkillsDirectory).Distinct(StringComparer.OrdinalIgnoreCase),
+        AgentPath.UniversalSkillsDirectory,
+        s_primarySkillBaseDirectory,
         // Legacy output from the upstream generator; never offered as installation destinations.
         Path.Combine(".github", "skills"),
         Path.Combine(".opencode", "skill")

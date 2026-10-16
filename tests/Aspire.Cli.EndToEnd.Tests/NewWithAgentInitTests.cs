@@ -52,10 +52,8 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
 
         // Run aspire new with the Starter template, going through all prompts manually
         // so we can ACCEPT the agent init prompt instead of declining it.
-        // Pass client, scope, and skill flags so the test does not depend on
-        // the position or count of entries in the interactive skill-selection menus, which
-        // change whenever the bundle ships a new skill.
-        await auto.TypeAsync("aspire new --agents claude --scope project --skills playwright-cli");
+        // Explicit asset choices isolate Playwright acquisition from the Aspire skills source.
+        await auto.TypeAsync("aspire new --agents claude --scope project --aspire-skills none --playwright --dotnet-inspect n");
         await auto.EnterAsync();
 
         // Template selection: accept default Starter App

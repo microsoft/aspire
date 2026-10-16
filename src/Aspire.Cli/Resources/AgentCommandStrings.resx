@@ -300,4 +300,101 @@
   <data name="AgentTelemetryCommand_TimestampDescription" xml:space="preserve">
     <value>The timestamp recorded for the event</value>
   </data>
+  <data name="Configuration_ConcurrentChange" xml:space="preserve">
+    <value>The configuration or one of its overrides changed during setup. Retry after the other writer has finished.</value>
+  </data>
+  <data name="Configuration_Conflict" xml:space="preserve">
+    <value>An existing Aspire entry has a different source or command; it was not replaced.</value>
+  </data>
+  <data name="Configuration_Disabled" xml:space="preserve">
+    <value>An existing disabled choice was preserved; this entry was not enabled.</value>
+  </data>
+  <data name="Configuration_MalformedJson" xml:space="preserve">
+    <value>The configuration is not valid JSON/JSONC; the file was left unchanged.</value>
+  </data>
+  <data name="Configuration_OpenCodeSchemaConflict" xml:space="preserve">
+    <value>OpenCode configuration evidence does not establish one compatible V1 or V2 schema. Existing files were not converted.</value>
+  </data>
+  <data name="Configuration_PolicyBlocked" xml:space="preserve">
+    <value>An existing policy or higher-precedence override controls this entry. It was preserved; review it in the client before enabling Aspire.</value>
+  </data>
+  <data name="Configuration_ReadWriteFailed" xml:space="preserve">
+    <value>Could not read or write the configuration: {0}</value>
+  </data>
+  <data name="Configuration_UnexpectedShape" xml:space="preserve">
+    <value>The configuration has an unsupported JSON shape at '{0}'; this entry was left unchanged.</value>
+  </data>
+  <data name="Configuration_UnsafeLink" xml:space="preserve">
+    <value>The configuration link '{0}' could not be resolved safely; it was left unchanged.</value>
+  </data>
+  <data name="InitCommand_AspireSkillsAsset" xml:space="preserve">
+    <value>Aspire source</value>
+  </data>
+  <data name="InitCommand_AspireSkillsOptionDescription" xml:space="preserve">
+    <value>Aspire skills source: bundled (copy all applicable skills), native (register the plugin/catalog), or none (default: bundled)</value>
+  </data>
+  <data name="InitCommand_BlockedTarget" xml:space="preserve">
+    <value>Blocked {0} for {1} ({2}): {3}</value>
+  </data>
+  <data name="InitCommand_BundledSkillsChoice" xml:space="preserve">
+    <value>Bundled (copy all applicable Aspire skills)</value>
+  </data>
+  <data name="InitCommand_ClientAcquisitionNotice" xml:space="preserve">
+    <value>Native clients control content acquisition, trust, activation, and MCP startup. Registration does not mean Aspire content is installed or loaded; some policies and runtime overrides cannot be verified offline.</value>
+  </data>
+  <data name="InitCommand_ConfigureAspireSkillsPrompt" xml:space="preserve">
+    <value>How do you want to configure Aspire skills?</value>
+  </data>
+  <data name="InitCommand_ConfigureDotnetInspectPrompt" xml:space="preserve">
+    <value>Install the dotnet-inspect bootstrap skill?</value>
+  </data>
+  <data name="InitCommand_DirectSkillsAlternative" xml:space="preserve">
+    <value>Prefer not to use the plugin? Install the skills directly from {0} instead.</value>
+    <comment>{0} is the official Aspire skills repository URL.</comment>
+  </data>
+  <data name="InitCommand_DotnetInspectOptionDescription" xml:space="preserve">
+    <value>Install the dotnet-inspect bootstrap skill for the selected agents (y/n or true/false; default: no)</value>
+  </data>
+  <data name="InitCommand_FailedTarget" xml:space="preserve">
+    <value>Failed to configure {0} for {1} ({2}): {3}</value>
+  </data>
+  <data name="InitCommand_InvalidAspireSkillsMode" xml:space="preserve">
+    <value>Invalid Aspire skills source '{0}'. Use 'bundled', 'native', or 'none'.</value>
+  </data>
+  <data name="InitCommand_InvalidAssetValue" xml:space="preserve">
+    <value>Invalid value '{1}' for '{0}'. Use y/n or true/false.</value>
+  </data>
+  <data name="InitCommand_LocalSkillsConflict" xml:space="preserve">
+    <value>Native Aspire skills cannot be registered while these local Aspire skills are present:
+{0}
+No files were changed. Keep bundled mode, or remove these skills after preserving any customizations before choosing native mode.</value>
+    <comment>{0} lists the local skill entry-point paths, one per line.</comment>
+  </data>
+  <data name="InitCommand_NativeSkillsChoice" xml:space="preserve">
+    <value>Native (register the Aspire plugin/catalog)</value>
+  </data>
+  <data name="InitCommand_NativeSkillsConflict" xml:space="preserve">
+    <value>A native Aspire plugin/catalog is already enabled. Bundled skills were not installed and no configuration was changed. Keep native mode, or disable the native Aspire registration before choosing bundled mode.</value>
+  </data>
+  <data name="InitCommand_NoSkillsChoice" xml:space="preserve">
+    <value>None (leave Aspire skills unchanged)</value>
+  </data>
+  <data name="InitCommand_PlaywrightOptionDescription" xml:space="preserve">
+    <value>Install Playwright CLI and its skills for the selected agents (y/n or true/false; default: no)</value>
+  </data>
+  <data name="InitCommand_PluginRiskWarning" xml:space="preserve">
+    <value>Install and use Aspire plugins or catalog content at your own risk. Review the source before enabling it: plugin-provided tools and scripts can execute code with your permissions.</value>
+  </data>
+  <data name="InitCommand_RegisteredTarget" xml:space="preserve">
+    <value>Registered {0} for {1} ({2}): {3}</value>
+  </data>
+  <data name="InitCommand_SkippedTarget" xml:space="preserve">
+    <value>Skipped {0} for {1} ({2}): {3}</value>
+  </data>
+  <data name="InitCommand_UnchangedTarget" xml:space="preserve">
+    <value>Already configured {0} for {1} ({2}): {3}</value>
+  </data>
+  <data name="LocalSkills_ReadFailed" xml:space="preserve">
+    <value>Could not check local Aspire skills at '{0}': {1}</value>
+  </data>
 </root>

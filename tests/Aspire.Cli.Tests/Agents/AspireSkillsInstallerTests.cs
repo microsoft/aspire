@@ -1406,6 +1406,8 @@ public class AspireSkillsInstallerTests
             Assert.NotNull(result.Bundle);
             Assert.Equal(AspireSkillsInstaller.Version, result.Bundle.Version);
             Assert.False(attestationVerifier.VerifyCalled);
+            Assert.Equal(result.Bundle.GetSkillDefinitions().Select(skill => skill.Name),
+                EmbeddedAspireSkillsBundleProvider.GetSkillNames());
             var migrationSkill = Assert.Single(
                 result.Bundle.GetSkillDefinitions(),
                 skill => skill.HasName(migrationSkillName));

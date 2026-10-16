@@ -646,32 +646,17 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_WhenAspireifySkillSelected_PrintsToolSpecificFollowUpCommands()
+    public async Task InitCommand_WhenBundledSkillsSelected_PrintsToolSpecificFollowUpCommands()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var interactionService = new TestInteractionService
         {
-            ConfirmCallback = (_, _) => true
+            ConfirmCallback = (_, defaultValue) => defaultValue
         };
         var subtleMessages = new List<string>();
         interactionService.DisplaySubtleMessageCallback = subtleMessages.Add;
-        interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
-        {
-            var items = choices.Cast<object>().ToList();
-
-            if (items.FirstOrDefault() is AgentClient)
-            {
-                return [AgentClient.Copilot, AgentClient.ClaudeCode, AgentClient.OpenCode];
-            }
-
-            Assert.All(items, static item => Assert.IsType<SkillDefinition>(item));
-            return items
-                .OfType<SkillDefinition>()
-                .Where(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName))
-                .Cast<object>()
-                .ToList();
-        };
+        interactionService.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>().ToArray();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -694,33 +679,22 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(Directory.GetFiles(workspace.WorkspaceRoot.FullName, "*mcp*.json*", SearchOption.AllDirectories));
     }
 
-    [Fact]
-    public async Task InitCommand_WhenAspireifySkillNotSelected_DoesNotPrintFollowUpCommands()
+    [Theory]
+    [InlineData("none")]
+    [InlineData("native")]
+    public async Task InitCommand_WhenAspireifyNotInstalled_DoesNotPrintFollowUpCommands(string skillsMode)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var interactionService = new TestInteractionService
         {
-            ConfirmCallback = (_, _) => true
+            ConfirmCallback = (_, defaultValue) => defaultValue
         };
 
         var subtleMessages = new List<string>();
         interactionService.DisplaySubtleMessageCallback = subtleMessages.Add;
         interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
-        {
-            var items = choices.Cast<object>().ToList();
-
-            if (items.FirstOrDefault() is AgentClient)
-            {
-                return [AgentClient.Copilot];
-            }
-
-            return items
-                .OfType<SkillDefinition>()
-                .Where(static skill => skill.HasName(CommonAgentApplicators.AspireSkillName))
-                .Cast<object>()
-                .ToList();
-        };
+            choices.Cast<IAgentClient>().Where(client => client.Id == "claude").Cast<object>().ToArray();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -732,7 +706,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
-        var parseResult = initCommand.Parse("init --language typescript");
+        var parseResult = initCommand.Parse($"init --language typescript --aspire-skills {skillsMode}");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -749,7 +723,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var parseResult = command.Parse("init --non-interactive --skills none");
+        var parseResult = command.Parse("init --non-interactive --aspire-skills none");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -785,7 +759,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("project")]
     [InlineData("global")]
-    public async Task InitCommand_NonInteractive_WithClientScopeAndSkills_InstallsOnlySpecifiedSkills(string scope)
+    public async Task InitCommand_NonInteractive_WithClientScope_InstallsBundledSkills(string scope)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -793,7 +767,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var parseResult = command.Parse($"init --non-interactive --agents copilot --scope {scope} --skills {CommonAgentApplicators.AspireSkillName}");
+        var parseResult = command.Parse($"init --non-interactive --agents copilot --scope {scope} --aspire-skills bundled");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -807,9 +781,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.False(Directory.Exists(Path.Combine(unselectedRoot.FullName, ".agents", "skills")));
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json")));
 
-        // aspireify was not requested, so it should not be installed.
-        var aspireifySkillPath = Path.Combine(selectedRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
-        Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
+        var aspireifySkillPath = Path.Combine(selectedRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
+        Assert.True(File.Exists(aspireifySkillPath), $"Expected bundled aspireify skill file at {aspireifySkillPath}");
     }
 
     [Fact]
