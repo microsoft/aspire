@@ -1,17 +1,159 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "2")]
 public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task MissingUrlParameterReportsUnresolvedState(bool environmentReference, bool validUrl)
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestDcpExecutor(options => options.DisableDashboard = false, testOutputHelper);
+        var url = builder.AddParameter("url");
+        var external = builder.AddExternalService("external", url);
+        var consumer = builder.AddContainer("consumer", "test-image");
+        if (validUrl)
+        {
+            consumer.WaitForStart(external);
+        }
+        if (environmentReference)
+        {
+            consumer.WithEnvironment("EXTERNAL_URL", external);
+        }
+        else
+        {
+            consumer.WithReference(external);
+        }
+
+        using var app = builder.Build();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var orchestrator = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        Assert.True(app.Services.GetRequiredService<IInteractionService>().IsAvailable);
+        await orchestrator.PublishResourcesPreparedAsync(cts.Token);
+        await orchestrator.PublishResourceStartingAsync(consumer.Resource, cts.Token);
+        var beforeStartTask = validUrl
+            ? builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(consumer.Resource, app.Services), cts.Token)
+            : Task.CompletedTask;
+
+        foreach (var resource in new IResource[] { external.Resource, consumer.Resource })
+        {
+            Assert.True(notifications.TryGetCurrentState(resource.Name, out var unresolved));
+            Assert.Equal(KnownResourceStates.UnresolvedParameters, unresolved.Snapshot.State?.Text);
+            Assert.Equal(
+                ["url"],
+                Assert.IsType<string[]>(Assert.Single(unresolved.Snapshot.Properties, p => p.Name == "resource.unresolvedParameters").Value));
+        }
+
+        var configurationTask = ExecutionConfigurationBuilder.Create(consumer.Resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(builder.ExecutionContext, NullLogger.Instance, cts.Token);
+        Assert.False(configurationTask.IsCompleted);
+        if (validUrl)
+        {
+            Assert.False(beforeStartTask.IsCompleted);
+            Assert.True(notifications.TryGetCurrentState(consumer.Resource.Name, out var waiting));
+            Assert.Equal(
+                ["external"],
+                Assert.IsType<string[]>(Assert.Single(waiting.Snapshot.Properties, p => p.Name == "resource.waitingFor").Value));
+        }
+
+        await url.Resource.SetValueAsync(validUrl ? "https://example.com/" : "not-a-url", cts.Token);
+        if (validUrl)
+        {
+            var configuration = await configurationTask;
+            Assert.Null(configuration.Exception);
+            Assert.Equal(
+                environmentReference
+                    ? new Dictionary<string, string> { ["EXTERNAL_URL"] = "https://example.com/" }
+                    : new Dictionary<string, string>
+                    {
+                        ["services__external__https__0"] = "https://example.com/",
+                        ["EXTERNAL_HTTPS"] = "https://example.com/"
+                    },
+                configuration.EnvironmentVariables.ToDictionary(p => p.Key, p => p.Value));
+            await beforeStartTask;
+        }
+        else
+        {
+            await Assert.ThrowsAsync<DistributedApplicationException>(() => configurationTask);
+        }
+
+        var completed = await notifications.WaitForResourceAsync(external.Resource.Name,
+            e => e.Snapshot.State?.Text == (validUrl ? KnownResourceStates.Running : KnownResourceStates.FailedToStart), cts.Token);
+        Assert.Empty(completed.Snapshot.Properties.Where(p => p.Name == "resource.unresolvedParameters"));
+        var starting = await notifications.WaitForResourceAsync(consumer.Resource.Name, e => e.Snapshot.State?.Text == KnownResourceStates.Starting, cts.Token);
+        Assert.Empty(starting.Snapshot.Properties.Where(p => p.Name == "resource.unresolvedParameters"));
+    }
+
+    [Theory]
+    [InlineData(ReferenceEnvironmentInjectionFlags.None, false)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.ConnectionString, false)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.ConnectionProperties, false)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.Endpoints, true)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.ServiceDiscovery, true)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.All, true)]
+    public async Task ExternalUrlParameterIsOnlyTrackedWhenInjected(ReferenceEnvironmentInjectionFlags flags, bool injectsUrl)
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestDcpExecutor(options => options.DisableDashboard = false, testOutputHelper);
+        var url = builder.AddParameter("url");
+        var external = builder.AddExternalService("external", url);
+        var consumer = builder.AddContainer("consumer", "test-image").WithReferenceEnvironment(flags).WithReference(external);
+        using var app = builder.Build();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var orchestrator = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        await orchestrator.PublishResourcesPreparedAsync(cts.Token);
+        await orchestrator.PublishResourceStartingAsync(consumer.Resource, cts.Token);
+
+        Assert.True(notifications.TryGetCurrentState(consumer.Resource.Name, out var starting));
+        Assert.Equal(injectsUrl ? KnownResourceStates.UnresolvedParameters : KnownResourceStates.Starting, starting.Snapshot.State?.Text);
+        if (injectsUrl)
+        {
+            Assert.Equal(
+                ["url"],
+                Assert.IsType<string[]>(Assert.Single(starting.Snapshot.Properties, p => p.Name == "resource.unresolvedParameters").Value));
+        }
+        else
+        {
+            Assert.Empty(starting.Snapshot.Properties.Where(p => p.Name == "resource.unresolvedParameters"));
+        }
+
+        var configurationTask = ExecutionConfigurationBuilder.Create(consumer.Resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(builder.ExecutionContext, NullLogger.Instance, cts.Token);
+        Assert.Equal(!injectsUrl, configurationTask.IsCompleted);
+        await url.Resource.SetValueAsync("https://example.com/", cts.Token);
+        var configuration = await configurationTask;
+        Assert.Null(configuration.Exception);
+        var expected = new Dictionary<string, string>();
+        if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.Endpoints))
+        {
+            expected["EXTERNAL_HTTPS"] = "https://example.com/";
+        }
+        if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ServiceDiscovery))
+        {
+            expected["services__external__https__0"] = "https://example.com/";
+        }
+        Assert.Equal(
+            expected.OrderBy(p => p.Key),
+            configuration.EnvironmentVariables.ToDictionary(p => p.Key, p => p.Value).OrderBy(p => p.Key));
+        await notifications.WaitForResourceAsync(external.Resource.Name, KnownResourceStates.Running, cts.Token);
+    }
+
     [Fact]
     public void AddExternalServiceWithString()
     {

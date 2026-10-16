@@ -55,6 +55,16 @@ for (var i = 0; i < 2; i++)
 builder.AddParameter("testParameterResource", secret: true);
 var apiKeyParam = builder.AddParameter("api-key", secret: true);
 var connectionStringParam = builder.AddParameter("db-connection-string");
+
+var connectionPropertyParameter = builder.AddParameter("connection-property-value");
+var connectionPropertySource = builder.AddConnectionString("connection-properties", ReferenceExpression.Create($"Value=constant"));
+builder.AddProject<Projects.Stress_Empty>("connection-properties-consumer", launchProfileName: null)
+    .WithReferenceEnvironment(ReferenceEnvironmentInjectionFlags.ConnectionProperties)
+    .WithReference(connectionPropertySource);
+
+// Add the property after WithReference to exercise late discovery of the consumer's parameter blocker.
+connectionPropertySource.WithConnectionProperty("Value", ReferenceExpression.Create($"{connectionPropertyParameter}"));
+
 builder.AddContainer("hiddenContainer", "alpine")
     .WithHidden()
     .WithInitialState(new CustomResourceSnapshot

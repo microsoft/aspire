@@ -1169,6 +1169,124 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
+    [InlineData(nameof(KnownResourceStates.Waiting), true)]
+    [InlineData(nameof(KnownResourceStates.Starting), true)]
+    [InlineData(nameof(KnownResourceStates.UnresolvedParameters), true)]
+    [InlineData(nameof(KnownResourceStates.NotStarted), false)]
+    [InlineData(nameof(KnownResourceStates.Building), false)]
+    [InlineData(nameof(KnownResourceStates.Running), false)]
+    [InlineData(nameof(KnownResourceStates.Exited), false)]
+    [InlineData(nameof(KnownResourceStates.FailedToStart), false)]
+    [InlineData(null, false)]
+    public async Task OnResourcesPrepared_WithUnresolvedParameter_OnlyTracksStartupStates(string? initialState, bool tracksParameter)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var parameter = builder.AddParameter("value", () => throw new MissingParameterValueException("Missing parameter."));
+        var resource = builder.AddResource(new CustomResource("custom"))
+            .WithReferenceRelationship(parameter)
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "CustomResource",
+                State = initialState is not null ? new ResourceStateSnapshot(initialState, null) : null,
+                Properties = []
+            });
+        using var app = builder.Build();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), notifications, dcpEvents: events);
+        await orchestrator.RunApplicationAsync();
+
+        try
+        {
+            await events.PublishAsync(new OnResourcesPreparedContext(cts.Token)).DefaultTimeout();
+            Assert.True(notifications.TryGetCurrentState(resource.Resource.Name, out var initial));
+            Assert.Equal(tracksParameter ? KnownResourceStates.UnresolvedParameters : initialState, initial.Snapshot.State?.Text);
+            if (tracksParameter)
+            {
+                Assert.Equal(
+                    ["value"],
+                    Assert.IsType<string[]>(Assert.Single(initial.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+            }
+            else
+            {
+                Assert.Empty(initial.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
+            }
+
+            await parameter.Resource.SetValueAsync("resolved-value", cts.Token).DefaultTimeout();
+            if (tracksParameter)
+            {
+                await notifications.WaitForResourceAsync(resource.Resource.Name, KnownResourceStates.Starting, cts.Token).DefaultTimeout();
+            }
+
+            Assert.True(notifications.TryGetCurrentState(resource.Resource.Name, out var resolved));
+            Assert.Equal(tracksParameter ? KnownResourceStates.Starting : initialState, resolved.Snapshot.State?.Text);
+            Assert.Empty(resolved.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
+            if (!tracksParameter)
+            {
+                Assert.Equal(initial.Snapshot.Version, resolved.Snapshot.Version);
+            }
+        }
+        finally
+        {
+            await cts.CancelAsync();
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnResourcesPrepared_WithUnresolvedParameter_OnlyUpdatesStartingReplicas(bool firstReplicaStarting)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var parameter = builder.AddParameter("value", () => throw new MissingParameterValueException("Missing parameter."));
+        var container = builder.AddContainer("api", "test-image").WithEnvironment("VALUE", parameter);
+        container.Resource.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("api-first", "first", 0),
+            new DcpInstance("api-second", "second", 1)
+        ]));
+        using var app = builder.Build();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        await notifications.PublishUpdateAsync(container.Resource, "api-first", s => s with
+        {
+            State = firstReplicaStarting ? KnownResourceStates.Starting : KnownResourceStates.NotStarted
+        });
+        await notifications.PublishUpdateAsync(container.Resource, "api-second", s => s with
+        {
+            State = firstReplicaStarting ? KnownResourceStates.NotStarted : KnownResourceStates.Starting
+        });
+        var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), notifications, dcpEvents: events);
+        await orchestrator.RunApplicationAsync();
+
+        try
+        {
+            await events.PublishAsync(new OnResourcesPreparedContext(cts.Token)).DefaultTimeout();
+            var startingId = firstReplicaStarting ? "api-first" : "api-second";
+            var inactiveId = firstReplicaStarting ? "api-second" : "api-first";
+            Assert.True(notifications.TryGetCurrentState(startingId, out var unresolved));
+            Assert.Equal(KnownResourceStates.UnresolvedParameters, unresolved.Snapshot.State?.Text);
+            Assert.Equal(
+                ["value"],
+                Assert.IsType<string[]>(Assert.Single(unresolved.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+            Assert.True(notifications.TryGetCurrentState(inactiveId, out var inactive));
+            Assert.Equal(KnownResourceStates.NotStarted, inactive.Snapshot.State?.Text);
+            Assert.Empty(inactive.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
+
+            await parameter.Resource.SetValueAsync("resolved-value", cts.Token).DefaultTimeout();
+            await notifications.WaitForResourceAsync(container.Resource.Name,
+                e => e.ResourceId == startingId && e.Snapshot.State?.Text == KnownResourceStates.Starting, cts.Token).DefaultTimeout();
+            Assert.True(notifications.TryGetCurrentState(inactiveId, out var unchanged));
+            Assert.Equal(inactive.Snapshot.Version, unchanged.Snapshot.Version);
+        }
+        finally
+        {
+            await cts.CancelAsync();
+        }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task OnResourceStarting_WithUnresolvedParameters_PublishesParameterNamesUntilResolved(bool useConnectionStringEnvironment)
@@ -1314,6 +1432,218 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(
             ["value"],
             Assert.IsType<string[]>(Assert.Single(unresolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+    }
+
+    [Theory]
+    [InlineData(ReferenceEnvironmentInjectionFlags.None, false)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.None, true)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.ConnectionString, false)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.ConnectionString, true)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.ConnectionProperties, false)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.ConnectionProperties, true)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.All, false)]
+    [InlineData(ReferenceEnvironmentInjectionFlags.All, true)]
+    public async Task OnResourceStarting_WithLateConnectionProperty_TracksOnlyInjectedParameters(
+        ReferenceEnvironmentInjectionFlags flags, bool useAnnotation)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var parameter = ParameterResourceBuilderExtensions.CreateParameter(builder, "value", secret: false);
+        var source = builder.AddResource(new TestResourceWithConnectionString("database", "Value=constant"));
+        var consumer = builder.AddContainer("api", "test-image")
+            .WithReferenceEnvironment(flags)
+            .WithReference(source);
+
+        var property = ReferenceExpression.Create($"{parameter}");
+        if (useAnnotation)
+        {
+            source.WithConnectionProperty("property", property);
+        }
+        else
+        {
+            source.Resource.UnresolvedProperty = property;
+        }
+
+        using var app = builder.Build();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var orchestrator = CreateOrchestrator(model, notifications, dcpEvents: events);
+        await orchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(cts.Token)).DefaultTimeout();
+        await events.PublishAsync(new OnResourceStartingContext(
+            cts.Token, KnownResourceTypes.Container, consumer.Resource, consumer.Resource.Name)).DefaultTimeout();
+
+        var injectsProperty = flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionProperties);
+        Assert.True(notifications.TryGetCurrentState(consumer.Resource.Name, out var startingEvent));
+        Assert.Equal(injectsProperty ? KnownResourceStates.UnresolvedParameters : KnownResourceStates.Starting, startingEvent.Snapshot.State?.Text);
+        if (injectsProperty)
+        {
+            Assert.Equal(
+                ["value"],
+                Assert.IsType<string[]>(Assert.Single(startingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+            Assert.NotNull(parameter.WaitForValueTcs);
+        }
+        else
+        {
+            Assert.Empty(startingEvent.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
+        }
+
+        var configurationTask = ExecutionConfigurationBuilder.Create(consumer.Resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(builder.ExecutionContext, NullLogger.Instance, cts.Token);
+
+        try
+        {
+            if (injectsProperty)
+            {
+                Assert.False(configurationTask.IsCompleted);
+                var resolvedStateTask = notifications.WaitForResourceAsync(
+                    consumer.Resource.Name, KnownResourceStates.Starting, cts.Token);
+                await parameter.SetValueAsync("resolved-value", cts.Token).DefaultTimeout();
+                await resolvedStateTask.DefaultTimeout();
+            }
+
+            var configuration = await configurationTask.DefaultTimeout();
+            Assert.Null(configuration.Exception);
+            var expectedEnvironment = new Dictionary<string, string>();
+            if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
+            {
+                expectedEnvironment["ConnectionStrings__database"] = "Value=constant";
+            }
+            if (injectsProperty)
+            {
+                expectedEnvironment[useAnnotation ? "DATABASE_PROPERTY" : "DATABASE_UNAVAILABLE"] = "resolved-value";
+            }
+            Assert.Equal(
+                expectedEnvironment.OrderBy(p => p.Key),
+                configuration.EnvironmentVariables.ToDictionary(p => p.Key, p => p.Value).OrderBy(p => p.Key));
+        }
+        finally
+        {
+            if (parameter.WaitForValueTcs is not null)
+            {
+                await parameter.SetValueAsync("cleanup-value", TestContext.Current.CancellationToken).DefaultTimeout();
+            }
+            cts.Cancel();
+        }
+    }
+
+    [Theory]
+    [InlineData(ReferenceUsage.Reference)]
+    [InlineData(ReferenceUsage.Environment)]
+    [InlineData(ReferenceUsage.ConnectionStringEnvironment)]
+    [InlineData(ReferenceUsage.GenericEnvironment)]
+    [InlineData(ReferenceUsage.Arguments)]
+    [InlineData(ReferenceUsage.Relationship)]
+    public async Task OnResourceStarting_WithDeferredConnectionMetadata_TracksCurrentParametersWithoutInvokingLaunchCallbacks(ReferenceUsage usage)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var parameter = ParameterResourceBuilderExtensions.CreateParameter(builder, "value", secret: false);
+        var unusedParameter = ParameterResourceBuilderExtensions.CreateParameter(builder, "unused", secret: false);
+        var source = builder.AddResource(new ParameterConnectionStringResource("database", parameter) { IsConfigured = false })
+            .WithConnectionProperty("unused", ReferenceExpression.Create($"{unusedParameter}"));
+        var consumer = builder.AddContainer("api", "test-image");
+        var expression = ReferenceExpression.Create($"{source.Resource}");
+        switch (usage)
+        {
+            case ReferenceUsage.Reference:
+                consumer.WithReferenceEnvironment(ReferenceEnvironmentInjectionFlags.ConnectionString).WithReference(source);
+                break;
+            case ReferenceUsage.Environment:
+                consumer.WithEnvironment("CONNECTION", expression);
+                break;
+            case ReferenceUsage.ConnectionStringEnvironment:
+                consumer.WithEnvironment("CONNECTION", source);
+                break;
+            case ReferenceUsage.GenericEnvironment:
+                consumer.WithEnvironment<ContainerResource, ReferenceExpression>("CONNECTION", expression);
+                break;
+            case ReferenceUsage.Arguments:
+                consumer.WithArgs(expression);
+                break;
+            case ReferenceUsage.Relationship:
+                consumer.WithReferenceRelationship(expression);
+                consumer.WithEnvironment(context => context.EnvironmentVariables["CONNECTION"] = expression);
+                break;
+            default:
+                throw new InvalidOperationException($"Unexpected usage '{usage}'.");
+        }
+
+        var environmentCallbackCount = 0;
+        var argumentsCallbackCount = 0;
+        consumer.WithEnvironment(_ =>
+        {
+            Interlocked.Increment(ref environmentCallbackCount);
+        })
+        .WithArgs(_ =>
+        {
+            Interlocked.Increment(ref argumentsCallbackCount);
+        });
+        source.Resource.IsConfigured = true;
+
+        using var app = builder.Build();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var orchestrator = CreateOrchestrator(model, notifications, out var parameterProcessor, dcpEvents: events);
+        await orchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(cts.Token)).DefaultTimeout();
+        Assert.NotNull(parameter.WaitForValueTcs);
+        Assert.Null(unusedParameter.WaitForValueTcs);
+
+        await events.PublishAsync(new OnResourceStartingContext(
+            cts.Token, KnownResourceTypes.Container, consumer.Resource, consumer.Resource.Name)).DefaultTimeout();
+        Assert.True(notifications.TryGetCurrentState(consumer.Resource.Name, out var unresolvedEvent));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, unresolvedEvent.Snapshot.State?.Text);
+        Assert.Equal(
+            ["value"],
+            Assert.IsType<string[]>(Assert.Single(unresolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+        Assert.Equal(0, environmentCallbackCount);
+        Assert.Equal(0, argumentsCallbackCount);
+
+        var configurationTask = ExecutionConfigurationBuilder.Create(consumer.Resource)
+            .WithEnvironmentVariablesConfig()
+            .WithArgumentsConfig()
+            .BuildAsync(builder.ExecutionContext, NullLogger.Instance, cts.Token);
+
+        try
+        {
+            Assert.False(configurationTask.IsCompleted);
+            var resolvedStateTask = notifications.WaitForResourceAsync(
+                consumer.Resource.Name, KnownResourceStates.Starting, cts.Token);
+            await parameter.SetValueAsync("resolved-value", cts.Token).DefaultTimeout();
+            await resolvedStateTask.DefaultTimeout();
+            var configuration = await configurationTask.DefaultTimeout();
+            Assert.Null(configuration.Exception);
+            Assert.Equal(1, environmentCallbackCount);
+            Assert.Equal(1, argumentsCallbackCount);
+            if (usage == ReferenceUsage.Arguments)
+            {
+                Assert.Equal("Value=resolved-value", Assert.Single(configuration.Arguments).Value);
+                Assert.Empty(configuration.EnvironmentVariables);
+            }
+            else
+            {
+                var environmentVariable = Assert.Single(configuration.EnvironmentVariables);
+                Assert.Equal(usage == ReferenceUsage.Reference ? "ConnectionStrings__database" : "CONNECTION", environmentVariable.Key);
+                Assert.Equal("Value=resolved-value", environmentVariable.Value);
+                Assert.Empty(configuration.Arguments);
+            }
+
+            await parameterProcessor.DeleteParameterCoreAsync(parameter, new InteractionInputCollection([]), cts.Token).DefaultTimeout();
+            Assert.True(notifications.TryGetCurrentState(consumer.Resource.Name, out var resetEvent));
+            Assert.Equal(KnownResourceStates.UnresolvedParameters, resetEvent.Snapshot.State?.Text);
+            Assert.Equal(
+                ["value"],
+                Assert.IsType<string[]>(Assert.Single(resetEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+            await parameter.SetValueAsync("cleanup-value", cts.Token).DefaultTimeout();
+        }
+        finally
+        {
+            cts.Cancel();
+        }
     }
 
     [Theory]
@@ -2528,6 +2858,8 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     private sealed class TestResourceWithConnectionString(string name, string connectionString, string? databaseName = null, string? host = null, ReferenceExpression? unresolvedProperty = null)
         : Resource(name), IResourceWithConnectionString
     {
+        public ReferenceExpression? UnresolvedProperty { get; set; } = unresolvedProperty;
+
         public bool ThrowOnConnectionStringExpression { get; init; }
 
         public bool ThrowOnConnectionProperties { get; init; }
@@ -2553,9 +2885,9 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
                 yield return new("Host", ReferenceExpression.Create($"{host}"));
             }
 
-            if (unresolvedProperty is not null)
+            if (UnresolvedProperty is not null)
             {
-                yield return new("Unavailable", unresolvedProperty);
+                yield return new("Unavailable", UnresolvedProperty);
             }
 
             if (ThrowOnConnectionProperties)
@@ -2568,7 +2900,11 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     private sealed class ParameterConnectionStringResource(string name, ParameterResource parameter)
         : Resource(name), IResourceWithConnectionString
     {
-        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"Value={parameter}");
+        public bool IsConfigured { get; set; } = true;
+
+        public ReferenceExpression ConnectionStringExpression => IsConfigured
+            ? ReferenceExpression.Create($"Value={parameter}")
+            : throw new InvalidOperationException("Connection metadata is not configured yet.");
     }
 
     [Fact]

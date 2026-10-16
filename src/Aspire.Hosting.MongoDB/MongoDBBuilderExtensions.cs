@@ -614,6 +614,7 @@ public static class MongoDBBuilderExtensions
 
         return builder
             .WithAnnotation(new MongoDBServerKeyFileAnnotation(keyValue, keyFilePath))
+            .WithReferenceRelationship(ReferenceExpression.Create($"{keyValue}"))
             .WithContainerFiles(
                 destinationPath: keyFileDirectory,
                 callback: async (_, ct) => [new ContainerFile

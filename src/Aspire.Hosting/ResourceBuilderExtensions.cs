@@ -452,6 +452,7 @@ public static class ResourceBuilderExtensions
         }
         else if (externalService.Resource.UrlParameter is not null)
         {
+            builder.WithReferenceRelationship(externalService.Resource.UrlParameter);
             builder.WithEnvironment(async context =>
             {
                 // In publish mode we can't validate the parameter value so we'll just use it without validating.
@@ -502,7 +503,8 @@ public static class ResourceBuilderExtensions
     /// <param name="envVarName">The name of the environment variable under which the connection string will be set.</param>
     /// <param name="resource">The resource builder of the referenced service from which to pull the connection string.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>Parameters referenced by the connection string are also tracked as references of the destination resource.</remarks>
+    /// <remarks>Parameters referenced by the connection string are also tracked as references of the destination resource.
+    /// Parameter dependencies are discovered again at startup, allowing the source connection metadata to be configured after this call.</remarks>
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(
         this IResourceBuilder<T> builder,
@@ -557,7 +559,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(value);
 
-        WalkAndLinkResourceReferences(builder, [value], ResourceLinkTargets.All, onDiscoveryFailure: null);
+        WalkAndLinkResourceReferences(builder, new ResourceReferenceDiscoveryAnnotation([value]), ResourceLinkTargets.All, onDiscoveryFailure: null);
 
         return builder.WithEnvironment(context =>
         {
@@ -584,7 +586,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(value);
 
-        WalkAndLinkResourceReferences(builder, [value], ResourceLinkTargets.All, onDiscoveryFailure: null);
+        WalkAndLinkResourceReferences(builder, new ResourceReferenceDiscoveryAnnotation([value]), ResourceLinkTargets.All, onDiscoveryFailure: null);
 
         return builder.WithEnvironment(context =>
         {
@@ -946,7 +948,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(args);
 
-        WalkAndLinkResourceReferences(builder, args, ResourceLinkTargets.All, onDiscoveryFailure: null);
+        WalkAndLinkResourceReferences(builder, new ResourceReferenceDiscoveryAnnotation(args), ResourceLinkTargets.All, onDiscoveryFailure: null);
 
         return builder.WithArgs(context => context.Args.AddRange(args));
     }
@@ -1350,6 +1352,7 @@ public static class ResourceBuilderExtensions
     /// <param name="optional"><see langword="true"/> to allow a missing connection string; <see langword="false"/> to throw an exception if the connection string is not found.</param>
     /// <exception cref="DistributedApplicationException">Throws an exception if the connection string resolves to null. It can be null if the resource has no connection string, and if the configuration has no connection string for the source resource.</exception>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>Parameter dependencies are discovered again at startup, allowing the source connection metadata to be configured after this call.</remarks>
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withReference dispatcher export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<IResourceWithConnectionString> source, string? connectionName = null, bool optional = false)
         where TDestination : IResourceWithEnvironment
@@ -1378,34 +1381,10 @@ public static class ResourceBuilderExtensions
                 connectionStringExpression: null);
         }
 
-        var injectedValues = new List<object>();
-        if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
+        WalkAndLinkResourceReferences(builder, new ResourceReferenceDiscoveryAnnotation(connectionStringReference is null ? [] : [connectionStringReference])
         {
-            try
-            {
-                injectedValues.Add(resource.ConnectionStringExpression);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                LogDiscoveryFailure(ex);
-            }
-        }
-
-        if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionProperties))
-        {
-            try
-            {
-                injectedValues.AddRange(resource.GetConnectionProperties().Select(static property => property.Value));
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                LogDiscoveryFailure(ex);
-            }
-
-            injectedValues.AddRange(resource.Annotations.OfType<ConnectionPropertyAnnotation>().Select(static annotation => annotation.Value));
-        }
-
-        WalkAndLinkResourceReferences(builder, injectedValues, ResourceLinkTargets.Parameters, LogDiscoveryFailure);
+            ConnectionPropertiesSource = flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionProperties) ? resource : null
+        }, ResourceLinkTargets.Parameters, exception => LogReferenceDiscoveryFailure(builder, resource.Name, exception));
 
         return builder.WithEnvironment(context =>
         {
@@ -1440,10 +1419,6 @@ public static class ResourceBuilderExtensions
             }
         });
 
-        void LogDiscoveryFailure(Exception exception)
-        {
-            LogReferenceDiscoveryFailure(builder, resource.Name, exception);
-        }
     }
 
     internal static void ValidateConnectionStringReference(EnvironmentCallbackContext context, ConnectionStringReference candidate)
@@ -1664,8 +1639,10 @@ public static class ResourceBuilderExtensions
                 builder.WithEnvironment(envVarName, uri.ToString());
             }
         }
-        else if (externalService.Resource.UrlParameter is not null)
+        else if (externalService.Resource.UrlParameter is not null &&
+            (flags & (ReferenceEnvironmentInjectionFlags.ServiceDiscovery | ReferenceEnvironmentInjectionFlags.Endpoints)) != 0)
         {
+            builder.WithReferenceRelationship(externalService.Resource.UrlParameter);
             builder.WithEnvironment(async context =>
             {
                 string discoveryEnvVarName;
@@ -4940,7 +4917,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(expression);
 
-        WalkAndLinkResourceReferences(builder, expression.ValueProviders, ResourceLinkTargets.All, onDiscoveryFailure: null);
+        WalkAndLinkResourceReferences(builder, new ResourceReferenceDiscoveryAnnotation(expression.ValueProviders), ResourceLinkTargets.All, onDiscoveryFailure: null);
 
         return builder;
     }
@@ -4956,11 +4933,14 @@ public static class ResourceBuilderExtensions
 
     private static void WalkAndLinkResourceReferences<T>(
         IResourceBuilder<T> builder,
-        IEnumerable<object> values,
+        ResourceReferenceDiscoveryAnnotation references,
         ResourceLinkTargets linkTargets,
         Action<Exception>? onDiscoveryFailure)
         where T : IResource
     {
+        // Retain consumed values for startup discovery because source metadata can change after this call.
+        builder.WithAnnotation(references);
+
         var processed = new HashSet<(object Value, ResourceLinkTargets LinkTargets)>();
         var linkedResources = new HashSet<IResource>(ReferenceEqualityComparer.Instance);
 
@@ -5018,9 +4998,29 @@ public static class ResourceBuilderExtensions
             }
         }
 
-        foreach (var value in values)
+        foreach (var value in references.Values)
         {
             Walk(value, linkTargets);
+        }
+
+        if (references.ConnectionPropertiesSource is { } source)
+        {
+            try
+            {
+                foreach (var property in source.GetConnectionProperties())
+                {
+                    Walk(property.Value, linkTargets);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                LogReferenceDiscoveryFailure(builder, source.Name, ex);
+            }
+
+            foreach (var annotation in source.Annotations.OfType<ConnectionPropertyAnnotation>())
+            {
+                Walk(annotation.Value, linkTargets);
+            }
         }
     }
 

@@ -287,7 +287,7 @@ internal sealed class ApplicationOrchestrator
                 break;
         }
 
-        await PublishUnresolvedParametersStateAsync(context).ConfigureAwait(false);
+        await PublishUnresolvedParametersStateAsync(context.Resource, context.DcpResourceName, context.CancellationToken).ConfigureAwait(false);
     }
 
     private Task OnResourceBeforeStart(OnResourceBeforeStartContext context)
@@ -306,7 +306,7 @@ internal sealed class ApplicationOrchestrator
             : notificationService.PublishUpdateAsync(resource, stateFactory);
     }
 
-    private async Task PublishUnresolvedParametersStateAsync(OnResourceStartingContext context)
+    private async Task PublishUnresolvedParametersStateAsync(IResource resource, string? resourceId, CancellationToken cancellationToken)
     {
         // Avoid walking references unless parameter processing found at least one value that is still
         // waiting for user input.
@@ -315,19 +315,30 @@ internal sealed class ApplicationOrchestrator
             return;
         }
 
+        // Model-level updates can cover replicas in different states. Look for an eligible instance
+        // before creating a monitor; the updater rechecks each snapshot under its publication lock.
+        string[] resourceIds = resourceId is not null ? [resourceId] : resource.GetResolvedResourceNames();
+        if (!resourceIds.Any(id => _notificationService.TryGetCurrentState(id, out var currentState) &&
+            (string.Equals(currentState.Snapshot.State?.Text, KnownResourceStates.Starting, StringComparisons.ResourceState) ||
+             string.Equals(currentState.Snapshot.State?.Text, KnownResourceStates.Waiting, StringComparisons.ResourceState) ||
+             string.Equals(currentState.Snapshot.State?.Text, KnownResourceStates.UnresolvedParameters, StringComparisons.ResourceState))))
+        {
+            return;
+        }
+
         // Launch callbacks must run after BeforeResourceStartedEvent and only once per start. Declarative
         // references and connection expressions provide the dependencies without evaluating callbacks early.
-        var parameterValueTasks = GetReferencedParameterValueTasks(context.Resource);
+        var parameterValueTasks = GetReferencedParameterValueTasks(resource);
         if (!parameterValueTasks.Any(parameter => parameter.Value?.IsCompleted is false && _parameterProcessor.IsParameterUnresolved(parameter.Key)))
         {
             return;
         }
 
-        await PublishUnresolvedParametersUpdateAsync(context.Resource, context.DcpResourceName, parameterValueTasks, allowStartingState: true).ConfigureAwait(false);
+        await PublishUnresolvedParametersUpdateAsync(resource, resourceId, parameterValueTasks, allowStartingState: true).ConfigureAwait(false);
 
         // The launch configuration remains the authoritative startup gate and awaits these same parameter
         // tasks. This monitor only keeps the informational state and parameter-name list up to date.
-        _ = MonitorUnresolvedParametersAsync(context.Resource, context.DcpResourceName, parameterValueTasks, context.CancellationToken);
+        _ = MonitorUnresolvedParametersAsync(resource, resourceId, parameterValueTasks, cancellationToken);
     }
 
     private Dictionary<ParameterResource, Task<string?>?> GetReferencedParameterValueTasks(IResource resource)
@@ -354,11 +365,37 @@ internal sealed class ApplicationOrchestrator
             }
         }
 
+        foreach (var discovery in resource.Annotations.OfType<ResourceReferenceDiscoveryAnnotation>())
+        {
+            foreach (var value in discovery.Values)
+            {
+                Walk(value);
+            }
+
+            if (discovery.ConnectionPropertiesSource is { } source)
+            {
+                WalkConnectionProperties(source);
+                foreach (var annotation in source.Annotations.OfType<ConnectionPropertyAnnotation>())
+                {
+                    Walk(annotation.Value);
+                }
+            }
+        }
+
         if (resource is IResourceWithConnectionString resourceWithConnectionString)
+        {
+            WalkConnectionProperties(resourceWithConnectionString);
+        }
+
+        Walk(resource);
+
+        return parameters;
+
+        void WalkConnectionProperties(IResourceWithConnectionString source)
         {
             try
             {
-                foreach (var property in resourceWithConnectionString.GetConnectionProperties())
+                foreach (var property in source.GetConnectionProperties())
                 {
                     Walk(property.Value);
                 }
@@ -367,16 +404,17 @@ internal sealed class ApplicationOrchestrator
             {
                 // Connection metadata can validate configuration before startup. Discovery is informational;
                 // keep references already found and let the resource's normal lifecycle report the failure.
-                _logger.LogDebug(ex, "Failed to discover parameters in connection properties for resource '{ResourceName}'.", resource.Name);
+                _logger.LogDebug(ex, "Failed to discover parameters in connection properties for resource '{ResourceName}'.", source.Name);
             }
         }
 
-        Walk(resource);
-
-        return parameters;
-
         void Walk(object? value)
         {
+            if (value is IResourceBuilder<IResource> resourceBuilder)
+            {
+                value = resourceBuilder.Resource;
+            }
+
             if (value is null || !visited.Add(value))
             {
                 return;
@@ -999,6 +1037,9 @@ internal sealed class ApplicationOrchestrator
                     HealthReports = GetInitialHealthReports(resource)
                 };
             }).ConfigureAwait(false);
+
+            // Custom resources can await parameters during initialization without a DCP starting event.
+            await PublishUnresolvedParametersStateAsync(resource, resourceId: null, cancellationToken).ConfigureAwait(false);
 
             // Notify resources that they need to initialize themselves.
             var initializeEvent = new InitializeResourceEvent(resource, _eventing, _loggerService, _notificationService, _serviceProvider);
