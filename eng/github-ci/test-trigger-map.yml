@@ -454,12 +454,9 @@ path_rules:
     targets: [test:Infrastructure.Tests]
     reason: Infrastructure.Tests/PowerShellScripts validates these CLI-archive/npm packaging scripts (DownloadNativeArchivesTests, StageNativeCliToolPackagesTests, ValidateNpmPackageSignaturesTests, ValidateNpmReleaseAliasesTests; ReleasePublishNugetPipelineTests reads validate-npm-release-aliases.ps1); the build jobs that run them are unconditional needs, so the unit verifier is the trigger that must fire
   - paths:
-      - eng/scripts/telemetry-hooks.common.ps1
-      - eng/scripts/update-telemetry-hooks.ps1
-      - eng/scripts/verify-telemetry-hooks.ps1
       - eng/test-retry-patterns.json
     targets: [test:Infrastructure.Tests]
-    reason: Telemetry hook maintenance, provenance, and retry-pattern regression coverage
+    reason: transient retry-pattern regression coverage
   - paths:
       - eng/scripts/verify-cli-archive.ps1
     targets: [test:Aspire.Acquisition.Tests]

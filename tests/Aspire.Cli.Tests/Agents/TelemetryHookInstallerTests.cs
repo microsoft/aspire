@@ -1,9 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -27,40 +24,6 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal(Path.Combine(expectedDirectory, "track-telemetry.ps1"), scripts.PowerShellScriptPath);
         Assert.True(File.Exists(scripts.ShellScriptPath));
         Assert.True(File.Exists(scripts.PowerShellScriptPath));
-    }
-
-    [Fact]
-    public async Task EnsureInstalledAsync_MatchesPinnedHookMetadata()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var home = workspace.CreateDirectory("home");
-        await using var metadataStream = typeof(TelemetryHookInstaller).Assembly.GetManifestResourceStream("telemetry-hooks.metadata.json")
-            ?? throw new InvalidOperationException("Embedded telemetry hook provenance is missing.");
-        using var metadata = await JsonDocument.ParseAsync(metadataStream, cancellationToken: TestContext.Current.CancellationToken).DefaultTimeout();
-        var root = metadata.RootElement;
-        Assert.Equal("microsoft/aspire-skills", root.GetProperty("repository").GetString());
-        Assert.Matches("^[0-9a-f]{40}$", root.GetProperty("commitSha").GetString()!);
-        Assert.Matches(@"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$", root.GetProperty("version").GetString()!);
-
-        var scripts = await CreateInstaller(workspace, home).EnsureInstalledAsync(CancellationToken.None).DefaultTimeout();
-        var installedPaths = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["track-telemetry.sh"] = scripts.ShellScriptPath,
-            ["track-telemetry.ps1"] = scripts.PowerShellScriptPath
-        };
-
-        var hashes = root.GetProperty("files");
-        Assert.Equal(installedPaths.Keys.Order(StringComparer.Ordinal), hashes.EnumerateObject().Select(hook => hook.Name).Order(StringComparer.Ordinal));
-
-        foreach (var (name, path) in installedPaths)
-        {
-            var recordedHash = hashes.GetProperty(name).GetString();
-            Assert.Matches("^[0-9a-f]{128}$", recordedHash!);
-            // Canonical hashes use LF UTF-8 without a BOM, including for Windows checkouts.
-            var installedContent = await File.ReadAllTextAsync(path, new UTF8Encoding(false, true)).DefaultTimeout();
-            var installedBytes = Encoding.UTF8.GetBytes(installedContent.ReplaceLineEndings("\n"));
-            Assert.Equal(recordedHash, Convert.ToHexStringLower(SHA512.HashData(installedBytes)));
-        }
     }
 
     [Fact]

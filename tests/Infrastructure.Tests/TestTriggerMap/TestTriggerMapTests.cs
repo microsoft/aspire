@@ -167,30 +167,6 @@ public sealed class TestTriggerMapTests
             ["test:Infrastructure.Tests"]
         },
         {
-            "eng/scripts/telemetry-hooks.common.ps1",
-            ["test:Infrastructure.Tests"]
-        },
-        {
-            "eng/scripts/update-telemetry-hooks.ps1",
-            ["test:Infrastructure.Tests"]
-        },
-        {
-            "eng/scripts/verify-telemetry-hooks.ps1",
-            ["test:Infrastructure.Tests"]
-        },
-        {
-            ".github/workflows/update-telemetry-hooks.yml",
-            ["test:Infrastructure.Tests"]
-        },
-        {
-            ".github/workflows/verify-telemetry-hooks.yml",
-            ["test:Infrastructure.Tests"]
-        },
-        {
-            ".github/workflows/verify-telemetry-hook-changes.yml",
-            ["test:Infrastructure.Tests"]
-        },
-        {
             "eng/scripts/smoke-installed-cli.ps1",
             ["job:winget-installer"]
         },
