@@ -3,7 +3,6 @@
 
 using System.Globalization;
 using System.Text.Json;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 
@@ -19,6 +18,8 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
     internal const int DefaultMaxPayloadCharacters = 64 * 1024;
     internal const int MaximumPayloadCharacters = 1024 * 1024;
     private const string ContinueResponse = """{"continue":true}""";
+    private const string SkillsDirectoryName = "skills";
+    private const string SkillFileName = "SKILL.md";
     private static readonly string[] s_mcpPrefixes = ["aspire-", "mcp__aspire__", "mcp_aspire_"];
 
     internal static (string Command, string[] Args) GetCommand(string mode)
@@ -141,7 +142,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                 var segments = path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
                 for (var i = segments.Length - 3; i >= 0; i--)
                 {
-                    if (!segments[i].Equals(AspireSkillsBundleLayout.SkillsDirectoryName, StringComparison.OrdinalIgnoreCase))
+                    if (!segments[i].Equals(SkillsDirectoryName, StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }
@@ -149,7 +150,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                     var relativePath = string.Join('/', segments[(i + 1)..]);
                     if (AgentTelemetryCatalog.Bundled.Skills.Contains(skill))
                     {
-                        if (segments[^1].Equals(AspireSkillsBundleLayout.SkillFileName, StringComparison.OrdinalIgnoreCase))
+                        if (segments[^1].Equals(SkillFileName, StringComparison.OrdinalIgnoreCase))
                         {
                             trackedEvent = (AgentTelemetryProtocol.SkillInvocationEventType, AgentTelemetryProtocol.SkillNameOptionName, skill);
                         }

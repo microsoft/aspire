@@ -35,7 +35,6 @@ internal static class KnownFeatures
     public static string ExperimentalPolyglotPython => "experimentalPolyglotPython";
     public static string ExperimentalHostingIntegrations => "experimentalHostingIntegrations";
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
-    public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
     public static string PolyglotIntegrationFilterEnabled => "polyglotIntegrationFilterEnabled";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
@@ -94,15 +93,6 @@ internal static class KnownFeatures
             NuGetSignatureVerificationEnabled,
             "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for NuGet operations",
             DefaultValue: true),
-
-        [AspireSkillsRemoteFetchEnabled] = new(
-            AspireSkillsRemoteFetchEnabled,
-            "(Preview) Allow the Aspire CLI to download the aspire-skills bundle from GitHub. When disabled (the 13.4 default), the CLI only uses the cached bundle and the embedded snapshot baked into the CLI; toggle on to opt in to the remote fetch path.",
-            DefaultValue: false,
-            // Hidden from discovery while the remote-fetch path is preview-only: the CLI ships with a
-            // trusted SHA-512 embedded snapshot, and the remote path stays off by default. The flag is
-            // still honored if set directly in config.
-            Hidden: true),
 
         [PolyglotIntegrationFilterEnabled] = new(
             PolyglotIntegrationFilterEnabled,

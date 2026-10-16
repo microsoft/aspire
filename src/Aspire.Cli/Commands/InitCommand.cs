@@ -177,10 +177,8 @@ internal sealed class InitCommand : BaseCommand
         // MCP remains an explicit opt-in through standalone `aspire agent init`.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
-        // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
-        // (which includes aspireify as the natural follow-up wiring skill). This chained flow
-        // never registers `--mcp`, so MCP configuration is unavailable here by construction —
-        // it remains reachable only through standalone `aspire agent init`.
+        // This chained flow never registers `--mcp`, so MCP configuration is unavailable here
+        // by construction. It remains reachable only through standalone `aspire agent init`.
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
             InteractionService,
             CliExitCodes.Success,
@@ -189,14 +187,14 @@ internal sealed class InitCommand : BaseCommand
             PromptBinding.Create(parseResult, _agentInitCommand.AgentsOption),
             AgentInitCommand.CreateConfirmationBinding(parseResult, AgentInitCommand.s_playwrightOption),
             AgentInitCommand.CreateConfirmationBinding(parseResult, AgentInitCommand.s_dotnetInspectOption),
-            PromptBinding.Create(parseResult, AgentInitCommand.s_aspireSkillsOption, AspireSkillsMode.Bundled),
+            PromptBinding.Create(parseResult, AgentInitCommand.s_aspireSkillsOption, AspireSkillsMode.Native),
             PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
             cancellationToken);
 
         if (agentInitResult.ExitCode == CliExitCodes.Success &&
-            agentInitResult.SelectedSkills.Any(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName)))
+            agentInitResult.NativeRegisteredClients.Count > 0)
         {
-            var commands = GetAspireifyCommands(agentInitResult.SelectedClients);
+            var commands = GetAspireifyCommands(agentInitResult.NativeRegisteredClients);
             if (commands.Count > 0)
             {
                 InteractionService.DisplayEmptyLine();

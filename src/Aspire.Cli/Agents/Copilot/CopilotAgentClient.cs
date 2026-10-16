@@ -45,9 +45,6 @@ internal sealed class CopilotAgentClient(CliExecutionContext context, IEnvironme
             : Path.Combine(GetSettingsDirectory(), "skills");
     }
 
-    public Task<bool> HasNativeSkillsRegistrationAsync(DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
-        => AspireSkillsConfiguration.HasPluginRegistrationAsync(GetSettingsFiles(workspaceRoot), cancellationToken);
-
     public AgentFileEdit CreateNativeSkillsEdit(DirectoryInfo workspaceRoot, AgentConfigurationScope scope)
     {
         var directory = scope is AgentConfigurationScope.Project

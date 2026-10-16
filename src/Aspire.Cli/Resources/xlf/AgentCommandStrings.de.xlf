@@ -42,46 +42,6 @@
         <target state="new">The Aspire MCP tool name for a tool_invocation event</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
-        <source>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</source>
-        <target state="new">Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_GitHubUnavailable">
-        <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</source>
-        <target state="new">Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InvalidMetadata">
-        <source>Embedded Aspire skills bundle metadata is invalid: {0}</source>
-        <target state="new">Embedded Aspire skills bundle metadata is invalid: {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MetadataRepositoryMismatch">
-        <source>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</source>
-        <target state="new">Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataAssetName">
-        <source>Embedded Aspire skills metadata must specify a release asset name.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a release asset name.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataSha512">
-        <source>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</source>
-        <target state="new">Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataTag">
-        <source>Embedded Aspire skills metadata must specify a GitHub release tag.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a GitHub release tag.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataVersion">
-        <source>Embedded Aspire skills metadata must specify a version.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a version.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">
         <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
         <target state="translated">In den folgenden Agentkonfigurationen wird der veraltete Befehl „mcp start“ verwendet. Aktualisieren?</target>
@@ -173,18 +133,13 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AspireSkillsOptionDescription">
-        <source>Aspire skills source: bundled (copy all applicable skills), native (register the plugin/catalog), or none (default: bundled)</source>
-        <target state="new">Aspire skills source: bundled (copy all applicable skills), native (register the plugin/catalog), or none (default: bundled)</target>
+        <source>Aspire skills source: native (register the plugin/catalog) or none (default: native)</source>
+        <target state="new">Aspire skills source: native (register the plugin/catalog) or none (default: native)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_BlockedTarget">
         <source>Blocked {0} for {1} ({2}): {3}</source>
         <target state="new">Blocked {0} for {1} ({2}): {3}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_BundledSkillsChoice">
-        <source>Bundled (copy all applicable Aspire skills)</source>
-        <target state="new">Bundled (copy all applicable Aspire skills)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ClientAcquisitionNotice">
@@ -278,8 +233,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InvalidAspireSkillsMode">
-        <source>Invalid Aspire skills source '{0}'. Use 'bundled', 'native', or 'none'.</source>
-        <target state="new">Invalid Aspire skills source '{0}'. Use 'bundled', 'native', or 'none'.</target>
+        <source>Invalid Aspire skills source '{0}'. Use 'native' or 'none'.</source>
+        <target state="new">Invalid Aspire skills source '{0}'. Use 'native' or 'none'.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InvalidAssetValue">
@@ -300,10 +255,10 @@
       <trans-unit id="InitCommand_LocalSkillsConflict">
         <source>Native Aspire skills cannot be registered while these local Aspire skills are present:
 {0}
-No files were changed. Keep bundled mode, or remove these skills after preserving any customizations before choosing native mode.</source>
+No files were changed. Remove these skills after preserving any customizations before choosing native mode.</source>
         <target state="new">Native Aspire skills cannot be registered while these local Aspire skills are present:
 {0}
-No files were changed. Keep bundled mode, or remove these skills after preserving any customizations before choosing native mode.</target>
+No files were changed. Remove these skills after preserving any customizations before choosing native mode.</target>
         <note>{0} lists the local skill entry-point paths, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_McpConfigurationDescription">
@@ -324,11 +279,6 @@ No files were changed. Keep bundled mode, or remove these skills after preservin
       <trans-unit id="InitCommand_NativeSkillsChoice">
         <source>Native (register the Aspire plugin/catalog)</source>
         <target state="new">Native (register the Aspire plugin/catalog)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_NativeSkillsConflict">
-        <source>A native Aspire plugin/catalog is already enabled. Bundled skills were not installed and no configuration was changed. Keep native mode, or disable the native Aspire registration before choosing bundled mode.</source>
-        <target state="new">A native Aspire plugin/catalog is already enabled. Bundled skills were not installed and no configuration was changed. Keep native mode, or disable the native Aspire registration before choosing bundled mode.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_NoConfigurationSelected">
@@ -436,16 +386,6 @@ No files were changed. Keep bundled mode, or remove these skills after preservin
         <target state="new">Path to the workspace root directory</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InstallingStatus">
-        <source>Installing Aspire skills...</source>
-        <target state="new">Installing Aspire skills...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InvalidBundle">
-        <source>The Aspire skills bundle is invalid: {0}</source>
-        <target state="new">The Aspire skills bundle is invalid: {0}</target>
-        <note />
-      </trans-unit>
       <trans-unit id="LocalSkills_ReadFailed">
         <source>Could not check local Aspire skills at '{0}': {1}</source>
         <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
@@ -504,21 +444,6 @@ No files were changed. Keep bundled mode, or remove these skills after preservin
       <trans-unit id="PlaywrightCliInstaller_ProvenanceVerificationFailed">
         <source>Provenance verification failed for {0}: {1}</source>
         <target state="new">Provenance verification failed for {0}: {1}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_Aspire">
-        <source>Aspire CLI commands and workflows for distributed apps</source>
-        <target state="new">Aspire CLI commands and workflows for distributed apps</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_AspireDeployment">
-        <source>Aspire deployment target selection, preflight, publish, and deploy workflows</source>
-        <target state="new">Aspire deployment target selection, preflight, publish, and deploy workflows</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_Aspireify">
-        <source>One-time setup: wire up AppHost with discovered projects</source>
-        <target state="new">One-time setup: wire up AppHost with discovered projects</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_DotnetInspect">

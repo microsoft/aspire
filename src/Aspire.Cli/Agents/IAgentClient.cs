@@ -17,8 +17,6 @@ internal interface IAgentClient
     // Include compatibility locations the client loads, not just the CLI's install destination.
     IEnumerable<string> GetLocalSkillDirectories(AgentConfigurationScope scope, DirectoryInfo workspaceRoot);
 
-    Task<bool> HasNativeSkillsRegistrationAsync(DirectoryInfo workspaceRoot, CancellationToken cancellationToken);
-
     AgentFileEdit CreateNativeSkillsEdit(DirectoryInfo workspaceRoot, AgentConfigurationScope scope);
 
     string GetMcpConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot);

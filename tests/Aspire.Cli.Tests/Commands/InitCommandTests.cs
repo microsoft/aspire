@@ -646,7 +646,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_WhenBundledSkillsSelected_PrintsToolSpecificFollowUpCommands()
+    public async Task InitCommand_WhenNativeSkillsSelected_PrintsToolSpecificFollowUpCommands()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -679,10 +679,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(Directory.GetFiles(workspace.WorkspaceRoot.FullName, "*mcp*.json*", SearchOption.AllDirectories));
     }
 
-    [Theory]
-    [InlineData("none")]
-    [InlineData("native")]
-    public async Task InitCommand_WhenAspireifyNotInstalled_DoesNotPrintFollowUpCommands(string skillsMode)
+    [Fact]
+    public async Task InitCommand_WhenAspireSkillsNone_DoesNotPrintFollowUpCommands()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -706,7 +704,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
-        var parseResult = initCommand.Parse($"init --language typescript --aspire-skills {skillsMode}");
+        var parseResult = initCommand.Parse("init --language typescript --aspire-skills none");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -729,11 +727,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
 
-        var aspireSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireSkillName);
-        Assert.False(Directory.Exists(aspireSkillPath), $"Expected no aspire skill directory but found {aspireSkillPath}");
-
-        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
-        Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
+        Assert.Empty(Directory.EnumerateFiles(workspace.WorkspaceRoot.FullName, "SKILL.md", SearchOption.AllDirectories));
     }
 
     [Fact]
@@ -759,7 +753,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("project")]
     [InlineData("global")]
-    public async Task InitCommand_NonInteractive_WithClientScope_InstallsBundledSkills(string scope)
+    public async Task InitCommand_NonInteractive_WithClientScope_RegistersNativeSkills(string scope)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -767,7 +761,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var parseResult = command.Parse($"init --non-interactive --agents copilot --scope {scope} --aspire-skills bundled");
+        var parseResult = command.Parse($"init --non-interactive --agents copilot --scope {scope} --aspire-skills native");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -776,13 +770,15 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var homeDirectory = serviceProvider.GetRequiredService<CliExecutionContext>().HomeDirectory;
         var selectedRoot = scope == "project" ? workspace.WorkspaceRoot : homeDirectory;
         var unselectedRoot = scope == "project" ? homeDirectory : workspace.WorkspaceRoot;
-        var aspireSkillPath = Path.Combine(selectedRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
-        Assert.True(File.Exists(aspireSkillPath), $"Expected aspire skill file at {aspireSkillPath}");
-        Assert.False(Directory.Exists(Path.Combine(unselectedRoot.FullName, ".agents", "skills")));
+        var settingsPath = Path.Combine(
+            selectedRoot.FullName,
+            scope == "project" ? Path.Combine(".github", "copilot", "settings.json") : Path.Combine(".copilot", "settings.json"));
+        Assert.True(File.Exists(settingsPath), $"Expected native Aspire registration at {settingsPath}");
+        Assert.False(File.Exists(Path.Combine(
+            unselectedRoot.FullName,
+            scope == "project" ? Path.Combine(".copilot", "settings.json") : Path.Combine(".github", "copilot", "settings.json"))));
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json")));
-
-        var aspireifySkillPath = Path.Combine(selectedRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
-        Assert.True(File.Exists(aspireifySkillPath), $"Expected bundled aspireify skill file at {aspireifySkillPath}");
+        Assert.Empty(Directory.EnumerateFiles(selectedRoot.FullName, "SKILL.md", SearchOption.AllDirectories));
     }
 
     [Fact]

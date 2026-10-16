@@ -26,9 +26,6 @@ internal sealed class ClaudeCodeAgentClient(CliExecutionContext context, IEnviro
         yield return GetSkillBaseDirectory(scope, workspaceRoot);
     }
 
-    public Task<bool> HasNativeSkillsRegistrationAsync(DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
-        => AspireSkillsConfiguration.HasPluginRegistrationAsync(GetSettingsFiles(workspaceRoot), cancellationToken);
-
     public AgentFileEdit CreateNativeSkillsEdit(DirectoryInfo workspaceRoot, AgentConfigurationScope scope)
     {
         var directory = scope is AgentConfigurationScope.Project

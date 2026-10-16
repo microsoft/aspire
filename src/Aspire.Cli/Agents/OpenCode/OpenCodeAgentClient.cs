@@ -174,27 +174,6 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
                 root, reader, path, workspaceRoot, scope, token));
     }
 
-    public async Task<bool> HasNativeSkillsRegistrationAsync(DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
-    {
-        var reader = new AgentConfigurationJson.ReadContext();
-        // Inline settings can activate skills, but are not a writable registration target.
-        if (environment.GetEnvironmentVariable("OPENCODE_CONFIG_CONTENT") is { Length: > 0 } inline &&
-            HasAspireCatalog(AgentConfigurationJson.ParseObject(Encoding.UTF8.GetBytes(inline))))
-        {
-            return true;
-        }
-
-        foreach (var path in CatalogSettings(workspaceRoot))
-        {
-            if (await reader.ReadOptionalAsync(path, cancellationToken) is { } config && HasAspireCatalog(config))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private string GetCatalogConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
         => scope is AgentConfigurationScope.Project
             ? OpenCodePaths.GetProjectConfigPath(workspaceRoot)
@@ -307,9 +286,6 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
 
         return AgentConfigurationEdit.Applied();
     }
-
-    private static bool HasAspireCatalog(JsonObject root)
-        => ReadSkills(root)?.Sources?.Any(value => CatalogSchema(AgentConfigurationJson.String(value)) is not null) is true;
 
     private static (int Schema, JsonArray? Sources)? ReadSkills(JsonObject root)
     {

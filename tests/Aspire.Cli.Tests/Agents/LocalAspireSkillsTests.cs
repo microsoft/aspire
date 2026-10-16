@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.Agents;
@@ -10,24 +9,6 @@ namespace Aspire.Cli.Tests.Agents;
 public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
 {
     private readonly AgentConfigurationTestContext _context = new(output);
-
-    [Fact]
-    public async Task Find_UsesTheEmbeddedInventoryWithoutCreatingAnInstallation()
-    {
-        var paths = EmbeddedAspireSkillsBundleProvider.GetSkillNames()
-            .Select(name => Path.Combine(_context.Project.FullName, ".agents", "skills", name, "SKILL.md")).ToArray();
-        foreach (var path in paths)
-        {
-            await AgentConfigurationTestContext.WriteAsync(path, "local skill");
-        }
-        var before = Directory.GetFileSystemEntries(_context.Workspace.Path, "*", SearchOption.AllDirectories).Order().ToArray();
-
-        var result = Scan([_context.Copilot]);
-
-        Assert.Empty(result.Errors);
-        Assert.Equal(paths.Order(AgentPath.Comparer), result.Files);
-        Assert.Equal(before, Directory.GetFileSystemEntries(_context.Workspace.Path, "*", SearchOption.AllDirectories).Order());
-    }
 
     [Theory]
     [InlineData("GitHub Copilot", ".github")]
@@ -141,7 +122,7 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
             Path.Combine(_context.Workspace.Path, directory, "skills", "aspire", "SKILL.md"), "outside the workspace");
         var before = Directory.GetFileSystemEntries(_context.Workspace.Path, "*", SearchOption.AllDirectories).Order().ToArray();
 
-        var result = AspireSkillsInstaller.FindLocalSkills(working, _context.Project,
+        var result = LocalAspireSkills.Find(working, _context.Project,
             [_context.Clients.Single(scanner => scanner.DisplayName == agent)], TestContext.Current.CancellationToken);
 
         Assert.Empty(result.Errors);
@@ -158,7 +139,7 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(outside.FullName, ".agents", "skills", "aspire", "SKILL.md"), "outside");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.Workspace.Path, ".agents", "skills", "aspire", "SKILL.md"), "ancestor");
 
-        var result = AspireSkillsInstaller.FindLocalSkills(outside, _context.Project, [_context.OpenCode],
+        var result = LocalAspireSkills.Find(outside, _context.Project, [_context.OpenCode],
             TestContext.Current.CancellationToken);
 
         Assert.Empty(result.Errors);
@@ -199,13 +180,13 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
     public void Find_CancellationPropagates()
     {
         Assert.ThrowsAny<OperationCanceledException>(() =>
-            AspireSkillsInstaller.FindLocalSkills(_context.Project, _context.Project, _context.Clients, new CancellationToken(canceled: true)));
+            LocalAspireSkills.Find(_context.Project, _context.Project, _context.Clients, new CancellationToken(canceled: true)));
         Assert.Empty(_context.Project.EnumerateFileSystemInfos());
         Assert.Empty(_context.Home.EnumerateFileSystemInfos());
     }
 
-    private (IReadOnlyList<string> Files, IReadOnlyList<string> Errors) Scan(IEnumerable<IAgentClient> agents)
-        => AspireSkillsInstaller.FindLocalSkills(_context.Project, _context.Project, agents, TestContext.Current.CancellationToken);
+    private LocalAspireSkillScan Scan(IEnumerable<IAgentClient> agents)
+        => LocalAspireSkills.Find(_context.Project, _context.Project, agents, TestContext.Current.CancellationToken);
 
     public void Dispose() => _context.Dispose();
 }

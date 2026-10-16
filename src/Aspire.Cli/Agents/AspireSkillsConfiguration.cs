@@ -20,24 +20,6 @@ internal static class AspireSkillsConfiguration
         => new(client, path, static bytes => AgentConfigurationJson.ParseObject(bytes.Span),
             async (root, reader, token) => ApplyPlugin(root, await AgentConfigurationJson.ReadSettingsAsync(reader, settings, token)));
 
-    public static async Task<bool> HasPluginRegistrationAsync(IEnumerable<string> settings, CancellationToken cancellationToken)
-    {
-        var reader = new AgentConfigurationJson.ReadContext();
-        foreach (var path in settings)
-        {
-            if (await reader.ReadOptionalAsync(path, cancellationToken) is { } config && HasPlugin(config))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool HasPlugin(JsonObject root)
-        => AgentConfigurationJson.OptionalObject(root, "enabledPlugins") is { } plugins &&
-            AgentConfigurationJson.Boolean(plugins, PluginName) is true;
-
     private static AgentConfigurationEdit ApplyPlugin(JsonObject root, IReadOnlyList<JsonObject> settings)
     {
         JsonObject? selectedSource = null;

@@ -81,7 +81,6 @@ eng/Version.Details.xml
 .github/workflows/update-azure-vm-sizes.yml
 .github/workflows/update-ai-foundry-models.yml
 .github/workflows/update-nix-cli-flake.yml
-.github/workflows/update-aspire-skills-bundle.yml
 .github/workflows/update-dependencies.yml
 .github/workflows/auto-rerun-transient-ci-failures.*
 

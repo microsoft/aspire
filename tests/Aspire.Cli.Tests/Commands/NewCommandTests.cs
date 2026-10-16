@@ -4,7 +4,6 @@
 using System.Globalization;
 using System.Xml.Linq;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Commands;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -2336,7 +2335,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandNonInteractive_WithClient_InstallsBundledSkills()
+    public async Task NewCommandNonInteractive_WithClient_RegistersNativeSkills()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
@@ -2350,17 +2349,15 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --agents copilot --aspire-skills bundled");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --agents copilot --aspire-skills native");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
-        var aspireSkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
-        Assert.True(File.Exists(aspireSkillPath), $"Expected aspire skill file at {aspireSkillPath}");
-
-        var aspireifySkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
-        Assert.True(File.Exists(aspireifySkillPath), $"Expected bundled aspireify skill file at {aspireifySkillPath}");
+        var settingsPath = Path.Combine(outputDir, ".github", "copilot", "settings.json");
+        Assert.True(File.Exists(settingsPath), $"Expected native Aspire registration at {settingsPath}");
+        Assert.Empty(Directory.EnumerateFiles(outputDir, "SKILL.md", SearchOption.AllDirectories));
     }
 
     [Fact]
@@ -2497,9 +2494,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(capturedOutputPath);
         Assert.Contains("my-project", capturedOutputPath);
 
-        // Agent init runs by default after project creation
-        var skillPath = Path.Combine(capturedOutputPath, ".agents", "skills", "aspire", "SKILL.md");
-        Assert.True(File.Exists(skillPath));
+        // Agent init runs by default after project creation using native registration.
+        var settingsPath = Path.Combine(capturedOutputPath, ".github", "copilot", "settings.json");
+        Assert.True(File.Exists(settingsPath));
+        Assert.False(File.Exists(Path.Combine(capturedOutputPath, ".agents", "skills", "aspire", "SKILL.md")));
     }
 
     [Fact]
@@ -3263,7 +3261,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandAgentInit_IncludesAspireifyAndDoesNotOfferMcpServer()
+    public async Task NewCommandAgentInit_RegistersNativeSkillsAndDoesNotOfferMcpServer()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService
@@ -3292,14 +3290,13 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             [SharedCommandStrings.PromptRunAgentInit, McpCommandStrings.InitCommand_ConfigurePlaywrightPrompt, AgentCommandStrings.InitCommand_ConfigureDotnetInspectPrompt],
             interactionService.BooleanPromptCalls.Select(call => call.PromptText));
-        var aspireifySkillPath = Path.Combine(
+        var settingsPath = Path.Combine(
             workspace.WorkspaceRoot.FullName,
             "output",
-            ".agents",
-            "skills",
-            CommonAgentApplicators.AspireifySkillName,
-            "SKILL.md");
-        Assert.True(File.Exists(aspireifySkillPath));
+            ".github",
+            "copilot",
+            "settings.json");
+        Assert.True(File.Exists(settingsPath));
     }
 
     [Fact]
@@ -3323,9 +3320,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // Agent init should not have run — no skill files should exist
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
-        Assert.False(File.Exists(skillPath));
+        // Agent init should not have run.
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".github", "copilot", "settings.json");
+        Assert.False(File.Exists(settingsPath));
     }
 
     [Fact]
@@ -3350,11 +3347,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // Agent init should have run — default skill files should exist
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
-        Assert.True(File.Exists(skillPath));
-        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
-        Assert.True(File.Exists(aspireifySkillPath));
+        // Agent init should have run with native registration as the default.
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".github", "copilot", "settings.json");
+        Assert.True(File.Exists(settingsPath));
     }
 
     [Fact]
@@ -3379,11 +3374,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // Default is to run agent init
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
-        Assert.True(File.Exists(skillPath));
-        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
-        Assert.True(File.Exists(aspireifySkillPath));
+        // Default is to run agent init with native registration.
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".github", "copilot", "settings.json");
+        Assert.True(File.Exists(settingsPath));
     }
 
     [Fact]
@@ -3399,20 +3392,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var result = provider.GetRequiredService<NewCommand>().Parse(
-            "new aspire-empty --name TestApp --output ./output --agents claude --scope global --aspire-skills bundled");
+            "new aspire-empty --name TestApp --output ./output --agents claude --scope global --aspire-skills native");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        var bundle = Assert.IsType<AspireSkillsBundle>(
-            (await provider.GetRequiredService<IAspireSkillsInstaller>().InstallAsync(CancellationToken.None)).Bundle);
-        var expectedFiles = new List<string>();
-        foreach (var skill in bundle.GetSkillDefinitions())
-        {
-            expectedFiles.AddRange((await bundle.GetSkillFilesAsync(skill, CancellationToken.None))
-                .Select(file => Path.Combine(homeDirectory.FullName, ".claude", "skills", skill.Name, file.RelativePath)));
-        }
-        Assert.Equal(expectedFiles.Order(), Directory.EnumerateFiles(homeDirectory.FullName, "*", SearchOption.AllDirectories).Order());
+        Assert.Equal(
+            [Path.Combine(homeDirectory.FullName, ".claude", "settings.json")],
+            Directory.EnumerateFiles(homeDirectory.FullName, "*", SearchOption.AllDirectories));
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
-        Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".claude", "skills")));
-        Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
+        Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".claude")));
+        Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents")));
         Assert.False(File.Exists(Path.Combine(outputDirectory, ".mcp.json")));
         Assert.False(File.Exists(Path.Combine(outputDirectory, ".vscode", "mcp.json")));
     }

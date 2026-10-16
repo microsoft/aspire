@@ -9,21 +9,6 @@ namespace Aspire.Cli.Agents;
 internal static class CommonAgentApplicators
 {
     /// <summary>
-    /// The name of the Aspire skill.
-    /// </summary>
-    internal const string AspireSkillName = "aspire";
-
-    /// <summary>
-    /// The name of the Aspire deployment skill.
-    /// </summary>
-    internal const string AspireDeploymentSkillName = "aspire-deployment";
-
-    /// <summary>
-    /// The name of the Aspireify skill.
-    /// </summary>
-    internal const string AspireifySkillName = "aspireify";
-
-    /// <summary>
     /// The name of the dotnet-inspect skill.
     /// </summary>
     internal const string DotnetInspectSkillName = "dotnet-inspect";

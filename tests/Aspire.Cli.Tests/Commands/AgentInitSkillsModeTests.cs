@@ -3,7 +3,6 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Resources;
@@ -22,21 +21,21 @@ public class AgentInitSkillsModeTests(ITestOutputHelper output)
     [InlineData("mcp init")]
     [InlineData("new aspire-empty")]
     [InlineData("init")]
-    public void SourceMode_IsNamedExclusiveAndDefaultsToBundled(string command)
+    public void SourceMode_IsNamedExclusiveAndDefaultsToNative(string command)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(output);
         using var provider = CliTestHelper.CreateServiceCollection(workspace, output).BuildServiceProvider();
         var root = provider.GetRequiredService<RootCommand>();
         var defaults = root.Parse(command);
         Assert.Empty(defaults.Errors);
-        Assert.Equal(AspireSkillsMode.Bundled, defaults.GetValue<AspireSkillsMode>("--aspire-skills"));
-        foreach (var mode in new[] { AspireSkillsMode.Bundled, AspireSkillsMode.Native, AspireSkillsMode.None })
+        Assert.Equal(AspireSkillsMode.Native, defaults.GetValue<AspireSkillsMode>("--aspire-skills"));
+        foreach (var mode in new[] { AspireSkillsMode.Native, AspireSkillsMode.None })
         {
             var result = root.Parse($"{command} --aspire-skills {mode.ToString().ToUpperInvariant()}");
             Assert.Empty(result.Errors);
             Assert.Equal(mode, result.GetValue<AspireSkillsMode>("--aspire-skills"));
         }
-        foreach (var options in new[] { "--aspire-skills", "--aspire-skills true", "--aspire-skills all", "--aspire-skills 0", "--aspire-skills native,bundled", "--skills aspire" })
+        foreach (var options in new[] { "--aspire-skills", "--aspire-skills true", "--aspire-skills all", "--aspire-skills bundled", "--aspire-skills 0", "--aspire-skills native,none", "--skills aspire" })
         {
             Assert.NotEmpty(root.Parse($"{command} {options}").Errors);
         }
@@ -69,7 +68,7 @@ public class AgentInitSkillsModeTests(ITestOutputHelper output)
     [InlineData("claude", "global", ".claude/settings.json")]
     [InlineData("opencode", "project", "opencode.jsonc")]
     [InlineData("opencode", "global", ".config/opencode/opencode.jsonc")]
-    public async Task Native_RegistersSelectedUndetectedClientsWithoutBundleOrMcp(string client, string scope, string relativePath)
+    public async Task Native_RegistersSelectedUndetectedClientsWithoutMcp(string client, string scope, string relativePath)
     {
         using var context = new AgentConfigurationTestContext(output);
         var messages = new List<string>();
@@ -79,8 +78,6 @@ public class AgentInitSkillsModeTests(ITestOutputHelper output)
         {
             options.CliExecutionContextFactory = _ => context.ExecutionContext;
             options.InteractionServiceFactory = _ => interaction;
-            options.AspireSkillsInstallerFactory = _ => new FakeAspireSkillsInstaller(context.ExecutionContext,
-                AspireSkillsInstallResult.Failed("Native mode must not acquire a bundle."));
         });
         services.AddSingleton<IEnvironment>(context.Environment);
         services.AddSingleton<IOpenCodeCliRunner>(runner);
@@ -102,22 +99,12 @@ public class AgentInitSkillsModeTests(ITestOutputHelper output)
         Assert.Empty(interaction.DisplayedErrors);
     }
 
-    [Theory]
-    [InlineData("native", "copied")]
-    [InlineData("bundled", "native")]
-    [InlineData("bundled", "malformed")]
-    public async Task ConflictingSources_StopBeforeIndependentAssetsOrHooks(string mode, string existing)
+    [Fact]
+    public async Task LocalCopiedSkills_StopBeforeIndependentAssetsOrHooks()
     {
         using var context = new AgentConfigurationTestContext(output);
-        var path = existing == "copied"
-            ? Path.Combine(context.Project.FullName, ".agents", "skills", "aspire", "SKILL.md")
-            : Path.Combine(context.CopilotDirectory, "settings.json");
-        var content = existing switch
-        {
-            "copied" => "My customized Aspire instructions.",
-            "native" => """{"enabledPlugins":{"aspire@aspire-skills":true}}""",
-            _ => "{broken"
-        };
+        var path = Path.Combine(context.Project.FullName, ".agents", "skills", "aspire", "SKILL.md");
+        const string content = "My customized Aspire instructions.";
         await AgentConfigurationTestContext.WriteAsync(path, content);
         var hooks = new TestTelemetryHookConfigurator();
         var services = CliTestHelper.CreateServiceCollection(context.Workspace, output, options =>
@@ -131,7 +118,7 @@ public class AgentInitSkillsModeTests(ITestOutputHelper output)
         var before = Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order().ToArray();
 
         var result = command.Parse(
-            $"agent init --agents copilot --scope global --aspire-skills {mode} --mcp --playwright --dotnet-inspect");
+            "agent init --agents copilot --scope global --aspire-skills native --mcp --playwright --dotnet-inspect");
 
         Assert.Equal(CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(content, await File.ReadAllTextAsync(path));
