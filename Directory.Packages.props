@@ -184,8 +184,8 @@
     <PackageVersion Include="Microsoft.Signed.Wix" Version="$(MicrosoftSignedWixVersion)" />
     <PackageVersion Include="Microsoft.DotNet.Build.Tasks.Archives" Version="$(MicrosoftDotNetBuildTasksArchivesVersion)" />
     <PackageVersion Include="Microsoft.DotNet.GenAPI.Task" Version="9.0.103-servicing.25065.25" />
-    <PackageVersion Include="Microsoft.TemplateEngine.Edge" Version="11.0.100-rc.1.26425.128" />
-    <PackageVersion Include="Microsoft.TemplateEngine.Orchestrator.RunnableProjects" Version="11.0.100-rc.1.26425.128" />
+    <PackageVersion Include="Microsoft.TemplateEngine.Edge" Version="11.0.100-rc.2.26504.105" />
+    <PackageVersion Include="Microsoft.TemplateEngine.Orchestrator.RunnableProjects" Version="11.0.100-rc.2.26504.105" />
     <PackageVersion Include="System.CommandLine" Version="2.0.12" />
     <!-- test dependencies shared with playground -->
     <PackageVersion Include="xunit.v3.assert" Version="$(XunitV3Version)" />
@@ -312,20 +312,23 @@
     <PackageVersion Update="Microsoft.Extensions.Features" Version="$(MicrosoftExtensionsFeaturesVersion)" />
     <PackageVersion Update="Microsoft.Extensions.FileProviders.Embedded" Version="$(MicrosoftExtensionsFileProvidersEmbeddedVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreSignalRClientVersion)" />
-    <PackageVersion Update="System.IO.Hashing" Version="11.0.0-rc.1.26425.128" />
-    <PackageVersion Update="Microsoft.Data.Sqlite.Core" Version="11.0.0-rc.1.26425.128" />
+    <PackageVersion Update="System.IO.Hashing" Version="11.0.0-rc.2.26504.105" />
+    <PackageVersion Update="Microsoft.Data.Sqlite.Core" Version="11.0.0-rc.2.26504.105" />
     <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="11.0.0-rc.1.1" />
   </ItemGroup>
 
   <!-- The template engine uses the .NET 11 SDK dependency line. Keep these pins scoped to
        the build tool and its test host, not the shipping projects that use stable NuGet APIs.
-       Its NuGet 7.11.0-rc.42628 dependencies were not published; use the available tooling
-       version already consumed by the CLI instead of NuGet's approximate-match fallback. -->
+       Its NuGet 8.0.0-rc.605 dependencies were not published; use the available 8.1 tooling
+       version instead of NuGet's approximate-match fallback. -->
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'GenerateTemplateManifest' or '$(MSBuildProjectName)' == 'Infrastructure.Tests'">
-    <PackageVersion Include="NuGet.Configuration" Version="$(NuGetPackageVersionForCli)" />
-    <PackageVersion Include="NuGet.Credentials" Version="$(NuGetPackageVersionForCli)" />
-    <PackageVersion Include="NuGet.Versioning" Version="$(NuGetPackageVersionForCli)" />
-    <PackageVersion Update="NuGet.Protocol" Version="$(NuGetPackageVersionForCli)" />
+    <PackageVersion Include="NuGet.Common" Version="$(NuGetPackageVersionForTemplateManifest)" />
+    <PackageVersion Include="NuGet.Configuration" Version="$(NuGetPackageVersionForTemplateManifest)" />
+    <PackageVersion Include="NuGet.Credentials" Version="$(NuGetPackageVersionForTemplateManifest)" />
+    <PackageVersion Include="NuGet.Frameworks" Version="$(NuGetPackageVersionForTemplateManifest)" />
+    <PackageVersion Include="NuGet.Packaging" Version="$(NuGetPackageVersionForTemplateManifest)" />
+    <PackageVersion Include="NuGet.Versioning" Version="$(NuGetPackageVersionForTemplateManifest)" />
+    <PackageVersion Update="NuGet.Protocol" Version="$(NuGetPackageVersionForTemplateManifest)" />
     <PackageVersion Update="System.Security.Cryptography.Pkcs" Version="$(SystemSecurityCryptographyPkcsVersion)" />
   </ItemGroup>
 </Project>

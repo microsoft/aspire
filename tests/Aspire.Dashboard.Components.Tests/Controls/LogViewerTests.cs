@@ -14,6 +14,33 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 
 public class LogViewerTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(1)]
+    [InlineData(5)]
+    public async Task LogViewer_SmallInitialLoad_DoesNotLimitFirstAppendedBatch(int initialCount)
+    {
+        SetupLogViewerServices();
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
+
+        var logEntries = CreateLogEntries(Enumerable.Range(1, initialCount).Select(number => $"Log {number}").ToArray());
+        var cut = Render<LogViewer>(builder => builder.Add(p => p.LogEntries, logEntries));
+        cut.WaitForAssertion(() => Assert.Equal(initialCount, cut.FindAll(".log-content").Count));
+        var virtualize = cut.FindComponent<Virtualize<LogEntry>>().Instance;
+
+        var result = await cut.InvokeAsync(() =>
+        {
+            foreach (var number in Enumerable.Range(initialCount + 1, 385))
+            {
+                logEntries.InsertSorted(LogEntry.Create(timestamp: null, logMessage: $"Log {number}", isErrorMessage: false));
+            }
+
+            return virtualize.ItemsProvider!(new ItemsProviderRequest(0, initialCount + 385, CancellationToken.None)).AsTask();
+        });
+
+        Assert.Equal(initialCount + 385, result.TotalItemCount);
+        Assert.Equal(logEntries.GetEntries(), result.Items);
+    }
+
     [Fact]
     public async Task LogViewer_EndAnchorLimitsInitialResultThenReturnsAllEntries()
     {

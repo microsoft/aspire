@@ -15,8 +15,15 @@ internal sealed class EndAnchorItemsProviderState
 
     public (T[] Items, int TotalItemCount)? GetInitialResult<T>(int startIndex, IEnumerable<T> items, int totalItemCount)
     {
-        if (_hasReturnedInitialResult || startIndex != 0 || totalItemCount <= InitialItemCount)
+        if (_hasReturnedInitialResult || startIndex != 0)
         {
+            return null;
+        }
+
+        if (totalItemCount <= InitialItemCount)
+        {
+            // A small nonempty initial result already establishes the End anchor for later appends.
+            _hasReturnedInitialResult = totalItemCount > 0;
             return null;
         }
 
