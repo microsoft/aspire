@@ -59,6 +59,65 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
     #region construct_aspire_cli_url
 
     [Theory]
+    [InlineData("linux-x64", "tar.gz", false, "public", "")]
+    [InlineData("win-arm64", "zip", true, "public-checksums", ".sha512")]
+    public async Task ConstructAspireCliUrl_StableVersionWithBuildPin_UsesPinnedBuild(
+        string rid, string extension, bool checksum, string container, string suffix)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            $"construct_aspire_cli_url '13.6.1' '' '{rid}' '{extension}' '{checksum.ToString().ToLowerInvariant()}' '13.6.1-preview.1.26506.6'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal(
+            $"https://ci.dot.net/{container}/aspire/13.6.1-preview.1.26506.6/aspire-cli-{rid}-13.6.1.{extension}{suffix}",
+            result.Output.Trim());
+    }
+
+    [Theory]
+    [InlineData("https://ci.dot.net/public/aspire/latest/aspire-cli-linux-x64-latest.tar.gz")]
+    [InlineData("https://ci.dot.net/public/aspire/17.0.0-preview.1/aspire-cli-win-x64-17.0.0-preview.1.zip")]
+    [InlineData("https://example.invalid/aspire-cli-linux-x64-17.0.0-preview.1.tar.gz")]
+    [InlineData("")]
+    public async Task ResolveAspireCliVersion_UnexpectedRedirect_FailsWithoutAliasFallback(string location)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            $$"""
+            secure_curl() { printf 'HTTP/1.1 301\r\nLocation: {{location}}\r\n'; }
+            resolve_aspire_cli_version dev linux-x64 tar.gz
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Could not resolve", result.Output);
+    }
+
+    [Fact]
+    public async Task ResolveAspireCliVersion_RequestFails_PropagatesFailure()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            "secure_curl() { return 22; }; resolve_aspire_cli_version dev linux-x64 tar.gz",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Theory]
     [InlineData("release", "linux-x64", "tar.gz", "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-linux-x64.tar.gz")]
     [InlineData("dev", "linux-x64", "tar.gz", "https://aka.ms/dotnet/9/aspire/daily/aspire-cli-linux-x64.tar.gz")]
     [InlineData("staging", "linux-x64", "tar.gz", "https://aka.ms/dotnet/9/aspire/rc/daily/aspire-cli-linux-x64.tar.gz")]

@@ -113,14 +113,24 @@ internal static class AspireCliShellCommandHelpers
 
     internal static string GetInstallScriptArgs(CliInstallStrategy strategy)
     {
-        if (strategy.Quality is not null)
+        if (strategy.Version is null)
         {
-            return $" --quality {strategy.Quality.Value.ToString().ToLowerInvariant()}";
+            return strategy.Quality is not null
+                ? $" --quality {strategy.Quality.Value.ToString().ToLowerInvariant()}"
+                : "";
         }
 
-        return strategy.Version is not null
-            ? $" --version {strategy.Version}"
-            : "";
+        var args = $" --version {strategy.Version}";
+        if (strategy.BuildVersion is not null)
+        {
+            args += $" --build-version {strategy.BuildVersion}";
+            if (strategy.Quality is not null)
+            {
+                args += $" --quality {strategy.Quality.Value.ToString().ToLowerInvariant()}";
+            }
+        }
+
+        return args;
     }
 
     internal static string GetPullRequestInstallArgs(int prNumber)
@@ -250,6 +260,12 @@ internal sealed class CliInstallStrategy
     public string? Version { get; }
 
     /// <summary>
+    /// For InstallScript: the immutable artifact build directory returned by --resolve-only.
+    /// This can differ from the CLI's product version for stable-shaped staging builds.
+    /// </summary>
+    public string? BuildVersion { get; }
+
+    /// <summary>
     /// For LocalArchive: the directory containing pre-downloaded CLI archives and NuGet packages.
     /// </summary>
     public string? ArchiveDir { get; }
@@ -295,12 +311,13 @@ internal sealed class CliInstallStrategy
         NupkgSourcePath is null &&
         (IncludePrerelease || IsPrereleaseVersion(Version));
 
-    private CliInstallStrategy(CliInstallMode mode, string? archivePath = null, CliInstallQuality? quality = null, string? version = null, string? archiveDir = null, string? nupkgSourcePath = null, bool includePrerelease = false, string? expectedVersion = null)
+    private CliInstallStrategy(CliInstallMode mode, string? archivePath = null, CliInstallQuality? quality = null, string? version = null, string? archiveDir = null, string? nupkgSourcePath = null, bool includePrerelease = false, string? expectedVersion = null, string? buildVersion = null)
     {
         Mode = mode;
         ArchivePath = archivePath;
         Quality = quality;
         Version = version;
+        BuildVersion = buildVersion;
         ArchiveDir = archiveDir;
         NupkgSourcePath = nupkgSourcePath;
         IncludePrerelease = includePrerelease;
@@ -339,14 +356,29 @@ internal sealed class CliInstallStrategy
     /// <summary>
     /// Creates an InstallScript strategy targeting a specific version.
     /// </summary>
-    public static CliInstallStrategy FromVersion(string version)
+    public static CliInstallStrategy FromVersion(string version, string? buildVersion = null, CliInstallQuality? quality = null)
     {
         if (!CliPackageDiscovery.IsValidVersion(version))
         {
             throw new ArgumentException($"Invalid version format: '{version}'. Must contain only alphanumeric characters, dots, and dashes.", nameof(version));
         }
 
-        return new CliInstallStrategy(CliInstallMode.InstallScript, version: version);
+        if (buildVersion is not null && !CliPackageDiscovery.IsValidVersion(buildVersion))
+        {
+            throw new ArgumentException($"Invalid build version format: '{buildVersion}'. Must contain only alphanumeric characters, dots, and dashes.", nameof(buildVersion));
+        }
+
+        if (quality is not null && buildVersion is null)
+        {
+            throw new ArgumentException("Specifying both version and quality requires a resolved build version.", nameof(buildVersion));
+        }
+
+        // The installer accepts v/V-prefixed stable versions but the CLI reports the normalized product version.
+        var expectedVersion = Regex.IsMatch(version, @"^[vV][0-9]+\.[0-9]+\.[0-9]+$")
+            ? version[1..]
+            : version;
+
+        return new CliInstallStrategy(CliInstallMode.InstallScript, version: version, buildVersion: buildVersion, quality: quality, expectedVersion: expectedVersion);
     }
 
     /// <summary>
@@ -404,8 +436,15 @@ internal sealed class CliInstallStrategy
     /// <summary>
     /// Creates a DotnetTool strategy for a published NuGet feed.
     /// </summary>
-    public static CliInstallStrategy FromPublishedDotnetToolFeed(string? version, CliInstallQuality? quality)
+    public static CliInstallStrategy FromPublishedDotnetToolFeed(string? version, CliInstallQuality? quality, string? buildVersion)
     {
+        // A complete product/build pair pins native archives, not published tool packages.
+        // Stable-shaped staging products (e.g. 17.0.0 in a 17.0.0-preview.* build) may not exist on NuGet.org.
+        if (!string.IsNullOrEmpty(version) && !string.IsNullOrEmpty(buildVersion))
+        {
+            version = null;
+        }
+
         var includePrerelease = ShouldIncludePrereleaseForPublishedDotnetTool(version, quality);
         return FromDotnetTool(version, includePrerelease);
     }
@@ -449,13 +488,14 @@ internal sealed class CliInstallStrategy
     ///   1. ASPIRE_E2E_ARCHIVE → LocalHive
     ///   2. ASPIRE_E2E_DOTNET_TOOL_SOURCE → DotnetTool with local nupkg source
     ///   3. ASPIRE_E2E_DOTNET_TOOL=true → DotnetTool from published feed
-    ///   4. ASPIRE_E2E_QUALITY → InstallScript with quality
-    ///   5. ASPIRE_E2E_VERSION → InstallScript with version
-    ///   6. ASPIRE_E2E_PREINSTALLED → Preinstalled
-    ///   7. ASPIRE_E2E_CLI_ARCHIVE_DIR → LocalArchive
-    ///   8. GITHUB_PR_NUMBER + GITHUB_PR_HEAD_SHA → PullRequest
-    ///   9. CI/GITHUB_ACTIONS → InstallScript (dev/daily)
-    ///  10. Local fallback → InstallScript (latest GA)
+    ///   4. ASPIRE_E2E_VERSION + ASPIRE_E2E_BUILD_VERSION → InstallScript with a resolved build pin (and optional quality)
+    ///   5. ASPIRE_E2E_QUALITY → InstallScript with quality
+    ///   6. ASPIRE_E2E_VERSION → InstallScript with version
+    ///   7. ASPIRE_E2E_PREINSTALLED → Preinstalled
+    ///   8. ASPIRE_E2E_CLI_ARCHIVE_DIR → LocalArchive
+    ///   9. GITHUB_PR_NUMBER + GITHUB_PR_HEAD_SHA → PullRequest
+    ///  10. CI/GITHUB_ACTIONS → InstallScript (dev/daily)
+    ///  11. Local fallback → InstallScript (latest GA)
     /// </summary>
     /// <param name="log">Optional log callback (e.g. <c>output.WriteLine</c>) for tracing the detection logic.</param>
     public static CliInstallStrategy Detect(Action<string>? log = null)
@@ -487,20 +527,33 @@ internal sealed class CliInstallStrategy
         {
             var toolVersion = Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION");
             var quality = GetQualityFromEnvironment();
-            var strategy = FromPublishedDotnetToolFeed(toolVersion, quality);
-            var versionDescription = toolVersion ?? (strategy.IncludePrerelease ? "(latest prerelease)" : "(latest stable)");
+            var toolBuildVersion = Environment.GetEnvironmentVariable("ASPIRE_E2E_BUILD_VERSION");
+            var strategy = FromPublishedDotnetToolFeed(toolVersion, quality, toolBuildVersion);
+            var versionDescription = strategy.Version ?? (strategy.IncludePrerelease ? "(latest prerelease)" : "(latest stable)");
             log?.Invoke($"  → Selected: DotnetTool published feed (ASPIRE_E2E_DOTNET_TOOL={dotnetTool}, version={versionDescription})");
             return strategy;
         }
 
         var qualityStr = GetQualityFromEnvironment();
+        var version = Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION");
+        var buildVersion = Environment.GetEnvironmentVariable("ASPIRE_E2E_BUILD_VERSION");
+        if (!string.IsNullOrEmpty(buildVersion) && string.IsNullOrEmpty(version))
+        {
+            throw new ArgumentException("ASPIRE_E2E_BUILD_VERSION requires ASPIRE_E2E_VERSION.");
+        }
+
+        if (!string.IsNullOrEmpty(version) && !string.IsNullOrEmpty(buildVersion))
+        {
+            log?.Invoke($"  → Selected: InstallScript version={version}, build={buildVersion}, quality={qualityStr}");
+            return FromVersion(version, buildVersion, qualityStr);
+        }
+
         if (qualityStr is not null)
         {
             log?.Invoke($"  → Selected: InstallScript quality={qualityStr}");
             return FromQuality(qualityStr.Value);
         }
 
-        var version = Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION");
         if (!string.IsNullOrEmpty(version))
         {
             log?.Invoke($"  → Selected: InstallScript version={version}");
@@ -614,8 +667,8 @@ internal sealed class CliInstallStrategy
             CliInstallMode.Preinstalled => "Preinstalled (~/.aspire)",
             CliInstallMode.PullRequest => $"PullRequest (PR #{Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER")})",
             CliInstallMode.LocalArchive => $"LocalArchive ({ArchiveDir})",
+            CliInstallMode.InstallScript when Version is not null => $"InstallScript ({AspireCliShellCommandHelpers.GetInstallScriptArgs(this).TrimStart()})",
             CliInstallMode.InstallScript when Quality is not null => $"InstallScript (--quality {Quality.Value.ToString().ToLowerInvariant()})",
-            CliInstallMode.InstallScript when Version is not null => $"InstallScript (--version {Version})",
             CliInstallMode.InstallScript => "InstallScript (latest GA)",
             CliInstallMode.DotnetTool when NupkgSourcePath is not null => $"DotnetTool (local: {NupkgSourcePath}, --version {Version})",
             CliInstallMode.DotnetTool when Version is not null => $"DotnetTool (--version {Version})",

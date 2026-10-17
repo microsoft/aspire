@@ -18,6 +18,9 @@ readonly RESET='\033[0m'
 # Variables (defaults set after parsing arguments)
 INSTALL_PATH=""
 VERSION=""
+BUILD_VERSION=""
+RESOLVED_VERSION=""
+RESOLVED_BUILD_VERSION=""
 QUALITY=""
 OS=""
 ARCH=""
@@ -28,6 +31,7 @@ SHOW_HELP=false
 VERBOSE=false
 KEEP_ARCHIVE=false
 DRY_RUN=false
+RESOLVE_ONLY=false
 INSTALL_EXTENSION=false
 USE_INSIDERS=false
 SKIP_PATH=false
@@ -51,6 +55,8 @@ DESCRIPTION:
     The default quality is `${DEFAULT_QUALITY}`.
 
     Pass a specific version to get CLI for that version.
+    To reuse a resolved build, pass version and buildVersion from --resolve-only
+    as --version and --build-version. Quality may accompany this pair to retain the install channel.
 
 USAGE:
     ./get-aspire-cli.sh [OPTIONS]
@@ -58,6 +64,8 @@ USAGE:
     -i, --install-path PATH     Directory to install the CLI (default: $HOME/.aspire/bin)
     -q, --quality QUALITY       Quality to download (default: ${DEFAULT_QUALITY}). Supported values: dev, staging, release
     --version VERSION           Version of the Aspire CLI to download (default: unset)
+    --build-version VERSION     Artifact build directory for --version (from --resolve-only)
+    --resolve-only              Print JSON with version and buildVersion; do not install
     --os OS                     Operating system (default: auto-detect)
     --arch ARCH                 Architecture (default: auto-detect)
     --install-extension         Install VS Code extension along with the CLI
@@ -117,6 +125,18 @@ parse_args() {
                 fi
                 VERSION="$2"
                 shift 2
+                ;;
+            --build-version)
+                if [[ $# -lt 2 || -z "$2" ]]; then
+                    say_error "Option '$1' requires a non-empty value"
+                    exit 1
+                fi
+                BUILD_VERSION="$2"
+                shift 2
+                ;;
+            --resolve-only)
+                RESOLVE_ONLY=true
+                shift
                 ;;
             -q|--quality)
                 if [[ $# -lt 2 || -z "$2" ]]; then
@@ -1025,6 +1045,7 @@ construct_aspire_cli_url() {
     local rid="$3"
     local extension="$4"
     local checksum="${5:-false}"
+    local build_version="${6:-}"
     local base_url
     local filename
 
@@ -1054,6 +1075,9 @@ construct_aspire_cli_url() {
         printf "${base_url}/aspire-cli-${rid}.${extension}"
     else
         if is_stable_version "$version"; then
+            version=$(normalize_stable_version "$version")
+        fi
+        if [[ -z "$build_version" ]] && is_stable_version "$version"; then
             local normalized_version
             normalized_version=$(normalize_stable_version "$version")
             base_url="https://github.com/microsoft/aspire/releases/download/v${normalized_version}"
@@ -1068,8 +1092,36 @@ construct_aspire_cli_url() {
             base_url="https://ci.dot.net/public/aspire"
         fi
 
-        printf "${base_url}/${version}/aspire-cli-${rid}-${version}.${extension}"
+        printf "%s/%s/aspire-cli-%s-%s.%s" "$base_url" "${build_version:-$version}" "$rid" "$version" "$extension"
     fi
+}
+
+# Resolve the alias once, before requesting either archive or checksum. Official
+# archives can have different build-directory and product versions, for example:
+#   /public/aspire/13.6.1-preview.1.26506.6/aspire-cli-linux-x64-13.6.1.tar.gz
+# Retain both so staging installs never accidentally switch to GitHub GA assets.
+resolve_aspire_cli_version() {
+    local quality="$1" rid="$2" extension="$3"
+    local alias_url headers location pattern
+    alias_url=$(construct_aspire_cli_url "" "$quality" "$rid" "$extension") || return 1
+    headers=$(secure_curl "$alias_url" /dev/null 60 "$USER_AGENT" 3 HEAD) || return 1
+    pattern="^https://ci[.]dot[.]net/public/aspire/([^/]+)/aspire-cli-${rid}-([^/]+)[.]${extension//./[.]}$"
+
+    while IFS= read -r location; do
+        location="${location%$'\r'}"
+        if [[ "$location" =~ $pattern ]]; then
+            RESOLVED_BUILD_VERSION="${BASH_REMATCH[1]}"
+            RESOLVED_VERSION="${BASH_REMATCH[2]}"
+            if [[ "$RESOLVED_BUILD_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ &&
+                  "$RESOLVED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+                return 0
+            fi
+            break
+        fi
+    done < <(printf '%s\n' "$headers" | sed -n 's/^[Ll][Oo][Cc][Aa][Tt][Ii][Oo][Nn]:[[:space:]]*//p')
+
+    say_error "Could not resolve a versioned Aspire CLI archive for quality '$quality'."
+    return 1
 }
 
 # Function to download VS Code extension
@@ -1170,6 +1222,7 @@ download_and_install_archive() {
     local os arch runtimeIdentifier url filename checksum_url checksum_filename extension
     local cli_exe cli_path
     local download_source=""
+    local download_version="$VERSION" download_build_version="$BUILD_VERSION"
 
     # Detect OS and architecture if not provided
     if [[ -z "$OS" ]]; then
@@ -1201,11 +1254,18 @@ download_and_install_archive() {
         extension="tar.gz"
     fi
 
+    if [[ -z "$download_version" && "$DRY_RUN" != true ]]; then
+        resolve_aspire_cli_version "$QUALITY" "$runtimeIdentifier" "$extension" || return 1
+        download_version="$RESOLVED_VERSION"
+        download_build_version="$RESOLVED_BUILD_VERSION"
+        say_info "Resolved Aspire CLI version: $download_version (build $download_build_version)"
+    fi
+
     # Construct the URLs using the new function
-    if ! url=$(construct_aspire_cli_url "$VERSION" "$QUALITY" "$runtimeIdentifier" "$extension"); then
+    if ! url=$(construct_aspire_cli_url "$download_version" "$QUALITY" "$runtimeIdentifier" "$extension" false "$download_build_version"); then
         return 1
     fi
-    if ! checksum_url=$(construct_aspire_cli_url "$VERSION" "$QUALITY" "$runtimeIdentifier" "$extension" "true"); then
+    if ! checksum_url=$(construct_aspire_cli_url "$download_version" "$QUALITY" "$runtimeIdentifier" "$extension" true "$download_build_version"); then
         return 1
     fi
 
@@ -1256,7 +1316,9 @@ download_and_install_archive() {
         say_info "Installing VS Code extension"
 
         if test_vscode_cli; then
-            if extension_archive=$(download_aspire_extension "$temp_dir" "$VERSION" "$QUALITY"); then
+            # The extension has its own version, so retain its quality alias
+            # instead of using the CLI archive's version pin.
+            if extension_archive=$(download_aspire_extension "$temp_dir" "" "$QUALITY"); then
                 if ! install_aspire_extension "$extension_archive"; then
                     say_warn "Failed to install VS Code extension"
                     say_warn "The CLI was installed successfully, but the extension installation failed"
@@ -1311,24 +1373,60 @@ main() {
         exit 0
     fi
 
-    # Validate that both --version and --quality are not provided together
-    if [[ -n "$VERSION" && -n "$QUALITY" ]]; then
+    # A resolved build pin may retain its quality for install-channel identity.
+    if [[ -n "$VERSION" && -n "$QUALITY" && -z "$BUILD_VERSION" ]]; then
         say_error "Cannot specify both --version and --quality. Use --version for a specific version or --quality for a quality level."
         say_info "Use --help for usage information."
         exit 1
     fi
 
+    if [[ -n "$BUILD_VERSION" && -z "$VERSION" ]]; then
+        say_error "--build-version requires --version."
+        exit 1
+    fi
+
+    if [[ -n "$BUILD_VERSION" && ! "$BUILD_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+        say_error "Invalid --build-version. Use the buildVersion returned by --resolve-only."
+        exit 1
+    fi
+
+    local requested_quality="$QUALITY"
     # Initialize default values after parsing arguments
     if [[ -z "$QUALITY" ]]; then
         # Default quality if not provided
         QUALITY="${DEFAULT_QUALITY}"
     fi
 
+    case "$QUALITY" in
+        dev|staging|release) ;;
+        *)
+            say_error "Unsupported quality '$QUALITY'. Supported values are: dev, staging, release."
+            exit 1
+            ;;
+    esac
+
     # Validate extension installation is only allowed with dev quality
     if [[ "$INSTALL_EXTENSION" == true && "$QUALITY" != "dev" ]]; then
         say_error "Extension installation is only supported with --quality dev. Current quality: $QUALITY"
         say_info "Use --help for usage information."
         exit 1
+    fi
+
+    if [[ "$RESOLVE_ONLY" == true ]]; then
+        if [[ "$DRY_RUN" == true || -n "$VERSION" ]]; then
+            say_error "--resolve-only requires a quality, not --version or --dry-run."
+            exit 1
+        fi
+        local resolve_os resolve_arch resolve_extension
+        resolve_os="${OS:-$(detect_os)}"
+        resolve_arch=$(get_cli_architecture_from_architecture "${ARCH:-<auto>}") || return 1
+        resolve_extension="tar.gz"
+        if [[ "$resolve_os" == "win" ]]; then
+            resolve_extension="zip"
+        fi
+        resolve_aspire_cli_version "$QUALITY" "$resolve_os-$resolve_arch" "$resolve_extension" || return 1
+        printf '{"version":"%s","buildVersion":"%s"}\n' "$RESOLVED_VERSION" "$RESOLVED_BUILD_VERSION"
+        return 0
     fi
 
     # Set default install path if not provided
@@ -1384,7 +1482,7 @@ main() {
         # An explicit version can come from any channel, so retain the archive's
         # baked identity when there was no quality route to author the channel.
         local sidecar_quality=""
-        if [[ -z "$VERSION" ]]; then
+        if [[ -z "$VERSION" || ( -n "$BUILD_VERSION" && -n "$requested_quality" ) ]]; then
             sidecar_quality="$QUALITY"
         fi
         write_install_sidecar "$INSTALL_PATH" "$sidecar_quality"

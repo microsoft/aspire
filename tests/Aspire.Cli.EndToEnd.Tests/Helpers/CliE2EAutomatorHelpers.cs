@@ -525,11 +525,13 @@ internal static class CliE2EAutomatorHelpers
         }
 
         // Run bash version comparison: get installed version, strip +commit build metadata, compare
+        // Format markers such as "CLI_VERSION_EXACT:13.6.1+commit" at execution time so the
+        // terminal matcher cannot mistake the echoed command for a successful version check.
         await auto.TypeAsync(
             $"VER=$(aspire --version 2>/dev/null) && BASE_VER=${{VER%%+*}} && " +
             $"[ \"$BASE_VER\" = \"{expectedVersion}\" ] && " +
-            $"echo \"CLI_VERSION_EXACT:$VER\" || " +
-            $"echo \"CLI_VERSION_MISMATCH:expected={expectedVersion} actual=$VER\"; " +
+            "printf 'CLI_VERSION_%s:%s\\n' EXACT \"$VER\" || " +
+            $"printf 'CLI_VERSION_%s:expected=%s actual=%s\\n' MISMATCH \"{expectedVersion}\" \"$VER\"; " +
             recordVersionCommand);
         await auto.EnterAsync();
 

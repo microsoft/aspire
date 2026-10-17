@@ -25,6 +25,8 @@ Supported Quality values:
 |------------------|-------|---------------------------------------------------|-----------------------|
 | `--install-path` | `-i`  | Directory to install the CLI                      | `$HOME/.aspire/bin`   |
 | `--version`      |       | Version of the Aspire CLI to download             | `9.0`                 |
+| `--build-version` |      | Artifact build directory paired with `--version` | unset                 |
+| `--resolve-only` |       | Print JSON `version` and `buildVersion` without installing | `false`      |
 | `--quality`      | `-q`  | Quality to download                               | `release`             |
 | `--os`           |       | Operating system (auto-detected if not specified) | auto-detect           |
 | `--arch`         |       | Architecture (auto-detected if not specified)     | auto-detect           |
@@ -38,11 +40,44 @@ Supported Quality values:
 |-----------------|---------------------------------------------------|--------------------------------------------------------------------|
 | `-InstallPath`  | Directory to install the CLI                      | `$HOME/.aspire/bin` (Unix) / `%USERPROFILE%\.aspire\bin` (Windows) |
 | `-Version`      | Version of the Aspire CLI to download             | `9.0`                                                              |
+| `-BuildVersion` | Artifact build directory paired with `-Version`  | unset                                                              |
+| `-ResolveOnly`  | Print JSON `version` and `buildVersion` without installing | `false`                                                   |
 | `-Quality`      | Quality to download                               | `release`                                                          |
 | `-OS`           | Operating system (auto-detected if not specified) | auto-detect                                                        |
 | `-Architecture` | Architecture (auto-detected if not specified)     | auto-detect                                                        |
 | `-KeepArchive`  | Keep downloaded archive files after installation  | `false`                                                            |
 | `-Help`         | Show help message                                 |                                                                    |
+
+### Reusing a resolved build
+
+Quality installs resolve the CLI archive once, then download that build's archive
+and SHA-512 checksum. To reuse the same build across installs, resolve once and
+pass both returned versions back to the script. The product version can differ
+from the artifact build directory, especially for stable-shaped staging builds.
+
+The Bash example uses `jq` to read the JSON:
+
+```bash
+resolved=$(./get-aspire-cli.sh --quality dev --resolve-only)
+./get-aspire-cli.sh --quality dev \
+  --version "$(jq -r '.version' <<< "$resolved")" \
+  --build-version "$(jq -r '.buildVersion' <<< "$resolved")"
+```
+
+```powershell
+$resolved = ./get-aspire-cli.ps1 -Quality dev -ResolveOnly | ConvertFrom-Json
+./get-aspire-cli.ps1 -Quality dev -Version $resolved.version -BuildVersion $resolved.buildVersion
+```
+
+Build version requires an explicit product version. Quality may accompany this
+pair to retain the install-channel identity without resolving the CLI alias
+again. Without a build pin, version and quality remain mutually exclusive.
+Explicit-version installs without a build pin retain their existing download
+routing. Checksum verification remains mandatory.
+
+VS Code extension versions are independent of CLI versions. Optional extension
+installation uses the requested dev quality alias; the CLI pin does not pin the
+extension.
 
 ## Install Path Parameter
 

@@ -18,6 +18,141 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
     private static readonly string s_scriptPath = ScriptPaths.ReleaseShell;
     private readonly ITestOutputHelper _testOutput = testOutput;
 
+    [Theory]
+    [InlineData("dev", "daily", "17.0.0-preview.1.26509.9", "17.0.0-preview.1.26509.9")]
+    [InlineData("staging", "rc/daily", "13.6.1", "13.6.1-preview.1.26506.6")]
+    [InlineData("release", "ga/daily", "13.6.1", "13.6.1-preview.1.26506.6")]
+    public async Task ResolveOnly_PrintsVersionAndBuildWithoutInstalling(string quality, string alias, string version, string buildVersion)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            secure_curl() {
+                [[ "$1" == 'https://aka.ms/dotnet/9/aspire/{{alias}}/aspire-cli-linux-x64.tar.gz' && "$6" == HEAD ]] || return 1
+                printf 'HTTP/1.1 301\r\nLocation: https://ci.dot.net/public/aspire/{{buildVersion}}/aspire-cli-linux-x64-{{version}}.tar.gz\r\n\r\nHTTP/2 200\r\n'
+            }
+            main --quality '{{quality}}' --os linux --arch x64 --resolve-only
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        using var document = JsonDocument.Parse(result.Output);
+        Assert.Equal(version, document.RootElement.GetProperty("version").GetString());
+        Assert.Equal(buildVersion, document.RootElement.GetProperty("buildVersion").GetString());
+        Assert.Empty(Directory.GetFileSystemEntries(env.MockHome));
+    }
+
+    [Theory]
+    [InlineData("--build-version", "13.6.1-preview.1.26506.6")]
+    [InlineData("--resolve-only", "--dry-run")]
+    public async Task InvalidResolutionArguments_Fail(string first, string second)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync(first, second);
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Theory]
+    [InlineData("../other")]
+    [InlineData("not-a-version")]
+    public async Task InvalidBuildPin_FailsBeforeDownloading(string buildVersion)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync("--version", "13.6.1", "--build-version", buildVersion, "--quality", "dev", "--dry-run");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Invalid --build-version", result.Output);
+    }
+
+    [Theory]
+    [InlineData("dev", "17.0.0-preview.1.26509.9", "17.0.0-preview.1.26509.9", false, "daily", false)]
+    [InlineData("staging", "13.6.1", "13.6.1-preview.1.26506.6", false, "staging", false)]
+    [InlineData("release", "13.6.1", "13.6.1-preview.1.26506.6", false, "stable", false)]
+    [InlineData("dev", "17.0.0-preview.1.26509.9", "17.0.0-preview.1.26509.9", true, "daily", false)]
+    [InlineData("dev", "17.0.0-preview.1.26509.9", "17.0.0-preview.1.26509.9", false, "daily", true)]
+    [InlineData("release", "13.6.1", "13.6.1-preview.1.26506.6", false, "stable", true)]
+    [InlineData("", "13.6.1", "13.6.1-preview.1.26506.6", false, null, true)]
+    public async Task QualityInstall_AliasAdvancesAfterResolution_PinsBothDownloadsAndChecksChecksum(
+        string quality, string version, string buildVersion, bool corruptChecksum, string? channel, bool reuseResolvedBuild)
+    {
+        using var env = new TestEnvironment();
+        var archive = await FakeArchiveHelper.CreateFakeArchiveAsync(Path.Combine(env.TempDirectory, "source"));
+        var requestsPath = Path.Combine(env.TempDirectory, "requests");
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var qualityArgs = quality.Length > 0 ? $"--quality '{quality}'" : "";
+        var pinArgs = reuseResolvedBuild ? $"--version '{version}' --build-version '{buildVersion}'" : "";
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            secure_curl() {
+                if [[ "$6" == HEAD ]]; then
+                    if [[ "$1" == https://aka.ms/* ]]; then
+                        echo 'resolve' >> '{{requestsPath}}'
+                        printf 'HTTP/1.1 301\r\nLocation: https://ci.dot.net/public/aspire/{{buildVersion}}/aspire-cli-linux-x64-{{version}}.tar.gz\r\n\r\nHTTP/2 200\r\n'
+                    else
+                        printf 'HTTP/2 200\r\nContent-Type: application/octet-stream\r\n'
+                    fi
+                    return 0
+                fi
+                echo "$1" >> '{{requestsPath}}'
+                case "$1" in
+                    *.sha512)
+                        # The mutable checksum alias now refers to a different build.
+                        if [[ "$1" == https://aka.ms/* || '{{corruptChecksum}}' == 'True' ]]; then
+                            printf '%0128d' 0 > "$2"
+                        else
+                            cp '{{archive.ChecksumPath}}' "$2"
+                        fi
+                        ;;
+                    *) cp '{{archive.ArchivePath}}' "$2" ;;
+                esac
+            }
+            main {{qualityArgs}} {{pinArgs}} --os linux --arch x64 --install-path '{{installPath}}' --skip-path --skip-completions
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        var requests = await File.ReadAllLinesAsync(requestsPath);
+        Assert.Equal(
+            [
+                .. reuseResolvedBuild ? Array.Empty<string>() : ["resolve"],
+                $"https://ci.dot.net/public/aspire/{buildVersion}/aspire-cli-linux-x64-{version}.tar.gz",
+                $"https://ci.dot.net/public-checksums/aspire/{buildVersion}/aspire-cli-linux-x64-{version}.tar.gz.sha512"
+            ],
+            requests);
+        if (corruptChecksum)
+        {
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("Checksum validation failed", result.Output);
+            Assert.False(File.Exists(Path.Combine(installPath, "aspire")));
+        }
+        else
+        {
+            result.EnsureSuccessful();
+            Assert.True(File.Exists(Path.Combine(installPath, "aspire")));
+            using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(installPath, ".aspire-install.json")));
+            if (channel is null)
+            {
+                Assert.False(document.RootElement.TryGetProperty("channel", out _));
+            }
+            else
+            {
+                Assert.Equal(channel, document.RootElement.GetProperty("channel").GetString());
+            }
+        }
+    }
+
     [Fact]
     public async Task HelpFlag_ShowsUsage()
     {
@@ -29,6 +164,64 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains("Usage", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Aspire CLI", result.Output);
         Assert.Contains("--skip-completions", result.Output);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task QualityInstall_WithIndependentExtensionVersion_UsesExtensionQualityAlias(bool reuseResolvedBuild)
+    {
+        using var env = new TestEnvironment();
+        var archive = await FakeArchiveHelper.CreateFakeArchiveAsync(Path.Combine(env.TempDirectory, "source"));
+        var extensionPath = Path.Combine(env.TempDirectory, "aspire-vscode-1.24.0.vsix.zip");
+        await File.WriteAllTextAsync(extensionPath, "extension version 1.24.0");
+        var installedExtensionPath = Path.Combine(env.TempDirectory, "installed-extension");
+        var requestsPath = Path.Combine(env.TempDirectory, "requests");
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var pinArgs = reuseResolvedBuild
+            ? "--version '17.0.0-preview.1.26513.5' --build-version '17.0.0-preview.1.26513.5'"
+            : "";
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            secure_curl() {
+                if [[ "${6:-GET}" == HEAD ]]; then
+                    if [[ "$1" == *aspire-vscode* ]]; then
+                        [[ "$1" == 'https://aka.ms/dotnet/9/aspire/daily/aspire-vscode.vsix.zip' ]] || return 22
+                        printf 'HTTP/1.1 301\r\nLocation: https://ci.dot.net/public/aspire/17.0.0-preview.1.26513.5/aspire-vscode-1.24.0.vsix.zip\r\n\r\nHTTP/2 200\r\nContent-Type: application/octet-stream\r\n'
+                    else
+                        printf 'HTTP/1.1 301\r\nLocation: https://ci.dot.net/public/aspire/17.0.0-preview.1.26513.5/aspire-cli-linux-x64-17.0.0-preview.1.26513.5.tar.gz\r\n\r\nHTTP/2 200\r\nContent-Type: application/octet-stream\r\n'
+                    fi
+                    return 0
+                fi
+                echo "$1" >> '{{requestsPath}}'
+                case "$1" in
+                    *.sha512) cp '{{archive.ChecksumPath}}' "$2" ;;
+                    https://aka.ms/dotnet/9/aspire/daily/aspire-vscode.vsix.zip) cp '{{extensionPath}}' "$2" ;;
+                    *aspire-vscode*) return 22 ;;
+                    *) cp '{{archive.ArchivePath}}' "$2" ;;
+                esac
+            }
+            test_vscode_cli() { return 0; }
+            install_aspire_extension() { cp "$1" '{{installedExtensionPath}}'; }
+            main --quality dev {{pinArgs}} --os linux --arch x64 --install-path '{{installPath}}' --install-extension --skip-path --skip-completions
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.True(File.Exists(installedExtensionPath), "The independently versioned 1.24.0 extension should be downloaded and passed to its installer.");
+        Assert.Equal("extension version 1.24.0", await File.ReadAllTextAsync(installedExtensionPath));
+        var requests = await File.ReadAllLinesAsync(requestsPath);
+        Assert.Equal(
+            [
+                "https://ci.dot.net/public/aspire/17.0.0-preview.1.26513.5/aspire-cli-linux-x64-17.0.0-preview.1.26513.5.tar.gz",
+                "https://ci.dot.net/public-checksums/aspire/17.0.0-preview.1.26513.5/aspire-cli-linux-x64-17.0.0-preview.1.26513.5.tar.gz.sha512",
+                "https://aka.ms/dotnet/9/aspire/daily/aspire-vscode.vsix.zip"
+            ],
+            requests);
     }
 
     [Fact]
@@ -66,14 +259,37 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains("Unsupported quality", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public async Task DryRun_ShowsDownloadAndInstallSteps()
+    [Theory]
+    [InlineData("dev", false)]
+    [InlineData("staging", false)]
+    [InlineData("release", false)]
+    [InlineData("dev", true)]
+    [InlineData("staging", true)]
+    [InlineData("release", true)]
+    public async Task DryRun_ShowsDownloadAndInstallSteps_WithoutRequestsOrInstallWrites(string quality, bool reuseResolvedBuild)
     {
         using var env = new TestEnvironment();
-        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
-        var result = await cmd.ExecuteAsync("--dry-run", "--quality", "release");
+        var requestsPath = Path.Combine(env.TempDirectory, "requests");
+        var installPath = Path.Combine(env.MockHome, ".aspire", "bin");
+        await File.WriteAllTextAsync(requestsPath, "");
+        var pinArgs = reuseResolvedBuild ? "--version '13.6.1' --build-version '13.6.1-preview.1.26506.6'" : "";
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            secure_curl() {
+                printf '%s\n' "$*" >> '{{requestsPath}}'
+                return 22
+            }
+            main --dry-run --quality '{{quality}}' {{pinArgs}} --install-path '{{installPath}}'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
 
         result.EnsureSuccessful();
+        Assert.Empty(await File.ReadAllLinesAsync(requestsPath));
+        Assert.Empty(Directory.GetFileSystemEntries(env.MockHome));
         Assert.Contains("download", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("install", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("[DRY RUN]", result.Output);

@@ -74,9 +74,27 @@ jobs:
       - name: Build E2E test project
         run: dotnet build tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj
 
+      - name: Resolve Aspire CLI version
+        id: resolve-cli
+        env:
+          INSTALL_QUALITY: ${{ inputs.quality || 'dev' }}
+        run: |
+          set -euo pipefail
+          resolved=$(eng/scripts/get-aspire-cli.sh --quality "$INSTALL_QUALITY" --os linux --arch x64 --resolve-only)
+          version=$(jq -er '.version' <<< "$resolved")
+          build_version=$(jq -er '.buildVersion' <<< "$resolved")
+          {
+            printf 'version=%s\n' "$version"
+            printf 'build-version=%s\n' "$build_version"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Run smoke tests against daily build
         env:
+          # The resolved build pin takes precedence over quality selection; quality
+          # is retained only to preserve the requested install-channel identity.
           ASPIRE_E2E_QUALITY: ${{ inputs.quality || 'dev' }}
+          ASPIRE_E2E_VERSION: ${{ steps.resolve-cli.outputs.version }}
+          ASPIRE_E2E_BUILD_VERSION: ${{ steps.resolve-cli.outputs.build-version }}
           ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR: ${{ github.workspace }}/testresults/cli-versions
         run: |
           dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \

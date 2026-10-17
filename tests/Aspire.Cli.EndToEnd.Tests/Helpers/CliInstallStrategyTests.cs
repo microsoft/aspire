@@ -2,13 +2,270 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Hex1b;
+using Hex1b.Automation;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 
 [Collection(CliInstallEnvironmentCollection.Name)]
-public class CliInstallStrategyTests
+public class CliInstallStrategyTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData("staging", false, true)]
+    [InlineData("staging", true, true)]
+    [InlineData("dev", false, true)]
+    [InlineData("dev", true, true)]
+    [InlineData("release", false, false)]
+    [InlineData("release", true, false)]
+    public void PublishedDotnetTool_ArchivePin_SelectsByQuality(string quality, bool useDetect, bool includePrerelease)
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("BUILT_NUGETS_PATH", null),
+            ("ASPIRE_E2E_VERSION", "17.0.0"),
+            ("ASPIRE_E2E_BUILD_VERSION", "17.0.0-preview.1.26513.5"),
+            ("ASPIRE_E2E_QUALITY", quality));
+
+        var strategy = useDetect ? CliInstallStrategy.Detect() : DotnetToolSmokeTests.GetDotnetToolStrategy();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.Null(strategy.Version);
+        Assert.Null(strategy.BuildVersion);
+        Assert.Null(strategy.ExpectedVersion);
+        Assert.Equal(includePrerelease, strategy.IncludePrerelease);
+        Assert.Equal(includePrerelease, strategy.RequiresDotnetToolNuGetConfig);
+        Assert.Equal(
+            includePrerelease
+                ? "dotnet tool install --global Aspire.Cli --prerelease --configfile '/opt/aspire-scripts/NuGet.config'"
+                : "dotnet tool install --global Aspire.Cli",
+            AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy));
+    }
+
+    [Theory]
+    [InlineData(null, "13.6.1", false)]
+    [InlineData("dev", "13.6.1", false)]
+    [InlineData("staging", "13.6.1", false)]
+    [InlineData("release", "13.6.1", false)]
+    [InlineData("dev", "17.0.0-dev.26513.5", true)]
+    public void PublishedDotnetTool_VersionOnly_PreservesExplicitVersion(string? quality, string version, bool requiresConfig)
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("BUILT_NUGETS_PATH", null),
+            ("ASPIRE_E2E_VERSION", version),
+            ("ASPIRE_E2E_BUILD_VERSION", null),
+            ("ASPIRE_E2E_QUALITY", quality));
+
+        foreach (var strategy in new[] { CliInstallStrategy.Detect(), DotnetToolSmokeTests.GetDotnetToolStrategy() })
+        {
+            Assert.Equal(version, strategy.Version);
+            Assert.Equal(version, strategy.ExpectedVersion);
+            Assert.False(strategy.IncludePrerelease);
+            Assert.Equal(requiresConfig, strategy.RequiresDotnetToolNuGetConfig);
+            Assert.Equal(
+                $"dotnet tool install --global Aspire.Cli --version {version}" +
+                (requiresConfig ? " --configfile '/opt/aspire-scripts/NuGet.config'" : ""),
+                AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy));
+        }
+    }
+
+    [Fact]
+    public void DotnetToolSmokeTests_ArchivePinWithoutQuality_RequiresPublishedSelector()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("BUILT_NUGETS_PATH", null),
+            ("ASPIRE_E2E_VERSION", "17.0.0"),
+            ("ASPIRE_E2E_BUILD_VERSION", "17.0.0-preview.1.26513.5"),
+            ("ASPIRE_E2E_QUALITY", null));
+
+        Assert.Throws<InvalidOperationException>(DotnetToolSmokeTests.GetDotnetToolStrategy);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DotnetTool_ArchivePin_PreservesLocalSourcePrecedence(bool explicitSource)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        File.WriteAllText(Path.Combine(workspace.Path, "Aspire.Cli.13.6.1.nupkg"), "");
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", explicitSource ? workspace.Path : null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("BUILT_NUGETS_PATH", workspace.Path),
+            ("ASPIRE_E2E_VERSION", "17.0.0"),
+            ("ASPIRE_E2E_BUILD_VERSION", "17.0.0-preview.1.26513.5"),
+            ("ASPIRE_E2E_QUALITY", "staging"));
+
+        var strategies = explicitSource
+            ? new[] { DotnetToolSmokeTests.GetDotnetToolStrategy(), CliInstallStrategy.Detect() }
+            : [DotnetToolSmokeTests.GetDotnetToolStrategy()];
+        foreach (var strategy in strategies)
+        {
+            var expectedVersion = explicitSource ? "17.0.0" : "13.6.1";
+            Assert.Equal(workspace.Path, strategy.NupkgSourcePath);
+            Assert.Equal(expectedVersion, strategy.ExpectedVersion);
+            Assert.Null(strategy.BuildVersion);
+            Assert.Equal(
+                $"dotnet tool install --global Aspire.Cli --version {expectedVersion} --add-source '/tmp/aspire-nupkg-source'",
+                AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy));
+        }
+    }
+
+    [Theory]
+    [InlineData("13.6.1", null, "13.6.1+commit", true)]
+    [InlineData("13.6.1", null, "13.6.0+commit", false)]
+    [InlineData("v13.6.1", null, "13.6.1+commit", true)]
+    [InlineData("V13.6.1", null, "13.6.1+commit", true)]
+    [InlineData("v13.6.1", null, "13.6.0+commit", false)]
+    [InlineData("13.6.1", "13.6.1-preview.1.26506.6", "13.6.1+commit", true)]
+    [InlineData("13.6.1", "13.6.1-preview.1.26506.6", "13.6.0+commit", false)]
+    [InlineData("13.6.1", "13.6.1-preview.1.26506.6", "13.6.1-preview.1.26506.6+commit", false)]
+    [InlineData("17.0.0-preview.1.26513.5", "17.0.0-preview.1.26513.5", "17.0.0-preview.1.26513.5+commit", true)]
+    public async Task VerifyAspireCliVersion_NativePin_EnforcesProductVersion(
+        string version, string? buildVersion, string installedVersion, bool matches)
+    {
+        var strategy = CliInstallStrategy.FromVersion(version, buildVersion,
+            buildVersion is not null ? CliInstallQuality.Staging : null);
+
+        await VerifyInstalledVersionAsync(strategy, installedVersion, matches);
+        Assert.Equal(version.TrimStart('v', 'V'), strategy.ExpectedVersion);
+    }
+
+    [Theory]
+    [InlineData("dev")]
+    [InlineData("staging")]
+    [InlineData("release")]
+    public async Task VerifyAspireCliVersion_QualityOnly_DoesNotRequireKnownVersion(string quality)
+    {
+        var strategy = CliInstallStrategy.FromQuality(Enum.Parse<CliInstallQuality>(quality, ignoreCase: true));
+
+        Assert.Null(strategy.ExpectedVersion);
+        await VerifyInstalledVersionAsync(strategy, "13.6.0+commit", matches: true);
+    }
+
+    [Theory]
+    [InlineData("13.6.1+commit", true)]
+    [InlineData("13.6.0+commit", false)]
+    public async Task VerifyAspireCliVersion_DotnetTool_EnforcesExplicitVersion(string installedVersion, bool matches)
+    {
+        await VerifyInstalledVersionAsync(CliInstallStrategy.FromDotnetTool("13.6.1"), installedVersion, matches);
+    }
+
+    [Fact]
+    public async Task VerifyAspireCliVersion_LocalHive_DoesNotRequireKnownVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var archivePath = Path.Combine(workspace.Path, "localhive.tar.gz");
+        File.WriteAllText(archivePath, "");
+        var strategy = CliInstallStrategy.FromLocalHive(archivePath);
+
+        Assert.Null(strategy.ExpectedVersion);
+        await VerifyInstalledVersionAsync(strategy, "13.6.0+commit", matches: true);
+    }
+
+    [Theory]
+    [InlineData("17.0.0-preview.1.26509.9", "17.0.0-preview.1.26509.9")]
+    [InlineData("13.6.1", "13.6.1-preview.1.26506.6")]
+    public void Detect_ResolvedVersionAndBuild_UsesPinnedInstallScript(string version, string buildVersion)
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", ""),
+            ("ASPIRE_E2E_VERSION", version),
+            ("ASPIRE_E2E_BUILD_VERSION", buildVersion));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.InstallScript, strategy.Mode);
+        Assert.Null(strategy.Quality);
+        Assert.Equal(version, strategy.Version);
+        Assert.Equal(buildVersion, strategy.BuildVersion);
+        Assert.Equal(version, strategy.ExpectedVersion);
+        Assert.Equal(
+            $"/opt/aspire-scripts/get-aspire-cli.sh --version {version} --build-version {buildVersion}",
+            AspireCliShellCommandHelpers.GetInstallScriptCommand(strategy, AspireCliShellCommandHelpers.DockerInstallScriptCommandPrefix));
+    }
+
+    [Theory]
+    [InlineData("dev", "13.6.1", "13.6.1-preview.1.26506.6")]
+    [InlineData("staging", "13.6.1", "13.6.1-preview.1.26506.6")]
+    [InlineData("release", "13.6.1", "13.6.1-preview.1.26506.6")]
+    [InlineData("staging", "17.0.0", "17.0.0-preview.1.26513.5")]
+    public void Detect_ResolvedBuildWithQuality_PinsDownloadsAndRetainsChannel(string quality, string version, string buildVersion)
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", quality),
+            ("ASPIRE_E2E_VERSION", version),
+            ("ASPIRE_E2E_BUILD_VERSION", buildVersion));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.InstallScript, strategy.Mode);
+        Assert.Equal(Enum.Parse<CliInstallQuality>(quality, ignoreCase: true), strategy.Quality);
+        Assert.Equal(version, strategy.Version);
+        Assert.Equal(buildVersion, strategy.BuildVersion);
+        Assert.Equal(version, strategy.ExpectedVersion);
+        Assert.Equal(
+            $" --version {version} --build-version {buildVersion} --quality {quality}",
+            AspireCliShellCommandHelpers.GetInstallScriptArgs(strategy));
+    }
+
+    [Fact]
+    public void Detect_QualityWithoutBuildPin_PreservesQualityPrecedence()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", "dev"),
+            ("ASPIRE_E2E_VERSION", "13.6.1"),
+            ("ASPIRE_E2E_BUILD_VERSION", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallQuality.Dev, strategy.Quality);
+        Assert.Null(strategy.Version);
+        Assert.Null(strategy.BuildVersion);
+        Assert.Equal(" --quality dev", AspireCliShellCommandHelpers.GetInstallScriptArgs(strategy));
+    }
+
+    [Fact]
+    public void Detect_BuildPinWithoutVersion_FailsInsteadOfResolvingQuality()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", "dev"),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_BUILD_VERSION", "13.6.1-preview.1.26506.6"));
+
+        var exception = Assert.Throws<ArgumentException>(() => CliInstallStrategy.Detect());
+
+        Assert.Equal("ASPIRE_E2E_BUILD_VERSION requires ASPIRE_E2E_VERSION.", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("bad/version")]
+    [InlineData("1.0.0;echo invalid")]
+    public void FromVersion_InvalidBuildVersion_Throws(string buildVersion)
+    {
+        var exception = Assert.Throws<ArgumentException>(() => CliInstallStrategy.FromVersion("13.6.1", buildVersion));
+
+        Assert.Equal("buildVersion", exception.ParamName);
+    }
+
     [Fact]
     public void GetPullRequestInstallArgs_ReturnsPrNumber()
     {
@@ -1033,6 +1290,36 @@ public class CliInstallStrategyTests
         var strategy = CliInstallStrategy.Detect();
 
         Assert.Equal(CliInstallMode.Preinstalled, strategy.Mode);
+    }
+
+    private async Task VerifyInstalledVersionAsync(CliInstallStrategy strategy, string installedVersion, bool matches)
+    {
+        using var environment = new EnvironmentVariableScope(("ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR", null));
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
+        var counter = new SequenceCounter();
+        await using var terminalRun = CliE2ETestHelpers.StartRun(
+            terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.TypeAsync(AspireCliShellCommandHelpers.NumberedPromptSetupCommand);
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.RunCommandAsync(
+            $"aspire() {{ printf '%s\\n' {AspireCliShellCommandHelpers.QuoteBashArg(installedVersion)}; }}",
+            counter);
+
+        var exception = await Record.ExceptionAsync(() => auto.VerifyAspireCliVersionAsync(strategy, counter));
+
+        if (matches)
+        {
+            Assert.Null(exception);
+        }
+        else
+        {
+            Assert.NotNull(exception);
+            Assert.Contains($"Expected '{strategy.ExpectedVersion}'", exception.Message);
+        }
     }
 
     private static EnvironmentVariableScope WithCleanCliE2ETestEnvironment(params (string Name, string? Value)[] variables)

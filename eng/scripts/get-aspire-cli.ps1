@@ -8,6 +8,12 @@ param(
     [Parameter(HelpMessage = "Version of the Aspire CLI to download")]
     [string]$Version = "",
 
+    [Parameter(HelpMessage = "Artifact build directory for -Version (from -ResolveOnly)")]
+    [string]$BuildVersion = "",
+
+    [Parameter(HelpMessage = "Print JSON with version and buildVersion without installing")]
+    [switch]$ResolveOnly,
+
     [Parameter(HelpMessage = "Quality to download")]
     [ValidateSet("", "release", "staging", "dev")]
     [string]$Quality = "",
@@ -138,11 +144,15 @@ DESCRIPTION:
     The default quality is '$($Script:Config.DefaultQuality)'.
 
     Pass a specific version to get CLI for that version.
+    To reuse a resolved build, pass version and buildVersion from -ResolveOnly
+    as -Version and -BuildVersion. Quality may accompany this pair to retain the install channel.
 
 PARAMETERS:
     -InstallPath <string>       Directory to install the CLI (default: %USERPROFILE%\.aspire\bin on Windows, `$HOME/.aspire/bin on Unix)
     -Quality <string>           Quality to download (default: $($Script:Config.DefaultQuality))
     -Version <string>           Version of the Aspire CLI to download (default: unset)
+    -BuildVersion <string>      Artifact build directory for -Version (from -ResolveOnly)
+    -ResolveOnly                Print JSON with version and buildVersion; do not install
     -OS <string>                Operating system (default: auto-detect)
     -Architecture <string>      Architecture (default: auto-detect)
     -InstallExtension           Install VS Code extension along with the CLI
@@ -1302,6 +1312,8 @@ function Get-AspireCliUrl {
         [Parameter()]
         [string]$Quality,
 
+        [string]$BuildVersion,
+
         [Parameter(Mandatory = $true)]
         [string]$RuntimeIdentifier,
 
@@ -1333,6 +1345,9 @@ function Get-AspireCliUrl {
     }
     else {
         if (Test-StableVersion -Version $Version) {
+            $Version = ConvertTo-StableVersion -Version $Version
+        }
+        if (-not $BuildVersion -and (Test-StableVersion -Version $Version)) {
             $stableVersion = ConvertTo-StableVersion -Version $Version
             $archiveFilename = "aspire-cli-$RuntimeIdentifier-$stableVersion.$Extension"
             $checksumFilename = "$archiveFilename.sha512"
@@ -1348,14 +1363,51 @@ function Get-AspireCliUrl {
 
         $archiveFilename = "aspire-cli-$RuntimeIdentifier-$Version.$Extension"
         $checksumFilename = "$archiveFilename.sha512"
+        $artifactVersion = if ($BuildVersion) { $BuildVersion } else { $Version }
 
         return [PSCustomObject]@{
-            ArchiveUrl = "$($Script:Config.BaseUrls["versioned"])/$Version/$archiveFilename"
+            ArchiveUrl = "$($Script:Config.BaseUrls["versioned"])/$artifactVersion/$archiveFilename"
             ArchiveFilename = $archiveFilename
-            ChecksumUrl = "$($Script:Config.BaseUrls["versioned-checksums"])/$Version/$checksumFilename"
+            ChecksumUrl = "$($Script:Config.BaseUrls["versioned-checksums"])/$artifactVersion/$checksumFilename"
             ChecksumFilename = $checksumFilename
         }
     }
+}
+
+function Resolve-AspireCliVersion {
+    [CmdletBinding()]
+    param(
+        [string]$Quality,
+        [string]$RuntimeIdentifier,
+        [string]$Extension
+    )
+
+    $alias = Get-AspireCliUrl -Quality $Quality -RuntimeIdentifier $RuntimeIdentifier -Extension $Extension
+    $response = Invoke-SecureWebRequest -Uri $alias.ArchiveUrl -Method Head -TimeoutSec 60 -MaxRetries 3
+    $resolvedUri = if ($Script:IsModernPowerShell) {
+        $response.BaseResponse.RequestMessage.RequestUri.AbsoluteUri
+    } else {
+        $response.BaseResponse.ResponseUri.AbsoluteUri
+    }
+
+    # A stable-shaped staging archive can differ from its build directory:
+    # /public/aspire/13.6.1-preview.1.26506.6/aspire-cli-linux-x64-13.6.1.tar.gz
+    # Keep both versions rather than re-routing staging through GitHub GA assets.
+    $pattern = '^https://ci[.]dot[.]net/public/aspire/(?<build>[^/]+)/aspire-cli-' +
+        [regex]::Escape($RuntimeIdentifier) + '-(?<version>[^/]+)[.]' + [regex]::Escape($Extension) + '$'
+    if ($resolvedUri -match $pattern) {
+        $resolvedVersion = $Matches.version
+        $resolvedBuildVersion = $Matches.build
+        $versionPattern = '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+        if ($resolvedVersion -match $versionPattern -and $resolvedBuildVersion -match $versionPattern) {
+            return [PSCustomObject]@{
+                version = $resolvedVersion
+                buildVersion = $resolvedBuildVersion
+            }
+        }
+    }
+
+    throw "Could not resolve a versioned Aspire CLI archive for quality '$Quality'."
 }
 
 function Invoke-AspireCliBundleSetup {
@@ -1401,6 +1453,7 @@ function Install-AspireCli {
         [Parameter(Mandatory = $true)]
         [string]$InstallPath,
         [string]$Version,
+        [string]$BuildVersion,
         [string]$Quality,
         [string]$OS,
         [string]$Architecture
@@ -1444,7 +1497,15 @@ function Install-AspireCli {
         # Construct the runtime identifier and URLs
         $runtimeIdentifier = "$targetOS-$targetArch"
         $extension = if ($targetOS -eq "win") { "zip" } else { "tar.gz" }
-        $urls = Get-AspireCliUrl -Version $Version -Quality $Quality -RuntimeIdentifier $runtimeIdentifier -Extension $extension
+        $downloadVersion = $Version
+        $downloadBuildVersion = $BuildVersion
+        if ([string]::IsNullOrWhiteSpace($downloadVersion) -and -not $WhatIfPreference) {
+            $resolved = Resolve-AspireCliVersion -Quality $Quality -RuntimeIdentifier $runtimeIdentifier -Extension $extension
+            $downloadVersion = $resolved.version
+            $downloadBuildVersion = $resolved.buildVersion
+            Write-Message "Resolved Aspire CLI version: $downloadVersion (build $downloadBuildVersion)" -Level Info
+        }
+        $urls = Get-AspireCliUrl -Version $downloadVersion -BuildVersion $downloadBuildVersion -Quality $Quality -RuntimeIdentifier $runtimeIdentifier -Extension $extension
         $downloadSource = $null
         if ([string]::IsNullOrWhiteSpace($Version) -and -not [string]::IsNullOrWhiteSpace($Quality)) {
             $downloadSource = "the $(ConvertTo-ChannelName -Quality $Quality) channel"
@@ -1487,7 +1548,7 @@ function Install-AspireCli {
         if ($PSCmdlet.ShouldProcess($sidecarPath, "Write route sidecar")) {
             # An explicit version can come from any channel, so retain the archive's
             # baked identity when there was no quality route to author the channel.
-            $sidecarQuality = if ([string]::IsNullOrWhiteSpace($Version)) { $Quality } else { "" }
+            $sidecarQuality = if ([string]::IsNullOrWhiteSpace($Version) -or $BuildVersion) { $Quality } else { "" }
             Write-InstallSidecar -InstallPath $InstallPath -Quality $sidecarQuality
         }
         else {
@@ -1501,7 +1562,9 @@ function Install-AspireCli {
 
             if (Test-VSCodeCLIDependency -UseInsiders:$UseInsiders) {
                 try {
-                    $extensionArchive = Get-AspireExtension -TempDir $tempDir -Version $Version -Quality $Quality
+                    # The extension has its own version, so retain its quality alias
+                    # instead of using the CLI archive's version pin.
+                    $extensionArchive = Get-AspireExtension -TempDir $tempDir -Quality $Quality
                     Install-AspireExtension -ExtensionArchive $extensionArchive -UseInsiders:$UseInsiders
                 }
                 catch {
@@ -1546,9 +1609,17 @@ function Start-AspireCliInstallation {
     param()
 
     try {
-        # Validate that both Version and Quality are not provided
-        if (-not [string]::IsNullOrWhiteSpace($Version) -and -not [string]::IsNullOrWhiteSpace($Quality)) {
+        # A resolved build pin may retain its quality for install-channel identity.
+        if (-not [string]::IsNullOrWhiteSpace($Version) -and -not [string]::IsNullOrWhiteSpace($Quality) -and -not $BuildVersion) {
             throw "Cannot specify both -Version and -Quality. Use -Version for a specific version or -Quality for a quality level."
+        }
+
+        if ($BuildVersion -and -not $Version) {
+            throw "-BuildVersion requires -Version."
+        }
+
+        if ($BuildVersion -and $BuildVersion -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$') {
+            throw "Invalid -BuildVersion. Use the buildVersion returned by -ResolveOnly."
         }
 
         # Set default quality if not specified and no version is provided
@@ -1570,6 +1641,18 @@ function Start-AspireCliInstallation {
             throw "Extension installation is only supported with -Quality dev. Current quality: $Quality"
         }
 
+        if ($ResolveOnly) {
+            if ($WhatIfPreference -or $Version) {
+                throw "-ResolveOnly requires a quality, not -Version or -WhatIf."
+            }
+            $targetOS = if ($OS) { $OS } else { Get-OperatingSystem }
+            $targetArch = Get-CLIArchitectureFromArchitecture $(if ($Architecture) { $Architecture } else { "<auto>" })
+            $extension = if ($targetOS -eq "win") { "zip" } else { "tar.gz" }
+            Resolve-AspireCliVersion -Quality $Quality -RuntimeIdentifier "$targetOS-$targetArch" -Extension $extension |
+                ConvertTo-Json -Compress
+            return
+        }
+
         # Determine the installation path
         $resolvedInstallPath = Get-InstallPath -InstallPath $InstallPath
 
@@ -1587,7 +1670,7 @@ function Start-AspireCliInstallation {
         }
 
         # Download and install the Aspire CLI
-        $targetOS = Install-AspireCli -InstallPath $resolvedInstallPath -Version $Version -Quality $Quality -OS $OS -Architecture $Architecture
+        $targetOS = Install-AspireCli -InstallPath $resolvedInstallPath -Version $Version -BuildVersion $BuildVersion -Quality $Quality -OS $OS -Architecture $Architecture
 
         # Update PATH environment variables unless -SkipPath is specified
         if ($SkipPath) {

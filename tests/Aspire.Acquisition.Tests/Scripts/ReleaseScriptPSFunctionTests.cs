@@ -59,6 +59,96 @@ public class ReleaseScriptPSFunctionTests(ITestOutputHelper testOutput)
     #region Get-AspireCliUrl
 
     [Theory]
+    [InlineData("linux-x64", "tar.gz", "ArchiveUrl", "public", "")]
+    [InlineData("win-arm64", "zip", "ChecksumUrl", "public-checksums", ".sha512")]
+    public async Task GetAspireCliUrl_StableVersionWithBuildPin_UsesPinnedBuild(
+        string rid, string extension, string property, string container, string suffix)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            $"(Get-AspireCliUrl -Version '13.6.1' -BuildVersion '13.6.1-preview.1.26506.6' -RuntimeIdentifier '{rid}' -Extension '{extension}').{property}",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal(
+            $"https://ci.dot.net/{container}/aspire/13.6.1-preview.1.26506.6/aspire-cli-{rid}-13.6.1.{extension}{suffix}",
+            result.Output.Trim());
+    }
+
+    [Theory]
+    [InlineData("https://ci.dot.net/public/aspire/latest/aspire-cli-linux-x64-latest.tar.gz")]
+    [InlineData("https://ci.dot.net/public/aspire/17.0.0-preview.1/aspire-cli-win-x64-17.0.0-preview.1.zip")]
+    [InlineData("https://example.invalid/aspire-cli-linux-x64-17.0.0-preview.1.tar.gz")]
+    public async Task ResolveAspireCliVersion_UnexpectedRedirect_FailsWithoutAliasFallback(string location)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            $$"""
+            function Invoke-SecureWebRequest {
+                [PSCustomObject]@{
+                    BaseResponse = [PSCustomObject]@{
+                        RequestMessage = [PSCustomObject]@{ RequestUri = [uri]'{{location}}' }
+                    }
+                }
+            }
+            Resolve-AspireCliVersion -Quality dev -RuntimeIdentifier linux-x64 -Extension tar.gz
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Could not resolve", result.Output);
+    }
+
+    [Fact]
+    public async Task ResolveAspireCliVersion_LegacyResponseUri_ResolvesWindowsArchive()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            """
+            $Script:IsModernPowerShell = $false
+            function Invoke-SecureWebRequest {
+                [PSCustomObject]@{
+                    BaseResponse = [PSCustomObject]@{ ResponseUri = [uri]'https://ci.dot.net/public/aspire/17.0.0-preview.1/aspire-cli-win-arm64-17.0.0-preview.1.zip' }
+                }
+            }
+            $resolved = Resolve-AspireCliVersion -Quality dev -RuntimeIdentifier win-arm64 -Extension zip
+            "$($resolved.version)|$($resolved.buildVersion)"
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal("17.0.0-preview.1|17.0.0-preview.1", result.Output.Trim());
+    }
+
+    [Fact]
+    public async Task ResolveAspireCliVersion_RequestFails_PropagatesFailure()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            "function Invoke-SecureWebRequest { throw 'Resolution request failed' }; Resolve-AspireCliVersion -Quality dev -RuntimeIdentifier linux-x64 -Extension tar.gz",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Resolution request failed", result.Output);
+    }
+
+    [Theory]
     [InlineData("release", "linux-x64", "tar.gz", "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-linux-x64.tar.gz")]
     [InlineData("dev", "linux-x64", "tar.gz", "https://aka.ms/dotnet/9/aspire/daily/aspire-cli-linux-x64.tar.gz")]
     [InlineData("staging", "linux-x64", "tar.gz", "https://aka.ms/dotnet/9/aspire/rc/daily/aspire-cli-linux-x64.tar.gz")]

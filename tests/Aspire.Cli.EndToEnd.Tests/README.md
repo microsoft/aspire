@@ -106,6 +106,36 @@ await sequence.ApplyAsync(Terminal);
 
 ## Running Tests Locally
 
+### Daily smoke version pinning
+
+`.github/workflows/tests-daily-smoke.yml` uses the acquisition script's
+`--resolve-only` mode once per run. It passes the returned product version as
+`ASPIRE_E2E_VERSION` and artifact build directory as `ASPIRE_E2E_BUILD_VERSION`.
+Native archive smoke tests then invoke the script with `--version` and `--build-version`;
+artifact URLs are constructed only by the acquisition script.
+
+The resolved product/build pair takes precedence over `ASPIRE_E2E_QUALITY` in
+strategy detection; quality is passed to the script only to retain the requested
+install channel. Without a build pin, quality still takes precedence over a
+version. The two version values preserve
+stable-shaped staging artifacts whose build directory differs from their product
+version. The stable-channel AppHost smoke scenarios still explicitly request
+`channel: "stable"`; pinning the CLI does not pin their AppHost SDK.
+
+Published dotnet tool installs select by `ASPIRE_E2E_QUALITY` when a complete
+native product/build pin is present: `dev` and `staging` include prerelease
+packages from the configured feeds, and `release` uses the latest stable package.
+The native archive's product version may not yet be published as a tool package,
+so these installs do not share its exact version. A version-only
+`ASPIRE_E2E_VERSION` still requests that exact published tool version.
+Explicit `ASPIRE_E2E_DOTNET_TOOL_SOURCE` and CI-built `BUILT_NUGETS_PATH`
+sources retain precedence over published-feed selection.
+
+Explicit native versions are verified against the installed product version,
+ignoring `+commit` metadata and normalizing a stable version's optional `v`/`V`
+prefix. The artifact build directory is not an installed-version expectation.
+Quality-only installs have no predetermined version and remain diagnostic-only.
+
 ### npm test dependencies
 
 The project-level `package.json` pins npm tools used to scaffold test fixtures.
