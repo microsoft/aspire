@@ -6,6 +6,21 @@ using Aspire;
 using StackExchange.Redis;
 
 [assembly: ConfigurationSchema("Aspire:StackExchange:Redis", typeof(StackExchangeRedisSettings))]
-[assembly: ConfigurationSchema("Aspire:StackExchange:Redis:ConfigurationOptions", typeof(ConfigurationOptions))]
+// Redis 3.2 marks the availability policies as experimental and legacy settings as errors.
+// Excluding them keeps configuration binding limited to supported, effective options.
+[assembly: ConfigurationSchema(
+    "Aspire:StackExchange:Redis:ConfigurationOptions",
+    typeof(ConfigurationOptions),
+    exclusionPaths: [
+        "CircuitBreaker",
+        "HighPrioritySocketThreads",
+        "PreserveAsyncOrder",
+        "ReconnectRetryPolicy",
+        "ResponseTimeout",
+        "RetryPolicy",
+        "SocketManager",
+        "UseSsl",
+        "WriteBuffer"
+    ])]
 
 [assembly: LoggingCategories("StackExchange.Redis")]
