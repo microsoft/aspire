@@ -142,7 +142,9 @@ public sealed class ExtensionWorkflowTests
         string[] normalModeSkipChecks =
         [
             "needs.extension_tests_win.result == 'skipped'",
-            "needs.extension_e2e_tests.result == 'skipped'",
+            "needs.extension_e2e_preflight.result == 'skipped'",
+            "needs.extension_e2e_tests_linux.result == 'skipped'",
+            "needs.extension_e2e_tests_windows.result == 'skipped'",
             "needs.cli_starter_validation_linux_x64.result == 'skipped'",
             "needs.cli_starter_validation_linux_arm64.result == 'skipped'",
             "needs.cli_starter_validation_windows_x64.result == 'skipped'",

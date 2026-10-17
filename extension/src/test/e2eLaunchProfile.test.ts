@@ -639,7 +639,7 @@ suite('E2E launch profile', () => {
     test('preflights locked ExTester dependency graph before starting the E2E matrix', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
-        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-preflight.yml'), 'utf8');
 
         assert.ok(runner.includes('--verify-extester-feed'));
         assert.ok(runner.includes('Verifying vscode-extension-tester@'));
@@ -650,7 +650,6 @@ suite('E2E launch profile', () => {
         assert.ok(workflow.includes('Verify locked ExTester'));
         assert.ok(workflow.includes('verify_extester_feed:'));
         assert.ok(workflow.includes('run: node scripts/run-e2e.js --verify-extester-feed'));
-        assert.ok(workflow.includes('needs: verify_extester_feed'));
         assert.ok(!workflow.includes('extester_feed_unavailable:'));
         assert.ok(!workflow.includes('VS Code extension E2E matrix skipped'));
     });
@@ -677,6 +676,8 @@ suite('E2E launch profile', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const matrix: { shardName: string; installAzureFunctions?: boolean; installAzureFunctionsCoreTools?: boolean }[] =
+            JSON.parse(fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-matrix.json'), 'utf8'));
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
         const appHostLifecycleTools = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostLifecycleTools.e2e.test.ts'), 'utf8');
         const dotnetRuntimeInstallIndex = runner.indexOf("displayName: '.NET Install Tool'");
@@ -688,7 +689,8 @@ suite('E2E launch profile', () => {
         const azureFunctionsPrerequisitesIndex = workflow.indexOf('name: Azure Functions E2E prerequisites');
         const runStepIndex = workflow.indexOf('- name: Run extension E2E tests');
         const uploadStepIndex = workflow.indexOf('- name: Upload E2E diagnostics');
-        const debuggerPrerequisiteStep = workflow.slice(debuggerPrerequisitesIndex, azureFunctionsPrerequisitesIndex);
+        const debuggerPrerequisiteStep = workflow.slice(debuggerPrerequisitesIndex, azureFunctionsPrerequisitesIndex)
+            .replace(/^\s*#.*$/gm, '');
         const azureFunctionsPrerequisiteStep = workflow.slice(azureFunctionsPrerequisitesIndex, workflow.indexOf('\n      - name:', azureFunctionsPrerequisitesIndex));
         const runStep = workflow.slice(runStepIndex, uploadStepIndex);
         const uploadStep = workflow.slice(uploadStepIndex, workflow.indexOf('\n      - name:', uploadStepIndex + 1));
@@ -700,10 +702,8 @@ suite('E2E launch profile', () => {
         const fixtureTargetFrameworks = [fixtures, appHostLifecycleTools]
             .flatMap(source => [...source.matchAll(/<TargetFramework>([^<]+)<\/TargetFramework>/g)].map(match => match[1]));
 
-        assert.ok(workflow.includes('shardName: azure-functions'));
-        assert.ok(workflow.includes('installAzureFunctions: true'));
-        assert.ok(workflow.includes('shardName: azure-functions-node'));
-        assert.ok(workflow.includes('installAzureFunctionsCoreTools: true'));
+        assert.strictEqual(matrix.find(row => row.shardName === 'azure-functions')?.installAzureFunctions, true);
+        assert.strictEqual(matrix.find(row => row.shardName === 'azure-functions-node')?.installAzureFunctionsCoreTools, true);
         assert.ok(dotNetSetupIndex >= 0);
         assert.ok(dotNetSetupIndex < debuggerPrerequisitesIndex);
         assert.ok(debuggerPrerequisitesIndex < azureFunctionsPrerequisitesIndex);
@@ -1050,14 +1050,16 @@ builder.Build().Run();
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const matrix: { shardName: string; spec: string; installWinUI?: boolean }[] =
+            JSON.parse(fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-matrix.json'), 'utf8'));
         const spec = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'winUiDebug.e2e.test.ts'), 'utf8');
         const openWinUiSourceIndex = spec.indexOf("await executeE2eControlCommand({ name: 'openFile', filePath: winUiAppPath });");
         const projectLoadIndex = spec.indexOf('await waitForCSharpProjectLoad(winUiAppPath, 120000);');
         const debugLaunchIndex = spec.indexOf("name: 'debugAppHost'");
 
-        assert.ok(workflow.includes('shardName: winui-debug'));
-        assert.ok(workflow.includes('spec: out/test-e2e/test-e2e/winUiDebug.e2e.test.js'));
-        assert.ok(workflow.includes('installWinUI: true'));
+        const winUi = matrix.find(row => row.shardName === 'winui-debug');
+        assert.strictEqual(winUi?.spec, 'out/test-e2e/test-e2e/winUiDebug.e2e.test.js');
+        assert.strictEqual(winUi?.installWinUI, true);
         assert.ok(workflow.includes('name: Install WinUI E2E debugger prerequisites'));
         assert.ok(workflow.includes('csharp/2.140.9/vspackage?targetPlatform=win32-x64'));
         assert.ok(workflow.includes('ed7a3ca7775b0afa0c7c8e51e203eba0ca5e7366969509a3bbdd707888b8536a'));
@@ -1194,7 +1196,8 @@ builder.Build().Run();
     test('seeds Corepack from the internal npm feed before E2E workflow uses Yarn', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
-        const bashCorepackInstallIndex = workflow.indexOf('npm install --global --force --registry "$NPM_REGISTRY" "corepack@$CorepackVersion"');
+        const preflight = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-preflight.yml'), 'utf8');
+        const bashCorepackInstallIndex = preflight.indexOf('npm install --global --force --registry "$NPM_REGISTRY" "corepack@$CorepackVersion"');
         const pwshCorepackInstallIndex = workflow.indexOf('npm install --global --force --registry "$env:NPM_REGISTRY" "corepack@$CorepackVersion"');
         const yarnSeedIndex = workflow.indexOf('node ./scripts/prepareCorepackYarn.mjs');
         const yarnInstallIndex = workflow.indexOf('corepack yarn install --frozen-lockfile --non-interactive');
@@ -1203,8 +1206,9 @@ builder.Build().Run();
         assert.ok(workflow.includes('NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/'));
         assert.ok(workflow.includes('COREPACK_ENABLE_DOWNLOAD_PROMPT: 0'));
         assert.ok(bashCorepackInstallIndex >= 0);
+        assert.ok(preflight.indexOf('node ./scripts/prepareCorepackYarn.mjs') > bashCorepackInstallIndex);
         assert.ok(pwshCorepackInstallIndex >= 0);
-        assert.ok(yarnSeedIndex > bashCorepackInstallIndex);
+        assert.ok(yarnSeedIndex > pwshCorepackInstallIndex);
         assert.ok(yarnInstallIndex > yarnSeedIndex);
         assert.ok(yarnCompileIndex > yarnSeedIndex);
         assert.ok(!workflow.includes('cache: yarn'));

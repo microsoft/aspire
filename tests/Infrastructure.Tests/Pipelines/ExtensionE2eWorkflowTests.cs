@@ -22,7 +22,7 @@ public sealed class ExtensionE2eWorkflowTests
     {
         var job = LoadExtensionE2eJob();
 
-        var rows = MatrixIncludeRows(job).ToList();
+        var rows = MatrixIncludeRows().ToList();
         Assert.NotEmpty(rows);
         Assert.All(rows, row =>
         {
@@ -57,7 +57,7 @@ public sealed class ExtensionE2eWorkflowTests
     public void DenoIsInstalledOnlyForDenoE2eShards()
     {
         var job = LoadExtensionE2eJob();
-        var rows = MatrixIncludeRows(job).ToList();
+        var rows = MatrixIncludeRows().ToList();
         var denoRows = rows
             .Where(row => Scalar(row, "installDeno") == "true")
             .ToList();
@@ -85,8 +85,10 @@ public sealed class ExtensionE2eWorkflowTests
         Assert.Contains("--version", installScript, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void SelectedExtensionE2eWorkflowMustRun()
+    [Theory]
+    [InlineData("linux", "build_cli_archive_linux", true)]
+    [InlineData("windows", "build_cli_archive_windows", false)]
+    public void SelectedExtensionE2eWorkflowMustRun(string platform, string cliProducer, bool requiresLinuxBootstrap)
     {
         var yaml = new YamlStream();
         using var reader = new StringReader(File.ReadAllText(Path.Combine(RepoRoot.Path, CallerWorkflowRelativePath)));
@@ -94,7 +96,8 @@ public sealed class ExtensionE2eWorkflowTests
 
         var root = (YamlMappingNode)yaml.Documents[0].RootNode;
         var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-        var extensionE2eJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("extension_e2e_tests")];
+        var jobId = $"extension_e2e_tests_{platform}";
+        var extensionE2eJob = (YamlMappingNode)jobs.Children[new YamlScalarNode(jobId)];
 
         // The condition is a folded block, so compare on collapsed whitespace rather than the layout.
         var e2eCondition = string.Join(' ', (Scalar(extensionE2eJob, "if") ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
@@ -111,7 +114,13 @@ public sealed class ExtensionE2eWorkflowTests
 
         // The artifact producers stay required by result: without them every shard fails on a
         // download, which reports nothing useful about the extension.
-        foreach (var producer in new[] { "build_packages", "build_cli_archive_linux", "build_cli_archive_windows", "extension_bootstrap_linux" })
+        var producers = new List<string> { "build_packages", cliProducer, "extension_e2e_preflight" };
+        if (requiresLinuxBootstrap)
+        {
+            producers.Add("extension_bootstrap_linux");
+        }
+
+        foreach (var producer in producers)
         {
             Assert.Contains($"needs.{producer}.result == 'success'", e2eCondition, StringComparison.Ordinal);
         }
@@ -132,7 +141,7 @@ public sealed class ExtensionE2eWorkflowTests
         var steps = (YamlSequenceNode)resultsJob.Children[new YamlScalarNode("steps")];
         var failureStep = Assert.Single(steps.Cast<YamlMappingNode>(), step => Scalar(step, "name") == "Fail if any dependency failed");
         var condition = Scalar(failureStep, "if");
-        const string unexpectedSkipCheck = "needs.extension_e2e_tests.result == 'skipped'";
+        var unexpectedSkipCheck = $"needs.{jobId}.result == 'skipped'";
         Assert.Equal(2, condition?.Split(unexpectedSkipCheck, StringSplitOptions.None).Length - 1);
     }
 
@@ -148,12 +157,13 @@ public sealed class ExtensionE2eWorkflowTests
         return Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
     }
 
-    private static IEnumerable<YamlMappingNode> MatrixIncludeRows(YamlMappingNode job)
+    private static IEnumerable<YamlMappingNode> MatrixIncludeRows()
     {
-        var strategy = (YamlMappingNode)job.Children[new YamlScalarNode("strategy")];
-        var matrix = (YamlMappingNode)strategy.Children[new YamlScalarNode("matrix")];
+        var yaml = new YamlStream();
+        using var reader = File.OpenText(Path.Combine(RepoRoot.Path, ".github", "workflows", "extension-e2e-matrix.json"));
+        yaml.Load(reader);
 
-        return ((YamlSequenceNode)matrix.Children[new YamlScalarNode("include")]).Cast<YamlMappingNode>();
+        return ((YamlSequenceNode)yaml.Documents[0].RootNode).Cast<YamlMappingNode>();
     }
 
     private static string? Scalar(YamlMappingNode node, string key)

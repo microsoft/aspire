@@ -350,6 +350,8 @@ path_rules:
       - .github/scripts/assert-extension-e2e-bridge-vsix.ps1
       - .github/workflows/extension-unit-tests.yml
       - .github/workflows/extension-e2e-tests.yml
+      - .github/workflows/extension-e2e-preflight.yml
+      - .github/workflows/extension-e2e-matrix.json
     targets: [job:extension-unit]
     reason: extension tests validate workspace wiring and the E2E workflow contract; bootstrap builds validate the E2E bridge VSIX
   - paths:
@@ -373,6 +375,8 @@ path_rules:
       - .github/workflows/tests.yml
       - .github/workflows/extension-unit-tests.yml
       - .github/workflows/extension-e2e-tests.yml
+      - .github/workflows/extension-e2e-preflight.yml
+      - .github/workflows/extension-e2e-matrix.json
       - .github/workflows/build-packages.yml
       - .github/workflows/build-cli-native-archives.yml
     targets: [job:extension-e2e]

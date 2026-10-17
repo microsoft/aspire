@@ -1,0 +1,93 @@
+name: VS Code extension E2E preflight
+
+on:
+  workflow_call:
+    outputs:
+      linux_matrix:
+        description: Linux E2E shards
+        value: ${{ jobs.verify_extester_feed.outputs.linux_matrix }}
+      windows_matrix:
+        description: Windows E2E shards
+        value: ${{ jobs.verify_extester_feed.outputs.windows_matrix }}
+
+jobs:
+  verify_extester_feed:
+    if: ${{ github.repository == 'microsoft/aspire' }}
+    name: Verify ExTester internal feed availability
+    runs-on: ubuntu-latest
+    outputs:
+      linux_matrix: ${{ steps.matrix.outputs.linux }}
+      windows_matrix: ${{ steps.matrix.outputs.windows }}
+    env:
+      NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.x'
+
+      - name: Install Corepack
+        working-directory: extension
+        run: |
+          CorepackHome="$RUNNER_TEMP/corepack"
+          export COREPACK_HOME="$CorepackHome"
+          echo "COREPACK_HOME=$CorepackHome" >> "$GITHUB_ENV"
+
+          CorepackVersion="$(cat scripts/corepack-version.txt)"
+          npm install --global --force --registry "$NPM_REGISTRY" "corepack@$CorepackVersion"
+
+          npmGlobalBin="$(npm prefix --global)/bin"
+          export PATH="$npmGlobalBin:$PATH"
+          echo "$npmGlobalBin" >> "$GITHUB_PATH"
+
+          installed="$(corepack --version)"
+          if [ "$installed" != "$CorepackVersion" ]; then
+            echo "::error::corepack version mismatch: expected $CorepackVersion, got '$installed'."
+            exit 1
+          fi
+
+          corepack enable
+          node ./scripts/prepareCorepackYarn.mjs
+          corepack yarn --version
+
+      - name: Validate lockfile registries
+        working-directory: extension
+        run: node scripts/validate-lockfile-registry.cjs
+
+      - name: Install extension dependencies
+        working-directory: extension
+        run: |
+          for attempt in 1 2 3; do
+            if corepack yarn install --frozen-lockfile --non-interactive; then
+              exit 0
+            else
+              exitCode=$?
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::corepack yarn install failed after $attempt attempts."
+              exit "$exitCode"
+            fi
+
+            delay=$((attempt * 30))
+            echo "corepack yarn install failed with exit code $exitCode. Retrying in ${delay}s (attempt $((attempt + 1)) of 3)."
+            sleep "$delay"
+          done
+
+      - name: Verify locked ExTester
+        working-directory: extension
+        run: node scripts/run-e2e.js --verify-extester-feed
+
+      - name: Prepare OS-specific E2E matrices
+        id: matrix
+        run: |
+          for platform in Linux Windows; do
+            matrix="$(jq -ce --arg platform "$platform" \
+              '{include: [.[] | select(.name == $platform)]} | select(.include | length > 0)' \
+              .github/workflows/extension-e2e-matrix.json)"
+            echo "${platform,,}=$matrix" >> "$GITHUB_OUTPUT"
+          done

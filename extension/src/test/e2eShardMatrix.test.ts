@@ -10,7 +10,7 @@ import { removeDirectorySafely } from './testHelpers';
  */
 suite('E2E shard matrix', () => {
     const extensionRoot = path.resolve(__dirname, '..', '..');
-    const workflowPath = path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml');
+    const workflowPath = path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-matrix.json');
     const specDirectory = path.join(extensionRoot, 'src', 'test-e2e');
     const advisoryIssuePattern = /^https:\/\/github\.com\/microsoft\/aspire\/issues\/\d+$/;
 
@@ -46,16 +46,22 @@ suite('E2E shard matrix', () => {
             .sort();
     }
 
-    function matrixRows(workflow: string): MatrixRow[] {
-        const document = asRecord(load(workflow), 'Expected extension-e2e-tests.yml to contain a YAML mapping.');
+    function fixtureRows(value: unknown): unknown {
+        const document = asRecord(value, 'Expected a matrix fixture.');
         const jobs = asRecord(document.jobs, 'Expected extension-e2e-tests.yml to contain jobs.');
         const extensionE2e = asRecord(jobs.extension_e2e, 'Expected extension-e2e-tests.yml to contain the extension_e2e job.');
         const strategy = asRecord(extensionE2e.strategy, 'Expected the extension_e2e job to contain a strategy.');
         const matrix = asRecord(strategy.matrix, 'Expected the extension_e2e strategy to contain a matrix.');
 
-        assert.ok(Array.isArray(matrix.include), 'Expected the extension_e2e matrix to contain an include list.');
+        return matrix.include;
+    }
 
-        return matrix.include.map((value, index) => {
+    function matrixRows(workflow: string): MatrixRow[] {
+        const value: unknown = load(workflow);
+        const rows = Array.isArray(value) ? value : fixtureRows(value);
+        assert.ok(Array.isArray(rows), 'Expected the shard manifest to contain a list.');
+
+        return rows.map((value, index) => {
             const row = asRecord(value, `Expected extension_e2e matrix row ${index + 1} to be a mapping.`);
             assertNoLegacyFields(row, index);
 

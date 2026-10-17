@@ -414,7 +414,7 @@ sanitize_untrusted_text()
 #   Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)
 #   logs-Infrastructure-8-core-ubuntu-latest
 # extension-e2e-tests.yml names test jobs and their diagnostic artifacts as:
-#   Tests / VS Code extension E2E tests / VS Code extension E2E (Linux, debug)
+#   Tests / Run VS Code extension E2E tests (Linux) / VS Code extension E2E (Linux, debug)
 #   extension-e2e-diagnostics-linux-x64-debug-attempt1
 select_test_result_artifacts()
 {

@@ -88,7 +88,7 @@ The map stays small by keeping each dependency in the layer that can prove it:
 | `job:typescript-sdk` | `tests.yml` → [`typescript-sdk-tests.yml`](../../.github/workflows/typescript-sdk-tests.yml) |
 | `job:typescript-api-compat` | `tests.yml` → [`typescript-api-compat.yml`](../../.github/workflows/typescript-api-compat.yml) |
 | `job:extension-unit` | `tests.yml` `extension_tests_win` + `extension_bootstrap_linux` |
-| `job:extension-e2e` | `tests.yml` → [`extension-e2e-tests.yml`](../../.github/workflows/extension-e2e-tests.yml) |
+| `job:extension-e2e` | `tests.yml` → [`extension-e2e-preflight.yml`](../../.github/workflows/extension-e2e-preflight.yml) + Linux/Windows calls to [`extension-e2e-tests.yml`](../../.github/workflows/extension-e2e-tests.yml) |
 | `job:winget-installer` | `tests.yml` `prepare_winget_installer_artifacts` |
 | `job:homebrew-installer` | `tests.yml` `prepare_homebrew_installer_artifacts` |
 | `job:nix-package` | `tests.yml` `nix_package` |
@@ -101,6 +101,30 @@ The map stays small by keeping each dependency in the layer that can prove it:
 
 Unconditional baseline builds are not selector targets. Gated reusable
 workflows are routed to the target they implement or serve.
+
+### Extension E2E scheduling
+
+`run_extension_e2e` starts a single internal-feed preflight immediately after
+selection, alongside product builds. The preflight retains lockfile validation,
+dependency installation with retries, and locked ExTester verification. It
+partitions the single shard list in
+`.github/workflows/extension-e2e-matrix.json` into Linux and Windows outputs.
+Edit that manifest when adding shards or changing their prerequisites; do not
+duplicate shard lists in the caller workflows.
+
+Both E2E calls require a successful preflight, `build_packages`, their own native
+CLI archive producer, and completion of the Windows VSIX producer. Linux also
+requires `extension_bootstrap_linux`; Windows does not consume that bootstrap.
+The VSIX producer's unit-test result is deliberately not a success prerequisite:
+packaging still runs after a unit failure, so E2E can provide independent signal.
+A missing VSIX still fails the artifact download.
+
+The final gate checks both OS calls, the preflight, and Linux bootstrap for
+unexpected skips when E2E is selected, on PR and non-PR events. Shard names,
+diagnostic artifacts, advisory issues, and setup/harness/cleanup failure policy
+are independent of this scheduling split. Linux can start before Windows CLI
+compilation finishes; that head-start alone does not guarantee a shorter overall
+run if Windows shards remain the critical path.
 
 ## Rule categories
 

@@ -150,6 +150,8 @@ public sealed class TestTriggerMapTests
     [Theory]
     [InlineData(".github/workflows/extension-unit-tests.yml")]
     [InlineData(".github/workflows/extension-e2e-tests.yml")]
+    [InlineData(".github/workflows/extension-e2e-preflight.yml")]
+    [InlineData(".github/workflows/extension-e2e-matrix.json")]
     public void ExtensionWorkflowChangesSelectUnitAndE2eJobs(string workflow)
     {
         var targets = s_map.PathRules
@@ -1310,7 +1312,8 @@ public sealed class TestTriggerMapTests
         var packageConsumerTargets = ArtifactConsumingWorkflowJobTargets(jobs, "build_packages").ToList();
         var cliArchiveConsumerTargets = ArtifactConsumingWorkflowJobTargets(jobs, "build_cli_archive_").ToList();
         Assert.Contains(packageConsumerTargets, target => target.WorkflowJobId == "polyglot_validation");
-        Assert.Contains(packageConsumerTargets, target => target.WorkflowJobId == "extension_e2e_tests");
+        Assert.Contains(packageConsumerTargets, target => target.WorkflowJobId == "extension_e2e_tests_linux");
+        Assert.Contains(packageConsumerTargets, target => target.WorkflowJobId == "extension_e2e_tests_windows");
         Assert.Contains(packageConsumerTargets, target => target.WorkflowJobId == "prepare_winget_installer_artifacts");
         Assert.Contains(cliArchiveConsumerTargets, target => target.WorkflowJobId == "native_dashboard_validation_linux_x64");
         Assert.DoesNotContain(packageSelectedJobs, job => job == "job:native-dashboard-validation");
@@ -1412,7 +1415,7 @@ public sealed class TestTriggerMapTests
         // This list is hand-maintained intent (like EveryJobTargetResolvesToExistingWorkflowOrJob's
         // job-id mapping): a new gated job must be added here too. The check is substring containment,
         // so it catches a job NOT referencing its own var; it intentionally tolerates extra vars -- the
-        // extension jobs additionally OR-in run_extension_e2e because extension_e2e_tests needs the
+        // extension jobs additionally OR-in run_extension_e2e because the E2E shards need the
         // VSIX and the corepack bootstrap they produce.
         var testsYml = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"));
 
@@ -1423,7 +1426,9 @@ public sealed class TestTriggerMapTests
             ("typescript_api_compat", "run_typescript_api_compat"),
             ("extension_tests_win", "run_extension_unit"),
             ("extension_bootstrap_linux", "run_extension_unit"),
-            ("extension_e2e_tests", "run_extension_e2e"),
+            ("extension_e2e_preflight", "run_extension_e2e"),
+            ("extension_e2e_tests_linux", "run_extension_e2e"),
+            ("extension_e2e_tests_windows", "run_extension_e2e"),
             ("prepare_winget_installer_artifacts", "run_winget_installer"),
             ("prepare_homebrew_installer_artifacts", "run_homebrew_installer"),
             ("nix_package", "run_nix_package"),
@@ -1532,11 +1537,12 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
-    [InlineData("tests_requires_cli_archive", "test:Aspire.Cli.EndToEnd.Tests")]
-    [InlineData("extension_e2e_tests", "job:extension-e2e")]
-    public void CliArchivePathsMatchWorkflowDependencies(string workflowJobId, string target)
+    [InlineData(new[] { "tests_requires_cli_archive" }, "test:Aspire.Cli.EndToEnd.Tests")]
+    [InlineData(new[] { "extension_e2e_tests_linux", "extension_e2e_tests_windows" }, "job:extension-e2e")]
+    public void CliArchivePathsMatchWorkflowDependencies(string[] workflowJobIds, string target)
     {
-        var expectedArchivePaths = ArchiveRidsRequiredByJob(workflowJobId)
+        var expectedArchivePaths = workflowJobIds.SelectMany(ArchiveRidsRequiredByJob)
+            .Distinct(StringComparer.Ordinal)
             .Select(rid => $"eng/clipack/Aspire.Cli.{rid}.csproj")
             .Order(StringComparer.Ordinal);
         var archiveRule = Assert.Single(
@@ -1554,27 +1560,19 @@ public sealed class TestTriggerMapTests
     [Fact]
     public void ExtensionE2eWorkflowRidsMatchArchiveDependencies()
     {
-        var workflow = new YamlStream();
-        using (var reader = new StringReader(File.ReadAllText(
-            Path.Combine(RepoRoot.Path, ".github", "workflows", "extension-e2e-tests.yml"))))
-        {
-            workflow.Load(reader);
-        }
-
-        var root = Assert.IsType<YamlMappingNode>(workflow.Documents[0].RootNode);
-        var jobs = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
-        var extensionE2e = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode("extension_e2e")]);
-        var strategy = Assert.IsType<YamlMappingNode>(extensionE2e.Children[new YamlScalarNode("strategy")]);
-        var matrix = Assert.IsType<YamlMappingNode>(strategy.Children[new YamlScalarNode("matrix")]);
-        var include = Assert.IsType<YamlSequenceNode>(matrix.Children[new YamlScalarNode("include")]);
-        var consumedRids = include.Children
-            .Select(node => Assert.IsType<YamlMappingNode>(node).Children[new YamlScalarNode("rid")].ToString())
+        using var matrix = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(RepoRoot.Path, ".github", "workflows", "extension-e2e-matrix.json")));
+        var consumedRids = matrix.RootElement.EnumerateArray()
+            .Select(row => row.GetProperty("rid").GetString())
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal);
 
         Assert.Equal(
             consumedRids,
-            ArchiveRidsRequiredByJob("extension_e2e_tests").Order(StringComparer.Ordinal));
+            new[] { "extension_e2e_tests_linux", "extension_e2e_tests_windows" }
+                .SelectMany(ArchiveRidsRequiredByJob)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -1936,7 +1934,7 @@ public sealed class TestTriggerMapTests
     private static IReadOnlyList<string> ArchiveRidsRequiredByJob(string jobId)
     {
         // Resolve workflow dependencies shaped as:
-        //   extension_e2e_tests:
+        //   extension_e2e_tests_linux:
         //     needs: [..., build_cli_archive_linux]
         //   build_cli_archive_linux:
         //     with:

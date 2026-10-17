@@ -3304,7 +3304,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             [
               {
                 "id":1,
-                "name":"Tests / VS Code extension E2E tests / VS Code extension E2E (Linux, debug)",
+                "name":"Tests / Run VS Code extension E2E tests (Linux) / VS Code extension E2E (Linux, debug)",
                 "steps":[{"name":"Run extension E2E tests","conclusion":"failure"}]
               }
             ]
@@ -3327,7 +3327,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal(0, result.ExitCode);
         Assert.Equal(
             """
-            [{"id":20,"name":"extension-e2e-diagnostics-linux-x64-debug-attempt2","size_in_bytes":2048,"job":"Tests / VS Code extension E2E tests / VS Code extension E2E (Linux, debug)","format":"mocha"}]
+            [{"id":20,"name":"extension-e2e-diagnostics-linux-x64-debug-attempt2","size_in_bytes":2048,"job":"Tests / Run VS Code extension E2E tests (Linux) / VS Code extension E2E (Linux, debug)","format":"mocha"}]
             """,
             result.Output.Trim());
     }
