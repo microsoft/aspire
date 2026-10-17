@@ -15,10 +15,11 @@ param myidentity_outputs_id string
 
 param myidentity_outputs_clientid string
 
-resource myapp2 'Microsoft.App/containerApps@2025-10-02-preview' = {
+resource myapp2 'Microsoft.App/containerApps@2026-03-02-preview' = {
   name: 'myapp2'
   location: location
   properties: {
+    environmentId: cae_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       registries: [
@@ -33,7 +34,6 @@ resource myapp2 'Microsoft.App/containerApps@2025-10-02-preview' = {
         }
       }
     }
-    environmentId: cae_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {
