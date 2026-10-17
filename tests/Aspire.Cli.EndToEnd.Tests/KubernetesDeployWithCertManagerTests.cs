@@ -1,0 +1,220 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Hex1b.Automation;
+using Xunit;
+
+namespace Aspire.Cli.EndToEnd.Tests;
+
+public sealed class KubernetesDeployWithCertManagerTests(ITestOutputHelper output)
+{
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task DeployCSharpWithExternalAccountBinding()
+        => DeployWithExternalAccountBindingAsync(typeScript: false);
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task DeployTypeScriptWithExternalAccountBinding()
+        => DeployWithExternalAccountBindingAsync(typeScript: true);
+
+    private async Task DeployWithExternalAccountBindingAsync(bool typeScript)
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var clusterName = KubernetesDeployTestHelpers.GenerateUniqueClusterName();
+        const string projectName = "CertManagerEab";
+        var fixtureDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "pebble-eab");
+        var containerFixtureDirectory = $"/workspace/{workspace.WorkspaceRoot.Name}/pebble-eab";
+        await PebbleAcmeFixture.CreateAsync(fixtureDirectory, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(
+            Path.Combine(fixtureDirectory, "reject-issuer-delete.yaml"),
+            RejectIssuerDeletionPolicy,
+            TestContext.Current.CancellationToken);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
+            repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(
+            terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        try
+        {
+            await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+            await auto.InstallAspireCliAsync(strategy, counter);
+            await auto.VerifyPullRequestCliVersionAsync(counter);
+            await auto.InstallKindAndHelmAsync(counter);
+            await auto.CreateKindClusterWithRegistryAsync(counter, clusterName);
+            await auto.RunCommandAsync(
+                "kubectl apply --server-side -f " +
+                "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml",
+                counter, TimeSpan.FromMinutes(2));
+
+            if (typeScript)
+            {
+                await auto.AspireNewTypeScriptEmptyAppHostAsync(projectName, counter);
+            }
+            else
+            {
+                await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
+            }
+
+            await auto.RunCommandAsync($"cd {projectName}", counter);
+            await auto.TypeAsync("aspire add Aspire.Hosting.Kubernetes");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromMinutes(3));
+
+            if (typeScript)
+            {
+                await auto.RunCommandAsync("aspire restore", counter, TimeSpan.FromMinutes(3));
+            }
+
+            var appHostPath = Path.Combine(
+                workspace.WorkspaceRoot.FullName, projectName, typeScript ? "apphost.mts" : "apphost.cs");
+            var content = await File.ReadAllTextAsync(appHostPath, TestContext.Current.CancellationToken);
+            var buildRun = typeScript ? "await builder.build().run();" : "builder.Build().Run();";
+            Assert.Contains(buildRun, content);
+            await File.WriteAllTextAsync(
+                appHostPath,
+                content.Replace(buildRun, (typeScript ? TypeScriptIssuers : CSharpIssuers) + Environment.NewLine + buildRun),
+                TestContext.Current.CancellationToken);
+
+            await auto.RunCommandAsync(
+                "unset ASPIRE_PLAYGROUND && " +
+                $"export Parameters__acmeserver={PebbleAcmeFixture.DirectoryUrl} && " +
+                "export Parameters__acmeemail=aspire-e2e-test@microsoft.com && " +
+                $"export Parameters__eabkeyid={PebbleAcmeFixture.KeyId} && " +
+                $"export Parameters__eabhmac=$(cat \"{containerFixtureDirectory}/valid-key\") && " +
+                $"export Parameters__eabinvalidhmac=$(cat \"{containerFixtureDirectory}/invalid-key\")",
+                counter);
+            await auto.RunCommandAsync("aspire deploy --non-interactive", counter, TimeSpan.FromMinutes(10));
+
+            // Start a fresh ACME server only after Aspire has applied both issuers and EAB Secrets.
+            // Patch test CA trust, never the binding or the Secrets generated by the deploy pipeline.
+            await auto.RunCommandAsync(
+                "URI=$(kubectl get clusterissuer pebble-valid -o jsonpath='{.status.acme.uri}') && test -z \"$URI\" && " +
+                $"kubectl apply -f \"{containerFixtureDirectory}/pebble.json\" && " +
+                "kubectl rollout status deployment/pebble-acme -n cert-manager-chart --timeout=180s && " +
+                $"kubectl patch clusterissuer pebble-valid --type=merge --patch-file \"{containerFixtureDirectory}/trust.json\" && " +
+                $"kubectl patch clusterissuer pebble-invalid --type=merge --patch-file \"{containerFixtureDirectory}/trust.json\" && " +
+                "kubectl wait clusterissuer/pebble-valid --for=condition=Ready --timeout=300s && " +
+                "URI=$(kubectl get clusterissuer pebble-valid -o jsonpath='{.status.acme.uri}') && test -n \"$URI\" && " +
+                "EAB_ACCOUNT_UID=$(kubectl get secret pebble-valid-account-key -n cert-manager-chart -o jsonpath='{.metadata.uid}') && " +
+                "test -n \"$EAB_ACCOUNT_UID\"",
+                counter, TimeSpan.FromMinutes(9));
+
+            await auto.RunCommandAsync(
+                "OK=0; for i in $(seq 1 60); do " +
+                "MESSAGE=$(kubectl get clusterissuer pebble-invalid -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].message}') && " +
+                "READY=$(kubectl get clusterissuer pebble-invalid -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}') && " +
+                "if [ \"$READY\" = False ] && printf '%s' \"$MESSAGE\" | grep -q 'external account binding JWS verification error'; " +
+                "then OK=1; break; fi; sleep 5; done; " +
+                "test \"$OK\" = 1 && " +
+                "URI=$(kubectl get clusterissuer pebble-invalid -o jsonpath='{.status.acme.uri}') && test -z \"$URI\"",
+                counter, TimeSpan.FromMinutes(6));
+
+            await auto.RunCommandAsync("aspire deploy --non-interactive", counter, TimeSpan.FromMinutes(10));
+            await auto.RunCommandAsync(
+                "kubectl wait clusterissuer/pebble-valid --for=condition=Ready --timeout=60s && " +
+                "test \"$EAB_ACCOUNT_UID\" = \"$(kubectl get secret pebble-valid-account-key -n cert-manager-chart -o jsonpath='{.metadata.uid}')\"",
+                counter, TimeSpan.FromMinutes(2));
+
+            // Reject only one issuer's deletion at the API server, leaving Secret cleanup permitted.
+            // Prove rejection is active before destroy so propagation delays cannot hide the regression.
+            await auto.RunCommandAsync(
+                $"kubectl apply -f \"{containerFixtureDirectory}/reject-issuer-delete.yaml\"",
+                counter);
+            await auto.RunCommandAsync(
+                "REJECTED=0; for i in $(seq 1 60); do " +
+                "if kubectl delete clusterissuer pebble-valid --dry-run=server > issuer-delete-result.txt 2>&1; then sleep 1; " +
+                "elif grep -q 'EAB cleanup rejection fixture' issuer-delete-result.txt; then REJECTED=1; break; " +
+                "else cat issuer-delete-result.txt; break; fi; done; test \"$REJECTED\" = 1",
+                counter, TimeSpan.FromMinutes(2));
+            await auto.AspireDestroyAsync(counter, TimeSpan.FromMinutes(5));
+            await auto.RunCommandAsync(
+                "ISSUERS=$(kubectl get clusterissuer pebble-valid pebble-invalid --ignore-not-found -o name) && " +
+                "test \"$ISSUERS\" = clusterissuer.cert-manager.io/pebble-valid && " +
+                "SECRETS=$(kubectl get secret pebble-valid-eab pebble-invalid-eab -n cert-manager-chart --ignore-not-found -o name) && test -z \"$SECRETS\" && " +
+                "test \"$EAB_ACCOUNT_UID\" = \"$(kubectl get secret pebble-valid-account-key -n cert-manager-chart -o jsonpath='{.metadata.uid}')\"",
+                counter);
+            await auto.CleanupKubernetesDeploymentAsync(counter, clusterName);
+        }
+        finally
+        {
+            await KubernetesDeployTestHelpers.CleanupKindClusterOutOfBandAsync(clusterName, output);
+        }
+    }
+
+    private const string RejectIssuerDeletionPolicy = """
+        apiVersion: admissionregistration.k8s.io/v1
+        kind: ValidatingAdmissionPolicy
+        metadata:
+          name: reject-eab-issuer-deletion
+        spec:
+          failurePolicy: Fail
+          matchConstraints:
+            resourceRules:
+              - apiGroups: ["cert-manager.io"]
+                apiVersions: ["v1"]
+                operations: ["DELETE"]
+                resources: ["clusterissuers"]
+          validations:
+            - expression: "oldObject.metadata.name != 'pebble-valid'"
+              message: EAB cleanup rejection fixture
+        ---
+        apiVersion: admissionregistration.k8s.io/v1
+        kind: ValidatingAdmissionPolicyBinding
+        metadata:
+          name: reject-eab-issuer-deletion
+        spec:
+          policyName: reject-eab-issuer-deletion
+          validationActions: ["Deny"]
+        """;
+
+    private const string CSharpIssuers = """
+        #pragma warning disable ASPIRECOMPUTE003
+        var server = builder.AddParameter("acmeserver");
+        var email = builder.AddParameter("acmeemail");
+        var keyId = builder.AddParameter("eabkeyid");
+        var hmac = builder.AddParameter("eabhmac", secret: true);
+        var invalidHmac = builder.AddParameter("eabinvalidhmac", secret: true);
+        var k8s = builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm => helm.WithNamespace("eab-test").WithChartVersion("0.1.0"));
+        var certManager = k8s.AddCertManager("cert-manager");
+        certManager.AddIssuer("pebble-valid")
+            .WithAcmeServer(server, email)
+            .WithExternalAccountBinding("fixture-key-id", hmac)
+            .WithHttp01Solver();
+        certManager.AddIssuer("pebble-invalid")
+            .WithAcmeServer(server, "aspire-e2e-test@microsoft.com")
+            .WithExternalAccountBinding(keyId, invalidHmac)
+            .WithHttp01Solver();
+        """;
+
+    private const string TypeScriptIssuers = """
+        const server = await builder.addParameter("acmeserver");
+        const email = await builder.addParameter("acmeemail");
+        const keyId = await builder.addParameter("eabkeyid");
+        const hmac = await builder.addParameter("eabhmac", { secret: true });
+        const invalidHmac = await builder.addParameter("eabinvalidhmac", { secret: true });
+        const k8s = await builder.addKubernetesEnvironment("env");
+        await k8s.withHelm({
+            configure: async (helm) => {
+                await helm.withNamespace("eab-test");
+                await helm.withChartVersion("0.1.0");
+            },
+        });
+        const certManager = await k8s.addCertManager("cert-manager");
+        const valid = await certManager.addIssuer("pebble-valid");
+        await valid.withAcmeServerParams(server, email);
+        await valid.withExternalAccountBinding("fixture-key-id", hmac);
+        await valid.withHttp01Solver();
+        const invalid = await certManager.addIssuer("pebble-invalid");
+        await invalid.withAcmeServerUrlParam(server, "aspire-e2e-test@microsoft.com");
+        await invalid.withExternalAccountBindingParam(keyId, invalidHmac);
+        await invalid.withHttp01Solver();
+        """;
+}

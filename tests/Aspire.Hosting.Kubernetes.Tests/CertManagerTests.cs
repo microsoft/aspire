@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +14,251 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 
 public class CertManagerTests
 {
+    private const string TestHmacKey = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh_-";
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WithAcmeServer_ParameterizedUrlResolvesAtDeployTime(bool parameterizedEmail)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var serverUrl = builder.AddParameter("acmeurl");
+        var email = builder.AddParameter("acmeemail");
+        var certManager = builder.AddKubernetesEnvironment("env").AddCertManager("cert-manager");
+        var issuer = certManager.AddIssuer("parameterized-acme").WithHttp01Solver();
+
+        if (parameterizedEmail)
+        {
+            issuer.WithAcmeServer(serverUrl, email);
+        }
+        else
+        {
+            issuer.WithAcmeServer(serverUrl, "ops@contoso.com");
+        }
+        var spec = Assert.IsType<CertManagerAcmeIssuerSpec>(issuer.Resource.Spec);
+        Assert.Same(serverUrl.Resource, Assert.Single(spec.ServerUrl.ValueProviders));
+
+        builder.Configuration["Parameters:acmeurl"] = "https://acme.example.com/directory";
+        builder.Configuration["Parameters:acmeemail"] = "ops@contoso.com";
+        using var app = builder.Build();
+        var yaml = await CertManagerExtensions.BuildClusterIssuerManifestAsync(
+            app.Services.GetRequiredService<DistributedApplicationModel>(), certManager.Resource, issuer.Resource,
+            NullLogger.Instance, TestContext.Current.CancellationToken);
+
+        await Verify(yaml, "yaml").UseParameters(parameterizedEmail);
+    }
+
+    [Fact]
+    public void WithAcmeServer_ParameterizedUrlValidatesArguments()
+    {
+        var builder = TestDistributedApplicationBuilder.Create();
+        var serverUrl = builder.AddParameter("acmeurl");
+        var email = builder.AddParameter("acmeemail");
+        var issuer = builder.AddKubernetesEnvironment("env").AddCertManager("cert-manager").AddIssuer("acme");
+
+        Assert.Throws<ArgumentNullException>(() => CertManagerExtensions.WithAcmeServer(null!, serverUrl, "ops@contoso.com"));
+        Assert.Throws<ArgumentNullException>(() => CertManagerExtensions.WithAcmeServer(null!, serverUrl, email));
+        Assert.Throws<ArgumentNullException>(() => issuer.WithAcmeServer((IResourceBuilder<ParameterResource>)null!, "ops@contoso.com"));
+        Assert.Throws<ArgumentNullException>(() => issuer.WithAcmeServer((IResourceBuilder<ParameterResource>)null!, email));
+        Assert.Throws<ArgumentNullException>(() => issuer.WithAcmeServer(serverUrl, (string)null!));
+        Assert.Throws<ArgumentException>(() => issuer.WithAcmeServer(serverUrl, ""));
+        Assert.Throws<ArgumentNullException>(() => issuer.WithAcmeServer(serverUrl, (IResourceBuilder<ParameterResource>)null!));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WithExternalAccountBinding_StoresCredentialsWithoutResolvingParameters(bool parameterizedKeyId)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var issuer = builder.AddKubernetesEnvironment("env").AddCertManager("cert-manager").AddIssuer("eab");
+        var hmacKey = builder.AddParameter("eab-hmac", secret: true);
+        var keyId = builder.AddParameter("eab-key-id");
+
+        var result = parameterizedKeyId
+            ? issuer.WithExternalAccountBinding(keyId, hmacKey)
+            : issuer.WithExternalAccountBinding("provider-key-id", hmacKey);
+        issuer.WithAcmeServer("https://acme.example.com/directory", "ops@contoso.com");
+
+        Assert.Same(issuer, result);
+        var binding = Assert.IsType<CertManagerExternalAccountBinding>(issuer.Resource.ExternalAccountBinding);
+        Assert.Same(hmacKey.Resource, binding.HmacKey);
+        Assert.Equal(parameterizedKeyId ? "{0}" : "provider-key-id", binding.KeyId.Format);
+        if (parameterizedKeyId)
+        {
+            Assert.Same(keyId.Resource, Assert.Single(binding.KeyId.ValueProviders));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WithExternalAccountBinding_RejectsNonSecretHmacKey(bool parameterizedKeyId)
+    {
+        var builder = TestDistributedApplicationBuilder.Create();
+        var issuer = builder.AddKubernetesEnvironment("env").AddCertManager("cert-manager").AddIssuer("eab");
+        var hmacKey = builder.AddParameter("eab-hmac");
+        var keyId = builder.AddParameter("eab-key-id");
+
+        var exception = Assert.Throws<ArgumentException>(() => parameterizedKeyId
+            ? issuer.WithExternalAccountBinding(keyId, hmacKey)
+            : issuer.WithExternalAccountBinding("provider-key-id", hmacKey));
+        Assert.Equal("hmacKey", exception.ParamName);
+        Assert.Null(issuer.Resource.ExternalAccountBinding);
+    }
+
+    [Fact]
+    public void WithExternalAccountBinding_ValidatesArguments()
+    {
+        var builder = TestDistributedApplicationBuilder.Create();
+        var issuer = builder.AddKubernetesEnvironment("env").AddCertManager("cert-manager").AddIssuer("eab");
+        var hmacKey = builder.AddParameter("eab-hmac", secret: true);
+        var keyId = builder.AddParameter("eab-key-id");
+
+        Assert.Throws<ArgumentNullException>(() => CertManagerExtensions.WithExternalAccountBinding(null!, "key", hmacKey));
+        Assert.Throws<ArgumentNullException>(() => CertManagerExtensions.WithExternalAccountBinding(null!, keyId, hmacKey));
+        Assert.Throws<ArgumentNullException>(() => issuer.WithExternalAccountBinding((string)null!, hmacKey));
+        Assert.Throws<ArgumentException>(() => issuer.WithExternalAccountBinding("", hmacKey));
+        Assert.Throws<ArgumentNullException>(() => issuer.WithExternalAccountBinding((IResourceBuilder<ParameterResource>)null!, hmacKey));
+        Assert.Throws<ArgumentNullException>(() => issuer.WithExternalAccountBinding("key", null!));
+        Assert.Throws<ArgumentNullException>(() => issuer.WithExternalAccountBinding(keyId, null!));
+    }
+
+    [Theory]
+    [InlineData(null, null, null, "cert-manager-chart")]
+    [InlineData("controllers", null, null, "controllers")]
+    [InlineData("controllers", "accounts", null, "accounts")]
+    [InlineData("controllers", "", null, "controllers")]
+    [InlineData("controllers", null, "chart-override", "chart-override")]
+    [InlineData("controllers", null, "", "controllers")]
+    public void ExternalAccountBinding_UsesClusterResourceNamespace(
+        string? installNamespace, string? clusterNamespace, string? chartNamespace, string expected)
+    {
+        var builder = TestDistributedApplicationBuilder.Create();
+        var certManager = builder.AddKubernetesEnvironment("env").AddCertManager("cert-manager");
+        certManager.Resource.HelmChart.Namespace = installNamespace;
+        if (clusterNamespace is not null)
+        {
+            certManager.Resource.HelmChart.Values["clusterResourceNamespace"] = clusterNamespace;
+        }
+        if (chartNamespace is not null)
+        {
+            certManager.Resource.HelmChart.Values["namespace"] = chartNamespace;
+        }
+
+        Assert.Equal(expected, CertManagerExtensions.GetClusterResourceNamespace(certManager.Resource));
+    }
+
+    [Fact]
+    public void ExternalAccountBinding_RejectsAmbiguousNamespaceOverride()
+    {
+        var builder = TestDistributedApplicationBuilder.Create();
+        var certManager = builder.AddKubernetesEnvironment("env").AddCertManager("cert-manager");
+        certManager.Resource.HelmChart.Values["extraArgs[0]"] = "--cluster-resource-namespace=accounts";
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CertManagerExtensions.GetClusterResourceNamespace(certManager.Resource));
+        Assert.Contains("'clusterResourceNamespace' Helm value", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task IssuerPipeline_ValidatesSpecAndSolverBeforeInvokingKubectl(bool withSpec)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var certManager = builder.AddKubernetesEnvironment("env").AddCertManager("cert-manager");
+        var issuer = certManager.AddIssuer("eab");
+        if (withSpec)
+        {
+            issuer.WithAcmeServer("https://acme.example.com/directory", "ops@contoso.com");
+        }
+        using var app = builder.Build();
+        var steps = await PipelineStepTestHelpers.CreateStepsAsync(app.Services, certManager.Resource);
+        var apply = Assert.Single(steps, step => step.Name == "cm-issuer-apply-eab");
+        Assert.Contains("helm-install-cert-manager-chart", apply.DependsOnSteps);
+        var delete = Assert.Single(steps, step => step.Name == "cm-issuer-delete-eab");
+        Assert.Contains("helm-uninstall-cert-manager-chart", delete.RequiredBySteps);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            PipelineStepTestHelpers.RunStepAsync(app.Services, apply));
+        Assert.Equal(withSpec
+            ? "ClusterIssuer 'eab' has no solvers configured. Add at least one solver via WithHttp01Solver()."
+            : "ClusterIssuer 'eab' has no spec. Configure it with WithAcmeServer().", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("issuer-eab:aspire-cert-manager")]
+    public void ExternalAccountBinding_AcceptsMissingOrOwnedSecret(string ownership)
+    {
+        CertManagerExtensions.ValidateExternalAccountBindingSecretOwnership("issuer-eab", ownership);
+    }
+
+    [Theory]
+    [InlineData("issuer-eab:")]
+    [InlineData("issuer-eab:another-manager")]
+    public void ExternalAccountBinding_RejectsUnmanagedSecret(string ownership)
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            CertManagerExtensions.ValidateExternalAccountBindingSecretOwnership("issuer-eab", ownership));
+    }
+
+    [Fact]
+    public async Task BuildExternalAccountBindingSecretApplySpec_UsesStdinAndPreservesBase64UrlText()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Configuration["Parameters:eab-hmac"] = TestHmacKey;
+        var hmacKey = builder.AddParameter("eab-hmac", secret: true);
+        var issuer = builder.AddKubernetesEnvironment("env").AddCertManager("cert-manager").AddIssuer("Eab-Issuer")
+            .WithExternalAccountBinding("fixture-key-id", hmacKey);
+
+        var spec = await CertManagerExtensions.BuildExternalAccountBindingSecretApplySpecAsync(
+            issuer.Resource, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["apply", "--server-side", "--field-manager=aspire-cert-manager", "-f", "-"], spec.ArgumentList);
+        Assert.Null(spec.Arguments);
+        Assert.Null(spec.OnOutputData);
+        Assert.Null(spec.OnErrorData);
+        Assert.False(spec.ThrowOnNonZeroReturnCode);
+        Assert.Equal(0, spec.RetainedOutputLineCount);
+        using var document = JsonDocument.Parse(spec.StandardInputContent!);
+        var encodedKey = document.RootElement.GetProperty("data").GetProperty("hmac-key").GetString()!;
+        Assert.Equal(TestHmacKey, Encoding.UTF8.GetString(Convert.FromBase64String(encodedKey)));
+        await Verify(spec.StandardInputContent!, "json");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BuildClusterIssuerManifest_ExternalAccountBindingEscapesKeyId(bool parameterizedKeyId)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        const string keyIdValue = "fixture: \"account\"\n#key";
+        builder.Configuration["Parameters:eab-key-id"] = keyIdValue;
+        var keyId = builder.AddParameter("eab-key-id");
+        var hmacKey = builder.AddParameter("eab-hmac", secret: true);
+        var certManager = builder.AddKubernetesEnvironment("env").AddCertManager("cert-manager");
+        var issuer = certManager.AddIssuer("eab")
+            .WithAcmeServer("https://acme.example.com/directory", "ops@contoso.com")
+            .WithHttp01Solver();
+        if (parameterizedKeyId)
+        {
+            issuer.WithExternalAccountBinding(keyId, hmacKey);
+        }
+        else
+        {
+            issuer.WithExternalAccountBinding(keyIdValue, hmacKey);
+        }
+
+        using var app = builder.Build();
+        var yaml = await CertManagerExtensions.BuildClusterIssuerManifestAsync(
+            app.Services.GetRequiredService<DistributedApplicationModel>(), certManager.Resource, issuer.Resource,
+            NullLogger.Instance, TestContext.Current.CancellationToken);
+
+        await Verify(yaml, "yaml").UseParameters(parameterizedKeyId);
+    }
+
     [Fact]
     public void AddCertManager_RegistersWrapperAndHelmChartUnderSeparateNames()
     {
@@ -41,14 +288,14 @@ public class CertManagerTests
     }
 
     [Fact]
-    public void AddIssuer_WithLetsEncryptProductionAndHttp01_PopulatesSpecAndSolver()
+    public void AddIssuer_WithAcmeServerAndHttp01_PopulatesSpecAndSolver()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var k8s = builder.AddKubernetesEnvironment("env");
         var certManager = k8s.AddCertManager("cert-manager");
 
         var issuer = certManager.AddIssuer("letsencrypt-prod")
-            .WithLetsEncryptProduction("ops@contoso.com")
+            .WithAcmeServer("https://acme-v02.api.letsencrypt.org/directory", "ops@contoso.com")
             .WithHttp01Solver();
 
         Assert.Equal("letsencrypt-prod", issuer.Resource.Name);
@@ -64,13 +311,13 @@ public class CertManagerTests
     }
 
     [Fact]
-    public void WithLetsEncryptStaging_UsesStagingDirectoryUrl()
+    public void WithAcmeServer_UsesStagingDirectoryUrl()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var certManager = builder.AddKubernetesEnvironment("env").AddCertManager("cert-manager");
 
         var issuer = certManager.AddIssuer("le-staging")
-            .WithLetsEncryptStaging("ops@contoso.com");
+            .WithAcmeServer("https://acme-staging-v02.api.letsencrypt.org/directory", "ops@contoso.com");
 
         var spec = Assert.IsType<CertManagerAcmeIssuerSpec>(issuer.Resource.Spec);
         Assert.Equal("https://acme-staging-v02.api.letsencrypt.org/directory", spec.ServerUrl.Format);
@@ -96,7 +343,7 @@ public class CertManagerTests
         var k8s = builder.AddKubernetesEnvironment("env");
         var issuer = k8s.AddCertManager("cert-manager")
             .AddIssuer("letsencrypt-prod")
-            .WithLetsEncryptProduction("ops@contoso.com")
+            .WithAcmeServer("https://acme-v02.api.letsencrypt.org/directory", "ops@contoso.com")
             .WithHttp01Solver();
 
         var gateway = k8s.AddGateway("public")
@@ -118,7 +365,7 @@ public class CertManagerTests
         var k8s = builder.AddKubernetesEnvironment("env");
         var issuer = k8s.AddCertManager("cert-manager")
             .AddIssuer("LetsEncrypt-Prod") // intentionally mixed-case to verify DNS-1123 normalization
-            .WithLetsEncryptProduction("ops@contoso.com")
+            .WithAcmeServer("https://acme-v02.api.letsencrypt.org/directory", "ops@contoso.com")
             .WithHttp01Solver();
 
         // A gateway that adopts this issuer must end up referenced as a parentRef on the
@@ -151,8 +398,8 @@ public class CertManagerTests
         Assert.Contains("apiVersion: cert-manager.io/v1", yaml);
         Assert.Contains("kind: ClusterIssuer", yaml);
         Assert.Contains("name: letsencrypt-prod", yaml);
-        Assert.Contains("server: https://acme-v02.api.letsencrypt.org/directory", yaml);
-        Assert.Contains("email: ops@contoso.com", yaml);
+        Assert.Contains("server: \"https://acme-v02.api.letsencrypt.org/directory\"", yaml);
+        Assert.Contains("email: \"ops@contoso.com\"", yaml);
         Assert.Contains("name: letsencrypt-prod-account-key", yaml);
         Assert.Contains("- http01:", yaml);
         Assert.Contains("gatewayHTTPRoute:", yaml);
@@ -170,7 +417,7 @@ public class CertManagerTests
         var k8s = builder.AddKubernetesEnvironment("env");
         var issuer = k8s.AddCertManager("cert-manager")
             .AddIssuer("le-prod")
-            .WithLetsEncryptProduction("ops@contoso.com")
+            .WithAcmeServer("https://acme-v02.api.letsencrypt.org/directory", "ops@contoso.com")
             .WithHttp01Solver();
 
         k8s.AddGateway("public")
@@ -207,7 +454,7 @@ public class CertManagerTests
         var k8s = builder.AddKubernetesEnvironment("env");
         var issuer = k8s.AddCertManager("cert-manager")
             .AddIssuer("le-prod")
-            .WithLetsEncryptProduction("ops@contoso.com")
+            .WithAcmeServer("https://acme-v02.api.letsencrypt.org/directory", "ops@contoso.com")
             .WithHttp01Solver();
 
         k8s.AddGateway("public")
@@ -250,7 +497,7 @@ public class CertManagerTests
 
         var issuerInA = envA.AddCertManager("cert-manager")
             .AddIssuer("le-prod")
-            .WithLetsEncryptProduction("ops@contoso.com")
+            .WithAcmeServer("https://acme-v02.api.letsencrypt.org/directory", "ops@contoso.com")
             .WithHttp01Solver();
 
         var gatewayInB = envB.AddGateway("public").WithGatewayClass("nginx");

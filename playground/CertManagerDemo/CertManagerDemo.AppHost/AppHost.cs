@@ -39,7 +39,7 @@ var certManager = aks.AddCertManager("cert-manager");
 // the same hostname being validated, which works for any AGC-assigned FQDN because port
 // 80 is publicly reachable.
 var letsEncrypt = certManager.AddIssuer("letsencrypt-prod")
-                             .WithLetsEncryptProduction(acmeEmail)
+                             .WithAcmeServer("https://acme-v02.api.letsencrypt.org/directory", acmeEmail)
                              .WithHttp01Solver();
 
 var api = builder.AddProject<Projects.CertManagerDemo_ApiService>("api")

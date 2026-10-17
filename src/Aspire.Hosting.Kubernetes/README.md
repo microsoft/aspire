@@ -90,6 +90,145 @@ When published or deployed, `DATA_PATH` contains `/data`. Applications can there
 aspire publish -o k8s-artifacts
 ```
 
+### ACME certificates with cert-manager
+
+Install cert-manager and configure an issuer with the provider's ACME directory URL:
+
+```csharp
+var k8s = builder.AddKubernetesEnvironment("k8s");
+var email = builder.AddParameter("acmeemail");
+var certManager = k8s.AddCertManager("cert-manager");
+
+var letsEncrypt = certManager.AddIssuer("letsencrypt")
+    .WithAcmeServer("https://acme-v02.api.letsencrypt.org/directory", email)
+    .WithHttp01Solver();
+
+// api must expose an external HTTP endpoint; the Gateway must be publicly reachable on port 80.
+k8s.AddGateway("public")
+    .WithGatewayClass("my-gateway-class")
+    .WithRoute("/", api.GetEndpoint("http"))
+    .WithTls(letsEncrypt);
+```
+
+The former `WithLetsEncryptProduction` and `WithLetsEncryptStaging` helpers have been removed.
+Use `WithAcmeServer` with the corresponding URL instead; for TypeScript, use `withAcmeServer`
+or `withAcmeServerParam` when the email is a parameter. Use staging for development and CI
+to avoid production rate limits; staging certificates are not publicly trusted.
+
+The directory URL can also be a non-secret parameter, so one AppHost can select an endpoint
+per environment without changing source:
+
+```csharp
+var serverUrl = builder.AddParameter("acmeserver");
+var issuer = certManager.AddIssuer("acme")
+    .WithAcmeServer(serverUrl, email)
+    .WithHttp01Solver();
+```
+
+Set `Parameters__acmeserver` before deployment. Either the URL, email, or both can be
+parameterized. In TypeScript, use `withAcmeServerUrlParam(serverUrl, "ops@contoso.com")`
+for a parameterized URL with a literal email, or `withAcmeServerParams(serverUrl, email)`
+when both are parameters.
+
+| Provider | ACME directory | External Account Binding |
+|---|---|---|
+| Let's Encrypt production | `https://acme-v02.api.letsencrypt.org/directory` | Not required |
+| Let's Encrypt staging | `https://acme-staging-v02.api.letsencrypt.org/directory` | Not required |
+| ZeroSSL | `https://acme.zerossl.com/v2/DV90` | Required |
+| Google Trust Services production | `https://dv.acme-v02.api.pki.goog/directory` | Required |
+| Google Trust Services staging | `https://dv.acme-v02.test-api.pki.goog/directory` | Required |
+
+Other ACME providers, including SSL.com, Sectigo, and DigiCert, use the same APIs with
+their account/product-specific directory URLs and EAB credentials. Provider-specific
+authentication and credential acquisition remain outside Aspire. Private ACME servers
+also require the appropriate TLS trust configuration; EAB does not establish that trust.
+
+#### External Account Binding
+
+[EAB is defined by RFC 8555, section 7.3.4](https://www.rfc-editor.org/rfc/rfc8555.html#section-7.3.4).
+It binds a newly registered ACME account to an existing provider account using a key identifier
+and an HMAC key. It does not replace the domain-ownership challenge.
+
+For ZeroSSL, obtain EAB credentials from the provider and pass the HMAC key as a secret parameter:
+
+```csharp
+var keyId = builder.AddParameter("acmeeabkeyid");
+var hmacKey = builder.AddParameter("acmeeabhmackey", secret: true);
+
+var zeroSsl = certManager.AddIssuer("zerossl")
+    .WithAcmeServer("https://acme.zerossl.com/v2/DV90", email)
+    .WithExternalAccountBinding(keyId, hmacKey)
+    .WithHttp01Solver();
+```
+
+A literal key identifier is also supported: `.WithExternalAccountBinding("provider-key-id", hmacKey)`.
+In TypeScript:
+
+```typescript
+const keyId = await builder.addParameter("acmeeabkeyid");
+const hmacKey = await builder.addParameter("acmeeabhmackey", { secret: true });
+const issuer = await certManager.addIssuer("zerossl");
+await issuer.withAcmeServerParam("https://acme.zerossl.com/v2/DV90", email);
+await issuer.withExternalAccountBindingParam(keyId, hmacKey);
+await issuer.withHttp01Solver();
+```
+
+Use `withExternalAccountBinding("provider-key-id", hmacKey)` for a literal identifier.
+
+Supply parameters using your pipeline's secure environment-variable mechanism, with
+`Parameters__acmeeabkeyid` and `Parameters__acmeeabhmackey` set before `aspire deploy`.
+Never print the HMAC key or enable shell tracing around credential acquisition. Pass the
+provider's unpadded base64url HMAC text unchanged; do not base64-decode it yourself.
+
+Aspire applies an issuer-specific `<issuer>-eab` Secret before applying the ClusterIssuer.
+The value is sent to `kubectl` through stdin, not command-line arguments or published
+artifacts. Kubernetes' `Secret.data` base64 encoding is a separate layer, not encryption:
+restrict Secret access with RBAC and configure encryption at rest as appropriate.
+Existing Secrets not marked as Aspire cert-manager-managed are not adopted or deleted.
+Destroy removes the managed EAB Secret before uninstalling cert-manager; it does not
+explicitly delete cert-manager's separate `<issuer>-account-key` Secret.
+
+ClusterIssuers read Secrets from cert-manager's **cluster resource namespace**, not the
+application namespace. The default is the Helm installation namespace, normally
+`cert-manager-chart`. If you customize it, use the chart's `clusterResourceNamespace`
+Helm value rather than overriding `--cluster-resource-namespace` through `extraArgs`:
+
+```csharp
+certManager.Resource.HelmChart.Values["clusterResourceNamespace"] = "certificate-accounts";
+```
+
+Ensure a custom cluster resource namespace already exists and that cert-manager can
+access Secrets there. Aspire also respects the chart's installation namespace override.
+
+#### Deployment pipelines and account lifecycle
+
+Credential lifetime and reuse are provider-specific. [ZeroSSL documents reusable EAB
+credentials](https://zerossl.com/documentation/acme/). [Google Public CA](https://docs.cloud.google.com/certificate-manager/docs/public-ca-tutorial)
+credentials must be used within seven days and can register one account. For a new Google
+account, authenticate to Google in a separate pipeline step and acquire a fresh pair with
+`gcloud publicca external-account-keys create`; capture `keyId` and `b64MacKey` securely
+and supply them as the Aspire parameters. Aspire does not authenticate to providers,
+refresh EAB credentials, or track their expiry.
+
+Once registered, cert-manager renews using the ACME account private-key Secret, not by
+creating a fresh EAB account each time. Preserve that Secret across redeployments.
+Deleting/recreating the cluster or losing the account key may require fresh EAB credentials;
+do not delete account keys as an automatic recovery shortcut. The managed EAB apply path
+still requires configured parameter values on subsequent deployments.
+
+`aspire deploy` applies the issuer but does not wait for ACME account registration. Check
+issuer readiness before treating a deployment as ready for certificate issuance:
+
+```shell
+kubectl wait clusterissuer/zerossl --for=condition=Ready --timeout=300s
+```
+
+Readiness verifies account setup, not that a Gateway certificate has been issued.
+Wait for the relevant Certificate separately.
+
+See [cert-manager's ACME configuration](https://cert-manager.io/docs/configuration/acme/)
+for account reuse and EAB details.
+
 ## Additional documentation
 
 https://aspire.dev/integrations/gallery/

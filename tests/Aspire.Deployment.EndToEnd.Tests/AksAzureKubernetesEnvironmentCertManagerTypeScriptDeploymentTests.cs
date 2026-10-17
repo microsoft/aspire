@@ -12,7 +12,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// <see cref="AksAzureKubernetesEnvironmentCertManagerDeploymentTests"/> but uses the
 /// TypeScript Express/React starter (<c>aspire new</c> --&gt; <c>Starter App (Express/React, TypeScript AppHost)</c>)
 /// and patches <c>apphost.mts</c> to wire <c>addAzureKubernetesEnvironment</c> +
-/// <c>addCertManager</c> + <c>addIssuer().withLetsEncryptProductionParam(acmeEmail).withHttp01Solver()</c>
+/// <c>addCertManager</c> + <c>addIssuer().withAcmeServerParam(url, acmeEmail).withHttp01Solver()</c>
 /// + <c>gateway.withGatewayTlsIssuer(letsEncrypt)</c> around the Express API.
 ///
 /// Proves that the cert-manager API surface generated for TypeScript via <c>[AspireExport]</c>
@@ -124,7 +124,7 @@ public sealed class AksAzureKubernetesEnvironmentCertManagerTypeScriptDeployment
             // The TypeScript surface mirrors the C# API exposed via [AspireExport]:
             //   addAzureKubernetesEnvironment / withSubnet / withSystemNodePool / addNodePool
             //   addLoadBalancer
-            //   addCertManager / addIssuer / withLetsEncryptProductionParam / withHttp01Solver
+            //   addCertManager / addIssuer / withAcmeServerParam / withHttp01Solver
             //   addGateway / withLoadBalancer / withRoute / withGatewayTlsIssuer
             //   publishAsKubernetesService / addManifest
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
@@ -160,7 +160,7 @@ const acmeEmail = await builder.addParameter("acmeemail");
 // Install cert-manager via the typed API and declare a Let's Encrypt PRODUCTION ClusterIssuer.
 const certManager = await aks.addCertManager("cert-manager");
 const letsEncrypt = await certManager.addIssuer("letsencrypt-prod");
-await letsEncrypt.withLetsEncryptProductionParam(acmeEmail);
+await letsEncrypt.withAcmeServerParam("https://acme-v02.api.letsencrypt.org/directory", acmeEmail);
 await letsEncrypt.withHttp01Solver();
 
 // Gateway with HTTPS listener. withGatewayTlsIssuer(letsEncrypt) creates the listener AND
