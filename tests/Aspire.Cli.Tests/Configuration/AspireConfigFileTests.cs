@@ -633,6 +633,28 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void LoadOrCreate_MigratesLegacy_PortAllocation()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+                "portAllocation": {
+                    "persistInIsolatedMode": true
+                }
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        Assert.True(config.PortAllocation?.PersistInIsolatedMode);
+        var saved = AspireConfigFile.Load(root);
+        Assert.True(saved?.PortAllocation?.PersistInIsolatedMode);
+    }
+
+    [Fact]
     public void LoadOrCreate_MigratesLegacy_AdjustsPathForApphostAtRoot()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -94,6 +94,49 @@ public class ProxylessEndpointPortAllocatorTests
         Assert.Equal(10001, allocator.AllocatePort(ProtocolType.Tcp));
     }
 
+    [Fact]
+    public void TryReservePortReservesAvailablePort()
+    {
+        var allocator = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10001,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: static (_, _) => true);
+
+        Assert.True(allocator.TryReservePort(10000, ProtocolType.Tcp));
+        Assert.Equal(10001, allocator.AllocatePort(ProtocolType.Tcp));
+    }
+
+    [Fact]
+    public void TryReservePortRejectsUnavailablePortAndDoesNotAllocateItLater()
+    {
+        var allocator = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10001,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: static (port, _) => port != 10000);
+
+        Assert.False(allocator.TryReservePort(10000, ProtocolType.Tcp));
+        Assert.Equal(10001, allocator.AllocatePort(ProtocolType.Tcp));
+    }
+
+    [Fact]
+    public void TryReservePortClearsCachedNextCandidate()
+    {
+        var allocator = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10002,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: static (_, _) => true);
+
+        Assert.Equal(10000, allocator.AllocatePort(ProtocolType.Tcp));
+        Assert.True(allocator.TryReservePort(10001, ProtocolType.Tcp));
+        Assert.Equal(10002, allocator.AllocatePort(ProtocolType.Tcp));
+    }
+
     private static EndpointAnnotation CreateEndpoint(string name)
     {
         return new EndpointAnnotation(ProtocolType.Tcp, name: name, isProxied: false);
