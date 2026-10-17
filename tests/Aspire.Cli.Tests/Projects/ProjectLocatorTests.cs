@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.AspNetCore.InternalTesting;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -20,6 +20,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -662,8 +663,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
 
-        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>
-        {
+        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>{
             await projectLocator.UseOrFindAppHostProjectFileAsync(
                 projectFile: null,
                 MultipleAppHostProjectsFoundBehavior.Throw,
@@ -1276,6 +1276,58 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UseOrFindAppHostProjectFileDisplaysDiscoveredProjectsAfterStatusCompletes()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var firstAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "First", "AppHost.csproj"));
+        Directory.CreateDirectory(firstAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(firstAppHost.FullName, "Not a real apphost");
+
+        var secondAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Second", "AppHost.csproj"));
+        Directory.CreateDirectory(secondAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(secondAppHost.FullName, "Not a real apphost");
+
+        var thirdAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Third", "AppHost.csproj"));
+        Directory.CreateDirectory(thirdAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(thirdAppHost.FullName, "Not a real apphost");
+
+        var events = new ConcurrentQueue<string>();
+        var interactionService = new TestInteractionService
+        {
+            ShowStatusCallback = _ => events.Enqueue("status-started"),
+            ShowStatusCompletedCallback = _ => events.Enqueue("status-completed"),
+            DisplaySubtleMessageCallback = message => events.Enqueue(message),
+            DisplayMessageCallback = (_, message, _) => events.Enqueue(message)
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = projectFile => projectFile.FullName switch
+            {
+                var path when path == firstAppHost.FullName => new AppHostValidationResult(IsValid: true),
+                var path when path == secondAppHost.FullName => new AppHostValidationResult(IsValid: false, IsPossiblyUnbuildable: true),
+                _ => new AppHostValidationResult(IsValid: false, IsUnsupported: true)
+            }
+        };
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService, projectFactory: projectFactory);
+
+        await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.None,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        var recordedEvents = events.ToArray();
+        Assert.Equal(5, recordedEvents.Length);
+        Assert.Equal("status-started", recordedEvents[0]);
+        Assert.Equal("status-completed", recordedEvents[1]);
+        Assert.Equal(Path.Join("First", "AppHost.csproj"), recordedEvents[2]);
+        Assert.Contains(Path.Join("Second", "AppHost.csproj"), recordedEvents[3]);
+        Assert.Contains(Path.Join("Third", "AppHost.csproj"), recordedEvents[4]);
+    }
+
+    [Fact]
     public async Task UseOrFindAppHostProjectFileTreatsSettingsAppHostWithoutProjectHandlerAsUnsupported()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1395,7 +1447,8 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext);
 
-        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>{
+        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>
+        {
             await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
         });
 
