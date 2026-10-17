@@ -4,5 +4,15 @@
 # Handle Types
 Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetProjectResource [ExposeProperties]
 
+# DTO Types
+Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetProjectOptions # Launch options for a .NET project in a polyglot AppHost.
+  ExcludeKestrelEndpoints?: boolean # Whether to ignore endpoints from Kestrel configuration.
+  ExcludeLaunchProfile?: boolean # Whether to disable launch profiles. When true, the launch profile name is ignored.
+  LaunchProfileName?: string # The launch profile to use. If omitted or null, the default launch profile is used.
+
 # Capabilities
-Aspire.Hosting.Dotnet/addDotnetProject(name: string, path: string, options?: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions) -> Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetProjectResource
+Aspire.Hosting.Dotnet/addDotnetProject(name: string, path: string, options?: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetProjectOptions) -> Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetProjectResource
+Aspire.Hosting.Dotnet/disableDotnetProjectForwardedHeaders() -> Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetProjectResource
+Aspire.Hosting.Dotnet/withBuildEnvironment(name: string, value: string) -> Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetProjectResource
+Aspire.Hosting.Dotnet/withDotnetProjectEndpointsInEnvironment(endpointNames: string[]) -> Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetProjectResource
+Aspire.Hosting.Dotnet/withDotnetProjectReplicas(replicas: number) -> Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetProjectResource
