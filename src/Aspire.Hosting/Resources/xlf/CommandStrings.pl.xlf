@@ -22,6 +22,21 @@
         <target state="new">Rebuild</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResetVolumesConfirmation">
+        <source>Permanently delete all volume data for this resource? This cannot be undone. Bind-mounted host directories will not be modified.</source>
+        <target state="new">Permanently delete all volume data for this resource? This cannot be undone. Bind-mounted host directories will not be modified.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResetVolumesDescription">
+        <source>Delete the resource's volume data. Running containers resume with empty storage; stopped containers remain stopped. Shared volumes cannot be reset. Bind mounts are not modified.</source>
+        <target state="new">Delete the resource's volume data. Running containers resume with empty storage; stopped containers remain stopped. Shared volumes cannot be reset. Bind mounts are not modified.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResetVolumesName">
+        <source>Reset volumes</source>
+        <target state="new">Reset volumes</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceDeletedParameter">
         <source>Successfully deleted parameter '{0}'.</source>
         <target state="new">Successfully deleted parameter '{0}'.</target>
@@ -50,6 +65,11 @@
       <trans-unit id="ResourceStopped">
         <source>Successfully stopped '{0}'.</source>
         <target state="new">Successfully stopped '{0}'.</target>
+        <note>{0} is the resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourceVolumesReset">
+        <source>Successfully reset volumes for '{0}'.</source>
+        <target state="new">Successfully reset volumes for '{0}'.</target>
         <note>{0} is the resource name.</note>
       </trans-unit>
       <trans-unit id="RestartDescription">

@@ -31,6 +31,11 @@ public static class KnownResourceCommands
     public static readonly string RebuildCommand = "rebuild";
 
     /// <summary>
+    /// The command name for deleting a resource's volume data and restarting it with empty storage.
+    /// </summary>
+    public static readonly string ResetVolumesCommand = "reset-volumes";
+
+    /// <summary>
     /// The command name for setting a parameter value.
     /// </summary>
     public static readonly string SetParameterCommand = "set-parameter";

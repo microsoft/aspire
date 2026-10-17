@@ -1667,6 +1667,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 resourceName: element.resource.name,
                 displayName: element.resource.displayName ?? element.resource.name,
                 commandName,
+                confirmationMessage: element.resource.commands?.[commandName]?.confirmationMessage,
                 appHostPath: appHostPath ?? undefined,
                 additionalArgs,
             });

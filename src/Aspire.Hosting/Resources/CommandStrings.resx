@@ -183,4 +183,17 @@
     <value>Successfully stopped '{0}'.</value>
     <comment>{0} is the resource name.</comment>
   </data>
+  <data name="ResetVolumesName" xml:space="preserve">
+    <value>Reset volumes</value>
+  </data>
+  <data name="ResetVolumesDescription" xml:space="preserve">
+    <value>Delete the resource's volume data. Running containers resume with empty storage; stopped containers remain stopped. Shared volumes cannot be reset. Bind mounts are not modified.</value>
+  </data>
+  <data name="ResetVolumesConfirmation" xml:space="preserve">
+    <value>Permanently delete all volume data for this resource? This cannot be undone. Bind-mounted host directories will not be modified.</value>
+  </data>
+  <data name="ResourceVolumesReset" xml:space="preserve">
+    <value>Successfully reset volumes for '{0}'.</value>
+    <comment>{0} is the resource name.</comment>
+  </data>
 </root>
