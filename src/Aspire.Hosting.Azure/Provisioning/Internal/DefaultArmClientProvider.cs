@@ -55,6 +55,8 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
         return new DefaultArmClient(armClient, _timeProvider);
     }
 
+    public ArmClient GetRawArmClient(TokenCredential credential) => new(credential, default, _options);
+
     private sealed class DefaultArmClient(ArmClient armClient, TimeProvider timeProvider) : IArmClient
     {
         private const string KeyVaultResourceType = "Microsoft.KeyVault/vaults";

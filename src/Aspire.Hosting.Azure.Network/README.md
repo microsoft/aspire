@@ -64,6 +64,20 @@ var vnet = builder.AddAzureVirtualNetwork("vnet");
 var subnet = vnet.AddSubnet("subnet", "10.0.1.0/24");
 ```
 
+### Internal load balancers and private DNS
+
+For resources that support an internal load balancer, such as Azure Container Apps environments, use a delegated subnet and `WithInternalLoadBalancer`:
+
+```csharp
+var vnet = builder.AddAzureVirtualNetwork("vnet");
+var subnet = vnet.AddSubnet("aca-subnet", "10.0.0.0/23");
+var environment = builder.AddAzureContainerAppEnvironment("env")
+    .WithDelegatedSubnet(subnet)
+    .WithInternalLoadBalancer(vnet);
+```
+
+This publish/deploy-only helper enables a private load balancer and creates a private DNS zone for the environment's default domain, a wildcard A record pointing to its static IP, and a link to the supplied virtual network. The network must contain the delegated subnet. The Network integration owns DNS provisioning; the service integration implements the shared `IAzureInternalIngressResource` contract from `Aspire.Hosting.Azure`.
+
 ### Adding NAT Gateways
 
 A NAT Gateway provides outbound internet connectivity with deterministic public IP addresses:

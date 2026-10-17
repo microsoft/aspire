@@ -29,6 +29,12 @@ internal interface IArmClientProvider
     /// Gets the ARM client for Azure resource management without a specific subscription.
     /// </summary>
     IArmClient GetArmClient(TokenCredential credential);
+
+    /// <summary>
+    /// Gets the Azure SDK ARM client directly, for scenarios that need SDK types not covered by
+    /// <see cref="IArmClient"/>, such as generic-resource PATCH operations.
+    /// </summary>
+    ArmClient GetRawArmClient(TokenCredential credential);
 }
 
 /// <summary>

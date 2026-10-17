@@ -416,8 +416,18 @@ public static class AzureContainerAppExtensions
             {
                 containerAppEnvironment.VnetConfiguration = new ContainerAppVnetConfiguration
                 {
-                    InfrastructureSubnetId = subnetAnnotation.SubnetId.AsProvisioningParameter(infra)
+                    InfrastructureSubnetId = subnetAnnotation.SubnetId.AsProvisioningParameter(infra),
                 };
+
+                if (appEnvResource.HasAnnotationOfType<InternalLoadBalancerAnnotation>())
+                {
+                    containerAppEnvironment.VnetConfiguration.IsInternal = true;
+                }
+            }
+            else if (appEnvResource.HasAnnotationOfType<InternalLoadBalancerAnnotation>())
+            {
+                throw new InvalidOperationException(
+                    $"Azure Container App environment '{appEnvResource.Name}' must use a delegated subnet before it can use an internal load balancer.");
             }
 
             infra.Add(containerAppEnvironment);
@@ -631,7 +641,11 @@ public static class AzureContainerAppExtensions
                 Value = laWorkspace.Id.ToBicepExpression()
             });
 
-            AddSharedContainerAppEnvironmentOutputs(infra, containerRegistry, containerAppEnvironment, managedIdentityIdOutputValue);
+            AddSharedContainerAppEnvironmentOutputs(
+                infra,
+                containerRegistry,
+                containerAppEnvironment,
+                managedIdentityIdOutputValue);
         });
 
         // Create the default container registry resource before creating the environment
@@ -861,7 +875,11 @@ public static class AzureContainerAppExtensions
             infra.Add(pullRa);
         }
 
-        AddSharedContainerAppEnvironmentOutputs(infra, containerRegistry, containerAppEnvironment, managedIdentityIdOutputValue);
+        AddSharedContainerAppEnvironmentOutputs(
+            infra,
+            containerRegistry,
+            containerAppEnvironment,
+            managedIdentityIdOutputValue);
     }
 
     /// <summary>
@@ -907,6 +925,17 @@ public static class AzureContainerAppExtensions
         infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", typeof(string))
         {
             Value = containerAppEnvironment.DefaultDomain.ToBicepExpression()
+        });
+
+        // Always emitted, regardless of whether this environment is internal: this property reads
+        // directly from the managed environment resource (including "existing" references), which
+        // simply returns null/empty when the environment has no internal ingress. Internal load
+        // balancer consumers (IAzureInternalIngressResource.StaticIp) can only read this output
+        // after WithInternalLoadBalancer has configured the environment to be internal, so the output
+        // being unconditionally present does not change observable behavior for external environments.
+        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", typeof(string))
+        {
+            Value = containerAppEnvironment.StaticIP.ToBicepExpression()
         });
     }
 

@@ -175,3 +175,5 @@ output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = my_ace.name
 output AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = my_ace.id
 
 output AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = my_ace.properties.defaultDomain
+
+output AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP string = my_ace.properties.staticIp

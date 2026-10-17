@@ -654,7 +654,7 @@ public static class AzureVirtualNetworkExtensions
             rule.DestinationAddressPrefix = to;
         }
 
-        nsgResource.SecurityRules.Add(rule);
+        nsgResource.Rules.Add(rule);
 
         return builder;
     }
