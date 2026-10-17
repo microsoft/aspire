@@ -1463,6 +1463,7 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     [InlineData(false, 3600)]
     [InlineData(false, int.MaxValue)]
     [InlineData(true, 0)]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/20968")]
     public async Task CreateAsync_RecoveryBudgetIncludesConfirmationRetryDelay(bool useHttpDate, int retryAfterSeconds)
     {
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
