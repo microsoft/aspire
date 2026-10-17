@@ -55,6 +55,16 @@ public sealed class TestTriggerMapTests
         Assert.Equal(1, s_map.Version);
     }
 
+    [Fact]
+    public void NativeArchiveBuildArgumentForwardingSelectsInfrastructureTests()
+    {
+        var result = SelectWithRealMap("eng/scripts/invoke-native-archive-build.ps1");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["Infrastructure.Tests"], result.TestProjects);
+    }
+
     [Theory]
     [InlineData("eng/scripts/tray-registration-control/control.cpp")]
     [InlineData("eng/scripts/tray-registration-control/run.ps1")]
