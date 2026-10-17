@@ -159,8 +159,7 @@ internal sealed partial class TrayApplication
                     ?? throw new InvalidOperationException("Smoke confirmation handler is missing.");
                 _smokeDialog = new(2, accept ? 1 : 2);
             }
-            var result = NativeMethods.MessageBox(_modalOwner, detail, title, NativeMethods.SafeConfirmation);
-            NativeCallException.Require(result != 0, "MessageBoxW(confirm)");
+            var result = ShowModernMessage(title, detail, confirmation: true);
             return result == 1 && !_quitRequested;
         }
         finally
@@ -182,11 +181,10 @@ internal sealed partial class TrayApplication
         {
             if (smokeSeconds is not null && !_interactiveSmoke)
             {
-                // MB_OK reports IDOK as its default, but its sole button uses IDCANCEL
-                // so Escape can dismiss it. Sending IDOK leaves the native dialog open.
-                _smokeDialog = new(1, 2);
+                // Close uses IDCANCEL so Escape also dismisses the dialog.
+                _smokeDialog = new(2, 2);
             }
-            NativeCallException.Require(NativeMethods.MessageBox(_modalOwner, detail, title, flags) != 0, "MessageBoxW");
+            ShowModernMessage((flags & NativeMethods.MbIconError) != 0 ? title + " — Error" : title, detail, confirmation: false);
         }
         finally
         {

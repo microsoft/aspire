@@ -33,7 +33,7 @@ internal sealed unsafe partial class TrayApplication
                     ?? throw new InvalidOperationException("Smoke confirmation handler is missing.");
                 _smokeDialog = new(2, accept ? 1 : 2);
             }
-            var template = CreateDialogTemplate("Stop AppHost", 310, 126, 9);
+            var template = CreateDialogTemplate("Stop AppHost", 310, 146, 10);
             nint result;
             fixed (byte* pointer = template)
             {
@@ -61,17 +61,22 @@ internal sealed unsafe partial class TrayApplication
         }
     }
 
-    private nint HandleStopDialog(nint dialog, uint message, nuint wParam)
+    private nint HandleStopDialog(nint dialog, uint message, nuint wParam, nint lParam)
     {
+        if (PaintDialog(dialog, message, wParam, lParam, out var painted))
+        {
+            return painted;
+        }
         switch (message)
         {
             case NativeMethods.WmInitDialog:
-                AddDialogControl(dialog, "STATIC", _stopDetail!, 0, StopDetailId, 12, 12, 286, 48);
+                AddDialogControl(dialog, "STATIC", _stopDetail!, 0, StopDetailId, 16, 16, 278, 54);
                 AddDialogControl(dialog, "BUTTON", "&Don't ask again", 0x10000 | 0x3,
-                    StopSuppressionId, 12, 68, 286, 16); // BS_AUTOCHECKBOX, initially unchecked.
-                AddDialogControl(dialog, "BUTTON", "&Stop AppHost", 0x10000, 1, 150, 98, 80, 18);
-                var cancel = AddDialogControl(dialog, "BUTTON", "Cancel", 0x10000 | 0x1, 2, 238, 98, 60, 18);
+                    StopSuppressionId, 16, 80, 278, 20); // BS_AUTOCHECKBOX, initially unchecked.
+                AddDialogControl(dialog, "BUTTON", "&Stop AppHost", 0x10000, 1, 138, 114, 88, 24);
+                var cancel = AddDialogControl(dialog, "BUTTON", "Cancel", 0x10000 | 0x1, 2, 234, 114, 60, 24);
                 NativeMethods.SendMessage(dialog, 0x401, 2, 0); // DM_SETDEFID.
+                UpdateDialogAppearance(dialog);
                 NativeMethods.SetFocus(cancel);
                 return 0;
             case NativeMethods.WmCommand when (wParam & 0xFFFF) is 1 or 2:
@@ -81,6 +86,14 @@ internal sealed unsafe partial class TrayApplication
                         NativeMethods.BmGetCheck, 0, 0) == 1;
                 NativeCallException.Require(NativeMethods.EndDialog(dialog, result) != 0, "EndDialog(Stop)");
                 return 1;
+            case NativeMethods.WmSettingChange:
+            case NativeMethods.WmSysColorChange:
+            case NativeMethods.WmThemeChanged:
+                UpdateDialogAppearance(dialog);
+                return 0;
+            case NativeMethods.WmNcDestroy:
+                ReleaseDialogAppearance(dialog);
+                return 0;
             case NativeMethods.WmClose:
                 NativeCallException.Require(NativeMethods.EndDialog(dialog, 2) != 0, "EndDialog(Cancel)");
                 return 1;
@@ -94,7 +107,7 @@ internal sealed unsafe partial class TrayApplication
     {
         try
         {
-            return s_current?.HandleStopDialog(dialog, message, wParam) ?? 0;
+            return s_current?.HandleStopDialog(dialog, message, wParam, lParam) ?? 0;
         }
         catch (Exception ex)
         {
