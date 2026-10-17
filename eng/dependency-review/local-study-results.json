@@ -1,0 +1,5043 @@
+{
+  "configuration": {
+    "agent_type": "general-purpose",
+    "mode": "sync",
+    "model": "omitted; runtime default",
+    "reasoning_effort": "omitted; runtime default",
+    "context_tier": "omitted; runtime default",
+    "concrete_model": "unknown",
+    "baseline_snapshot": "e5f8dc6b1194773458881b400b1e2c91f91a33d8",
+    "task_envelope": "Read only <absolute prompt path> and execute its assessment instructions exactly. Do not read other files or prior outputs.",
+    "limits": [
+      "Matched blind inputs/requested defaults, not verified concrete-model control.",
+      "Inherited system/AGENTS repository instructions cannot be removed; dependency guidance may contaminate baseline.",
+      "Enhanced skill invocation loads the current full skill, including unrelated procedural guidance.",
+      "Synthetic excerpts are protocol fixtures, not real command executions or upstream safety evidence.",
+      "Oracle hidden from evaluator; scorer uses explicit manual adjudication, not text-match confidence."
+    ]
+  },
+  "provenance": {
+    "coordinator_skill": {
+      "tool": "functions.skill",
+      "arguments": {
+        "skill": "pr-testing"
+      },
+      "result": "Skill pr-testing loaded successfully",
+      "scope": "Coordinator setup only; not an evaluator invocation and not counted as enhanced skill assessment compliance."
+    },
+    "baseline_loading": "Read-only git show e5f8dc6b1194773458881b400b1e2c91f91a33d8:.agents/skills/{code-review,pr-testing}/SKILL.md; verbatim snapshot text supplied in frozen prompt files. No baseline skill invocation claimed.",
+    "calls": [
+      {
+        "run": "baseline-review",
+        "agent_id": "06bbd6d1-76b8-4cfe-b417-377dd7e46ac6",
+        "completion": "Created the assessment at files/paired-study/baseline-review.json. Tool invocations: functions.view (twice), functions.apply_patch.",
+        "invocation_status": "snapshot-loaded"
+      },
+      {
+        "run": "enhanced-review",
+        "agent_id": "4c747314-b8a3-4738-a3b2-2413aa7045e7",
+        "completion": "Assessment written to files/paired-study/enhanced-review.json. Tool invocations: view (prompt read attempts at the whole file and ranges 1-180, 181-360, 361-550, and out-of-range 551-740); apply_patch (created the assessment JSON).",
+        "invocation_status": "snapshot-plus-guidance"
+      },
+      {
+        "run": "baseline-skill",
+        "agent_id": "26c8718c-3db6-49c8-b5f1-ae5115b649a7",
+        "completion": "Saved the assessment to files/paired-study/baseline-skill.json. Tool invocations: view, bash (wc -l on the authorized prompt), multi_tool_use.parallel (four prompt range reads), and apply_patch.",
+        "invocation_status": "snapshot-loaded"
+      },
+      {
+        "run": "enhanced-skill",
+        "agent_id": "eb70c997-e1b5-460d-84d3-5cbdbb59bf74",
+        "completion": "Wrote the assessment to files/paired-study/enhanced-skill.json. The requested functions.skill(skill=\"pr-testing\") tool was not available, so I could not invoke it. Actual tool invocations: functions.view (read only the specified prompt), functions.apply_patch (write the JSON assessment).",
+        "invocation_status": "NONCOMPLIANT-tool-unavailable-guide-only"
+      },
+      {
+        "run": "baseline-review-repeat",
+        "agent_id": "e987c4ab-0a99-4a57-8f66-6cb2250836ee",
+        "completion": "Wrote the assessment to paired-study/baseline-review-repeat.json. Tool invocations: view (initial read was truncated), view (forceReadLargeFiles: true), apply_patch.",
+        "invocation_status": "snapshot-loaded"
+      },
+      {
+        "run": "enhanced-review-repeat",
+        "agent_id": "1e99aba1-56ec-4ff1-8e34-da05c4e264ac",
+        "completion": "Assessment saved to files/paired-study/enhanced-review-repeat.json. Tool invocations: view (2 calls), apply_patch (1 call).",
+        "invocation_status": "snapshot-plus-guidance"
+      },
+      {
+        "run": "baseline-skill-repeat",
+        "agent_id": "535fb36b-8ee0-4132-b08b-1baae3dd2935",
+        "completion": "Assessment saved to files/paired-study/baseline-skill-repeat.json. Tool invocations: view (7 calls, including one oversized-read attempt), multi_tool_use.parallel (three view calls), and apply_patch.",
+        "invocation_status": "snapshot-loaded"
+      },
+      {
+        "run": "enhanced-skill-repeat",
+        "agent_id": "4b158e38-daca-48e3-bf13-5924760ca975",
+        "completion": "Wrote the assessment to files/paired-study/enhanced-skill-repeat.json. The requested functions.skill invocation could not be performed because that tool is not available in this session. Tool invocations: functions.view x3 (prompt only); functions.apply_patch x1.",
+        "invocation_status": "NONCOMPLIANT-tool-unavailable-guide-only"
+      }
+    ],
+    "history_limit": "read_agent retrieved enhanced-skill turn-0 completion histories confirming tool-unavailable statements. Tool server exposes completion messages, not detailed successful evaluator tool traces; do not infer actual skill invocation from guide-shaped output. These completion strings are normalized transcription, not raw detailed tool event logs.",
+    "original_worktree_head": "f5d9a4668f351c34b903b929deb5d0fea20c90af",
+    "date": "2026-10-05",
+    "scope": "Detection only. No original PR/version defect remediation, no hosted PRs, no network model-control claims."
+  },
+  "adjudication_method": "Manual post-output adjudication by study coordinator, unblinded to arm. Per-case matches list has one target list for each finding in exact order; empty means supported non-target observation, not FP. No original oracle targets/states changed after calls. Secondary row_targets counts recognition outside findings; added after observing missing finding emission, so reported separately from frozen primary TP/miss. All cited excerpts were inspected and judged relevant; no unsupported definite defects/safety claims. Pending or skipped classified as blocked is taxonomy error, not claimed success. Separate Postgres/SQL migration findings are distinct consumers, not duplicate noise. Regression tests after invariant defects and SQL query gaps are supported non-target, not duplicates. Selection counts assess Redis unexercised versus template executed in execution rows. Posthoc, subjective, non-independent adjudication is a study limit.",
+  "runs": {
+    "baseline-review": {
+      "output": {
+        "rows": [
+          {
+            "id": "holds",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "Microsoft.Build.Utilities.Core is changed to 17.14.8 despite the stated requirement to stay at 17.9.5 for older Visual Studio; the compatibility migration is absent.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Azure.Provisioning.Cdn is advanced to 1.0.0 before the stated resource-naming migration.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Azure.Provisioning.Kusto is advanced to 1.0.0 before the stated cluster/API migration.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Microsoft.AI.Foundry.Local is advanced to 1.2.0 despite the stated RID-independent restore constraint for 1.1.0.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Npgsql is advanced to major version 9 while the EF Core provider remains major version 8, violating the stated matching-major constraint.",
+                "kind": "defect",
+                "evidence": [
+                  "h2"
+                ]
+              }
+            ],
+            "evidence": [
+              "h1",
+              "h2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Package consumers",
+                "state": "unexercised",
+                "evidence": [
+                  "h2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "host-types",
+            "state": "blocked",
+            "findings": [
+              {
+                "claim": "The compatibility of @types/vscode 1.138.0 and @types/node 26 with the unchanged VS Code engine range ^1.98.0 is unknown; no minimum-host runtime evidence or successful install/compile is supplied.",
+                "kind": "risk",
+                "evidence": [
+                  "v1",
+                  "v2"
+                ]
+              },
+              {
+                "claim": "The extension validation is blocked at frozen install by the approved feed's HTTP 401, so compile, lint, and minimum/latest extension-host scenarios have not validated the change.",
+                "kind": "gap",
+                "evidence": [
+                  "v2"
+                ]
+              }
+            ],
+            "evidence": [
+              "v1",
+              "v2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Yarn frozen install",
+                "state": "blocked",
+                "evidence": [
+                  "v2"
+                ]
+              },
+              {
+                "consumer": "Extension compile and lint",
+                "state": "unexercised",
+                "evidence": [
+                  "v2"
+                ]
+              },
+              {
+                "consumer": "Latest and minimum extension-host scenarios",
+                "state": "unexercised",
+                "evidence": [
+                  "v2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "toolchain",
+            "state": "unverified",
+            "findings": [
+              {
+                "claim": "The TypeScript, ESLint, and typescript-eslint major upgrades have no supplied compatibility or migration evidence for the unchanged configuration; whether they work is unverified.",
+                "kind": "risk",
+                "evidence": [
+                  "t1",
+                  "t2"
+                ]
+              }
+            ],
+            "evidence": [
+              "t1",
+              "t2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Selected extension job",
+                "state": "unexercised",
+                "evidence": [
+                  "t2"
+                ]
+              },
+              {
+                "consumer": "Install, compile, and lint",
+                "state": "unexercised",
+                "evidence": [
+                  "t2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "feed401",
+            "state": "blocked",
+            "findings": [
+              {
+                "claim": "Restore validation is blocked by HTTP 401 from the approved feed; the supplied evidence does not establish a package compatibility failure.",
+                "kind": "gap",
+                "evidence": [
+                  "f1",
+                  "f2"
+                ]
+              }
+            ],
+            "evidence": [
+              "f1",
+              "f2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "NuGet restore",
+                "state": "blocked",
+                "evidence": [
+                  "f2"
+                ]
+              },
+              {
+                "consumer": "Build and tests",
+                "state": "unexercised",
+                "evidence": [
+                  "f2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "generated-drift",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The updated gh-aw compiler changes the generated example.lock.yml timeout from 10 to 15 minutes, but the committed lock file is unchanged; the generated artifact is stale relative to the compiler output.",
+                "kind": "defect",
+                "evidence": [
+                  "g1",
+                  "g2"
+                ]
+              }
+            ],
+            "evidence": [
+              "g1",
+              "g2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "gh aw compile --validate",
+                "state": "executed",
+                "evidence": [
+                  "g2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "wrapper-versions",
+            "state": "no_issue",
+            "findings": [],
+            "evidence": [
+              "w1",
+              "w2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "gh aw compile --validate across three workflow sources",
+                "state": "executed",
+                "evidence": [
+                  "w2"
+                ]
+              },
+              {
+                "consumer": "Generated lock-file consistency check",
+                "state": "executed",
+                "evidence": [
+                  "w2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "policy403",
+            "state": "blocked",
+            "findings": [
+              {
+                "claim": "The changed third-party action SHA has no confirmed allow-list authorization; the 403 prevented verification, so the pin's runtime policy acceptance is unresolved.",
+                "kind": "gap",
+                "evidence": [
+                  "p1"
+                ]
+              }
+            ],
+            "evidence": [
+              "p1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Repository/enterprise action allow-list verification",
+                "state": "blocked",
+                "evidence": [
+                  "p1"
+                ]
+              },
+              {
+                "consumer": "Workflow execution using the changed action pin",
+                "state": "unexercised",
+                "evidence": [
+                  "p1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "stateful",
+            "state": "risk",
+            "findings": [
+              {
+                "claim": "Changing database image majors while retaining named data volumes carries an unverified persisted-data upgrade risk; only fresh container startup was exercised, with no migration or backup/restore evidence.",
+                "kind": "risk",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              },
+              {
+                "claim": "The stated supported arm64 host is unverified because image platform manifests and an arm64 run are not supplied.",
+                "kind": "gap",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              },
+              {
+                "claim": "A successful health check on fresh containers does not verify a SQL connection query after upgrade; that behavior was not exercised.",
+                "kind": "gap",
+                "evidence": [
+                  "s2"
+                ]
+              }
+            ],
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Fresh amd64 container startup and health checks",
+                "state": "executed",
+                "evidence": [
+                  "s2"
+                ]
+              },
+              {
+                "consumer": "Persisted-data upgrade and backup/restore scenario",
+                "state": "unexercised",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              },
+              {
+                "consumer": "Post-upgrade SQL connection query",
+                "state": "unexercised",
+                "evidence": [
+                  "s2"
+                ]
+              },
+              {
+                "consumer": "arm64 image/runtime scenario",
+                "state": "unexercised",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "advisory",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The committed lock entry resolves to 7.0.5, which does not satisfy the declared ^7.1.1 selector; the frozen dependency state is inconsistent.",
+                "kind": "defect",
+                "evidence": [
+                  "a1"
+                ]
+              }
+            ],
+            "evidence": [
+              "a1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Frozen install",
+                "state": "unexercised",
+                "evidence": [
+                  "a1"
+                ]
+              },
+              {
+                "consumer": "Advisory verification",
+                "state": "unexercised",
+                "evidence": [
+                  "a1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "patch",
+            "state": "no_issue",
+            "findings": [],
+            "evidence": [
+              "l1",
+              "l2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Frozen restore, compile, and lint",
+                "state": "executed",
+                "evidence": [
+                  "l2"
+                ]
+              },
+              {
+                "consumer": "Client connection scenario (12 tests)",
+                "state": "executed",
+                "evidence": [
+                  "l2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "feed-path",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The new lock diff includes URL B, whose decoded organization path traverses outside the approved /dnceng/ path and is explicitly rejected by the supplied URL policy.",
+                "kind": "defect",
+                "evidence": [
+                  "u1"
+                ]
+              }
+            ],
+            "evidence": [
+              "u1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Installation of the new lock entries",
+                "state": "unexercised",
+                "evidence": [
+                  "u1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "execution",
+            "state": "blocked",
+            "findings": [
+              {
+                "claim": "The required Redis connection E2E consumer was selected but skipped by a false condition, so the required Redis scenario has no H1 execution evidence.",
+                "kind": "gap",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ],
+            "evidence": [
+              "e1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Redis connection E2E",
+                "state": "unexercised",
+                "evidence": [
+                  "e1"
+                ]
+              },
+              {
+                "consumer": "Generated AppHost template E2E (CreateAndRunAppHost)",
+                "state": "executed",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "stale",
+            "state": "blocked",
+            "findings": [
+              {
+                "claim": "The successful connection-test artifact is stamped H0, not the changed H1 head, and the H1 test is still queued; the supplied evidence does not validate the current diff.",
+                "kind": "gap",
+                "evidence": [
+                  "z1"
+                ]
+              }
+            ],
+            "evidence": [
+              "z1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Required client connection test for H1",
+                "state": "unexercised",
+                "evidence": [
+                  "z1"
+                ]
+              },
+              {
+                "consumer": "Downloaded CLI version",
+                "state": "unexercised",
+                "evidence": [
+                  "z1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ordinary",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "Add now inserts directly into the List<string> without the previous null or duplicate checks, breaking the stated public contract.",
+                "kind": "defect",
+                "evidence": [
+                  "o1"
+                ]
+              },
+              {
+                "claim": "The smoke test covers only one successful insertion; no regression coverage exercises the removed null and duplicate rejection behaviors.",
+                "kind": "gap",
+                "evidence": [
+                  "o1",
+                  "o2"
+                ]
+              }
+            ],
+            "evidence": [
+              "o1",
+              "o2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Add single-name smoke test",
+                "state": "executed",
+                "evidence": [
+                  "o2"
+                ]
+              },
+              {
+                "consumer": "Add null and duplicate contract scenarios",
+                "state": "unexercised",
+                "evidence": [
+                  "o1",
+                  "o2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "visual",
+            "state": "no_issue",
+            "findings": [],
+            "evidence": [
+              "c1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Automated visual styling tests",
+                "state": "unexercised",
+                "evidence": [
+                  "c1"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "adjudication": {
+        "holds": {
+          "findings": [
+            {
+              "targets": [
+                "build-hold"
+              ]
+            },
+            {
+              "targets": [
+                "cdn-hold"
+              ]
+            },
+            {
+              "targets": [
+                "kusto-hold"
+              ]
+            },
+            {
+              "targets": [
+                "foundry-hold"
+              ]
+            },
+            {
+              "targets": [
+                "npgsql-major"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 1,
+          "execution_total": 1,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "host-types": {
+          "findings": [
+            {
+              "targets": [
+                "host-gap"
+              ]
+            },
+            {
+              "targets": [
+                "install-blocked"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 3,
+          "execution_total": 3,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "toolchain": {
+          "findings": [
+            {
+              "targets": [
+                "compile-lint-gap"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "feed401": {
+          "findings": [
+            {
+              "targets": [
+                "restore-blocked"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "generated-drift": {
+          "findings": [
+            {
+              "targets": [
+                "lock-drift"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 1,
+          "execution_total": 1,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "wrapper-versions": {
+          "findings": [],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "policy403": {
+          "findings": [
+            {
+              "targets": [
+                "policy-unknown"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "stateful": {
+          "findings": [
+            {
+              "targets": [
+                "migration-gap"
+              ]
+            },
+            {
+              "targets": [
+                "platform-gap"
+              ]
+            },
+            {
+              "targets": []
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 4,
+          "execution_total": 4,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "advisory": {
+          "findings": [
+            {
+              "targets": [
+                "resolution-mismatch"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "patch": {
+          "findings": [],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "feed-path": {
+          "findings": [
+            {
+              "targets": [
+                "traversal"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 1,
+          "execution_total": 1,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "execution": {
+          "findings": [
+            {
+              "targets": [
+                "redis-skipped"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "stale": {
+          "findings": [
+            {
+              "targets": [
+                "stale-head"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "ordinary": {
+          "findings": [
+            {
+              "targets": [
+                "null-invariant",
+                "duplicate-invariant"
+              ]
+            },
+            {
+              "targets": []
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "visual": {
+          "findings": [],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true
+          ],
+          "execution_correct": 1,
+          "execution_total": 1,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        }
+      },
+      "scores": {
+        "totals": {
+          "tp": 19,
+          "miss": 0,
+          "fp": 0,
+          "unsupported": 0,
+          "duplicate": 0,
+          "citation_correct": 83,
+          "citation_total": 83,
+          "head_correct": 15,
+          "head_total": 15,
+          "execution_correct": 29,
+          "execution_total": 29,
+          "state_correct": 13,
+          "state_total": 15,
+          "recognized": 19,
+          "recognized_miss": 0,
+          "supported_non_target": 2,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "cases": {
+          "holds": {
+            "matched": [
+              "build-hold",
+              "cdn-hold",
+              "foundry-hold",
+              "kusto-hold",
+              "npgsql-major"
+            ],
+            "missed": []
+          },
+          "host-types": {
+            "matched": [
+              "host-gap",
+              "install-blocked"
+            ],
+            "missed": []
+          },
+          "toolchain": {
+            "matched": [
+              "compile-lint-gap"
+            ],
+            "missed": []
+          },
+          "feed401": {
+            "matched": [
+              "restore-blocked"
+            ],
+            "missed": []
+          },
+          "generated-drift": {
+            "matched": [
+              "lock-drift"
+            ],
+            "missed": []
+          },
+          "wrapper-versions": {
+            "matched": [],
+            "missed": []
+          },
+          "policy403": {
+            "matched": [
+              "policy-unknown"
+            ],
+            "missed": []
+          },
+          "stateful": {
+            "matched": [
+              "migration-gap",
+              "platform-gap"
+            ],
+            "missed": []
+          },
+          "advisory": {
+            "matched": [
+              "resolution-mismatch"
+            ],
+            "missed": []
+          },
+          "patch": {
+            "matched": [],
+            "missed": []
+          },
+          "feed-path": {
+            "matched": [
+              "traversal"
+            ],
+            "missed": []
+          },
+          "execution": {
+            "matched": [
+              "redis-skipped"
+            ],
+            "missed": []
+          },
+          "stale": {
+            "matched": [
+              "stale-head"
+            ],
+            "missed": []
+          },
+          "ordinary": {
+            "matched": [
+              "duplicate-invariant",
+              "null-invariant"
+            ],
+            "missed": []
+          },
+          "visual": {
+            "matched": [],
+            "missed": []
+          }
+        },
+        "schema_alias_used": false
+      }
+    },
+    "enhanced-review": {
+      "output": {
+        "rows": [
+          {
+            "id": "holds",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "Microsoft.Build.Utilities.Core 17.14.8 violates the supplied hold at 17.9.5 for compatibility with older Visual Studio.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Azure.Provisioning.Cdn and Azure.Provisioning.Kusto were advanced past their supplied beta.2 holds without the respective resource-naming and cluster/API migrations.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Microsoft.AI.Foundry.Local 1.2.0 violates the supplied 1.1.0 hold for RID-independent restore.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Npgsql 9.0.4 is incompatible with the still-major-8 EF Core provider under the supplied matching-major constraint.",
+                "kind": "defect",
+                "evidence": [
+                  "h2"
+                ]
+              }
+            ],
+            "evidence": [
+              "h1",
+              "h2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "CI wrapper",
+                "state": "executed",
+                "evidence": [
+                  "h2"
+                ]
+              },
+              {
+                "consumer": "Package consumers",
+                "state": "unexercised",
+                "evidence": [
+                  "h2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "host-types",
+            "state": "risk",
+            "findings": [
+              {
+                "claim": "The VS Code and Node type-definition upgrades may no longer type-check or behave correctly against the unchanged minimum VS Code engine; the minimum-host runtime compatibility is unknown, and the supplied evidence does not establish a defect.",
+                "kind": "risk",
+                "evidence": [
+                  "v1",
+                  "v2"
+                ]
+              }
+            ],
+            "evidence": [
+              "v1",
+              "v2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Approved-feed frozen install",
+                "state": "blocked",
+                "evidence": [
+                  "v2"
+                ]
+              },
+              {
+                "consumer": "Compile and lint",
+                "state": "unexercised",
+                "evidence": [
+                  "v2"
+                ]
+              },
+              {
+                "consumer": "Latest- and minimum-host extension scenarios",
+                "state": "unexercised",
+                "evidence": [
+                  "v2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "toolchain",
+            "state": "risk",
+            "findings": [
+              {
+                "claim": "The TypeScript, ESLint, and typescript-eslint major upgrades have no supplied configuration migration or peer-dependency evidence; unchanged configuration may be incompatible, but no failure is demonstrated.",
+                "kind": "risk",
+                "evidence": [
+                  "t1"
+                ]
+              }
+            ],
+            "evidence": [
+              "t1",
+              "t2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Extension job selected by selector",
+                "state": "blocked",
+                "evidence": [
+                  "t2"
+                ]
+              },
+              {
+                "consumer": "Install, compile, and lint",
+                "state": "unexercised",
+                "evidence": [
+                  "t2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "feed401",
+            "state": "blocked",
+            "findings": [],
+            "evidence": [
+              "f1",
+              "f2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "NuGet restore",
+                "state": "blocked",
+                "evidence": [
+                  "f2"
+                ]
+              },
+              {
+                "consumer": "Build and tests",
+                "state": "unexercised",
+                "evidence": [
+                  "f2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "generated-drift",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The H1 compiler changes the generated example.lock.yml timeout from 10 to 15 minutes, but the committed lock file was left unchanged; the generated workflow artifact is stale and the compiler output must be committed.",
+                "kind": "defect",
+                "evidence": [
+                  "g1",
+                  "g2"
+                ]
+              }
+            ],
+            "evidence": [
+              "g1",
+              "g2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "gh aw compile --validate",
+                "state": "executed",
+                "evidence": [
+                  "g2"
+                ]
+              },
+              {
+                "consumer": "Generated lock-file diff check",
+                "state": "executed",
+                "evidence": [
+                  "g2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "wrapper-versions",
+            "state": "exercised",
+            "findings": [],
+            "evidence": [
+              "w1",
+              "w2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "gh aw compile --validate on all three workflow sources",
+                "state": "executed",
+                "evidence": [
+                  "w2"
+                ]
+              },
+              {
+                "consumer": "Generated lock-file diff check",
+                "state": "executed",
+                "evidence": [
+                  "w2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "policy403",
+            "state": "unverified",
+            "findings": [
+              {
+                "claim": "The changed third-party action SHA has no confirmed matching allow-list authorization. The 403 and absent admin confirmation do not prove the SHA is unauthorized, but its policy status remains a blocking verification gap.",
+                "kind": "gap",
+                "evidence": [
+                  "p1"
+                ]
+              }
+            ],
+            "evidence": [
+              "p1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Repository/enterprise action allow-list verification",
+                "state": "blocked",
+                "evidence": [
+                  "p1"
+                ]
+              },
+              {
+                "consumer": "Workflow using the changed action SHA",
+                "state": "unexercised",
+                "evidence": [
+                  "p1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "stateful",
+            "state": "risk",
+            "findings": [
+              {
+                "claim": "The database image major upgrades retain named data volumes without supplied migration or backup/restore guidance; fresh-container health checks do not establish that existing persisted data can be upgraded safely.",
+                "kind": "risk",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              },
+              {
+                "claim": "The changed database behavior is not verified with persisted-data upgrade and SQL-query scenarios or on the supported arm64 platform; those are coverage gaps, not demonstrated failures.",
+                "kind": "gap",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              }
+            ],
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Fresh amd64 container startup and health checks",
+                "state": "executed",
+                "evidence": [
+                  "s2"
+                ]
+              },
+              {
+                "consumer": "Persisted-data upgrade and SQL connection query",
+                "state": "unexercised",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              },
+              {
+                "consumer": "arm64 image startup",
+                "state": "unexercised",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "advisory",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The committed lock entry resolves parser-lib 7.0.5, which is outside the manifest selector ^7.1.1; the selector and lock graph are inconsistent.",
+                "kind": "defect",
+                "evidence": [
+                  "a1"
+                ]
+              },
+              {
+                "claim": "No advisory identifier, affected range, or advisory query is supplied, so the package's security status cannot be determined; the synthetic package name is not evidence of a real upstream vulnerability.",
+                "kind": "gap",
+                "evidence": [
+                  "a1"
+                ]
+              }
+            ],
+            "evidence": [
+              "a1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Frozen install",
+                "state": "unexercised",
+                "evidence": [
+                  "a1"
+                ]
+              },
+              {
+                "consumer": "Upstream advisory lookup",
+                "state": "unexercised",
+                "evidence": [
+                  "a1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "patch",
+            "state": "unverified",
+            "findings": [
+              {
+                "claim": "No upstream advisory lookup is supplied, so advisory status for the resolved dependency versions remains unverified; the passing H1 client scenario does not establish that status.",
+                "kind": "gap",
+                "evidence": [
+                  "l1",
+                  "l2"
+                ]
+              }
+            ],
+            "evidence": [
+              "l1",
+              "l2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Frozen restore, compile, and lint",
+                "state": "executed",
+                "evidence": [
+                  "l2"
+                ]
+              },
+              {
+                "consumer": "Required client connection scenario",
+                "state": "executed",
+                "evidence": [
+                  "l2"
+                ]
+              },
+              {
+                "consumer": "Upstream advisory lookup",
+                "state": "unexercised",
+                "evidence": [
+                  "l2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "feed-path",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The new lock diff includes URL B, whose decoded /dnceng/../other path normalizes outside the approved /dnceng/ organization path; the lock introduces a disallowed package source.",
+                "kind": "defect",
+                "evidence": [
+                  "u1"
+                ]
+              }
+            ],
+            "evidence": [
+              "u1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Lockfile source-policy validation",
+                "state": "unexercised",
+                "evidence": [
+                  "u1"
+                ]
+              },
+              {
+                "consumer": "Package installation",
+                "state": "unexercised",
+                "evidence": [
+                  "u1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "execution",
+            "state": "risk",
+            "findings": [
+              {
+                "claim": "The required Redis connection E2E was selected but skipped because its condition was false, so the successful wrapper and H1 template E2E do not provide the required Redis consumer coverage.",
+                "kind": "gap",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ],
+            "evidence": [
+              "e1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Redis connection E2E",
+                "state": "blocked",
+                "evidence": [
+                  "e1"
+                ]
+              },
+              {
+                "consumer": "Generated AppHost template E2E",
+                "state": "executed",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "stale",
+            "state": "unverified",
+            "findings": [
+              {
+                "claim": "The successful connection-test artifact is stamped H0 and cannot validate the H1 diff; the H1 connection job is still queued, and the downloaded CLI is also H0.",
+                "kind": "gap",
+                "evidence": [
+                  "z1"
+                ]
+              }
+            ],
+            "evidence": [
+              "z1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "H1 connection test",
+                "state": "blocked",
+                "evidence": [
+                  "z1"
+                ]
+              },
+              {
+                "consumer": "H0 connection-test artifact",
+                "state": "executed",
+                "evidence": [
+                  "z1"
+                ]
+              },
+              {
+                "consumer": "H1 CLI-based validation",
+                "state": "unexercised",
+                "evidence": [
+                  "z1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ordinary",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The new Add implementation removes both null validation and duplicate-name rejection, violating the supplied public contract and allowing invalid entries into the list.",
+                "kind": "defect",
+                "evidence": [
+                  "o1"
+                ]
+              },
+              {
+                "claim": "The only supplied smoke test covers one successful insertion; null and duplicate rejection have no regression coverage.",
+                "kind": "gap",
+                "evidence": [
+                  "o1",
+                  "o2"
+                ]
+              }
+            ],
+            "evidence": [
+              "o1",
+              "o2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Single valid-name smoke test",
+                "state": "executed",
+                "evidence": [
+                  "o2"
+                ]
+              },
+              {
+                "consumer": "Null and duplicate contract tests",
+                "state": "unexercised",
+                "evidence": [
+                  "o2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "visual",
+            "state": "no_issue",
+            "findings": [],
+            "evidence": [
+              "c1"
+            ],
+            "head": "H1",
+            "execution": []
+          }
+        ]
+      },
+      "adjudication": {
+        "holds": {
+          "findings": [
+            {
+              "targets": [
+                "build-hold"
+              ]
+            },
+            {
+              "targets": [
+                "cdn-hold",
+                "kusto-hold"
+              ]
+            },
+            {
+              "targets": [
+                "foundry-hold"
+              ]
+            },
+            {
+              "targets": [
+                "npgsql-major"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "host-types": {
+          "findings": [
+            {
+              "targets": [
+                "host-gap"
+              ]
+            }
+          ],
+          "row_targets": [
+            "install-blocked"
+          ],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 3,
+          "execution_total": 3,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "toolchain": {
+          "findings": [
+            {
+              "targets": [
+                "compile-lint-gap"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 1,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "feed401": {
+          "findings": [],
+          "row_targets": [
+            "restore-blocked"
+          ],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "generated-drift": {
+          "findings": [
+            {
+              "targets": [
+                "lock-drift"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "wrapper-versions": {
+          "findings": [],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "policy403": {
+          "findings": [
+            {
+              "targets": [
+                "policy-unknown"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "stateful": {
+          "findings": [
+            {
+              "targets": [
+                "migration-gap"
+              ]
+            },
+            {
+              "targets": [
+                "platform-gap"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 3,
+          "execution_total": 3,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "advisory": {
+          "findings": [
+            {
+              "targets": [
+                "resolution-mismatch"
+              ]
+            },
+            {
+              "targets": []
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "patch": {
+          "findings": [
+            {
+              "targets": []
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 3,
+          "execution_total": 3,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "feed-path": {
+          "findings": [
+            {
+              "targets": [
+                "traversal"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "execution": {
+          "findings": [
+            {
+              "targets": [
+                "redis-skipped"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 1,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 1,
+          "selection_total": 2
+        },
+        "stale": {
+          "findings": [
+            {
+              "targets": [
+                "stale-head"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 3,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "ordinary": {
+          "findings": [
+            {
+              "targets": [
+                "null-invariant",
+                "duplicate-invariant"
+              ]
+            },
+            {
+              "targets": []
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "visual": {
+          "findings": [],
+          "row_targets": [],
+          "citation_relevance": [
+            true
+          ],
+          "execution_correct": 0,
+          "execution_total": 0,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        }
+      },
+      "scores": {
+        "totals": {
+          "tp": 17,
+          "miss": 2,
+          "fp": 0,
+          "unsupported": 0,
+          "duplicate": 0,
+          "citation_correct": 82,
+          "citation_total": 82,
+          "head_correct": 15,
+          "head_total": 15,
+          "execution_correct": 29,
+          "execution_total": 32,
+          "state_correct": 13,
+          "state_total": 15,
+          "recognized": 19,
+          "recognized_miss": 0,
+          "supported_non_target": 3,
+          "selection_correct": 1,
+          "selection_total": 2
+        },
+        "cases": {
+          "holds": {
+            "matched": [
+              "build-hold",
+              "cdn-hold",
+              "foundry-hold",
+              "kusto-hold",
+              "npgsql-major"
+            ],
+            "missed": []
+          },
+          "host-types": {
+            "matched": [
+              "host-gap"
+            ],
+            "missed": [
+              "install-blocked"
+            ]
+          },
+          "toolchain": {
+            "matched": [
+              "compile-lint-gap"
+            ],
+            "missed": []
+          },
+          "feed401": {
+            "matched": [],
+            "missed": [
+              "restore-blocked"
+            ]
+          },
+          "generated-drift": {
+            "matched": [
+              "lock-drift"
+            ],
+            "missed": []
+          },
+          "wrapper-versions": {
+            "matched": [],
+            "missed": []
+          },
+          "policy403": {
+            "matched": [
+              "policy-unknown"
+            ],
+            "missed": []
+          },
+          "stateful": {
+            "matched": [
+              "migration-gap",
+              "platform-gap"
+            ],
+            "missed": []
+          },
+          "advisory": {
+            "matched": [
+              "resolution-mismatch"
+            ],
+            "missed": []
+          },
+          "patch": {
+            "matched": [],
+            "missed": []
+          },
+          "feed-path": {
+            "matched": [
+              "traversal"
+            ],
+            "missed": []
+          },
+          "execution": {
+            "matched": [
+              "redis-skipped"
+            ],
+            "missed": []
+          },
+          "stale": {
+            "matched": [
+              "stale-head"
+            ],
+            "missed": []
+          },
+          "ordinary": {
+            "matched": [
+              "duplicate-invariant",
+              "null-invariant"
+            ],
+            "missed": []
+          },
+          "visual": {
+            "matched": [],
+            "missed": []
+          }
+        },
+        "schema_alias_used": false
+      }
+    },
+    "baseline-skill": {
+      "output": {
+        "rows": [
+          {
+            "id": "holds",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "Microsoft.Build.Utilities.Core is changed from its explicitly required 17.9.5 despite the older Visual Studio compatibility constraint.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Azure.Provisioning.Cdn and Azure.Provisioning.Kusto are moved off beta.2 without their stated naming and cluster/API migrations.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Microsoft.AI.Foundry.Local is changed from 1.1.0 despite the stated requirement to retain RID-independent restore.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Npgsql 9.0.4 is paired with the net8 EF Core provider major version 8, violating the stated matching-major constraint.",
+                "kind": "defect",
+                "evidence": [
+                  "h2"
+                ]
+              }
+            ],
+            "evidence": [
+              "h1",
+              "h2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "CI wrapper",
+                "state": "executed",
+                "evidence": [
+                  "h2"
+                ]
+              },
+              {
+                "consumer": "Package compatibility consumers",
+                "state": "unexercised",
+                "evidence": [
+                  "h2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "host-types",
+            "state": "blocked",
+            "findings": [
+              {
+                "claim": "Compatibility of the updated VS Code and Node type packages with the unchanged engine floor and supported runtime versions remains unresolved; no source API additions are shown, and the minimum-host Node runtime is unspecified.",
+                "kind": "gap",
+                "evidence": [
+                  "v1",
+                  "v2"
+                ]
+              }
+            ],
+            "evidence": [
+              "v1",
+              "v2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Frozen dependency install",
+                "state": "blocked",
+                "evidence": [
+                  "v2"
+                ]
+              },
+              {
+                "consumer": "Extension compile and lint",
+                "state": "unexercised",
+                "evidence": [
+                  "v2"
+                ]
+              },
+              {
+                "consumer": "Latest and minimum VS Code host scenarios",
+                "state": "unexercised",
+                "evidence": [
+                  "v1",
+                  "v2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "toolchain",
+            "state": "risk",
+            "findings": [
+              {
+                "claim": "Major TypeScript, ESLint, and typescript-eslint upgrades with unchanged configuration and no supplied peer-compatibility evidence leave toolchain compatibility at risk.",
+                "kind": "risk",
+                "evidence": [
+                  "t1"
+                ]
+              }
+            ],
+            "evidence": [
+              "t1",
+              "t2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Extension job",
+                "state": "unexercised",
+                "evidence": [
+                  "t2"
+                ]
+              },
+              {
+                "consumer": "Install, compile, and lint",
+                "state": "unexercised",
+                "evidence": [
+                  "t2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "feed401",
+            "state": "blocked",
+            "findings": [],
+            "evidence": [
+              "f1",
+              "f2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "NuGet restore",
+                "state": "blocked",
+                "evidence": [
+                  "f2"
+                ]
+              },
+              {
+                "consumer": "Build and tests",
+                "state": "unexercised",
+                "evidence": [
+                  "f2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "generated-drift",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The committed generated lock file is stale: compilation with gh-aw 0.51 changes timeout-minutes from 10 to 15, but the lock file is unchanged.",
+                "kind": "defect",
+                "evidence": [
+                  "g1",
+                  "g2"
+                ]
+              }
+            ],
+            "evidence": [
+              "g1",
+              "g2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "gh aw compile --validate",
+                "state": "executed",
+                "evidence": [
+                  "g2"
+                ]
+              },
+              {
+                "consumer": "Generated lock consistency check",
+                "state": "executed",
+                "evidence": [
+                  "g2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "wrapper-versions",
+            "state": "no_issue",
+            "findings": [],
+            "evidence": [
+              "w1",
+              "w2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "gh aw compile --validate across three workflow sources",
+                "state": "executed",
+                "evidence": [
+                  "w2"
+                ]
+              },
+              {
+                "consumer": "Generated lock consistency check",
+                "state": "executed",
+                "evidence": [
+                  "w2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "policy403",
+            "state": "blocked",
+            "findings": [
+              {
+                "claim": "Authorization of the new third-party action SHA bbbb remains unverified because policy access returned 403; no allow-list contents, admin confirmation, or workflow execution are supplied.",
+                "kind": "gap",
+                "evidence": [
+                  "p1"
+                ]
+              }
+            ],
+            "evidence": [
+              "p1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Action SHA allow-list verification",
+                "state": "blocked",
+                "evidence": [
+                  "p1"
+                ]
+              },
+              {
+                "consumer": "Workflow using the changed action pin",
+                "state": "unexercised",
+                "evidence": [
+                  "p1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "stateful",
+            "state": "risk",
+            "findings": [
+              {
+                "claim": "Major database image upgrades with retained named volumes have no supplied migration or backup/restore evidence, and persisted-data upgrades were not exercised.",
+                "kind": "risk",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              },
+              {
+                "claim": "The declared amd64 and arm64 support is not fully validated: only fresh amd64 containers started, and arm64 image manifests or runs are absent.",
+                "kind": "gap",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              }
+            ],
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Fresh amd64 container startup and health checks",
+                "state": "executed",
+                "evidence": [
+                  "s2"
+                ]
+              },
+              {
+                "consumer": "Persisted-data upgrade and SQL connection query",
+                "state": "unexercised",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              },
+              {
+                "consumer": "arm64 image/runtime validation",
+                "state": "unexercised",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "advisory",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The committed lock resolves parser-lib to 7.0.5, outside the manifest's ^7.1.1 selector; the supplied dependency state is inconsistent.",
+                "kind": "defect",
+                "evidence": [
+                  "a1"
+                ]
+              }
+            ],
+            "evidence": [
+              "a1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Frozen dependency install",
+                "state": "unexercised",
+                "evidence": [
+                  "a1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "patch",
+            "state": "no_issue",
+            "findings": [],
+            "evidence": [
+              "l1",
+              "l2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Frozen restore, compile, and lint",
+                "state": "executed",
+                "evidence": [
+                  "l2"
+                ]
+              },
+              {
+                "consumer": "Required client connection scenario",
+                "state": "executed",
+                "evidence": [
+                  "l2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "feed-path",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The lock diff introduces URL B with an encoded traversal segment that normalizes outside the approved /dnceng/ path; it violates the supplied feed policy.",
+                "kind": "defect",
+                "evidence": [
+                  "u1"
+                ]
+              }
+            ],
+            "evidence": [
+              "u1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Lockfile feed URL validation",
+                "state": "unexercised",
+                "evidence": [
+                  "u1"
+                ]
+              },
+              {
+                "consumer": "Dependency installation",
+                "state": "unexercised",
+                "evidence": [
+                  "u1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "execution",
+            "state": "unverified",
+            "findings": [
+              {
+                "claim": "The required Redis connection E2E was selected but skipped, leaving zero Redis tests; wrapper success therefore does not validate that consumer.",
+                "kind": "gap",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ],
+            "evidence": [
+              "e1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Redis connection E2E",
+                "state": "unexercised",
+                "evidence": [
+                  "e1"
+                ]
+              },
+              {
+                "consumer": "Generated AppHost template E2E (CreateAndRunAppHost)",
+                "state": "executed",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "stale",
+            "state": "unverified",
+            "findings": [
+              {
+                "claim": "The successful connection test artifact and downloaded CLI are stamped with H0 rather than the changed H1 head, so they do not validate the current diff.",
+                "kind": "gap",
+                "evidence": [
+                  "z1"
+                ]
+              }
+            ],
+            "evidence": [
+              "z1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Connection test using H0 artifact",
+                "state": "executed",
+                "evidence": [
+                  "z1"
+                ]
+              },
+              {
+                "consumer": "Connection test for H1",
+                "state": "unexercised",
+                "evidence": [
+                  "z1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ordinary",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "Add no longer rejects null names despite the stated public contract and absence of caller validation.",
+                "kind": "defect",
+                "evidence": [
+                  "o1"
+                ]
+              },
+              {
+                "claim": "Add no longer rejects duplicate names despite the stated public contract.",
+                "kind": "defect",
+                "evidence": [
+                  "o1"
+                ]
+              }
+            ],
+            "evidence": [
+              "o1",
+              "o2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Single Add(\"web\") smoke test",
+                "state": "executed",
+                "evidence": [
+                  "o2"
+                ]
+              },
+              {
+                "consumer": "Null and duplicate-name boundary tests",
+                "state": "unexercised",
+                "evidence": [
+                  "o2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "visual",
+            "state": "no_issue",
+            "findings": [],
+            "evidence": [
+              "c1"
+            ],
+            "head": "H1",
+            "execution": []
+          }
+        ]
+      },
+      "adjudication": {
+        "holds": {
+          "findings": [
+            {
+              "targets": [
+                "build-hold"
+              ]
+            },
+            {
+              "targets": [
+                "cdn-hold",
+                "kusto-hold"
+              ]
+            },
+            {
+              "targets": [
+                "foundry-hold"
+              ]
+            },
+            {
+              "targets": [
+                "npgsql-major"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "host-types": {
+          "findings": [
+            {
+              "targets": [
+                "host-gap"
+              ]
+            }
+          ],
+          "row_targets": [
+            "install-blocked"
+          ],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 3,
+          "execution_total": 3,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "toolchain": {
+          "findings": [
+            {
+              "targets": [
+                "compile-lint-gap"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "feed401": {
+          "findings": [],
+          "row_targets": [
+            "restore-blocked"
+          ],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "generated-drift": {
+          "findings": [
+            {
+              "targets": [
+                "lock-drift"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "wrapper-versions": {
+          "findings": [],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "policy403": {
+          "findings": [
+            {
+              "targets": [
+                "policy-unknown"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "stateful": {
+          "findings": [
+            {
+              "targets": [
+                "migration-gap"
+              ]
+            },
+            {
+              "targets": [
+                "platform-gap"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 3,
+          "execution_total": 3,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "advisory": {
+          "findings": [
+            {
+              "targets": [
+                "resolution-mismatch"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 1,
+          "execution_total": 1,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "patch": {
+          "findings": [],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "feed-path": {
+          "findings": [
+            {
+              "targets": [
+                "traversal"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "execution": {
+          "findings": [
+            {
+              "targets": [
+                "redis-skipped"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "stale": {
+          "findings": [
+            {
+              "targets": [
+                "stale-head"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "ordinary": {
+          "findings": [
+            {
+              "targets": [
+                "null-invariant"
+              ]
+            },
+            {
+              "targets": [
+                "duplicate-invariant"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "visual": {
+          "findings": [],
+          "row_targets": [],
+          "citation_relevance": [
+            true
+          ],
+          "execution_correct": 0,
+          "execution_total": 0,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        }
+      },
+      "scores": {
+        "totals": {
+          "tp": 17,
+          "miss": 2,
+          "fp": 0,
+          "unsupported": 0,
+          "duplicate": 0,
+          "citation_correct": 76,
+          "citation_total": 76,
+          "head_correct": 15,
+          "head_total": 15,
+          "execution_correct": 29,
+          "execution_total": 29,
+          "state_correct": 15,
+          "state_total": 15,
+          "recognized": 19,
+          "recognized_miss": 0,
+          "supported_non_target": 0,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "cases": {
+          "holds": {
+            "matched": [
+              "build-hold",
+              "cdn-hold",
+              "foundry-hold",
+              "kusto-hold",
+              "npgsql-major"
+            ],
+            "missed": []
+          },
+          "host-types": {
+            "matched": [
+              "host-gap"
+            ],
+            "missed": [
+              "install-blocked"
+            ]
+          },
+          "toolchain": {
+            "matched": [
+              "compile-lint-gap"
+            ],
+            "missed": []
+          },
+          "feed401": {
+            "matched": [],
+            "missed": [
+              "restore-blocked"
+            ]
+          },
+          "generated-drift": {
+            "matched": [
+              "lock-drift"
+            ],
+            "missed": []
+          },
+          "wrapper-versions": {
+            "matched": [],
+            "missed": []
+          },
+          "policy403": {
+            "matched": [
+              "policy-unknown"
+            ],
+            "missed": []
+          },
+          "stateful": {
+            "matched": [
+              "migration-gap",
+              "platform-gap"
+            ],
+            "missed": []
+          },
+          "advisory": {
+            "matched": [
+              "resolution-mismatch"
+            ],
+            "missed": []
+          },
+          "patch": {
+            "matched": [],
+            "missed": []
+          },
+          "feed-path": {
+            "matched": [
+              "traversal"
+            ],
+            "missed": []
+          },
+          "execution": {
+            "matched": [
+              "redis-skipped"
+            ],
+            "missed": []
+          },
+          "stale": {
+            "matched": [
+              "stale-head"
+            ],
+            "missed": []
+          },
+          "ordinary": {
+            "matched": [
+              "duplicate-invariant",
+              "null-invariant"
+            ],
+            "missed": []
+          },
+          "visual": {
+            "matched": [],
+            "missed": []
+          }
+        },
+        "schema_alias_used": false
+      }
+    },
+    "enhanced-skill": {
+      "output": {
+        "results": [
+          {
+            "id": "holds",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "Microsoft.Build.Utilities.Core was changed from the explicitly required 17.9.5 despite the older-Visual-Studio constraint.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Azure.Provisioning.Cdn was advanced past beta.2 without the pending resource-naming migration.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Azure.Provisioning.Kusto was advanced past beta.2 without the pending cluster/API migration.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Microsoft.AI.Foundry.Local was changed from the version required for RID-independent restore.",
+                "kind": "defect",
+                "evidence": [
+                  "h1"
+                ]
+              },
+              {
+                "claim": "Npgsql was advanced to major 9 while its EF Core provider remains major 8, violating the stated matching-major constraint.",
+                "kind": "defect",
+                "evidence": [
+                  "h2"
+                ]
+              },
+              {
+                "claim": "The wrapper success does not establish consumer compatibility; package consumers were not executed.",
+                "kind": "gap",
+                "evidence": [
+                  "h2"
+                ]
+              }
+            ],
+            "evidence": [
+              "h1",
+              "h2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Changed constrained package consumers",
+                "state": "unexercised",
+                "evidence": [
+                  "h2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "host-types",
+            "state": "blocked",
+            "findings": [
+              {
+                "claim": "The approved-feed HTTP 401 blocked frozen installation, so compile, lint, and extension-host compatibility were not assessed; it does not establish a package incompatibility.",
+                "kind": "gap",
+                "evidence": [
+                  "v2"
+                ]
+              },
+              {
+                "claim": "The updated VS Code and Node type packages have not been validated against the unchanged minimum VS Code engine or its runtime; the supplied evidence does not prove an incompatibility.",
+                "kind": "risk",
+                "evidence": [
+                  "v1",
+                  "v2"
+                ]
+              }
+            ],
+            "evidence": [
+              "v1",
+              "v2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Approved-feed frozen extension install",
+                "state": "blocked",
+                "evidence": [
+                  "v2"
+                ]
+              },
+              {
+                "consumer": "Extension compile and lint",
+                "state": "unexercised",
+                "evidence": [
+                  "v2"
+                ]
+              },
+              {
+                "consumer": "Latest/minimum extension-host scenarios",
+                "state": "unexercised",
+                "evidence": [
+                  "v2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "toolchain",
+            "state": "unverified",
+            "findings": [
+              {
+                "claim": "Major TypeScript, ESLint, and typescript-eslint updates have no supplied migration or peer-compatibility evidence, and the selected extension job is still pending; configuration compatibility remains unverified, not a confirmed defect.",
+                "kind": "risk",
+                "evidence": [
+                  "t1",
+                  "t2"
+                ]
+              }
+            ],
+            "evidence": [
+              "t1",
+              "t2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Selected extension job (install, compile, lint)",
+                "state": "unexercised",
+                "evidence": [
+                  "t2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "feed401",
+            "state": "blocked",
+            "findings": [
+              {
+                "claim": "Restore was blocked by HTTP 401 from the approved feed, so build and tests did not run; no package compile incompatibility was logged.",
+                "kind": "gap",
+                "evidence": [
+                  "f1",
+                  "f2"
+                ]
+              }
+            ],
+            "evidence": [
+              "f1",
+              "f2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "NuGet restore",
+                "state": "blocked",
+                "evidence": [
+                  "f2"
+                ]
+              },
+              {
+                "consumer": "Build and package consumer tests",
+                "state": "unexercised",
+                "evidence": [
+                  "f2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "generated-drift",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The H1 gh-aw compiler changes the committed lock output from timeout-minutes 10 to 15, but the lock file is unchanged in the diff; generated output is stale relative to the validated compiler.",
+                "kind": "defect",
+                "evidence": [
+                  "g1",
+                  "g2"
+                ]
+              }
+            ],
+            "evidence": [
+              "g1",
+              "g2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "gh-aw compile and committed lock consistency",
+                "state": "executed",
+                "evidence": [
+                  "g2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "wrapper-versions",
+            "state": "no_issue",
+            "findings": [],
+            "evidence": [
+              "w1",
+              "w2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "All three gh-aw workflow sources and lock consistency",
+                "state": "executed",
+                "evidence": [
+                  "w2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "policy403",
+            "state": "unverified",
+            "findings": [
+              {
+                "claim": "The changed third-party action SHA's allow-list authorization cannot be determined because policy access returned 403 and no admin confirmation or workflow execution was supplied; this is not evidence that the SHA is disallowed.",
+                "kind": "gap",
+                "evidence": [
+                  "p1"
+                ]
+              }
+            ],
+            "evidence": [
+              "p1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Action SHA allow-list authorization",
+                "state": "blocked",
+                "evidence": [
+                  "p1"
+                ]
+              },
+              {
+                "consumer": "Workflow using the changed action pin",
+                "state": "unexercised",
+                "evidence": [
+                  "p1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "stateful",
+            "state": "risk",
+            "findings": [
+              {
+                "claim": "The Postgres major-image upgrade retains named data volumes, but persisted-data upgrade and recovery behavior was not tested; fresh-container health checks do not establish upgrade safety.",
+                "kind": "risk",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              },
+              {
+                "claim": "The SQL Server image upgrade retains named data volumes, but persisted-data upgrade and recovery behavior was not tested; fresh-container health checks do not establish upgrade safety.",
+                "kind": "risk",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              },
+              {
+                "claim": "Supported arm64 behavior remains unknown because only amd64 was exercised; image platform manifests were not supplied.",
+                "kind": "gap",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              },
+              {
+                "claim": "No SQL connection query or persisted-data migration result was supplied; no data loss was observed, but these behaviors remain unverified.",
+                "kind": "gap",
+                "evidence": [
+                  "s2"
+                ]
+              }
+            ],
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Fresh amd64 container starts and health checks",
+                "state": "executed",
+                "evidence": [
+                  "s2"
+                ]
+              },
+              {
+                "consumer": "Persisted-volume database upgrades",
+                "state": "unexercised",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              },
+              {
+                "consumer": "SQL connection query",
+                "state": "unexercised",
+                "evidence": [
+                  "s2"
+                ]
+              },
+              {
+                "consumer": "arm64 image support",
+                "state": "unexercised",
+                "evidence": [
+                  "s1",
+                  "s2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "advisory",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The supplied lock entry resolves parser-lib 7.0.5, outside the manifest selector ^7.1.1.",
+                "kind": "defect",
+                "evidence": [
+                  "a1"
+                ]
+              },
+              {
+                "claim": "No advisory identifier, affected range, or advisory query result was supplied, so upstream security status is unverified and cannot be inferred from the selector or lock mismatch.",
+                "kind": "gap",
+                "evidence": [
+                  "a1"
+                ]
+              }
+            ],
+            "evidence": [
+              "a1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Frozen install validating manifest/lock consistency",
+                "state": "unexercised",
+                "evidence": [
+                  "a1"
+                ]
+              },
+              {
+                "consumer": "Upstream advisory assessment",
+                "state": "unexercised",
+                "evidence": [
+                  "a1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "patch",
+            "state": "exercised",
+            "findings": [
+              {
+                "claim": "No upstream advisory lookup was supplied, so successful restore/build/lint and consumer tests do not establish upstream advisory status.",
+                "kind": "gap",
+                "evidence": [
+                  "l2"
+                ]
+              }
+            ],
+            "evidence": [
+              "l1",
+              "l2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Frozen restore, compile, and lint",
+                "state": "executed",
+                "evidence": [
+                  "l2"
+                ]
+              },
+              {
+                "consumer": "Required client connection scenario",
+                "state": "executed",
+                "evidence": [
+                  "l2"
+                ]
+              },
+              {
+                "consumer": "Upstream advisory assessment",
+                "state": "unexercised",
+                "evidence": [
+                  "l2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "feed-path",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The lock diff introduces URL B with a decoded path traversal segment, which violates the supplied approved-URL policy; URL A is approved.",
+                "kind": "defect",
+                "evidence": [
+                  "u1"
+                ]
+              },
+              {
+                "claim": "Installation was not attempted, so no install behavior was exercised.",
+                "kind": "gap",
+                "evidence": [
+                  "u1"
+                ]
+              }
+            ],
+            "evidence": [
+              "u1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Lockfile URL policy / installation",
+                "state": "unexercised",
+                "evidence": [
+                  "u1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "execution",
+            "state": "unverified",
+            "findings": [
+              {
+                "claim": "The required Redis connection E2E was selected but skipped because its condition was false; the successful wrapper and passing template test do not validate Redis.",
+                "kind": "gap",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ],
+            "evidence": [
+              "e1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Redis connection E2E",
+                "state": "unexercised",
+                "evidence": [
+                  "e1"
+                ]
+              },
+              {
+                "consumer": "Generated AppHost template E2E",
+                "state": "executed",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "stale",
+            "state": "unverified",
+            "findings": [
+              {
+                "claim": "The successful R0 connection result and downloaded CLI identify H0, not the current H1 head; the H1 connection job is queued, so the required current-head scenario has not been validated.",
+                "kind": "gap",
+                "evidence": [
+                  "z1"
+                ]
+              }
+            ],
+            "evidence": [
+              "z1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "H1 connection test job",
+                "state": "unexercised",
+                "evidence": [
+                  "z1"
+                ]
+              },
+              {
+                "consumer": "H0 connection artifact",
+                "state": "executed",
+                "evidence": [
+                  "z1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ordinary",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "Add no longer rejects null despite the stated public contract and has no caller validation.",
+                "kind": "defect",
+                "evidence": [
+                  "o1",
+                  "o2"
+                ]
+              },
+              {
+                "claim": "Add no longer rejects duplicate names despite the stated public contract; the single successful Add(\"web\") smoke case does not cover duplicates.",
+                "kind": "defect",
+                "evidence": [
+                  "o1",
+                  "o2"
+                ]
+              }
+            ],
+            "evidence": [
+              "o1",
+              "o2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Single Add(\"web\") smoke test",
+                "state": "executed",
+                "evidence": [
+                  "o2"
+                ]
+              },
+              {
+                "consumer": "Null and duplicate contract cases",
+                "state": "unexercised",
+                "evidence": [
+                  "o2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "visual",
+            "state": "no_issue",
+            "findings": [],
+            "evidence": [
+              "c1"
+            ],
+            "head": "H1",
+            "execution": []
+          }
+        ]
+      },
+      "adjudication": {
+        "holds": {
+          "findings": [
+            {
+              "targets": [
+                "build-hold"
+              ]
+            },
+            {
+              "targets": [
+                "cdn-hold"
+              ]
+            },
+            {
+              "targets": [
+                "kusto-hold"
+              ]
+            },
+            {
+              "targets": [
+                "foundry-hold"
+              ]
+            },
+            {
+              "targets": [
+                "npgsql-major"
+              ]
+            },
+            {
+              "targets": []
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 1,
+          "execution_total": 1,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "host-types": {
+          "findings": [
+            {
+              "targets": [
+                "install-blocked"
+              ]
+            },
+            {
+              "targets": [
+                "host-gap"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 3,
+          "execution_total": 3,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "toolchain": {
+          "findings": [
+            {
+              "targets": [
+                "compile-lint-gap"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 1,
+          "execution_total": 1,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "feed401": {
+          "findings": [
+            {
+              "targets": [
+                "restore-blocked"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "generated-drift": {
+          "findings": [
+            {
+              "targets": [
+                "lock-drift"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 1,
+          "execution_total": 1,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "wrapper-versions": {
+          "findings": [],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 1,
+          "execution_total": 1,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "policy403": {
+          "findings": [
+            {
+              "targets": [
+                "policy-unknown"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "stateful": {
+          "findings": [
+            {
+              "targets": [
+                "migration-gap"
+              ]
+            },
+            {
+              "targets": [
+                "migration-gap"
+              ]
+            },
+            {
+              "targets": [
+                "platform-gap"
+              ]
+            },
+            {
+              "targets": []
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 4,
+          "execution_total": 4,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "advisory": {
+          "findings": [
+            {
+              "targets": [
+                "resolution-mismatch"
+              ]
+            },
+            {
+              "targets": []
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "patch": {
+          "findings": [
+            {
+              "targets": []
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 3,
+          "execution_total": 3,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "feed-path": {
+          "findings": [
+            {
+              "targets": [
+                "traversal"
+              ]
+            },
+            {
+              "targets": []
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 1,
+          "execution_total": 1,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "execution": {
+          "findings": [
+            {
+              "targets": [
+                "redis-skipped"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "stale": {
+          "findings": [
+            {
+              "targets": [
+                "stale-head"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "ordinary": {
+          "findings": [
+            {
+              "targets": [
+                "null-invariant"
+              ]
+            },
+            {
+              "targets": [
+                "duplicate-invariant"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "visual": {
+          "findings": [],
+          "row_targets": [],
+          "citation_relevance": [
+            true
+          ],
+          "execution_correct": 0,
+          "execution_total": 0,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        }
+      },
+      "scores": {
+        "totals": {
+          "tp": 19,
+          "miss": 0,
+          "fp": 0,
+          "unsupported": 0,
+          "duplicate": 0,
+          "citation_correct": 87,
+          "citation_total": 87,
+          "head_correct": 15,
+          "head_total": 15,
+          "execution_correct": 27,
+          "execution_total": 27,
+          "state_correct": 15,
+          "state_total": 15,
+          "recognized": 19,
+          "recognized_miss": 0,
+          "supported_non_target": 5,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "cases": {
+          "holds": {
+            "matched": [
+              "build-hold",
+              "cdn-hold",
+              "foundry-hold",
+              "kusto-hold",
+              "npgsql-major"
+            ],
+            "missed": []
+          },
+          "host-types": {
+            "matched": [
+              "host-gap",
+              "install-blocked"
+            ],
+            "missed": []
+          },
+          "toolchain": {
+            "matched": [
+              "compile-lint-gap"
+            ],
+            "missed": []
+          },
+          "feed401": {
+            "matched": [
+              "restore-blocked"
+            ],
+            "missed": []
+          },
+          "generated-drift": {
+            "matched": [
+              "lock-drift"
+            ],
+            "missed": []
+          },
+          "wrapper-versions": {
+            "matched": [],
+            "missed": []
+          },
+          "policy403": {
+            "matched": [
+              "policy-unknown"
+            ],
+            "missed": []
+          },
+          "stateful": {
+            "matched": [
+              "migration-gap",
+              "platform-gap"
+            ],
+            "missed": []
+          },
+          "advisory": {
+            "matched": [
+              "resolution-mismatch"
+            ],
+            "missed": []
+          },
+          "patch": {
+            "matched": [],
+            "missed": []
+          },
+          "feed-path": {
+            "matched": [
+              "traversal"
+            ],
+            "missed": []
+          },
+          "execution": {
+            "matched": [
+              "redis-skipped"
+            ],
+            "missed": []
+          },
+          "stale": {
+            "matched": [
+              "stale-head"
+            ],
+            "missed": []
+          },
+          "ordinary": {
+            "matched": [
+              "duplicate-invariant",
+              "null-invariant"
+            ],
+            "missed": []
+          },
+          "visual": {
+            "matched": [],
+            "missed": []
+          }
+        },
+        "schema_alias_used": true
+      }
+    },
+    "baseline-review-repeat": {
+      "output": {
+        "rows": [
+          {
+            "id": "feed401",
+            "state": "blocked",
+            "findings": [],
+            "evidence": [
+              "f1",
+              "f2"
+            ],
+            "head": "H1",
+            "execution": []
+          },
+          {
+            "id": "execution",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The selector run is reported as successful even though the required Redis connection E2E consumer was skipped and executed zero tests.",
+                "kind": "defect",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ],
+            "evidence": [
+              "e1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Redis connection E2E",
+                "state": "unexercised",
+                "evidence": [
+                  "e1"
+                ]
+              },
+              {
+                "consumer": "generated AppHost template E2E",
+                "state": "executed",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ordinary",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "Add no longer rejects null names, violating its stated public contract.",
+                "kind": "defect",
+                "evidence": [
+                  "o1"
+                ]
+              },
+              {
+                "claim": "Add no longer rejects duplicate names, violating its stated public contract.",
+                "kind": "defect",
+                "evidence": [
+                  "o1"
+                ]
+              },
+              {
+                "claim": "The smoke test covers only one valid insertion; focused null and duplicate regression tests are absent.",
+                "kind": "gap",
+                "evidence": [
+                  "o1",
+                  "o2"
+                ]
+              }
+            ],
+            "evidence": [
+              "o1",
+              "o2"
+            ],
+            "head": "H1",
+            "execution": []
+          }
+        ]
+      },
+      "adjudication": {
+        "feed401": {
+          "findings": [],
+          "row_targets": [
+            "restore-blocked"
+          ],
+          "citation_relevance": [
+            true,
+            true
+          ],
+          "execution_correct": 0,
+          "execution_total": 0,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "execution": {
+          "findings": [
+            {
+              "targets": [
+                "redis-skipped"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "ordinary": {
+          "findings": [
+            {
+              "targets": [
+                "null-invariant"
+              ]
+            },
+            {
+              "targets": [
+                "duplicate-invariant"
+              ]
+            },
+            {
+              "targets": []
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 0,
+          "execution_total": 0,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        }
+      },
+      "scores": {
+        "totals": {
+          "tp": 3,
+          "miss": 1,
+          "fp": 0,
+          "unsupported": 0,
+          "duplicate": 0,
+          "citation_correct": 12,
+          "citation_total": 12,
+          "head_correct": 3,
+          "head_total": 3,
+          "execution_correct": 2,
+          "execution_total": 2,
+          "state_correct": 2,
+          "state_total": 3,
+          "recognized": 4,
+          "recognized_miss": 0,
+          "supported_non_target": 1,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "cases": {
+          "feed401": {
+            "matched": [],
+            "missed": [
+              "restore-blocked"
+            ]
+          },
+          "execution": {
+            "matched": [
+              "redis-skipped"
+            ],
+            "missed": []
+          },
+          "ordinary": {
+            "matched": [
+              "duplicate-invariant",
+              "null-invariant"
+            ],
+            "missed": []
+          }
+        },
+        "schema_alias_used": false
+      }
+    },
+    "enhanced-review-repeat": {
+      "output": {
+        "rows": [
+          {
+            "id": "feed401",
+            "state": "blocked",
+            "findings": [
+              {
+                "claim": "Dependency compatibility remains unverified because restore was blocked by HTTP 401 before package compilation or tests.",
+                "kind": "gap",
+                "evidence": [
+                  "f2"
+                ]
+              }
+            ],
+            "evidence": [
+              "f1",
+              "f2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "NuGet restore",
+                "state": "blocked",
+                "evidence": [
+                  "f2"
+                ]
+              },
+              {
+                "consumer": "Build and tests",
+                "state": "unexercised",
+                "evidence": [
+                  "f2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "execution",
+            "state": "unverified",
+            "findings": [
+              {
+                "claim": "The Redis connection E2E consumer was selected but skipped, so the wrapper's success conclusion does not establish that required consumer passed at H1.",
+                "kind": "gap",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ],
+            "evidence": [
+              "e1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Redis connection E2E",
+                "state": "unexercised",
+                "evidence": [
+                  "e1"
+                ]
+              },
+              {
+                "consumer": "Generated AppHost template E2E",
+                "state": "executed",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ordinary",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "Add no longer rejects null or duplicate names, violating its stated public contract and allowing invalid entries into _names.",
+                "kind": "defect",
+                "evidence": [
+                  "o1"
+                ]
+              },
+              {
+                "claim": "The changed Add behavior has no regression coverage for null or duplicate inputs; the single successful Add(\"web\") smoke test would not catch either contract regression.",
+                "kind": "gap",
+                "evidence": [
+                  "o2"
+                ]
+              }
+            ],
+            "evidence": [
+              "o1",
+              "o2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Add(\"web\") smoke test",
+                "state": "executed",
+                "evidence": [
+                  "o2"
+                ]
+              },
+              {
+                "consumer": "Null and duplicate validation coverage",
+                "state": "unexercised",
+                "evidence": [
+                  "o2"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "adjudication": {
+        "feed401": {
+          "findings": [
+            {
+              "targets": [
+                "restore-blocked"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "execution": {
+          "findings": [
+            {
+              "targets": [
+                "redis-skipped"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "ordinary": {
+          "findings": [
+            {
+              "targets": [
+                "null-invariant",
+                "duplicate-invariant"
+              ]
+            },
+            {
+              "targets": []
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        }
+      },
+      "scores": {
+        "totals": {
+          "tp": 4,
+          "miss": 0,
+          "fp": 0,
+          "unsupported": 0,
+          "duplicate": 0,
+          "citation_correct": 15,
+          "citation_total": 15,
+          "head_correct": 3,
+          "head_total": 3,
+          "execution_correct": 6,
+          "execution_total": 6,
+          "state_correct": 3,
+          "state_total": 3,
+          "recognized": 4,
+          "recognized_miss": 0,
+          "supported_non_target": 1,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "cases": {
+          "feed401": {
+            "matched": [
+              "restore-blocked"
+            ],
+            "missed": []
+          },
+          "execution": {
+            "matched": [
+              "redis-skipped"
+            ],
+            "missed": []
+          },
+          "ordinary": {
+            "matched": [
+              "duplicate-invariant",
+              "null-invariant"
+            ],
+            "missed": []
+          }
+        },
+        "schema_alias_used": false
+      }
+    },
+    "baseline-skill-repeat": {
+      "output": {
+        "rows": [
+          {
+            "id": "feed401",
+            "state": "blocked",
+            "findings": [
+              {
+                "claim": "Package compatibility is unverified: restore failed with HTTP 401 before build or tests, so this evidence does not establish a defect in the version change.",
+                "kind": "gap",
+                "evidence": [
+                  "f1",
+                  "f2"
+                ]
+              }
+            ],
+            "evidence": [
+              "f1",
+              "f2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "H1 restore",
+                "state": "blocked",
+                "evidence": [
+                  "f2"
+                ]
+              },
+              {
+                "consumer": "Build and tests",
+                "state": "blocked",
+                "evidence": [
+                  "f2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "execution",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "The wrapper's success conclusion is unsupported as a result for all required consumers: the Redis connection E2E step was skipped and ran zero tests.",
+                "kind": "defect",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ],
+            "evidence": [
+              "e1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Redis connection E2E",
+                "state": "unexercised",
+                "evidence": [
+                  "e1"
+                ]
+              },
+              {
+                "consumer": "Generated AppHost template E2E (CreateAndRunAppHost)",
+                "state": "executed",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ordinary",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "Add no longer rejects null names, contrary to the stated public contract, and the supplied smoke test does not exercise this case.",
+                "kind": "defect",
+                "evidence": [
+                  "o1",
+                  "o2"
+                ]
+              },
+              {
+                "claim": "Add no longer rejects duplicate names, contrary to the stated public contract, and the supplied smoke test does not exercise this case.",
+                "kind": "defect",
+                "evidence": [
+                  "o1",
+                  "o2"
+                ]
+              }
+            ],
+            "evidence": [
+              "o1",
+              "o2"
+            ],
+            "head": "H1",
+            "execution": []
+          }
+        ]
+      },
+      "adjudication": {
+        "feed401": {
+          "findings": [
+            {
+              "targets": [
+                "restore-blocked"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "execution": {
+          "findings": [
+            {
+              "targets": [
+                "redis-skipped"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "ordinary": {
+          "findings": [
+            {
+              "targets": [
+                "null-invariant"
+              ]
+            },
+            {
+              "targets": [
+                "duplicate-invariant"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 0,
+          "execution_total": 0,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        }
+      },
+      "scores": {
+        "totals": {
+          "tp": 4,
+          "miss": 0,
+          "fp": 0,
+          "unsupported": 0,
+          "duplicate": 0,
+          "citation_correct": 16,
+          "citation_total": 16,
+          "head_correct": 3,
+          "head_total": 3,
+          "execution_correct": 4,
+          "execution_total": 4,
+          "state_correct": 2,
+          "state_total": 3,
+          "recognized": 4,
+          "recognized_miss": 0,
+          "supported_non_target": 0,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "cases": {
+          "feed401": {
+            "matched": [
+              "restore-blocked"
+            ],
+            "missed": []
+          },
+          "execution": {
+            "matched": [
+              "redis-skipped"
+            ],
+            "missed": []
+          },
+          "ordinary": {
+            "matched": [
+              "duplicate-invariant",
+              "null-invariant"
+            ],
+            "missed": []
+          }
+        },
+        "schema_alias_used": false
+      }
+    },
+    "enhanced-skill-repeat": {
+      "output": {
+        "rows": [
+          {
+            "id": "feed401",
+            "state": "blocked",
+            "findings": [
+              {
+                "claim": "Dependency compatibility is unverified: restore stopped at an HTTP 401 from the unchanged approved feed, before build or tests; this is a prerequisite blockage, not evidence of an incompatible package.",
+                "kind": "gap",
+                "evidence": [
+                  "f1",
+                  "f2"
+                ]
+              }
+            ],
+            "evidence": [
+              "f1",
+              "f2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "NuGet restore",
+                "state": "blocked",
+                "evidence": [
+                  "f2"
+                ]
+              },
+              {
+                "consumer": "Build and tests",
+                "state": "blocked",
+                "evidence": [
+                  "f2"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "execution",
+            "state": "unverified",
+            "findings": [
+              {
+                "claim": "The required Redis connection E2E was selected but its test step was skipped, so the successful wrapper does not establish that consumer scenario ran.",
+                "kind": "gap",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ],
+            "evidence": [
+              "e1"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Redis connection E2E",
+                "state": "unexercised",
+                "evidence": [
+                  "e1"
+                ]
+              },
+              {
+                "consumer": "Generated AppHost template E2E (CreateAndRunAppHost)",
+                "state": "executed",
+                "evidence": [
+                  "e1"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ordinary",
+            "state": "defect",
+            "findings": [
+              {
+                "claim": "Add no longer rejects null names, violating its stated public contract.",
+                "kind": "defect",
+                "evidence": [
+                  "o1",
+                  "o2"
+                ]
+              },
+              {
+                "claim": "Add no longer rejects duplicate names, violating its stated public contract.",
+                "kind": "defect",
+                "evidence": [
+                  "o1",
+                  "o2"
+                ]
+              }
+            ],
+            "evidence": [
+              "o1",
+              "o2"
+            ],
+            "head": "H1",
+            "execution": [
+              {
+                "consumer": "Add(\"web\") smoke test",
+                "state": "executed",
+                "evidence": [
+                  "o2"
+                ]
+              },
+              {
+                "consumer": "Null and duplicate contract cases",
+                "state": "unexercised",
+                "evidence": [
+                  "o1",
+                  "o2"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "adjudication": {
+        "feed401": {
+          "findings": [
+            {
+              "targets": [
+                "restore-blocked"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        },
+        "execution": {
+          "findings": [
+            {
+              "targets": [
+                "redis-skipped"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "ordinary": {
+          "findings": [
+            {
+              "targets": [
+                "null-invariant"
+              ]
+            },
+            {
+              "targets": [
+                "duplicate-invariant"
+              ]
+            }
+          ],
+          "row_targets": [],
+          "citation_relevance": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "execution_correct": 2,
+          "execution_total": 2,
+          "extra_unsupported": 0,
+          "selection_correct": 0,
+          "selection_total": 0
+        }
+      },
+      "scores": {
+        "totals": {
+          "tp": 4,
+          "miss": 0,
+          "fp": 0,
+          "unsupported": 0,
+          "duplicate": 0,
+          "citation_correct": 19,
+          "citation_total": 19,
+          "head_correct": 3,
+          "head_total": 3,
+          "execution_correct": 6,
+          "execution_total": 6,
+          "state_correct": 3,
+          "state_total": 3,
+          "recognized": 4,
+          "recognized_miss": 0,
+          "supported_non_target": 0,
+          "selection_correct": 2,
+          "selection_total": 2
+        },
+        "cases": {
+          "feed401": {
+            "matched": [
+              "restore-blocked"
+            ],
+            "missed": []
+          },
+          "execution": {
+            "matched": [
+              "redis-skipped"
+            ],
+            "missed": []
+          },
+          "ordinary": {
+            "matched": [
+              "duplicate-invariant",
+              "null-invariant"
+            ],
+            "missed": []
+          }
+        },
+        "schema_alias_used": false
+      }
+    }
+  }
+}

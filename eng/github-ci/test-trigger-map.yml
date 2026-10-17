@@ -107,6 +107,8 @@ ignore:
   - eng/scripts/tray-registration-control/**
   # The stabilization job invokes this script independently of the tests selector.
   - eng/scripts/stabilization-smoke-init-restore.sh
+  # Offline constraints and their tests run unconditionally in ci.yml's PR preparation job.
+  - eng/dependency-review/**
   # Dev/AzDO-only eng/scripts with NO test consumer and no GH-CI build/test path: local debug-channel
   # helpers and the AzDO native-symbol validator. Listed so they do not show as unattributed audit noise.
   # (verify-cli-archive.ps1 and validate-npm-release-aliases.ps1 are NOT here -- they have test consumers

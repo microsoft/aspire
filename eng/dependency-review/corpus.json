@@ -1,0 +1,120 @@
+{
+  "schema": 1,
+  "provenance": "All cases are clearly synthetic, self-contained protocol/code fixtures. Names and versions model pilot topics; no logs are attributed to real runs or upstream vulnerabilities. H1/H0 are synthetic head identifiers, not Git SHAs. Excerpt IDs are local citations.",
+  "cases": [
+    {
+      "id": "holds",
+      "head": "H1",
+      "input": [
+        {"id": "h1", "text": "Directory.Packages.props nearby comments: Microsoft.Build.Utilities.Core must stay 17.9.5 for older Visual Studio; Azure.Provisioning.Cdn stays 1.0.0-beta.2 until resource naming migration; Azure.Provisioning.Kusto stays beta.2 pending cluster/API migration; Microsoft.AI.Foundry.Local stays 1.1.0 for RID-independent restore. Diff changes them to 17.14.8, 1.0.0, 1.0.0, 1.2.0 respectively; no migration included."},
+        {"id": "h2", "text": "Npgsql8Version 8.0.8 -> 9.0.4; net8 EF Core provider remains major 8. Nearby constraint: driver and provider must have matching majors. CI wrapper H1 success; package consumers not executed."}
+      ]
+    },
+    {
+      "id": "host-types",
+      "head": "H1",
+      "input": [
+        {"id": "v1", "text": "Synthetic analogue of source PR 20716 topic, not a reproduction: extension engines.vscode ^1.98.0 unchanged; @types/vscode 1.98.0 -> 1.138.0; @types/node 22 -> 26. No source API additions shown."},
+        {"id": "v2", "text": "H1 yarn frozen install: HTTP 401 from approved dotnet-public-npm feed; compile, lint, extension host latest/minimum scenarios not started. Node runtime of supported minimum host not supplied."}
+      ]
+    },
+    {
+      "id": "toolchain",
+      "head": "H1",
+      "input": [
+        {"id": "t1", "text": "extension devDependencies typescript 5 -> 7; eslint 9 -> 10; typescript-eslint 8 -> 9. Configuration unchanged; no migration guide or peer graph supplied."},
+        {"id": "t2", "text": "Selector H1 chooses extension job. Job pending. No compile/lint/install output supplied."}
+      ]
+    },
+    {
+      "id": "feed401",
+      "head": "H1",
+      "input": [
+        {"id": "f1", "text": "NuGet patch 8.0.7 -> 8.0.8. Approved https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json unchanged."},
+        {"id": "f2", "text": "H1 restore exits 1: HTTP 401 from that feed. Build and tests not started. No package compile error logged."}
+      ]
+    },
+    {
+      "id": "generated-drift",
+      "head": "H1",
+      "input": [
+        {"id": "g1", "text": "gh-aw CLI pin 0.50 -> 0.51 in generated-workflow compiler job; committed .lock.yml unchanged."},
+        {"id": "g2", "text": "H1 isolated compiler command from validate-agentic-workflows.yml: gh aw compile --validate. Exit 0. git diff -- .github/workflows/example.lock.yml: '- timeout-minutes: 10' / '+ timeout-minutes: 15'. Compiler 0.51; working tree initially clean."}
+      ]
+    },
+    {
+      "id": "wrapper-versions",
+      "head": "H1",
+      "input": [
+        {"id": "w1", "text": "setup wrapper release 0.12 -> 0.13; explicit gh-aw CLI remains 0.51. Wrapper and installed CLI are separately versioned. Policy authorization unchanged and previously confirmed for the unchanged action pin."},
+        {"id": "w2", "text": "H1 installed CLI reports 0.51. gh aw compile --validate exit 0; git diff --exit-code -- '*.lock.yml' exit 0 after compile. Compiler ran all three workflow sources. No behavioral workflow change."}
+      ]
+    },
+    {
+      "id": "policy403",
+      "head": "H1",
+      "input": [
+        {"id": "p1", "text": "Third-party action pin changed from synthetic SHA aaaa to bbbb. Admin policy access request: HTTP 403. No allow-list contents or workflow execution supplied; admin confirmation not obtained."}
+      ]
+    },
+    {
+      "id": "stateful",
+      "head": "H1",
+      "input": [
+        {"id": "s1", "text": "Postgres container tag 17 -> 18; SQL Server 2022 -> 2025. Application retains named data volumes across upgrade. Migration notes, backup/restore tests, image platform manifests absent; intended supported hosts amd64 and arm64."},
+        {"id": "s2", "text": "H1 fresh amd64 containers start and health checks pass. No persisted data upgrade, SQL connection query, or arm64 run performed. No data loss observed."}
+      ]
+    },
+    {
+      "id": "advisory",
+      "head": "H1",
+      "input": [
+        {"id": "a1", "text": "Manifest selector parser-lib ^7.1.1; supplied committed lock entry resolves 7.0.5, a version outside that selector. Frozen install not executed. No advisory identifier, affected range, or advisory query result supplied. This fictional name does not identify a real upstream advisory."}
+      ]
+    },
+    {
+      "id": "patch",
+      "head": "H1",
+      "input": [
+        {"id": "l1", "text": "Unconstrained synthetic NuGet Example.Client 8.0.7 -> 8.0.8 and npm example-util 2.3.0 -> 2.4.0. Matching lock graph, approved feeds, migration notes state no API changes."},
+        {"id": "l2", "text": "H1 frozen restore, compile, lint exit 0; required client connection scenario executes 12 tests, all pass, result artifact contains H1. No known defects in supplied diff. No upstream advisory lookup provided."}
+      ]
+    },
+    {
+      "id": "feed-path",
+      "head": "H1",
+      "input": [
+        {"id": "u1", "text": "Synthetic URL policy: HTTPS pkgs.dev.azure.com with decoded normalized organization path /dnceng/ is approved; credentials and path traversal are rejected. URL A https://pkgs.dev.azure.com/dnceng/public/_packaging/npm/npm/registry/%40scope/pkg/-/pkg.tgz; URL B https://pkgs.dev.azure.com/dnceng/%2e%2e/other/_packaging/npm/npm/registry/pkg.tgz. New lock diff introduces both. Installation not attempted."}
+      ]
+    },
+    {
+      "id": "execution",
+      "head": "H1",
+      "input": [
+        {"id": "e1", "text": "Required consumers H1: Redis connection E2E and generated AppHost template E2E. Selector run R1 selects both. Wrapper conclusion success. Redis test step skipped due to condition false; zero Redis tests. Template step executes CreateAndRunAppHost, 1 passed, artifact template.trx H1. No other results."}
+      ]
+    },
+    {
+      "id": "stale",
+      "head": "H1",
+      "input": [
+        {"id": "z1", "text": "Diff at current H1 updates a client library; required connection test. R0 successful connection test artifact stamped H0. H1 selector chooses connection job, currently queued. Downloaded CLI version contains H0. No H1 execution supplied."}
+      ]
+    },
+    {
+      "id": "ordinary",
+      "head": "H1",
+      "input": [
+        {"id": "o1", "text": "Synthetic ordinary C# diff, no dependency bump. Before: Add(string name) { ArgumentNullException.ThrowIfNull(name); if (_names.Contains(name)) throw new ArgumentException(\"duplicate\"); _names.Add(name); }. After: Add(string name) { _names.Add(name); }. _names is List<string>; public contract rejects null and duplicate names; no caller validation."},
+        {"id": "o2", "text": "H1 smoke test Add(\"web\") passes once. Null/duplicate tests absent. No concurrent calls or security exploit claimed."}
+      ]
+    },
+    {
+      "id": "visual",
+      "head": "H1",
+      "input": [
+        {"id": "c1", "text": "Synthetic ordinary CSS-only diff: .card:hover { opacity: .8; } -> .card:hover { opacity: .9; }. No DOM, semantics, hit-testing, interaction or state changes. No automated visual tests. No dependency bump."}
+      ]
+    }
+  ]
+}

@@ -227,6 +227,10 @@ runner bash -lc '/workspace/.aspire/bin/aspire --version'
 
 ### 5. Analyze PR Changes
 
+For dependency-update PRs, also follow `dependency-review.md` in this skill
+directory. Report consumer-specific execution evidence and gaps rather than
+inferring compatibility from aggregate CI status.
+
 Examine the PR diff to understand what was changed:
 
 ```powershell

@@ -1,0 +1,93 @@
+{
+  "method": "Manual post-output adjudication by study coordinator, unblinded to arm. Per-case matches list has one target list for each finding in exact order; empty means supported non-target observation, not FP. No original oracle targets/states changed after calls. Secondary row_targets counts recognition outside findings; added after observing missing finding emission, so reported separately from frozen primary TP/miss. All cited excerpts were inspected and judged relevant; no unsupported definite defects/safety claims. Pending or skipped classified as blocked is taxonomy error, not claimed success. Separate Postgres/SQL migration findings are distinct consumers, not duplicate noise. Regression tests after invariant defects and SQL query gaps are supported non-target, not duplicates. Selection counts assess Redis unexercised versus template executed in execution rows. Posthoc, subjective, non-independent adjudication is a study limit.",
+  "runs": {
+    "baseline-review": {
+      "holds": {"matches": [["build-hold"], ["cdn-hold"], ["kusto-hold"], ["foundry-hold"], ["npgsql-major"]]},
+      "host-types": {"matches": [["host-gap"], ["install-blocked"]]},
+      "toolchain": {"matches": [["compile-lint-gap"]]},
+      "feed401": {"matches": [["restore-blocked"]]},
+      "generated-drift": {"matches": [["lock-drift"]]},
+      "wrapper-versions": {"matches": []},
+      "policy403": {"matches": [["policy-unknown"]]},
+      "stateful": {"matches": [["migration-gap"], ["platform-gap"], []]},
+      "advisory": {"matches": [["resolution-mismatch"]]},
+      "patch": {"matches": []},
+      "feed-path": {"matches": [["traversal"]]},
+      "execution": {"matches": [["redis-skipped"]], "selection_correct": 2, "selection_total": 2},
+      "stale": {"matches": [["stale-head"]]},
+      "ordinary": {"matches": [["null-invariant", "duplicate-invariant"], []]},
+      "visual": {"matches": []}
+    },
+    "enhanced-review": {
+      "holds": {"matches": [["build-hold"], ["cdn-hold", "kusto-hold"], ["foundry-hold"], ["npgsql-major"]]},
+      "host-types": {"matches": [["host-gap"]], "row_targets": ["install-blocked"]},
+      "toolchain": {"matches": [["compile-lint-gap"]], "execution_errors": [0]},
+      "feed401": {"matches": [], "row_targets": ["restore-blocked"]},
+      "generated-drift": {"matches": [["lock-drift"]]},
+      "wrapper-versions": {"matches": []},
+      "policy403": {"matches": [["policy-unknown"]]},
+      "stateful": {"matches": [["migration-gap"], ["platform-gap"]]},
+      "advisory": {"matches": [["resolution-mismatch"], []]},
+      "patch": {"matches": [[]]},
+      "feed-path": {"matches": [["traversal"]]},
+      "execution": {"matches": [["redis-skipped"]], "execution_errors": [0], "selection_correct": 1, "selection_total": 2},
+      "stale": {"matches": [["stale-head"]], "execution_errors": [0]},
+      "ordinary": {"matches": [["null-invariant", "duplicate-invariant"], []]},
+      "visual": {"matches": []}
+    },
+    "baseline-skill": {
+      "holds": {"matches": [["build-hold"], ["cdn-hold", "kusto-hold"], ["foundry-hold"], ["npgsql-major"]]},
+      "host-types": {"matches": [["host-gap"]], "row_targets": ["install-blocked"]},
+      "toolchain": {"matches": [["compile-lint-gap"]]},
+      "feed401": {"matches": [], "row_targets": ["restore-blocked"]},
+      "generated-drift": {"matches": [["lock-drift"]]},
+      "wrapper-versions": {"matches": []},
+      "policy403": {"matches": [["policy-unknown"]]},
+      "stateful": {"matches": [["migration-gap"], ["platform-gap"]]},
+      "advisory": {"matches": [["resolution-mismatch"]]},
+      "patch": {"matches": []},
+      "feed-path": {"matches": [["traversal"]]},
+      "execution": {"matches": [["redis-skipped"]], "selection_correct": 2, "selection_total": 2},
+      "stale": {"matches": [["stale-head"]]},
+      "ordinary": {"matches": [["null-invariant"], ["duplicate-invariant"]]},
+      "visual": {"matches": []}
+    },
+    "enhanced-skill": {
+      "holds": {"matches": [["build-hold"], ["cdn-hold"], ["kusto-hold"], ["foundry-hold"], ["npgsql-major"], []]},
+      "host-types": {"matches": [["install-blocked"], ["host-gap"]]},
+      "toolchain": {"matches": [["compile-lint-gap"]]},
+      "feed401": {"matches": [["restore-blocked"]]},
+      "generated-drift": {"matches": [["lock-drift"]]},
+      "wrapper-versions": {"matches": []},
+      "policy403": {"matches": [["policy-unknown"]]},
+      "stateful": {"matches": [["migration-gap"], ["migration-gap"], ["platform-gap"], []]},
+      "advisory": {"matches": [["resolution-mismatch"], []]},
+      "patch": {"matches": [[]]},
+      "feed-path": {"matches": [["traversal"], []]},
+      "execution": {"matches": [["redis-skipped"]], "selection_correct": 2, "selection_total": 2},
+      "stale": {"matches": [["stale-head"]]},
+      "ordinary": {"matches": [["null-invariant"], ["duplicate-invariant"]]},
+      "visual": {"matches": []}
+    },
+    "baseline-review-repeat": {
+      "feed401": {"matches": [], "row_targets": ["restore-blocked"]},
+      "execution": {"matches": [["redis-skipped"]], "selection_correct": 2, "selection_total": 2},
+      "ordinary": {"matches": [["null-invariant"], ["duplicate-invariant"], []]}
+    },
+    "enhanced-review-repeat": {
+      "feed401": {"matches": [["restore-blocked"]]},
+      "execution": {"matches": [["redis-skipped"]], "selection_correct": 2, "selection_total": 2},
+      "ordinary": {"matches": [["null-invariant", "duplicate-invariant"], []]}
+    },
+    "baseline-skill-repeat": {
+      "feed401": {"matches": [["restore-blocked"]]},
+      "execution": {"matches": [["redis-skipped"]], "selection_correct": 2, "selection_total": 2},
+      "ordinary": {"matches": [["null-invariant"], ["duplicate-invariant"]]}
+    },
+    "enhanced-skill-repeat": {
+      "feed401": {"matches": [["restore-blocked"]]},
+      "execution": {"matches": [["redis-skipped"]], "selection_correct": 2, "selection_total": 2},
+      "ordinary": {"matches": [["null-invariant"], ["duplicate-invariant"]]}
+    }
+  }
+}

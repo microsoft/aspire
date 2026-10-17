@@ -55,6 +55,33 @@ public sealed class TestTriggerMapTests
         Assert.Equal(1, s_map.Version);
     }
 
+    [Fact]
+    public void DependencyConstraintInputsRunOutsideTheSelectiveTestGate()
+    {
+        string[] paths =
+        [
+            "eng/dependency-review/check.py",
+            "eng/dependency-review/constraints.json",
+            "eng/dependency-review/test_check.py",
+        ];
+        Assert.All(paths, path =>
+            Assert.Contains(s_map.Ignore, pattern => TestTriggerMap.GlobMatches(pattern, path)));
+
+        var workflow = new YamlStream();
+        using var reader = File.OpenText(Path.Combine(RepoRoot.Path, ".github", "workflows", "ci.yml"));
+        workflow.Load(reader);
+        var root = Assert.IsType<YamlMappingNode>(workflow.Documents[0].RootNode);
+        var jobs = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
+        var prepare = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode("prepare_for_ci")]);
+        var steps = Assert.IsType<YamlSequenceNode>(prepare.Children[new YamlScalarNode("steps")]);
+        var constraintStep = Assert.Single(steps.Children.Select(Assert.IsType<YamlMappingNode>),
+            step => step.Children.TryGetValue(new YamlScalarNode("run"), out var run) &&
+                run.ToString().Contains("eng/dependency-review/check.py", StringComparison.Ordinal));
+        Assert.Equal("${{ github.event_name == 'pull_request' }}", constraintStep.Children[new YamlScalarNode("if")].ToString());
+        Assert.Contains("unittest discover -s eng/dependency-review", constraintStep.Children[new YamlScalarNode("run")].ToString());
+        Assert.Contains("node scripts/validate-lockfile-registry.cjs", constraintStep.Children[new YamlScalarNode("run")].ToString());
+    }
+
     [Theory]
     [InlineData("eng/scripts/tray-registration-control/control.cpp")]
     [InlineData("eng/scripts/tray-registration-control/run.ps1")]
