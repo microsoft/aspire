@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
+    <EnableAspireIntegrationAnalyzers>true</EnableAspireIntegrationAnalyzers>
+    <PackageTags>aspire hosting github pages static website</PackageTags>
+    <Description>GitHub Pages static website modeling and bundle generation for Aspire.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.JavaScript\Aspire.Hosting.JavaScript.csproj" />
+    <InternalsVisibleTo Include="Aspire.Hosting.GitHubPages.Tests" />
+  </ItemGroup>
+
+</Project>
