@@ -348,9 +348,10 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void ApplyToRuntimeSpec_WhenBunSelected_UsesBunCommandsAndPreservesExtensionLaunch()
     {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var baseRuntimeSpec = CreateBaseRuntimeSpec();
 
-        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Bun);
+        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Bun, workspace.WorkspaceRoot);
 
         Assert.Equal("TypeScript (Bun)", runtimeSpec.DisplayName);
         Assert.NotNull(runtimeSpec.InstallDependencies);
@@ -382,9 +383,10 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     [Fact]
     public void ApplyToRuntimeSpec_WhenYarnSelected_UsesYarnExecCommands()
     {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var baseRuntimeSpec = CreateBaseRuntimeSpec();
 
-        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Yarn);
+        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Yarn, workspace.WorkspaceRoot);
 
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         Assert.Equal("yarn", preExecute.Command);
@@ -396,11 +398,12 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
-    public void ApplyToRuntimeSpec_WhenPnpmSelected_UsesPnpmTypeCheckCommands()
+    public void ApplyToRuntimeSpec_WhenPnpmSelectedOutsideWorkspace_UsesIsolatedInstallAndPnpmTypeCheckCommands()
     {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var baseRuntimeSpec = CreateBaseRuntimeSpec();
 
-        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Pnpm);
+        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Pnpm, workspace.WorkspaceRoot);
 
         var installDependencies = Assert.IsType<CommandSpec>(runtimeSpec.InstallDependencies);
         Assert.Equal("pnpm", installDependencies.Command);
@@ -415,11 +418,26 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
-    public void ApplyToRuntimeSpec_WhenDenoSelected_UsesDenoRunCommands()
+    public void ApplyToRuntimeSpec_WhenPnpmSelectedAtWorkspaceRoot_UsesWorkspaceInstall()
     {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "pnpm-workspace.yaml"), "packages: []");
         var baseRuntimeSpec = CreateBaseRuntimeSpec();
 
-        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Deno);
+        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Pnpm, workspace.WorkspaceRoot);
+
+        var installDependencies = Assert.IsType<CommandSpec>(runtimeSpec.InstallDependencies);
+        Assert.Equal("pnpm", installDependencies.Command);
+        Assert.Equal(["install"], installDependencies.Args);
+    }
+
+    [Fact]
+    public void ApplyToRuntimeSpec_WhenDenoSelected_UsesDenoRunCommands()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var baseRuntimeSpec = CreateBaseRuntimeSpec();
+
+        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Deno, workspace.WorkspaceRoot);
 
         Assert.Equal("TypeScript (Deno)", runtimeSpec.DisplayName);
         Assert.Equal("deno", runtimeSpec.InstallDependencies?.Command);
