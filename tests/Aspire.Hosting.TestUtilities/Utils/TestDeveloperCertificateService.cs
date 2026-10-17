@@ -3,6 +3,7 @@
 
 using System.Collections.Immutable;
 using System.Security.Cryptography.X509Certificates;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Tests.Utils;
 
@@ -15,6 +16,9 @@ public sealed class TestDeveloperCertificateService(List<X509Certificate2> certi
 
     /// <inheritdoc />
     public bool SupportsContainerTrust => supportsContainerTrust;
+
+    /// <inheritdoc />
+    public bool SupportsLoopbackAddresses => Certificates.Any(c => c.SupportsLoopbackAddresses());
 
     /// <inheritdoc />
     public bool TrustCertificate => trustCertificate;
