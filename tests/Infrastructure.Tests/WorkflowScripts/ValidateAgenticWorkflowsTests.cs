@@ -25,6 +25,8 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
     [InlineData(true, WorkflowRelativePath)]
     [InlineData(true, ".github/workflows/new-agent.md")]
     [InlineData(true, ".github/workflows/nested/new-agent.md")]
+    [InlineData(true, ".github/workflows/auto-sec/auto-sec.js")]
+    [InlineData(true, ".github/workflows/auto-sec/publication-guard.js")]
     [InlineData(false, ".github/workflows/README.md")]
     [InlineData(false, ".github/workflows/nested/README.md")]
     [InlineData(true, ".github/workflows/README.md", ".github/workflows/new-agent.md")]
@@ -49,6 +51,20 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
         }
 
         Assert.Equal(expected, matcher.Match(changedPaths).HasMatches);
+    }
+
+    [Fact]
+    public void PublicationHardeningRunsBeforeDriftAndLintValidation()
+    {
+        var steps = Steps(LoadWorkflow());
+        var compile = Step(steps, "Compile agentic workflows (schema and action-pin validation)");
+        var commands = Scalar(compile, "run");
+        var compileIndex = commands.IndexOf("gh aw compile", StringComparison.Ordinal);
+        var guardIndex = commands.IndexOf("node .github/workflows/auto-sec/publication-guard.js", StringComparison.Ordinal);
+        Assert.True(compileIndex >= 0 && guardIndex > compileIndex);
+        var ordered = steps.ToList();
+        Assert.True(ordered.IndexOf(compile) < ordered.IndexOf(Step(steps, "Verify generated files are up to date")));
+        Assert.True(ordered.IndexOf(compile) < ordered.IndexOf(Step(steps, "Lint generated agentic workflows")));
     }
 
     [Theory]
