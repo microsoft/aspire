@@ -52,6 +52,30 @@ public class GuestAppHostProjectTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    [Fact]
+    public async Task BuildAndGenerateSdkAsync_V2BootstrapWithoutProvidersDoesNotStartWorkloads()
+    {
+        var root = _workspace.WorkspaceRoot;
+        var executable = Path.Combine(root.FullName, "server");
+        await File.WriteAllTextAsync(executable, "");
+        new AspireConfigFile
+        {
+            Features = new() { [KnownFeatures.AppHostServerV2] = true }
+        }.Save(root.FullName);
+        var sessionFactory = new FakeAppHostServerSessionFactory();
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(
+                    new NativeAppHostServerProject(path, executable, new TestProcessExecutionFactory(), NullLogger.Instance))
+            },
+            serverSessionFactory: sessionFactory);
+
+        Assert.True(await project.BuildAndGenerateSdkAsync(root, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Collection(sessionFactory.CreatedSessionEnvironments,
+            environment => Assert.Equal("true", environment![KnownConfigNames.IntegrationHostBootstrap]));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("false")]
@@ -2106,6 +2130,68 @@ public class GuestAppHostProjectTests : IDisposable
 
         await cancellationSource.CancelAsync();
         Assert.Equal(CliExitCodes.Cancelled, await runTask.DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData("publish", null, "publish")]
+    [InlineData("deploy", null, "publish")]
+    [InlineData("publish", "--operation", "inspect")]
+    [InlineData("deploy", "--operation", "inspect")]
+    [InlineData("publish", "--operation=inspect", "inspect")]
+    [InlineData(null, null, "publish")]
+    public async Task PublishAsync_V2ProjectsOperationIntoServerSession(string? step, string? inspectionArgument, string expectedOperation)
+    {
+        var root = _workspace.WorkspaceRoot;
+        var appHostFile = new FileInfo(Path.Combine(root.FullName, "apphost.mts"));
+        var executable = Path.Combine(root.FullName, "server");
+        await File.WriteAllTextAsync(appHostFile.FullName, "// test apphost");
+        await File.WriteAllTextAsync(executable, "");
+        new AspireConfigFile
+        {
+            Features = new() { [KnownFeatures.AppHostServerV2] = true }
+        }.Save(root.FullName);
+        var session = new FakeAppHostServerSession
+        {
+            GetRpcClientAsyncCallback = _ => Task.FromException<IAppHostRpcClient>(
+                new InvalidOperationException("Stop after capturing the native server session."))
+        };
+        var sessions = new FakeAppHostServerSessionFactory { Session = session };
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(
+                    new NativeAppHostServerProject(path, executable, new TestProcessExecutionFactory(), NullLogger.Instance))
+            },
+            serverSessionFactory: sessions);
+        string[] arguments = step is null ? [] : ["--operation", "publish", "--step", step];
+        if (inspectionArgument is not null)
+        {
+            arguments = inspectionArgument == "--operation"
+                ? [.. arguments, "--operation", "inspect", "--list-steps", "true"]
+                : [.. arguments, inspectionArgument, "--list-steps", "true"];
+        }
+        var context = new PublishContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = root,
+            Arguments = arguments,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                [NativeAppHostServerProject.OperationEnvironmentVariable] = "run"
+            }
+        };
+
+        var exitCode = await project.PublishAsync(context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.True(session.StartAsyncCalled);
+        Assert.Collection(sessions.CreatedSessionEnvironments, environment =>
+        {
+            Assert.Equal(expectedOperation, environment![NativeAppHostServerProject.OperationEnvironmentVariable]);
+            Assert.False(environment.ContainsKey(KnownConfigNames.IntegrationHostBootstrap));
+            Assert.NotEmpty(environment[KnownConfigNames.UnixSocketPath]);
+        });
+        Assert.Equal("run", context.EnvironmentVariables[NativeAppHostServerProject.OperationEnvironmentVariable]);
     }
 
     [Theory]

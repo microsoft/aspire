@@ -102,6 +102,48 @@ The map stays small by keeping each dependency in the layer that can prove it:
 Unconditional baseline builds are not selector targets. Gated reusable
 workflows are routed to the target they implement or serve.
 
+### Independent native hosting lane
+
+[`native-hosting-validation.yml`](../../.github/workflows/native-hosting-validation.yml)
+is a dedicated PR/push/manual workflow, not a `tests.yml` selector target. Its
+path filters conservatively cover all `src/**` and `eng/**`, root build/restore
+inputs, shared test inputs, and `tests/Aspire.Hosting.Native.Core.Tests/**`.
+The TypeScript Polyglot AppHost manifest copied into the CLI fixture is also
+explicitly routed to this lane.
+This deliberately includes transitive build dependencies and runtime-only
+generated SDK, CLI, Dashboard, and smoke fixtures without maintaining another
+project dependency list. Its workflow is classified in `ignore`; the general
+workflow rule and the harness's path rule still select infrastructure validation.
+
+The lane runs the published Native AOT executable smoke and all six TypeScript
+smoke entry points using fresh generated SDK output, real Docker/DCP workloads,
+the repo-built CLI/Dashboard, and headless Chromium. Building `AotSmoke` through
+a project reference is not a substitute for executing this lane. Its existing
+cleanup assertions remain enabled. Evidence is uploaded even on failure.
+
+Both Linux and Windows run a fresh, opted-in TypeScript AppHost through the
+repo-built CLI and published server, including `aspire describe` over the
+existing CLI backchannels and clean guest/server exit. Windows additionally
+exercises authenticated named-pipe RPC and listener ownership.
+
+Run the same harness locally with Node.js 24+, Docker, and Native AOT build
+prerequisites:
+
+```bash
+bash eng/scripts/test-native-hosting.sh linux-x64
+# On an Apple Silicon host:
+bash eng/scripts/test-native-hosting.sh osx-arm64
+```
+
+The harness restores the repository, builds CLI/Dashboard in Debug using the
+default framework, publishes server/smoke in Release for net11, and installs
+isolated npm/browser dependencies under `artifacts/native-hosting/ci` without
+editing repository manifests. It executes RPC, runtime, workloads, revisions,
+CLI, and auxiliary protocol/command scenarios; workload/revision/CLI scenarios
+require the actual browser Dashboard. Logs and AppHost proof JSON are retained.
+After pushing changes, inspect this workflow's real run and uploaded evidence;
+local script or routing-test success alone does not prove GitHub CI passed.
+
 ## Rule categories
 
 Rules are **additive**: a changed file activates the union of targets from every

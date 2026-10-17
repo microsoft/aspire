@@ -107,6 +107,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// from the same context so documentation cannot drift from emitted source.
     /// </summary>
     private TypeScriptApiProjector _projector = null!;
+    private bool _invocationScopedCallbacks;
 
     private void WriteCapabilityDocComment(
         string indent,
@@ -433,7 +434,24 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     /// <inheritdoc />
     public Dictionary<string, string> GenerateDistributedApplication(AtsContext context)
+        => GenerateDistributedApplication(context, includeManagedBootstrap: true);
+
+    internal Dictionary<string, string> GenerateDistributedApplication(AtsContext context, bool includeManagedBootstrap)
+        => GenerateDistributedApplication(context, includeManagedBootstrap, invocationScopedCallbacks: false);
+
+    internal Dictionary<string, string> GenerateDistributedApplication(AtsContext context, bool includeManagedBootstrap, bool invocationScopedCallbacks)
     {
+        // Managed lifecycle callbacks outlive their registration call. Native
+        // authoring callbacks instead finish within that call and must release
+        // their guest registrations on success, rejection and cancellation.
+        _invocationScopedCallbacks = invocationScopedCallbacks;
+        if (invocationScopedCallbacks && context.Capabilities.Any(capability =>
+            capability.Parameters.Any(parameter => parameter.IsCallback) &&
+            (capability.TargetTypeId is null || capability.ReturnsBuilder ||
+                capability.ReturnType.TypeId != capability.TargetTypeId)))
+        {
+            throw new NotSupportedException("Invocation-scoped callbacks require self-returning handle instance capabilities.");
+        }
         var files = new Dictionary<string, string>();
 
         // Add the shared runtime files.
@@ -442,7 +460,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         files["integration-host.mts"] = EmbeddedResources.Read("integration-host.mts");
 
         // Generate the capability-based aspire.mts SDK
-        files["aspire.mts"] = GenerateAspireSdk(context);
+        files["aspire.mts"] = GenerateAspireSdk(context, includeManagedBootstrap);
 
         return files;
     }
@@ -450,10 +468,15 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// <summary>
     /// Generates the aspire.mts SDK file with capability-based API.
     /// </summary>
-    private string GenerateAspireSdk(AtsContext context)
+    private string GenerateAspireSdk(AtsContext context, bool includeManagedBootstrap)
     {
         using var stringWriter = new StringWriter(CultureInfo.InvariantCulture);
         _writer = stringWriter;
+
+        if (_invocationScopedCallbacks)
+        {
+            WriteLine("import { unregisterCallback } from './transport.mjs';");
+        }
 
         // Header
         WriteLine("""
@@ -557,7 +580,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         GenerateAspireClient(clientMethods);
 
         // Generate connection helper
-        GenerateConnectionHelper();
+        GenerateConnectionHelper(includeManagedBootstrap);
 
         // Generate global error handling
         GenerateGlobalErrorHandling();
@@ -1924,7 +1947,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
     }
 
-    private void GenerateConnectionHelper()
+    private void GenerateConnectionHelper(bool includeManagedBootstrap)
     {
         var builderHandle = TypeScriptApiProjector.GetHandleTypeName(AtsConstants.BuilderTypeId);
 
@@ -1958,6 +1981,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 return client;
             }
 
+            """);
+        if (includeManagedBootstrap)
+        {
+            WriteLine($$"""
             /**
              * Creates a new distributed application builder.
              * This is the entry point for building Aspire applications.
@@ -1999,11 +2026,17 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 return new DistributedApplicationBuilderImpl(handle, client);
             }
 
+            """);
+        }
+        WriteLine("""
             // Re-export commonly used types
             export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.mjs';
-            export { refExpr, ReferenceExpression } from './base.mjs';
-            export type { HandleReference, Awaitable } from './base.mjs';
             """);
+        if (includeManagedBootstrap)
+        {
+            WriteLine("export { refExpr, ReferenceExpression } from './base.mjs';");
+        }
+        WriteLine("export type { HandleReference, Awaitable } from './base.mjs';");
         WriteLine();
     }
 
@@ -2891,17 +2924,36 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 GenerateCallbackRegistration(callbackParam);
             }
 
+            var scopedCallbacks = _invocationScopedCallbacks && callbackParams.Count > 0;
+            if (scopedCallbacks)
+            {
+                WriteLine("        try");
+                WriteLine("        {");
+            }
+            var bodyIndent = scopedCallbacks ? "            " : "        ";
+
             // Resolve any promise-like handle parameters
-            GeneratePromiseResolution(userParams);
+            GeneratePromiseResolution(userParams, bodyIndent);
 
             // Build args with conditional inclusion
-            GenerateArgsObjectWithConditionals(targetParamName, requiredParams, optionalParams);
+            GenerateArgsObjectWithConditionals(targetParamName, requiredParams, optionalParams, indent: bodyIndent);
 
-            WriteLine($"        const result = await this._client.invokeCapability<{returnHandleType}>(");
-            WriteLine($"            '{capability.CapabilityId}',");
-            WriteLine($"            rpcArgs");
-            WriteLine("        );");
-            WriteLine($"        return new {returnWrapperImplementationClass}(result, this._client);");
+            WriteLine($"{bodyIndent}const result = await this._client.invokeCapability<{returnHandleType}>(");
+            WriteLine($"{bodyIndent}    '{capability.CapabilityId}',");
+            WriteLine($"{bodyIndent}    rpcArgs");
+            WriteLine($"{bodyIndent});");
+            WriteLine($"{bodyIndent}return new {returnWrapperImplementationClass}(result, this._client);");
+            if (scopedCallbacks)
+            {
+                WriteLine("        }");
+                WriteLine("        finally");
+                WriteLine("        {");
+                foreach (var callback in callbackParams)
+                {
+                    WriteLine($"            if ({callback.Name}Id) unregisterCallback({callback.Name}Id);");
+                }
+                WriteLine("        }");
+            }
             WriteLine("    }");
             WriteLine();
 

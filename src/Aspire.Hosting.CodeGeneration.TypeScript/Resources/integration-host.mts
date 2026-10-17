@@ -1,4 +1,5 @@
 import * as net from 'node:net';
+import { randomBytes } from 'node:crypto';
 import {
     RequestType3,
     createMessageConnection,
@@ -41,6 +42,15 @@ export interface IntegrationHostDefinition
     integrations: readonly AspireIntegrationDefinition[];
 }
 
+/** Integration-owned object whose lifetime is an authoritative native declaration.
+ * This convenience class projects a portable $lifetime handle, not a CLR-only resource model.
+ */
+export class IntegrationResource {
+    constructor(readonly declaration: { toJSON(): RemoteHandle }, readonly typeId: string) {}
+    /** Releases provider-local state after native declaration retirement. */
+    async dispose(): Promise<void> {}
+}
+
 // ============================================================================
 // Integration host framework: socket, auth, registration, dispatch.
 // ============================================================================
@@ -49,23 +59,31 @@ export async function runIntegrationHost(host: IntegrationHostDefinition): Promi
 {
     const log = (message: string) => console.log(`[${host.packageName}] ${message}`);
     const socketPath = process.env.REMOTE_APP_HOST_SOCKET_PATH;
+    const nativeEndpoint = process.env.ASPIRE_NATIVE_RPC_ENDPOINT;
     const registrationId = process.env.ASPIRE_INTEGRATION_HOST_REGISTRATION_ID;
 
-    if (!socketPath || !registrationId) {
+    if ((!socketPath && !nativeEndpoint) || !registrationId) {
         console.error("ERROR: Integration hosts must be launched by the AppHost server.");
         process.exit(1);
     }
 
-    const connectPath = process.platform === 'win32' && !socketPath.startsWith('\\\\.\\pipe\\')
+    const connectPath = socketPath && process.platform === 'win32' && !socketPath.startsWith('\\\\.\\pipe\\')
         ? `\\\\.\\pipe\\${socketPath}`
         : socketPath;
 
     log(`Connecting to engine: ${connectPath}`);
 
-    const socket = net.createConnection(connectPath);
+    // Native activation supplies a loopback endpoint such as 127.0.0.1:43210.
+    // The existing managed integration-host Unix socket/named-pipe bootstrap stays intact.
+    const nativeAddress = nativeEndpoint ? /^127\.0\.0\.1:(\d+)$/.exec(nativeEndpoint) : undefined;
+    if (nativeEndpoint && !nativeAddress) {
+        throw new Error('Native integration activation requires an IPv4 loopback endpoint.');
+    }
+    const socket = nativeAddress
+        ? net.createConnection({ host: '127.0.0.1', port: Number(nativeAddress[1]) })
+        : net.createConnection(connectPath!);
     socket.on('close', () => {
         log("Engine disconnected, shutting down");
-        process.exit(0);
     });
     await new Promise<void>((resolve, reject) => {
         socket.once('connect', resolve);
@@ -78,8 +96,19 @@ export async function runIntegrationHost(host: IntegrationHostDefinition): Promi
         undefined,
         { cancellationStrategy: undefined });
 
-    const shutdown = () => {
+    let releaseAll: () => Promise<void> = async () => {};
+    let shuttingDown = false;
+    const shutdown = async () => {
+        if (shuttingDown) {
+            return;
+        }
+        shuttingDown = true;
         log("Shutting down");
+        try {
+            await releaseAll();
+        } catch {
+            console.error('Native integration object cleanup failed.');
+        }
         connection.dispose();
         socket.destroy();
         process.exit(0);
@@ -88,10 +117,11 @@ export async function runIntegrationHost(host: IntegrationHostDefinition): Promi
     process.on('SIGTERM', shutdown);
 
     connection.onError(error => {
-        console.error(`[${host.packageName}] Connection error:`, error);
+        console.error(`[${host.packageName}] Connection error:`, nativeEndpoint ? 'Native RPC connection failed.' : error);
     });
     connection.onClose(() => {
         log("Connection closed");
+        return shutdown();
     });
 
     const client = AspireClient.fromConnection(connection, socket, log);
@@ -125,6 +155,10 @@ export async function runIntegrationHost(host: IntegrationHostDefinition): Promi
             }
             return wrapIfHandle(result, client);
         } catch (error) {
+            if (nativeEndpoint) {
+                log(`Guest callback ${callbackId} failed.`);
+                throw new Error('The native guest callback failed.');
+            }
             log(`Guest callback ${callbackId} failed: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
@@ -132,7 +166,7 @@ export async function runIntegrationHost(host: IntegrationHostDefinition): Promi
 
     connection.listen();
 
-    const authToken = process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+    const authToken = nativeEndpoint ? process.env.ASPIRE_NATIVE_RPC_TOKEN : process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
     if (authToken) {
         const authenticated = await connection.sendRequest<boolean>('authenticate', authToken);
         if (!authenticated) {
@@ -147,6 +181,85 @@ export async function runIntegrationHost(host: IntegrationHostDefinition): Promi
     // Build a flat capability map keyed by capability id.
     const allCapabilities = host.integrations.flatMap(integration => integration.capabilities);
     const capabilityMap = new Map<string, AspireExportedFunction<JsonObject, unknown>>();
+    const resources = new Map<string, IntegrationResource>();
+    const identities = new WeakMap<IntegrationResource, string>();
+    const released = new WeakSet<IntegrationResource>();
+    const invocations = new Map<string, { controller: AbortController; completion: Promise<void>; resources: IntegrationResource[] }>();
+    const releaseResource = async (id: string, waitForInvocations = true): Promise<boolean> => {
+        const resource = resources.get(id);
+        if (!resource) {
+            return true;
+        }
+        resources.delete(id);
+        identities.delete(resource);
+        released.add(resource);
+        const active = [...invocations.values()].filter(invocation => invocation.resources.includes(resource));
+        for (const invocation of active) {
+            invocation.controller.abort();
+        }
+        if (waitForInvocations) {
+            await Promise.all(active.map(invocation => invocation.completion));
+        }
+        await resource.dispose();
+        return true;
+    };
+    releaseAll = async () => {
+        for (const invocation of invocations.values()) {
+            invocation.controller.abort();
+        }
+        // On disconnect native scopes are already revoked. Clear every local
+        // identity even if integration code ignores its cancellation signal.
+        await Promise.all([...resources.keys()].map(id => releaseResource(id, false)));
+    };
+    connection.onRequest('releaseIntegrationResource', async (id: string) => {
+        try {
+            return await releaseResource(id);
+        } catch {
+            throw new Error('The native integration object release failed.');
+        }
+    });
+    connection.onRequest('cancelProviderInvocation', async (id: string) => {
+        const invocation = invocations.get(id);
+        if (invocation) {
+            invocation.controller.abort();
+            await invocation.completion;
+        }
+        return true;
+    });
+    const encodeResult = (value: unknown): unknown => {
+        if (!(value instanceof IntegrationResource)) {
+            return value;
+        }
+        if (released.has(value)) {
+            throw new Error('An integration resource cannot be republished after native retirement.');
+        }
+        let id = identities.get(value);
+        if (!id) {
+            if (resources.size >= 4096) {
+                throw new Error('Integration resource capacity was reached.');
+            }
+            id = randomBytes(32).toString('hex');
+            identities.set(value, id);
+            resources.set(id, value);
+        }
+        return { $handle: id, $type: value.typeId, $lifetime: value.declaration.toJSON() };
+    };
+    const decodeArguments = (value: unknown): unknown => {
+        if (isRemoteHandle(value) && resources.has(value.$handle)) {
+            const resource = resources.get(value.$handle)!;
+            if (resource.typeId !== value.$type) {
+                throw new Error('Integration resource type mismatch.');
+            }
+            return resource;
+        }
+        if (Array.isArray(value)) {
+            return value.map(decodeArguments);
+        }
+        if (value && typeof value === 'object' && !isRemoteHandle(value)) {
+            return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, decodeArguments(nested)]));
+        }
+        return wrapRemoteValue(value, client);
+    };
     for (const fn of allCapabilities) {
         const meta = getAspireExport(fn);
         if (!meta) {
@@ -167,7 +280,7 @@ export async function runIntegrationHost(host: IntegrationHostDefinition): Promi
             }
             const meta = getAspireExport(fn)!;
 
-            const wrappedArgs = wrapRemoteValue({ ...(args ?? {}) }, client) as JsonObject;
+            const wrappedArgs = decodeArguments({ ...(args ?? {}) }) as JsonObject;
 
             // For any parameter the projection marks as `isCallback`, replace
             // the wire-format callback id string with a JS function that routes
@@ -175,6 +288,16 @@ export async function runIntegrationHost(host: IntegrationHostDefinition): Promi
             // normal closure.
             const params = meta.projection?.parameters ?? [];
             const controller = new AbortController();
+            let completeInvocation!: () => void;
+            const completion = new Promise<void>(resolve => { completeInvocation = resolve; });
+            if (invocations.has(invocationId)) {
+                throw new Error('An integration invocation cannot be replayed.');
+            }
+            invocations.set(invocationId, { controller, completion,
+                resources: Object.values(wrappedArgs).filter((value): value is IntegrationResource => value instanceof IntegrationResource) });
+            // The signal is local invocation state, not a secret-bearing RPC
+            // parameter or an author-supplied replacement for native authority.
+            wrappedArgs.signal = controller.signal;
             const cancellationRegistration = cancellation?.onCancellationRequested(() => controller.abort());
             if (cancellation?.isCancellationRequested) {
                 controller.abort();
@@ -208,13 +331,19 @@ export async function runIntegrationHost(host: IntegrationHostDefinition): Promi
                     }
                 });
                 log(`Completed ${capabilityId} (invocation ${invocationId}, elapsed ${Math.round(performance.now() - started)}ms)`);
-                return result;
+                return encodeResult(result);
             } catch (error) {
+                if (nativeEndpoint) {
+                    log(`Failed ${capabilityId} (invocation ${invocationId}).`);
+                    throw new Error('The native integration invocation failed.');
+                }
                 log(`Failed ${capabilityId} (invocation ${invocationId}, elapsed ${Math.round(performance.now() - started)}ms): ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
                 throw error;
             } finally {
                 clearInterval(stalled);
                 cancellationRegistration?.dispose();
+                invocations.delete(invocationId);
+                completeInvocation();
             }
         });
 

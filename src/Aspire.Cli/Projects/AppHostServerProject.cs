@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
@@ -70,6 +71,13 @@ internal sealed class AppHostServerProjectFactory(
         string workloadId,
         CancellationToken cancellationToken)
     {
+        var configDirectory = ConfigurationHelper.GetConfigRootDirectory(new DirectoryInfo(appPath));
+        if (KnownFeatures.IsAppHostServerV2Enabled(AspireConfigFile.Load(configDirectory.FullName)))
+        {
+            return await NativeAppHostServerProject.CreateAsync(appPath, bundleService, environment,
+                processExecutionFactory, loggerFactory.CreateLogger<NativeAppHostServerProject>(), cancellationToken).ConfigureAwait(false);
+        }
+
         var socketPath = CliPathHelper.CreateGuestAppHostSocketPath("apphost.sock");
 
         // Priority 1: Check for dev mode (ASPIRE_REPO_ROOT or running from Aspire source repo)

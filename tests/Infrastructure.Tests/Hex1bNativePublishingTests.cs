@@ -196,6 +196,17 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             }
         }
 
+        var serverPublish = Path.Combine(artifacts, "bin", "Aspire.Hosting.Native.Server", "Release", "net11.0", rid, "publish");
+        var serverFiles = new[]
+        {
+            rid.StartsWith("win-", StringComparison.Ordinal) ? "Aspire.Hosting.Native.Server.exe" : "Aspire.Hosting.Native.Server",
+            "ats-contract.json"
+        };
+        foreach (var file in serverFiles)
+        {
+            WriteFile(Path.Combine(serverPublish, file), file);
+        }
+
         var terminalPublish = Path.Combine(artifacts, "bin", "Aspire.TerminalHost", "Release", "net11.0", rid, "publish");
         var terminalFiles = Aspire.Shared.TerminalHostPayload.GetRequiredFiles(rid);
         foreach (var file in terminalFiles)
@@ -290,6 +301,15 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         foreach (var file in terminalFiles)
         {
             Assert.Equal(File.ReadAllBytes(Path.Combine(terminalPublish, file)), File.ReadAllBytes(Path.Combine(terminal, file)));
+        }
+
+        var server = Path.Combine(layout, "apphost-server");
+        foreach (var file in serverFiles)
+        {
+            var bundledFile = file.StartsWith("Aspire.Hosting.Native.Server", StringComparison.Ordinal)
+                ? rid.StartsWith("win-", StringComparison.Ordinal) ? "aspire-apphost-server.exe" : "aspire-apphost-server"
+                : file;
+            Assert.Equal(File.ReadAllBytes(Path.Combine(serverPublish, file)), File.ReadAllBytes(Path.Combine(server, bundledFile)));
         }
 
         var dashboard = Path.Combine(layout, "dashboard");
