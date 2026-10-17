@@ -742,6 +742,19 @@ jobs:
             artifacts/bin/Aspire.Templates.Tests/Debug/net10.0/logs/**
             artifacts/log/test-logs/**
 
+      # Final aggregation needs only TRX files, not the binlogs, dumps, and
+      # recordings retained in the original diagnostic artifact above.
+      # Keep the same search roots to preserve repository-relative result paths.
+      - name: Upload aggregation test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trx-${{ inputs.testShortName }}-${{ inputs.os }}
+          path: |
+            testresults/**/*.trx
+            artifacts/bin/Aspire.Templates.Tests/Debug/net10.0/logs/**/*.trx
+            artifacts/log/test-logs/**/*.trx
+
       - name: Copy CLI E2E recordings for upload
         if: always()
         shell: bash

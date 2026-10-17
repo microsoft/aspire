@@ -98,6 +98,30 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task RetriesCompactResultUploadForArtifactNetworkFailure()
+    {
+        WorkflowJob job = CreateJob(failedSteps: ["Upload aggregation test results"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Failed to CreateArtifact: Unable to make request: ENOTFOUND");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Empty(result.SkippedJobs);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DoesNotRetryTestFailureAlongsideCompactResultUploadFailure()
+    {
+        WorkflowJob job = CreateJob(failedSteps: ["Run tests (Windows)", "Upload aggregation test results"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Failed to CreateArtifact: Unable to make request: ENOTFOUND");
+
+        Assert.Empty(result.RetryableJobs);
+        Assert.Single(result.SkippedJobs);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task KeepsMixedFailureVetoWhenIgnoredTestStepsFailAlongsideRetrySafeSteps()
     {
         WorkflowJob job = CreateJob(failedSteps: ["Run tests (Windows)", "Upload logs, and test results"]);
@@ -888,6 +912,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 "- name: Build test project",
                 "- name: Run tests (Windows)",
                 "- name: Upload logs, and test results",
+                "- name: Upload aggregation test results",
                 "- name: Copy CLI E2E recordings for upload",
                 "- name: Upload CLI E2E recordings",
                 "- name: Generate test results summary",

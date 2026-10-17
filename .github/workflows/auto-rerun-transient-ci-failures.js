@@ -34,6 +34,7 @@ const retryableWithAnnotationStepPatterns = [
     /^Set up \.NET Core$/i,
     /^Install sdk for nuget based testing$/i,
     /^Upload logs, and test results$/i,
+    /^Upload aggregation test results$/i,
 ];
 
 const ignoredFailureStepPatterns = [
@@ -91,6 +92,7 @@ const ignoredFailureStepOverridePatterns = [
 
 const postTestCleanupFailureStepPatterns = [
     /^Upload logs, and test results$/i,
+    /^Upload aggregation test results$/i,
     /^Copy CLI E2E recordings for upload$/i,
     /^Upload CLI E2E recordings$/i,
     /^Generate test results summary$/i,

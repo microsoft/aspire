@@ -44,6 +44,10 @@ The full analysis runs in four passes:
 
 Passes 1–2 are hardcoded because they target well-known infrastructure signatures that rarely change. Passes 3–4 are configurable because transient test failure patterns evolve as integrations are added or CI environments change.
 
+`Upload aggregation test results` uses the same infrastructure and Windows
+post-test cleanup classifications as the full diagnostic upload. An upload
+failure does not override a concurrent test-execution failure.
+
 ## When does it trigger?
 
 | Trigger | Behavior |

@@ -42,6 +42,26 @@ The main test workflow in `.github/workflows/tests.yml` is organized into these 
 5. `results`
    - Aggregates the final workflow status after all required lanes finish
 
+### Compact final-results transfer
+
+`run-tests.yml` retains the full `logs-{testShortName}-{os}` diagnostic
+artifact and additionally uploads `trx-{testShortName}-{os}`, containing
+only TRX files from the same result and diagnostic directories. The final
+`results` job downloads the compact
+artifacts rather than downloading binlogs, dumps, and recordings again.
+
+Downloads retain the existing `{os}/testresults/` hierarchy in
+`All-TestResults`. The combined summary, original diagnostic artifacts,
+test-result existence checks, and dependency failure gate are unchanged.
+An early build or test-host failure can legitimately leave no TRX file;
+the compact upload warns in that case, while the original failure still
+blocks CI.
+
+When validating this boundary, compare every TRX path and byte against the
+full diagnostic artifacts, then compare combined summaries. Measure the
+extra per-test upload time as well as the final job's download time and
+total workflow wall time before treating the smaller transfer as a win.
+
 ## Why the jobs are split this way
 
 ### 1. Package build and CLI archive build run in parallel
