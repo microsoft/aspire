@@ -1080,6 +1080,56 @@ builder.Build().Run();
         assert.ok(spec.includes("await waitForResourceState('e2e-winui', ['Running'], 30000);"));
     });
 
+    for (const [mode, spec] of [
+        ['ordinary', 'treeActions.e2e.test.js'],
+        ['java', 'treeActions.e2e.test.js'],
+        ['ordinary', 'appHostLifecycleTools.e2e.test.js'],
+        ['ordinary', 'diagnosticLogs.e2e.test.js'],
+    ]) {
+        test(`owns resource source fixtures for ${spec} in ${mode} mode`, () => {
+            const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
+            const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
+            const names = new Set(['writeAppHostProject', 'cleanupTemporaryRunRoot']);
+            const declarations = source.statements.filter(statement => ts.isFunctionDeclaration(statement) && names.has(statement.name?.text ?? ''));
+            assert.strictEqual(declarations.length, names.size);
+            const shortRunRoot = path.resolve('owned-run-root');
+            const javaScratchWorkspaceRoot = path.resolve('java-e2e-workspace');
+            const workspaceRoot = mode === 'java' ? javaScratchWorkspaceRoot : path.join(shortRunRoot, 'workspace');
+            const directories: string[] = [];
+            const removed: string[] = [];
+            const files = new Map<string, string>();
+            vm.runInNewContext(`${declarations.map(declaration => declaration.getText(source)).join('\n')}
+writeAppHostProject('AspireE2E.AppHost', '13.6.0', false, false);
+cleanupTemporaryRunRoot();`, {
+                path, shortRunRoot, workspaceRoot, javaScratchWorkspaceRoot, Buffer,
+                matchedTestSpecs: [path.resolve(spec)],
+                process: { env: {}, platform: process.platform },
+                isWindows: process.platform === 'win32',
+                enableJavaE2E: mode === 'java',
+                csharpFileHeader: '',
+                isWorkspaceRootOwnedByRunner: () => true,
+                removePathWithoutFollowingLinks: (directory: string) => removed.push(directory),
+                fs: {
+                    mkdirSync: (directory: string) => directories.push(directory),
+                    writeFileSync: (file: string, content: string) => files.set(file, content),
+                },
+            });
+            const outsideWorkspaceSourcePath = path.join(shortRunRoot, 'e2e-outside-workspace-source');
+            assert.ok(directories.includes(outsideWorkspaceSourcePath));
+            assert.deepStrictEqual(removed, mode === 'java' ? [javaScratchWorkspaceRoot, shortRunRoot] : [shortRunRoot]);
+            const appHostSource = files.get(path.join(workspaceRoot, 'AspireE2E.AppHost', 'AppHost.cs'));
+            assert.ok(appHostSource);
+            assert.ok(appHostSource.includes(`new("project.path", ${JSON.stringify(outsideWorkspaceSourcePath)})`));
+            const includeLanguageSources = spec === 'treeActions.e2e.test.js';
+            assert.deepStrictEqual(
+                [...appHostSource.matchAll(/\("(python|java)", Path.Combine/g)].map(match => match[1]),
+                includeLanguageSources ? ['python', 'java'] : []);
+            assert.deepStrictEqual(
+                [...files.keys()].filter(file => /\.(py|java)$/.test(file)).map(file => path.basename(file)),
+                includeLanguageSources ? ['main.py', 'App.java'] : []);
+        });
+    }
+
     for (const arch of ['x64', 'arm64']) {
         test(`isolates WinUI design-time intermediates without moving restore assets on ${arch}`, () => {
             const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
