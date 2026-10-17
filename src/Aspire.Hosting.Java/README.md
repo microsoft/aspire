@@ -153,6 +153,22 @@ No health check is added, for the same reason as Spring Boot: `/q/health` only r
 application depends on `quarkus-smallrye-health`. Add `.WithHttpHealthCheck("/q/health")` when that
 extension is present.
 
+The application serves plain HTTP by default. Call `WithHttpsDeveloperCertificate()` (or `WithHttpsCertificate`
+for a specific certificate) to serve HTTPS instead:
+
+```csharp
+#pragma warning disable ASPIRECERTIFICATES001
+
+var pricing = builder.AddQuarkusApp("pricing", "../pricing")
+    .WithHttpsDeveloperCertificate();
+```
+
+Aspire configures Quarkus through environment variables, so the application needs no change. Quarkus serves
+TLS on the port Aspire allocated and turns its plain HTTP listener off, and the endpoint switches to `https`
+in run mode. A resource that references the application then receives its address as
+`services__pricing__https__0` rather than `services__pricing__http__0`, which is why HTTPS is opt-in:
+switching the scheme would otherwise break applications that read the `http` variable.
+
 A **published** container needs one thing more, in the application's own `application.properties`:
 
 ```properties
