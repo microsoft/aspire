@@ -467,8 +467,12 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.Equal(8080, endpoint.TargetPort);
     }
 
-    [Fact]
-    public void AddDotnetProject_DirectoryContainingSingleProjectFile_ResolvesToThatProjectFile()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task AddDotnetProject_DirectoryContainingSingleProjectFile_ResolvesToThatProjectFile(bool trailingSlash, bool relativePath)
     {
         // DotnetProjectMetadata defers path resolution to ProjectPathResolver, which resolves a directory
         // containing exactly one .csproj to that project file. Verify AddDotnetProject preserves that
@@ -478,11 +482,19 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(projectDir.FullName, "MyService.csproj");
         File.WriteAllText(projectPath, "<Project />");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var app = builder.AddDotnetProject("svc", projectDir.FullName, o => o.ExcludeLaunchProfile = true);
+        var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "AppHost"));
+        using var builder = TestDistributedApplicationBuilder.Create(options => options.ProjectDirectory = appHostDirectory.FullName);
+        var resourcePath = relativePath ? "../MyService" : projectDir.FullName;
+        var app = builder.AddDotnetProject("svc", trailingSlash ? resourcePath + "/" : resourcePath, o => o.ExcludeLaunchProfile = true);
 
         Assert.True(app.Resource.TryGetLastAnnotation<IProjectMetadata>(out var metadata));
         Assert.Equal(projectPath, metadata.ProjectPath);
+        Assert.Equal(projectDir.FullName, app.Resource.WorkingDirectory);
+
+        var expected = new List<string> { "run", "--project", projectPath, "--no-build" };
+        AddExpectedConfiguration(builder, expected);
+        expected.Add("--no-launch-profile");
+        Assert.Equal(expected, await ArgumentEvaluator.GetArgumentListAsync(app.Resource));
     }
 
     [Fact]
