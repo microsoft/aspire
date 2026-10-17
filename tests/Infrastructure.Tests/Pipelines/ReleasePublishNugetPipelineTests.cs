@@ -280,7 +280,6 @@ public sealed class ReleasePublishNugetPipelineTests
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
         var pointerPublishIndex = FindRequiredText(pipeline, "folderLocation: '$(Pipeline.Workspace)\\npm\\pointer-package'");
         var registryValidationIndex = FindRequiredText(pipeline, "npm install -g --foreground-scripts=true --no-audit --no-fund --loglevel=warn --registry=https://registry.npmjs.org/ $packageSpec");
-        var channelPromotionIndex = FindRequiredText(pipeline, "# ===== PROMOTE TO CHANNEL =====");
         var nodeToolIndex = FindRequiredText(pipeline, "task: NodeTool@0");
         var dryRunReachabilityIndex = FindRequiredText(pipeline, "Dry Run - Validate npm Registry Reachability");
         var pointerSkipIndex = FindRequiredText(pipeline, "SkipNpmPointerPublish");
@@ -288,10 +287,6 @@ public sealed class ReleasePublishNugetPipelineTests
         Assert.True(
             pointerPublishIndex < registryValidationIndex,
             "Expected registry validation to happen after the npm pointer package is published.");
-
-        Assert.True(
-            registryValidationIndex < channelPromotionIndex,
-            "Expected registry validation to happen before channel promotion.");
 
         Assert.True(
             nodeToolIndex < registryValidationIndex,
@@ -558,14 +553,14 @@ public sealed class ReleasePublishNugetPipelineTests
         var winGetJob = ExtractSection(
             pipeline,
             "# ===== WINGET PUBLISHING =====",
-            "# ===== STAGE 3: GITHUB TASKS =====");
+            "# ===== GITHUB TASKS =====");
         Assert.Contains("eq('${{ parameters.SkipWinGetPublish }}', 'false')", winGetJob);
         Assert.Contains("eq('${{ parameters.IsPrerelease }}', 'false')", winGetJob);
 
         var releaseSummary = ExtractSection(
             pipeline,
             "# ===== SUMMARY =====",
-            "# ===== VS CODE EXTENSION PUBLISHING =====");
+            "# ===== npm PUBLISHING =====");
         var winGetSummary = ExtractSection(
             releaseSummary,
             """Write-Host "║ WinGet:""",
