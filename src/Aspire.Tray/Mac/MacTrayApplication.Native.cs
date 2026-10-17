@@ -15,6 +15,9 @@ internal sealed partial class MacTrayApplication
     private readonly object _dispatchGate = new();
     private readonly HashSet<nint> _openMenus = [];
     private readonly List<NativeAppHostRow> _rows = [];
+    private readonly List<(nint Item, AppHostMenuGroup Group)> _groups = [];
+    private IReadOnlyList<AppHostMenuGroup> _menuGroups = [];
+    private IReadOnlyList<AppHostMenuGroup> _recentMenuGroups = [];
     private readonly List<NativeAppHostRow> _recentRows = [];
     private readonly List<nint> _menus = [];
     private readonly List<nint> _runLoopModes = [];
@@ -289,8 +292,8 @@ internal sealed partial class MacTrayApplication
     private void UpdateMenu(TrayViewState state)
     {
         var structureChanged = _menu == 0 || _showStatus != state.ShowStatus
-            || !_rows.Select(row => row.Id).SequenceEqual(state.AppHosts.Select(row => row.Id))
-            || !_recentRows.Select(row => row.Id).SequenceEqual(state.RecentAppHosts.Select(row => row.Id));
+            || !AppHostGrouping.HasSameStructure(_menuGroups, state.MenuGroups)
+            || !AppHostGrouping.HasSameStructure(_recentMenuGroups, state.RecentMenuGroups);
         if (structureChanged && _openMenus.Count == 0 && _modalDepth == 0)
         {
             RebuildMenu(state);
@@ -305,7 +308,7 @@ internal sealed partial class MacTrayApplication
         {
             var exists = current.TryGetValue(row.Id, out var host);
             var subtitle = host?.Subtitle ?? "AppHost no longer available.";
-            SetTitleAndSubtitle(row.Item, host?.Title ?? row.Title, subtitle);
+            SetTitleAndSubtitle(row.Item, row.Title, subtitle);
             SetEnabled(row.Item, exists);
             SetEnabled(row.Dashboard, host?.CanOpenDashboard == true);
             SetEnabled(row.Stop, host?.CanStop == true);
@@ -319,7 +322,18 @@ internal sealed partial class MacTrayApplication
             var health = host?.Health ?? AppHostHealth.Unknown;
             AppKit.Set(row.Item, "setImage:", GetHealthImage(health, host?.IsRunning == true));
             AppKit.Set(row.Item, "setAccessibilityLabel:",
-                AppKit.String($"{host?.DisplayName ?? row.DisplayName}, {HealthDescription(health, host?.IsRunning == true)}, {subtitle}, AppHost actions"));
+                AppKit.String($"{row.DisplayName}, {HealthDescription(health, host?.IsRunning == true)}, {subtitle}, AppHost actions"));
+        }
+        foreach (var (item, original) in _groups)
+        {
+            var group = original with
+            {
+                Instances = original.Instances.Select(host => current.GetValueOrDefault(host.Id)
+                    ?? host with { IsRunning = false, IsStarting = false, IsStopping = false, Error = null, Health = AppHostHealth.Unknown }).ToArray()
+            };
+            var health = group.GetHealth(state.Discovery == DiscoveryState.Live);
+            AppKit.Set(item, "setImage:", GetHealthImage(health, group.IsRunning));
+            AppKit.Set(item, "setAccessibilityLabel:", AppKit.String($"{original.Title}, {HealthDescription(health, group.IsRunning)}, {original.Instances.Count} instances"));
         }
         SetEnabled(_clearRecent, state.CanClearRecent);
 
@@ -337,6 +351,7 @@ internal sealed partial class MacTrayApplication
         var previous = _menu;
         DetachMenuDelegates();
         _rows.Clear();
+        _groups.Clear();
         _recentRows.Clear();
         _menus.Clear();
         _menu = CreateMenu();
@@ -362,20 +377,16 @@ internal sealed partial class MacTrayApplication
         {
             _header = AddItem(_menu, state.Status, null, enabled: false);
         }
-        foreach (var host in state.AppHosts)
-        {
-            _rows.Add(AddAppHostMenu(_menu, host));
-        }
+        _menuGroups = state.MenuGroups;
+        AddGroups(_menu, state.MenuGroups, _rows);
+        _recentMenuGroups = state.RecentMenuGroups;
         AddSeparator(_menu);
         var recent = AddItem(_menu, "Open Recent", null, enabled: true);
         SetSymbol(recent, "clock", "Recently opened AppHosts");
         _recentMenu = CreateMenu();
         try
         {
-            foreach (var host in state.RecentAppHosts)
-            {
-                _recentRows.Add(AddAppHostMenu(_recentMenu, host));
-            }
+            AddGroups(_recentMenu, _recentMenuGroups, _recentRows);
             if (state.RecentAppHosts.Count == 0)
             {
                 AddItem(_recentMenu, "No recently opened AppHosts", null, enabled: false);
@@ -395,6 +406,33 @@ internal sealed partial class MacTrayApplication
         var quit = AddItem(_menu, "Quit Aspire", "quit:", enabled: true);
         AppKit.Set(quit, "setKeyEquivalent:", AppKit.String("q"));
         AppKit.Set(quit, "setKeyEquivalentModifierMask:", 1 << 20);
+    }
+
+    private void AddGroups(nint menu, IReadOnlyList<AppHostMenuGroup> groups, List<NativeAppHostRow> rows)
+    {
+        foreach (var group in groups)
+        {
+            if (!group.IsGroup)
+            {
+                rows.Add(AddAppHostMenu(menu, group.Instances[0]));
+                continue;
+            }
+            var item = AddItem(menu, group.Title, null, enabled: true);
+            var submenu = CreateMenu();
+            try
+            {
+                foreach (var host in group.Instances)
+                {
+                    rows.Add(AddAppHostMenu(submenu, host));
+                }
+                AppKit.Set(item, "setSubmenu:", submenu);
+                _groups.Add((item, group));
+            }
+            finally
+            {
+                AppKit.Release(submenu);
+            }
+        }
     }
 
     private NativeAppHostRow AddAppHostMenu(nint menu, AppHostMenuItem host)
@@ -763,6 +801,7 @@ internal sealed partial class MacTrayApplication
         }
         AppKit.Release(_target);
         _rows.Clear();
+        _groups.Clear();
         _recentRows.Clear();
         _menus.Clear();
         Interlocked.CompareExchange(ref s_callbackRoot, null, this);

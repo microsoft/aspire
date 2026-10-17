@@ -74,6 +74,8 @@ internal sealed record AppHostMenuItem(
     bool IsStopping,
     string? Error)
 {
+    public string ApplicationName { get; init; } = Title;
+    public AppHostRepository? Repository { get; init; }
     public bool IsPinned { get; init; }
     public bool CanStart { get; init; }
     public bool IsStarting { get; init; }
@@ -86,7 +88,9 @@ internal sealed record TrayViewState(
     IReadOnlyList<AppHostMenuItem> AppHosts,
     string Status)
 {
+    public IReadOnlyList<AppHostMenuGroup> MenuGroups { get; init; } = AppHostGrouping.Create(AppHosts);
     public IReadOnlyList<AppHostMenuItem> RecentAppHosts { get; init; } = [];
+    public IReadOnlyList<AppHostMenuGroup> RecentMenuGroups => AppHostGrouping.Create(RecentAppHosts);
     public bool CanClearRecent { get; init; }
     public bool HasActiveAppHosts { get; init; } = AppHosts.Any(host => host.IsRunning || host.IsStarting);
     public bool ShowStatus { get; init; } = AppHosts.Count == 0 || Discovery != DiscoveryState.Live

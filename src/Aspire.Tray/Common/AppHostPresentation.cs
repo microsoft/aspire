@@ -9,6 +9,13 @@ internal static class AppHostPresentation
 {
     public static string GetDisplayName(AppHostInfo host)
     {
+        var name = GetApplicationName(host);
+        var context = GitCheckoutContext.GetLabel(host.AppHostPath);
+        return ToSingleLine(context is null ? name : $"{name} · {context}");
+    }
+
+    public static string GetApplicationName(AppHostInfo host)
+    {
         var name = Path.GetFileNameWithoutExtension(host.AppHostPath);
         var directory = GetDirectory(host);
         // File-based hosts often use apphost.cs/apphost.mts inside an AppHost directory.

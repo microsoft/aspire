@@ -604,6 +604,8 @@ internal sealed class TrayController : IAsyncDisposable
                 live && !stopped && !stopping && host.ProcessStartTimeUnixMilliseconds is > 0,
                 stopping, error)
             {
+                ApplicationName = AppHostPresentation.GetApplicationName(host),
+                Repository = AppHostRepository.Read(host.AppHostPath),
                 IsPinned = pins.Contains(TrayAppHostPath.Normalize(host.AppHostPath)),
                 IsRunning = !stopped,
                 Health = live && !stopped ? host.Health : AppHostHealth.Unknown
@@ -640,6 +642,7 @@ internal sealed class TrayController : IAsyncDisposable
         };
         Volatile.Write(ref _state, new(_snapshot.Discovery, rows.ToArray(), status)
         {
+            MenuGroups = AppHostGrouping.Create(rows.ToArray()),
             RecentAppHosts = recent,
             CanClearRecent = _savedState.AppHosts.Any(host => host.IsRecent),
             HasActiveAppHosts = running > 0 || starting > 0,
@@ -659,6 +662,8 @@ internal sealed class TrayController : IAsyncDisposable
         return new(host.Id, AppHostPresentation.GetTitle(host), subtitle, AppHostPresentation.GetDisplayName(host),
             false, false, false, error)
         {
+            ApplicationName = AppHostPresentation.GetApplicationName(host),
+            Repository = AppHostRepository.Read(saved.AppHostPath),
             IsPinned = saved.IsPinned,
             CanStart = live && start?.BlocksStart != true,
             IsStarting = starting,

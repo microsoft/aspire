@@ -209,6 +209,60 @@ internal sealed partial class MacTrayApplication
         }
     }
 
+    internal int TopLevelHostCountForSmoke => _menuGroups.Count;
+
+    internal void VerifyGroupedMenusForSmoke()
+    {
+        var (item, group) = _groups.Single(entry => entry.Group.Title == "Shop");
+        var submenu = AppKit.Get(item, "submenu");
+        if (submenu == 0 || AppKit.Get(submenu, "numberOfItems") != 3
+            || AppKit.Get(item, "image") == 0 || !AppKit.Text(AppKit.Get(item, "accessibilityLabel")).Contains("3 instances", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Grouped native menu is missing nested instances, aggregate health, or accessibility.");
+        }
+        for (var index = 0; index < group.Instances.Count; index++)
+        {
+            var row = _rows.Concat(_recentRows).Single(row => row.Id == group.Instances[index].Id);
+            if (AppKit.Get(submenu, "itemAtIndex:", index) != row.Item
+                || AppKit.Get(row.Item, "submenu") != row.Submenu)
+            {
+                throw new InvalidOperationException("A grouped instance's native actions lost their original identity.");
+            }
+        }
+    }
+
+    internal void VerifyGroupedContextMenuLookupForSmoke()
+    {
+        var (item, group) = _groups.Single(entry => entry.Group.Title == "Shop");
+        var parent = AppKit.Get(item, "menu");
+        var submenu = AppKit.Get(item, "submenu");
+        foreach (var host in group.Instances)
+        {
+            var row = _rows.Concat(_recentRows).Single(row => row.Id == host.Id);
+            MenuWillOpen(parent);
+            MenuWillOpen(submenu);
+            try
+            {
+                // AppKit owns highlightedItem and provides no setter. Inject only this
+                // native read while exercising the actual tracking registry and row lookup.
+                var selected = FindHighlightedAppHostRow(menu => menu == submenu ? row.Item : menu == parent ? item : 0);
+                if (!ReferenceEquals(selected, row))
+                {
+                    throw new InvalidOperationException("A grouped context action did not select its original instance.");
+                }
+            }
+            finally
+            {
+                MenuDidClose(submenu);
+                MenuDidClose(parent);
+            }
+            if (FindHighlightedAppHostRow(menu => menu == submenu ? row.Item : 0) is not null)
+            {
+                throw new InvalidOperationException("An inactive group retained its previous context selection.");
+            }
+        }
+    }
+
     internal NativeMenuInspection InspectMenu()
     {
         VerifyUIThread();
