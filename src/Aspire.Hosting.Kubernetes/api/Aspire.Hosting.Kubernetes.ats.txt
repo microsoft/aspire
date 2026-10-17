@@ -98,7 +98,7 @@ Aspire.Hosting.Kubernetes/withIngressTlsAuto() -> Aspire.Hosting.Kubernetes/Aspi
 Aspire.Hosting.Kubernetes/withIngressTlsParam(secretName: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
 Aspire.Hosting.Kubernetes/withKubernetesNodePool(nodePool: Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesNodePoolResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting.Kubernetes/withKubernetesPersistentVolume(volume: Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesPersistentVolumeResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
-Aspire.Hosting.Kubernetes/withKubernetesPersistentVolumeMount(volume: Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesPersistentVolumeResource, mountPath: string, isReadOnly?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
+Aspire.Hosting.Kubernetes/withKubernetesPersistentVolumeMount(volume: Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesPersistentVolumeResource, mountPath: string, isReadOnly?: boolean, env?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
 Aspire.Hosting.Kubernetes/withLabel(context: Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesManifestResource, key: string, value: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesManifestResource
 Aspire.Hosting.Kubernetes/withLetsEncryptProduction(email: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.CertManagerIssuerResource
 Aspire.Hosting.Kubernetes/withLetsEncryptProductionParam(email: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.CertManagerIssuerResource
@@ -106,6 +106,8 @@ Aspire.Hosting.Kubernetes/withLetsEncryptStaging(email: string) -> Aspire.Hostin
 Aspire.Hosting.Kubernetes/withLetsEncryptStagingParam(email: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.CertManagerIssuerResource
 Aspire.Hosting.Kubernetes/withNamespace(context: Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesManifestResource, namespace: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesManifestResource
 Aspire.Hosting.Kubernetes/withOtlpServicePort(grpcPort?: number, httpPort?: number) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesAspireDashboardResource
+Aspire.Hosting.Kubernetes/withoutStorageClass() -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesPersistentVolumeResource
+Aspire.Hosting.Kubernetes/withPersistentVolumeName(persistentVolumeName: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesPersistentVolumeResource
 Aspire.Hosting.Kubernetes/withProperties(configure: callback) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesEnvironmentResource
 Aspire.Hosting.Kubernetes/withServicePort(port?: number) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesAspireDashboardResource
 Aspire.Hosting.Kubernetes/withStorageClass(storageClassName: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesPersistentVolumeResource
