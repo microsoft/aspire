@@ -1,0 +1,27 @@
+name: "Copilot Code Review Setup"
+
+# Validate this setup from the Actions tab and whenever this workflow changes.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/copilot-code-review.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/copilot-code-review.yml'
+
+jobs:
+  # The job MUST be called `copilot-setup-steps` or it will not be picked up by Copilot code review.
+  copilot-setup-steps:
+    # Keep the current review runner selection unchanged while measuring the setup-content change.
+    runs-on: ${{ github.repository_owner == 'microsoft' && '8-core-ubuntu-latest' || 'ubuntu-latest' }}
+
+    permissions: {}
+
+    steps:
+      # Copilot checks out the repository after setup completes. Code review does not need the
+      # solution restore, local tools, or additional SDKs installed by the coding-agent setup.
+      - name: Use default Copilot code review environment
+        run: echo "No dedicated setup is required before Copilot code review."
