@@ -108,12 +108,14 @@ ignore:
   # The stabilization job invokes this script independently of the tests selector.
   - eng/scripts/stabilization-smoke-init-restore.sh
   # Dev/AzDO-only eng/scripts with NO test consumer and no GH-CI build/test path: local debug-channel
-  # helpers and the AzDO native-symbol validator. Listed so they do not show as unattributed audit noise.
+  # helpers and AzDO build/validation scripts. Listed so they do not show as unattributed audit noise.
   # (verify-cli-archive.ps1 and validate-npm-release-aliases.ps1 are NOT here -- they have test consumers
   # and are routed to their tests in path_rules above.)
   - eng/scripts/debug-*.ps1                             # debug-aspire-channel/stable/staging: local channel-switch helpers
   - eng/scripts/debug-*.sh
   - eng/scripts/validate-cli-symbols.ps1                # AzDO native-AOT symbol publish validation; no GH-CI consumer
+  - eng/scripts/build-codeql-starter.ps1               # official AzDO Go/Java snapshot builds; no GH-CI consumer
+  - eng/scripts/codeql-gradle-init.gradle              # Java snapshot dependency routing; no GH-CI consumer
   - eng/scripts/validate-mac-platform-sso.sh            # manual managed-Mac validation; no GH-CI consumer
   - eng/generate-catalog.ps1                            # Windows/AzDO template catalog generation; no GH-CI consumer
   - eng/scripts/update-aspire-skills-bundle.ps1         # schedule/dispatch-only bundle updater
