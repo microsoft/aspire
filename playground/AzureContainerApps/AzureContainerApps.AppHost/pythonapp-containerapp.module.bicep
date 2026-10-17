@@ -11,7 +11,7 @@ param infra_outputs_azure_container_registry_endpoint string
 
 param infra_outputs_azure_container_registry_managed_identity_id string
 
-resource pythonapp 'Microsoft.App/containerApps@2025-01-01' = {
+resource pythonapp 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'pythonapp'
   location: location
   properties: {
