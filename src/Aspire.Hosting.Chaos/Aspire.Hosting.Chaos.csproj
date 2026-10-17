@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <!-- No published baseline exists for this package yet; skip the repo's package validation. -->
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <MinCodeCoverage>0</MinCodeCoverage>
+    <!-- This pilot has no [AspireExport] annotations yet (see the M2 TODO below), so it is
+         not a polyglot integration. Acknowledged explicitly per ASPIREEXPORT017. -->
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
+    <!-- Reference drop: these files keep the Chaos repo's copyright headers, house style
+         (this.field rather than _field) and doc-comment coverage, so the branch stays
+         faithful to the source it mirrors. Aspire's conventions and [AspireExport]
+         annotations belong to the contribution path, not this read-only branch. -->
+    <NoWarn>$(NoWarn);CS1591;IDE0073;IDE1006;ASPIREEXPORT008</NoWarn>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Aspire.Hosting.Chaos</RootNamespace>
+    <AssemblyName>Aspire.Hosting.Chaos</AssemblyName>
+    <Description>Local-dev fault-injection proxy resource for .NET Aspire. Drops a YARP+middleware container between Aspire resources to inject latency, errors, rate limits, dropped responses, header tampering, idempotency-key collisions, partial responses, replay duplication, and Azure-SDK-shaped failures (Cosmos throttling, Storage 503, Key Vault throttling, etc).</Description>
+    <PackageTags>aspire integration hosting chaos fault-injection proxy yarp testing</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- TODO(M2/13.4 upgrade): add [AspireExport] attributes to public surface; not available in Aspire 13.3 -->
+    <!-- TODO(M4 public release): add package icon, source link / SBOM, switch from WithDockerfile to published image -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+    <ProjectReference Include="..\Aspire.Chaos.Client\Aspire.Chaos.Client.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+
+    <!-- container/ holds the docker build context (Dockerfile + ASP.NET Core source). 
+         It's built by docker via Aspire's WithDockerfile at AppHost startup, not by this library. -->
+    <Compile Remove="container\**" />
+    <None Include="container\**\*" CopyToOutputDirectory="PreserveNewest" Exclude="container\bin\**;container\obj\**" />
+
+    <!-- Ship the docker build context INSIDE the package. ResolveContainerSourcePath() locates
+         container/ next to the assembly, so a PackageReference consumer that doesn't get these
+         files fails at AddChaosProxy() with DirectoryNotFoundException. Paired with
+         build/Aspire.Hosting.Chaos.targets, which copies them into the consumer's output dir
+         (packaged files land in the NuGet cache, not the consumer's bin). -->
+    <None Include="container\**\*"
+          Exclude="container\bin\**;container\obj\**"
+          Pack="true"
+          PackagePath="container\" />
+
+    <!-- Auto-imported by NuGet into the consuming project. -->
+    <None Include="build\Aspire.Hosting.Chaos.targets" Pack="true" PackagePath="build\" />
+  </ItemGroup>
+
+</Project>
