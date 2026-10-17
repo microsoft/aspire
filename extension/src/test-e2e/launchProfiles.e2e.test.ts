@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { ProjectLaunchConfiguration } from '../dcp/types';
-import { getCommandInvocationCount, waitForCommandOutcome, waitForDebugSessionStartup, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
+import { getCommandInvocationCount, waitForCommandOutcome, waitForDebugSessionStartup, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResourceState, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, removePath, restoreWorkspaceAppHostConfig, runE2eTeardown, stopAppHostIfRunning, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { runProcess } from './helpers/process';
 import { getProcessEntry } from './helpers/processArguments';
@@ -17,10 +17,12 @@ suite('Aspire launch profiles E2E', function () {
     const launchSettingsDirectory = path.join(appHostDirectory, 'Properties');
     const launchSettingsPath = path.join(launchSettingsDirectory, 'launchSettings.json');
     const launchJsonPath = path.join(getWorkspaceRoot(), '.vscode', 'launch.json');
+    const appHostSourcePath = path.join(appHostDirectory, 'AppHost.cs');
     const denoAppHostDirectory = path.join(getWorkspaceRoot(), 'DenoAppHost');
     const denoAppHostPath = path.join(denoAppHostDirectory, 'apphost.mts');
     let originalLaunchSettings: FileSnapshot | undefined;
     let originalLaunchJson: FileSnapshot | undefined;
+    let originalAppHostSource: FileSnapshot | undefined;
     let launchSettingsDirectoryExisted: boolean | undefined;
 
     teardown(async () => {
@@ -34,6 +36,7 @@ suite('Aspire launch profiles E2E', function () {
             () => removePath(denoAppHostDirectory, { recursive: true, force: true }),
             () => restoreFile(launchSettingsPath, originalLaunchSettings),
             () => restoreFile(launchJsonPath, originalLaunchJson),
+            () => restoreFile(appHostSourcePath, originalAppHostSource),
             () => removeDirectoryIfCreated(launchSettingsDirectory, launchSettingsDirectoryExisted),
         ], 'Launch profiles E2E teardown failed.');
     });
@@ -147,6 +150,58 @@ suite('Aspire launch profiles E2E', function () {
             DOTNET_LAUNCH_PROFILE: 'H2',
             ASPNETCORE_URLS: 'http://localhost:15002',
         });
+    });
+
+    test('uses nested launch profiles for the actual AppHost resource graph without C#', async function () {
+        this.timeout(600000);
+        originalLaunchSettings = captureFile(launchSettingsPath);
+        originalLaunchJson = captureFile(launchJsonPath);
+        originalAppHostSource = captureFile(appHostSourcePath);
+        launchSettingsDirectoryExisted = fs.existsSync(launchSettingsDirectory);
+
+        await openAspireView();
+        await waitForWorkspaceAppHost();
+        await waitForRepositoryIdle();
+        fs.mkdirSync(launchSettingsDirectory, { recursive: true });
+        writeFileWithRetry(launchSettingsPath, JSON.stringify({
+            profiles: {
+                h1: { commandName: 'Project', environmentVariables: { mode: '1' } },
+                h2: { commandName: 'Project', environmentVariables: { mode: '2' } },
+            },
+        }, undefined, 2));
+        writeFileWithRetry(appHostSourcePath, `var builder = DistributedApplication.CreateBuilder(args);
+
+builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker").WithHttpEndpoint(name: "http");
+if (builder.Configuration["mode"] == "2")
+{
+    builder.AddProject<Projects.AspireE2E_Worker>("e2e-profile-two").WithHttpEndpoint(name: "http");
+}
+
+builder.Build().Run();
+`);
+        fs.mkdirSync(path.dirname(launchJsonPath), { recursive: true });
+        writeFileWithRetry(launchJsonPath, JSON.stringify({
+            version: '0.2.0',
+            configurations: ['h1', 'h2'].map(profile => ({
+                type: 'aspire',
+                request: 'launch',
+                name: `Nested ${profile}`,
+                program: appHostProjectPath,
+                dashboardBrowser: 'none',
+                debuggers: { apphost: { launchProfile: profile } },
+            })),
+        }, undefined, 2));
+
+        const status = await executeE2eControlCommand({
+            name: 'startDebugging',
+            configurationName: 'Nested h2',
+        }, { timeoutMs: 180000 });
+        assert.strictEqual(status.result, true);
+        await waitForDebugSessionStartup(appHostProjectPath, 180000);
+        await Promise.all([
+            waitForResourceState('e2e-worker', ['Running'], 120000),
+            waitForResourceState('e2e-profile-two', ['Running'], 120000),
+        ]);
     });
 
     test('forwards launch profiles from launch.json and the AppHost start tool to the selected CLI', async () => {

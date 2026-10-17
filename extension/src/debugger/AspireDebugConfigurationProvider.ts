@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { isCsharpInstalled } from '../capabilities';
 import { appHostLifecycleLaunchAlreadyClaimed, appHostLifecycleLaunchProfileRequiresRun, appHostOperationAlreadyInProgress, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder, selectAppHostToLaunch } from '../loc/strings';
 import type { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostDiscoveryService, formatAppHostLanguage, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
@@ -263,13 +264,18 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                 ?? projectDebuggerSettings?.launchProfile;
             const nestedDisableLaunchProfile = appHostDebuggerSettings?.disableLaunchProfile
                 ?? projectDebuggerSettings?.disableLaunchProfile;
-            const nestedDebuggerOwnsLaunchProfile = nestedDisableLaunchProfile === true
+            const hasNestedLaunchProfileOptions = nestedDisableLaunchProfile === true
                 || nestedLaunchProfile !== undefined;
-            const effectiveLaunchProfile = nestedDebuggerOwnsLaunchProfile
+            const cliOwnsDotnetAppHostLaunch = command === 'run'
+                && effectiveAppHostLanguage === 'csharp'
+                && !isCsharpInstalled();
+            const canForwardNestedLaunchProfile = cliOwnsDotnetAppHostLaunch
+                && nestedDisableLaunchProfile !== true;
+            const effectiveLaunchProfile = hasNestedLaunchProfileOptions && !canForwardNestedLaunchProfile
                 ? undefined
-                : aspireConfig.launchProfile;
+                : nestedLaunchProfile ?? aspireConfig.launchProfile;
             const rootArguments = Array.isArray(config.args) ? [...config.args] : undefined;
-            const launchArguments = nestedDebuggerOwnsLaunchProfile
+            const launchArguments = hasNestedLaunchProfileOptions
                 ? removeRootLaunchProfileCliArg(rootArguments)
                 : rootArguments;
             if (launchArguments === undefined) {
