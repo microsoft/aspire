@@ -11,7 +11,7 @@
 //   * "CI failed"      -> trigger only fires on `workflow_run.conclusion == 'failure'`,
 //                         which also means a run that was merely *cancelled* never
 //                         triggers a rerun (its conclusion is 'cancelled', not 'failure').
-//   * "max 3 reruns"   -> trigger gates on `run_attempt <= 3`; computeRerunEligibility
+//   * "max 2 reruns"   -> trigger gates on `run_attempt <= 2`; computeRerunEligibility
 //                         re-checks the same attempt cap for the manual-dispatch path.
 //
 // Force mode still KEEPS the open-PR requirement (no point spending CI on a run whose
@@ -26,7 +26,7 @@ const fs = require('node:fs');
 const failureConclusions = new Set(['failure', 'cancelled', 'timed_out', 'startup_failure']);
 const ignoredJobs = new Set(['Final Results', 'Tests / Final Test Results']);
 const defaultMaxRetryableJobs = 5;
-const defaultMaxRunAttempt = 3;
+const defaultMaxRunAttempt = 2;
 
 const retryableWithAnnotationStepPatterns = [
     /^Set up job$/i,
@@ -545,7 +545,7 @@ function computeRerunEligibility({
     forceRerunAll = false
 }) {
     // The attempt cap applies in every mode: never rerun past maxRunAttempt source
-    // attempts (up to 3 auto-reruns / 4 total attempts).
+    // attempts (up to 2 auto-reruns / 3 total attempts).
     if (runAttempt > maxRunAttempt) {
         return false;
     }
@@ -726,7 +726,7 @@ async function writeForceRerunSummary({
     // after the open-PR gate (the zero-PR case returns earlier), and force-mode
     // computeRerunEligibility returns false solely when runAttempt > maxRunAttempt. The
     // skipped case is reachable only via a manual workflow_dispatch on a run past the cap
-    // (the workflow_run trigger gates run_attempt <= 3, so the auto path is always eligible).
+    // (the workflow_run trigger gates run_attempt <= 2, so the auto path is always eligible).
     const outcomeDetails = rerunEligible
         ? dryRun
             ? 'Force-rerun mode: the failed jobs would be rerun if dry run were disabled (transient-failure analysis bypassed).'

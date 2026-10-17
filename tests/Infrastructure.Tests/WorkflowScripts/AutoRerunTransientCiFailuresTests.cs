@@ -761,15 +761,15 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             new { runAttempt = 1, forceRerunAll = true });
         Assert.True(eligibleAttempt1);
 
+        bool eligibleAttempt2 = await InvokeHarnessAsync<bool>(
+            "computeRerunEligibility",
+            new { runAttempt = 2, forceRerunAll = true });
+        Assert.True(eligibleAttempt2);
+
         bool eligibleAttempt3 = await InvokeHarnessAsync<bool>(
             "computeRerunEligibility",
             new { runAttempt = 3, forceRerunAll = true });
-        Assert.True(eligibleAttempt3);
-
-        bool eligibleAttempt4 = await InvokeHarnessAsync<bool>(
-            "computeRerunEligibility",
-            new { runAttempt = 4, forceRerunAll = true });
-        Assert.False(eligibleAttempt4);
+        Assert.False(eligibleAttempt3);
     }
 
     [Fact]
@@ -788,7 +788,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
         bool attemptCapBlocks = await InvokeHarnessAsync<bool>(
             "computeRerunExecutionEligibility",
-            new { dryRun = false, runAttempt = 4, forceRerunAll = true });
+            new { dryRun = false, runAttempt = 3, forceRerunAll = true });
         Assert.False(attemptCapBlocks);
     }
 
@@ -938,7 +938,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Contains("const dryRun = parseManualDryRun();", workflowText);
         Assert.Contains("computeRerunExecutionEligibility", workflowText);
         Assert.Contains("getAssociatedPullRequestNumbers", workflowText);
-        Assert.Contains("github.event.workflow_run.run_attempt <= 3", workflowText);
+        Assert.Contains("github.event.workflow_run.run_attempt <= 2", workflowText);
     }
 
     [Fact]
