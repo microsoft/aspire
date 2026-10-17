@@ -36,7 +36,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     private const string DurationColumn = nameof(DurationColumn);
     private const string ActionsColumn = nameof(ActionsColumn);
     private readonly CancellationTokenSource _cts = new();
-    private readonly EndAnchorItemsProviderState _endAnchorItemsProviderState = new();
     private IList<GridColumn> _gridColumns = null!;
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
 
@@ -168,11 +167,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         _totalItemsCount = traces.TotalItemCount;
         _totalItemsFooter.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
 
-        if (_endAnchorItemsProviderState.GetInitialResult(request.StartIndex, traces.Items, virtualizedTraceCount) is { } initialResult)
-        {
-            return GridItemsProviderResult.From(initialResult.Items, initialResult.TotalItemCount);
-        }
-
         return GridItemsProviderResult.From(traces.Items, virtualizedTraceCount);
     }
 
@@ -274,10 +268,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
         }
 
-        if (_endAnchorItemsProviderState.TryBeginRefresh())
-        {
-            await _dataGrid.RefreshDataAndRenderAsync();
-        }
     }
 
     private string? PauseText => PauseManager.AreTracesPaused(out var startTime)
