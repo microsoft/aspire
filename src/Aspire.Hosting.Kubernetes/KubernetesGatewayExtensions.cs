@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 
@@ -9,7 +10,7 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Provides extension methods for configuring Kubernetes Gateway API resources in the Aspire application model.
 /// </summary>
-public static class KubernetesGatewayExtensions
+public static partial class KubernetesGatewayExtensions
 {
     /// <summary>
     /// Adds a Kubernetes Gateway API Gateway resource to the application model as a child of the specified
@@ -159,6 +160,98 @@ public static class KubernetesGatewayExtensions
             Host: host,
             Path: path,
             PathType: pathType,
+            Endpoint: endpoint));
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a gRPC routing rule to the gateway.
+    /// The rule matches each hostname configured with <see cref="WithHostname(IResourceBuilder{KubernetesGatewayResource}, string)"/>, or all hosts when no hostname is configured, and routes matching gRPC requests to the endpoint's backing Kubernetes service.
+    /// This generates a <c>GRPCRoute</c> resource attached to the Gateway.
+    /// </summary>
+    /// <param name="builder">The gateway resource builder.</param>
+    /// <param name="endpoint">The endpoint reference identifying the target gRPC service and port.</param>
+    /// <param name="service">The fully qualified gRPC service name to match. When <see langword="null"/>, any service matches.</param>
+    /// <param name="method">The gRPC method name to match. When <see langword="null"/>, any method matches.</param>
+    /// <param name="matchType">How <paramref name="service"/> and <paramref name="method"/> are compared. Defaults to <see cref="GrpcMethodMatchType.Exact"/>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// <para>
+    /// When neither <paramref name="service"/> nor <paramref name="method"/> is specified, the rule matches every gRPC request.
+    /// The Gateway API only guarantees support for exact matches that specify a service, with or without a method.
+    /// Method-only matches and <see cref="GrpcMethodMatchType.RegularExpression"/> are implementation-specific.
+    /// </para>
+    /// <para>
+    /// The Gateway API recommends serving gRPC and non-gRPC HTTP traffic on separate hostnames.
+    /// Implementations may reject a <c>GRPCRoute</c> whose hostnames intersect with an <c>HTTPRoute</c> attached to the same listener.
+    /// Use <see cref="WithGrpcRoute(IResourceBuilder{KubernetesGatewayResource}, string, EndpointReference, string?, string?, GrpcMethodMatchType)"/> to give gRPC routes a dedicated hostname.
+    /// See <see href="https://gateway-api.sigs.k8s.io/reference/api-types/grpcroute/#cross-serving"/>.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var gateway = k8s.AddGateway("public").WithGatewayClass("istio");
+    /// var grpc = builder.AddProject&lt;GreeterService&gt;("greeter");
+    ///
+    /// gateway.WithGrpcRoute(grpc.GetEndpoint("http"), service: "greet.Greeter", method: "SayHello");
+    /// </code>
+    /// </example>
+    [AspireExport("withGatewayGrpcRoute")]
+    public static IResourceBuilder<KubernetesGatewayResource> WithGrpcRoute(
+        this IResourceBuilder<KubernetesGatewayResource> builder,
+        EndpointReference endpoint,
+        string? service = null,
+        string? method = null,
+        GrpcMethodMatchType matchType = GrpcMethodMatchType.Exact)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        ValidateGrpcMethodMatch(service, method, matchType);
+
+        builder.Resource.GrpcRoutes.Add(new GatewayGrpcRouteConfig(
+            Host: null,
+            Service: service,
+            Method: method,
+            MatchType: matchType,
+            Endpoint: endpoint));
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a host-scoped gRPC routing rule to the gateway.
+    /// The rule matches gRPC requests for the specified host, routing them to the given endpoint's backing Kubernetes service.
+    /// This generates a <c>GRPCRoute</c> resource with a <c>hostnames</c> filter.
+    /// </summary>
+    /// <param name="builder">The gateway resource builder.</param>
+    /// <param name="host">The hostname to match.</param>
+    /// <param name="endpoint">The endpoint reference identifying the target gRPC service and port.</param>
+    /// <param name="service">The fully qualified gRPC service name to match. When <see langword="null"/>, any service matches.</param>
+    /// <param name="method">The gRPC method name to match. When <see langword="null"/>, any method matches.</param>
+    /// <param name="matchType">How <paramref name="service"/> and <paramref name="method"/> are compared. Defaults to <see cref="GrpcMethodMatchType.Exact"/>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withGatewayHostGrpcRoute")]
+    public static IResourceBuilder<KubernetesGatewayResource> WithGrpcRoute(
+        this IResourceBuilder<KubernetesGatewayResource> builder,
+        string host,
+        EndpointReference endpoint,
+        string? service = null,
+        string? method = null,
+        GrpcMethodMatchType matchType = GrpcMethodMatchType.Exact)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(host);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        ValidateGrpcMethodMatch(service, method, matchType);
+
+        builder.Resource.GrpcRoutes.Add(new GatewayGrpcRouteConfig(
+            Host: host,
+            Service: service,
+            Method: method,
+            MatchType: matchType,
             Endpoint: endpoint));
 
         return builder;
@@ -325,4 +418,63 @@ public static class KubernetesGatewayExtensions
         builder.Resource.GatewayAnnotations[key] = ReferenceExpression.Create($"{value.Resource}");
         return builder;
     }
+
+    // Mirrors the GRPCMethodMatch CEL validation in the Gateway API CRD so that invalid values fail when the
+    // AppHost is authored rather than when the API server rejects the chart. See
+    // https://github.com/kubernetes-sigs/gateway-api/blob/main/apis/v1/grpcroute_types.go (GRPCMethodMatch):
+    //   - When a method match is present, one or both of 'service' or 'method' must be specified.
+    //   - For Exact matches, service must match ^(?i)\.?[a-z_][a-z_0-9]*(\.[a-z_][a-z_0-9]*)*$
+    //     (e.g. "com.example.User", never "/com.example.User/Login") and method must match
+    //     ^[A-Za-z_][A-Za-z_0-9]*$ (e.g. "Login").
+    // RegularExpression values are passed through untouched because the regex dialect is implementation-specific.
+    private static void ValidateGrpcMethodMatch(string? service, string? method, GrpcMethodMatchType matchType)
+    {
+        if (service is not null)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(service);
+        }
+
+        if (method is not null)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(method);
+        }
+
+        switch (matchType)
+        {
+            case GrpcMethodMatchType.Exact:
+                if (service is not null && !GrpcServiceNameRegex().IsMatch(service))
+                {
+                    throw new ArgumentException(
+                        $"gRPC service '{service}' is not a valid fully qualified service name (e.g., 'com.example.User'). " +
+                        "Exact matches must not contain '/' or a method name.",
+                        nameof(service));
+                }
+
+                if (method is not null && !GrpcMethodNameRegex().IsMatch(method))
+                {
+                    throw new ArgumentException(
+                        $"gRPC method '{method}' is not a valid method name (e.g., 'Login'). Exact matches must not contain '/' or '.'.",
+                        nameof(method));
+                }
+                break;
+
+            case GrpcMethodMatchType.RegularExpression:
+                if (service is null && method is null)
+                {
+                    throw new ArgumentException(
+                        $"A {nameof(GrpcMethodMatchType.RegularExpression)} gRPC match requires a service or method pattern.",
+                        nameof(matchType));
+                }
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(matchType), matchType, "Unknown gRPC method match type.");
+        }
+    }
+
+    [GeneratedRegex(@"^\.?[a-z_][a-z_0-9]*(\.[a-z_][a-z_0-9]*)*$", RegexOptions.IgnoreCase)]
+    private static partial Regex GrpcServiceNameRegex();
+
+    [GeneratedRegex(@"^[A-Za-z_][A-Za-z_0-9]*$")]
+    private static partial Regex GrpcMethodNameRegex();
 }
