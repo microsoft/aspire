@@ -31,7 +31,7 @@ public class JavaAppHostToolchainResolverTests(ITestOutputHelper outputHelper)
             // "call" precedes the wrapper so the first token on the command line is never a quote,
             // which is what stops cmd.exe from stripping quotes around a path containing a space.
             Assert.Equal(
-                ["/c", "call", Path.GetRelativePath(appHostDirectory, wrapperPath), .. toolArgs],
+                ["/c", "call", Path.Combine(".", Path.GetRelativePath(appHostDirectory, wrapperPath)), .. toolArgs],
                 actual.Args);
 
             return;
@@ -324,7 +324,7 @@ public class JavaAppHostToolchainResolverTests(ITestOutputHelper outputHelper)
             // wrapper is never the first token: cmd strips the first and last quote on the line when
             // the first token is quoted, which would mangle a path containing a space.
             Assert.Equal(Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", invocation.Command);
-            Assert.Equal(["/c", "call", expectedWrapper], invocation.PrefixArgs);
+            Assert.Equal(["/c", "call", Path.Combine(".", expectedWrapper)], invocation.PrefixArgs);
         }
         else
         {
@@ -359,7 +359,7 @@ public class JavaAppHostToolchainResolverTests(ITestOutputHelper outputHelper)
 
         if (OperatingSystem.IsWindows())
         {
-            Assert.Equal(["/c", "call", Path.Combine("..", expectedWrapper)], invocation.PrefixArgs);
+            Assert.Equal(["/c", "call", Path.Combine(".", "..", expectedWrapper)], invocation.PrefixArgs);
         }
         else
         {
