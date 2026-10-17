@@ -76,7 +76,8 @@ public class TrayResourceHealthTests
             new() { Name = "connection", ResourceType = "ConnectionString" },
             new() { Name = "setup", State = "Finished", ExitCode = 0 }
         ];
-        Assert.Null(TrayResourceHealth.Aggregate([]));
+        Assert.Equal("no_resources", TrayResourceHealth.Aggregate([]));
+        Assert.Equal("no_resources", TrayResourceHealth.Aggregate(resources.Take(2)));
         Assert.Null(TrayResourceHealth.Aggregate(resources));
         Assert.Equal("healthy", TrayResourceHealth.Aggregate(
             [.. resources, new() { Name = "api", State = "Running", HealthStatus = "Healthy" }]));

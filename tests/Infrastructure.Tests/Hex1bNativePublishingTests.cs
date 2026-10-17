@@ -135,6 +135,8 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var result = await RunDotNetAsync(["msbuild", project, "-nologo", "-t:CopyTestFiles", "-getItem:NativeCopyLocalItems,ResolvedFileToPublish"]);
         Assert.True(result.ExitCode == 0, result.Output);
 
+        // MSBuild writes JSON to stdout, but can report "MSBuild server unavailable..."
+        // on stderr even on success. Retain both streams in diagnostics, not in the JSON.
         using var document = JsonDocument.Parse(result.StandardOutput);
         var items = document.RootElement.GetProperty("Items");
         var published = items.GetProperty("ResolvedFileToPublish").EnumerateArray().ToArray();
@@ -184,6 +186,8 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     [InlineData("win-arm64", "arm64/OpenConsole.exe")]
     public async Task BundlePreservesPtyLayoutAndRejectsMissingSidecars(string rid, string? missingSidecar)
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows() && (rid is "linux-x64" or "linux-arm64"),
+            "Linux tray bundles must be assembled on Unix to preserve executable permissions.");
         var artifacts = Path.Combine(_workspace.Path, "artifacts");
         var publish = Path.Combine(artifacts, "bin", "Aspire.Managed", "Release", "net10.0", rid, "publish");
         var executable = rid.StartsWith("win-", StringComparison.Ordinal) ? "aspire-managed.exe" : "aspire-managed";
@@ -252,6 +256,12 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         else if (rid.StartsWith("osx-", StringComparison.Ordinal))
         {
             arguments.AddRange(["--tray-app", MacTrayTestPayload.Create(_workspace.Path)]);
+        }
+        else if (rid is "linux-x64" or "linux-arm64")
+        {
+            var tray = Path.Combine(_workspace.Path, "linux-tray");
+            LinuxTrayTestPayload.Create(tray, rid);
+            arguments.AddRange(["--tray-linux", tray]);
         }
 
         var result = await RunDotNetAsync(
@@ -481,8 +491,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         File.WriteAllText(path, contents);
     }
 
-    private async Task<(int ExitCode, string StandardOutput, string StandardError, string Output)> RunDotNetAsync(
-        string[] arguments, string? packages = null)
+    private async Task<ProcessResult> RunDotNetAsync(string[] arguments, string? packages = null)
     {
         var startInfo = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
         {
@@ -514,10 +523,8 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             throw;
         }
 
-        var standardOutput = await stdout;
-        var standardError = await stderr;
-        var output = standardOutput + standardError;
-        _output.WriteLine(output);
-        return (process.ExitCode, standardOutput, standardError, output);
+        var result = new ProcessResult(process.ExitCode, await stdout, await stderr);
+        _output.WriteLine(result.Output);
+        return result;
     }
 }

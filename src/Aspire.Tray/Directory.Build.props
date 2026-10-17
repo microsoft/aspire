@@ -12,5 +12,6 @@
     <PackageReference Include="System.IO.Hashing" />
     <Compile Include="$(MSBuildThisFileDirectory)Common/*.cs" Link="Common/%(Filename)%(Extension)" />
     <Compile Include="$(SharedDir)TrayCliProtocol.cs" Link="Common/TrayCliProtocol.cs" />
+    <Compile Include="$(SharedDir)LinuxTrayPayload.cs" Link="Common/LinuxTrayPayload.cs" />
   </ItemGroup>
 </Project>

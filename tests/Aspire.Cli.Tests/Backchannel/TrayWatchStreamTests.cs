@@ -757,6 +757,56 @@ public class TrayWatchStreamTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task EmptyResourceSnapshotIsDistinctFromUnavailableHealth(bool hiddenOnly)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var resourceUpdates = Channel.CreateUnbounded<ResourceSnapshot>();
+        var messages = Channel.CreateUnbounded<TrayWatchMessage>();
+        var connection = Connection("/project/a.cs", 10);
+        connection.ResourceSnapshots = hiddenOnly
+            ? [new() { Name = "api", State = "Running", IsHidden = true }]
+            : [];
+        connection.WatchResourceSnapshotsHandler = (_, token) => resourceUpdates.Reader.ReadAllAsync(token);
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection(connection.SocketPath, connection);
+        var run = CreateStream(monitor, new FakeTimeProvider())
+            .RunAsync((json, _) =>
+            {
+                messages.Writer.TryWrite(Deserialize(json));
+                return Task.CompletedTask;
+            }, cancellation.Token);
+
+        try
+        {
+            var initial = await ReadHostAsync();
+            Assert.Equal("no_resources", initial.Health);
+
+            resourceUpdates.Writer.TryWrite(new() { Name = "api", State = "Running" });
+            Assert.Equal(initial with { Health = "healthy" }, await ReadHostAsync());
+
+            resourceUpdates.Writer.TryWrite(new() { Name = "api", State = "Running", IsHidden = true });
+            Assert.Equal(initial with { Health = "no_resources" }, await ReadHostAsync());
+
+            resourceUpdates.Writer.TryComplete();
+            Assert.Equal(initial with { Health = null }, await ReadHostAsync());
+        }
+        finally
+        {
+            cancellation.Cancel();
+            Assert.Equal(CliExitCodes.Success, await run.DefaultTimeout());
+        }
+
+        async Task<TrayAppHost> ReadHostAsync()
+        {
+            var message = await messages.Reader.ReadAsync().AsTask().DefaultTimeout();
+            Assert.Equal("snapshot", message.Type);
+            return Assert.Single(message.AppHosts!);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task MissingOrFailedResourceStreamLeavesHostUnknownWithoutFailingDiscovery(bool fails)
     {
         using var cancellation = new CancellationTokenSource();

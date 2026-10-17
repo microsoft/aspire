@@ -687,6 +687,10 @@ public sealed class TestTriggerMapTests
             ["job:native-dashboard-validation"]
         },
         {
+            "eng/scripts/test-native-tray.ps1",
+            ["test:Infrastructure.Tests"]
+        },
+        {
             "eng/scripts/verify-native-dashboard-warnings.ps1",
             ["test:Infrastructure.Tests", "job:native-dashboard-validation"]
         },
@@ -759,6 +763,10 @@ public sealed class TestTriggerMapTests
         },
         {
             "tools/CreateLayout/verify-windows-tray-payload.ps1",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
+            "tools/CreateLayout/verify-linux-tray-payload.sh",
             ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
         },
         {

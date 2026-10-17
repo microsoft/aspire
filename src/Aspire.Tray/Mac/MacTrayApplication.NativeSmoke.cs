@@ -508,6 +508,7 @@ internal sealed partial class MacTrayApplication
             (AppHostHealth.Warning, true, "exclamationmark.triangle", "Resources waiting or degraded"),
             (AppHostHealth.Unhealthy, true, "xmark.octagon", "Resources failed or unhealthy"),
             (AppHostHealth.Unknown, true, "questionmark.circle", "Resource health unavailable"),
+            (AppHostHealth.NoResources, true, "minus.circle", "No resources"),
             (AppHostHealth.Unknown, false, "stop.circle", "AppHost stopped")
         })
         {

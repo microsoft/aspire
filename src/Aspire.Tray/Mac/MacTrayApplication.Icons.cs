@@ -259,6 +259,7 @@ internal sealed partial class MacTrayApplication
         AppHostHealth.Healthy => "checkmark.circle",
         AppHostHealth.Warning => "exclamationmark.triangle",
         AppHostHealth.Unhealthy => "xmark.octagon",
+        AppHostHealth.NoResources => "minus.circle",
         _ => "questionmark.circle"
     };
 
@@ -267,6 +268,7 @@ internal sealed partial class MacTrayApplication
         AppHostHealth.Healthy => "All resources healthy",
         AppHostHealth.Warning => "Resources waiting or degraded",
         AppHostHealth.Unhealthy => "Resources failed or unhealthy",
+        AppHostHealth.NoResources => "No resources",
         _ => "Resource health unavailable"
     };
 

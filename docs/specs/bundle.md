@@ -33,7 +33,7 @@ The Aspire Bundle distributes the CLI with its runtime components:
 | `dashboard/Aspire.Dashboard[.exe]` | Native AOT | Dashboard web application |
 | `dashboard/wwwroot/` and native dependencies | Publish assets | Dashboard scripts, styles, fonts, images, and SQLite native library |
 | `dcp/` | Platform-specific native binaries | Developer Control Plane |
-| `tray/` | NativeAOT, macOS and Windows only | Experimental menu-bar or notification-area companion |
+| `tray/` | NativeAOT, macOS, Windows, and glibc Linux | Experimental menu-bar or notification-area companion |
 
 The bundle removes the need to acquire DCP and Dashboard separately when using the bundled components. Its pre-built AppHost Server and in-process NuGet client do not require a globally installed .NET SDK.
 
@@ -62,7 +62,7 @@ aspire (Native AOT CLI)
   |     +-- Hex1b native dependencies
   |
   +-- dcp/ (Developer Control Plane)
-  +-- tray/ (optional native desktop companion on macOS and Windows)
+  +-- tray/ (optional native desktop companion on macOS, Windows, and glibc Linux)
 
 Guest AppHost <---- JSON-RPC ----> AppHost Server
                                       |
@@ -97,10 +97,12 @@ Standalone `aspire dashboard run` and CLI profile capture launch Dashboard direc
 ├── dcp/
 │   ├── dcp[.exe]
 │   └── ...                      # DCP extensions and supporting files
-└── tray/                        # macOS and Windows only
+└── tray/                        # macOS, Windows, and glibc Linux
     ├── Aspire Tray.app/         # macOS; complete signed app bundle
     ├── aspire-tray.exe          # Windows
-    └── Aspire.ico               # Windows
+    ├── Aspire.ico               # Windows
+    ├── aspire-tray              # glibc Linux
+    └── Aspire.png               # glibc Linux
 ```
 
 The CLI is published separately with the payload embedded. `CreateLayout` does not copy the CLI into the payload or modify a CLI binary.
@@ -109,7 +111,7 @@ Windows bundles also include `managed/hex1bpty.exe`, `managed/conpty.dll`, and `
 
 Dashboard layout creation requires a RID-specific publish for the requested configuration. It fails if the executable, `wwwroot`, or a nonempty platform-specific SQLite library is missing. It copies the publish assets and native dependencies, excluding debug symbols. DCP must also be available for the requested target platform; it is acquired from build-time NuGet packages and copied into the payload.
 
-New macOS and Windows layouts also require the matching native tray payload; Linux layouts do not include one. Existing installed layouts without a tray remain valid.
+New macOS, Windows, and glibc Linux layouts also require the matching native tray payload; Linux musl layouts do not include one. Existing installed layouts without a tray remain valid.
 
 ### Installed Layout
 
@@ -128,7 +130,7 @@ For a script installation using the default prefix, the installed structure is:
 │   │   ├── managed/
 │   │   ├── dashboard/
 │   │   ├── dcp/
-│   │   ├── tray/                 # macOS and Windows bundles
+│   │   ├── tray/                 # macOS, Windows, and glibc Linux bundles
 │   │   └── .leases/            # Live bundle users
 │   └── ...                     # Older versions retained while in use
 ├── hives/
@@ -139,7 +141,7 @@ This is an example of the script route, not a universal install location. Packag
 
 The stable `bundle/` path selects the active version. Processes started through a leased layout use paths rooted in the selected `versions/{id}/` directory, so a later update cannot redirect them to another version mid-operation.
 
-Flat layouts with `managed/`, `dashboard/`, `dcp/`, and, on macOS or Windows, `tray/` directly under a root remain useful for build output and explicit layout discovery. Older layouts may omit the optional tray directory. They are distinct from the versioned extraction layout above.
+Flat layouts with `managed/`, `dashboard/`, `dcp/`, and, on supported desktop platforms, `tray/` directly under a root remain useful for build output and explicit layout discovery. Older layouts may omit the optional tray directory. They are distinct from the versioned extraction layout above.
 
 ## Self-Extracting Binary
 
@@ -332,7 +334,7 @@ The build sequence is:
 
 1. Publish `Aspire.Managed` as a self-contained single-file executable.
 2. Publish `Aspire.Dashboard` and `Aspire.TerminalHost` with Native AOT for the same RID and configuration.
-3. Publish the native tray payload on macOS or Windows, before signing bundle components.
+3. Publish the native tray payload on macOS, Windows, or glibc Linux, before signing bundle components.
 4. Restore the matching DCP package, using the target OS/architecture rather than the build machine's defaults.
 5. Run `CreateLayout` to assemble the payload and create its `.tar.gz` archive.
 6. Publish the Native AOT CLI with `BundlePayloadPath` pointing to that archive.
@@ -351,19 +353,38 @@ dotnet run --project tools/CreateLayout -- \
   --artifacts artifacts \
   --rid linux-x64 \
   --configuration Release \
+  --tray-linux artifacts/bin/Aspire.Tray.Linux/Release/net10.0/linux-x64/publish \
   --bundle-version local-test \
   --archive
 ```
 
 `--output`, `--artifacts`, `--rid`, and `--configuration` are required. `--bundle-version`, `--archive`, and `--verbose` are optional. The output directory is cleaned before assembly. There is no `--embed-in-cli`, `--runtime`, or runtime-download option; embedding happens in the subsequent CLI publish.
 
+Desktop layouts also require their native tray input: `--tray-app` on macOS,
+`--tray-windows` on Windows, or `--tray-linux` on glibc Linux.
+
 For the complete tool contract, see [CreateLayout](../../tools/CreateLayout/README.md). CI packaging additionally uses [dashboardpack](../../eng/dashboardpack/Common.projitems), [clipack](../../eng/clipack/Common.projitems), signing targets, and the native-archive workflows.
 
 ### Experimental Native Tray Companion
 
-`aspire tray start` starts or restores the native companion from the invoking CLI's leased bundle; `aspire tray stop` shuts down the companion without stopping AppHosts. The companion uses the CLI's versioned discovery and exact-instance stop contracts. Linux and standalone CLI binaries without a bundled payload are unsupported.
+`aspire tray start` starts or restores the native companion from the invoking CLI's leased bundle; `aspire tray stop` shuts down the companion without stopping AppHosts. The companion uses the CLI's versioned discovery and exact-instance stop contracts. Linux musl, headless sessions, and standalone CLI binaries without a bundled payload are unsupported.
 
 macOS bundles contain the complete `Aspire Tray.app`, including its executable, plist, artwork, and signature. Windows x64 and ARM64 bundles contain `tray/aspire-tray.exe` and the shared `tray/Aspire.ico`. `CreateLayout` copies the already-published payload and rejects missing or incompatible files. The native archive verification targets check the actual packaged payload before it is embedded in the CLI.
+
+Linux x64 and ARM64 bundles contain `tray/aspire-tray` and `tray/Aspire.png`.
+The Linux archive verifier rejects extra entries and requires both files to be regular, non-symlink files.
+`LinuxTrayDirectory` overrides the pre-built Linux tray directory used by `eng/Bundle.proj`.
+
+Layout assembly validates ELF architecture and executable permissions. GTK 3 and
+an Ayatana/compatible AppIndicator library are dynamically loaded host
+dependencies, not shipped libraries. They are loaded only when starting the
+desktop companion, so headless CLI use does not require them. A desktop
+StatusNotifierWatcher is required; GNOME needs an AppIndicator extension.
+
+GitHub native-archive builds and the internal pipeline extract the packaged tray and run `--help`
+on matching OS/architecture hosts, without repairing permissions. Cross-built payloads remain
+structurally verified but skip execution; musl has no tray payload. This launch check does not
+initialize the desktop or exercise GTK/AppIndicator, D-Bus registration, or menu interactions.
 
 Official packaging signs the macOS app as a whole and signs the Windows executable before layout assembly. Pipeline wiring and local ad-hoc signatures do not establish that official signing or notarization has been validated. Windows ARM64 native UI, installed-bundle lifecycle, real monitor/DPI behavior, and formal security review remain outstanding; successful cross-publishing or payload verification is not runtime validation.
 

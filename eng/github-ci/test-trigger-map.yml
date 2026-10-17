@@ -411,6 +411,10 @@ path_rules:
       - eng/scripts/verify-native-dashboard-warnings.ps1
     targets: [test:Infrastructure.Tests, job:native-dashboard-validation]
     reason: validates the Native AOT Dashboard publish warning policy
+  - paths:
+      - eng/scripts/test-native-tray.ps1
+    targets: [test:Infrastructure.Tests]
+    reason: behavioral tests exercise packaged tray launch checks; native archive builds run unconditionally
 
   # --- outerloop / e2e test targets: loose paths (production projects in affected_project_rules) --------
   - paths:
@@ -608,10 +612,10 @@ path_rules:
 # triggers.
 # Project Name == the .csproj base name (what Layer 1 emits).
 affected_project_rules:
-  - projects: [Aspire.Tray.Mac, Aspire.Tray.Windows]
+  - projects: [Aspire.Tray.Linux, Aspire.Tray.Mac, Aspire.Tray.Windows]
     targets: [test:Aspire.Tray.Tests, test:Infrastructure.Tests]
     reason: native platform changes must retain shared tray contracts and the packaging/signing invariants; tests source-link common code rather than referencing the platform executables
-  - projects: [Aspire.Tray.Mac, Aspire.Tray.Windows]
+  - projects: [Aspire.Tray.Linux, Aspire.Tray.Mac, Aspire.Tray.Windows]
     targets: [CLI_BUNDLE]
     reason: native tray payloads are embedded in the CLI bundle
   - projects: [CreateLayout]
