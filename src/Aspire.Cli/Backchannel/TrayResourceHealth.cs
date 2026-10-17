@@ -50,7 +50,8 @@ internal static class TrayResourceHealth
         // The AppHost reports aggregate Unhealthy until the first registered check returns.
         // For example: healthStatus: "Unhealthy", healthReports: [{ name: "ready", status: null }].
         // An actual failing report still takes precedence over another check that is pending.
-        if (pendingCheck
+        // Checks registered before startup remain pending while a resource is NotStarted.
+        if ((pendingCheck && !IsState(resource, KnownResourceStates.NotStarted))
             || string.Equals(resource.StateStyle, "warning", StringComparisons.ResourceState)
             || IsHealth(resource.HealthStatus, "Degraded")
             || resource.HealthReports.Any(report => IsHealth(report.Status, "Degraded")))
@@ -58,9 +59,10 @@ internal static class TrayResourceHealth
             return "warning";
         }
 
-        // The dashboard treats successful jobs and resources without a lifetime (such as
-        // resolved parameters) as neutral, not services waiting to become Running.
-        if (completed || ((string.IsNullOrEmpty(resource.State) || IsState(resource, KnownResourceStates.Active))
+        // Intentionally unstarted resources, successful jobs, and resources without a
+        // lifetime (such as resolved parameters) do not need to become Running.
+        if (completed || IsState(resource, KnownResourceStates.NotStarted)
+            || ((string.IsNullOrEmpty(resource.State) || IsState(resource, KnownResourceStates.Active))
             && resource.HealthStatus is null && resource.HealthReports.Length == 0))
         {
             return null;
