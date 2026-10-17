@@ -27,6 +27,8 @@ namespace Aspire.Microsoft.Azure.Cosmos
 
         public string? DatabaseName { get { throw null; } set { } }
 
+        public bool DisableHealthChecks { get { throw null; } set { } }
+
         public bool DisableTracing { get { throw null; } set { } }
     }
 }
