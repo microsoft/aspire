@@ -84,6 +84,7 @@ suite('AppHostDataRepository', () => {
     let terminalProvider: AspireTerminalProvider;
     let subscriptions: vscode.Disposable[];
     let getCliPathStub: sinon.SinonStub;
+    let resolveCliPathStub: sinon.SinonStub;
     let spawnStub: sinon.SinonStub;
     let getConfigInfoStub: sinon.SinonStub;
     let defaultWorkspaceFoldersStub: sinon.SinonStub;
@@ -93,6 +94,11 @@ suite('AppHostDataRepository', () => {
         subscriptions = [];
         terminalProvider = new AspireTerminalProvider(subscriptions);
         getCliPathStub = sinon.stub(terminalProvider, 'getAspireCliExecutablePath').resolves('aspire');
+        resolveCliPathStub = sinon.stub(terminalProvider, 'resolveAspireCliPath').callsFake(async target => ({
+            cliPath: await terminalProvider.getAspireCliExecutablePath(target),
+            available: true,
+            source: 'path',
+        }));
         spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
         spawnStub.callsFake(() => new TestChildProcess());
         // Default to a current CLI so common-path tests use streamed discovery and include disabled
@@ -107,6 +113,7 @@ suite('AppHostDataRepository', () => {
     teardown(() => {
         spawnStub.restore();
         getCliPathStub.restore();
+        resolveCliPathStub.restore();
         getConfigInfoStub.restore();
         findFilesStub.restore();
         if (defaultWorkspaceFoldersStub.restore) {

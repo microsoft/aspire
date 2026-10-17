@@ -156,7 +156,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const editorCommandProvider = new AspireEditorCommandProvider(appHostDiscoveryService, appHostLaunchService);
 
-  const cliCommandRegistrations = registerCliCommands(terminalProvider, editorCommandProvider, configInfoProvider);
+  const cliCommandRegistrations = registerCliCommands(terminalProvider, editorCommandProvider, appHostDiscoveryService, configInfoProvider);
 
   // Aspire panel - running app hosts tree view
   const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService, configInfoProvider);

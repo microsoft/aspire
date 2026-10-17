@@ -3,6 +3,19 @@ import * as vscode from 'vscode';
 
 export const appHostDiscoveryFindFilesMaxResults = 512;
 
+export const appHostSourceFilePatterns = [
+    '**/apphost.cs',
+    '**/apphost.ts',
+    '**/apphost.mts',
+    '**/apphost.cts',
+    '**/apphost.js',
+    '**/apphost.mjs',
+    '**/apphost.cjs',
+    '**/apphost.rs',
+    // Java file names must match the public class, including on case-sensitive file systems.
+    '**/AppHost.java',
+] as const;
+
 interface SegmentExcludeRule {
     readonly glob: string;
     readonly segments: readonly string[];

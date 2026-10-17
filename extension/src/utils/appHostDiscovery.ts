@@ -6,18 +6,19 @@ import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { aspireConfigFileName } from './cliTypes';
 import { isNoLogoUnsupportedOutput, noLogoOption } from './cliCompatibility';
 import { EnvironmentVariables } from './environment';
+import { cliNotAvailable } from '../loc/strings';
 import { extensionLogOutputChannel } from './logging';
 import { getAppHostDiscoveryTimeoutMs } from './settings';
 import { summarizeAppHostLanguages } from './appHostLanguage';
 import { sendTelemetryEvent } from './telemetry';
-import { isExcludedDiscoveryCandidate, isExcludedDiscoveryUri } from './workspaceFileSearch';
+import { appHostSourceFilePatterns, isExcludedDiscoveryCandidate, isExcludedDiscoveryUri } from './workspaceFileSearch';
 import { ConfigInfoProvider } from './configInfoProvider';
 import { lsJsonStreamCapability } from '../types/configInfo';
 import { workspaceFolderCliPathTarget } from './cliPathVariables';
 import { isSamePath } from './paths/comparison';
 import { isSameFileSystemEntry } from './paths/fileSystemIdentity';
 import { createLsStreamCandidateHandler, parseCandidateOutput, parseLegacyGetAppHostsOutput, toCandidatesFromLegacySearchResult } from './appHostCandidateParsing';
-import { discoverProjectAppHostsFromWorkspaceFiles, findConfiguredAppHostPaths, formatErrorMessage } from './appHostProjectFiles';
+import { discoverConfiguredAppHostsFromWorkspaceFiles, discoverProjectAppHostsFromWorkspaceFiles, discoverSourceAppHostsFromWorkspaceFiles, findConfiguredAppHostPaths, formatErrorMessage } from './appHostProjectFiles';
 import { findCandidateForEditorFile, findWorkspaceDefaultCandidate, getDebugTargetForCandidate, sortCandidatesByPath } from './appHostCandidateSelection';
 import type { CandidateAppHostDisplayInfo, IncrementalCandidateCallback } from './appHostCandidateTypes';
 
@@ -53,6 +54,9 @@ interface CliProcessResult {
     stdout: string;
     stderr: string;
     exitCode: number | null | undefined;
+}
+
+export class AppHostDiscoveryCliUnavailableError extends Error {
 }
 
 export class AppHostDiscoveryService implements vscode.Disposable {
@@ -151,7 +155,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             const startTime = Date.now();
             return this._discoverCore(workspaceFolder, reportCandidateProgress, cancellationSource.token, forceRefresh)
                 .then(async discovery => {
-                    let candidates = discovery.candidates;
+                    let candidates = this._filterExcludedCandidates(workspaceFolder, discovery.candidates);
                     try {
                         candidates = await this._selectConfiguredAppHostCandidate(workspaceFolder, candidates);
                         candidates = sortCandidatesByPath(this._filterExcludedCandidates(workspaceFolder, candidates));
@@ -325,18 +329,44 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 }
             }
 
-            let fileFallbackError: unknown;
-            try {
-                const appHosts = await discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder);
-                throwIfCancellationRequested(cancellationToken);
-                if (appHosts.length > 0) {
-                    extensionLogOutputChannel.warn(`CLI AppHost discovery failed; using ${appHosts.length} AppHost project candidate(s) found by file discovery.`);
-                    return { source: 'workspace-files', candidates: appHosts };
+            let fileFallbackError: Error | undefined;
+            const appHosts: CandidateAppHostDisplayInfo[] = [];
+            // An unreadable project must not hide a verifiable source AppHost.
+            // Retain failures until the independent presence checks finish.
+            const addFileCandidates = async (discoverCandidates: () => Promise<CandidateAppHostDisplayInfo[]>): Promise<void> => {
+                try {
+                    const candidates = this._filterExcludedCandidates(workspaceFolder, await discoverCandidates());
+                    this._throwIfDisposed();
+                    throwIfCancellationRequested(cancellationToken);
+                    appHosts.push(...candidates.filter(candidate => !findCandidateForEditorFile(candidate.path, appHosts)));
+                }
+                catch (discoveryError) {
+                    this._throwIfDisposed();
+                    throwIfCancellationRequested(cancellationToken);
+                    if (discoveryError instanceof vscode.CancellationError) {
+                        throw discoveryError;
+                    }
+                    fileFallbackError ??= discoveryError instanceof Error ? discoveryError : new Error(formatErrorMessage(discoveryError));
+                    extensionLogOutputChannel.warn(`Workspace file discovery failed: ${formatErrorMessage(discoveryError)}`);
+                }
+            };
+            await addFileCandidates(() => discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder));
+            if (error instanceof AppHostDiscoveryCliUnavailableError) {
+                await addFileCandidates(() => discoverSourceAppHostsFromWorkspaceFiles(workspaceFolder, cancellationToken));
+                if (appHosts.length === 0) {
+                    await addFileCandidates(() => discoverConfiguredAppHostsFromWorkspaceFiles(workspaceFolder, cancellationToken));
                 }
             }
-            catch (error) {
-                throwIfCancellationRequested(cancellationToken);
-                fileFallbackError = error;
+            this._throwIfDisposed();
+            throwIfCancellationRequested(cancellationToken);
+            if (appHosts.length > 0) {
+                extensionLogOutputChannel.warn(`CLI AppHost discovery failed; using ${appHosts.length} AppHost candidate(s) found by file discovery.`);
+                return { source: 'workspace-files', candidates: appHosts };
+            }
+
+            // Only a completed file search can distinguish a missing CLI from indeterminate discovery.
+            if (error instanceof AppHostDiscoveryCliUnavailableError && fileFallbackError === undefined) {
+                throw error;
             }
 
             const legacyFallbackMessage = cliPath
@@ -409,8 +439,10 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             }
 
             try {
-                this._terminalProvider.getAspireCliExecutablePath(target).then(
-                    cliPath => settle(() => resolve(cliPath)),
+                this._terminalProvider.resolveAspireCliPath(target).then(
+                    result => settle(() => result.available
+                        ? resolve(result.cliPath)
+                        : reject(new AppHostDiscoveryCliUnavailableError(cliNotAvailable))),
                     error => settle(() => reject(error instanceof Error ? error : new Error(String(error)))));
             }
             catch (error) {
@@ -471,18 +503,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             '**/*.csproj',
             '**/*.fsproj',
             '**/*.vbproj',
-            '**/apphost.cs',
-            '**/apphost.ts',
-            '**/apphost.mts',
-            '**/apphost.cts',
-            '**/apphost.js',
-            '**/apphost.mjs',
-            '**/apphost.cjs',
-            '**/apphost.rs',
-            // Java requires the file name to match the public class name, so this is always
-            // AppHost.java. Watcher globs are case-sensitive on Linux, so the pattern has to
-            // carry the real casing rather than the lowercase form used by the other entries.
-            '**/AppHost.java',
+            ...appHostSourceFilePatterns,
             `**/${aspireConfigFileName}`,
             '**/.aspire/settings.json',
         ];
