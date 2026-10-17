@@ -1,6 +1,6 @@
 ---
 name: startup-perf
-description: Measures Aspire startup profiling with CLI self-profile capture and dashboard export traces.
+description: Measure, validate, or investigate Aspire startup performance using the CLI self-profile capture flow and dashboard export traces. Use when asked to profile, benchmark, or diagnose slow Aspire startup.
 ---
 
 # Aspire Startup Profiling with OTEL
