@@ -80,7 +80,7 @@ public class AddPostgresTests(ITestOutputHelper outputHelper)
             env =>
             {
                 Assert.Equal("POSTGRES_INITDB_ARGS", env.Key);
-                Assert.Equal("--auth-host=scram-sha-256 --auth-local=scram-sha-256", env.Value);
+                Assert.Equal("--auth-host=scram-sha-256 --auth-local=scram-sha-256 --nosync", env.Value);
             },
             env =>
             {
@@ -134,7 +134,7 @@ public class AddPostgresTests(ITestOutputHelper outputHelper)
             env =>
             {
                 Assert.Equal("POSTGRES_INITDB_ARGS", env.Key);
-                Assert.Equal("--auth-host=scram-sha-256 --auth-local=scram-sha-256", env.Value);
+                Assert.Equal("--auth-host=scram-sha-256 --auth-local=scram-sha-256 --nosync", env.Value);
             },
             env =>
             {
@@ -250,7 +250,7 @@ public class AddPostgresTests(ITestOutputHelper outputHelper)
             env =>
             {
                 Assert.Equal("POSTGRES_INITDB_ARGS", env.Key);
-                Assert.Equal("--auth-host=scram-sha-256 --auth-local=scram-sha-256", env.Value);
+                Assert.Equal("--auth-host=scram-sha-256 --auth-local=scram-sha-256 --nosync", env.Value);
             },
             env =>
             {
@@ -936,5 +936,81 @@ public class AddPostgresTests(ITestOutputHelper outputHelper)
         Assert.Equal("/var/lib/postgresql", volumeAnnotation.Target);
         Assert.Equal(ContainerMountType.BindMount, volumeAnnotation.Type);
         Assert.Equal(isReadOnly ?? false, volumeAnnotation.IsReadOnly);
+    }
+
+    [Theory]
+    [InlineData("17.6")]
+    [InlineData("18.1")]
+    public async Task InitDbSkipsSyncForEphemeralDataDirectoryInRunMode(string tag)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddPostgres("myPostgres")
+            .WithImage("postgres", tag)
+            .WithInitFiles(Path.GetTempPath());
+
+        Assert.Equal("--auth-host=scram-sha-256 --auth-local=scram-sha-256 --nosync", await GetInitDbArgsAsync(postgres, DistributedApplicationOperation.Run));
+    }
+
+    [Fact]
+    public async Task InitDbKeepsSyncInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var postgres = builder.AddPostgres("myPostgres");
+
+        Assert.Equal("--auth-host=scram-sha-256 --auth-local=scram-sha-256", await GetInitDbArgsAsync(postgres, DistributedApplicationOperation.Publish));
+    }
+
+    [Theory]
+    [InlineData("17.6")]
+    [InlineData("18.1")]
+    public async Task InitDbKeepsSyncWithDataVolume(string tag)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddPostgres("myPostgres")
+            .WithImage("postgres", tag)
+            .WithDataVolume();
+
+        Assert.Equal("--auth-host=scram-sha-256 --auth-local=scram-sha-256", await GetInitDbArgsAsync(postgres, DistributedApplicationOperation.Run));
+    }
+
+    [Theory]
+    [InlineData("17.6")]
+    [InlineData("18.1")]
+    public async Task InitDbKeepsSyncWithDataBindMount(string tag)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddPostgres("myPostgres")
+            .WithImage("postgres", tag)
+            .WithDataBindMount("mydata");
+
+        Assert.Equal("--auth-host=scram-sha-256 --auth-local=scram-sha-256", await GetInitDbArgsAsync(postgres, DistributedApplicationOperation.Run));
+    }
+
+    [Theory]
+    [InlineData("/var/lib/postgresql/18/docker")]
+    [InlineData("/var/lib")]
+    public async Task InitDbKeepsSyncWithVolumeCoveringDataDirectory(string target)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddPostgres("myPostgres")
+            .WithVolume("pgdata", target);
+
+        Assert.Equal("--auth-host=scram-sha-256 --auth-local=scram-sha-256", await GetInitDbArgsAsync(postgres, DistributedApplicationOperation.Run));
+    }
+
+    [Fact]
+    public async Task InitDbKeepsSyncWithPersistentLifetime()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddPostgres("myPostgres")
+            .WithLifetime(ContainerLifetime.Persistent);
+
+        Assert.Equal("--auth-host=scram-sha-256 --auth-local=scram-sha-256", await GetInitDbArgsAsync(postgres, DistributedApplicationOperation.Run));
+    }
+
+    private static async Task<string?> GetInitDbArgsAsync(IResourceBuilder<PostgresServerResource> postgres, DistributedApplicationOperation operation)
+    {
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(postgres.Resource, operation, TestServiceProvider.Instance);
+        return config["POSTGRES_INITDB_ARGS"];
     }
 }
