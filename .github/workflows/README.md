@@ -21,6 +21,52 @@ input in `copilot-setup-steps.yml` aligned with the compiler used to generate th
 workflows and with `validate-agentic-workflows.yml`. Updating only the setup
 action does not update the installed compiler; its `version` input controls that.
 
+`recompile-agentic-workflows.yml` uses `pull_request: closed` to handle merged
+upstream Dependabot PRs targeting the default branch, including grouped GitHub
+Actions updates. Unmerged closures are skipped. It detects changed
+`github/gh-aw-actions` pins from the PR diff and verifies their release comments
+against upstream tag commits (or resolves an uncommented SHA through upstream
+tags). It never selects a compiler from the PR title or the latest release.
+It can also be run manually from the default branch using **Run workflow** or
+`gh workflow run recompile-agentic-workflows.yml`. Manual dispatch selects the
+newest release already pinned by `github/gh-aw-actions` references in the default
+branch's workflow YAML, verifies those pins against upstream tags, and aligns both
+compiler inputs before recompiling. It does not fetch the latest upstream release.
+Manual runs reuse the `recompile-agentic-workflows-manual` branch and update its
+open PR, refreshing its title and body to match the selected release; if there
+are no changes, they open no PR.
+The workflow checks out only the trusted default branch, skips superseded pins,
+aligns both `setup-cli` pins and version inputs, and runs:
+
+```shell
+gh extension install github/gh-aw --pin <detected-version> --force
+gh aw version
+gh aw compile --no-check-update --schedule-seed microsoft/aspire
+gh aw lint --shellcheck
+```
+
+It does not run `gh aw upgrade` or refresh authoring scaffolding. Compilation or
+lint failures prevent publication, unexpected changed paths fail the run, and an
+empty diff opens no PR. Aspirey creates or updates a stable branch per source PR;
+reruns do not reopen a closed follow-up PR. Runs sharing a follow-up branch are
+serialized: each source PR gets its own concurrency group, and manual dispatches
+share a separate group. Unrelated PR closures cannot replace a queued gh-aw update;
+a pending rerun can only be replaced by another run for the same source.
+Version verification captures both stdout and stderr
+because older gh-aw releases print their version to stderr.
+The existing `ASPIRE_BOT_APP_ID` and `ASPIRE_BOT_PRIVATE_KEY` secrets are
+required as both **Actions secrets** (manual runs) and **Dependabot secrets**
+(Dependabot-triggered runs), using the same names. GitHub does not expose normal
+Actions secrets to Dependabot-triggered `pull_request` workflows, even on a manual
+rerun; see [GitHub's Dependabot secrets guidance](https://docs.github.com/en/code-security/reference/supply-chain-security/troubleshoot-dependabot/dependabot-on-actions#accessing-secrets).
+The workflow explicitly grants `GITHUB_TOKEN` only Contents and Pull requests read
+permissions; all writes use the separately minted App token. No privileged
+`pull_request_target` trigger or dangerous-trigger suppression is needed.
+The App installation must grant **Contents**, **Pull requests**, and
+**Workflows** write permissions to push generated workflow YAML. Newly introduced
+third-party action SHAs still require the repository/enterprise allow-list update
+before the generated PR is merged.
+
 Commit the generated `.lock.yml` files and `.github/aw/actions-lock.json` alongside
 their source changes. `agentics-maintenance-microsoft-aspire.dev.yml` is generated
 by the same full compilation despite not having a `.lock.yml` suffix. Do not edit

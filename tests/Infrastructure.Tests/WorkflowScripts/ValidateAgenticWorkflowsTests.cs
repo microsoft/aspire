@@ -15,6 +15,55 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
     private const string LockPath = ".github/workflows/test-agent.lock.yml";
     private const string ActionsLockPath = ".github/aw/actions-lock.json";
 
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RecompilationAutomationHandlesDependabotUpdates()
+    {
+        using var node = new NodeCommand(output);
+        var result = await node.ExecuteScriptAsync(Path.Combine(
+            RepoRoot.Path, "tests", "Infrastructure.Tests", "WorkflowScripts", "recompile-agentic-workflows.test.js"));
+
+        Assert.True(result.ExitCode == 0, result.Output);
+    }
+
+    [Fact]
+    public void RecompilationUsesTrustedCheckoutAndDefersWriteCredentials()
+    {
+        using var reader = File.OpenText(Path.Combine(RepoRoot.Path, ".github/workflows/recompile-agentic-workflows.yml"));
+        var yaml = new YamlStream();
+        yaml.Load(reader);
+        var root = Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+        Assert.Equal(
+            ["workflow_dispatch", "pull_request"],
+            Mapping(root, "on").Children.Keys.Select(node => node.ToString()));
+        var trigger = Mapping(Mapping(root, "on"), "pull_request");
+        Assert.Equal(["closed"], Sequence(trigger, "types").Children.Select(node => node.ToString()));
+        var job = Mapping(Mapping(root, "jobs"), "recompile");
+        Assert.Contains("github.event_name == 'workflow_dispatch'", Scalar(job, "if"), StringComparison.Ordinal);
+        Assert.Contains("github.event_name == 'pull_request'", Scalar(job, "if"), StringComparison.Ordinal);
+        Assert.Contains("github.event.pull_request.merged == true", Scalar(job, "if"), StringComparison.Ordinal);
+        Assert.Contains("github.event.pull_request.user.login == 'dependabot[bot]'", Scalar(job, "if"), StringComparison.Ordinal);
+        Assert.Contains("github.ref_name == github.event.repository.default_branch", Scalar(job, "if"), StringComparison.Ordinal);
+        var steps = Sequence(job, "steps").Children.Cast<YamlMappingNode>().ToArray();
+        var checkout = Assert.Single(steps, step => Scalar(step, "uses").StartsWith("actions/checkout@", StringComparison.Ordinal));
+        Assert.Equal("${{ github.event.repository.default_branch }}", Scalar(Mapping(checkout, "with"), "ref"));
+        Assert.Equal("false", Scalar(Mapping(checkout, "with"), "persist-credentials"));
+        var token = Step(steps, "Generate Aspirey token");
+        Assert.Equal("steps.changes.outputs.changed == 'true'", Scalar(token, "if"));
+        Assert.True(Array.IndexOf(steps, Step(steps, "Install exact gh-aw release and compile all workflows")) <
+            Array.IndexOf(steps, Step(steps, "Check complete recompilation changes")));
+        Assert.True(Array.IndexOf(steps, Step(steps, "Check complete recompilation changes")) < Array.IndexOf(steps, token));
+        var permissions = Mapping(root, "permissions");
+        Assert.All(permissions.Children.Values, permission => Assert.Equal("read", permission.ToString()));
+        var concurrency = Mapping(root, "concurrency");
+        Assert.Equal("recompile-agentic-workflows-${{ github.event.pull_request.number || 'manual' }}", Scalar(concurrency, "group"));
+        Assert.Equal("false", Scalar(concurrency, "cancel-in-progress"));
+        var publication = Step(steps, "Create or update recompilation PR");
+        Assert.Equal("true", Scalar(Mapping(publication, "with"), "update-existing-pr-metadata"));
+        var compile = Scalar(Step(steps, "Install exact gh-aw release and compile all workflows"), "run");
+        Assert.Contains("installed=$(gh aw version 2>&1)", compile, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(true, ".github/workflows/analyze-ci-failure.md")]
     [InlineData(true, ".github/workflows/analyze-ci-failure.lock.yml")]
