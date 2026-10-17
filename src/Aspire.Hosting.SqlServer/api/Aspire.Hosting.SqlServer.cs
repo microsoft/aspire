@@ -30,6 +30,27 @@ namespace Aspire.Hosting
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithPassword(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> password) { throw null; }
+
+        [AspireExport(RunSyncOnBackgroundThread = true)]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithRepl(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, System.Action<SqlServerReplOptions>? configure = null) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the WithRepl overload with an optional configuration callback.")]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithRepl(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder) { throw null; }
+    }
+
+    public static partial class SqlServerReplCommand
+    {
+        [AspireValue("SqlServerReplCommand")]
+        public const string Version17 = "/opt/mssql-tools/bin/sqlcmd";
+        [AspireValue("SqlServerReplCommand")]
+        public const string Version18 = "/opt/mssql-tools18/bin/sqlcmd";
+    }
+
+    [AspireExport]
+    public sealed partial class SqlServerReplOptions
+    {
+        [AspireExport]
+        public string Command { get { throw null; } set { } }
     }
 }
 
