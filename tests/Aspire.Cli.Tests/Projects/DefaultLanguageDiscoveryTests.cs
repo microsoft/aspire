@@ -108,6 +108,21 @@ public class DefaultLanguageDiscoveryTests(ITestOutputHelper outputHelper)
         Assert.NotNull(languages.FirstOrDefault(l => l.LanguageId.Value == languageId));
     }
 
+    [Fact]
+    public async Task GetAvailableLanguagesAsync_ListsLanguagesInPickerOrder()
+    {
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
+        var discovery = new DefaultLanguageDiscovery(features);
+
+        var languages = await discovery.GetAvailableLanguagesAsync().DefaultTimeout();
+
+        // The CLI E2E tests reach a language in the init picker by pressing Down a fixed number of times.
+        Assert.Equal(
+            [KnownLanguageId.CSharp, KnownLanguageId.TypeScript, KnownLanguageId.Go, KnownLanguageId.Java],
+            languages.Select(l => l.LanguageId.Value));
+    }
+
     [Theory]
     [InlineData("test.csproj", KnownLanguageId.CSharp)]
     [InlineData("Test.csproj", KnownLanguageId.CSharp)]
