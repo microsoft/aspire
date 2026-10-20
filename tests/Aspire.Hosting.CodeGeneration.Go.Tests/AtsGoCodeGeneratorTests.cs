@@ -1543,7 +1543,9 @@ public class AtsGoCodeGeneratorTests
                     }
                 }
 
-                func TestConcurrentChildErrorsKeepTheFirstOne(t *testing.T) {
+                // Concurrent writers have no defined first error, so this asserts that the builder
+                // reports one of the recorded errors and keeps reporting that same one.
+                func TestConcurrentChildErrorsReportOneRecordedError(t *testing.T) {
                     c := newClient("")
                     builder := newBuilderOn(c)
 
