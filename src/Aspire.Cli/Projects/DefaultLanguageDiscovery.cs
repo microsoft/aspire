@@ -12,7 +12,7 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 /// <remarks>
 /// This implementation provides a static list of supported languages.
-/// Experimental languages (Go, Java, Rust) are filtered based on per-language feature flags.
+/// Experimental languages (Python, Java, Rust) are filtered based on per-language feature flags.
 /// </remarks>
 internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDiscovery
 {
@@ -51,8 +51,7 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
             PackageName: "Aspire.Hosting.CodeGeneration.Go",
             DetectionPatterns: ["apphost.go"],
             CodeGenerator: "Go",
-            AppHostFileName: "apphost.go",
-            IsExperimental: true),
+            AppHostFileName: "apphost.go"),
         new LanguageInfo(
             LanguageId: new LanguageId(KnownLanguageId.Java),
             DisplayName: KnownLanguageId.JavaDisplayName,
@@ -75,7 +74,6 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
     private static readonly Dictionary<string, string> s_experimentalFeatureFlags = new(StringComparer.OrdinalIgnoreCase)
     {
         [KnownLanguageId.Python] = KnownFeatures.ExperimentalPolyglotPython,
-        [KnownLanguageId.Go] = KnownFeatures.ExperimentalPolyglotGo,
         [KnownLanguageId.Java] = KnownFeatures.ExperimentalPolyglotJava,
         [KnownLanguageId.Rust] = KnownFeatures.ExperimentalPolyglotRust,
     };

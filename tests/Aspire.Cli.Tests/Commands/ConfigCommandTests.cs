@@ -873,7 +873,6 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("experimentalPolyglotJava")]
-    [InlineData("experimentalPolyglotGo")]
     [InlineData("experimentalPolyglotPython")]
     [InlineData("experimentalPolyglotRust")]
     public async Task ConfigSetCommand_ExperimentalPolyglotFeature_CreatesLoadableLocalConfig(string featureName)
