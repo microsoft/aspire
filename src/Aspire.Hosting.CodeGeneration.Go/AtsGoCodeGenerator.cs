@@ -1400,6 +1400,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
     // Hand-authored members are documented on both the public interface and the implementation.
     private const string BuildSummary = "Build invokes the build capability and returns the running application.";
+    private const string BuilderErrSummary = "Err returns the first error recorded by this builder or by any handle created from it.";
     private const string ErrSummary = "Err returns the first error recorded on this wrapper, or nil if the wrapper resolved successfully and no chained operation has failed.";
     private const string InputGetSummary = "Get returns the input with the specified name, or nil if no input matches.";
     private const string InputRequiredSummary = "Required returns the input with the specified name, or an error if no input matches.";
@@ -2497,9 +2498,20 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             WriteLine();
         }
 
+        // Err overrides the promoted handle Err(): a failed AddX records its error on
+        // the child it returns, which a caller may never check, so the builder
+        // reports the first error any handle of its client recorded.
+        WriteDocLines(RenderGoDoc("Err", BuilderErrSummary));
+        WriteLine($"func (b *{builderImpl}) Err() error {{");
+        WriteLine("\tif err := b.client.firstError(); err != nil { return err }");
+        WriteLine("\treturn b.resourceBuilderBase.Err()");
+        WriteLine("}");
+        WriteLine();
+
         // Build() method on the concrete impl. Sequential model: any prior
-        // chain error short-circuits; otherwise invoke the build capability
-        // and return the wrapped result.
+        // chain error, including one recorded only on a child handle,
+        // short-circuits; otherwise invoke the build capability and return the
+        // wrapped result.
         WriteDocLines(RenderGoDoc("Build", BuildSummary));
         WriteLine($"func (b *{builderImpl}) Build() ({appInterface}, error) {{");
         WriteLine("\tif err := b.Err(); err != nil { return nil, err }");

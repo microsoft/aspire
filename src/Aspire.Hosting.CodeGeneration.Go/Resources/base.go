@@ -26,7 +26,9 @@ import (
 //
 // Callers retrieve the chain's error with Err() at any logical boundary
 // (typically once at the end of a builder chain or before using the result of
-// a value-returning method).
+// a value-returning method). Every wrapper also reports its error to the
+// client, and the builder's Err() and Build() return the first error any
+// handle reported, so a failed child that was never checked still stops Build().
 //
 // Callbacks run on separate goroutines and can capture a wrapper also used by
 // the builder chain. The sticky error and lazy collection accessors are
@@ -45,6 +47,7 @@ func newHandleWrapperBase(h *handle, c *client) *handleWrapperBase {
 }
 
 func newErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
+	c.recordErr(err)
 	return &handleWrapperBase{err: err, client: c}
 }
 
@@ -64,14 +67,16 @@ func (h *handleWrapperBase) Err() error {
 	return h.err
 }
 
-// setErr records an error on this wrapper. The first non-nil error wins;
-// later errors are dropped to keep failure causality clear in chains.
+// setErr records an error on this wrapper and on the client. The first non-nil
+// error wins on each; later errors are dropped to keep failure causality clear
+// in chains.
 func (h *handleWrapperBase) setErr(err error) {
 	h.errMu.Lock()
-	defer h.errMu.Unlock()
 	if h.err == nil {
 		h.err = err
 	}
+	h.errMu.Unlock()
+	h.client.recordErr(err)
 }
 
 // ── resourceBuilderBase ───────────────────────────────────────────────────────

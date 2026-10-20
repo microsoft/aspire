@@ -3145,6 +3145,13 @@ type DistributedApplication interface { handleReference }
 
 type distributedApplication struct { *resourceBuilderBase }
 
+// Err returns the first error recorded by this builder or by any handle created
+// from it.
+func (b *iDistributedApplicationBuilder) Err() error {
+	if err := b.client.firstError(); err != nil { return err }
+	return b.resourceBuilderBase.Err()
+}
+
 // Build invokes the build capability and returns the running application.
 func (b *iDistributedApplicationBuilder) Build() (DistributedApplication, error) {
 	if err := b.Err(); err != nil { return nil, err }
@@ -3221,7 +3228,9 @@ import (
 //
 // Callers retrieve the chain's error with Err() at any logical boundary
 // (typically once at the end of a builder chain or before using the result of
-// a value-returning method).
+// a value-returning method). Every wrapper also reports its error to the
+// client, and the builder's Err() and Build() return the first error any
+// handle reported, so a failed child that was never checked still stops Build().
 //
 // Callbacks run on separate goroutines and can capture a wrapper also used by
 // the builder chain. The sticky error and lazy collection accessors are
@@ -3240,6 +3249,7 @@ func newHandleWrapperBase(h *handle, c *client) *handleWrapperBase {
 }
 
 func newErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
+	c.recordErr(err)
 	return &handleWrapperBase{err: err, client: c}
 }
 
@@ -3259,14 +3269,16 @@ func (h *handleWrapperBase) Err() error {
 	return h.err
 }
 
-// setErr records an error on this wrapper. The first non-nil error wins;
-// later errors are dropped to keep failure causality clear in chains.
+// setErr records an error on this wrapper and on the client. The first non-nil
+// error wins on each; later errors are dropped to keep failure causality clear
+// in chains.
 func (h *handleWrapperBase) setErr(err error) {
 	h.errMu.Lock()
-	defer h.errMu.Unlock()
 	if h.err == nil {
 		h.err = err
 	}
+	h.errMu.Unlock()
+	h.client.recordErr(err)
 }
 
 // ── resourceBuilderBase ───────────────────────────────────────────────────────
@@ -4861,6 +4873,10 @@ type client struct {
 	cancellationsMu     sync.Mutex
 	cancellations       map[string]*cancellationRegistration
 	cancellationCounter atomic.Int64
+
+	// errMu guards firstErr.
+	errMu    sync.Mutex
+	firstErr error
 }
 
 type cancellationRegistration struct {
@@ -4876,6 +4892,30 @@ func newClient(socketPath string) *client {
 		callbacks:     make(map[string]func(...any) any),
 		cancellations: make(map[string]*cancellationRegistration),
 	}
+}
+
+// recordErr remembers the first error reported by any handle of this client,
+// so the builder can surface a failure that only ever reached a child handle.
+// It is safe to call concurrently and on a nil client.
+func (c *client) recordErr(err error) {
+	if c == nil || err == nil {
+		return
+	}
+	c.errMu.Lock()
+	defer c.errMu.Unlock()
+	if c.firstErr == nil {
+		c.firstErr = err
+	}
+}
+
+// firstError returns the first error passed to recordErr, or nil.
+func (c *client) firstError() error {
+	if c == nil {
+		return nil
+	}
+	c.errMu.Lock()
+	defer c.errMu.Unlock()
+	return c.firstErr
 }
 
 // registerHandleWrapper registers a factory for wrapping handles of a specific
