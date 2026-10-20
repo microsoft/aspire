@@ -3,9 +3,11 @@
 
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Configuration;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -13,6 +15,20 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 
 public class DashboardDialogProviderTests : DashboardTestContext
 {
+    [Fact]
+    public void SecuredMode_UnauthenticatedUser_Throws()
+    {
+        var authorizationContext = this.AddAuthorization();
+        authorizationContext.SetNotAuthorized();
+        FluentUISetupHelpers.SetupDialogInfrastructure(this);
+        var options = new DashboardOptions();
+        options.Frontend.AuthMode = FrontendAuthMode.BrowserToken;
+        Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(options));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => Render<DashboardDialogProvider>());
+        Assert.Equal("Dashboard authentication is required, but the current user is not authenticated.", exception.Message);
+    }
+
     [Theory]
     [InlineData("/traces")]
     [InlineData("/?hiddenTypes=Container")]

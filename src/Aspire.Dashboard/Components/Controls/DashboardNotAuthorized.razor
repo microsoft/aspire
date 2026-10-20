@@ -1,0 +1,4 @@
+@if (DashboardOptions.Value.Frontend.AuthMode != FrontendAuthMode.BrowserToken)
+{
+    @Loc[nameof(Resources.Routes.NotAuthorized)]
+}

@@ -13,18 +13,34 @@
 <CascadingValue Value="@_viewportInformation">
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
-            <!-- AuthorizeRouteView protects pages from being accessed when authorization is required -->
-            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)" />
+            <!-- AuthorizeRouteView also uses DefaultLayout for denied authorization.
+                 Only allow the protected default layout after the frontend policy succeeds. -->
+            <AuthorizeView Policy="@FrontendAuthorizationDefaults.PolicyName" Context="routeAuthenticationState">
+                <Authorized>
+                    <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)" />
+                </Authorized>
+                <NotAuthorized>
+                    <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.EmptyLayout)">
+                        <NotAuthorized>
+                            <DashboardNotAuthorized />
+                        </NotAuthorized>
+                    </AuthorizeRouteView>
+                </NotAuthorized>
+            </AuthorizeView>
         </Found>
         <NotFound>
-            <PageTitle>@Loc[nameof(Resources.Routes.NotFoundPageTitle)]</PageTitle>
-            <LayoutView Layout="@typeof(Layout.MainLayout)">
-                <Aspire.Dashboard.Components.Pages.NotFound />
-            </LayoutView>
+            <!-- Missing routes bypass AuthorizeRouteView, so enforce authorization before rendering the main layout. -->
+            <AuthorizeView Policy="@FrontendAuthorizationDefaults.PolicyName">
+                <Authorized>
+                    <PageTitle>@Loc[nameof(Resources.Routes.NotFoundPageTitle)]</PageTitle>
+                    <LayoutView Layout="@typeof(Layout.MainLayout)">
+                        <Aspire.Dashboard.Components.Pages.NotFound />
+                    </LayoutView>
+                </Authorized>
+                <NotAuthorized>
+                    <DashboardNotAuthorized />
+                </NotAuthorized>
+            </AuthorizeView>
         </NotFound>
     </Router>
 </CascadingValue>
-
-@code {
-    private ViewportInformation? _viewportInformation;
-}

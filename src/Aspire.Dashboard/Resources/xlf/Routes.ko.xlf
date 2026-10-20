@@ -17,6 +17,11 @@
         <target state="translated">오류</target>
         <note />
       </trans-unit>
+      <trans-unit id="NotAuthorized">
+        <source>Not authorized</source>
+        <target state="new">Not authorized</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NotFoundDescription">
         <source>Not found</source>
         <target state="translated">찾을 수 없음</target>
