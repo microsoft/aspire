@@ -464,10 +464,24 @@ data; new metadata such as descriptions, notes, funding, or license text is not
 supported. If regeneration requires unsupported metadata, revert that directory
 and mark it `blocked: update-failed`.
 
-Summary rows must match the exact manifest, package, old version, and new version
-in a fully reconstructed patch, with exactly one row per manifest/package/target
+Stage only the modified tracked manifests and lockfiles with
+`git add -u -- <paths>`; never use `git add .` or `git add -A`, because the
+private `.auto-sec` inputs are untracked. Then, before committing, run:
+
+`node .github/workflows/auto-sec/auto-sec.js preflight`
+
+This runs the same patch-content checks as the publication scrub. If it exits
+nonzero, revert every rejected directory and mark its alerts
+`blocked: update-failed`; do not commit or emit a PR output for a rejected patch.
+If it succeeds, use its `commit_message` exactly for the commit and push message,
+and paste its `pr_table_rows` exactly into a new PR body. Do not derive either
+summary from the alert list or from package names mentioned elsewhere in the
+diff. Do not stage any additional files after preflight.
+
+Summary rows match the exact manifest, package, old version, and new version in
+the fully reconstructed patch, with exactly one row per manifest/package/target
 and no omitted updates. Missing trusted bases or unsupported scalar encodings
-block publication; do not substitute package names mentioned elsewhere in the diff.
+block publication.
 
 Confirm
 only dependency manifests changed, no new registry host appears, and every version

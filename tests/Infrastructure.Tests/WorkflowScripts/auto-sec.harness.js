@@ -3,6 +3,8 @@
 // argv[2]: request JSON path. argv[3]: result JSON path.
 // Request modes:
 //   { mode: "call", fn, args }                    -> { value }
+//   { mode: "preflight", patch, baseFiles }       -> { value }
+//   { mode: "preflight-working-tree", baseFiles, headFiles, untrackedFiles } -> { value }
 //   { mode: "lookup", ecosystem, name, version, now, responses, nugetConfigText } -> { value, urls }
 //   { mode: "approve", now, staged, agentItems, pr, prOverrides, files, contents, alerts,
 //     malwareNumbers, checkRuns, statuses, reviews, responses, liveHeadSha, liveBaseRef, liveDraft,
@@ -307,6 +309,47 @@ async function main() {
         case 'call': {
             const value = await gate[request.fn](...request.args.map(reviveDates));
             result = { value: value instanceof Set ? [...value].sort() : value };
+            break;
+        }
+        case 'preflight': {
+            result = { value: gate.preflightPatch(request.patch, file => [request.baseFiles?.[file]]) };
+            break;
+        }
+        case 'preflight-working-tree': {
+            const root = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-sec-preflight-'));
+            const exec = require('node:child_process').execFileSync;
+            const options = {
+                cwd: root,
+                encoding: 'utf8',
+                windowsHide: true,
+                env: {
+                    ...process.env,
+                    GIT_AUTHOR_NAME: 'github-actions[bot]',
+                    GIT_COMMITTER_NAME: 'github-actions[bot]',
+                    GIT_AUTHOR_EMAIL: 'github-actions[bot]@users.noreply.github.com',
+                    GIT_COMMITTER_EMAIL: 'github-actions[bot]@users.noreply.github.com',
+                },
+            };
+            try {
+                exec('git', ['init', '--quiet'], options);
+                for (const [file, text] of Object.entries(request.baseFiles ?? {})) {
+                    fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+                    fs.writeFileSync(path.join(root, file), text);
+                }
+                exec('git', ['add', '--all'], options);
+                exec('git', ['commit', '--quiet', '-m', 'Fixture base'], options);
+                for (const [file, text] of Object.entries(request.headFiles ?? {})) {
+                    fs.writeFileSync(path.join(root, file), text);
+                }
+                exec('git', ['add', '-u'], options);
+                for (const [file, text] of Object.entries(request.untrackedFiles ?? {})) {
+                    fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+                    fs.writeFileSync(path.join(root, file), text);
+                }
+                result = { value: gate.preflightWorkingTree(root) };
+            } finally {
+                fs.rmSync(root, { recursive: true, force: true });
+            }
             break;
         }
         case 'lookup': {

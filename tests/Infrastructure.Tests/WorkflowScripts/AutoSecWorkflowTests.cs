@@ -1117,6 +1117,88 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task PreflightReturnsCanonicalPublicationRows()
+    {
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "preflight",
+            ["patch"] = PublicTextPatch,
+            ["baseFiles"] = new JsonObject { ["extension/package-lock.json"] = PublicTextBase },
+        });
+
+        Assert.True(result["value"]!["ok"]!.GetValue<bool>());
+        Assert.Empty(result["value"]!["violations"]!.AsArray());
+        Assert.Equal("Update dependencies\n\nlodash 4.17.20 -> 4.17.21\n@types/node 22.0.0 -> 22.1.0\n",
+            result["value"]!["commit_message"]!.GetValue<string>());
+        Assert.Equal(
+            ["lodash 4.17.20 -> 4.17.21", "@types/node 22.0.0 -> 22.1.0"],
+            result["value"]!["commit_rows"]!.AsArray().Select(row => row!.GetValue<string>()));
+        Assert.Equal(
+            [
+                ("lodash", "extension/package-lock.json", "4.17.20", "4.17.21"),
+                ("@types/node", "extension/package-lock.json", "22.0.0", "22.1.0"),
+            ],
+            result["value"]!["pr_rows"]!.AsArray().Select(row => (
+                row!["package"]!.GetValue<string>(),
+                row["manifest"]!.GetValue<string>(),
+                row["from"]!.GetValue<string>(),
+                row["to"]!.GetValue<string>())));
+        Assert.Equal(
+            [
+                "| lodash | extension/package-lock.json | 4.17.20 | 4.17.21 |",
+                "| `@types/node` | extension/package-lock.json | 22.0.0 | 22.1.0 |",
+            ],
+            result["value"]!["pr_table_rows"]!.AsArray().Select(row => row!.GetValue<string>()));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PreflightRejectsUnsupportedLockfileMetadata()
+    {
+        var patch = PublicTextPatch
+            .Replace("@@ -3,3 +3,3 @@", "@@ -3,3 +3,4 @@", StringComparison.Ordinal)
+            .Replace("+      \"version\": \"4.17.21\",\n", "+      \"version\": \"4.17.21\",\n+      \"license\": \"MIT\",\n", StringComparison.Ordinal);
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "preflight",
+            ["patch"] = patch,
+            ["baseFiles"] = new JsonObject { ["extension/package-lock.json"] = PublicTextBase },
+        });
+
+        Assert.False(result["value"]!["ok"]!.GetValue<bool>());
+        Assert.Contains(result["value"]!["violations"]!.AsArray(),
+            violation => violation!["reason"]!.GetValue<string>() == "unsupported-lockfile-text");
+        Assert.Null(result["value"]!["commit_message"]);
+        Assert.Null(result["value"]!["pr_rows"]);
+        Assert.Null(result["value"]!["pr_table_rows"]);
+    }
+
+    [Fact]
+    [RequiresTools(["node", "git"])]
+    public async Task PreflightValidatesOnlyStagedChanges()
+    {
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "preflight-working-tree",
+            ["baseFiles"] = new JsonObject { ["extension/package-lock.json"] = PublicTextBase },
+            ["headFiles"] = new JsonObject
+            {
+                ["extension/package-lock.json"] = PublicTextBase
+                    .Replace("4.17.20", "4.17.21", StringComparison.Ordinal)
+                    .Replace("22.0.0", "22.1.0", StringComparison.Ordinal),
+            },
+            ["untrackedFiles"] = new JsonObject { [".auto-sec/alerts.json"] = "[{\"private\":\"data\"}]" },
+        });
+
+        Assert.True(result["value"]!["ok"]!.GetValue<bool>());
+        Assert.Empty(result["value"]!["violations"]!.AsArray());
+        Assert.Equal(
+            ["lodash 4.17.20 -> 4.17.21", "@types/node 22.0.0 -> 22.1.0"],
+            result["value"]!["commit_rows"]!.AsArray().Select(row => row!.GetValue<string>()));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task PublicTextGateRequiresInitialBatchQualification()
     {
         var output = PublicOutputFixture("create_pull_request");

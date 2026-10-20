@@ -3548,6 +3548,79 @@ function checkAgentOutputs(lines, patches, readBaseTexts, collectedCounts) {
     return { kept, violations };
 }
 
+/**
+ * Runs the publication content checks against a local working-tree patch and returns the
+ * exact summary rows accepted by the later scrub. This does not replace the scrub: it gives
+ * the agent a deterministic fail-fast check before it commits and emits safe output.
+ */
+function preflightPatch(patchText, readBaseTexts = () => []) {
+    const rebuiltFiles = new Map();
+    const violations = [
+        ...checkPatchContents(patchText, readBaseTexts, rebuiltFiles),
+        ...checkPatchUploadSafety(patchText).map(reason => ({ path: '(patch)', reason })),
+    ];
+    const updates = [];
+    for (const [manifest, { base, head }] of rebuiltFiles) {
+        const ecosystem = PATH_ECOSYSTEMS.get(basenameOf(manifest).toLowerCase());
+        if (ecosystem) {
+            updates.push(...manifestVersionChanges(manifest, base, head, ecosystem)
+                .map(change => ({ manifest, ecosystem, ...change })));
+        }
+    }
+    if (updates.some(update => update.from.length === 0)) {
+        violations.push({ path: '(patch)', reason: 'unrepresentable-summary' });
+    }
+    if (violations.length > 0) {
+        return { ok: false, violations };
+    }
+
+    const commitRowData = [];
+    for (const update of updates) {
+        for (const from of update.from) {
+            const duplicate = commitRowData.some(existing =>
+                normalizePackageName(update.ecosystem, existing.name) === normalizePackageName(update.ecosystem, update.name)
+                && sameVersion(existing.from, from) && sameVersion(existing.to, update.to));
+            if (!duplicate) {
+                commitRowData.push({ name: update.name, from, to: update.to });
+            }
+        }
+    }
+    if (!isCompletePublicCommitSummary(commitRowData, updates)) {
+        return { ok: false, violations: [{ path: '(patch)', reason: 'unrepresentable-summary' }] };
+    }
+    const commitRows = commitRowData.map(row => `${row.name} ${row.from} -> ${row.to}`);
+    const prRows = updates.map(update => ({
+        package: update.name,
+        manifest: update.manifest,
+        from: update.from[0],
+        to: update.to,
+    }));
+    const prTableRows = prRows.map(row =>
+        `| ${row.package.startsWith('@') ? `\`${row.package}\`` : row.package} | ${row.manifest} | ${row.from} | ${row.to} |`);
+    return {
+        ok: true,
+        violations: [],
+        commit_message: `Update dependencies\n\n${commitRows.join('\n')}\n`,
+        commit_rows: commitRows,
+        pr_rows: prRows,
+        pr_table_rows: prTableRows,
+    };
+}
+
+function preflightWorkingTree(cwd = process.cwd(), execFileSync = require('node:child_process').execFileSync) {
+    const options = { cwd, encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 };
+    // Validate exactly what the next commit will contain. The collector's private
+    // `.auto-sec` inputs are intentionally untracked and must not affect preflight.
+    const patch = execFileSync('git', ['--no-pager', '--no-replace-objects', 'diff', '--cached', '--full-index', '--no-ext-diff', 'HEAD', '--'], options);
+    return preflightPatch(patch, path => {
+        try {
+            return [execFileSync('git', ['--no-pager', '--no-replace-objects', 'show', '--no-textconv', `HEAD:${path}`], options)];
+        } catch {
+            return [];
+        }
+    });
+}
+
 // The manifest and lockfile basenames the create/push `allowed-files` lists permit.
 const UPLOADABLE_PATCH_BASENAMES = new Set([
     'package.json',
@@ -3730,8 +3803,17 @@ async function scrubAgentOutputs({ core, github, context, fs, env, workDir, read
 
 async function main(argv) {
     const [command, ecosystem, name, version] = argv;
+    if (command === 'preflight' && !ecosystem && !name && !version) {
+        const result = preflightWorkingTree();
+        console.log(JSON.stringify(result, null, 2));
+        if (!result.ok) {
+            process.exitCode = 1;
+        }
+        return;
+    }
     if (command !== 'lookup' || !ecosystem || !name || !version) {
         console.error('Usage: node auto-sec.js lookup <npm|pip|nuget> <package> <version>');
+        console.error('   or: node auto-sec.js preflight');
         process.exitCode = 2;
         return;
     }
@@ -3776,6 +3858,8 @@ module.exports = {
     normalizePackageName,
     parseDependabotUpdates,
     parseNuGetConfig,
+    preflightPatch,
+    preflightWorkingTree,
     readApprovalRequests,
     runAgentOutputScrub,
     runApprovalJob,
