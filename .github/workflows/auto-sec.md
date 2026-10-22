@@ -93,11 +93,15 @@ pre-agent-steps:
     run: pipx install uv==0.12.22
   # The agent can write to the checkout, so the post-agent scrub step runs this
   # copy of the gate module, taken before the agent starts and stored outside the
-  # agent sandbox mounts.
+  # agent sandbox mounts. A second copy goes into the untracked `.auto-sec` input
+  # directory so the agent can run `preflight` from the current workflow revision
+  # even after checking out an older auto-sec branch whose helper predates it. That
+  # copy is advisory only; the scrub never trusts it.
   - name: Copy gate module for the agent output scrub
     run: |
-      mkdir -p "${RUNNER_TEMP}/auto-sec-gate"
+      mkdir -p "${RUNNER_TEMP}/auto-sec-gate" .auto-sec
       cp .github/workflows/auto-sec/auto-sec.js "${RUNNER_TEMP}/auto-sec-gate/auto-sec.js"
+      cp .github/workflows/auto-sec/auto-sec.js .auto-sec/auto-sec.js
   - name: Collect alerts and Dependabot pull requests
     env:
       GH_TOKEN: ${{ github.token }}
@@ -468,11 +472,17 @@ Stage only the modified tracked manifests and lockfiles with
 `git add -u -- <paths>`; never use `git add .` or `git add -A`, because the
 private `.auto-sec` inputs are untracked. Then, before committing, run:
 
-`node .github/workflows/auto-sec/auto-sec.js preflight`
+`node .auto-sec/auto-sec.js preflight`
 
-This runs the same patch-content checks as the publication scrub. If it exits
-nonzero, revert every rejected directory and mark its alerts
-`blocked: update-failed`; do not commit or emit a PR output for a rejected patch.
+This runs the same patch-content checks as the publication scrub, using the
+helper copy taken from the current workflow revision (the working branch may
+carry an older `.github/workflows/auto-sec/auto-sec.js` without `preflight`; do
+not run that one). It also verifies that the generated commit message and PR
+table rows fit the publication templates and row limit. If it exits
+nonzero, revert every rejected directory in both the index and the working tree
+with `git restore --source=HEAD --staged --worktree -- <dir>`, mark its alerts
+`blocked: update-failed`, and rerun preflight on whatever remains staged; do not
+commit or emit a PR output for a rejected patch.
 If it succeeds, use its `commit_message` exactly for the commit and push message,
 and paste its `pr_table_rows` exactly into a new PR body. Do not derive either
 summary from the alert list or from package names mentioned elsewhere in the

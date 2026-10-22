@@ -3597,10 +3597,24 @@ function preflightPatch(patchText, readBaseTexts = () => []) {
     }));
     const prTableRows = prRows.map(row =>
         `| ${row.package.startsWith('@') ? `\`${row.package}\`` : row.package} | ${row.manifest} | ${row.from} | ${row.to} |`);
+    const commitMessage = `${PUBLIC_COMMIT_SUBJECT}\n\n${commitRows.join('\n')}\n`;
+    const prBody = [...PUBLIC_PR_BODY_HEAD, ...prTableRows, ...PUBLIC_PR_BODY_TAIL].join('\n');
+    // The completeness check above covers tuples only. Publication also enforces the serialized
+    // grammar (for example an npm alias version such as `alias lodash@4.17.20` is not a valid
+    // row) and the row limit, so apply the same parsers to the exact text the agent will publish.
+    const commitRowsValid = checkPublicCommitMessage(commitMessage)
+        && publicLines(commitMessage).slice(2).every(line => {
+            const row = parsePublicUpdate(line, 'commit');
+            return row !== null && matchesPublicUpdate(row, updates);
+        });
+    const prBodyRows = parsePublicPrBody(prBody);
+    if (!commitRowsValid || prBodyRows === null || !prBodyRows.every(row => matchesPublicUpdate(row, updates))) {
+        return { ok: false, violations: [{ path: '(patch)', reason: 'unrepresentable-summary' }] };
+    }
     return {
         ok: true,
         violations: [],
-        commit_message: `Update dependencies\n\n${commitRows.join('\n')}\n`,
+        commit_message: commitMessage,
         commit_rows: commitRows,
         pr_rows: prRows,
         pr_table_rows: prTableRows,

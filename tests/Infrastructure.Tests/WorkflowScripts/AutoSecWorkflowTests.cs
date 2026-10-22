@@ -1175,6 +1175,62 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
 
     [Fact]
     [RequiresTools(["node", "git"])]
+    public async Task PreflightRejectsSummaryRowsThatPublicationCannotParse()
+    {
+        // An npm alias override reconstructs as `alias lodash@4.17.20 -> lodash@4.17.21`,
+        // which is not a `<name> <from> -> <to>` commit row.
+        static string Manifest(string version) =>
+            $$"""
+            {
+              "overrides": {
+                "alias": "npm:lodash@{{version}}"
+              }
+            }
+
+            """.ReplaceLineEndings("\n");
+
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "preflight-working-tree",
+            ["baseFiles"] = new JsonObject { ["package.json"] = Manifest("4.17.20") },
+            ["headFiles"] = new JsonObject { ["package.json"] = Manifest("4.17.21") },
+        });
+
+        Assert.False(result["value"]!["ok"]!.GetValue<bool>());
+        Assert.Equal(["unrepresentable-summary"],
+            result["value"]!["violations"]!.AsArray().Select(violation => violation!["reason"]!.GetValue<string>()));
+        Assert.Null(result["value"]!["commit_message"]);
+        Assert.Null(result["value"]!["pr_table_rows"]);
+    }
+
+    [Fact]
+    [RequiresTools(["node", "git"])]
+    public async Task PreflightRejectsSummariesOverThePublicationRowLimit()
+    {
+        // 201 distinct prior versions consolidate into one target, which needs 201 commit rows;
+        // publication accepts at most 200.
+        static string Lockfile(IEnumerable<string> versions) =>
+            "{\n  \"name\": \"x\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {\n    \"\": {\n      \"name\": \"x\"\n    }"
+            + string.Concat(versions.Select((version, index) =>
+                $",\n    \"node_modules/a{index}/node_modules/lodash\": {{\n      \"version\": \"{version}\"\n    }}"))
+            + "\n  }\n}\n";
+
+        var priorVersions = Enumerable.Range(0, 201).Select(index => $"4.{index}.0").ToArray();
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "preflight-working-tree",
+            ["baseFiles"] = new JsonObject { ["package-lock.json"] = Lockfile(priorVersions) },
+            ["headFiles"] = new JsonObject { ["package-lock.json"] = Lockfile(priorVersions.Select(_ => "4.999.0")) },
+        });
+
+        Assert.False(result["value"]!["ok"]!.GetValue<bool>());
+        Assert.Equal(["unrepresentable-summary"],
+            result["value"]!["violations"]!.AsArray().Select(violation => violation!["reason"]!.GetValue<string>()));
+        Assert.Null(result["value"]!["commit_message"]);
+    }
+
+    [Fact]
+    [RequiresTools(["node", "git"])]
     public async Task PreflightValidatesOnlyStagedChanges()
     {
         var result = await RunHarnessAsync(new JsonObject
