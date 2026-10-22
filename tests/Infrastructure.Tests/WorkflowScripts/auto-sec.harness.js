@@ -6,6 +6,7 @@
 //   { mode: "preflight", patch, baseFiles }       -> { value }
 //   { mode: "preflight-working-tree", baseFiles, headFiles, untrackedFiles } -> { value }
 //   { mode: "lookup", ecosystem, name, version, now, responses, nugetConfigText } -> { value, urls }
+//   { mode: "plan", now, alerts, codeScanning, prs, manifests, responses, registryFailure } -> { value, urls }
 //   { mode: "approve", now, staged, agentItems, pr, prOverrides, files, contents, alerts,
 //     malwareNumbers, checkRuns, statuses, reviews, responses, liveHeadSha, liveBaseRef, liveDraft,
 //     liveCheckRuns, liveStatuses } -> { value, reviews, summary, info, warnings }
@@ -350,6 +351,22 @@ async function main() {
             } finally {
                 fs.rmSync(root, { recursive: true, force: true });
             }
+            break;
+        }
+        case 'plan': {
+            const urls = [];
+            const fetchImpl = createFetch(request.responses, urls);
+            const value = await gate.planAlerts({
+                alerts: request.alerts ?? [],
+                codeScanning: request.codeScanning ?? { version_alerts: [], other_rule_counts: [] },
+                prs: request.prs ?? [],
+                readManifest: manifestPath => request.manifests?.[manifestPath] ?? null,
+                listReleases: (ecosystem, name) => request.registryFailure === name
+                    ? Promise.reject(new Error('synthetic registry failure'))
+                    : gate.listPackageReleases(ecosystem, name, { fetchImpl }),
+                now: new Date(request.now),
+            });
+            result = { value, urls };
             break;
         }
         case 'lookup': {

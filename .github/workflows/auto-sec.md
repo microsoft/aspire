@@ -263,6 +263,10 @@ safe-outputs:
         every gate (Dependabot author, manifest-only diff, no new package source,
         green CI, non-breaking update, 7-day cooldown, fixes an open alert) and
         silently skips pull requests that fail any of them.
+      # The framework caps an output type at one item unless the job declares a
+      # larger max. The approval job itself bounds attempts with MAX_APPROVALS in
+      # auto-sec.js, so keep the two values equal.
+      max: 10
       runs-on: ubuntu-latest
       needs: [safe_outputs]
       permissions:
@@ -365,6 +369,15 @@ Do not print alert contents into public safe outputs:
   `covered_alerts`: the alert numbers the PR provably fixes, computed by the same
   module the approval job uses.
 - `.auto-sec/auto-sec-prs.json`: open pull requests labeled `auto-sec`.
+- `.auto-sec/plan.json`: the precomputed disposition of every alert, produced by the
+  same module that gates publication. `counts` totals the dispositions. `fixes` lists
+  the exact `manifest_path`, `package`, `from`, and `to` of each change to make (the
+  lowest stable, non-breaking release that is outside every advisory range and past the
+  7-day cooldown). `alerts` gives each alert's `disposition`: `dependabot-pr`, `fix`,
+  `blocked` (with its `reason` code), or `agent` (the planner could not decide; its
+  `note` says why). Treat the plan as authoritative. Do not re-derive versions,
+  cooldowns, or blocked reasons for alerts it has already decided, and do not stop
+  early: apply every entry in `fixes`.
 - `.github/dependabot.yml`: the repository Dependabot configuration (its
   `cooldown.default-days: 7` is the policy the cooldown rule enforces).
 
@@ -376,7 +389,9 @@ alert number is listed in that PR's `covered_alerts`.
 
 For every PR with a non-empty `covered_alerts` that is **not** a GitHub Actions
 update, emit one `approve_dependabot_pr` item with `pr_number` and the full
-`head_sha`. The approval job verifies green CI,
+`head_sha`, up to 10 items per run (the approval job's per-run limit). When more
+than 10 PRs qualify, request the PRs that cover the most alerts first, then the
+lowest PR numbers. The approval job verifies green CI,
 the cooldown, the manifest-only diff, the package source, and the version change
 itself, and skips PRs that fail any check, so request approval even when CI is
 still running. Still treat alerts as covered by the PR; do not duplicate the fix in
@@ -386,7 +401,15 @@ approval for them, but still treat the alert as covered by the PR.
 
 ## Step 2: Fix the remaining alerts in the auto-sec PR
 
-Collect every alert not covered in Step 1.
+The alerts to fix are the entries in `.auto-sec/plan.json` `fixes`. Each `fixes` entry
+already names the manifest, package, current version, and the exact target version, so
+apply it with the matching ecosystem command below and do not choose another version.
+Entries with `disposition: blocked` keep the planned `reason`; do not retry them.
+Entries with `disposition: agent` are the only alerts you evaluate yourself, using the
+ecosystem rules below (including `lookup` for NuGet and the registry-failed cases); use
+`blocked: update-failed` if they still cannot be resolved. If a command for a `fixes`
+entry fails, revert that directory and report those alerts as `blocked: update-failed`;
+a failure in one directory never stops the remaining entries.
 
 **Choose the working branch.**
 
@@ -458,9 +481,10 @@ regeneration on an unchanged owner is required, report `blocked: update-failed`.
   it. Mark the alert `blocked: unsupported-ecosystem`; Dependabot PRs for these
   ecosystems stay with a human reviewer.
 
-If no compliant version exists yet, use `blocked: no-version-past-cooldown`. If a
-command fails or the result does not resolve, revert that directory with
-`git checkout -- <dir>` and use `blocked: update-failed`.
+For `agent` entries only: if no compliant version exists yet, use
+`blocked: no-version-past-cooldown`. If a command fails or the result does not
+resolve, revert that directory with `git checkout -- <dir>` and use
+`blocked: update-failed`.
 
 After the edits, review `git diff --stat` and `git diff` for each lockfile. All
 lockfile additions are restricted to recognized dependency/version/artifact
@@ -546,7 +570,10 @@ Finish with a single `noop` message containing counts only, in exactly this form
 `alerts=12 dependabot-pr=3 auto-sec-pr=6 blocked=3 (nuget-not-mirrored=1, breaking-upgrade-required=2) code-findings-out-of-scope=344`.
 Omit the parenthesized breakdown only when `blocked=0`. Otherwise include unique
 reason codes with positive counts summing exactly to `blocked`, using only the codes
-defined above. Every in-scope alert must have exactly one disposition:
+defined above. Start from `.auto-sec/plan.json` `counts`: `dependabot-pr` and the
+`blocked` reasons are already final; `fix` alerts count as `auto-sec-pr` unless their
+directory failed (move those to `blocked: update-failed`), and each `agent` alert
+counts under the state you resolved it to. Every in-scope alert must have exactly one disposition:
 `alerts = dependabot-pr + auto-sec-pr + blocked`. The alert total includes both
 Dependabot alerts (including malware) and version-mapped code scanning alerts.
 The scrub binds both totals to a runner-owned snapshot from collection; editing

@@ -1153,6 +1153,141 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task PlanDecidesEveryAlertBeforeTheAgentStarts()
+    {
+        var response = (string[] versions, string[] published) => Response(new JsonObject
+        {
+            ["versions"] = new JsonObject(versions.Select(version => KeyValuePair.Create<string, JsonNode?>(version, new JsonObject()))),
+            ["time"] = new JsonObject(versions.Zip(published, (version, date) => KeyValuePair.Create<string, JsonNode?>(version, date))),
+        });
+        var lockfile = (params (string Path, string Version)[] packages) => new JsonObject
+        {
+            ["lockfileVersion"] = 3,
+            ["packages"] = new JsonObject(packages.Select(package => KeyValuePair.Create<string, JsonNode?>(
+                package.Path, new JsonObject { ["version"] = package.Version }))),
+        }.ToJsonString();
+        var alert = (int number, string ecosystem, string package, string manifest, params string[] ranges) => new JsonObject
+        {
+            ["number"] = number,
+            ["ecosystem"] = ecosystem,
+            ["package"] = package,
+            ["manifest_path"] = manifest,
+            ["vulnerable_ranges"] = new JsonArray(ranges.Select(range => (JsonNode)range).ToArray()),
+            ["malware"] = false,
+        };
+
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "plan",
+            ["now"] = Now,
+            ["alerts"] = new JsonArray(
+                alert(1, "npm", "vite", "app/package-lock.json", "< 7.3.7"),
+                alert(2, "npm", "undici", "app/package-lock.json", "< 6.28.1", ">= 7.0.0, < 7.29.1"),
+                alert(3, "npm", "hono", "app/package-lock.json", "< 4.13.11"),
+                alert(4, "npm", "esbuild", "app/package-lock.json", "< 0.28.1"),
+                alert(5, "npm", "extract-zip", "app/package-lock.json", "<= 2.0.1"),
+                alert(6, "npm", "covered", "app/package-lock.json", "< 1.0.1"),
+                alert(7, "npm", "failing", "app/package-lock.json", "< 1.0.1"),
+                alert(8, "pip", "certifi", "py/uv.lock", "< 2026.2.1"),
+                alert(9, "nuget", "Newtonsoft.Json", "Directory.Packages.props", "< 13.0.4"),
+                alert(10, "actions", "actions/checkout", ".github/workflows/ci.yml", "< 5"),
+                alert(11, "maven", "org.example:lib", "pom.xml", "< 1.0"),
+                alert(12, "npm", "vite", "app/package.json", "< 7.3.7"),
+                alert(13, "npm", "missing", "gone/package-lock.json", "< 1.0.1")),
+            ["codeScanning"] = new JsonObject
+            {
+                ["version_alerts"] = new JsonArray(new JsonObject { ["number"] = 3, ["rule"] = "zizmor/unpinned-uses", ["path"] = ".github/workflows/ci.yml" }),
+                ["other_rule_counts"] = new JsonArray(),
+            },
+            ["prs"] = new JsonArray(new JsonObject { ["number"] = 99, ["covered_alerts"] = new JsonArray(6) }),
+            ["registryFailure"] = "failing",
+            ["manifests"] = new JsonObject
+            {
+                ["app/package-lock.json"] = lockfile(
+                    ("node_modules/vite", "7.3.6"),
+                    ("node_modules/undici", "6.28.0"),
+                    ("node_modules/other/node_modules/undici", "7.29.0"),
+                    ("node_modules/hono", "4.13.5"),
+                    ("node_modules/esbuild", "0.27.0"),
+                    ("node_modules/extract-zip", "2.0.1"),
+                    ("node_modules/covered", "1.0.0"),
+                    ("node_modules/failing", "1.0.0")),
+                ["py/uv.lock"] = "[[package]]\nname = \"certifi\"\nversion = \"2026.1.4\"\n",
+            },
+            ["responses"] = new JsonObject
+            {
+                // Newer than the cooldown (2026-09-24) or in a vulnerable range, so 7.3.7 is the lowest fix.
+                ["https://registry.npmjs.org/vite"] = response(
+                    ["7.3.6", "7.3.7", "7.3.8", "7.4.0-beta.1", "8.0.0"],
+                    ["2026-08-01T00:00:00Z", "2026-09-01T00:00:00Z", "2026-09-30T00:00:00Z", "2026-09-01T00:00:00Z", "2026-09-01T00:00:00Z"]),
+                // One target per installed major: the 7.x fix must not be forced onto 6.x.
+                ["https://registry.npmjs.org/undici"] = response(
+                    ["6.28.0", "6.28.1", "7.29.0", "7.29.1"],
+                    ["2026-06-01T00:00:00Z", "2026-07-01T00:00:00Z", "2026-08-01T00:00:00Z", "2026-09-01T00:00:00Z"]),
+                ["https://registry.npmjs.org/hono"] = response(["4.13.5", "4.13.11"], ["2026-06-01T00:00:00Z", "2026-09-30T00:00:00Z"]),
+                ["https://registry.npmjs.org/esbuild"] = response(["0.27.0", "0.28.1"], ["2026-06-01T00:00:00Z", "2026-07-01T00:00:00Z"]),
+                ["https://registry.npmjs.org/extract-zip"] = response(["2.0.1"], ["2026-06-01T00:00:00Z"]),
+                ["https://pypi.org/pypi/certifi/json"] = Response(new JsonObject
+                {
+                    ["releases"] = new JsonObject
+                    {
+                        ["2026.1.4"] = new JsonArray(new JsonObject { ["upload_time_iso_8601"] = "2026-01-04T00:00:00Z" }),
+                        ["2026.2.1"] = new JsonArray(new JsonObject { ["upload_time_iso_8601"] = "2026-02-01T00:00:00Z", ["yanked"] = true }),
+                        ["2026.3.1"] = new JsonArray(new JsonObject { ["upload_time_iso_8601"] = "2026-03-01T00:00:00Z" }),
+                    },
+                }),
+            },
+        });
+
+        var plan = result["value"]!;
+        Assert.Equal(
+            [
+                ("app/package-lock.json", "undici", "6.28.0", "6.28.1"),
+                ("app/package-lock.json", "undici", "7.29.0", "7.29.1"),
+                ("app/package-lock.json", "vite", "7.3.6", "7.3.7"),
+                ("py/uv.lock", "certifi", "2026.1.4", "2026.3.1"),
+            ],
+            plan["fixes"]!.AsArray().Select(fix => (
+                fix!["manifest_path"]!.GetValue<string>(),
+                fix["package"]!.GetValue<string>(),
+                fix["from"]!.GetValue<string>(),
+                fix["to"]!.GetValue<string>())));
+        Assert.Equal(
+            [
+                "code-scanning:3=blocked:actions-pin-requires-maintainer",
+                "dependabot:1=fix", "dependabot:2=fix", "dependabot:3=blocked:no-version-past-cooldown",
+                "dependabot:4=blocked:breaking-upgrade-required", "dependabot:5=blocked:no-safe-version",
+                "dependabot:6=dependabot-pr", "dependabot:7=agent", "dependabot:8=fix", "dependabot:9=agent",
+                "dependabot:10=blocked:actions-pin-requires-maintainer", "dependabot:11=blocked:unsupported-ecosystem",
+                "dependabot:12=agent", "dependabot:13=agent",
+            ],
+            plan["alerts"]!.AsArray().Select(entry => $"{entry!["source"]}:{entry["number"]}={entry["disposition"]}"
+                + (entry["reason"] is { } reason ? $":{reason}" : "")));
+        Assert.Equal(
+            ["registry-lookup-failed", "nuget-rules", "no-lockfile", "manifest-unreadable"],
+            plan["alerts"]!.AsArray().Where(entry => entry!["note"] is not null).Select(entry => entry!["note"]!.GetValue<string>()));
+        Assert.Equal(14, plan["counts"]!["alerts"]!.GetValue<int>());
+        Assert.Equal(1, plan["counts"]!["dependabot-pr"]!.GetValue<int>());
+        Assert.Equal(3, plan["counts"]!["fix"]!.GetValue<int>());
+        Assert.Equal(4, plan["counts"]!["agent"]!.GetValue<int>());
+        Assert.Equal(6, plan["counts"]!["blocked"]!.AsObject().Sum(reason => reason.Value!.GetValue<int>()));
+        // A covered alert needs no registry data.
+        Assert.DoesNotContain("https://registry.npmjs.org/covered", result["urls"]!.AsArray().Select(url => url!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void ApprovalJobDeclaresTheSameLimitAsTheScript()
+    {
+        var job = GetSection(ReadWorkflow("auto-sec.md"), "^    approve-dependabot-pr:", "^---");
+
+        // The framework drops approval requests beyond the declared max, which left every
+        // run approving one Dependabot PR no matter how many qualified.
+        Assert.Contains("max: 10", job, StringComparison.Ordinal);
+        Assert.Contains("\\\"max\\\":10}", ReadWorkflow("auto-sec.lock.yml"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task PreflightRejectsUnsupportedLockfileMetadata()
     {
         var patch = PublicTextPatch

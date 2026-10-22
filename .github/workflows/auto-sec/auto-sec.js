@@ -9,6 +9,8 @@
 //   2. The agent runs `node auto-sec.js lookup <ecosystem> <name> <version>` to get the
 //      publish date (7-day cooldown) and approved-feed availability of a candidate
 //      version before proposing it in an auto-sec pull request.
+//   3. The pre-agent collection step runs `node auto-sec.js plan` to decide every
+//      alert's disposition and target version, so the agent applies a computed plan.
 
 'use strict';
 
@@ -1672,6 +1674,182 @@ async function lookupPackageVersion(ecosystem, name, version, { fetchImpl = fetc
         cooldown_satisfied: isCooldownSatisfied(publishedAt, now),
         available_on_approved_feed: available,
     };
+}
+
+/**
+ * Every installable release of one package with its publish date, for the fix planner.
+ * Returns `[{ version, published_at }]`; an unknown package returns an empty list. The
+ * dates follow `lookupPackageVersion`, so a planned target passes the same cooldown gate
+ * the publication scrub applies later.
+ */
+async function listPackageReleases(ecosystem, name, { fetchImpl = fetch } = {}) {
+    switch (ecosystem) {
+        case 'npm': {
+            const packument = await fetchJson(fetchImpl, `https://registry.npmjs.org/${npmPackagePath(name)}`);
+            return Object.entries(packument?.versions ?? {})
+                // A deprecated release is never a safe upgrade target.
+                .filter(([, release]) => !release?.deprecated)
+                .map(([version]) => ({ version, published_at: packument.time?.[version] ?? null }));
+        }
+        case 'pip': {
+            const project = await fetchJson(fetchImpl, `https://pypi.org/pypi/${encodeURIComponent(name)}/json`);
+            return Object.entries(project?.releases ?? {}).flatMap(([version, files]) => {
+                // A release whose files are all yanked is not installable. The cooldown runs
+                // from the newest upload, as in `lookupPackageVersion`.
+                const live = files.filter(file => !file.yanked);
+                const uploads = live.map(file => file.upload_time_iso_8601).filter(Boolean)
+                    .sort((a, b) => Date.parse(a) - Date.parse(b));
+                return live.length ? [{ version, published_at: uploads.at(-1) ?? null }] : [];
+            });
+        }
+        default:
+            throw new Error(`Unsupported ecosystem '${ecosystem}'. Expected npm or pip.`);
+    }
+}
+
+/**
+ * The lowest release that replaces the vulnerable installed version `from`, or the reason
+ * none exists. A target must be a stable release newer than `from` and outside every
+ * advisory range (which also places it at or above the patched version of the range
+ * `from` is in), non-breaking relative to `from`, and past the cooldown. A first patched
+ * version is deliberately not a separate floor: it belongs to one advisory range, and
+ * applying it to every installed major would wrongly force 6.x consumers onto 7.x.
+ * Reasons: `no-safe-version` (no fixed release exists), `breaking-upgrade-required`
+ * (only a major bump, or a 0.x minor bump, fixes it), `no-version-past-cooldown`.
+ */
+function selectFixTarget(from, { ranges, releases, now }) {
+    const fixed = releases.filter(release => {
+        const parsed = parseVersion(release.version);
+        return parsed !== null && parsed.prerelease === ''
+            && (compareVersions(release.version, from) ?? -1) > 0
+            && !inVulnerableRanges(release.version, ranges);
+    });
+    if (!fixed.length) {
+        return { reason: 'no-safe-version' };
+    }
+    const nonBreaking = fixed.filter(release => !isBreakingChange(from, release.version));
+    if (!nonBreaking.length) {
+        return { reason: 'breaking-upgrade-required' };
+    }
+    const aged = nonBreaking.filter(release => isCooldownSatisfied(release.published_at, now))
+        .sort((a, b) => compareVersions(a.version, b.version));
+    return aged.length ? { to: aged[0].version } : { reason: 'no-version-past-cooldown' };
+}
+
+// Lockfiles the agent has a documented update procedure for, by ecosystem. A manifest
+// outside this set is reported as unsupported instead of being left to the agent.
+const PLANNABLE_MANIFESTS = {
+    npm: new Set(['package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml']),
+    pip: new Set(['uv.lock']),
+};
+
+/**
+ * Decide every open alert's disposition before the agent starts, so the agent applies a
+ * computed plan instead of re-deriving versions and cooldowns for hundreds of alerts.
+ *
+ * Dispositions: `dependabot-pr` (an open Dependabot PR covers it), `fix` (the plan lists
+ * the exact `from -> to` change), `blocked` (with a reason code the run summary accepts),
+ * and `agent` (the planner cannot decide, for example NuGet or an unreadable manifest, so
+ * the agent follows the ecosystem rules). Alerts are grouped by package and manifest, and
+ * the group's advisory ranges are merged so one target satisfies every alert in it.
+ *
+ * `readManifest(path)` returns the manifest text or null. `listReleases` returns the
+ * registry releases for one package.
+ */
+async function planAlerts({ alerts, codeScanning, prs, readManifest, listReleases, now = new Date(), concurrency = 6 }) {
+    const covered = new Map();
+    for (const pr of prs) {
+        for (const number of pr.covered_alerts ?? []) {
+            covered.set(number, pr.number);
+        }
+    }
+
+    const entries = [];
+    const groups = new Map();
+    for (const alert of alerts) {
+        const entry = { source: 'dependabot', number: alert.number, ecosystem: alert.ecosystem, package: alert.package, manifest_path: alert.manifest_path };
+        entries.push(entry);
+        if (covered.has(alert.number)) {
+            entry.disposition = 'dependabot-pr';
+            entry.pr_number = covered.get(alert.number);
+        } else if (alert.ecosystem === 'actions') {
+            Object.assign(entry, { disposition: 'blocked', reason: 'actions-pin-requires-maintainer' });
+        } else if (alert.ecosystem === 'nuget') {
+            Object.assign(entry, { disposition: 'agent', note: 'nuget-rules' });
+        } else if (!PLANNABLE_MANIFESTS[alert.ecosystem]?.has(basenameOf(String(alert.manifest_path ?? '')).toLowerCase())) {
+            // A package.json alert has no installed version to compare, so the agent reads it.
+            const reason = alert.ecosystem === 'npm' && basenameOf(String(alert.manifest_path ?? '')).toLowerCase() === 'package.json'
+                ? null : 'unsupported-ecosystem';
+            Object.assign(entry, reason ? { disposition: 'blocked', reason } : { disposition: 'agent', note: 'no-lockfile' });
+        } else {
+            const key = JSON.stringify([alert.ecosystem, alert.manifest_path, normalizePackageName(alert.ecosystem, alert.package)]);
+            if (!groups.has(key)) {
+                groups.set(key, { ecosystem: alert.ecosystem, package: alert.package, manifest_path: alert.manifest_path, alerts: [] });
+            }
+            groups.get(key).alerts.push({ alert, entry });
+        }
+    }
+    for (const alert of codeScanning?.version_alerts ?? []) {
+        // Pinned action versions must change together with the repository Actions allow-list.
+        entries.push({ source: 'code-scanning', number: alert.number, ecosystem: 'actions', package: null, manifest_path: alert.path ?? null, disposition: 'blocked', reason: 'actions-pin-requires-maintainer' });
+    }
+
+    const releaseCache = new Map();
+    const loadReleases = (ecosystem, name) => {
+        const key = JSON.stringify([ecosystem, normalizePackageName(ecosystem, name)]);
+        if (!releaseCache.has(key)) {
+            releaseCache.set(key, listReleases(ecosystem, name).then(releases => ({ releases }), () => ({ releases: null })));
+        }
+        return releaseCache.get(key);
+    };
+
+    const fixes = [];
+    const queue = [...groups.values()];
+    const planGroup = async group => {
+        const text = readManifest(group.manifest_path);
+        const ranges = [...new Set(group.alerts.flatMap(({ alert }) => alertVulnerableRanges(alert)))];
+        const installed = text === null ? [] : [...new Set(manifestPackageVersions(group.manifest_path, text, group.ecosystem, group.package))];
+        const vulnerable = installed.filter(version => parseVersion(version) !== null && inVulnerableRanges(version, ranges));
+        const decide = (disposition, extra) => group.alerts.forEach(({ entry }) => Object.assign(entry, { disposition }, extra));
+        if (!vulnerable.length) {
+            decide('agent', { note: text === null ? 'manifest-unreadable' : 'no-vulnerable-version-in-manifest' });
+            return;
+        }
+        const { releases } = await loadReleases(group.ecosystem, group.package);
+        if (releases === null) {
+            decide('agent', { note: 'registry-lookup-failed' });
+            return;
+        }
+        const results = vulnerable.sort((a, b) => compareVersions(a, b) ?? 0)
+            .map(from => ({ from, ...selectFixTarget(from, { ranges, releases, now }) }));
+        const failed = results.find(result => !result.to);
+        if (failed) {
+            decide('blocked', { reason: failed.reason });
+            return;
+        }
+        const numbers = group.alerts.map(({ alert }) => alert.number).sort((a, b) => a - b);
+        decide('fix');
+        for (const { from, to } of results) {
+            fixes.push({ ecosystem: group.ecosystem, manifest_path: group.manifest_path, package: group.package, from, to, alerts: numbers });
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+        while (queue.length) {
+            await planGroup(queue.shift());
+        }
+    }));
+
+    fixes.sort((a, b) => a.manifest_path.localeCompare(b.manifest_path) || a.package.localeCompare(b.package) || (compareVersions(a.from, b.from) ?? 0));
+    entries.sort((a, b) => a.source.localeCompare(b.source) || a.number - b.number);
+    const counts = { alerts: entries.length, 'dependabot-pr': 0, fix: 0, agent: 0, blocked: {} };
+    for (const entry of entries) {
+        if (entry.disposition === 'blocked') {
+            counts.blocked[entry.reason] = (counts.blocked[entry.reason] ?? 0) + 1;
+        } else {
+            counts[entry.disposition]++;
+        }
+    }
+    return { counts, fixes, alerts: entries };
 }
 
 function readApprovalRequests(agentOutput) {
@@ -3815,8 +3993,38 @@ async function scrubAgentOutputs({ core, github, context, fs, env, workDir, read
     return { kept: kept.length, dropped: lines.length - kept.length, violations };
 }
 
+// Runs from the pre-agent collection step, after alerts.json, code-scanning.json, and
+// dependabot-prs.json are written. The manifests are read from the checkout the agent
+// starts from, so planned `from` versions match what the agent edits.
+async function writePlan({ fs = require('node:fs'), path = require('node:path'), cwd = process.cwd(), fetchImpl = fetch, now = new Date() } = {}) {
+    const readJsonFile = name => JSON.parse(fs.readFileSync(path.join(cwd, '.auto-sec', name), 'utf8'));
+    const readManifest = manifestPath => {
+        // The path comes from an alert; never read outside the checkout.
+        const resolved = path.resolve(cwd, String(manifestPath ?? ''));
+        const relative = path.relative(cwd, resolved);
+        if (!manifestPath || relative.startsWith('..') || path.isAbsolute(relative) || !fs.existsSync(resolved)) {
+            return null;
+        }
+        return fs.readFileSync(resolved, 'utf8');
+    };
+    const plan = await planAlerts({
+        alerts: readJsonFile('alerts.json'),
+        codeScanning: readJsonFile('code-scanning.json'),
+        prs: readJsonFile('dependabot-prs.json'),
+        readManifest,
+        listReleases: (ecosystem, name) => listPackageReleases(ecosystem, name, { fetchImpl }),
+        now,
+    });
+    fs.writeFileSync(path.join(cwd, '.auto-sec', 'plan.json'), JSON.stringify(plan, null, 2));
+    return plan;
+}
+
 async function main(argv) {
     const [command, ecosystem, name, version] = argv;
+    if (command === 'plan' && !ecosystem && !name && !version) {
+        await writePlan();
+        return;
+    }
     if (command === 'preflight' && !ecosystem && !name && !version) {
         const result = preflightWorkingTree();
         console.log(JSON.stringify(result, null, 2));
@@ -3828,6 +4036,7 @@ async function main(argv) {
     if (command !== 'lookup' || !ecosystem || !name || !version) {
         console.error('Usage: node auto-sec.js lookup <npm|pip|nuget> <package> <version>');
         console.error('   or: node auto-sec.js preflight');
+        console.error('   or: node auto-sec.js plan');
         process.exitCode = 2;
         return;
     }
@@ -3866,6 +4075,10 @@ module.exports = {
     isBreakingChange,
     isCooldownSatisfied,
     lookupPackageVersion,
+    listPackageReleases,
+    planAlerts,
+    selectFixTarget,
+    writePlan,
     manifestMentionsVersion,
     manifestPackageVersions,
     manifestVersionChanges,
