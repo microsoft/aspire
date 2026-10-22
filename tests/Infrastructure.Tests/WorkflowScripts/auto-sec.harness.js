@@ -369,6 +369,16 @@ async function main() {
             result = { value, urls };
             break;
         }
+        case 'policy': {
+            const urls = [];
+            const rebuilt = new Map(Object.entries(request.manifests ?? {}).map(([manifestPath, base]) => [manifestPath, { base, head: request.headManifests[manifestPath] }]));
+            const value = await gate.checkPatchVersionPolicy(rebuilt, {
+                fetchImpl: createFetch(request.responses, urls),
+                now: new Date(request.now),
+            });
+            result = { value, urls };
+            break;
+        }
         case 'lookup': {
             const urls = [];
             const value = await gate.lookupPackageVersion(request.ecosystem, request.name, request.version, {

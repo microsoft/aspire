@@ -1276,6 +1276,151 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    [RequiresTools(["node"])]
+    public async Task PlannedMultiMajorFixesPassPublicationPolicy()
+    {
+        var lockfile = (string first, string second) => new JsonObject
+        {
+            ["lockfileVersion"] = 3,
+            ["packages"] = new JsonObject
+            {
+                ["node_modules/undici"] = new JsonObject { ["version"] = first },
+                ["node_modules/other/node_modules/undici"] = new JsonObject { ["version"] = second },
+            },
+        }.ToJsonString();
+        var responses = new JsonObject
+        {
+            ["https://registry.npmjs.org/undici"] = Response(new JsonObject
+            {
+                ["versions"] = new JsonObject
+                {
+                    ["6.28.0"] = new JsonObject(), ["6.28.1"] = new JsonObject(),
+                    ["7.29.0"] = new JsonObject(), ["7.29.1"] = new JsonObject(),
+                },
+                ["time"] = new JsonObject
+                {
+                    ["6.28.0"] = "2026-06-01T00:00:00Z", ["6.28.1"] = "2026-07-01T00:00:00Z",
+                    ["7.29.0"] = "2026-08-01T00:00:00Z", ["7.29.1"] = "2026-09-01T00:00:00Z",
+                },
+            }),
+        };
+        var manifests = new JsonObject { ["app/package-lock.json"] = lockfile("6.28.0", "7.29.0") };
+
+        var plan = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "plan",
+            ["now"] = Now,
+            ["alerts"] = new JsonArray(new JsonObject
+            {
+                ["number"] = 1,
+                ["ecosystem"] = "npm",
+                ["package"] = "undici",
+                ["manifest_path"] = "app/package-lock.json",
+                ["vulnerable_ranges"] = new JsonArray("< 6.28.1", ">= 7.0.0, < 7.29.1"),
+                ["malware"] = false,
+            }),
+            ["manifests"] = JsonNode.Parse(manifests.ToJsonString()),
+            ["responses"] = JsonNode.Parse(responses.ToJsonString()),
+        });
+        Assert.Equal(
+            ["6.28.0->6.28.1", "7.29.0->7.29.1"],
+            plan["value"]!["fixes"]!.AsArray().Select(fix => $"{fix!["from"]}->{fix["to"]}"));
+
+        // Applying the planned updates must produce a patch the publication gate accepts.
+        var policy = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "policy",
+            ["now"] = Now,
+            ["manifests"] = JsonNode.Parse(manifests.ToJsonString()),
+            ["headManifests"] = new JsonObject { ["app/package-lock.json"] = lockfile("6.28.1", "7.29.1") },
+            ["responses"] = JsonNode.Parse(responses.ToJsonString()),
+        });
+        Assert.Empty(policy["value"]!.AsArray());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PlanLeavesUnpairableMultiVersionLockfilesToTheAgent()
+    {
+        var uvLock = "[[package]]\nname = \"certifi\"\nversion = \"2025.1.4\"\n\n[[package]]\nname = \"certifi\"\nversion = \"2026.1.4\"\n";
+        var wheel = (string uploaded) => new JsonObject { ["upload_time_iso_8601"] = uploaded };
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "plan",
+            ["now"] = Now,
+            ["alerts"] = new JsonArray(new JsonObject
+            {
+                ["number"] = 1,
+                ["ecosystem"] = "pip",
+                ["package"] = "certifi",
+                ["manifest_path"] = "py/uv.lock",
+                ["vulnerable_ranges"] = new JsonArray("< 2025.3.1", ">= 2026.0.0, < 2026.3.1"),
+                ["malware"] = false,
+            }),
+            ["manifests"] = new JsonObject { ["py/uv.lock"] = uvLock },
+            ["responses"] = new JsonObject
+            {
+                ["https://pypi.org/pypi/certifi/json"] = Response(new JsonObject
+                {
+                    ["releases"] = new JsonObject
+                    {
+                        ["2025.1.4"] = new JsonArray(wheel("2025-01-04T00:00:00Z")),
+                        ["2025.3.1"] = new JsonArray(wheel("2025-03-01T00:00:00Z")),
+                        ["2026.1.4"] = new JsonArray(wheel("2026-01-04T00:00:00Z")),
+                        ["2026.3.1"] = new JsonArray(wheel("2026-03-01T00:00:00Z")),
+                    },
+                }),
+            },
+        });
+
+        Assert.Empty(result["value"]!["fixes"]!.AsArray());
+        var entry = Assert.Single(result["value"]!["alerts"]!.AsArray());
+        Assert.Equal("agent", entry!["disposition"]!.GetValue<string>());
+        Assert.Equal("multiple-versions-unpairable", entry["note"]!.GetValue<string>());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PlanCooldownIncludesYankedFilesLikePublication()
+    {
+        // An old live wheel next to a recent yanked one: publication measures the cooldown from
+        // the newest upload of any file, so the planner must not pick this release.
+        var release = new JsonArray(
+            new JsonObject { ["upload_time_iso_8601"] = "2026-06-01T00:00:00Z" },
+            new JsonObject { ["upload_time_iso_8601"] = "2026-09-30T00:00:00Z", ["yanked"] = true });
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "plan",
+            ["now"] = Now,
+            ["alerts"] = new JsonArray(new JsonObject
+            {
+                ["number"] = 1,
+                ["ecosystem"] = "pip",
+                ["package"] = "certifi",
+                ["manifest_path"] = "py/uv.lock",
+                ["vulnerable_ranges"] = new JsonArray("< 2026.3.1"),
+                ["malware"] = false,
+            }),
+            ["manifests"] = new JsonObject { ["py/uv.lock"] = "[[package]]\nname = \"certifi\"\nversion = \"2026.1.4\"\n" },
+            ["responses"] = new JsonObject
+            {
+                ["https://pypi.org/pypi/certifi/json"] = Response(new JsonObject
+                {
+                    ["releases"] = new JsonObject
+                    {
+                        ["2026.1.4"] = new JsonArray(new JsonObject { ["upload_time_iso_8601"] = "2026-01-04T00:00:00Z" }),
+                        ["2026.3.1"] = release,
+                    },
+                }),
+            },
+        });
+
+        var entry = Assert.Single(result["value"]!["alerts"]!.AsArray());
+        Assert.Equal("blocked", entry!["disposition"]!.GetValue<string>());
+        Assert.Equal("no-version-past-cooldown", entry["reason"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void ApprovalJobDeclaresTheSameLimitAsTheScript()
     {
         var job = GetSection(ReadWorkflow("auto-sec.md"), "^    approve-dependabot-pr:", "^---");

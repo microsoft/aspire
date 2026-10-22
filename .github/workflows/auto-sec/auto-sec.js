@@ -982,7 +982,13 @@ function manifestVersionChanges(path, baseText, headText, ecosystem) {
         const removed = baseVersions.filter(version => !counts.has(version));
         const introduced = [...counts.keys()].filter(version => !baseCounts.has(version));
         for (const version of introduced) {
-            add(name, removed.length ? removed : baseVersions, version);
+            // With several removed versions (one fix per installed major), the occurrence
+            // key says which one each new version replaces. Attributing every removed
+            // version to every target would report 7.29.0 -> 6.28.1 as a breaking change.
+            const replaced = [...keys].filter(([, headVersion]) => headVersion === version)
+                .map(([key]) => baseEntry?.keys.get(key))
+                .filter(baseVersion => baseVersion && removed.includes(baseVersion));
+            add(name, replaced.length ? replaced : removed.length ? removed : baseVersions, version);
         }
         // A consolidation into a version the base already carries introduces nothing new:
         // base `foo@1.0.0` + `foo@2.1.0` -> head `foo@2.1.0` still moves the 1.x consumers
@@ -1695,11 +1701,11 @@ async function listPackageReleases(ecosystem, name, { fetchImpl = fetch } = {}) 
             const project = await fetchJson(fetchImpl, `https://pypi.org/pypi/${encodeURIComponent(name)}/json`);
             return Object.entries(project?.releases ?? {}).flatMap(([version, files]) => {
                 // A release whose files are all yanked is not installable. The cooldown runs
-                // from the newest upload, as in `lookupPackageVersion`.
-                const live = files.filter(file => !file.yanked);
-                const uploads = live.map(file => file.upload_time_iso_8601).filter(Boolean)
+                // from the newest upload of every file, yanked or not, exactly as
+                // `lookupPackageVersion` computes it, so publication accepts the planned target.
+                const uploads = files.map(file => file.upload_time_iso_8601).filter(Boolean)
                     .sort((a, b) => Date.parse(a) - Date.parse(b));
-                return live.length ? [{ version, published_at: uploads.at(-1) ?? null }] : [];
+                return files.some(file => !file.yanked) ? [{ version, published_at: uploads.at(-1) ?? null }] : [];
             });
         }
         default:
@@ -1825,6 +1831,15 @@ async function planAlerts({ alerts, codeScanning, prs, readManifest, listRelease
         const failed = results.find(result => !result.to);
         if (failed) {
             decide('blocked', { reason: failed.reason });
+            return;
+        }
+        // Publication pairs each new version with the version it replaced through the
+        // lockfile's occurrence key. A format without keys (uv.lock) cannot tell which
+        // installed copy became which target, so a multi-major plan would be rejected as
+        // a breaking change; leave it to the agent rather than publish an unapprovable plan.
+        const reader = results.length > 1 ? manifestReader(group.manifest_path) : null;
+        if (reader && reader(text).some(entry => normalizePackageName(group.ecosystem, entry.name) === normalizePackageName(group.ecosystem, group.package) && entry.key === undefined)) {
+            decide('agent', { note: 'multiple-versions-unpairable' });
             return;
         }
         const numbers = group.alerts.map(({ alert }) => alert.number).sort((a, b) => a - b);
