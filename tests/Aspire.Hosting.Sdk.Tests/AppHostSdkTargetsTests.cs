@@ -617,22 +617,39 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("ASPIRE010")]
-    public async Task DisabledCliBundleFailsBuildEvenWithWarningSuppression(string? noWarn)
+    [InlineData("C#", false, null, "error ASPIRE013")]
+    [InlineData("C#", false, "ASPIRE010", "error ASPIRE013")]
+    [InlineData("C#", false, "ASPIRE013", "error ASPIRE013")]
+    [InlineData("C#", true, null, null)]
+    [InlineData("F#", false, null, "warning ASPIRE010")]
+    [InlineData("F#", false, "ASPIRE010", null)]
+    [InlineData("F#", false, "ASPIRE013", "warning ASPIRE010")]
+    [InlineData("F#", true, null, null)]
+    public async Task CliBundleDiagnosticsRespectLanguageAndWarningSuppression(string language, bool aspireUseCliBundle, string? noWarn, string? expectedDiagnostic)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: false);
-        var arguments = new List<string> { "msbuild", "-nologo", "-restore", "-t:PrepareForBuild" };
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle);
+        var arguments = new List<string> { "msbuild", "-nologo", "-restore", "-t:PrepareForBuild", $"-p:Language={language}" };
         if (noWarn is not null)
         {
             arguments.Add($"-p:NoWarn={noWarn}");
         }
         var result = await RunDotNetWithArgumentsAsync(project.ProjectDirectory, [.. arguments]);
 
-        Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains("error ASPIRE010", result.Output);
-        Assert.Contains("https://get.aspire.dev", result.Output);
+        Assert.Equal(expectedDiagnostic is "error ASPIRE013" ? 1 : 0, result.ExitCode);
+        // MSBuild emits lines such as "AppHost.targets(166,5): warning ASPIRE010: ... [AppHost.csproj]".
+        // Check every Aspire diagnostic so required-bundle errors do not also emit the optional warning.
+        string[] expectedDiagnostics = expectedDiagnostic is null ? [] : [expectedDiagnostic];
+        Assert.Equal(expectedDiagnostics, Regex.Matches(result.Output, @"\b(?:warning|error) ASPIRE\d+:").Select(match => match.Value.TrimEnd(':')));
+
+        if (expectedDiagnostic is "warning ASPIRE010")
+        {
+            Assert.Contains("AppHost is configured with AspireUseCliBundle=false. Some Aspire features require the Aspire CLI bundle. Set AspireUseCliBundle=true to enable those features, or suppress ASPIRE010 to continue without the bundle. See https://aka.ms/aspire/diagnostics/aspire010 for more information.", result.Output);
+        }
+        else if (expectedDiagnostic is "error ASPIRE013")
+        {
+            Assert.Contains("AppHost requires the Aspire CLI bundle. Remove AspireUseCliBundle or set it to true, and install the matching Aspire CLI from https://get.aspire.dev. ASPIRE013 cannot be suppressed to disable the bundle. See https://aka.ms/aspire/diagnostics/aspire013 for more information.", result.Output);
+        }
     }
 
     [Theory]
