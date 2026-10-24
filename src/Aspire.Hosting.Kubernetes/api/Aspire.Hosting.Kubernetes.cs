@@ -195,9 +195,13 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithCapacity(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, string capacity) { throw null; }
 
-        [AspireExport("withKubernetesPersistentVolumeMount")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the withKubernetesPersistentVolumeMount adapter.")]
         public static ApplicationModel.IResourceBuilder<T> WithPersistentVolume<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> volume, string mountPath, bool isReadOnly = false)
             where T : ApplicationModel.IComputeResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the withKubernetesPersistentVolumeMount adapter.")]
+        public static ApplicationModel.IResourceBuilder<T> WithPersistentVolume<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> volume, string mountPath, string env, bool isReadOnly = false)
+            where T : ApplicationModel.IComputeResource, ApplicationModel.IResourceWithEnvironment { throw null; }
 
         [AspireExport("withKubernetesPersistentVolume")]
         public static ApplicationModel.IResourceBuilder<T> WithPersistentVolume<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> volume)
@@ -270,34 +274,34 @@ namespace Aspire.Hosting.Kubernetes
     {
         internal HelmChartOptions() { }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartDescription dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartDescription dispatcher export.")]
         public HelmChartOptions WithChartDescription(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> description) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartDescription dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartDescription dispatcher export.")]
         public HelmChartOptions WithChartDescription(string description) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartName dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartName dispatcher export.")]
         public HelmChartOptions WithChartName(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> name) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartName dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartName dispatcher export.")]
         public HelmChartOptions WithChartName(string name) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartVersion dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartVersion dispatcher export.")]
         public HelmChartOptions WithChartVersion(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> version) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartVersion dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartVersion dispatcher export.")]
         public HelmChartOptions WithChartVersion(string version) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withNamespace dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withNamespace dispatcher export.")]
         public HelmChartOptions WithNamespace(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> @namespace) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withNamespace dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withNamespace dispatcher export.")]
         public HelmChartOptions WithNamespace(string @namespace) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withReleaseName dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withReleaseName dispatcher export.")]
         public HelmChartOptions WithReleaseName(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> releaseName) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withReleaseName dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withReleaseName dispatcher export.")]
         public HelmChartOptions WithReleaseName(string releaseName) { throw null; }
     }
 
@@ -337,7 +341,7 @@ namespace Aspire.Hosting.Kubernetes
     }
 
     [AspireExport(ExposeProperties = true)]
-    public sealed partial class KubernetesEnvironmentResource : ApplicationModel.Resource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource
+    public sealed partial class KubernetesEnvironmentResource : ApplicationModel.Resource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource, ApplicationModel.IComputeEnvironmentWithVolumeMounts
     {
         public KubernetesEnvironmentResource(string name) : base(default!) { }
 
@@ -766,6 +770,25 @@ namespace Aspire.Hosting.Kubernetes.Resources
 
         [YamlDotNet.Serialization.YamlMember(Alias = "name")]
         public string Name { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class CsiVolumeSourceV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "driver")]
+        public string Driver { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "fsType")]
+        public string? FsType { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "nodePublishSecretRef")]
+        public LocalObjectReferenceV1? NodePublishSecretRef { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "readOnly")]
+        public bool? ReadOnly { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "volumeAttributes")]
+        public System.Collections.Generic.Dictionary<string, string> VolumeAttributes { get { throw null; } }
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
@@ -3068,6 +3091,9 @@ namespace Aspire.Hosting.Kubernetes.Resources
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "configMap")]
         public ConfigMapVolumeSourceV1? ConfigMap { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "csi")]
+        public CsiVolumeSourceV1? Csi { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "emptyDir")]
         public EmptyDirVolumeSourceV1? EmptyDir { get { throw null; } set { } }
