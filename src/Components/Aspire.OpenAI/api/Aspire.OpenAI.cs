@@ -16,6 +16,8 @@ namespace Aspire.OpenAI
 
         public string ConnectionName { get { throw null; } }
 
+        public bool DisableMetrics { get { throw null; } init { } }
+
         public bool DisableTracing { get { throw null; } }
 
         public bool EnableSensitiveTelemetryData { get { throw null; } }
