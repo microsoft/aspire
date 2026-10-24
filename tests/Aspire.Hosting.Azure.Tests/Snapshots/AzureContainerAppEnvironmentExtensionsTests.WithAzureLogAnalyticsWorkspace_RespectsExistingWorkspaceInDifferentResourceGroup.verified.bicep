@@ -80,3 +80,5 @@ output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = app_host.name
 output AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = app_host.id
 
 output AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = app_host.properties.defaultDomain
+
+output AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP string = app_host.properties.staticIp

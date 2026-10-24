@@ -127,3 +127,5 @@ output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = my_long_env_name.name
 output AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = my_long_env_name.id
 
 output AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = my_long_env_name.properties.defaultDomain
+
+output AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP string = my_long_env_name.properties.staticIp
