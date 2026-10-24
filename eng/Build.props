@@ -59,6 +59,8 @@
          The aspireify-eval projects are intentionally un-aspirified sample apps used
          as eval inputs for the aspireify skill — they do not import the repo's
          Directory.Build.props/targets and are not meant to be built by CI.
+         ServiceContracts contains independent-repository fixtures built explicitly
+         by its runner with an AspireRepoRoot binding, not normal playground projects.
          `.aspire/` holds throwaway projects the CLI scaffolds while running a polyglot
          AppHost (for example integration-restore/IntegrationRestore.csproj). They pin the
          released Aspire.Hosting version, so building them against the repo's -dev version
@@ -68,6 +70,7 @@
     <ProjectToBuild Include="$(RepoRoot)playground\**\*.csproj"
                     Exclude="$(RepoRoot)playground\AspireWithMaui\AspireWithMaui.MauiClient\*.csproj;
                              $(RepoRoot)playground\aspireify-eval\**\*.csproj;
+                             $(RepoRoot)playground\ServiceContracts\**\*.csproj;
                              $(RepoRoot)playground\**\.aspire\**\*.csproj"
                     Condition="'$(SkipPlaygroundProjects)' != 'true'"/>
   </ItemGroup>

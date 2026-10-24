@@ -26,6 +26,7 @@ When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's 
 | ------------- | -------- | ----------- | -------- |
 | `ASPIREAZUREPROVISIONING001` | Warning | The polyglot Azure Provisioning proxy packages are experimental and may change or be removed in future releases. | [src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs](../src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs) |
 | `ASPIREEXPORT018` | Warning | The source-generated Aspire export provider contract is experimental and may change or be removed in future releases. | [src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs](../src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs) |
+| `ASPIRESERVICECONTRACTS001` | Warning | Producer-owned service binding contracts are an experimental proof of concept, not a stable interchange format. | [src/Aspire.Hosting/ServiceContractResourceBuilderExtensions.cs](../src/Aspire.Hosting/ServiceContractResourceBuilderExtensions.cs) |
 
 ## Analyzer Warnings
 
