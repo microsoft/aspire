@@ -160,6 +160,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The --launch-group option requires a single non-empty name without surrounding whitespace, commas, or semicolons..
+        /// </summary>
+        internal static string InvalidLaunchGroupName {
+            get {
+                return ResourceManager.GetString("InvalidLaunchGroupName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The launch group to start, including its required dependencies.
+        /// </summary>
+        internal static string LaunchGroupOptionDescription {
+            get {
+                return ResourceManager.GetString("LaunchGroupOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The --launch-profile option is not supported for {0} AppHosts..
         /// </summary>
         internal static string LaunchProfileNotSupported {

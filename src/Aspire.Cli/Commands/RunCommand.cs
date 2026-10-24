@@ -365,6 +365,7 @@ internal sealed class RunCommand : BaseCommand
                 Isolated = isolated,
                 StartDebugSession = startDebugSession,
                 LaunchProfile = launchProfile,
+                LaunchGroup = parseResult.GetValue(AppHostLauncher.s_launchGroupOption),
                 EnvironmentVariables = new Dictionary<string, string>(),
                 UnmatchedTokens = parseResult.UnmatchedTokens.ToArray(),
                 WorkingDirectory = ExecutionContext.WorkingDirectory,
@@ -1487,6 +1488,7 @@ internal sealed class RunCommand : BaseCommand
         var isolated = AppHostLauncher.GetExplicitIsolated(parseResult);
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var launchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption);
+        var launchGroup = parseResult.GetValue(AppHostLauncher.s_launchGroupOption);
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
         var appHostArgs = parseResult.UnmatchedTokens;
@@ -1504,6 +1506,11 @@ internal sealed class RunCommand : BaseCommand
         if (!string.IsNullOrEmpty(launchProfile))
         {
             additionalArgs.Add($"{AppHostLauncher.s_launchProfileOption.Name}={launchProfile}");
+        }
+
+        if (launchGroup is not null)
+        {
+            additionalArgs.Add($"{AppHostLauncher.s_launchGroupOption.Name}={launchGroup}");
         }
 
         if (appHostArgs.Count > 0)

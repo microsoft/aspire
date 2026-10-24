@@ -182,6 +182,12 @@
   <data name="LaunchProfileOptionDescription" xml:space="preserve">
     <value>The .NET launch profile to use when starting the AppHost</value>
   </data>
+  <data name="LaunchGroupOptionDescription" xml:space="preserve">
+    <value>The launch group to start, including its required dependencies</value>
+  </data>
+  <data name="InvalidLaunchGroupName" xml:space="preserve">
+    <value>The --launch-group option requires a single non-empty name without surrounding whitespace, commas, or semicolons.</value>
+  </data>
   <data name="LaunchProfileNotSupported" xml:space="preserve">
     <value>The --launch-profile option is not supported for {0} AppHosts.</value>
     <comment>{0} is the AppHost project type display name.</comment>

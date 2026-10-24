@@ -19,6 +19,22 @@ namespace Aspire.Hosting.Tests;
 public class ExecutableResourceBuilderExtensionTests
 {
     [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public async Task AddExecutablePreservesNullAndEmptyArguments(bool strings, bool nullArguments)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = strings
+            ? builder.AddExecutable("exe", "unused", ".", nullArguments ? (string[]?)null : [])
+            : builder.AddExecutable("exe", "unused", ".", nullArguments ? (object[]?)null : []);
+        await using var app = builder.Build();
+
+        Assert.Empty(await ArgumentEvaluator.GetArgumentListAsync(executable.Resource, app.Services));
+    }
+
+    [Theory]
     [InlineData("/absolute")]
     [InlineData("relative")]
     public void AddExecutableNormalisesWorkingDirectory(string workingDirectory)

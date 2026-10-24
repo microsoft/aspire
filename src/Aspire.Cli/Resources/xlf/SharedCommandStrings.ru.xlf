@@ -47,9 +47,19 @@
         <target state="new">Include hidden resources in the output</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidLaunchGroupName">
+        <source>The --launch-group option requires a single non-empty name without surrounding whitespace, commas, or semicolons.</source>
+        <target state="new">The --launch-group option requires a single non-empty name without surrounding whitespace, commas, or semicolons.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="IsolatedOptionDescription">
         <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
         <target state="new">Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LaunchGroupOptionDescription">
+        <source>The launch group to start, including its required dependencies</source>
+        <target state="new">The launch group to start, including its required dependencies</target>
         <note />
       </trans-unit>
       <trans-unit id="LaunchProfileNotSupported">

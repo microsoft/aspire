@@ -22,6 +22,67 @@ namespace Aspire.Hosting.Tests.Orchestrator;
 public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PreparedStartIgnoresOldDcpStateUntilRecreationStarts(bool container)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        IResourceBuilder<IResource> dependency = container
+            ? builder.AddContainer("dependency", "image")
+            : builder.AddExecutable("dependency", "unused", ".");
+        var root = builder.AddExecutable("root", "unused", ".").WaitForStart(dependency);
+        using var app = builder.Build();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var events = new DcpExecutorEvents();
+        _ = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(),
+            notifications, dcpEvents: events, applicationEventing: builder.Eventing);
+        var resourceType = container ? KnownResourceTypes.Container : KnownResourceTypes.Executable;
+        var stoppedEvents = 0;
+        dependency.OnResourceStopped((_, _, _) =>
+        {
+            Interlocked.Increment(ref stoppedEvents);
+            return Task.CompletedTask;
+        });
+        await notifications.PublishUpdateAsync(dependency.Resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Exited,
+            ExitCode = 0
+        });
+        using var pendingStart = await notifications.BeginResourceStartAsync(dependency.Resource, dependency.Resource.Name);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var wait = notifications.WaitForDependenciesAsync(root.Resource, cts.Token);
+        try
+        {
+            await PublishStateAsync(KnownResourceStates.Exited, 0);
+            await PublishStateAsync(KnownResourceStates.Running, null);
+            Assert.False(wait.IsCompleted);
+            Assert.True(notifications.TryGetCurrentState(dependency.Resource.Name, out var current));
+            Assert.Equal(KnownResourceStates.Starting, current.Snapshot.State?.Text);
+            Assert.Null(current.Snapshot.ExitCode);
+            Assert.Equal(0, stoppedEvents);
+
+            await events.PublishAsync(new OnResourceStartingContext(cts.Token, resourceType, dependency.Resource, dependency.Resource.Name));
+            await PublishStateAsync(KnownResourceStates.Running, null);
+            await wait.DefaultTimeout();
+            await PublishStateAsync(KnownResourceStates.Exited, 7);
+
+            Assert.True(notifications.TryGetCurrentState(dependency.Resource.Name, out current));
+            Assert.Equal(KnownResourceStates.Exited, current.Snapshot.State?.Text);
+            Assert.Equal(7, current.Snapshot.ExitCode);
+            Assert.Equal(1, stoppedEvents);
+        }
+        finally
+        {
+            await cts.CancelAsync();
+        }
+
+        Task PublishStateAsync(string state, int? exitCode) => events.PublishAsync(new OnResourceChangedContext(
+            cts.Token, resourceType, dependency.Resource, dependency.Resource.Name,
+            new ResourceStatus(state, null, null), KnownResourceStates.Running,
+            snapshot => snapshot with { State = state, ExitCode = exitCode }));
+    }
+
+    [Theory]
     [InlineData("Waiting")]
     [InlineData("Starting")]
     [InlineData("Running")]
@@ -803,8 +864,10 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         await startingTask.DefaultTimeout();
     }
 
-    [Fact]
-    public async Task StartingNotStartedReplicaIsForwardedToDcpWhileSiblingWaits()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StartingInactiveReplicaIsForwardedToDcpWhileSiblingWaits(bool preparedStart)
     {
         // The consequence of WaitingUpdateDoesNotDisturbNotStartedReplicas: StartResourceAsync reads "Waiting" as
         // proof that startup is already in flight and only updates the snapshot, skipping DCP. If the waiting update
@@ -838,6 +901,13 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
         await PublishReplicaStatesAsync(resourceNotificationService, waiter.Resource, KnownResourceStates.NotStarted);
 
+        using var firstPreparedStart = preparedStart
+            ? await resourceNotificationService.BeginResourceStartAsync(waiter.Resource, "waiter-abc123")
+            : null;
+        using var secondPreparedStart = preparedStart
+            ? await resourceNotificationService.BeginResourceStartAsync(waiter.Resource, "waiter-def456")
+            : null;
+
         var startingTask = events.PublishAsync(new OnResourceStartingContext(
             CancellationToken.None, KnownResourceTypes.Executable, waiter.Resource, "waiter-abc123"));
 
@@ -845,6 +915,10 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             waiter.Resource.Name,
             e => e.ResourceId == "waiter-abc123" && e.Snapshot.State?.Text == KnownResourceStates.Waiting,
             TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("waiter-def456", out var sibling));
+        Assert.Equal(preparedStart ? KnownResourceStates.Starting : KnownResourceStates.NotStarted, sibling.Snapshot.State?.Text);
+        Assert.False(startingTask.IsCompleted);
 
         // Stand in for the user invoking the start command on the replica that was never started.
         await appOrchestrator.StartResourceAsync("waiter-def456", TestContext.Current.CancellationToken).DefaultTimeout();

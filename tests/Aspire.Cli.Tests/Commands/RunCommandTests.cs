@@ -41,6 +41,56 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class RunCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("run")]
+    [InlineData("start")]
+    public void LaunchGroupOptionIsParsedWithoutConsumingAppHostArguments(string commandName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse([commandName, "--launch-group", "catalog", "--", "--launch-group", "guest-value"]);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal("catalog", result.GetValue(AppHostLauncher.s_launchGroupOption));
+        Assert.Equal(["--launch-group", "guest-value"], result.UnmatchedTokens);
+    }
+
+    [Theory]
+    [InlineData("run", " ")]
+    [InlineData("run", " catalog")]
+    [InlineData("run", "catalog ")]
+    [InlineData("run", "catalog,basket")]
+    [InlineData("run", "catalog;basket")]
+    [InlineData("start", " ")]
+    [InlineData("start", " catalog")]
+    [InlineData("start", "catalog ")]
+    [InlineData("start", "catalog,basket")]
+    [InlineData("start", "catalog;basket")]
+    public void LaunchGroupOptionRejectsInvalidNames(string commandName, string name)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse([commandName, $"--launch-group={name}"]);
+
+        Assert.Equal(SharedCommandStrings.InvalidLaunchGroupName, Assert.Single(result.Errors).Message);
+    }
+
+    [Theory]
+    [InlineData("run")]
+    [InlineData("start")]
+    public void LaunchGroupOptionRequiresAValue(string commandName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse([commandName, "--launch-group"]);
+
+        Assert.Single(result.Errors);
+        Assert.Single(provider.GetRequiredService<RootCommand>().Parse([commandName, "--launch-group="]).Errors);
+    }
+
     [Fact]
     public async Task RunCommandWithHelpArgumentReturnsZero()
     {
@@ -289,8 +339,10 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.True(buildCalled);
     }
 
-    [Fact]
-    public async Task RunCommand_PassesSelectedLaunchProfileToProjectContext()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("catalog")]
+    public async Task RunCommand_PassesSelectedLaunchProfileAndGroupToProjectContext(string? selectedGroup)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateAppHostFile(workspace);
@@ -300,11 +352,13 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                 Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
         };
         string? launchProfile = null;
+        string? launchGroup = null;
         var projectFactory = new TestAppHostProjectFactory
         {
             RunAsyncCallback = (context, _) =>
             {
                 launchProfile = context.LaunchProfile;
+                launchGroup = context.LaunchGroup;
                 context.BuildCompletionSource?.TrySetResult(false);
                 return Task.FromResult(42);
             }
@@ -317,12 +371,18 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--launch-profile", "E2E"]);
+        string[] args = ["run", "--apphost", appHostFile.FullName, "--launch-profile", "E2E"];
+        if (selectedGroup is not null)
+        {
+            args = [.. args, "--launch-group", selectedGroup];
+        }
+        var result = command.Parse(args);
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(42, exitCode);
         Assert.Equal("E2E", launchProfile);
+        Assert.Equal(selectedGroup, launchGroup);
     }
 
     [Fact]
@@ -1656,6 +1716,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             "--apphost", appHostFile.FullName,
             "--no-build",
             $"{launchProfileOption}=--no-build",
+            "--launch-group=--option-shaped",
             "--",
             .. expectedAppHostArguments
         ]);
@@ -5111,6 +5172,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             "--detach=false",
             "--no-build",
             "--launch-profile", "E2E",
+            "--launch-group", "catalog",
             "--isolated=false",
             "--format=table",
             "--wait-for-debugger",
@@ -5137,6 +5199,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                 "--capture-profile",
                 "--no-build",
                 "--launch-profile", "E2E",
+                "--launch-group", "catalog",
                 "--isolated", "false",
                 "--wait-for-debugger",
                 "--capture-profile-output", new FileInfo(relativeCapturePath).FullName,
@@ -5508,12 +5571,13 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.True(separatorIndex > 0, "Expected a single child/AppHost separator.");
         Assert.True(noBuildIndex > 0, "Expected detached child arguments to include --no-build.");
         Assert.Equal(1, forwardedArguments.Count(argument => argument == "--no-build"));
-        Assert.Equal(["--no-build", $"--launch-profile={expectedLaunchProfile}", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
+        Assert.Equal(["--no-build", $"--launch-profile={expectedLaunchProfile}", "--launch-group=--option-shaped", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
         Assert.DoesNotContain("--detach", forwardedArguments.Take(separatorIndex));
         var childParseResult = command.Parse(forwardedArguments);
 
         Assert.Empty(childParseResult.Errors);
         Assert.Equal(expectedLaunchProfile, childParseResult.GetValue(AppHostLauncher.s_launchProfileOption));
+        Assert.Equal("--option-shaped", childParseResult.GetValue(AppHostLauncher.s_launchGroupOption));
         Assert.Equal(expectedAppHostArguments, childParseResult.UnmatchedTokens);
     }
 

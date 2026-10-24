@@ -171,7 +171,8 @@ internal sealed class ApplicationOrchestrator
 
         try
         {
-            var waitForDependenciesTask = _notificationService.WaitForDependenciesAsync(@event.Resource, cts.Token);
+            // Replica starts publish their own waits; a sibling can be prepared but not yet sent to DCP.
+            var waitForDependenciesTask = _notificationService.WaitForDependenciesAsync(@event.Resource, startingInstanceId, cts.Token);
             if (waitForDependenciesTask.IsCompletedSuccessfully)
             {
                 // Nothing to wait for after all, e.g. every dependency is a resource without a lifetime.
@@ -233,6 +234,11 @@ internal sealed class ApplicationOrchestrator
 
     private async Task OnResourceStarting(OnResourceStartingContext context)
     {
+        if (context.DcpResourceName is { } resourceId)
+        {
+            _notificationService.CompleteResourceStart(context.Resource, resourceId);
+        }
+
         switch (context.ResourceType)
         {
             case KnownResourceTypes.Project:
@@ -577,7 +583,10 @@ internal sealed class ApplicationOrchestrator
 
     private async Task OnResourceChanged(OnResourceChangedContext context)
     {
-        await _notificationService.PublishUpdateAsync(context.Resource, context.DcpResourceName, context.UpdateSnapshot).ConfigureAwait(false);
+        if (!await _notificationService.TryPublishDcpUpdateAsync(context.Resource, context.DcpResourceName, context.UpdateSnapshot).ConfigureAwait(false))
+        {
+            return;
+        }
 
         if (context.ResourceType == KnownResourceTypes.Container)
         {

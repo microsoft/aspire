@@ -20,6 +20,75 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "3")]
 public class ResourceNotificationTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PreparedReplicaStartRetainsModelReadinessWhileSiblingRemainsRunning(bool healthCheck)
+    {
+        var resource = new ExecutableResource("resource", "unused", ".");
+        resource.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("resource-first", "first", 0),
+            new DcpInstance("resource-second", "second", 1)
+        ]));
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var ready = new EventSnapshot(Task.CompletedTask);
+        foreach (var name in resource.GetResolvedResourceNames())
+        {
+            await notifications.PublishUpdateAsync(resource, name, snapshot => snapshot with
+            {
+                State = name == "resource-first" ? KnownResourceStates.Finished : KnownResourceStates.Running,
+                ExitCode = name == "resource-first" ? 0 : null,
+                ResourceReadyEvent = ready,
+                HealthReports = healthCheck ? [new HealthReportSnapshot("health", HealthStatus.Healthy, null, null)] : []
+            });
+        }
+        Assert.True(notifications.TryGetCurrentState("resource-second", out var sibling));
+        using var pendingStart = await notifications.BeginResourceStartAsync(resource, "resource-first");
+        Assert.True(notifications.TryGetCurrentState("resource-first", out var starting));
+        Assert.Same(ready, starting.Snapshot.ResourceReadyEvent);
+        Assert.Null(starting.Snapshot.HealthStatus);
+        Assert.True(notifications.TryGetCurrentState("resource-second", out var unchangedSibling));
+        Assert.Same(sibling.Snapshot, unchangedSibling.Snapshot);
+
+        notifications.CompleteResourceStart(resource, "resource-first");
+        await notifications.PublishUpdateAsync(resource, "resource-first", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            HealthReports = healthCheck ? [new HealthReportSnapshot("health", HealthStatus.Healthy, null, null)] : []
+        });
+        var dependent = new ExecutableResource("dependent", "unused", ".");
+        dependent.Annotations.Add(new WaitAnnotation(resource, WaitType.WaitUntilHealthy));
+        await notifications.WaitForDependenciesAsync(dependent, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(notifications.TryGetCurrentState("resource-first", out var healthy));
+        Assert.Equal(HealthStatus.Healthy, healthy.Snapshot.HealthStatus);
+        Assert.Same(ready, healthy.Snapshot.ResourceReadyEvent);
+    }
+
+    [Fact]
+    public async Task DisposingPreviousStartDoesNotReleaseNewAttemptGuard()
+    {
+        var resource = new ExecutableResource("resource", "unused", ".");
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        using var firstStart = await notifications.BeginResourceStartAsync(resource, resource.Name);
+        notifications.CompleteResourceStart(resource, resource.Name);
+        using var secondStart = await notifications.BeginResourceStartAsync(resource, resource.Name);
+
+        firstStart.Dispose();
+        Assert.False(await notifications.TryPublishDcpUpdateAsync(resource, resource.Name,
+            snapshot => snapshot with { State = KnownResourceStates.Exited, ExitCode = 7 }));
+        Assert.True(notifications.TryGetCurrentState(resource.Name, out var current));
+        Assert.Equal(KnownResourceStates.Starting, current.Snapshot.State?.Text);
+        Assert.Null(current.Snapshot.ExitCode);
+
+        secondStart.Dispose();
+        Assert.True(await notifications.TryPublishDcpUpdateAsync(resource, resource.Name,
+            snapshot => snapshot with { State = KnownResourceStates.Exited, ExitCode = 7 }));
+        Assert.True(notifications.TryGetCurrentState(resource.Name, out current));
+        Assert.Equal(KnownResourceStates.Exited, current.Snapshot.State?.Text);
+        Assert.Equal(7, current.Snapshot.ExitCode);
+    }
+
     [Fact]
     public void InitialStateCanBeSpecified()
     {
