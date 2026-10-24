@@ -1583,46 +1583,46 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void BuildSecretsStringFormatsEnvSecretCorrectly()
+    public void BuildSecretsFormatsEnvSecretCorrectly()
     {
         var secrets = new Dictionary<string, BuildImageSecretValue>
         {
             ["MY_SECRET"] = new BuildImageSecretValue("secret-value", BuildImageSecretType.Environment)
         };
 
-        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecretsString(secrets);
+        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecrets(secrets, useCsv: true);
 
-        Assert.Equal(" --secret \"id=MY_SECRET,type=env,env=MY_SECRET\"", result);
+        Assert.Equal(["--secret", "id=MY_SECRET,type=env,env=MY_SECRET"], result);
     }
 
     [Fact]
-    public void BuildSecretsStringFormatsFileSecretCorrectly()
+    public void BuildSecretsFormatsFileSecretCorrectly()
     {
         var secrets = new Dictionary<string, BuildImageSecretValue>
         {
             ["npmrc"] = new BuildImageSecretValue("/path/to/.npmrc", BuildImageSecretType.File)
         };
 
-        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecretsString(secrets);
+        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecrets(secrets, useCsv: true);
 
-        Assert.Equal(" --secret \"id=npmrc,type=file,src=/path/to/.npmrc\"", result);
+        Assert.Equal(["--secret", "id=npmrc,type=file,src=/path/to/.npmrc"], result);
     }
 
     [Fact]
-    public void BuildSecretsStringFormatsNullEnvSecretWithRequireValue()
+    public void BuildSecretsFormatsNullEnvSecretWithRequireValue()
     {
         var secrets = new Dictionary<string, BuildImageSecretValue>
         {
             ["MY_SECRET"] = new BuildImageSecretValue(null, BuildImageSecretType.Environment)
         };
 
-        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecretsString(secrets, requireValue: true);
+        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecrets(secrets, useCsv: false, requireValue: true);
 
-        Assert.Equal(" --secret \"id=MY_SECRET,type=env\"", result);
+        Assert.Equal(["--secret", "id=MY_SECRET,type=env"], result);
     }
 
     [Fact]
-    public void BuildSecretsStringFormatsMixedSecretTypes()
+    public void BuildSecretsFormatsMixedSecretTypes()
     {
         var secrets = new Dictionary<string, BuildImageSecretValue>
         {
@@ -1630,9 +1630,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             ["npmrc"] = new BuildImageSecretValue("/app/.npmrc", BuildImageSecretType.File)
         };
 
-        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecretsString(secrets);
+        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecrets(secrets, useCsv: true);
 
-        Assert.Equal(" --secret \"id=ENV_TOKEN,type=env,env=ENV_TOKEN\" --secret \"id=npmrc,type=file,src=/app/.npmrc\"", result);
+        Assert.Equal(["--secret", "id=ENV_TOKEN,type=env,env=ENV_TOKEN", "--secret", "id=npmrc,type=file,src=/app/.npmrc"], result);
     }
 
     [Fact]
