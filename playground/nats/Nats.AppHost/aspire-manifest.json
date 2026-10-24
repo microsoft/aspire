@@ -3,7 +3,7 @@
     "nats": {
       "type": "container.v0",
       "connectionString": "nats://nats:{nats-password-uri-encoded.value}@{nats.bindings.tcp.host}:{nats.bindings.tcp.port}",
-      "image": "docker.io/library/nats:2.12",
+      "image": "docker.io/library/nats:2.14",
       "args": [
         "--user",
         "nats",
