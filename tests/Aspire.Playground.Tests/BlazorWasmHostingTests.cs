@@ -17,7 +17,7 @@ namespace Aspire.Playground.Tests;
 public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
 {
     [Fact]
-    public async Task HostedBlazorWasm_ServesAppAndWeatherApi()
+    public async Task HostedBlazorWasm_ServesAppAndApis()
     {
         await using var app = await CreateAppAsync(typeof(Projects.BlazorHosted_AppHost));
 
@@ -27,6 +27,12 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
         Assert.Equal(HttpStatusCode.OK, homeResponse.StatusCode);
         var homeContent = await homeResponse.Content.ReadAsStringAsync();
         Assert.Contains("blazor.web.js", homeContent);
+
+        var timeResponse = await blazorClient.GetAsync("/time");
+        Assert.Equal(HttpStatusCode.OK, timeResponse.StatusCode);
+        var timeContent = await timeResponse.Content.ReadAsStringAsync();
+        Assert.Contains("Server Time", timeContent);
+        Assert.Contains("Local Time:", timeContent);
 
         var configResponse = await blazorClient.GetAsync("/_blazor/_configuration");
         Assert.Equal(HttpStatusCode.OK, configResponse.StatusCode);
