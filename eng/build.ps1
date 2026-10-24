@@ -235,9 +235,43 @@ if ($bundle) {
     "/p:TargetRid=$rid"
   )
   
-  # Pass through SkipNativeBuild if set
-  if ($remainingArguments -contains "/p:SkipNativeBuild=true") {
-    $bundleArgs += "/p:SkipNativeBuild=true"
+  # Translate only at the Bundle boundary; explicit bundle selection wins over
+  # repository native-build settings, including inherited environment properties.
+  $bundleCliExplicit = $false
+  $repositorySkipNative = ''
+  # Environment names are case-sensitive on Unix, unlike MSBuild properties.
+  # Preserve original spellings and values, including distinct Unix spellings.
+  $repositorySkipEnvironment = [System.Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
+  foreach ($entry in [Environment]::GetEnvironmentVariables().GetEnumerator()) {
+    if ($entry.Key -match '^(SkipNativeBuild|SkipManagedBuild|SkipAppHostServerBuild|SkipTrayBuild)$') {
+      $repositorySkipEnvironment.Add($entry.Key, $entry.Value)
+      if ($entry.Key -eq 'SkipNativeBuild') {
+        $repositorySkipNative = $entry.Value
+      }
+    } elseif ($entry.Key -eq 'SkipCliArtifacts' -and ![string]::IsNullOrEmpty($entry.Value)) {
+      $bundleCliExplicit = $true
+    }
+  }
+  foreach ($argument in $remainingArguments) {
+    if ($argument -match '^([-/]p:)(.*)$') {
+      $propertyPrefix = $Matches[1]
+      # For example: /p:SkipAspireManagedPublish=true;SkipNativeBuild=true.
+      # Semicolons and commas separate assignments; repository inputs must not
+      # hitchhike into Bundle on a list containing a valid Bundle control.
+      foreach ($assignment in $Matches[2] -split '[;,]') {
+        if ($assignment -match '^SkipNativeBuild=(.*)$') {
+          $repositorySkipNative = $Matches[1]
+        } elseif ($assignment -match '^SkipCliArtifacts=') {
+          $bundleCliExplicit = $true
+          $bundleArgs += "$propertyPrefix$assignment"
+        } elseif ($assignment -match '^(SkipAspireManagedPublish|SkipDashboardPublish|SkipTerminalHostPublish|SkipAppHostServerPublish|SkipTrayPublish)=') {
+          $bundleArgs += "$propertyPrefix$assignment"
+        }
+      }
+    }
+  }
+  if (!$bundleCliExplicit -and $repositorySkipNative -eq 'true') {
+    $bundleArgs += "/p:SkipCliArtifacts=true"
   }
   
   # CI flag is passed to Bundle.proj which handles version computation via Versions.props
@@ -249,9 +283,21 @@ if ($bundle) {
   Write-Host "  Configuration: $config"
   Write-Host ""
   
-  & dotnet msbuild @bundleArgs
+  # Restore the process environment even when the Bundle command fails. Clearing
+  # these properties globally would change later repository builds in this shell.
+  try {
+    foreach ($name in $repositorySkipEnvironment.Keys) {
+      Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+    }
+    & dotnet msbuild @bundleArgs
+    $bundleExitCode = $LASTEXITCODE
+  } finally {
+    foreach ($name in $repositorySkipEnvironment.Keys) {
+      [Environment]::SetEnvironmentVariable($name, $repositorySkipEnvironment[$name])
+    }
+  }
   
-  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  if ($bundleExitCode -ne 0) { exit $bundleExitCode }
 }
 
 exit 0

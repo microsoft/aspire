@@ -364,6 +364,21 @@ The repository-development path uses project references and local artifacts wher
 
 [eng/Bundle.proj](../../eng/Bundle.proj) orchestrates local bundle creation. Restore the repository toolchain first and install the target platform's Native AOT prerequisites.
 
+The bundling process is:
+
+1. Validate the requested configuration and acquire DCP for the target platform.
+2. Publish the managed helper, Dashboard, TerminalHost, AppHost Server, and
+   platform tray, or reuse their prepared outputs when requested.
+3. For signed distributions, sign the component binaries. The macOS tray app
+   also requires whole-app signing and notarization.
+4. Create any requested Dashboard and DCP distribution packages, then assemble
+   and validate the payload archive from the prepared components.
+5. Publish the CLI with the payload embedded. Distribution builds also create
+   CLI archives, .NET tool packages, and npm packages, signing them when requested.
+
+Signing precedes payload assembly so the embedded components retain their
+signatures. Assembly and packaging do not republish components.
+
 ```powershell
 # Windows example, from the repository root
 .\restore.cmd
@@ -376,18 +391,113 @@ dotnet msbuild eng/Bundle.proj /t:Build /p:TargetRid=win-x64 /p:Configuration=Re
 dotnet msbuild eng/Bundle.proj /t:Build /p:TargetRid=osx-arm64 /p:Configuration=Release
 ```
 
-The build sequence is:
+`Build` is the default entry point. A default build creates the payload archive
+and self-extracting CLI without distribution packages. Dashboard distribution
+outputs include a NuGet package and runtime ZIP.
 
-1. Publish `Aspire.Managed` as a self-contained single-file executable.
-2. Publish `Aspire.Dashboard` and `Aspire.TerminalHost` with Native AOT for the same RID and configuration.
-3. Publish the native tray payload on macOS or Windows, before signing bundle components.
-4. Restore the matching DCP package, using the target OS/architecture rather than the build machine's defaults.
-5. Run `CreateLayout` to assemble the payload and create its `.tar.gz` archive.
-6. Publish the Native AOT CLI with `BundlePayloadPath` pointing to that archive.
+### Build Properties
 
-The assembled directories are under `artifacts/bundle/{rid}/`; the payload archive is `artifacts/bundle/aspire-{version}-{rid}.tar.gz`. The self-extracting CLI is in the CLI project's publish output, not in the payload directory.
+| Property | Purpose |
+|---|---|
+| `TargetRid` | Target platform for one bundle, such as `win-x64`, `osx-arm64`, or `linux-x64`. |
+| `Configuration` | Build configuration; defaults to `Debug` locally. CI requires `Release`. |
+| `BuildDistributionPackages` | Produce Dashboard and CLI distribution packages; defaults to `false`. |
+| `PackDcpPackage` | Also produce the RID-specific DCP NuGet package when distribution packaging is enabled. |
+| `Sign` | Sign distribution outputs; requires `BuildDistributionPackages=true` and `DotNetSignType`. Defaults to `false`. |
+| `DotNetSignType` | Select `test` or `real` signing. Real signing requires an official build identity and signing infrastructure. |
+| `BundleVersion` | Version used in the payload archive name; defaults to the product version with the supplied version suffix, or `dev` locally. |
+| `TrayAppPath` | Path to the prepared macOS tray app. |
+| `WindowsTrayPath` | Path to the prepared Windows tray publish directory. |
+| `CliPublishDir` | Override the CLI publish directory for builds without distribution packages. |
 
-`Configuration` defaults to Debug for local bundle builds. The GitHub Actions native-archive workflow defaults to Release and passes it explicitly; CI bundle creation rejects non-Release configurations so distributed payloads use Native AOT optimizations. `SkipManagedBuild=true` reuses existing Managed, Dashboard, and TerminalHost publishes; `SkipNativeBuild=true` skips the final CLI publish. They do not make missing payload components optional.
+CI identity does not enable distribution packaging. The payload archive is
+created whether or not distribution packages are requested.
+
+The assembled directories are under `artifacts/bundle/{rid}/`; the payload
+archive is `artifacts/bundle/aspire-{version}-{rid}.tar.gz`. The self-extracting
+CLI is in the CLI project's publish output, not in the payload directory.
+
+### Reusing Components and Omitting CLI Output
+
+Bundle publishing has six independent controls, all false when unset.
+Explicit non-boolean values fail validation before restore or publishing:
+
+| Bundle property | Effect when true |
+|---|---|
+| `SkipAspireManagedPublish` | Reuse the prepared Aspire.Managed helper. |
+| `SkipDashboardPublish` | Reuse the RID-specific Dashboard publish; skip publish-warning verification, but still validate the prepared executable. |
+| `SkipTerminalHostPublish` | Reuse the prepared TerminalHost publish and dependencies. |
+| `SkipAppHostServerPublish` | Reuse the native AppHost Server publish and its ATS contract. |
+| `SkipTrayPublish` | Reuse the prepared macOS app or Windows tray publish; no effect on Linux. |
+| `SkipCliArtifacts` | Omit the final embedded CLI and its archive/tool/npm packages; never consume or repackage an existing CLI. |
+
+Component skips affect only their respective publishers and do not make missing
+payload inputs optional. Payload assembly always runs. CLI omission does not
+disable component publishing or requested Dashboard/DCP packages.
+`CliPublishDir` overrides the lightweight CLI publish directory only;
+distribution outputs keep their standard paths.
+
+Component skips suppress publishing, not signing: `Sign=true` still selects
+prepared outputs for signing, and real macOS signing still signs/notarizes the
+prepared tray app. Skipping the final CLI does not prevent signing requested
+Dashboard/DCP packages.
+
+In distribution mode, component publishing finishes by checking that selected
+required prepared files exist, including when publishers are skipped. This check
+runs before signing; assembled archive verification runs separately afterward.
+
+Signed bundle builds restore Arcade's signing tools once, after preparing
+component files and before component signing. `eng/RestoreSigningTools.proj`
+restores only the tool dependencies, not an arbitrary component project.
+Subsequent sign-only invocations use fresh evaluations to discover newly built
+packages without repeating project restore.
+
+Real signed builds also reconcile the assembled layout against the successful
+component signing pass. `write-bundle-signing-receipt.ps1` reads the resolved
+MicroBuild `FilesToSign` requests and successful-pass diagnostic records.
+Component signing passes diagnostic logger options through an MSBuild response
+file, avoiding semicolon reinterpretation by the Windows `build.cmd` PowerShell
+command wrapper.
+The Windows build entry point treats PowerShell errors as terminating so a
+wrapper failure cannot reuse a successful native command's exit code.
+It records processed/already-signed output files and their SHA-256 digests, plus the
+separately signed macOS app after its signing/notarization targets succeed.
+`verify-bundle-signing-accounting.ps1` compares actual native payload bytes with
+that receipt. Renamed and duplicated files match by digest rather than basename.
+
+Native files not processed by this pass require an exact RID/path classification
+in `eng/bundle-signing-policy.json` for preserved upstream signing. Other
+non-native assets are reported separately. Unaccounted native files fail the
+build and are listed in `BundleSigningAccounting.json`; later NuGet signing
+cannot account for a different copy already embedded in the bundle.
+
+This accounting check is separate from cryptographic signature validation.
+The existing unsigned Windows Dashboard SQLite/Hex1b copies are not exempted:
+their policy is unresolved in https://github.com/microsoft/aspire/issues/21303.
+Until resolved, a Windows real-signing build is expected to report those
+omissions rather than silently declaring complete coverage.
+
+These controls belong to `eng/Bundle.proj`, not repository build selection.
+Repository builds and child packaging calls use their own build properties.
+
+`eng/build.sh --bundle` and `eng/build.ps1 -bundle` forward explicit bundle
+controls in `/p:` or `-p:` form. At that boundary only, repository
+`SkipNativeBuild=true` (command line or environment) supplies the CLI-omission
+fallback. An explicit `SkipCliArtifacts=false` overrides it.
+For PowerShell, splat an argument array when passing `-p:` properties;
+direct `pwsh -File ... -p:` arguments collide with common-parameter binding.
+Use `/p:` to avoid that ambiguity.
+
+Distribution builds also validate Dashboard Native AOT warnings. Both modes
+validate required payload assets and the macOS or Windows tray archive.
+Missing required assets fail the build, including when reusing components.
+
+Distribution validation inspects the assembled archive for required component
+files, native architectures, and executable permissions. Compatible CI runners
+also extract the embedded payload from the final CLI, so correct intermediate
+files alone cannot hide a broken distributed binary. Official signing lanes
+verify executable trust, NuGet signatures, and the packaged macOS tray's
+notarization ticket; unsigned GitHub builds do not establish signing correctness.
 
 ### CreateLayout
 
@@ -405,13 +515,15 @@ dotnet run --project tools/CreateLayout -- \
 
 `--output`, `--artifacts`, `--rid`, and `--configuration` are required. `--bundle-version`, `--archive`, and `--verbose` are optional. The output directory is cleaned before assembly. There is no `--embed-in-cli`, `--runtime`, or runtime-download option; embedding happens in the subsequent CLI publish.
 
+Use `--dashboard "/path/to/prepared/publish"` to select a Dashboard publish directory instead of discovering one under the artifacts directory. Invalid or incomplete input fails without falling back to discovery.
+
 For the complete tool contract, see [CreateLayout](../../tools/CreateLayout/README.md). CI packaging additionally uses [dashboardpack](../../eng/dashboardpack/Common.projitems), [clipack](../../eng/clipack/Common.projitems), signing targets, and the native-archive workflows.
 
 ### Experimental Native Tray Companion
 
 `aspire tray start` starts or restores the native companion from the invoking CLI's leased bundle; `aspire tray stop` shuts down the companion without stopping AppHosts. The companion uses the CLI's versioned discovery and exact-instance stop contracts. Linux and standalone CLI binaries without a bundled payload are unsupported.
 
-macOS bundles contain the complete `Aspire Tray.app`, including its executable, plist, artwork, and signature. Windows x64 and ARM64 bundles contain `tray/aspire-tray.exe` and the shared `tray/Aspire.ico`. `CreateLayout` copies the already-published payload and rejects missing or incompatible files. The native archive verification targets check the actual packaged payload before it is embedded in the CLI.
+macOS bundles contain the complete `Aspire Tray.app`, including its executable, plist, artwork, and signature. Windows x64 and ARM64 bundles contain `tray/aspire-tray.exe` and the shared `tray/Aspire.ico`. `CreateLayout` copies the already-published payload and rejects missing or incompatible files. Archive verification checks the actual packaged payload before it is embedded in the CLI.
 
 Official packaging signs the macOS app as a whole and signs the Windows executable before layout assembly. Pipeline wiring and local ad-hoc signatures do not establish that official signing or notarization has been validated. Windows ARM64 native UI, installed-bundle lifecycle, real monitor/DPI behavior, and formal security review remain outstanding; successful cross-publishing or payload verification is not runtime validation.
 

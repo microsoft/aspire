@@ -9,7 +9,7 @@ case "${1:-$(uname -m)}" in
 esac
 
 cd "$root"
-./dotnet.sh msbuild eng/Bundle.proj -t:_PublishNativeTray \
+./dotnet.sh msbuild eng/Bundle.proj '-t:_ValidateBundleConfiguration;_PublishTray' \
     -p:Configuration=Release -p:TargetRid="$rid" --nologo
 
 app="$root/artifacts/bin/Aspire.Tray.Mac/Release/net10.0/$rid/app/Aspire Tray.app"

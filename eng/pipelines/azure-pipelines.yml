@@ -491,6 +491,19 @@ extends:
                 displayName: 🟣Validate npm package signatures
                 condition: and(succeeded(), eq(variables['_SignType'], 'real'))
 
+              # CLI tool packages are produced after per-RID signing, so verify
+              # their signatures only after the assembled packages are signed.
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $packages = @(Get-ChildItem -LiteralPath "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping" -Filter '*.nupkg' -File)
+                  if ($packages.Count -eq 0) { throw 'No staged CLI NuGet packages found for signature verification.' }
+                  foreach ($package in $packages) {
+                    & dotnet nuget verify $package.FullName --all
+                    if ($LASTEXITCODE -ne 0) { throw "NuGet signature verification failed: $($package.Name)" }
+                  }
+                displayName: 🟣Verify signed CLI NuGet packages
+                condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+
               # Managed-side artifacts use PipelineArtifact (1ES.PublishPipelineArtifact@1)
               # which DownloadPipelineArtifact@2 handles natively. Combined size is
               # small (~30s sequential) so parallelizing them isn't worth the

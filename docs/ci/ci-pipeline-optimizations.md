@@ -26,7 +26,7 @@ The main test workflow in `.github/workflows/tests.yml` is organized into these 
 
 3. `build_cli_archive_linux`, `build_cli_archive_windows`, `build_cli_archive_macos`
    - Build native CLI archives per RID
-   - Build the matching RID-specific DCP and Dashboard packages locally with `BuildBundleDepsOnly`
+   - Build RID-specific bundle components through `eng/Bundle.proj`
    - Upload `built-nugets-for-{rid}` artifacts for downstream tests
    - Upload `cli-native-archives-{rid}` artifacts for archive consumers such as polyglot validation
 
@@ -102,9 +102,10 @@ That makes Linux the best place to spend extra build capacity: finishing the sha
 
 ### 2. `build_packages` skips RID-specific bundle dependencies
 
-`build_packages` uses `SkipBundleDeps=true`, while the CLI archive jobs use `BuildBundleDepsOnly=true`.
+`build_packages` uses `SkipBundleDeps=true`, while the CLI archive jobs prepare
+and package their RID-specific components through `eng/Bundle.proj`.
 
-Those two settings work together:
+This division of work means:
 
 - the shared package build avoids work that would otherwise be duplicated
 - each CLI archive job becomes responsible for the RID-specific dependencies it actually needs
@@ -130,15 +131,14 @@ That keeps `build_packages` focused on the shared package feed, and because `ext
 
 ### `build-cli-native-archives.yml`
 
-Each CLI archive job:
+Each CLI archive job owns the components, packages, and validation for its RID.
+Keeping that work together makes the job self-sufficient and lets downstream
+consumers use a matching set of artifacts without waiting for another platform.
 
-1. Builds RID-specific DCP and Dashboard packages locally
-2. Uploads them as `built-nugets-for-{rid}`
-3. Builds the bundle payload
-4. Builds the native CLI archive
-5. Uploads the native archive as `cli-native-archives-{rid}`
-
-This makes the archive job self-sufficient for the RID-specific artifacts it needs.
+GitHub Actions and Azure Pipelines share the bundle orchestration so publishing,
+signing, and assembly cannot drift into different implementations. Components
+are signed before assembly and are not republished afterward, because replacing
+signed files would invalidate the distributed payload's signing guarantees.
 
 ### Native CLI packaging
 

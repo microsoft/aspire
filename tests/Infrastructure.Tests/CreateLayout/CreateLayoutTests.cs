@@ -168,6 +168,24 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         Assert.False(Directory.Exists(outputPath));
     }
 
+    [Fact]
+    public void CopyDashboard_MissingExplicitDirectoryDoesNotFallBackToDiscoverablePayload()
+    {
+        const string rid = "linux-x64";
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var discoveredPath = CreateDashboardPublishOutput(workspace.Path, rid, "libe_sqlite3.so");
+        var explicitPath = Path.Combine(workspace.Path, "missing prepared Dashboard");
+        var outputPath = Path.Combine(workspace.Path, "layout");
+        using var builder = new LayoutBuilder(outputPath, workspace.Path, rid, "Debug", "1.0.0",
+            verbose: false, trayAppPath: null, windowsTrayPath: null, dashboardPath: explicitPath);
+
+        var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
+
+        Assert.Equal($"Dashboard publish directory not found at {explicitPath}", exception.Message);
+        Assert.Equal(discoveredPath, builder.FindPublishPath("Aspire.Dashboard", "net11.0", requireRidSpecific: true));
+        Assert.False(Directory.Exists(Path.Combine(outputPath, "dashboard")));
+    }
+
     [Theory]
     [InlineData("win-x64", "e_sqlite3.dll")]
     [InlineData("win-arm64", "e_sqlite3.dll")]
@@ -291,6 +309,62 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal($"Native AOT Dashboard SQLite library missing or empty at {sqliteLibraryPath}", exception.Message);
         Assert.False(Directory.Exists(Path.Combine(outputPath, "dashboard")));
+    }
+
+    [Fact]
+    public void CopyDashboard_ExplicitDirectoryPreservesPayloadFiltering()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var publish = CreateDashboardPublishOutput(workspace.Path, "win-x64", "e_sqlite3.dll");
+        var explicitPath = Path.Combine(workspace.Path, "prepared dashboard outside artifacts");
+        Directory.Move(publish, explicitPath);
+        File.WriteAllText(Path.Combine(explicitPath, "Aspire.Dashboard.exe"), "explicit executable");
+        File.WriteAllText(Path.Combine(explicitPath, "Aspire.Dashboard.pdb"), "symbols");
+        Directory.CreateDirectory(Path.Combine(explicitPath, "nested.dSYM"));
+        File.WriteAllText(Path.Combine(explicitPath, "nested.dSYM", "symbols"), "symbols");
+        File.WriteAllText(Path.Combine(explicitPath, "Aspire.Dashboard.dbg"), "symbols");
+        var output = Path.Combine(workspace.Path, "layout");
+        using var builder = new LayoutBuilder(output, workspace.Path, "win-x64", "Debug", "1.0", false, null, null, explicitPath);
+
+        builder.CopyDashboard();
+
+        var dashboard = Path.Combine(output, "dashboard");
+        Assert.Equal(["Aspire.Dashboard.exe", "e_sqlite3.dll", "wwwroot/_framework/blazor.web.js"],
+            Directory.GetFiles(dashboard, "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(dashboard, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
+        Assert.Equal("explicit executable", File.ReadAllText(Path.Combine(dashboard, "Aspire.Dashboard.exe")));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public void CopyDashboard_EmptyExplicitDirectoryIsRejected(string path)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        CreateDashboardPublishOutput(workspace.Path, "win-x64", "e_sqlite3.dll");
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path,
+                "win-x64", "Debug", "1.0", false, null, null, path));
+
+        Assert.Equal("--dashboard requires a nonempty publish directory.", exception.Message);
+    }
+
+    [Fact]
+    public void CopyDashboard_DiscoveryFailureIdentifiesSearchLocations()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path,
+            "win-x64", "Debug", "1.0", false, null, null);
+
+        var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
+
+        Assert.Contains("win-x64", exception.Message);
+        Assert.Contains("Debug", exception.Message);
+        foreach (var path in GetPublishPaths(workspace.Path, "Debug")[..^1])
+        {
+            Assert.Contains(path, exception.Message);
+        }
     }
 
     private static string CreateDashboardPublishOutput(string artifactsPath, string rid, string sqliteLibraryName)

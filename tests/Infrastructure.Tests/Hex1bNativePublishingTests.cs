@@ -96,7 +96,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var result = await RunDotNetAsync(
             ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo", "-t:_ShowBanner",
              $"-p:Configuration={configuration}", $"-p:ContinuousIntegrationBuild={ci}",
-             $"-p:ArtifactsLogDir={Path.Combine(_workspace.Path, "logs")}"]);
+             $"-p:_ArtifactsLogDir={Path.Combine(_workspace.Path, "logs")}"]);
 
         Assert.Equal(succeeds, result.ExitCode == 0);
         if (!succeeds)
@@ -352,6 +352,107 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         Assert.Contains($"'{rid}'", result.Output);
         Assert.Contains("win-x64", result.Output);
         Assert.Contains("win-arm64", result.Output);
+    }
+
+    [Theory]
+    [InlineData("Debug", "osx-arm64")]
+    [InlineData("Release", "osx-x64")]
+    public async Task BundleResolvesProductTrayProjectAndOutputDirectory(string configuration, string rid)
+    {
+        var result = await RunDotNetAsync(
+            ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo",
+             $"-p:Configuration={configuration}", $"-p:TargetRid={rid}",
+             "-getProperty:_TrayProjectPath,TrayAppPath,DefaultTargetFramework"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        var properties = document.RootElement.GetProperty("Properties");
+        Assert.Equal(
+            Path.Combine(RepoRoot.Path, "src", "Aspire.Tray", "Mac", "Aspire.Tray.Mac.csproj"),
+            Path.GetFullPath(properties.GetProperty("_TrayProjectPath").GetString()!));
+        Assert.Equal(
+            Path.Combine(RepoRoot.Path, "artifacts", "bin", "Aspire.Tray.Mac", configuration,
+                properties.GetProperty("DefaultTargetFramework").GetString()!, rid, "app", "Aspire Tray.app"),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(properties.GetProperty("TrayAppPath").GetString()!)));
+    }
+
+    [Theory]
+    [InlineData("linux-x64", false)]
+    [InlineData("win-arm64", false)]
+    [InlineData("osx-arm64", false)]
+    [InlineData("linux-x64", true)]
+    public async Task BundleReusesPreparedDashboardWithoutRepublishing(string rid, bool missingDashboard)
+    {
+        var dashboard = Path.Combine(_workspace.Path, "artifacts", "bin", "Aspire.Dashboard", rid,
+            "Release", "net11.0", rid, "publish",
+            rid.StartsWith("win-", StringComparison.Ordinal) ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
+        if (!missingDashboard)
+        {
+            WriteFile(dashboard, "prepared Dashboard");
+        }
+        var project = CreateBundlePublishProject(dashboard);
+        var result = await RunDotNetAsync(
+            ["msbuild", project, "-nologo", "-t:_PublishBundleComponents", "-p:SkipAppHostServerPublish=true", "-p:SkipTrayPublish=true", "-p:Configuration=Release",
+             $"-p:TargetRid={rid}", "-p:AspireDashboardTargetFramework=net11.0", "-p:SkipDashboardPublish=true"]);
+
+        Assert.Equal(!missingDashboard, result.ExitCode == 0);
+        Assert.Equal(missingDashboard ? ["managed"] : ["managed", "terminalhost"],
+            File.ReadAllLines(Path.Combine(_workspace.Path, "published.txt")));
+        if (missingDashboard)
+        {
+            Assert.Contains("Prepared Native AOT Dashboard was not found", result.Output);
+        }
+        else
+        {
+            Assert.Equal("prepared Dashboard", File.ReadAllText(dashboard));
+        }
+    }
+
+    [Fact]
+    public async Task StandaloneBundleStillPublishesDashboardByDefault()
+    {
+        var dashboard = Path.Combine(_workspace.Path, "dashboard");
+        var project = CreateBundlePublishProject(dashboard);
+        var result = await RunDotNetAsync(
+            ["msbuild", project, "-nologo", "-t:_PublishBundleComponents", "-p:SkipAppHostServerPublish=true", "-p:SkipTrayPublish=true", "-p:Configuration=Release"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(["managed", "dashboard", "terminalhost"],
+            File.ReadAllLines(Path.Combine(_workspace.Path, "published.txt")));
+        Assert.Equal("new Dashboard", File.ReadAllText(dashboard).Trim());
+    }
+
+    private string CreateBundlePublishProject(string dashboard)
+    {
+        foreach (var component in new[] { "managed", "dashboard", "terminalhost" })
+        {
+            var publish = new XElement("Target", new XAttribute("Name", "Publish"),
+                new XElement("WriteLinesToFile",
+                    new XAttribute("File", Path.Combine(_workspace.Path, "published.txt")),
+                    new XAttribute("Lines", component)));
+            if (component == "dashboard")
+            {
+                publish.Add(new XElement("WriteLinesToFile",
+                    new XAttribute("File", dashboard),
+                    new XAttribute("Lines", "new Dashboard"),
+                    new XAttribute("Overwrite", "true")));
+            }
+            new XDocument(new XElement("Project",
+                new XElement("Target", new XAttribute("Name", "Restore")), publish))
+                .Save(Path.Combine(_workspace.Path, component + ".proj"));
+        }
+
+        var project = Path.Combine(_workspace.Path, "BundlePublish.proj");
+        new XDocument(new XElement("Project",
+            new XElement("Import", new XAttribute("Project", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"))),
+            new XElement("PropertyGroup",
+                new XElement("_ArtifactsDir", Path.Combine(_workspace.Path, "artifacts") + Path.DirectorySeparatorChar),
+                new XElement("_DashboardPublishDir", Path.GetDirectoryName(dashboard) + Path.DirectorySeparatorChar),
+                new XElement("_ManagedProjectPath", Path.Combine(_workspace.Path, "managed.proj")),
+                new XElement("_DashboardProjectPath", Path.Combine(_workspace.Path, "dashboard.proj")),
+                new XElement("_TerminalHostProjectPath", Path.Combine(_workspace.Path, "terminalhost.proj")))))
+            .Save(project);
+        return project;
     }
 
     private string CreatePublishProject(string rid, bool singleFile, bool duplicateUnrelatedAsset)

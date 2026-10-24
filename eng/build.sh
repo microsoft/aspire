@@ -334,20 +334,68 @@ if [ "$build_bundle" = true ]; then
         "/p:TargetRid=$rid"
     )
     
-    # Pass through SkipNativeBuild if set
-    for arg in "$@"; do
-        if [[ "$arg" == *"SkipNativeBuild=true"* ]]; then
-            bundle_args+=("/p:SkipNativeBuild=true")
-            break
-        fi
+    # Positional arguments were consumed above. Translate repository native-build
+    # selection only at the Bundle boundary; an explicit bundle selection wins.
+    bundle_cli_explicit=false
+    repository_skip_native=""
+    repository_skip_environment=()
+    # MSBuild property names are case-insensitive even on Unix. Keep the actual
+    # exported names so the Bundle subprocess can remove every spelling.
+    while IFS= read -r name; do
+        case "$(printf '%s' "$name" | tr "[:upper:]" "[:lower:]")" in
+            skipnativebuild)
+                repository_skip_native="$(printenv "$name")"
+                repository_skip_environment+=("$name") ;;
+            skipmanagedbuild|skipapphostserverbuild|skiptraybuild)
+                repository_skip_environment+=("$name") ;;
+            skipcliartifacts)
+                # A sentinel preserves trailing newlines: any nonempty explicit
+                # value must reach Bundle validation rather than a legacy fallback.
+                environment_value="$(printenv "$name"; printf '.')"
+                environment_value="${environment_value%$'\n.'}"
+                if [[ -n "$environment_value" ]]; then
+                    bundle_cli_explicit=true
+                fi ;;
+        esac
+    done < <(compgen -e)
+    for arg in ${extraargs[@]+"${extraargs[@]}"}; do
+        case "$(echo "$arg" | tr "[:upper:]" "[:lower:]")" in
+            /p:*|-p:*)
+                # MSBuild accepts /p:Name=value;Other=value (or a comma).
+                # Forward individual Bundle controls, never the whole list:
+                # it can also contain retired inputs valid only for the repo build.
+                IFS=';,' read -r -a bundle_properties <<< "${arg:3}"
+                for property in ${bundle_properties[@]+"${bundle_properties[@]}"}; do
+                    case "$(printf '%s' "$property" | tr "[:upper:]" "[:lower:]")" in
+                        skipnativebuild=*)
+                            repository_skip_native="${property#*=}" ;;
+                        skipcliartifacts=*)
+                            bundle_cli_explicit=true
+                            bundle_args+=("${arg:0:3}$property") ;;
+                        skipaspiremanagedpublish=*|skipdashboardpublish=*|\
+                        skipterminalhostpublish=*|skipapphostserverpublish=*|skiptraypublish=*)
+                            bundle_args+=("${arg:0:3}$property") ;;
+                    esac
+                done ;;
+        esac
     done
+    if [[ "$bundle_cli_explicit" == "false" && "$(echo "$repository_skip_native" | tr "[:upper:]" "[:lower:]")" == "true" ]]; then
+        bundle_args+=("/p:SkipCliArtifacts=true")
+    fi
     
     # CI flag is passed to Bundle.proj which handles version computation via Versions.props
     if [ "${CI:-}" = "true" ]; then
         bundle_args+=("/p:ContinuousIntegrationBuild=true")
     fi
     
-    dotnet msbuild "${bundle_args[@]}" || exit $?
+    # Environment properties remain valid for repository builds, but are retired
+    # Bundle inputs. Scrub only this subprocess, never the caller's environment.
+    (
+        for name in ${repository_skip_environment[@]+"${repository_skip_environment[@]}"}; do
+            unset "$name"
+        done
+        dotnet msbuild "${bundle_args[@]}"
+    ) || exit $?
 fi
 
 exit 0

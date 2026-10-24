@@ -8,10 +8,18 @@
     2. Extracts the CLI archive to a temp location
     3. Verifies the archive shape contains the native CLI payload and no install-route sidecar
     4. Runs 'aspire --version' to validate the binary executes
-    5. Cleans up temp directories
+    5. Optionally extracts and validates the embedded bundle and official signatures
+    6. Cleans up temp directories
 
 .PARAMETER ArchivePath
     Path to the CLI archive (.zip or .tar.gz)
+
+.PARAMETER VerifyBundle
+    Run bundle setup and validate the resulting component layout.
+
+.PARAMETER VerifySignature
+    Require trusted executable signatures. With VerifyBundle, also verify
+    component signatures and macOS tray notarization after extraction.
 
 .EXAMPLE
     .\verify-cli-archive.ps1 -ArchivePath "artifacts\packages\Release\Shipping\aspire-cli-win-x64-10.0.0.zip"
@@ -19,7 +27,11 @@
 
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [string]$ArchivePath
+    [string]$ArchivePath,
+
+    [switch]$VerifyBundle,
+
+    [switch]$VerifySignature
 )
 
 $ErrorActionPreference = 'Stop'
@@ -223,6 +235,36 @@ try {
     }
     Write-Host "  Version: $versionOutput"
     Write-Ok "'aspire --version' succeeded"
+
+    if ($VerifyBundle) {
+        Write-Step "Extracting and validating the embedded bundle..."
+        & $aspireBin setup
+        if ($LASTEXITCODE -ne 0) { throw "'aspire setup' failed with exit code $LASTEXITCODE." }
+
+        # CLI archive names use aspire-cli-<rid>-<version>.<extension>.
+        $name = [IO.Path]::GetFileName($ArchivePath)
+        if ($name -notmatch '^aspire-cli-(win-(?:x64|arm64)|osx-(?:x64|arm64)|linux-(?:musl-x64|x64|arm64))-') {
+            throw "Could not determine the bundle RID from archive name: $name"
+        }
+        $rid = $Matches[1]
+        $requireSignature = if ($VerifySignature) { 'true' } else { 'false' }
+        & "$PSScriptRoot/verify-bundle-payload.ps1" -LayoutDirectory (Join-Path $aspireDir 'bundle') -Rid $rid -RequireSignature $requireSignature
+        if ($LASTEXITCODE -ne 0) { throw 'Embedded bundle verification failed.' }
+    }
+
+    if ($VerifySignature) {
+        if (Test-IsWindows) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $aspireBin
+            if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation(?:,|$)') {
+                throw "CLI requires a valid Microsoft Authenticode signature (status: $($signature.Status))."
+            }
+        }
+        elseif ([Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Runtime.InteropServices.OSPlatform]::OSX)) {
+            & codesign --verify --strict '-R=anchor apple generic' $aspireBin
+            if ($LASTEXITCODE -ne 0) { throw 'CLI signature verification failed.' }
+        }
+        else { throw 'CLI executable signature verification requires Windows or macOS.' }
+    }
 
     # Note: 'aspire new aspire-starter' was previously invoked here to exercise the
     # template engine + bundle self-extraction path. It has been removed because the

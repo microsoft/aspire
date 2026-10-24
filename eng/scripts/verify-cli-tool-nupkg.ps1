@@ -17,13 +17,10 @@ function Write-Step([string]$Message) {
 }
 
 function Test-NupkgSignature([string]$NupkgPath) {
-    $zip = [System.IO.Compression.ZipFile]::OpenRead($NupkgPath)
-    try {
-        return [bool]($zip.Entries | Where-Object { $_.FullName -eq '.signature.p7s' } | Select-Object -First 1)
-    }
-    finally {
-        $zip.Dispose()
-    }
+    # Checking for .signature.p7s alone accepts corrupted or untrusted signatures.
+    # https://learn.microsoft.com/dotnet/core/tools/dotnet-nuget-verify
+    & dotnet nuget verify $NupkgPath --all | ForEach-Object { Write-Host $_ }
+    return $LASTEXITCODE -eq 0
 }
 
 function Expand-Nupkg([System.IO.FileInfo]$Package, [string]$Destination) {
@@ -281,11 +278,11 @@ try {
 
     if ($VerifySignature) {
         if (-not (Test-NupkgSignature $ridPackage.FullName)) {
-            throw "RID package $($ridPackage.Name) is not signed."
+            throw "RID package $($ridPackage.Name) does not have a valid trusted NuGet signature."
         }
 
         if (-not (Test-NupkgSignature $pointerPackage.FullName)) {
-            throw "Pointer package $($pointerPackage.Name) is not signed."
+            throw "Pointer package $($pointerPackage.Name) does not have a valid trusted NuGet signature."
         }
     }
 

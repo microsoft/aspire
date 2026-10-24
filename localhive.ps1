@@ -403,7 +403,6 @@ else {
 # Build the bundle payload (aspire-managed + DCP tar.gz archive, and optionally native AOT CLI)
 if (-not $SkipBundle) {
   $bundleProjPath = Join-Path $RepoRoot "eng" "Bundle.proj"
-  $skipNativeArg = if ($NativeAot) { '' } else { '/p:SkipNativeBuild=true' }
 
   # Clean stale managed publish output so dotnet publish doesn't skip due to incremental builds
   $staleManagedDir = Join-Path $RepoRoot "artifacts" "bundle" $bundleRid "managed"
@@ -415,7 +414,7 @@ if (-not $SkipBundle) {
   Write-Log "Building bundle (aspire-managed + DCP$(if ($NativeAot) { ' + native AOT CLI' }))..."
   $buildArgs = @($bundleProjPath, '-c', $effectiveConfig) + $packVersionArgs + @("/p:TargetRid=$bundleRid")
   if (-not $NativeAot) {
-    $buildArgs += '/p:SkipNativeBuild=true'
+    $buildArgs += '/p:SkipCliArtifacts=true'
   }
   & dotnet build @buildArgs
   if ($LASTEXITCODE -ne 0) {
