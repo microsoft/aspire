@@ -304,6 +304,159 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified).
+        /// </summary>
+        internal static string TemplatePathOptionDescription {
+            get {
+                return ResourceManager.GetString("TemplatePathOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to --template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language..
+        /// </summary>
+        internal static string TemplatePathConflictingOptions {
+            get {
+                return ResourceManager.GetString("TemplatePathConflictingOptions", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Clone a Git repository containing templates; --template-path is relative to its root.
+        /// </summary>
+        internal static string TemplateRepositoryOptionDescription {
+            get {
+                return ResourceManager.GetString("TemplateRepositoryOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Cloning template repository....
+        /// </summary>
+        internal static string CloningTemplateRepository {
+            get {
+                return ResourceManager.GetString("CloningTemplateRepository", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD).
+        /// </summary>
+        internal static string TemplateRepositoryRefOptionDescription {
+            get {
+                return ResourceManager.GetString("TemplateRepositoryRefOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to --template-repository-ref requires --template-repository and a non-empty ref value..
+        /// </summary>
+        internal static string TemplateRepositoryRefRequiresRepository {
+            get {
+                return ResourceManager.GetString("TemplateRepositoryRefRequiresRepository", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resolving template repository ref....
+        /// </summary>
+        internal static string ResolvingTemplateRepository {
+            get {
+                return ResourceManager.GetString("ResolvingTemplateRepository", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not resolve template repository ref &apos;{0}&apos; to a commit SHA. Specify a branch, tag, or full commit SHA..
+        /// </summary>
+        internal static string TemplateRepositoryRefNotFound {
+            get {
+                return ResourceManager.GetString("TemplateRepositoryRefNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not access the template repository: {0}.
+        /// </summary>
+        internal static string TemplateRepositoryGitFailed {
+            get {
+                return ResourceManager.GetString("TemplateRepositoryGitFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Git failed with exit code {0}: {1}.
+        /// </summary>
+        internal static string TemplateRepositoryGitExited {
+            get {
+                return ResourceManager.GetString("TemplateRepositoryGitExited", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Git could not be started. Install Git and ensure it is on PATH..
+        /// </summary>
+        internal static string TemplateRepositoryGitUnavailable {
+            get {
+                return ResourceManager.GetString("TemplateRepositoryGitUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links..
+        /// </summary>
+        internal static string TemplateRepositoryPathInvalid {
+            get {
+                return ResourceManager.GetString("TemplateRepositoryPathInvalid", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The template directory &apos;{0}&apos; does not exist..
+        /// </summary>
+        internal static string TemplateDirectoryNotFound {
+            get {
+                return ResourceManager.GetString("TemplateDirectoryNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No .NET templates were found in &apos;{0}&apos;. Expected a .template.config/template.json file in the directory or one of its subdirectories..
+        /// </summary>
+        internal static string NoLocalTemplatesFound {
+            get {
+                return ResourceManager.GetString("NoLocalTemplatesFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not load the local template: {0}.
+        /// </summary>
+        internal static string LocalTemplateLoadFailed {
+            get {
+                return ResourceManager.GetString("LocalTemplateLoadFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not create the local template ({0}): {1}.
+        /// </summary>
+        internal static string LocalTemplateCreationFailed {
+            get {
+                return ResourceManager.GetString("LocalTemplateCreationFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory..
+        /// </summary>
+        internal static string LocalTemplateSelectionRequiresInteraction {
+            get {
+                return ResourceManager.GetString("LocalTemplateSelectionRequiresInteraction", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The version of the project templates to use.
         /// </summary>
         internal static string VersionArgumentDescription {

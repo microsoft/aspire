@@ -186,6 +186,9 @@
   <data name="None" xml:space="preserve">
     <value>None</value>
   </data>
+  <data name="Skip" xml:space="preserve">
+    <value>Skip</value>
+  </data>
   <data name="Unknown" xml:space="preserve">
     <value>Unknown</value>
   </data>

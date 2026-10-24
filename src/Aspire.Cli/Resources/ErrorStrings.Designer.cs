@@ -61,6 +61,87 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Git could not be started. Install Git and ensure it is on PATH..
+        /// </summary>
+        internal static string GitUnavailable {
+            get {
+                return ResourceManager.GetString("GitUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled..
+        /// </summary>
+        internal static string GitAuthenticationFailed {
+            get {
+                return ResourceManager.GetString("GitAuthenticationFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Git repository could not be accessed. Check its address, network connectivity, and your access permissions..
+        /// </summary>
+        internal static string GitRepositoryUnavailable {
+            get {
+                return ResourceManager.GetString("GitRepositoryUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Git command failed. Check the repository and selected reference..
+        /// </summary>
+        internal static string GitCommandFailed {
+            get {
+                return ResourceManager.GetString("GitCommandFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Git operation timed out after two minutes..
+        /// </summary>
+        internal static string GitTimedOut {
+            get {
+                return ResourceManager.GetString("GitTimedOut", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The selected file was not found in the Git snapshot..
+        /// </summary>
+        internal static string GitFileNotFound {
+            get {
+                return ResourceManager.GetString("GitFileNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The selected Git entry is not a regular file. Symbolic links and directories are not supported..
+        /// </summary>
+        internal static string GitFileNotRegular {
+            get {
+                return ResourceManager.GetString("GitFileNotRegular", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Git blob exceeds the requested size limit..
+        /// </summary>
+        internal static string GitBlobTooLarge {
+            get {
+                return ResourceManager.GetString("GitBlobTooLarge", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Git returned an invalid or incomplete response..
+        /// </summary>
+        internal static string GitInvalidOutput {
+            get {
+                return ResourceManager.GetString("GitInvalidOutput", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Already connected to AppHost backchannel..
         /// </summary>
         internal static string AlreadyConnectedToBackchannel {

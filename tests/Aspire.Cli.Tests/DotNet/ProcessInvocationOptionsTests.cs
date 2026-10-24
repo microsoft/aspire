@@ -5,6 +5,7 @@ using System.Reflection;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Shared;
+using Microsoft.Win32.SafeHandles;
 
 namespace Aspire.Cli.Tests.DotNet;
 
@@ -13,6 +14,7 @@ public sealed class ProcessInvocationOptionsTests
     [Fact]
     public void Clone_CopiesEveryProperty()
     {
+        using var standardOutputHandle = new SafeFileHandle(IntPtr.Zero, ownsHandle: false);
         // Reflection-driven on purpose: adding a property to ProcessInvocationOptions without also
         // forwarding it in Clone() must fail this test rather than silently drop the value on the copy —
         // the exact "silently break" hazard Clone() exists to guard against.
@@ -20,6 +22,7 @@ public sealed class ProcessInvocationOptionsTests
         {
             StandardOutputCallback = _ => { },
             StandardErrorCallback = _ => { },
+            StandardOutputHandle = standardOutputHandle,
             NoLaunchProfile = true,
             NoRestore = true,
             ExcludeRestorePackageImports = true,

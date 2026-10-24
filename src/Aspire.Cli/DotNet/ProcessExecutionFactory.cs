@@ -125,11 +125,18 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
     }
 
     /// <summary>
-    /// Maps the launch options onto a <see cref="ProcessStartInfo"/>. Standard handles are assigned by
-    /// <see cref="Aspire.Shared.ChildProcess.StartAsync"/> so an execution that is never started holds no handles.
+    /// Maps the launch options onto a <see cref="ProcessStartInfo"/>. Unless supplied by the caller,
+    /// standard handles are assigned by <see cref="Aspire.Shared.ChildProcess.StartAsync"/> so an
+    /// execution that is never started holds no handles.
     /// </summary>
     internal static ProcessStartInfo CreateProcessStartInfo(string fileName, IEnumerable<string> arguments, string workingDirectory, ProcessInvocationOptions options)
     {
+        if (options.StandardOutputHandle is not null
+            && (options.Detached || options.KillOnParentExit || options.Lifetime == Aspire.Shared.ChildProcessLifetime.OwnedTree
+                || options.StandardOutputCallback is not null))
+        {
+            throw new ArgumentException("Raw stdout redirection requires a directly managed attached process without a stdout line callback.", nameof(options));
+        }
         var startInfo = new ProcessStartInfo(fileName, arguments)
         {
             WorkingDirectory = workingDirectory,
@@ -138,11 +145,18 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
 
         if (!options.Detached)
         {
-            startInfo.RedirectStandardOutput = true;
+            if (options.StandardOutputHandle is { } outputHandle)
+            {
+                startInfo.StandardOutputHandle = outputHandle;
+            }
+            else
+            {
+                startInfo.RedirectStandardOutput = true;
+                startInfo.StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false);
+            }
             startInfo.RedirectStandardError = true;
             // Pin encodings so process output decoding is stable regardless of the ambient
             // Console.OutputEncoding (e.g. on container hosts that leave it set to ASCII).
-            startInfo.StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false);
             startInfo.StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false);
         }
         else if (!OperatingSystem.IsWindows())

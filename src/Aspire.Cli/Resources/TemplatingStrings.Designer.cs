@@ -376,6 +376,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Skip.
+        /// </summary>
+        internal static string Skip {
+            get {
+                return ResourceManager.GetString("Skip", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to [yellow]--source was used for the initial scaffold restore only and is not persisted. Later &apos;aspire restore&apos; / &apos;aspire add&apos; will use the channel feeds configured for this project.[/].
         /// </summary>
         internal static string SourceOverrideNotPersistedWarning {

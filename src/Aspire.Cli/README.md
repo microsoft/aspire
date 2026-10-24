@@ -36,6 +36,156 @@ aspire <command> [options]
 
 C# AppHosts created with Aspire 17 or later use package directives instead of the obsolete AppHost SDK. When targeting an earlier Aspire release, the empty template retains its SDK directive so it does not require the newer `Aspire.Hosting.Dotnet` package.
 
+### Directory and Git templates
+
+Use an unpacked .NET template package without installing it into `dotnet new`:
+
+```bash
+aspire new --template-path ./my-template
+aspire new --template-path ./my-template --name MyApp --output ./MyApp
+```
+
+To use a template from a Git repository:
+
+```bash
+aspire new --template-repository https://github.com/example/templates.git --template-path templates/my-template
+aspire new --template-repository git@github.com:example/templates.git --template-path templates/my-template --name MyApp --output ./MyApp
+aspire new --template-repository https://github.com/example/templates.git --template-path templates/my-template --template-repository-ref v1.0
+```
+
+With `--template-repository`, `--template-path` is relative to the repository
+root and defaults to `.` when omitted. It cannot be absolute, escape the
+repository, or traverse symbolic links. Without `--template-repository`, paths
+remain relative to the working directory or absolute.
+
+`--template-repository-ref` requires `--template-repository` and accepts a branch,
+tag, or full commit SHA. If omitted, it selects the remote `HEAD`. Branches and
+tags are resolved to a commit SHA on every invocation before creating a cache
+entry. Annotated tags resolve to their target commit; an unqualified branch name
+takes precedence over a tag with the same name. Use `refs/tags/name` to select
+that tag explicitly.
+
+Git must be on `PATH` when resolving named refs or downloading a checkout.
+Successful checkouts are retained under `~/.aspire/cache/git/<hash>/`, keyed by
+the repository and resolved commit SHA. Different paths and refs pointing to
+the same repository commit share an entry; moving a branch or tag selects a
+new entry. Cache misses fetch only the resolved commit with depth one and
+check it out detached, so a branch moving during the download cannot change
+the selected version. Incomplete downloads are never published to the cache
+and are cleaned up on failure or cancellation. Existing entries remain available.
+Cached versions can be removed manually when no invocation is using them.
+On Unix and macOS, the Git cache root is created with owner-only (`0700`)
+permissions. Existing root permissions are repaired on cache reuse.
+
+Git's normal credential helpers and SSH authentication configuration apply, but
+Git terminal credential prompts are always disabled (`GIT_TERMINAL_PROMPT=0`),
+including during interactive Aspire commands. Configure authentication before
+running the command. Each Git operation has a two-minute timeout; cloning shares
+one timeout across initialization, fetching, checkout, and verification.
+Submodule cloning and repository catalogs are not supported.
+
+Git process execution is isolated behind `Aspire.Cli.Git.IGitRunner`, backed by
+`IProcessExecutionFactory`. The template factory owns checkout lifetime, template
+path validation, Git metadata exclusion, and template-engine discovery.
+The Git runner also supports fetching an exact commit into a bare repository,
+looking up a regular file's blob ID without checkout, and reading byte-preserving
+blob content with a caller-specified size limit. JSON parsing and configuration
+validation remain the caller's responsibility. Repository-routing Git environment
+variables are excluded from child processes, and private Git arguments, output,
+and raw error diagnostics are not logged. Failures are reported through localized
+messages and a classified `GitFailure` value.
+
+The directory must contain `.template.config/template.json`, either directly or
+under its template subdirectories. If it contains multiple templates, Aspire
+prompts for a selection. Template parameter metadata drives text, Boolean,
+single-choice, and multiple-choice prompts. The .NET template engine handles
+defaults, replacements, generated symbols, conditional content, and file renames.
+Template post-actions (including restore and scripts) are not executed.
+Git metadata (`.git` directories and worktree/submodule pointer files) is excluded
+from the engine's source view for both directory and Git templates without changing
+the original files. Other Git-related files, such as `.gitignore`,
+`.gitattributes`, and `.github` contents, are preserved.
+
+`AspireVersion` is a well-known template parameter (case-insensitive). When a
+template declares it as a parameter symbol, Aspire supplies the running CLI's
+package version automatically instead of prompting, overriding any template
+default. This includes the full prerelease or PR suffix and excludes SemVer
+build metadata (`+...`). It also honors CLI identity overrides. For example:
+
+```json
+{
+  "symbols": {
+    "AspireVersion": {
+      "type": "parameter",
+      "datatype": "string",
+      "replaces": "{{aspireVersion}}"
+    }
+  }
+}
+```
+
+`AspireNuGetSource` is another well-known parameter (case-insensitive). If declared,
+Aspire supplies the Aspire package source for the same CLI identity used by
+`AspireVersion`, overriding its default without prompting or querying package
+feeds. This is the nuget.org service index for stable, the appropriate feed for
+daily/staging, or a local package directory for a PR/local hive. CLI identity
+package-directory and NuGet service-index overrides are honored. If the identity's
+package channel cannot be resolved, creation fails before writing files rather
+than using an unrelated feed.
+
+The value is a raw URL or directory path. Templates must encode it for their
+output format and use matching source and package-source-mapping keys. For
+double-quoted XML attributes, `xmlEncode` also needs a quote-escaping form:
+
+```json
+{
+  "symbols": {
+    "AspireNuGetSource": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "https://api.nuget.org/v3/index.json"
+    },
+    "aspireNuGetSourceXml": {
+      "type": "derived",
+      "valueSource": "AspireNuGetSource",
+      "valueTransform": "xmlAttribute",
+      "replaces": "{{aspireNuGetSourceXml}}"
+    }
+  },
+  "forms": {
+    "xmlQuotes": {
+      "identifier": "replace",
+      "pattern": "\"",
+      "replacement": "&quot;"
+    },
+    "xmlAttribute": {
+      "identifier": "chain",
+      "steps": ["xmlEncode", "xmlQuotes"]
+    }
+  }
+}
+```
+
+Existing non-empty output directories are rejected. `--template-path` and
+`--template-repository` cannot be combined with a built-in template name,
+`--source`, `--version`, `--channel`, or `--language`. These sources are discovered
+through `ITemplateProvider` and the engine-backed `ITemplateFactory`; they do not
+resolve template packages from feeds or require the .NET SDK. Normal optional
+agent setup still applies; use `--suppress-agent-init` to skip it.
+
+In non-interactive mode, point to a single template and provide `--name` and
+`--output` as needed. Other template parameters use their engine-defined defaults;
+missing required values produce an error. Custom parameter values are currently
+collected interactively, not through dynamically generated CLI options.
+
+Interactive prompts honor parameter `isEnabled` and `isRequired` expressions using
+the template engine's typed values and expression evaluator. Parameters controlling
+these conditions are collected before their dependents, regardless of declaration
+order. Disabled parameters are omitted, and conditional requiredness applies to
+text, single-choice, and multiple-choice prompts. Optional single-choice parameters
+without a default offer **Skip** as the initial selection; skipping leaves the
+parameter unset for the template engine.
+
 ### Resource Management
 
 | Command | Description |

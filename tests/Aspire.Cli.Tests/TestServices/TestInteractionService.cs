@@ -47,7 +47,7 @@ internal sealed class TestInteractionService : IInteractionService
     public List<StringPromptCall> StringPromptCalls { get; } = [];
     public List<FilePathPromptCall> FilePathPromptCalls { get; } = [];
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
-    public List<(string PromptText, string? DefaultValue, IReadOnlyList<object> PreSelected)> MultiSelectionPromptCalls { get; } = [];
+    public List<(string PromptText, string? DefaultValue, IReadOnlyList<object> PreSelected, bool Optional)> MultiSelectionPromptCalls { get; } = [];
     public List<string> DisplayedErrors { get; } = [];
     public List<string> ValidationFailures { get; } = [];
     public List<(KnownEmoji Emoji, string Message, ConsoleOutput? ConsoleOverride)> DisplayedMessages { get; } = [];
@@ -123,7 +123,7 @@ internal sealed class TestInteractionService : IInteractionService
             return Task.FromResult(value);
         }
 
-        StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret));
+        StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret, required));
 
         return PromptForResponseAsync(validator, binding, cancellationToken);
     }
@@ -211,7 +211,7 @@ internal sealed class TestInteractionService : IInteractionService
     {
         lock (_displayLock)
         {
-            MultiSelectionPromptCalls.Add((promptText, binding?.DefaultValue, preSelected?.Cast<object>().ToArray() ?? []));
+            MultiSelectionPromptCalls.Add((promptText, binding?.DefaultValue, preSelected?.Cast<object>().ToArray() ?? [], optional));
         }
 
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
@@ -404,7 +404,7 @@ internal enum ResponseType
     Boolean
 }
 
-internal sealed record StringPromptCall(string PromptText, string? DefaultValue, bool IsSecret);
+internal sealed record StringPromptCall(string PromptText, string? DefaultValue, bool IsSecret, bool Required);
 internal sealed record FilePathPromptCall(string PromptText, string? DefaultValue, bool Directory);
 internal sealed record SelectionPromptCall<T>(string PromptText, IEnumerable<T> Choices, Func<T, string> ChoiceFormatter);
 internal sealed record BooleanPromptCall(string PromptText, bool DefaultValue);

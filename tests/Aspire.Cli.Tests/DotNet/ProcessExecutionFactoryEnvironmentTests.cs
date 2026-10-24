@@ -19,6 +19,50 @@ public sealed class ProcessExecutionFactoryEnvironmentTests(ITestOutputHelper ou
     private const string SelectionOrigin = "explicit-launch-configuration";
     private const string ControlEnvVarName = "ASPIRE_TEST_PROCESS_EXECUTION_FACTORY_CONTROL";
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateExecution_RedirectsRawStdoutWithoutOwningTheHandle(bool fromStartInfo)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, "stdout");
+        using var handle = File.OpenHandle(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+        var options = new ProcessInvocationOptions { StandardOutputHandle = handle };
+        Assert.Same(handle, options.Clone().StandardOutputHandle);
+        var factory = CreateFactory();
+        await using (var execution = fromStartInfo
+            ? factory.CreateExecution(new ProcessStartInfo("dotnet", ["--version"]) { WorkingDirectory = WorkingDirectory.FullName }, options)
+            : factory.CreateExecution("dotnet", ["--version"], null, WorkingDirectory, options))
+        {
+            Assert.True(await execution.StartAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(0, await execution.WaitForExitAsync(TestContext.Current.CancellationToken));
+        }
+
+        Assert.False(handle.IsClosed);
+        handle.Dispose();
+        Assert.Matches(@"^\d+\.\d+\.\d+[^\r\n]*\r?\n$", await File.ReadAllTextAsync(path));
+    }
+
+    [Theory]
+    [InlineData(false, false, false, true)]
+    [InlineData(true, false, false, false)]
+    [InlineData(false, true, false, false)]
+    [InlineData(false, false, true, false)]
+    public void CreateExecution_RejectsConflictingRawStdoutOptions(bool detached, bool ownedTree, bool killOnParentExit, bool callback)
+    {
+        using var handle = File.OpenNullHandle();
+        var options = new ProcessInvocationOptions
+        {
+            StandardOutputHandle = handle,
+            Detached = detached,
+            Lifetime = ownedTree ? Aspire.Shared.ChildProcessLifetime.OwnedTree : default,
+            KillOnParentExit = killOnParentExit,
+            StandardOutputCallback = callback ? _ => { } : null
+        };
+
+        Assert.Throws<ArgumentException>(() => CreateFactory().CreateExecution("dotnet", [], null, WorkingDirectory, options));
+    }
+
     [Fact]
     public async Task CreateExecution_FromStartInfo_PreservesRawArguments()
     {

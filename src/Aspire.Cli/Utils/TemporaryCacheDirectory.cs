@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-namespace Aspire.Cli.Agents.AspireSkills;
+namespace Aspire.Cli.Utils;
 
 /// <summary>
 /// Owns a leased temporary directory under a CLI-managed cache root.

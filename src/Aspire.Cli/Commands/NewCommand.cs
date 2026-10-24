@@ -56,6 +56,18 @@ internal sealed class NewCommand : BaseCommand
         Description = NewCommandStrings.VersionArgumentDescription,
         Recursive = true
     };
+    internal static readonly Option<string?> s_templatePathOption = new("--template-path")
+    {
+        Description = NewCommandStrings.TemplatePathOptionDescription
+    };
+    internal static readonly Option<string?> s_templateRepositoryOption = new("--template-repository")
+    {
+        Description = NewCommandStrings.TemplateRepositoryOptionDescription
+    };
+    internal static readonly Option<string?> s_templateRepositoryRefOption = new("--template-repository-ref")
+    {
+        Description = NewCommandStrings.TemplateRepositoryRefOptionDescription
+    };
 
     internal static readonly Option<bool?> s_suppressAgentInitOption = new("--suppress-agent-init")
     {
@@ -88,6 +100,9 @@ internal sealed class NewCommand : BaseCommand
         Options.Add(s_outputOption);
         Options.Add(s_sourceOption);
         Options.Add(s_versionOption);
+        Options.Add(s_templatePathOption);
+        Options.Add(s_templateRepositoryOption);
+        Options.Add(s_templateRepositoryRefOption);
         Options.Add(s_suppressAgentInitOption);
         Options.Add(AgentInitCommand.s_agentsOption);
         Options.Add(AgentInitCommand.s_scopeOption);
@@ -133,10 +148,13 @@ internal sealed class NewCommand : BaseCommand
 
     internal override void PrepareForExecution(ParseResult parseResult)
     {
-        if (!string.IsNullOrWhiteSpace(parseResult.GetValue(s_sourceOption)))
+        if (!string.IsNullOrWhiteSpace(parseResult.GetValue(s_sourceOption)) ||
+            parseResult.GetValue(s_templatePathOption) is not null ||
+            parseResult.GetValue(s_templateRepositoryOption) is not null ||
+            parseResult.GetValue(s_templateRepositoryRefOption) is not null)
         {
-            // The foreground template lookup applies --source. Background prefetch does not know
-            // about invocation options, so letting it run would still contact fallback feeds.
+            // Directory/repository templates do not use feeds, and --source limits foreground package lookup.
+            // Background prefetch does not know about either override and would contact fallback feeds.
             DisableTemplatePackageMetadataPrefetchingForInvocation();
         }
     }
@@ -502,6 +520,28 @@ internal sealed class NewCommand : BaseCommand
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
+        var templatePath = parseResult.GetValue(s_templatePathOption);
+        var templateRepository = parseResult.GetValue(s_templateRepositoryOption);
+        var templateRepositoryRef = parseResult.GetValue(s_templateRepositoryRefOption);
+        if (templateRepositoryRef is not null &&
+            (string.IsNullOrWhiteSpace(templateRepository) || string.IsNullOrWhiteSpace(templateRepositoryRef)))
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, NewCommandStrings.TemplateRepositoryRefRequiresRepository);
+        }
+        if (templatePath is not null || templateRepository is not null)
+        {
+            if (templatePath is not null && string.IsNullOrWhiteSpace(templatePath) ||
+                templateRepository is not null && string.IsNullOrWhiteSpace(templateRepository) ||
+                parseResult.CommandResult.Command != this ||
+                new[] { s_sourceOption, s_versionOption, _channelOption, _languageOption }
+                    .Any(option => parseResult.GetResult(option) is { Implicit: false }))
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, NewCommandStrings.TemplatePathConflictingOptions);
+            }
+
+            return await CreateFromSourceAsync(new TemplateSource(templatePath ?? ".", templateRepository, templateRepositoryRef), parseResult, cancellationToken);
+        }
+
         var source = parseResult.GetValue(s_sourceOption);
         if (!string.IsNullOrWhiteSpace(source) && PackageSourceOverrideMappings.HasCredentialMaterial(source))
         {
@@ -524,7 +564,7 @@ internal sealed class NewCommand : BaseCommand
         // Resolve which templates are actually available at runtime (performs
         // async checks like SDK availability). This may be a subset of the
         // templates registered as subcommands.
-        var availableTemplates = (await _templateProvider.GetTemplatesAsync(cancellationToken)).ToArray();
+        var availableTemplates = (await _templateProvider.GetTemplatesAsync(null, cancellationToken)).ToArray();
 
         var template = await GetProjectTemplateAsync(availableTemplates, parseResult, cancellationToken);
         if (template is null)
@@ -595,6 +635,49 @@ internal sealed class NewCommand : BaseCommand
         };
         var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
 
+        return await CompleteTemplateAsync(templateResult, parseResult, cancellationToken);
+    }
+
+    private async Task<CommandResult> CreateFromSourceAsync(TemplateSource source, ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var templates = (await _templateProvider.GetTemplatesAsync(source, cancellationToken)).ToArray();
+            if (templates.Length == 0)
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand,
+                    string.Format(CultureInfo.CurrentCulture, NewCommandStrings.NoLocalTemplatesFound, source.Path));
+            }
+
+            if (templates.Length > 1 && !_hostEnvironment.SupportsInteractiveInput)
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, NewCommandStrings.LocalTemplateSelectionRequiresInteraction);
+            }
+
+            var template = templates.Length == 1
+                ? templates[0]
+                : await _prompter.PromptForTemplateAsync(templates, cancellationToken);
+            var result = await template.ApplyTemplateAsync(new TemplateInputs
+            {
+                Name = parseResult.GetValue(s_nameOption),
+                Output = parseResult.GetValue(s_outputOption)
+            }, parseResult, cancellationToken);
+
+            return await CompleteTemplateAsync(result, parseResult, cancellationToken);
+        }
+        catch (TemplateDiscoveryException ex)
+        {
+            return CommandResult.Failure(ex.ExitCode, ex.Message);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return CommandResult.Failure(CliExitCodes.FailedToCreateNewProject,
+                string.Format(CultureInfo.CurrentCulture, NewCommandStrings.LocalTemplateLoadFailed, ex.Message));
+        }
+    }
+
+    private async Task<CommandResult> CompleteTemplateAsync(TemplateResult templateResult, ParseResult parseResult, CancellationToken cancellationToken)
+    {
         // Generated AppHosts can be run directly by dotnet, which cannot trigger lazy bundle
         // extraction. Ensure the bundle is ready instead of relying on best-effort prefetching.
         if (templateResult.ExitCode == CliExitCodes.Success)
