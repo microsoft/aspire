@@ -23,9 +23,13 @@ public class DashboardDialogProvider : ComponentBase, IDisposable
     [Inject]
     public required NavigationDialogService DialogService { get; init; }
 
+    [Inject]
+    public required DashboardDataSourcePool DataSourcePool { get; init; }
+
     protected override void OnInitialized()
     {
         NavigationManager.LocationChanged += OnLocationChanged;
+        DataSourcePool.CurrentRunChanged += OnCurrentRunChanged;
     }
 
     protected override void BuildRenderTree(RenderTreeBuilder builder)
@@ -34,7 +38,11 @@ public class DashboardDialogProvider : ComponentBase, IDisposable
         builder.CloseComponent();
     }
 
-    private async void OnLocationChanged(object? sender, LocationChangedEventArgs args)
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args) => DismissDialogs();
+
+    private void OnCurrentRunChanged() => DismissDialogs();
+
+    private async void DismissDialogs()
     {
         try
         {
@@ -49,5 +57,6 @@ public class DashboardDialogProvider : ComponentBase, IDisposable
     public void Dispose()
     {
         NavigationManager.LocationChanged -= OnLocationChanged;
+        DataSourcePool.CurrentRunChanged -= OnCurrentRunChanged;
     }
 }

@@ -36,9 +36,6 @@ public partial class ManageDataDialog : IAsyncDisposable
     public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
-    public required ITelemetryRepositoryWriter TelemetryRepositoryWriter { get; init; }
-
-    [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
     [Inject]
@@ -69,6 +66,7 @@ public partial class ManageDataDialog : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private Task? _resourceSubscriptionTask;
     private AspireFluentDataGrid<ManageDataGridItem>? _dataGrid;
+    private string _originatingRunId = null!;
     private bool _isExporting;
     private bool _isRemoving;
     private string? _errorMessage;
@@ -77,6 +75,8 @@ public partial class ManageDataDialog : IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
+        _originatingRunId = DataSource.SelectedRun.RunId;
+
         // Subscribe to telemetry changes
         _resourcesSubscription = TelemetryRepository.OnNewResources(OnTelemetryChangedAsync);
 
@@ -548,31 +548,29 @@ public partial class ManageDataDialog : IAsyncDisposable
         {
             var selectedResources = GetSelectedResourcesAndDataTypes();
 
-            // Clear telemetry signals via repository
-            DataSource.EnsureWritable();
-            await TelemetryRepositoryWriter.ClearSelectedSignalsAsync(selectedResources);
-
-            // Console logs are stored by the resource repository and are only available when the dashboard client is enabled.
-            if (DashboardClient.IsEnabled)
+            var consoleLogResourceNames = DashboardClient.IsEnabled
+                ? selectedResources.Where(kvp => kvp.Value.Contains(AspireDataType.ConsoleLogs)).Select(kvp => kvp.Key).ToList()
+                : [];
+            var filterDate = TimeProvider.GetUtcNow().UtcDateTime;
+            await DataSource.MutateCurrentRunAsync(_originatingRunId, async (telemetryWriter, resourceRepository) =>
             {
-                var consoleLogResourceNames = selectedResources
-                    .Where(kvp => kvp.Value.Contains(AspireDataType.ConsoleLogs))
-                    .Select(kvp => kvp.Key)
-                    .ToList();
-
+                await telemetryWriter.ClearSelectedSignalsAsync(selectedResources);
                 if (consoleLogResourceNames.Count > 0)
                 {
-                    var filterDate = TimeProvider.GetUtcNow().UtcDateTime;
-                    await DataSource.ResourceRepository.ClearConsoleLogsAsync(consoleLogResourceNames, filterDate);
-
-                    // Keep the filter to suppress console logs already buffered by the live AppHost.
-                    var filters = ConsoleLogsManager.Filters;
-                    foreach (var resourceName in consoleLogResourceNames)
-                    {
-                        filters = filters.WithResourceCleared(resourceName, filterDate);
-                    }
-                    await ConsoleLogsManager.UpdateFiltersAsync(filters);
+                    await resourceRepository.ClearConsoleLogsAsync(consoleLogResourceNames, filterDate);
                 }
+            });
+
+            // Notify UI subscriptions outside the rollover lock. They can start new AppHost captures,
+            // which acquire the attachment lock in the opposite order during a reconnect.
+            if (consoleLogResourceNames.Count > 0 && DataSource.SelectedRun.RunId == _originatingRunId)
+            {
+                var filters = ConsoleLogsManager.Filters;
+                foreach (var resourceName in consoleLogResourceNames)
+                {
+                    filters = filters.WithResourceCleared(resourceName, filterDate);
+                }
+                await ConsoleLogsManager.UpdateFiltersAsync(filters);
             }
         }
         catch (Exception ex)
@@ -606,7 +604,8 @@ public partial class ManageDataDialog : IAsyncDisposable
                 if (file.LocalFile is not null)
                 {
                     using var fileStream = file.LocalFile.OpenRead();
-                    await TelemetryImportService.ImportAsync(file.Name, fileStream, CancellationToken.None);
+                    await DataSource.MutateCurrentRunAsync(_originatingRunId,
+                        (writer, _) => TelemetryImportService.ImportAsync(file.Name, fileStream, writer, _cts.Token));
                     await OnTelemetryChangedAsync();
                 }
             }

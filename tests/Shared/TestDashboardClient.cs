@@ -30,13 +30,15 @@ public class TestDashboardClient : IDashboardClient
     private int _resourceSubscriptionCount;
     private int _getResourceCallCount;
     private int _getResourcesCallCount;
+    private int _reconnectCallCount;
 
     public bool IsEnabled { get; }
     public bool IsReadOnly { get; set; }
     public Task WhenConnected { get; }
     public Task WhenResourcesReady { get; }
-    public string ApplicationName { get; } = "TestApp";
+    public string ApplicationName { get; set; } = "TestApp";
     public string? MinRequiredVersion => null;
+    public string AppHostRunId { get; set; } = string.Empty;
     public DashboardConnectionState ConnectionState => _connectionState;
     public ConcurrentQueue<(IReadOnlyList<string> ResourceNames, DateTime ClearDate)> ClearedConsoleLogs { get; } = new();
     public ConcurrentQueue<string> ClosedTerminals { get; } = new();
@@ -51,7 +53,13 @@ public class TestDashboardClient : IDashboardClient
     public int GetResourceCallCount => Volatile.Read(ref _getResourceCallCount);
     public int GetResourcesCallCount => Volatile.Read(ref _getResourcesCallCount);
     public event Action<DashboardConnectionState>? ConnectionStateChanged;
-    public Task ReconnectAsync() => Task.CompletedTask;
+    public int ReconnectCallCount => Volatile.Read(ref _reconnectCallCount);
+
+    public Task ReconnectAsync()
+    {
+        Interlocked.Increment(ref _reconnectCallCount);
+        return Task.CompletedTask;
+    }
 
     public TestDashboardClient(
         bool? isEnabled = false,
@@ -113,7 +121,7 @@ public class TestDashboardClient : IDashboardClient
         return _resourceCommandsChannel.Reader.ReadAsync(cancellationToken).AsTask();
     }
 
-    public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken)
+    public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, string appHostRunId, CancellationToken cancellationToken)
     {
         return Task.FromResult(Guid.NewGuid().ToString("N"));
     }

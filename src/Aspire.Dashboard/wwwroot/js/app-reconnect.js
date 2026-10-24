@@ -48,19 +48,9 @@ function handleReconnectStateChanged(event) {
 // The optional "appName" and "requiredVersion" parameters are used for the unsupported state.
 window.updateResourceServiceConnectionState = function (state, showRetry, appName, requiredVersion) {
     if (state === "disconnected") {
-        // Only show resource service modal if we're not already in circuit mode.
-        if (currentMode === "circuit") {
-            return;
-        }
-        currentMode = "resource-service";
-        var className = "components-reconnect-resource-service-disconnected";
-        if (showRetry) {
-            className += " components-reconnect-resource-service-show-retry";
-        }
-        setModalClass(className);
-        if (!reconnectModal.open) {
-            reconnectModal.showModal();
-        }
+        // The dashboard remains usable with its stored data while the AppHost is stopped.
+        // ResourceServiceConnectionProvider renders a nonblocking status banner instead.
+        return;
     } else if (state === "unsupported") {
         // Only show resource service modal if we're not already in circuit mode.
         if (currentMode === "circuit") {

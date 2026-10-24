@@ -247,6 +247,37 @@ public partial class InteractionsProviderTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task ReceiveData_MessageBoxCompletedByServer_DelayedCallbackDoesNotReplyToReusedId()
+    {
+        var incoming = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var replies = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        var parameters = new List<DialogParameters>();
+        var client = new TestDashboardClient(isEnabled: true, interactionChannelProvider: () => incoming, sendInteractionUpdateChannel: replies);
+        var dialogs = new TestDialogService(onShowDialog: (data, options) =>
+        {
+            parameters.Add(options);
+            return Task.CompletedTask;
+        });
+        SetupInteractionProviderServices(dashboardClient: client, dialogService: dialogs);
+        var cut = Render<Components.Interactions.InteractionsProvider>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        await incoming.Writer.WriteAsync(new WatchInteractionsResponseUpdate { InteractionId = 1, AppHostRunId = "first", MessageBox = new InteractionMessageBox() });
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(() => cut.Instance._interactionDialogReference is not null, "First dialog opened");
+        var first = parameters[0];
+        await incoming.Writer.WriteAsync(new WatchInteractionsResponseUpdate { InteractionId = 1, AppHostRunId = "first", Complete = new InteractionComplete() });
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(() => cut.Instance._interactionDialogReference is null, "First dialog closed");
+        await incoming.Writer.WriteAsync(new WatchInteractionsResponseUpdate { InteractionId = 1, AppHostRunId = "second", MessageBox = new InteractionMessageBox() });
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(() => parameters.Count == 2 && cut.Instance._interactionDialogReference is not null, "Reused ID opened");
+        await cut.InvokeAsync(() => first.OnDialogResult.InvokeAsync(DialogResult.Cancel()));
+        await cut.InvokeAsync(() => parameters[1].OnDialogResult.InvokeAsync(DialogResult.Ok(true)));
+        var reply = await replies.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal("second", reply.AppHostRunId);
+        Assert.True(reply.MessageBox.Result);
+        Assert.False(replies.Reader.TryRead(out _));
+        await cut.Instance.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task ReceiveData_InputDialogOpenAndCancel_OpenDialogAndSendCompletion()
     {
         // Arrange

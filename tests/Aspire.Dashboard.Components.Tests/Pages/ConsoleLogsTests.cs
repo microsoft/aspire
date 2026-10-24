@@ -1091,6 +1091,23 @@ public partial class ConsoleLogsTests : DashboardTestContext
         }
     }
 
+    [Fact]
+    public void HighlightedCommands_OpenedOffline_AreDisabled()
+    {
+        var command = new CommandViewModel("restart", CommandViewModelState.Enabled, "Restart", "", "", [], true, "", IconVariant.Regular);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [command]);
+        var client = new TestDashboardClient(isEnabled: true, initialResources: [resource],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            consoleLogsChannelProvider: _ => Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>());
+        client.SetConnectionState(DashboardConnectionState.Disconnected);
+        SetupConsoleLogsServices(client);
+
+        var cut = RenderConsoleLogsPage(CreateViewport(isDesktop: true), resource.Name);
+
+        cut.WaitForAssertion(() => Assert.True(cut.FindComponents<FluentButton>()
+            .Single(button => button.Instance.Title == "Restart").Instance.Disabled));
+    }
+
     private void SetupConsoleLogsServices(TestDashboardClient? dashboardClient = null, TestTimeProvider? timeProvider = null, IResourceRepository? resourceRepository = null)
     {
         FluentUISetupHelpers.SetupFluentDialogProvider(this);

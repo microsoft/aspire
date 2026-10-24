@@ -20,6 +20,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private bool _isNavMenuOpen;
     private bool _isDisposing;
 
+    private bool _hasNewLiveRun;
     private bool _runSelectionChanged;
     private bool _isSwitchingRuns;
     private bool _hasResourceTerminals;
@@ -106,6 +107,11 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
+    // Standalone runs can ingest telemetry without an AppHost connection to wait for.
+    private DashboardConnectionState RunSelectConnectionState => LiveAppHostClient.IsEnabled
+        ? LiveAppHostClient.ConnectionState
+        : DashboardConnectionState.Connected;
+
     private bool IsTerminalDockEnabled => !_isSwitchingRuns && DashboardClient.IsEnabled && !DashboardClient.IsReadOnly;
 
     protected override async Task OnInitializedAsync()
@@ -133,6 +139,14 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             }
         }
 
+        LiveAppHostClient.ConnectionStateChanged += OnConnectionStateChanged;
+        DataSourcePool.CurrentRunChanged += OnCurrentRunChanged;
+        // Session restoration can await across a rollover before the handler is registered.
+        // Reconcile a live selection now, while preserving explicitly selected history.
+        if (RunSelection.SelectedRun.IsCurrent && RunSelection.SelectedRun.RunId != RunStore.GetCurrentRun().RunId)
+        {
+            RunSelection.SelectRun(runId: null);
+        }
         NotificationService.OnChange += HandleNotificationsChanged;
 
         // Theme change can be triggered from the settings dialog. This logic applies the new theme to the browser window.
@@ -308,6 +322,36 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     }
 
     private string GetDefaultReturnFocusElementId(string desktopButtonId) => ViewportInformation.IsDesktop ? desktopButtonId : NavigationButtonId;
+
+    [Inject]
+    public required DashboardDataSourcePool DataSourcePool { get; init; }
+
+    [Inject(Key = ServiceClient.DashboardClient.LiveAppHostServiceKey)]
+    public required IDashboardClient LiveAppHostClient { get; init; }
+
+    private void OnConnectionStateChanged(DashboardConnectionState state) => _ = InvokeAsync(StateHasChanged);
+
+    private void OnCurrentRunChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            // The replacement run is published before the AppHost handshake finishes. Render the
+            // arrival notice only after the live client reports Connected, including when viewing history.
+            _hasNewLiveRun = RunStore.SupportsRunSelection;
+            // A deliberately selected history entry stays selected. The live view follows the AppHost.
+            if (RunSelection.SelectedRun.IsCurrent)
+            {
+                RunSelection.SelectRun(runId: null);
+            }
+            StateHasChanged();
+        });
+    }
+
+    private async Task OpenNewLiveRunAsync()
+    {
+        await SwitchDashboardRunAsync(runId: null);
+        _hasNewLiveRun = false;
+    }
 
     private async Task SwitchDashboardRunAsync(string? runId)
     {
@@ -570,6 +614,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        LiveAppHostClient.ConnectionStateChanged -= OnConnectionStateChanged;
+        DataSourcePool.CurrentRunChanged -= OnCurrentRunChanged;
         _isDisposing = true;
 
         _shortcutManagerReference?.Dispose();

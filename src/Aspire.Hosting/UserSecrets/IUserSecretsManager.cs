@@ -49,7 +49,7 @@ public interface IUserSecretsManager
     }
 
     /// <summary>
-    /// Gets a secret value if it exists in configuration, or sets it using the value generator if it doesn't.
+    /// Gets a nonempty secret value from configuration, or generates and saves a value when it is missing or empty.
     /// </summary>
     /// <param name="configuration">The configuration manager to check and update.</param>
     /// <param name="name">The name of the secret.</param>

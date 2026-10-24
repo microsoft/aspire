@@ -94,6 +94,50 @@ public class ProxylessEndpointPortAllocatorTests
         Assert.Equal(10001, allocator.AllocatePort(ProtocolType.Tcp));
     }
 
+    [Fact]
+    public void AllocatePortSkipsPortExcludedAfterSuccessfulAllocation()
+    {
+        var probedPorts = new List<int>();
+        using var allocator = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10002,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: (port, _) =>
+            {
+                probedPorts.Add(port);
+                return true;
+            });
+
+        Assert.Equal(10000, allocator.AllocatePort(ProtocolType.Tcp));
+        allocator.ExcludePort(10001);
+
+        Assert.Equal(10002, allocator.AllocatePort(CreateEndpoint("endpoint")));
+        Assert.Equal(new[] { 10000, 10002 }, probedPorts);
+    }
+
+    [Fact]
+    public void AllocatePortExhaustsRangeWhenLastCandidateIsExcluded()
+    {
+        var probedPorts = new List<int>();
+        using var allocator = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10001,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: (port, _) =>
+            {
+                probedPorts.Add(port);
+                return true;
+            });
+
+        Assert.Equal(10000, allocator.AllocatePort(CreateEndpoint("endpoint")));
+        allocator.ExcludePort(10001);
+
+        Assert.Throws<InvalidOperationException>(() => allocator.AllocatePort(ProtocolType.Tcp));
+        Assert.Equal(new[] { 10000 }, probedPorts);
+    }
+
     private static EndpointAnnotation CreateEndpoint(string name)
     {
         return new EndpointAnnotation(ProtocolType.Tcp, name: name, isProxied: false);

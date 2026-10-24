@@ -91,10 +91,13 @@ public sealed class DashboardCommandExecutor(
 
     public async Task<bool> ExecuteAsyncCore(ResourceViewModel resource, CommandViewModel command, Func<ResourceViewModel, string> getResourceName)
     {
+        // A confirmation can outlive the AppHost. Capture its origin before awaiting any UI and
+        // carry it through dispatch so a reused resource name cannot target a different execution.
+        var appHostRunId = dashboardClient.AppHostRunId;
         if (!string.IsNullOrWhiteSpace(command.ConfirmationMessage))
         {
             var result = await dialogService.ShowConfirmationAsync(command.ConfirmationMessage).ConfigureAwait(false);
-            if (result.Cancelled)
+            if (result.Cancelled || dashboardClient.AppHostRunId != appHostRunId)
             {
                 return false;
             }
@@ -145,7 +148,7 @@ public sealed class DashboardCommandExecutor(
                 resource.Name,
                 resource.ResourceType,
                 command,
-                new ExecuteResourceCommandOptions(),
+                new ExecuteResourceCommandOptions { ExpectedAppHostRunId = appHostRunId },
                 executeCommandCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (executeCommandCts.IsCancellationRequested)

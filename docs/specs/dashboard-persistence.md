@@ -11,7 +11,7 @@ The design has three persistence modes:
 | Mode | Database lifetime | Historical run selection | Default use |
 |------|-------------------|--------------------------|-------------|
 | `None` | One temporary database per Dashboard process | No | Standalone Dashboard |
-| `Run` | One persistent database per Dashboard process | Yes | AppHost Dashboard |
+| `Run` | One persistent database per application run | Yes | AppHost Dashboard |
 | `Resume` | One persistent database reused by later Dashboard processes | No | Explicit opt-in |
 
 ## Usage examples
@@ -29,6 +29,28 @@ This mode is useful for inspecting telemetry during a single development or diag
 ### `Run`: compare AppHost runs
 
 An AppHost-launched Dashboard defaults to `Run`; no additional configuration is required. Each time the AppHost starts, the Dashboard creates a separate run database. After changing the application code and restarting the AppHost, use the run selector to compare the current telemetry and resources with historical runs and evaluate the impact of the change.
+
+### Keep the Dashboard process running between AppHost runs
+
+Opt in to process persistence in the AppHost configuration:
+
+```json
+{
+  "Aspire": {
+    "Dashboard": {
+      "Persistent": true
+    }
+  }
+}
+```
+
+The Dashboard remains running when the AppHost stops. Its browser URL and login token remain stable, and an open browser reconnects when the AppHost returns. Resource snapshots and captured telemetry stay browsable during the gap; commands and other operations that require the AppHost are unavailable until it reconnects.
+
+With the default `Run` data mode, each AppHost execution supplies a new run ID. The Dashboard opens a new database for that execution and exposes the previous database in the run selector. An existing live view follows the new run; an explicitly selected historical run stays selected. `None` and `Resume` keep their existing database lifetime semantics.
+
+The AppHost stores generated browser and resource-service credentials in user secrets, alongside the existing telemetry credentials. It also saves a generated resource-service port. Dashboard listeners use persistent, proxyless endpoints so their addresses survive an AppHost restart. Explicitly configured credentials and ports continue to take precedence. Process persistence is disabled when port randomization is enabled, including isolated runs.
+
+Console logs retain the existing demand-driven capture behavior described below. Telemetry sent while the AppHost is absent remains in the current run until the Dashboard observes the next AppHost run ID.
 
 ### `Resume`: long-running standalone Dashboard
 

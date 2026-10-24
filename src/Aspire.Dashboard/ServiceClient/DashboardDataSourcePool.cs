@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Utils;
 
 namespace Aspire.Dashboard.ServiceClient;
 
@@ -19,6 +20,88 @@ public sealed class DashboardDataSourcePool : IDisposable
     private readonly IDashboardRunStore _runStore;
     private readonly IRepositoryFactory _repositoryFactory;
     private Lease? _current;
+    private bool _pendingRunPublication;
+    internal AsyncLock RunWriteLock { get; } = new();
+    internal event Action? CurrentRunChanged;
+    internal Task PruningTask { get; private set; } = Task.CompletedTask;
+
+    internal async Task StartAppHostRunAsync(string appHostRunId, CancellationToken cancellationToken)
+    {
+        using (await RunWriteLock.LockAsync(cancellationToken).ConfigureAwait(false))
+        {
+            Lease? retiredRun;
+            lock (_lock)
+            {
+                if (_runStore is not DashboardRunStore store)
+                {
+                    return;
+                }
+                var runChanged = store.StartAppHostRun(appHostRunId, out var retiredRunOwnership);
+                if (!runChanged && !_pendingRunPublication)
+                {
+                    return;
+                }
+
+                retiredRun = null;
+                if (runChanged)
+                {
+                    // The store remembers the new AppHost ID before database initialization and metadata
+                    // publication finish. Retry those steps for the same ID after a transient failure.
+                    _pendingRunPublication = true;
+                    retiredRun = _current;
+                    if (retiredRun is not null)
+                    {
+                        // Retain the directory while old circuits and in-flight operations finish reading it.
+                        retiredRun.RetainDirectory(retiredRunOwnership);
+                        retiredRunOwnership = null;
+                        _current = null;
+                    }
+                }
+                retiredRunOwnership?.Dispose();
+            }
+            try
+            {
+                if (retiredRun is not null)
+                {
+                    await retiredRun.FreezeLiveUpdatesAsync().ConfigureAwait(false);
+                }
+                await InitializeAsync(cancellationToken).ConfigureAwait(false);
+                PublishRun();
+                _pendingRunPublication = false;
+            }
+            finally
+            {
+                retiredRun?.Dispose();
+            }
+        }
+        lock (_lock)
+        {
+            // Track all queued housekeeping, including an older task that has not started yet.
+            PruningTask = Task.WhenAll(PruningTask, ((DashboardRunStore)_runStore).PruneExpiredRunsInBackground());
+        }
+        CurrentRunChanged?.Invoke();
+    }
+
+    internal bool IsCurrentDatabase(string databasePath)
+    {
+        lock (_lock)
+        {
+            return !_disposed && s_pathComparer.Equals(_current?.Database.DatabasePath, databasePath);
+        }
+    }
+
+    internal IDisposable RetainCurrent(out Lease run, out DashboardRunDescriptor descriptor)
+    {
+        // Do not expose the replacement run before its schema is initialized.
+        using var transition = RunWriteLock.Lock();
+        lock (_lock)
+        {
+            run = Current;
+            descriptor = _runStore.GetCurrentRun();
+            return run.Retain();
+        }
+    }
+
     private bool _disposed;
 
     /// <summary>
@@ -50,14 +133,24 @@ public sealed class DashboardDataSourcePool : IDisposable
                 if (_current is null)
                 {
                     var database = new DashboardSqliteDatabase(currentRun.DatabasePath);
+                    // A streaming request can release its scope after the host's root services are disposed.
+                    // Keep temporary run files and their lock until that request closes its database lease.
+                    var runStoreRetention = (_runStore as DashboardRunStore)?.Retain();
                     _current = new Lease(
                         database,
-                        () => _repositoryFactory.CreateTelemetryRepository(database),
+                        enableLivePeerResolution => _repositoryFactory.CreateTelemetryRepository(database, enableLivePeerResolution),
                         () => _repositoryFactory.CreateResourceRepository(database),
                         () =>
                         {
-                            database.ClearPool();
-                            database.Dispose();
+                            try
+                            {
+                                database.ClearPool();
+                                database.Dispose();
+                            }
+                            finally
+                            {
+                                runStoreRetention?.Dispose();
+                            }
                         });
                 }
 
@@ -119,7 +212,7 @@ public sealed class DashboardDataSourcePool : IDisposable
 
             var lease = new Lease(
                 entry.Database,
-                () => _repositoryFactory.CreateTelemetryRepository(entry.Database),
+                _ => _repositoryFactory.CreateTelemetryRepository(entry.Database, enableLivePeerResolution: false),
                 () => _repositoryFactory.CreateResourceRepository(entry.Database),
                 () => Release(entry));
             try
@@ -186,6 +279,7 @@ public sealed class DashboardDataSourcePool : IDisposable
             }
             _entries.Clear();
             _current?.Dispose();
+
         }
     }
 
@@ -217,18 +311,60 @@ public sealed class DashboardDataSourcePool : IDisposable
     public sealed class Lease : IDisposable
     {
         private readonly Lazy<ITelemetryRepository> _telemetryRepository;
+        private readonly object _telemetryLifecycleLock = new();
+        private ITelemetryRepository? _telemetryRepositoryInstance;
+        private bool _isRetired;
         private readonly Lazy<IResourceRepository> _resourceRepository;
         private readonly Action _release;
         private int _disposed;
+        private int _references = 1;
+        private IDisposable? _directoryLease;
+
+        internal void RetainDirectory(IDisposable? directoryLease) => _directoryLease = directoryLease;
+
+        internal async Task FreezeLiveUpdatesAsync()
+        {
+            SqliteTelemetryRepository? telemetryRepository;
+            lock (_telemetryLifecycleLock)
+            {
+                // Retiring and first access can race. Construct late readers without live
+                // subscriptions rather than materializing new services during rollover.
+                _isRetired = true;
+                telemetryRepository = _telemetryRepositoryInstance as SqliteTelemetryRepository;
+            }
+            if (telemetryRepository is not null)
+            {
+                await telemetryRepository.FreezePeerResolutionAsync().ConfigureAwait(false);
+            }
+        }
+
+        internal IDisposable Retain()
+        {
+            Interlocked.Increment(ref _references);
+            return new Reference(this);
+        }
+
+        private sealed class Reference(Lease owner) : IDisposable
+        {
+            private Lease? _owner = owner;
+            public void Dispose() => Interlocked.Exchange(ref _owner, null)?.Release();
+        }
 
         internal Lease(
             DashboardSqliteDatabase database,
-            Func<ITelemetryRepository> telemetryRepositoryFactory,
+            Func<bool, ITelemetryRepository> telemetryRepositoryFactory,
             Func<IResourceRepository> resourceRepositoryFactory,
             Action release)
         {
             Database = database;
-            _telemetryRepository = new(telemetryRepositoryFactory);
+            _telemetryRepository = new(() =>
+            {
+                lock (_telemetryLifecycleLock)
+                {
+                    _telemetryRepositoryInstance = telemetryRepositoryFactory(!_isRetired);
+                    return _telemetryRepositoryInstance;
+                }
+            });
             _resourceRepository = new(resourceRepositoryFactory);
             _release = release;
         }
@@ -253,6 +389,14 @@ public sealed class DashboardDataSourcePool : IDisposable
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 0)
             {
+                Release();
+            }
+        }
+
+        private void Release()
+        {
+            if (Interlocked.Decrement(ref _references) == 0)
+            {
                 try
                 {
                     if (_telemetryRepository.IsValueCreated)
@@ -271,7 +415,14 @@ public sealed class DashboardDataSourcePool : IDisposable
                     }
                     finally
                     {
-                        _release();
+                        try
+                        {
+                            _release();
+                        }
+                        finally
+                        {
+                            _directoryLease?.Dispose();
+                        }
                     }
                 }
             }

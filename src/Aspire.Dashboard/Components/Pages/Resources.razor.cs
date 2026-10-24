@@ -90,6 +90,10 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     [SupplyParameterFromQuery(Name = "showHiddenResources")]
     public bool ShowHiddenResources { get; set; }
 
+    // Invalidate command controls and cached menus when only the AppHost connection changes.
+    [CascadingParameter(Name = nameof(DashboardConnectionState))]
+    public DashboardConnectionState AppHostConnectionState { get; set; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
@@ -131,6 +135,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private AspireMenu? _contextMenu;
     private bool _contextMenuOpen;
+    private DashboardConnectionState? _previousConnectionState;
     private readonly List<MenuButtonItem> _contextMenuItems = new();
     private string? _contextMenuFocusElementId;
 
@@ -229,18 +234,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
         UpdateMenuButtons();
 
-        // Must wait until after the dashboard is connected so the application name is correct.
-        await DashboardClient.WhenConnected;
-        _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
-
-        var collapsedResult = await LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
-        if (collapsedResult.Success)
-        {
-            foreach (var resourceName in collapsedResult.Value)
-            {
-                _collapsedResourceNames.Add(resourceName);
-            }
-        }
+        // Persisted resources are available even while the AppHost is offline. Load preferences
+        // using the available name now, then refresh them if the handshake supplies a different name.
+        await UpdateCollapsedResourceNamesAsync();
 
         await SubscribeResourcesAsync();
 
@@ -635,6 +631,17 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     protected override async Task OnParametersSetAsync()
     {
+        if (_previousConnectionState != AppHostConnectionState)
+        {
+            _previousConnectionState = AppHostConnectionState;
+            // Graph menus cache command availability when opened. Close them on connection
+            // changes so their old enabled state cannot survive a disconnect or reconnect.
+            if (_contextMenuOpen && _contextMenu is not null)
+            {
+                await _contextMenu.CloseAsync();
+            }
+        }
+
         if (await this.InitializeViewModelAsync())
         {
             return;
@@ -644,6 +651,12 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
         // Wait until the initial data is loaded. This is required so there isn't a race between data loading and using resources here.
         await _loadingTcs.Task;
+
+        if (await UpdateCollapsedResourceNamesAsync() && !_isDisposing)
+        {
+            UpdateMenuButtons();
+            await _dataGrid.SafeRefreshDataAsync();
+        }
 
         // If filters were saved in page state, resource filters now need to be recomputed since the URL has changed.
         foreach (var resourceViewModel in _resourceByName)
@@ -845,8 +858,53 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         return (null, false, isUnresolved);
     }
 
+    private async Task<bool> UpdateCollapsedResourceNamesAsync()
+    {
+        while (!_isDisposing)
+        {
+            var key = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
+            if (_collapsedResourceNamesKey == key)
+            {
+                return false;
+            }
+
+            var result = await LocalStorage.GetAsync<List<string>>(key);
+            if (_isDisposing)
+            {
+                return false;
+            }
+
+            // A reconnect can replace the fallback application name while browser storage is
+            // being read. Discard the old result, and don't overwrite edits after another read wins.
+            if (key != BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName))
+            {
+                continue;
+            }
+            if (_collapsedResourceNamesKey == key)
+            {
+                return false;
+            }
+
+            _collapsedResourceNames.Clear();
+            if (result.Success)
+            {
+                _collapsedResourceNames.UnionWith(result.Value);
+            }
+            _collapsedResourceNamesKey = key;
+            return true;
+        }
+
+        return false;
+    }
+
     private async Task OnToggleCollapse(ResourceGridViewModel viewModel)
     {
+        await UpdateCollapsedResourceNamesAsync();
+        if (_isDisposing)
+        {
+            return;
+        }
+
         // View model data is recreated if data updates.
         // Persist the collapsed state in a separate list.
         viewModel.IsCollapsed = !viewModel.IsCollapsed;
@@ -867,12 +925,19 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private async Task OnToggleCollapseAll()
     {
+        var expandAll = HasCollapsedResources();
+        await UpdateCollapsedResourceNamesAsync();
+        if (_isDisposing)
+        {
+            return;
+        }
+
         var resourcesWithChildren = _resourceByName.Values
             .Where(r => !r.IsResourceHidden(PageViewModel.ShowHiddenResources))
             .Where(r => _resourceByName.Values.Any(nested => nested.GetResourcePropertyValue(KnownProperties.Resource.ParentName) == r.Name))
             .ToList();
 
-        if (HasCollapsedResources())
+        if (expandAll)
         {
             foreach (var resource in resourcesWithChildren)
             {

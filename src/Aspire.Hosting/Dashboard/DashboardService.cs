@@ -40,7 +40,7 @@ namespace Aspire.Hosting.Dashboard;
 /// counterparts, and importing both namespaces would make every bare use ambiguous.
 /// </remarks>
 [Authorize(Policy = ResourceServiceApiKeyAuthorization.PolicyName)]
-internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IInteractionFileUploadStore fileUploadStore, TerminalService terminalService)
+internal sealed partial class DashboardService(DashboardServiceData serviceData, DashboardRunState runState, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IInteractionFileUploadStore fileUploadStore, TerminalService terminalService, ApplicationModel.DistributedApplicationModel model)
     : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceBase
 {
     // gRPC has a maximum receive size of 4MB. Force logs into batches to avoid exceeding receive size.
@@ -72,8 +72,18 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         return Task.FromResult(new ApplicationInformationResponse
         {
             ApplicationName = GetDashboardApplicationName(applicationName),
-            MinDashboardVersion = MinRequiredDashboardVersion
+            MinDashboardVersion = MinRequiredDashboardVersion,
+            RunId = runState.RunId,
+            CorsAllowedOrigins = GetCorsAllowedOrigins()
         });
+    }
+
+    private string GetCorsAllowedOrigins()
+    {
+        var configuredOrigins = configuration.GetString(KnownConfigNames.DashboardCorsAllowedOrigins, KnownConfigNames.Legacy.DashboardCorsAllowedOrigins);
+        return !string.IsNullOrEmpty(configuredOrigins)
+            ? configuredOrigins
+            : DashboardEventHandlers.GetAllowedOriginsFromResourceEndpoints(model) ?? string.Empty;
     }
 
     internal static string GetDashboardApplicationName(string applicationName)
@@ -320,16 +330,26 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
         async Task WatchResourcesInternal(CancellationToken cancellationToken)
         {
+            if (!string.IsNullOrEmpty(request.RunId) && request.RunId != runState.RunId)
+            {
+                throw new RpcException(new Status(StatusCode.FailedPrecondition, "The AppHost run has changed."));
+            }
+
+            if (request.RunId == runState.RunId)
+            {
+                runState.MarkAttached();
+            }
+
             var (initialData, updates) = serviceData.SubscribeResources();
 
-            var data = new InitialResourceData();
+            var data = new InitialResourceData { RunId = runState.RunId };
 
             foreach (var resource in initialData)
             {
                 data.Resources.Add(Resource.FromSnapshot(resource));
             }
 
-            await responseStream.WriteAsync(new() { InitialData = data }, cancellationToken).ConfigureAwait(false);
+            await responseStream.WriteAsync(new() { InitialData = data, CorsAllowedOrigins = GetCorsAllowedOrigins() }, cancellationToken).ConfigureAwait(false);
 
             await foreach (var batch in updates.WithCancellation(cancellationToken).ConfigureAwait(false))
             {
@@ -355,7 +375,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                     changes.Value.Add(change);
                 }
 
-                await responseStream.WriteAsync(new() { Changes = changes }, cancellationToken).ConfigureAwait(false);
+                await responseStream.WriteAsync(new() { Changes = changes, CorsAllowedOrigins = GetCorsAllowedOrigins() }, cancellationToken).ConfigureAwait(false);
             }
         }
     }

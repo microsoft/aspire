@@ -14,8 +14,9 @@ public interface IRepositoryFactory
     /// Creates a telemetry repository for the specified database.
     /// </summary>
     /// <param name="database">The dashboard database used by the repository.</param>
+    /// <param name="enableLivePeerResolution">Whether live resource changes may update stored trace peers.</param>
     /// <returns>A telemetry repository for the specified database.</returns>
-    ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database);
+    ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database, bool enableLivePeerResolution);
 
     /// <summary>
     /// Creates a resource repository for the specified database.

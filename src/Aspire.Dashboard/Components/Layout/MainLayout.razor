@@ -31,6 +31,7 @@
                 var selectedRun = RunSelection.SelectedRun;
                 <DashboardRunSelect SelectedRunId="@selectedRun.RunId"
                                     SelectedRunIsCurrent="@selectedRun.IsCurrent"
+                                    AppHostConnectionState="@RunSelectConnectionState"
                                     SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
                                     SelectedRunIdChanged="@SwitchDashboardRunAsync" />
             }
@@ -105,6 +106,7 @@
                 var selectedRun = RunSelection.SelectedRun;
                 <DashboardRunSelect SelectedRunId="@selectedRun.RunId"
                                     SelectedRunIsCurrent="@selectedRun.IsCurrent"
+                                    AppHostConnectionState="@RunSelectConnectionState"
                                     SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
                                     SelectedRunIdChanged="@SwitchDashboardRunAsync" />
             }
@@ -130,6 +132,24 @@
     }
 
     <div class="messagebar-container">
+        <ResourceServiceConnectionProvider />
+        @if (_hasNewLiveRun && LiveAppHostClient.ConnectionState == DashboardConnectionState.Connected)
+        {
+            <div class="new-live-run-notice" role="status">
+                <FluentIcon Value="@(new Icons.Regular.Size16.ArrowSync())" Color="Color.Default" />
+                <div class="new-live-run-content">
+                    <strong>@Loc[nameof(Layout.DashboardNewLiveRunTitle)]</strong>
+                    <span>@Loc[RunSelection.SelectedRun.IsCurrent ? nameof(Layout.DashboardNewLiveRunFollowed) : nameof(Layout.DashboardNewLiveRunHistory)]</span>
+                </div>
+                @if (!RunSelection.SelectedRun.IsCurrent)
+                {
+                    <FluentButton Class="new-live-run-action" Appearance="ButtonAppearance.Transparent" OnClick="OpenNewLiveRunAsync">@Loc[nameof(Layout.DashboardNewLiveRunOpen)]</FluentButton>
+                }
+                <FluentButton Class="new-live-run-dismiss aspire-icon-button" Appearance="ButtonAppearance.Transparent" OnClick="@(() => _hasNewLiveRun = false)" aria-label="@Loc[nameof(Layout.DashboardNewLiveRunDismiss)]">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Dismiss())" />
+                </FluentButton>
+            </div>
+        }
         <FluentMessageBarProvider Section="@DashboardUIHelpers.MessageBarSection" Class="top-messagebar" MaxMessageCount="null" NewestOnTop="true" />
     </div>
     <div class="layout-body-container">
@@ -138,8 +158,10 @@
             @if (!_isSwitchingRuns)
             {
                 var selectedRun = RunSelection.SelectedRun;
-                <CascadingValue @key="selectedRun.RunId" Name="DashboardRunId" Value="selectedRun.RunId" IsFixed="true">
-                    @Body
+                <CascadingValue Name="@nameof(DashboardConnectionState)" Value="DashboardClient.ConnectionState">
+                    <CascadingValue @key="selectedRun.RunId" Name="DashboardRunId" Value="selectedRun.RunId" IsFixed="true">
+                        @Body
+                    </CascadingValue>
                 </CascadingValue>
             }
         </main>
@@ -154,7 +176,6 @@
            new subscription rather than reusing the stream chosen for a previous selection. *@
         <TerminalDock @key="RunSelection.SelectedRun.RunId" />
     }
-    <ResourceServiceConnectionProvider />
     @if (IsTerminalDockEnabled)
     {
         <ResourceTerminalsAvailabilityProvider @key="(typeof(ResourceTerminalsAvailabilityProvider), RunSelection.SelectedRun.RunId)"

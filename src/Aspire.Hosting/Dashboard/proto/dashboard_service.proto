@@ -21,6 +21,8 @@ message ApplicationInformationResponse {
     // support this AppHost's features. If the dashboard's current version is lower than
     // this value, it should display a warning to the user indicating that an update is needed.
     string min_dashboard_version = 2;
+    string run_id = 3;
+    string cors_allowed_origins = 4;
 }
 
 ////////////////////////////////////////////
@@ -292,6 +294,7 @@ message Resource {
 
 // Models a snapshot of resource state
 message InitialResourceData {
+    string run_id = 3;
     repeated Resource resources = 1;
     repeated ResourceType resource_types = 2;
 }
@@ -320,10 +323,14 @@ message WatchResourcesChanges {
 message WatchResourcesRequest {
     // True if the client is establishing this connection because a prior one closed unexpectedly.
     optional bool is_reconnect = 1;
+    // Confirms that the client has prepared storage for this AppHost execution.
+    string run_id = 2;
 }
 
 // A message received from the server when watching resources. Has multiple types of payload.
 message WatchResourcesUpdate {
+    // Refreshed with resource changes, including endpoint allocation after the initial handshake.
+    optional string cors_allowed_origins = 3;
     oneof kind {
         // The current resource state, along with other reference data such as the set of resource types that may exist.
         // Received once upon connection, before any changes.

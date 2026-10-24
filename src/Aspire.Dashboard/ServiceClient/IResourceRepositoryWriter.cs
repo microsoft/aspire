@@ -13,3 +13,12 @@ internal interface IResourceRepositoryWriter
     Task AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines);
     Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate);
 }
+
+// Console line numbers restart with the AppHost even when None/Resume keeps the same database.
+// Carry the originating run into writes so a late batch cannot advance the new run's high-water mark.
+internal interface IAppHostConsoleLogWriter
+{
+    Task BeginAppHostRunAsync(string runId);
+    Task MarkConsoleLogsLoadedAsync(string resourceName, string runId);
+    Task<bool> AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines, string runId);
+}

@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Xunit;
 using DashboardServiceBase = Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceBase;
@@ -66,7 +67,41 @@ public sealed class DashboardClientAuthTests
         Assert.Equal("TestApiKey!", call.RequestHeaders.GetValue(ApiKeyHeaderName));
     }
 
-    private static async Task<ResourceServiceServer> CreateResourceServiceServerAsync(ILoggerFactory loggerFactory, bool useHttps, Action<TestCalls>? configureCalls = null)
+    [Fact]
+    public async Task ReconnectsToResourceService_AfterRepeatedTransportFailures()
+    {
+        using var activitySource = new DashboardActivitySource();
+        var sink = new TestSink();
+        using var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper, sink);
+        var server = await CreateResourceServiceServerAsync(loggerFactory, useHttps: false).DefaultTimeout();
+        var url = server.Url;
+        await server.DisposeAsync();
+        var backingOff = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failures = 0;
+        sink.MessageLogged += write =>
+        {
+            if (write.EventId.Name == "StartingConnectBackoff" && Interlocked.Increment(ref failures) == 9)
+            {
+                backingOff.TrySetResult();
+            }
+        };
+
+        // Real connection refusals exercise gRPC's transport backoff. Replacing the
+        // socket callback bypasses that backoff and only exercises HTTP/RPC retries.
+        await using var client = CreateDashboardClient(activitySource, loggerFactory, url);
+        var connected = ((IDashboardClient)client).WhenConnected;
+        await backingOff.Task.DefaultTimeout(TimeSpan.FromMinutes(2));
+        await using var restartedServer = await CreateResourceServiceServerAsync(
+            loggerFactory, useHttps: false, configureCalls: null, port: new Uri(url).Port).DefaultTimeout();
+
+        // Recovery must stay well within the AppHost's 60-second run-attachment gate,
+        // even after the channel has accumulated several failed transport attempts.
+        await connected.DefaultTimeout(TimeSpan.FromSeconds(30));
+        var call = await restartedServer.Calls.ResourceInformationCallsChannel.Reader.ReadAsync().DefaultTimeout();
+        Assert.NotNull(call.Request);
+    }
+
+    private static async Task<ResourceServiceServer> CreateResourceServiceServerAsync(ILoggerFactory loggerFactory, bool useHttps, Action<TestCalls>? configureCalls = null, int port = 0)
     {
         var serverAppBuilder = WebApplication.CreateSlimBuilder();
 
@@ -90,8 +125,8 @@ public sealed class DashboardClientAuthTests
 
         void ConfigureKestrel(KestrelServerOptions kestrelOptions)
         {
-            // Listen on a random port.
-            kestrelOptions.Listen(IPAddress.Loopback, port: 0, ConfigureListen);
+            // Use an ephemeral port unless restarting a resource service on its previous endpoint.
+            kestrelOptions.Listen(IPAddress.Loopback, port, ConfigureListen);
 
             void ConfigureListen(ListenOptions options)
             {
@@ -108,6 +143,18 @@ public sealed class DashboardClientAuthTests
     }
 
     private static async Task<DashboardClient> CreateDashboardClientAsync(
+        DashboardActivitySource activitySource,
+        ILoggerFactory loggerFactory,
+        string serverAddress,
+        ResourceClientAuthMode authMode = ResourceClientAuthMode.Unsecured,
+        Action<DashboardOptions>? configureOptions = null)
+    {
+        var client = CreateDashboardClient(activitySource, loggerFactory, serverAddress, authMode, configureOptions);
+        await ((IDashboardClient)client).WhenConnected;
+        return client;
+    }
+
+    private static DashboardClient CreateDashboardClient(
         DashboardActivitySource activitySource,
         ILoggerFactory loggerFactory,
         string serverAddress,
@@ -134,12 +181,9 @@ public sealed class DashboardClientAuthTests
             dashboardOptions: Options.Create(options),
             knownPropertyLookup: new MockKnownPropertyLookup(),
             loc: new Aspire.Dashboard.Tests.TestStringLocalizer<Dashboard.Resources.Resources>(),
+            dataSourcePool: null,
             resourceRepositoryWriter: new NoopResourceRepositoryWriter(),
             configureHttpHandler: handler => handler.SslOptions.RemoteCertificateValidationCallback = (sender, cert, chain, sslPolicyErrors) => true);
-
-        var iClient = (IDashboardClient)client;
-
-        await iClient.WhenConnected;
 
         return client;
     }

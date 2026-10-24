@@ -450,13 +450,13 @@ internal static class KubernetesDeployTestHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Show server pod logs for debugging connectivity issues
-        await auto.TypeAsync($"kubectl logs -n {@namespace} -l app={serviceName} --tail=50 2>&1 || true");
+        // Generated charts identify resources with the standard Kubernetes component label.
+        await auto.TypeAsync($"kubectl logs -n {@namespace} -l app.kubernetes.io/component={serviceName} --tail=50 2>&1 || true");
         await auto.EnterAsync();
         await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-        // Show environment variables in server pod for connection string debugging
-        await auto.TypeAsync($"kubectl exec -n {@namespace} deploy/{serviceName}-deployment -- env 2>&1 | grep -iE '(ConnectionStrings|services)' | head -10 || true");
+        // Endpoint routing is useful for connectivity diagnostics without dumping credentials.
+        await auto.TypeAsync($"kubectl get services,endpointslices -n {@namespace} -o wide 2>&1 || true");
         await auto.EnterAsync();
         await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
 
@@ -507,6 +507,9 @@ internal static class KubernetesDeployTestHelpers
         // Run in a subshell so the EXIT trap owns only this forward, even on HTTP failure.
         // A prompt-success assertion checks the final `test`, not an echoed success sentinel.
         // Each curl is bounded; retries also absorb startup of the forward without a fixed sleep.
+        // A failed probe needs logs captured after the request: Kubernetes Ready can mean only
+        // that the container started, and a five-second curl can hide the driver's longer timeout.
+        // The longer diagnostic request never changes the original probe's pass/fail result.
         await auto.RunCommandAsync(
             $"(kubectl port-forward -n {@namespace} {target} {localPort}:{targetPort} > port-forward.log 2>&1 & " +
             "forward_pid=$!; trap 'kill \"$forward_pid\" 2>/dev/null || true' EXIT; " +
@@ -514,8 +517,15 @@ internal static class KubernetesDeployTestHelpers
             $"if result=$(curl --connect-timeout 2 --max-time 5 -fsS http://localhost:{localPort}{testPath}) && " +
             $"{responseCheck}; then found=1; printf '%s\\n' \"$result\"; break; fi; " +
             "echo \"Attempt $i: got [$result], retrying...\"; sleep 5; done; " +
+            "if [ \"$found\" != 1 ]; then " +
+            $"curl --connect-timeout 2 --max-time 5 -sS -o /dev/null -w 'Root HTTP status: %{{http_code}}\\n' http://localhost:{localPort}/ || true; " +
+            $"curl --connect-timeout 2 --max-time 45 -sS -o /dev/null -w 'Endpoint HTTP status: %{{http_code}}\\n' http://localhost:{localPort}{testPath} || true; " +
+            $"kubectl --request-timeout=10s logs -n {@namespace} -l app.kubernetes.io/component --all-containers=true --prefix=true --tail=100 2>&1 || true; " +
+            $"kubectl --request-timeout=10s get pods,services,endpointslices -n {@namespace} -o wide 2>&1 || true; " +
+            $"kubectl --request-timeout=10s get events -n {@namespace} --sort-by=.lastTimestamp 2>&1 || true; " +
+            "cat port-forward.log; fi; " +
             "test \"$found\" = 1)",
-            counter, TimeSpan.FromMinutes(6));
+            counter, TimeSpan.FromMinutes(8));
     }
 
     /// <summary>

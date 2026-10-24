@@ -17,19 +17,42 @@ public sealed class TestOutgoingPeerResolver : IOutgoingPeerResolver, IDisposabl
         _callbacks = new();
     }
 
+    public int SubscriptionCount
+    {
+        get
+        {
+            lock (_callbacks)
+            {
+                return _callbacks.Count;
+            }
+        }
+    }
+
     public void Dispose()
     {
+        lock (_callbacks)
+        {
+            _callbacks.Clear();
+        }
     }
 
     public IDisposable OnPeerChanges(Func<Task> callback)
     {
-        _callbacks.Add(callback);
-        return this;
+        lock (_callbacks)
+        {
+            _callbacks.Add(callback);
+        }
+        return new Subscription(this, callback);
     }
 
     public async Task InvokePeerChanges()
     {
-        foreach (var callback in _callbacks)
+        Func<Task>[] callbacks;
+        lock (_callbacks)
+        {
+            callbacks = _callbacks.ToArray();
+        }
+        foreach (var callback in callbacks)
         {
             await callback();
         }
@@ -46,5 +69,20 @@ public sealed class TestOutgoingPeerResolver : IOutgoingPeerResolver, IDisposabl
         name = "TestPeer";
         matchedResourced = ModelTestHelpers.CreateResource(resourceName: "TestPeer");
         return true;
+    }
+    private sealed class Subscription(TestOutgoingPeerResolver owner, Func<Task> callback) : IDisposable
+    {
+        private TestOutgoingPeerResolver? _owner = owner;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _owner, null) is { } owner)
+            {
+                lock (owner._callbacks)
+                {
+                    owner._callbacks.Remove(callback);
+                }
+            }
+        }
     }
 }

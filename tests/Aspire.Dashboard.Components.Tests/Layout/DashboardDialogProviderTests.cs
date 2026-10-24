@@ -3,6 +3,10 @@
 
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Configuration;
+using Aspire.Tests.Utils;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging.Abstractions;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,6 +55,29 @@ public class DashboardDialogProviderTests : DashboardTestContext
         await cut.InvokeAsync(() => navigation.NavigateTo("/metrics"));
         cut.WaitForAssertion(() => Assert.True(reopened.IsCompletedSuccessfully));
         Assert.True((await reopened).Cancelled);
+    }
+
+    [Fact]
+    public async Task RunRollover_CancelsOpenDialog()
+    {
+        FluentUISetupHelpers.SetupDialogInfrastructure(this);
+        Services.AddSingleton<IDashboardRunStore>(services => new DashboardRunStore(
+            Options.Create(new DashboardOptions
+            {
+                Data = { PersistenceMode = DashboardPersistenceMode.Run, Directory = services.GetRequiredService<TemporaryWorkspace>().Path }
+            }), NullLogger<DashboardRunStore>.Instance, TimeProvider.System));
+        var cut = Render<DashboardDialogProvider>();
+        var pool = Services.GetRequiredService<DashboardDataSourcePool>();
+        await pool.InitializeAsync(CancellationToken.None);
+        await pool.StartAppHostRunAsync("first", CancellationToken.None);
+        var result = await OpenAsync(cut, "run-bound", drawer: false, onStateChange: null);
+        Assert.False(result.IsCompleted);
+
+        await pool.StartAppHostRunAsync("replacement", CancellationToken.None);
+
+        cut.WaitForAssertion(() => Assert.True(result.IsCompletedSuccessfully));
+        Assert.True((await result).Cancelled);
+        Assert.Empty(cut.FindComponents<FluentDialog>());
     }
 
     [Fact]

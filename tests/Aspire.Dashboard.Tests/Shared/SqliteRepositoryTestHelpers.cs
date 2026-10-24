@@ -144,7 +144,8 @@ internal static class SqliteRepositoryTestHelpers
             dashboardOptions ?? Options.Create(new DashboardOptions()),
             pauseManager ?? new PauseManager(),
             timeProvider ?? TimeProvider.System,
-            outgoingPeerResolvers ?? []);
+            outgoingPeerResolvers ?? [],
+            enableLivePeerResolution: true);
         return new SqliteRepositoryTestContext<SqliteTelemetryRepository>(database, repository);
     }
 

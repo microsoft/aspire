@@ -1013,6 +1013,11 @@ public sealed partial class SqliteTelemetryRepository
     {
         using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
+            if (Volatile.Read(ref _peerResolutionStopped) != 0)
+            {
+                return;
+            }
+
             using var writeConnection = _database.OpenConnection();
             using var transaction = writeConnection.BeginTransaction();
             using var readConnection = _database.OpenConnection();

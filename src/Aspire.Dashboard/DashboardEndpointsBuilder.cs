@@ -144,6 +144,8 @@ public static class DashboardEndpointsBuilder
         // Supports multiple resource names: ?resource=app1&resource=app2
         group.MapGet("/spans", async (
             TelemetryApiService service,
+            DashboardDataSource dataSource,
+            DashboardDataSourcePool dataSourcePool,
             HttpContext httpContext,
             [FromQuery] string[]? resource,
             [FromQuery] string? traceId,
@@ -155,7 +157,8 @@ public static class DashboardEndpointsBuilder
         {
             if (follow == true)
             {
-                await StreamNdjsonAsync(httpContext, service.FollowSpansAsync(resource, traceId, hasError, search, cancellationToken), cancellationToken).ConfigureAwait(false);
+                await StreamCurrentRunNdjsonAsync(httpContext, dataSource, dataSourcePool,
+                    token => service.FollowSpansAsync(resource, traceId, hasError, search, token), cancellationToken).ConfigureAwait(false);
                 return Results.Empty;
             }
 
@@ -176,6 +179,8 @@ public static class DashboardEndpointsBuilder
         // Supports multiple resource names: ?resource=app1&resource=app2
         group.MapGet("/logs", async (
             TelemetryApiService service,
+            DashboardDataSource dataSource,
+            DashboardDataSourcePool dataSourcePool,
             HttpContext httpContext,
             [FromQuery] string[]? resource,
             [FromQuery] string? traceId,
@@ -187,7 +192,8 @@ public static class DashboardEndpointsBuilder
         {
             if (follow == true)
             {
-                await StreamNdjsonAsync(httpContext, service.FollowLogsAsync(resource, traceId, severity, search, cancellationToken), cancellationToken).ConfigureAwait(false);
+                await StreamCurrentRunNdjsonAsync(httpContext, dataSource, dataSourcePool,
+                    token => service.FollowLogsAsync(resource, traceId, severity, search, token), cancellationToken).ConfigureAwait(false);
                 return Results.Empty;
             }
 
@@ -246,6 +252,48 @@ public static class DashboardEndpointsBuilder
         });
     }
 
+    private static async Task StreamCurrentRunNdjsonAsync(
+        HttpContext httpContext,
+        DashboardDataSource dataSource,
+        DashboardDataSourcePool pool,
+        Func<CancellationToken, IAsyncEnumerable<string>> follow,
+        CancellationToken cancellationToken)
+    {
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var databasePath = dataSource.SelectedRun.DatabasePath;
+        var cancellationLock = new object();
+        var finished = false;
+
+        void CancelIfRunChanged()
+        {
+            lock (cancellationLock)
+            {
+                if (!finished && !pool.IsCurrentDatabase(databasePath))
+                {
+                    lifetime.Cancel();
+                }
+            }
+        }
+
+        // A follow request owns a stable repository snapshot. End it on rollover so clients
+        // observe EOF and can reconnect, rather than silently watching a retired database forever.
+        pool.CurrentRunChanged += CancelIfRunChanged;
+        try
+        {
+            // Subscribe before checking to cover a rollover between request-scoped binding and registration.
+            CancelIfRunChanged();
+            await StreamNdjsonAsync(httpContext, follow(lifetime.Token), lifetime.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (cancellationLock)
+            {
+                finished = true;
+                pool.CurrentRunChanged -= CancelIfRunChanged;
+            }
+        }
+    }
+
     private static async Task StreamNdjsonAsync(HttpContext httpContext, IAsyncEnumerable<string> items, CancellationToken cancellationToken)
     {
         // Set headers for NDJSON streaming:
@@ -258,6 +306,9 @@ public static class DashboardEndpointsBuilder
 
         try
         {
+            // Send headers even while waiting for the first telemetry item.
+            await httpContext.Response.StartAsync(cancellationToken).ConfigureAwait(false);
+            await httpContext.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
             await foreach (var json in items.WithCancellation(cancellationToken).ConfigureAwait(false))
             {
                 await httpContext.Response.WriteAsync(json, cancellationToken).ConfigureAwait(false);
@@ -267,7 +318,7 @@ public static class DashboardEndpointsBuilder
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Client disconnected - this is expected, exit cleanly
+            // The client disconnected or its run ended. Finish the response cleanly.
         }
     }
 }

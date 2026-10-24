@@ -64,6 +64,9 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
+    [CascadingParameter(Name = nameof(DashboardConnectionState))]
+    public DashboardConnectionState AppHostConnectionState { get; set; }
+
     private bool IsSpecOnlyToggleDisabled => !Resource.Environment.All(i => !i.FromSpec) && !GetResourceProperties(ordered: false).Any(static vm => vm.KnownProperty is null);
 
     // NOTE Excludes URLs as they don't expose sensitive items (and enumerating URLs is non-trivial)
@@ -226,10 +229,11 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 _valueComponents[KnownProperties.Parameter.Value] = metadata;
                 _valueComponents[DisplayedResourcePropertyViewModel.GetUnknownKey(KnownProperties.Parameter.Value)] = metadata;
             }
-
-            UpdateResourceActionsMenu();
         }
 
+        // A disconnect can leave the resource snapshot unchanged. Rebuild the menu so cached
+        // command and terminal availability follows the connection state in an open details panel.
+        UpdateResourceActionsMenu();
         UpdateTelemetryProperties();
     }
 

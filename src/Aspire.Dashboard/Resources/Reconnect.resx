@@ -138,4 +138,10 @@
   <data name="ResourceServiceReconnectRetryButtonText" xml:space="preserve">
     <value>Retry</value>
   </data>
+  <data name="ResourceServiceOfflineTitle" xml:space="preserve">
+    <value>AppHost offline</value>
+  </data>
+  <data name="ResourceServiceOfflineDescription" xml:space="preserve">
+    <value>Reconnecting automatically. You can keep browsing captured resources, logs, traces, and metrics. Resource commands will be available when the AppHost reconnects.</value>
+  </data>
 </root>

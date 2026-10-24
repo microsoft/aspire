@@ -47,6 +47,32 @@ public class SecretsStoreTests
         DeleteUserSecretsFile(userSecretsId);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void GetOrSetUserSecret_MissingBrowserTokenGeneratesAndPersistsReplacement(string? storedToken)
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var manager = CreateFactory().GetOrCreateFromId(userSecretsId);
+        const string key = "AppHost:BrowserToken";
+        try
+        {
+            var configuration = new ConfigurationManager();
+            configuration[key] = storedToken;
+            manager.GetOrSetSecret(configuration, key, TokenGenerator.GenerateToken);
+
+            var token = configuration[key];
+            Assert.False(string.IsNullOrEmpty(token));
+            Assert.Equal(token, GetUserSecrets(userSecretsId)[key]);
+            manager.GetOrSetSecret(configuration, key, () => throw new InvalidOperationException("Token must be reused"));
+            Assert.Equal(token, configuration[key]);
+        }
+        finally
+        {
+            DeleteUserSecretsFile(userSecretsId);
+        }
+    }
+
     [Fact]
     public void GetOrSetUserSecret_ReadsValueFromConfiguration()
     {

@@ -67,9 +67,6 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
-    public required ITelemetryRepositoryWriter TelemetryRepositoryWriter { get; init; }
-
-    [Inject]
     public required ILogger<Metrics> Logger { get; init; }
 
     [Inject]
@@ -84,8 +81,11 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; init; }
 
+    private string _originatingRunId = null!;
+
     protected override void OnInitialized()
     {
+        _originatingRunId = DataSource.SelectedRun.RunId;
         TelemetryContextProvider.Initialize(TelemetryContext);
 
         _durations = new List<SelectViewModel<TimeSpan>>
@@ -243,8 +243,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
 
     private Task ClearMetrics(ResourceKey? key)
     {
-        DataSource.EnsureWritable();
-        return TelemetryRepositoryWriter.ClearMetricsAsync(key);
+        return DataSource.TryMutateCurrentRunAsync(_originatingRunId, (writer, _) => writer.ClearMetricsAsync(key));
     }
 
     private Task HandleSelectedDurationChangedAsync()

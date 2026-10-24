@@ -22,6 +22,16 @@
         <target state="new">Retry</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceServiceOfflineDescription">
+        <source>Reconnecting automatically. You can keep browsing captured resources, logs, traces, and metrics. Resource commands will be available when the AppHost reconnects.</source>
+        <target state="new">Reconnecting automatically. You can keep browsing captured resources, logs, traces, and metrics. Resource commands will be available when the AppHost reconnects.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceServiceOfflineTitle">
+        <source>AppHost offline</source>
+        <target state="new">AppHost offline</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceServiceReconnectDisconnectedText">
         <source>Lost connection to the AppHost. Attempting to reconnect...</source>
         <target state="new">Lost connection to the AppHost. Attempting to reconnect...</target>

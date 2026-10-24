@@ -45,6 +45,7 @@ public sealed class MockDashboardClient : IDashboardClient, IResourceRepositoryW
     public Task WhenResourcesReady => Task.CompletedTask;
     public string ApplicationName => "IntegrationTestApplication";
     public string? MinRequiredVersion => null;
+    public string AppHostRunId => string.Empty;
     public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
 #pragma warning disable CS0067 // Event is never used - required by interface
     public event Action<DashboardConnectionState>? ConnectionStateChanged;
@@ -52,7 +53,7 @@ public sealed class MockDashboardClient : IDashboardClient, IResourceRepositoryW
     public Task ReconnectAsync() => Task.CompletedTask;
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken) => throw new NotImplementedException();
-    public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken) => throw new NotImplementedException();
+    public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, string appHostRunId, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken) => throw new NotImplementedException();
     public async IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -119,8 +120,8 @@ internal sealed class MockRepositoryFactory(
 {
     private readonly RepositoryFactory _inner = new(serviceProvider);
 
-    public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database) =>
-        _inner.CreateTelemetryRepository(database);
+    public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database, bool enableLivePeerResolution) =>
+        _inner.CreateTelemetryRepository(database, enableLivePeerResolution);
 
     public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) =>
         resourceRepository;

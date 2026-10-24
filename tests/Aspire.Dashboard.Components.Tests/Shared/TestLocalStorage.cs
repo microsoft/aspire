@@ -11,6 +11,7 @@ public sealed class TestLocalStorage : ILocalStorage
     public Func<string, (bool Success, object? Value)>? OnGetUnprotectedAsync { get; set; }
     public Action<string, object?>? OnSetUnprotectedAsync { get; set; }
     public Func<string, (bool Success, object? Value)>? OnGetAsync { get; set; }
+    public Action<string, object?>? OnSetAsync { get; set; }
 
     public Task<StorageResult<T>> GetAsync<T>(string key)
     {
@@ -40,6 +41,7 @@ public sealed class TestLocalStorage : ILocalStorage
 
     public Task SetAsync<T>(string key, T value)
     {
+        OnSetAsync?.Invoke(key, value);
         return Task.CompletedTask;
     }
 

@@ -2,9 +2,39 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ko" original="../Layout.resx">
     <body>
+      <trans-unit id="DashboardNewLiveRunDismiss">
+        <source>Dismiss new live run notice</source>
+        <target state="new">Dismiss new live run notice</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardNewLiveRunFollowed">
+        <source>Previous run saved in history.</source>
+        <target state="new">Previous run saved in history.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardNewLiveRunHistory">
+        <source>You’re viewing a previous run.</source>
+        <target state="new">You’re viewing a previous run.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardNewLiveRunOpen">
+        <source>Open live run</source>
+        <target state="new">Open live run</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardNewLiveRunTitle">
+        <source>New live run connected</source>
+        <target state="new">New live run connected</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DashboardRunSelectAccessibleLabel">
         <source>Select run: {0}</source>
         <target state="new">Select run: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectConnecting">
+        <source>Connecting to AppHost</source>
+        <target state="new">Connecting to AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectCurrent">
@@ -25,6 +55,11 @@
       <trans-unit id="DashboardRunSelectIncompatibleTooltip">
         <source>This run can't be viewed because it was created by an incompatible version of the dashboard.</source>
         <target state="new">This run can't be viewed because it was created by an incompatible version of the dashboard.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectOffline">
+        <source>AppHost offline</source>
+        <target state="new">AppHost offline</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectPin">

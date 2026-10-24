@@ -18,6 +18,8 @@ public partial class AspireMenuButton : FluentComponentBase
 
     private static readonly Icon s_defaultIcon = new Icons.Regular.Size24.ChevronDown();
 
+    internal object MenuOpenKey { get; private set; } = new();
+
     private bool _renderMenu;
     private bool _visible;
     private Icon? _icon;
@@ -128,6 +130,7 @@ public partial class AspireMenuButton : FluentComponentBase
             return;
         }
 
+        MenuOpenKey = new();
         RefreshItems();
 
         _renderMenu = true;

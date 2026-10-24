@@ -32,6 +32,7 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
     private readonly DashboardDataSourcePool _dataSourcePool;
 
     private DashboardDataSourcePool.Lease? _historicalDataSourceLease;
+    private IDisposable? _currentRetention;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DashboardDataSource"/> class.
@@ -73,6 +74,33 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
         }
     }
 
+    internal async Task MutateCurrentRunAsync(string originatingRunId, Func<ITelemetryRepositoryWriter, IResourceRepository, Task> mutation)
+    {
+        EnsureWritable();
+        if (!await TryMutateCurrentRunAsync(originatingRunId, mutation).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException("The dashboard run changed. Reopen the dialog before changing data.");
+        }
+    }
+
+    internal async Task<bool> TryMutateCurrentRunAsync(string originatingRunId, Func<ITelemetryRepositoryWriter, IResourceRepository, Task> mutation)
+    {
+        // Validate and select the writer under the rollover lock. A callback queued before
+        // its page or dialog is replaced must never apply old selections to the new run.
+        using (await _dataSourcePool.RunWriteLock.LockAsync().ConfigureAwait(false))
+        {
+            if (IsReadOnly || SelectedRun.RunId != originatingRunId || _runStore.GetCurrentRun().RunId != originatingRunId ||
+                !_dataSourcePool.IsCurrentDatabase(SelectedRun.DatabasePath))
+            {
+                return false;
+            }
+
+            var current = _dataSourcePool.Current;
+            await mutation((ITelemetryRepositoryWriter)current.TelemetryRepository, current.ResourceRepository).ConfigureAwait(false);
+            return true;
+        }
+    }
+
     DashboardRunDescriptor IDashboardRunSelection.SelectedRun => SelectedRun;
 
     void IDashboardRunSelection.SelectRun(string? runId) => SelectRun(runId);
@@ -91,7 +119,7 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
             selectedRun = currentRun;
         }
 
-        if (SelectedRun?.RunId == selectedRun.RunId)
+        if (!selectedRun.IsCurrent && IsReadOnly && SelectedRun?.RunId == selectedRun.RunId)
         {
             return;
         }
@@ -122,14 +150,33 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
             TelemetryRepository = historicalDataSourceLease.TelemetryRepository;
             ResourceRepository = historicalDataSourceLease.ResourceRepository;
             IsReadOnly = true;
+            _currentRetention?.Dispose();
+            _currentRetention = null;
             SelectedRun = selectedRun;
             previousHistoricalDataSourceLease?.Dispose();
         }
         else
         {
+            var retention = _dataSourcePool.RetainCurrent(out var currentDataSource, out var capturedCurrentRun);
+            if (runId is not null && selectedRun.RunId == runId && capturedCurrentRun.RunId != runId)
+            {
+                // An explicit run ID can become historical while we wait for rollover. Resolve it
+                // again instead of silently following Live and losing the requested selection.
+                retention.Dispose();
+                SelectRun(runId);
+                return;
+            }
+
             var previousHistoricalDataSourceLease = _historicalDataSourceLease;
+            var previousRetention = _currentRetention;
             _historicalDataSourceLease = null;
-            SelectCurrentRun(selectedRun);
+            _currentRetention = retention;
+            TelemetryRepository = currentDataSource.TelemetryRepository;
+            ResourceRepository = currentDataSource.ResourceRepository;
+            IsReadOnly = false;
+            SelectedRun = capturedCurrentRun;
+            selectedRun = capturedCurrentRun;
+            previousRetention?.Dispose();
             previousHistoricalDataSourceLease?.Dispose();
         }
 
@@ -139,21 +186,13 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
     public void Dispose()
     {
         DisposeHistoricalDataSource();
+        _currentRetention?.Dispose();
     }
 
     private void DisposeHistoricalDataSource()
     {
         _historicalDataSourceLease?.Dispose();
         _historicalDataSourceLease = null;
-    }
-
-    private void SelectCurrentRun(DashboardRunDescriptor currentRun)
-    {
-        var currentDataSource = _dataSourcePool.Current;
-        TelemetryRepository = currentDataSource.TelemetryRepository;
-        ResourceRepository = currentDataSource.ResourceRepository;
-        IsReadOnly = false;
-        SelectedRun = currentRun;
     }
 
     private void LogRunSwitch(DashboardRunDescriptor? previousRun, DashboardRunDescriptor selectedRun)

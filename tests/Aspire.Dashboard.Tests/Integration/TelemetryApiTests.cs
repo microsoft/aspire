@@ -401,6 +401,33 @@ public class TelemetryApiTests
         }
     }
 
+    [Theory]
+    [InlineData("spans")]
+    [InlineData("logs")]
+    public async Task Follow_AppHostRunChanges_CompletesResponse(string telemetryKind)
+    {
+        using var workspace = TemporaryWorkspace.Create(_testOutputHelper);
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+        {
+            config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.Unsecured.ToString();
+            config[DashboardConfigNames.DashboardPersistenceModeName.ConfigKey] = nameof(DashboardPersistenceMode.Run);
+            config[DashboardConfigNames.DashboardDataDirectoryName.ConfigKey] = workspace.Path;
+        });
+        await app.StartAsync().DefaultTimeout();
+        var pool = app.Services.GetRequiredService<DashboardDataSourcePool>();
+        await pool.StartAppHostRunAsync("first", CancellationToken.None);
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var response = await httpClient.GetAsync($"/api/telemetry/{telemetryKind}?follow=true",
+            HttpCompletionOption.ResponseHeadersRead).DefaultTimeout();
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var completion = response.Content.ReadAsStringAsync();
+        Assert.False(completion.IsCompleted);
+
+        await pool.StartAppHostRunAsync("second", CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(string.Empty, await completion.DefaultTimeout());
+    }
+
     #region Trace Endpoint Tests
 
     [Fact]

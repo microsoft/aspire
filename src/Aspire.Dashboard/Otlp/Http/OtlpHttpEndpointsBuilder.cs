@@ -26,9 +26,9 @@ public static class OtlpHttpEndpointsBuilder
     public const string JsonContentType = "application/json";
     public const string CorsPolicyName = "OtlpHttpCors";
 
-    public static void MapHttpOtlpApi(this IEndpointRouteBuilder endpoints, OtlpOptions options)
+    public static void MapHttpOtlpApi(this IEndpointRouteBuilder endpoints, DashboardOptions options)
     {
-        var httpEndpoint = options.GetHttpEndpointAddress();
+        var httpEndpoint = options.Otlp.GetHttpEndpointAddress();
         if (httpEndpoint == null)
         {
             // Don't map OTLP HTTP route endpoints if there isn't a Kestrel endpoint to access them with.
@@ -40,7 +40,7 @@ public static class OtlpHttpEndpointsBuilder
             .MapGroup("/v1")
             .AddOtlpHttpMetadata();
 
-        if (!string.IsNullOrEmpty(options.Cors.AllowedOrigins))
+        if (options.Otlp.Cors.IsCorsEnabled || options.ResourceServiceClient.GetUri() is not null)
         {
             group = group.RequireCors(CorsPolicyName);
         }

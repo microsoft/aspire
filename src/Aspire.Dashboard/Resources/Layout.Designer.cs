@@ -347,5 +347,68 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("PageLayoutViewFilters", resourceCulture);
             }
         }
+        /// <summary>
+        ///   Looks up a localized string similar to AppHost offline.
+        /// </summary>
+        public static string DashboardRunSelectOffline {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectOffline", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Connecting to AppHost.
+        /// </summary>
+        public static string DashboardRunSelectConnecting {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectConnecting", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to New live run connected.
+        /// </summary>
+        public static string DashboardNewLiveRunTitle {
+            get {
+                return ResourceManager.GetString("DashboardNewLiveRunTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to You’re viewing the new live run. The previous run is available in run history..
+        /// </summary>
+        public static string DashboardNewLiveRunFollowed {
+            get {
+                return ResourceManager.GetString("DashboardNewLiveRunFollowed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to You’re still viewing a previous run. A new live run is ready..
+        /// </summary>
+        public static string DashboardNewLiveRunHistory {
+            get {
+                return ResourceManager.GetString("DashboardNewLiveRunHistory", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Open live run.
+        /// </summary>
+        public static string DashboardNewLiveRunOpen {
+            get {
+                return ResourceManager.GetString("DashboardNewLiveRunOpen", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Dismiss new live run notice.
+        /// </summary>
+        public static string DashboardNewLiveRunDismiss {
+            get {
+                return ResourceManager.GetString("DashboardNewLiveRunDismiss", resourceCulture);
+            }
+        }
+
     }
 }
