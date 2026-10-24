@@ -1,0 +1,127 @@
+name: Recompile agentic workflows
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+# Each source PR has its own follow-up branch; manual runs share a separate one.
+# Serialize writers to the same branch without letting unrelated closures cancel
+# a pending update. Replacing a pending rerun of the same source is safe.
+concurrency:
+  group: recompile-agentic-workflows-${{ github.event.pull_request.number || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  recompile:
+    if: >-
+      github.repository == 'microsoft/aspire' &&
+      ((github.event_name == 'workflow_dispatch' &&
+      github.ref_name == github.event.repository.default_branch) ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch))
+    runs-on: ubuntu-latest
+    steps:
+      # Only merged PRs run. Use the trusted default branch, including any fixes
+      # merged since the triggering PR, rather than executing the PR head.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Select pinned gh-aw release
+        id: detect
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            await require('./.github/workflows/recompile-agentic-workflows.js').detect({ github, context, core });
+
+      - name: Install exact gh-aw release and compile all workflows
+        if: steps.detect.outputs.updated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_AW_VERSION: ${{ steps.detect.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh extension install github/gh-aw --pin "$GH_AW_VERSION" --force
+          # Older gh-aw releases (including v0.89.17) print the version to stderr.
+          installed=$(gh aw version 2>&1)
+          printf '%s\n' "$installed"
+          [[ "$installed" == "gh aw version $GH_AW_VERSION" ]]
+          gh aw compile --no-check-update --schedule-seed microsoft/aspire
+          # Compilation replaces auto-sec.lock.yml with raw output. Reapply its publication
+          # gates before linting, as validate-agentic-workflows.yml does.
+          node .github/workflows/auto-sec/publication-guard.js
+          gh aw lint --shellcheck
+
+      - name: Check complete recompilation changes
+        if: steps.detect.outputs.updated == 'true'
+        id: changes
+        run: node .github/workflows/recompile-agentic-workflows.js changes
+
+      # Only mint the write token after compilation/lint and the path allowlist
+      # succeed. The App must also be granted Workflows write in its installation.
+      # Dependabot-triggered runs need these credentials in Dependabot secrets:
+      # https://docs.github.com/en/code-security/reference/supply-chain-security/troubleshoot-dependabot/dependabot-on-actions#accessing-secrets
+      - name: Generate Aspirey token
+        if: steps.changes.outputs.changed == 'true'
+        id: pr-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Create or update recompilation PR
+        if: steps.changes.outputs.changed == 'true'
+        # actionlint does not yet support zizmor's preferred '$/' local-action syntax.
+        uses: ./.github/actions/create-pull-request # zizmor: ignore[self-repository]
+        with:
+          token: ${{ steps.pr-token.outputs.token }}
+          branch: ${{ steps.detect.outputs.branch }}
+          base: ${{ github.event.repository.default_branch }}
+          title: "[automated] Recompile agentic workflows with gh-aw ${{ steps.detect.outputs.version }}"
+          commit-message: "[automated] Recompile agentic workflows with gh-aw ${{ steps.detect.outputs.version }}"
+          labels: area-engineering-systems
+          update-existing-pr-metadata: true
+          body: |
+            ## Description
+
+            Recompiles all agentic workflows using the exact gh-aw release from ${{ steps.detect.outputs.source }} and aligns the Copilot and validation compiler pins.
+
+            Compiler: https://github.com/github/gh-aw/releases/tag/${{ steps.detect.outputs.version }}
+
+            Validation passed: `gh aw version`, `gh aw compile --no-check-update --schedule-seed microsoft/aspire`, `node .github/workflows/auto-sec/publication-guard.js`, and `gh aw lint --shellcheck`.
+
+            ## Checklist
+
+            - Is this feature complete?
+              - [x] Yes. Ready to ship.
+              - [ ] No. Follow-up changes expected.
+            - Are you including unit tests for the changes and scenario tests if relevant?
+              - [ ] Yes
+              - [x] No
+            - Did you add public API?
+              - [ ] Yes
+                - If yes, did you have an API Review for it?
+                  - [ ] Yes
+                  - [ ] No
+                - Did you add `<remarks />` and `<code />` elements on your triple slash comments?
+                  - [ ] Yes
+                  - [ ] No
+              - [x] No
+            - Does the change make any security assumptions or guarantees?
+              - [x] Yes
+                - If yes, have you done a threat model and had a security review?
+                  - [ ] Yes
+                  - [ ] No
+              - [ ] No
