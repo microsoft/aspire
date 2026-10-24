@@ -52,6 +52,11 @@ internal static class AuxiliaryBackchannelCapabilities
     public const string V3 = "aux.v3";
 
     /// <summary>
+    /// Resource command file argument capability: file inputs can be transferred with command execution requests.
+    /// </summary>
+    public const string ResourceCommandFiles_V1 = "resource-command-files.v1";
+
+    /// <summary>
     /// Terminal capability (13.4+): the AppHost exposes per-replica terminal info via
     /// <see cref="GetTerminalInfoResponse.Replicas"/> AND the per-resource list returned by
     /// <c>ListTerminalsAsync</c> (with per-replica current grid size and attached-peer counts).
@@ -455,6 +460,11 @@ internal sealed class ExecuteResourceCommandRequest : BackchannelRequest
     public JsonNode? Arguments { get; init; }
 
     /// <summary>
+    /// Gets files supplied for file-type command arguments.
+    /// </summary>
+    public ResourceCommandFileArgument[]? Files { get; init; }
+
+    /// <summary>
     /// Gets a value indicating whether the request should validate arguments without executing the command.
     /// </summary>
     public bool ValidateOnly { get; init; }
@@ -476,6 +486,7 @@ internal sealed class ExecuteResourceCommandRequest : BackchannelRequest
         ResourceName = ResourceName,
         CommandName = CommandName,
         Arguments = Arguments,
+        Files = Files,
         ValidateOnly = ValidateOnly,
         NonInteractive = NonInteractive,
         ReturnArgumentInputs = ReturnArgumentInputs
@@ -494,6 +505,11 @@ internal sealed class ExecuteResourceCommandOptions
     public JsonNode? Arguments { get; init; }
 
     /// <summary>
+    /// Gets files supplied for file-type command arguments.
+    /// </summary>
+    public ResourceCommandFileArgument[]? Files { get; init; }
+
+    /// <summary>
     /// Gets a value indicating whether the request should validate arguments without executing the command.
     /// </summary>
     public bool ValidateOnly { get; init; }
@@ -507,6 +523,27 @@ internal sealed class ExecuteResourceCommandOptions
     /// Gets a value indicating whether the response should include command argument input metadata after dynamic loading.
     /// </summary>
     public bool ReturnArgumentInputs { get; init; }
+}
+
+/// <summary>
+/// Represents a file supplied for a resource command argument.
+/// </summary>
+internal sealed class ResourceCommandFileArgument
+{
+    /// <summary>
+    /// Gets the command argument name.
+    /// </summary>
+    public required string ArgumentName { get; init; }
+
+    /// <summary>
+    /// Gets the leaf file name supplied by the user.
+    /// </summary>
+    public required string FileName { get; init; }
+
+    /// <summary>
+    /// Gets or sets the file content.
+    /// </summary>
+    public required byte[] Data { get; set; }
 }
 
 /// <summary>
@@ -1298,6 +1335,21 @@ internal sealed class ResourceSnapshotCommandArgument
     /// Gets the maximum length for text inputs.
     /// </summary>
     public int? MaxLength { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether multiple files can be supplied for a file input.
+    /// </summary>
+    public bool AllowMultipleFiles { get; init; }
+
+    /// <summary>
+    /// Gets the accepted file type filter for a file input.
+    /// </summary>
+    public string? FileFilter { get; init; }
+
+    /// <summary>
+    /// Gets the maximum file size in bytes for a file input.
+    /// </summary>
+    public long? MaxFileSize { get; init; }
 
     /// <summary>
     /// Gets metadata describing dynamic input loading behavior.
