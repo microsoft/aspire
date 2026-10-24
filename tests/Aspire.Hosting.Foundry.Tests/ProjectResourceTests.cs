@@ -111,6 +111,38 @@ public class ProjectResourceTests
     }
 
     [Fact]
+    public async Task AddProject_WithUnregisteredComputeResource_ThrowsActionableErrorDuringBeforeStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddFoundry("account")
+            .AddProject("my-project");
+        builder.AddPythonApp("worker", "./worker.py", "main:app");
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ExecuteBeforeStartHooksAsync(app, default));
+        var innerException = Assert.IsType<InvalidOperationException>(exception.InnerException);
+
+        Assert.Equal(
+            "Compute resource(s) 'worker' are assigned to Microsoft Foundry project 'my-project' but are not configured as hosted agents. " +
+            "Register each resource with '.AsHostedAgent(project)' (or 'asHostedAgent(project)' in polyglot app hosts), or assign it to a different compute environment.",
+            innerException.Message);
+    }
+
+    [Fact]
+    public async Task AddProject_WithHostedAgent_AllowsBeforeStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        builder.AddPythonApp("worker", "./worker.py", "main:app")
+            .AsHostedAgent(project);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [Fact]
     public void ConnectionStringExpression_HasCorrectFormat()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
