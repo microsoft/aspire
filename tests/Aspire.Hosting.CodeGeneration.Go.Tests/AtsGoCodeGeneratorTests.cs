@@ -51,6 +51,17 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WritesFilesWithLfLineEndings()
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+
+        // The files mix raw string literals, StringWriter output and embedded resources, which take the line endings
+        // of the machine that built or runs the generator (CRLF on Windows), while gofmt reports CRLF as a
+        // formatting difference.
+        Assert.Empty(files.Where(file => file.Value.Contains('\r')).Select(file => file.Key));
+    }
+
+    [Fact]
     [RequiresTools(["go"])]
     public async Task GeneratedTransport_SupportsDuplexCommunication()
     {

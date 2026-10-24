@@ -70,7 +70,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     /// <inheritdoc />
     public Dictionary<string, string> GenerateDistributedApplication(AtsContext context)
     {
-        return new Dictionary<string, string>(StringComparer.Ordinal)
+        var files = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["go.mod"] = """
                 module apphost/modules/aspire
@@ -81,6 +81,12 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             ["base.go"] = GetEmbeddedResource("base.go"),
             ["aspire.go"] = GenerateAspireSdk(context)
         };
+
+        // The files mix raw string literals, StringWriter output and embedded resources, which take the line endings
+        // of the machine that built or runs the generator (CRLF on Windows). gofmt rewrites CRLF, so write LF everywhere.
+        // Only CRLF is replaced: ReplaceLineEndings would also split lines at characters such as U+2028 or form feed,
+        // which Go allows inside comments and string literals.
+        return files.ToDictionary(file => file.Key, file => file.Value.Replace("\r\n", "\n"), StringComparer.Ordinal);
     }
 
     private static string GetEmbeddedResource(string name)
