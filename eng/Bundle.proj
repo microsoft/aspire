@@ -259,6 +259,10 @@
       <_BundleSigningArgs Condition="'$(DotNetPublishUsingPipelines)' != ''">$(_BundleSigningArgs) /p:DotNetPublishUsingPipelines=$(DotNetPublishUsingPipelines)</_BundleSigningArgs>
 
       <_SignOnlyCommand>&quot;$(_BuildScriptPath)&quot; -sign -configuration $(Configuration) $(_BundleChildArgs) $(_BundleSigningArgs)</_SignOnlyCommand>
+      <_ComponentSigningLog>$(_ArtifactsLogDir)SignBundleComponents.log</_ComponentSigningLog>
+      <_ComponentSigningResponseFile>$(_ArtifactsLogDir)SignBundleComponents.rsp</_ComponentSigningResponseFile>
+      <_BundleSigningReceipt>$(_ArtifactsLogDir)BundleSigningReceipt.json</_BundleSigningReceipt>
+      <_ComponentSigningTempDir>$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'tmp', '$(Configuration)', 'BundleComponentSigning'))</_ComponentSigningTempDir>
     </PropertyGroup>
 
     <!-- Resolve shared component and bundle archive paths after importing projects have overridden
@@ -455,7 +459,24 @@
                Condition="'$(BuildDistributionPackages)' == 'true' and $(TargetRid.StartsWith('osx-')) and '$(Sign)' == 'true'" />
 
     <!-- Sign the prepared component binaries before assembling the bundle archive. -->
-    <Exec Command="$(_SignOnlyCommand) &quot;/bl:$(_ArtifactsLogDir)SignBundleComponents.binlog&quot;"
+    <ItemGroup Condition="'$(Sign)' == 'true'">
+      <_OldComponentSigningRequest Include="$(_ComponentSigningTempDir)**/Round*-Sign.proj" />
+    </ItemGroup>
+    <Delete Files="@(_OldComponentSigningRequest)" />
+    <MakeDir Directories="$(_ComponentSigningTempDir)" Condition="'$(Sign)' == 'true'" />
+    <!-- build.cmd forwards through powershell -Command. Keep the logger's
+         semicolon out of that shell command so it cannot become a statement. -->
+    <WriteLinesToFile File="$(_ComponentSigningResponseFile)"
+                      Lines="&quot;/flp:LogFile=$(_ComponentSigningLog)%3BVerbosity=diagnostic&quot;"
+                      Overwrite="true"
+                      Condition="'$(Sign)' == 'true'" />
+    <PropertyGroup>
+      <_ComponentSigningResponseArgument>&quot;@$(_ComponentSigningResponseFile)&quot;</_ComponentSigningResponseArgument>
+      <!-- Preserve grouping through cmd's outer -Command quotes and the
+           subsequent PowerShell parse, including response-file paths with spaces. -->
+      <_ComponentSigningResponseArgument Condition="$([MSBuild]::IsOSPlatform('Windows'))">&quot;'@$(_ComponentSigningResponseFile.Replace(&quot;'&quot;, &quot;''&quot;))'&quot;</_ComponentSigningResponseArgument>
+    </PropertyGroup>
+    <Exec Command="$(_SignOnlyCommand) &quot;/p:ArtifactsTmpDir=$(_ComponentSigningTempDir.TrimEnd('\').TrimEnd('/'))/&quot; &quot;/bl:$(_ArtifactsLogDir)SignBundleComponents.binlog&quot; $(_ComponentSigningResponseArgument)"
           EnvironmentVariables="$(_NuGetCacheEnvironmentVariables)"
           Condition="'$(Sign)' == 'true'" />
 
@@ -476,6 +497,14 @@
     <!-- MicroBuild replaces signed files, resetting their mode to the agent umask. -->
     <Exec Command="chmod +x &quot;$(_ManagedExecutablePath)&quot; &quot;$(_DashboardExecutablePath)&quot; &quot;$(_TerminalHostExecutablePath)&quot; &quot;$(_AppHostServerExecutablePath)&quot;"
           Condition="'$(Sign)' == 'true' and !$(TargetRid.StartsWith('win-'))" />
+
+    <PropertyGroup>
+      <_SignedTrayReceiptArgs Condition="$(TargetRid.StartsWith('osx-'))">-SignedAppPath &quot;$(TrayAppPath.TrimEnd('\').TrimEnd('/'))/&quot;</_SignedTrayReceiptArgs>
+    </PropertyGroup>
+    <!-- Record only this successful component pass, before later package signing
+         can rewrite a different copy. Hashes bind the receipt to shipped bytes. -->
+    <Exec Command="pwsh -NoProfile -File &quot;$(_BundleEngineeringDir)scripts/write-bundle-signing-receipt.ps1&quot; -SigningLog &quot;$(_ComponentSigningLog)&quot; -SigningRequestsDirectory &quot;$(_ComponentSigningTempDir.TrimEnd('\').TrimEnd('/'))/&quot; -OutputPath &quot;$(_BundleSigningReceipt)&quot; $(_SignedTrayReceiptArgs)"
+          Condition="'$(Sign)' == 'true' and '$(DotNetSignType)' == 'real'" />
   </Target>
 
   <Target Name="_ValidatePreparedComponentFiles" Condition="'$(BuildDistributionPackages)' == 'true'">
@@ -536,6 +565,9 @@
     <Message Importance="high" Text="Creating bundle layout and archive..." />
     <Exec Command="dotnet run --project &quot;$(_CreateLayoutProjectPath)&quot; $(_BundleChildArgs) -- $(_CreateLayoutArgs)"
           EnvironmentVariables="$(_NuGetCacheEnvironmentVariables)" />
+
+    <Exec Command="pwsh -NoProfile -File &quot;$(_BundleEngineeringDir)scripts/verify-bundle-signing-accounting.ps1&quot; -LayoutDirectory &quot;$(_BundleLayoutDirArg)&quot; -Receipt &quot;$(_BundleSigningReceipt)&quot; -Policy &quot;$(_BundleEngineeringDir)bundle-signing-policy.json&quot; -Rid &quot;$(TargetRid)&quot; -ReportPath &quot;$(_ArtifactsLogDir)BundleSigningAccounting.json&quot;"
+          Condition="'$(Sign)' == 'true' and '$(DotNetSignType)' == 'real'" />
 
     <!-- Verify archive contents, including required component signatures, before CLI embedding. -->
     <Exec Command="pwsh -NoProfile -File &quot;$(_BundleEngineeringDir)scripts/verify-bundle-payload.ps1&quot; -Archive &quot;$(_BundleArchivePath)&quot; -Rid &quot;$(TargetRid)&quot; -RequireSignature $(_RequireComponentSignatures)"

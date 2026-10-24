@@ -452,6 +452,31 @@ restores only the tool dependencies, not an arbitrary component project.
 Subsequent sign-only invocations use fresh evaluations to discover newly built
 packages without repeating project restore.
 
+Real signed builds also reconcile the assembled layout against the successful
+component signing pass. `write-bundle-signing-receipt.ps1` reads the resolved
+MicroBuild `FilesToSign` requests and successful-pass diagnostic records.
+Component signing passes diagnostic logger options through an MSBuild response
+file, avoiding semicolon reinterpretation by the Windows `build.cmd` PowerShell
+command wrapper.
+The Windows build entry point treats PowerShell errors as terminating so a
+wrapper failure cannot reuse a successful native command's exit code.
+It records processed/already-signed output files and their SHA-256 digests, plus the
+separately signed macOS app after its signing/notarization targets succeed.
+`verify-bundle-signing-accounting.ps1` compares actual native payload bytes with
+that receipt. Renamed and duplicated files match by digest rather than basename.
+
+Native files not processed by this pass require an exact RID/path classification
+in `eng/bundle-signing-policy.json` for preserved upstream signing. Other
+non-native assets are reported separately. Unaccounted native files fail the
+build and are listed in `BundleSigningAccounting.json`; later NuGet signing
+cannot account for a different copy already embedded in the bundle.
+
+This accounting check is separate from cryptographic signature validation.
+The existing unsigned Windows Dashboard SQLite/Hex1b copies are not exempted:
+their policy is unresolved in https://github.com/microsoft/aspire/issues/21303.
+Until resolved, a Windows real-signing build is expected to report those
+omissions rather than silently declaring complete coverage.
+
 These controls belong to `eng/Bundle.proj`, not repository build selection.
 Repository builds and child packaging calls use their own build properties.
 

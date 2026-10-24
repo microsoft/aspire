@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "upstream": [
+    { "rid": "win-x64", "path": "dcp/dcp.exe", "reason": "DCP is restored as an upstream-signed dependency." },
+    { "rid": "win-arm64", "path": "dcp/dcp.exe", "reason": "DCP is restored as an upstream-signed dependency." },
+    { "rid": "osx-x64", "path": "dcp/dcp", "reason": "DCP is restored as an upstream-signed dependency." },
+    { "rid": "osx-arm64", "path": "dcp/dcp", "reason": "DCP is restored as an upstream-signed dependency." },
+    { "rid": "win-x64", "path": "apphost-server/aspnetcorev2_inprocess.dll", "reason": "Preserve the upstream .NET runtime signature." },
+    { "rid": "win-arm64", "path": "apphost-server/aspnetcorev2_inprocess.dll", "reason": "Preserve the upstream .NET runtime signature." },
+    { "rid": "win-x64", "path": "dashboard/conpty.dll", "reason": "Preserve the upstream ConPTY signature." },
+    { "rid": "win-x64", "path": "managed/conpty.dll", "reason": "Preserve the upstream ConPTY signature." },
+    { "rid": "win-x64", "path": "terminalhost/conpty.dll", "reason": "Preserve the upstream ConPTY signature." },
+    { "rid": "win-arm64", "path": "dashboard/conpty.dll", "reason": "Preserve the upstream ConPTY signature." },
+    { "rid": "win-arm64", "path": "managed/conpty.dll", "reason": "Preserve the upstream ConPTY signature." },
+    { "rid": "win-arm64", "path": "terminalhost/conpty.dll", "reason": "Preserve the upstream ConPTY signature." },
+    { "rid": "win-x64", "path": "dashboard/arm64/OpenConsole.exe", "reason": "Preserve the upstream OpenConsole signature." },
+    { "rid": "win-x64", "path": "dashboard/x64/OpenConsole.exe", "reason": "Preserve the upstream OpenConsole signature." },
+    { "rid": "win-x64", "path": "managed/arm64/OpenConsole.exe", "reason": "Preserve the upstream OpenConsole signature." },
+    { "rid": "win-x64", "path": "managed/x64/OpenConsole.exe", "reason": "Preserve the upstream OpenConsole signature." },
+    { "rid": "win-x64", "path": "terminalhost/arm64/OpenConsole.exe", "reason": "Preserve the upstream OpenConsole signature." },
+    { "rid": "win-x64", "path": "terminalhost/x64/OpenConsole.exe", "reason": "Preserve the upstream OpenConsole signature." },
+    { "rid": "win-arm64", "path": "dashboard/arm64/OpenConsole.exe", "reason": "Preserve the upstream OpenConsole signature." },
+    { "rid": "win-arm64", "path": "managed/arm64/OpenConsole.exe", "reason": "Preserve the upstream OpenConsole signature." },
+    { "rid": "win-arm64", "path": "terminalhost/arm64/OpenConsole.exe", "reason": "Preserve the upstream OpenConsole signature." }
+  ]
+}

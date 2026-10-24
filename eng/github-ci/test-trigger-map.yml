@@ -593,6 +593,9 @@ path_rules:
   - paths:
       - eng/Bundle.proj
       - eng/RestoreSigningTools.proj
+      - eng/bundle-signing-policy.json
+      - eng/scripts/write-bundle-signing-receipt.ps1
+      - eng/scripts/verify-bundle-signing-accounting.ps1
       - tools/CreateLayout/**
     targets: [CLI_BUNDLE, test:Infrastructure.Tests]
     reason: assembles and validates native CLI bundle payloads
