@@ -832,6 +832,23 @@ func decodeStructFields[T any](raw any) (T, bool) {
 	return structValue.Interface().(T), true
 }
 
+// callbackHandleArg fetches a positional callback argument that is a handle
+// and returns it as the callback's declared wrapper type T, built with wrap
+// when the transport delivered a raw *handle. The host tags each handle
+// argument with the callback's declared parameter type. For a resource builder
+// that is a closed generic type id (IResourceBuilder<T>) that has no registered
+// wrapper, so wrapIfHandle leaves the *handle unwrapped and callbackArg alone
+// would hand the user's callback a nil interface. Arguments that are already
+// wrapped, nil or missing fall through to callbackArg.
+func callbackHandleArg[T any](c *client, args []any, idx int, wrap func(*handle, *client) T) T {
+	if idx < len(args) {
+		if h, ok := args[idx].(*handle); ok {
+			return wrap(h, c)
+		}
+	}
+	return callbackArg[T](args, idx)
+}
+
 // ── deepUpdate ───────────────────────────────────────────────────────────────
 //
 // Used by generated code to merge variadic Options structs:

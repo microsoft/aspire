@@ -1516,7 +1516,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine($"{indent}if {callbackExpr} != nil {{");
         WriteLine($"{indent}\tcb := {callbackExpr}");
         WriteLine($"{indent}\tshim := func(args ...any) any {{");
-        EmitGoCallbackShimBody($"{indent}\t\t", p);
+        EmitGoCallbackShimBody($"{indent}\t\t", p, "s.client");
         WriteLine($"{indent}\t}}");
         WriteLine($"{indent}\treqArgs[\"{p.Name}\"] = s.client.registerCallback(shim)");
         WriteLine($"{indent}}}");
@@ -1534,7 +1534,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine($"\tif d.{propertyName} != nil {{");
         WriteLine($"\t\tcb := d.{propertyName}");
         WriteLine($"\t\tm[\"{JsonNamingPolicy.CamelCase.ConvertName(property.Name)}\"] = func(args ...any) any {{");
-        EmitGoCallbackShimBody("\t\t\t", p);
+        EmitGoCallbackShimBody("\t\t\t", p, clientExpression: null);
         WriteLine($"\t\t}}");
         WriteLine($"\t}}");
     }
@@ -1552,7 +1552,9 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
     // Writes the body of a `func(args ...any) any` callback shim, assuming the user's typed
     // callback is in scope as `cb`. Shared by method-parameter and DTO-property callbacks.
-    private void EmitGoCallbackShimBody(string indent, AtsParameterInfo p)
+    // clientExpression is the Go expression for the *client when one is in scope; DTO-property
+    // shims run from ToMap, which has none, so they pass null.
+    private void EmitGoCallbackShimBody(string indent, AtsParameterInfo p, string? clientExpression)
     {
         var hasReturn = p.CallbackReturnType is not null
             && p.CallbackReturnType.TypeId != AtsConstants.Void;
@@ -1563,8 +1565,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             for (var i = 0; i < cps.Count; i++)
             {
                 if (i > 0) { callExpr.Append(", "); }
-                var goType = MapTypeRefToGo(cps[i].Type, false);
-                callExpr.Append(CultureInfo.InvariantCulture, $"callbackArg[{goType}](args, {i})");
+                callExpr.Append(GetCallbackArgExpression(cps[i].Type, i, clientExpression));
             }
         }
         else
@@ -1589,8 +1590,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             {
                 var argName = $"arg{i}";
                 argNames.Add(argName);
-                var goType = MapTypeRefToGo(callbackParameters[i].Type, false);
-                WriteLine($"{indent}{argName} := callbackArg[{goType}](args, {i})");
+                WriteLine($"{indent}{argName} := {GetCallbackArgExpression(callbackParameters[i].Type, i, clientExpression)}");
             }
 
             WriteLine($"{indent}cb({string.Join(", ", argNames)})");
@@ -1609,6 +1609,24 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             WriteLine($"{indent}{callExpr}");
             WriteLine($"{indent}return nil");
         }
+    }
+
+    // Returns the Go expression that reads callback argument `index` as the user's typed parameter.
+    // The host tags a handle argument with the callback's declared CLR parameter type. For
+    // IResourceBuilder<T> that is a closed generic type id that has no registered wrapper, so the
+    // transport delivers a raw *handle. Building the declared wrapper from it, as the TypeScript
+    // SDK does, keeps the user's callback from receiving nil. Handle types without a generated
+    // constructor (marker interfaces) and shims with no client in scope keep callbackArg.
+    private string GetCallbackArgExpression(AtsTypeRef type, int index, string? clientExpression)
+    {
+        if (clientExpression is not null
+            && type.Category == AtsTypeCategory.Handle
+            && _implNames.ContainsKey(type.TypeId))
+        {
+            return $"callbackHandleArg({clientExpression}, args, {index}, new{_interfaceNames[type.TypeId]}FromHandle)";
+        }
+
+        return $"callbackArg[{MapTypeRefToGo(type, false)}](args, {index})";
     }
 
     // ── List / Dict accessor methods ─────────────────────────────────────────

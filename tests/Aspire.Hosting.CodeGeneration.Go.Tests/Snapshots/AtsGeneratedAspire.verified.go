@@ -229,7 +229,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWithEnviro
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[TestEnvironmentContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newTestEnvironmentContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -492,7 +492,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalCa
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -561,7 +561,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithValidator(
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
@@ -876,7 +876,7 @@ func (s *testDatabaseResource) TestWithEnvironmentCallback(callback func(arg Tes
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[TestEnvironmentContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newTestEnvironmentContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -1157,7 +1157,7 @@ func (s *testDatabaseResource) WithOptionalCallback(options ...*WithOptionalCall
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -1226,7 +1226,7 @@ func (s *testDatabaseResource) WithValidator(validator func(arg TestResourceCont
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
@@ -1610,7 +1610,7 @@ func (s *testRedisResource) TestWithEnvironmentCallback(callback func(arg TestEn
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[TestEnvironmentContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newTestEnvironmentContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -1940,7 +1940,7 @@ func (s *testRedisResource) WithMultiParamHandleCallback(callback func(arg1 Test
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[TestCallbackContext](args, 0), callbackArg[TestEnvironmentContext](args, 1))
+			cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle), callbackHandleArg(s.client, args, 1, newTestEnvironmentContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -1992,7 +1992,7 @@ func (s *testRedisResource) WithOptionalCallback(options ...*WithOptionalCallbac
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -2106,7 +2106,7 @@ func (s *testRedisResource) WithValidator(validator func(arg TestResourceContext
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
@@ -3516,6 +3516,23 @@ func decodeStructFields[T any](raw any) (T, bool) {
 	}
 
 	return structValue.Interface().(T), true
+}
+
+// callbackHandleArg fetches a positional callback argument that is a handle
+// and returns it as the callback's declared wrapper type T, built with wrap
+// when the transport delivered a raw *handle. The host tags each handle
+// argument with the callback's declared parameter type. For a resource builder
+// that is a closed generic type id (IResourceBuilder<T>) that has no registered
+// wrapper, so wrapIfHandle leaves the *handle unwrapped and callbackArg alone
+// would hand the user's callback a nil interface. Arguments that are already
+// wrapped, nil or missing fall through to callbackArg.
+func callbackHandleArg[T any](c *client, args []any, idx int, wrap func(*handle, *client) T) T {
+	if idx < len(args) {
+		if h, ok := args[idx].(*handle); ok {
+			return wrap(h, c)
+		}
+	}
+	return callbackArg[T](args, idx)
 }
 
 // ── deepUpdate ───────────────────────────────────────────────────────────────
