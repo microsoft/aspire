@@ -1,0 +1,106 @@
+﻿## method summary is reworded to start with the name
+// AddRedis adds a Redis container resource.
+
+## summary that already starts with the name is kept
+// AddRedis adds a Redis container resource.
+
+## getter
+// DisplayName gets the display name.
+
+## setter
+// SetDisplayName sets the display name.
+
+## boolean getter
+// IsEnabled reports whether the resource is enabled.
+
+## setter falls back to the description when the property text cannot be reworded
+// SetPort sets the Port property
+//
+// The port.
+
+## field with a noun phrase
+// Port is the port to listen on.
+
+## field with a sentence
+// Pending - The resource is pending.
+
+## field with whether
+// UseTls indicates whether TLS is used.
+
+## type without a verb
+// Settings - Test settings.
+
+## fallback summary
+// Settings represents Settings.
+
+## nothing to document
+
+
+## remarks, notes, parameters and returns
+// WithDocumentation adds documentation.
+//
+// Usage.
+//
+//	resource.WithDocumentation("docs")
+//
+// The name and settings arguments are required, so pass nil for neither. See
+// [DocumentedSettings], IResourceBuilder and WithDocumentation.
+//
+//   - name: Must be unique.
+//   - port: Defaults to 8080.
+//
+// Only one of the values may be set.
+//
+// Parameters:
+//   - name: The name.
+//   - options: Optional parameters; see [WithDocumentationOptions].
+//
+// Returns: The builder.
+
+## experimental
+// WithPreview adds a preview.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+// release.
+
+## obsolete with a message
+// WithLegacy adds the legacy behavior.
+//
+// Deprecated: Use WithPreview instead. It replaces this method.
+
+## obsolete without a message
+// WithLegacy adds the legacy behavior.
+//
+// Deprecated: This API is obsolete.
+
+## experimental and obsolete
+// WithLegacy adds the legacy behavior.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+// release.
+//
+// Deprecated: Use WithPreview.
+
+## long text wraps without splitting words or starting a list
+// WithLongText adds a resource whose documentation is long enough that it has
+// to wrap across several comment lines - the next dash must not start a list
+// item - or a heading # either.
+//
+// Parameters:
+//   - value: A parameter whose description is also long enough that it has to
+//     wrap onto a continuation line of the list.
+
+## a remark that looks like a heading stays a paragraph
+// WithHeading adds a heading.
+//
+// Overview.
+//
+//   - first item
+
+## special characters are kept
+// WithSpecialCharacters adds <special> characters & "quotes", a backslash \ and
+// a */ terminator. Unicode: 你好こんにちは.

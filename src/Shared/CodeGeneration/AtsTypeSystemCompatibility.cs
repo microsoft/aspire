@@ -4,8 +4,12 @@
 using System.Reflection;
 using Aspire.TypeSystem;
 
-namespace Aspire.Hosting.CodeGeneration.TypeScript;
+namespace Aspire.Shared.CodeGeneration;
 
+/// <summary>
+/// Reads members of the shared ATS contract that may be missing from an older Aspire.TypeSystem.
+/// Used by the polyglot code generators.
+/// </summary>
 internal static class AtsTypeSystemCompatibility
 {
     private static readonly PropertyInfo? s_isExperimentalProperty =
