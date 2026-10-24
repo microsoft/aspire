@@ -41,6 +41,27 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
     .withComputeEnvironment(aks);
 ```
 
+### Existing clusters
+
+Use the shared Azure existing-resource APIs to deploy to a pre-provisioned AKS cluster:
+
+```csharp
+var clusterName = builder.AddParameter("cluster-name");
+var resourceGroup = builder.AddParameter("cluster-resource-group");
+var subscription = builder.AddParameter("cluster-subscription");
+
+var aks = builder.AddAzureKubernetesEnvironment("aks")
+    .AsExistingInResourceGroup(clusterName, resourceGroup, subscription);
+```
+
+Use `AsExisting(clusterName, null)` when the cluster is in the application's Azure resource group. `PublishAsExisting` applies only when publishing/deploying.
+
+Aspire references the cluster without changing its node pools, networking, or add-ons, and does not assign workloads to an automatically created `workload` node pool. Cluster-creation settings do not reconfigure an existing cluster. Explicit node-pool affinity must name a pool that already exists. The cluster must have a kubelet managed identity for registry access; workloads using Azure workload identity also require OIDC and workload identity to be enabled beforehand. Any ingress add-ons used by the application must already be installed and configured.
+
+Existing private clusters can have their public DNS name disabled. The cluster FQDN output falls back to the private DNS name, or an empty string if neither name is available. Deploying to a private cluster still requires network connectivity and DNS resolution from the deployment host.
+
+Aspire still provisions the default container registry, grants the cluster's kubelet identity `AcrPull` access, and creates workload identity federated credentials when needed. The deploying identity needs permission to create these supporting resources and role assignments, retrieve AKS credentials, and deploy Kubernetes workloads. `aspire destroy` removes the application's workloads and deletes the application's Azure resource group. Keep the existing cluster in a separate resource group if it must survive `aspire destroy`.
+
 ### Node pool configuration
 
 Use callbacks to configure system and user node pools. Both receive an `AksNodePoolConfig` with a VM size of `Standard_D2s_v5` and an autoscaling range of 1-3 nodes. User pools can scale to zero; system pools require at least one node.
@@ -111,7 +132,7 @@ const aks = await builder.addAzureKubernetesEnvironment("aks");
 await aks.withContainerRegistry(registry);
 ```
 
-Aspire grants the AKS kubelet identity `AcrPull` at the registry's scope. The deployment identity must have permission to create role assignments there, as well as push images to the registry.
+Aspire grants the AKS kubelet identity `AcrPull` at the registry's scope, independently of the cluster's resource group or subscription. This applies to both new and existing clusters and registries. For an existing cluster, Aspire reads its kubelet identity and deploys the grant in a separate module without creating a replacement identity. The deployment identity must have permission to create role assignments at the registry's scope, as well as push images to the registry.
 
 `aspire destroy` preserves the existing registry only when it is outside the application's resource group. It deletes the entire application resource group, including any existing resources in that group, even those configured with `PublishAsExisting`. A registry in that group and its images are deleted.
 
@@ -121,7 +142,7 @@ Aspire grants the AKS kubelet identity `AcrPull` at the registry's scope. The de
 
 ### Cluster identities and permissions
 
-Aspire provisions separate user-assigned managed identities for the control plane and kubelets. Both inherit the cluster's resource-group and subscription scope, including scopes set through provisioning customization. Neither is a workload identity:
+For newly provisioned clusters, Aspire provisions separate user-assigned managed identities for the control plane and kubelets. Both inherit the cluster's resource-group and subscription scope, including scopes set through provisioning customization. Neither is a workload identity:
 
 | Identity | Permissions |
 | --- | --- |

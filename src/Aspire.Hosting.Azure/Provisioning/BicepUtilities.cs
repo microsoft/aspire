@@ -185,9 +185,28 @@ internal static class BicepUtilities
             return resource.Scope;
         }
 
-        return resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingResource)
-            ? AzureBicepResourceScope.FromExistingResourceAnnotation(existingResource)
-            : null;
+        if (!resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingResource))
+        {
+            return null;
+        }
+
+        if (resource is IAzureComputeEnvironmentResource && resource is AzureProvisioningResource provisioningResource)
+        {
+            // Configuration can either set the module scope or scope the existing reference inside
+            // the template. Materialize it before deciding where supporting infrastructure belongs.
+            _ = provisioningResource.GetBicepTemplateString();
+            if (provisioningResource.Scope is not null)
+            {
+                return provisioningResource.Scope;
+            }
+
+            if (provisioningResource.HandlesExistingResourceScopeInTemplate)
+            {
+                return null;
+            }
+        }
+
+        return AzureBicepResourceScope.FromExistingResourceAnnotation(existingResource);
     }
 
     private static async Task SetScopeValueAsync(JsonObject scope, string propertyName, object? value, CancellationToken cancellationToken)

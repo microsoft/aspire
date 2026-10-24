@@ -121,6 +121,47 @@ public static class AzureKubernetesEnvironmentExtensions
                     return Task.CompletedTask;
                 }
 
+                var registry = resource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReference)
+                    ? registryReference.Registry as AzureContainerRegistryResource
+                    : null;
+
+                if (resource.IsExisting())
+                {
+                    resource.References.Remove(controlPlaneIdentity.Resource);
+                    resource.References.Remove(kubeletIdentity.Resource);
+
+                    if (registry is not null)
+                    {
+                        // The kubelet identity belongs to the external cluster, not this app model.
+                        // A separate role module can target the registry's scope after reading the cluster outputs.
+                        var roles = new AzureRoleAssignmentResource(
+                            $"{name}-kubelet-roles-{registry.Name}",
+                            registry,
+                            ownerResource: null,
+                            identityResource: null,
+                            infrastructure =>
+                            {
+                                var acr = (ContainerRegistryService)registry.AddAsExistingResource(infrastructure);
+                                var roleId = BicepFunction.GetSubscriptionResourceId(
+                                    "Microsoft.Authorization/roleDefinitions",
+                                    ContainerRegistryBuiltInRole.AcrPull.ToString());
+                                infrastructure.Add(new RoleAssignment("acrPullRole")
+                                {
+                                    Name = BicepFunction.CreateGuid(acr.Id, resource.Id.AsProvisioningParameter(infrastructure, "clusterId"), roleId),
+                                    Scope = new IdentifierExpression(acr.BicepIdentifier),
+                                    RoleDefinitionId = roleId,
+                                    PrincipalId = resource.KubeletIdentityObjectId.AsProvisioningParameter(infrastructure, "principalId"),
+                                    PrincipalType = RoleManagementPrincipalType.ServicePrincipal
+                                });
+                            });
+                        roles.References.Add(resource);
+                        context.Model.Resources.Add(roles);
+                    }
+
+                    identitiesPrepared = true;
+                    return Task.CompletedTask;
+                }
+
                 foreach (var identity in new[] { controlPlaneIdentity.Resource, kubeletIdentity.Resource })
                 {
                     if (context.Model.Resources.Any(existing => StringComparer.OrdinalIgnoreCase.Equals(existing.Name, identity.Name)))
@@ -138,8 +179,7 @@ public static class AzureKubernetesEnvironmentExtensions
 
                 // Resolve the final registry and subnet selections after model configuration.
                 // Standard Azure role preparation handles assignment scope and deployment ordering.
-                if (resource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReference) &&
-                    registryReference.Registry is AzureContainerRegistryResource registry)
+                if (registry is not null)
                 {
                     kubeletIdentity.WithRoleAssignments(builder.CreateResourceBuilder(registry), ContainerRegistryBuiltInRole.AcrPull);
                 }
@@ -667,10 +707,10 @@ public static class AzureKubernetesEnvironmentExtensions
         return builder;
     }
 
-    private static void ConfigureAksInfrastructure(AzureResourceInfrastructure infrastructure)
+    private static ContainerServiceManagedCluster CreateAksCluster(
+        AzureResourceInfrastructure infrastructure,
+        AzureKubernetesEnvironmentResource aksResource)
     {
-        var aksResource = (AzureKubernetesEnvironmentResource)infrastructure.AspireResource;
-
         // Create the AKS managed cluster
         var aks = new ContainerServiceManagedCluster(aksResource.GetBicepIdentifier())
         {
@@ -845,7 +885,7 @@ public static class AzureKubernetesEnvironmentExtensions
             // the SDK's stable API version. Gateway API alone uses the stable default.
             if (aksResource.RequiresPreviewIngressApi)
             {
-                aks.ResourceVersion = "2026-07-02-preview";
+                aks.ResourceVersion = AzureKubernetesEnvironmentResource.PreviewIngressApiVersion;
             }
 
             var ingressProfile = new AksPreviewIngressProfile();
@@ -859,6 +899,16 @@ public static class AzureKubernetesEnvironmentExtensions
             }
             aks.IngressProfile = ingressProfile;
         }
+
+        return aks;
+    }
+
+    private static void ConfigureAksInfrastructure(AzureResourceInfrastructure infrastructure)
+    {
+        var aksResource = (AzureKubernetesEnvironmentResource)infrastructure.AspireResource;
+        var aks = aksResource.IsExisting()
+            ? (ContainerServiceManagedCluster)aksResource.AddAsExistingResource(infrastructure)
+            : CreateAksCluster(infrastructure, aksResource);
 
         // AGC ALB controller subnet role assignments. AKS auto-creates a managed identity
         // for the AGC ALB add-on (`applicationloadbalancer-{cluster-name}` in the MC_*
@@ -947,17 +997,32 @@ public static class AzureKubernetesEnvironmentExtensions
         var aksId = new IdentifierExpression(aks.BicepIdentifier);
         infrastructure.Add(new ProvisioningOutput("clusterFqdn", typeof(string))
         {
-            Value = new MemberExpression(new MemberExpression(aksId, "properties"), "fqdn")
+            Value = aksResource.IsExisting()
+                ? new BinaryExpression(
+                    new BinaryExpression(
+                        new SafeMemberExpression(new MemberExpression(aksId, "properties"), "fqdn"),
+                        BinaryBicepOperator.Coalesce,
+                        new SafeMemberExpression(new MemberExpression(aksId, "properties"), "privateFQDN")),
+                    BinaryBicepOperator.Coalesce,
+                    new StringLiteralExpression(""))
+                : new MemberExpression(new MemberExpression(aksId, "properties"), "fqdn")
         });
-        // OIDC issuer URL and kubelet identity outputs are only valid when the
-        // corresponding features are enabled on the cluster.
+        // Existing clusters can omit the OIDC profile or issuer URL when OIDC is disabled.
+        // Federated credentials below still require an issuer when workload identity is used.
         if (aksResource.OidcIssuerEnabled)
         {
             infrastructure.Add(new ProvisioningOutput("oidcIssuerUrl", typeof(string))
             {
-                Value = new MemberExpression(
-                    new MemberExpression(new MemberExpression(aksId, "properties"), "oidcIssuerProfile"),
-                    "issuerURL")
+                Value = aksResource.IsExisting()
+                    ? new BinaryExpression(
+                        new SafeMemberExpression(
+                            new SafeMemberExpression(new MemberExpression(aksId, "properties"), "oidcIssuerProfile"),
+                            "issuerURL"),
+                        BinaryBicepOperator.Coalesce,
+                        new StringLiteralExpression(""))
+                    : new MemberExpression(
+                        new MemberExpression(new MemberExpression(aksId, "properties"), "oidcIssuerProfile"),
+                        "issuerURL")
             });
         }
 

@@ -14,6 +14,75 @@ namespace Aspire.Hosting.Azure.Tests;
 public class BicepUtilitiesTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SetScopeAsync_ExistingComputeEnvironmentDoesNotChangeModuleScope(bool appService)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        AzureBicepResource resource = appService
+            ? builder.AddAzureAppServiceEnvironment("env")
+                .AsExistingInResourceGroup("existing-env", "existing-rg", "existing-subscription").Resource
+            : builder.AddAzureContainerAppEnvironment("env")
+                .AsExistingInResourceGroup("existing-env", "existing-rg", "existing-subscription").Resource;
+
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Single(scope);
+        Assert.Null(scope["resourceGroup"]);
+
+        resource.Scope = new AzureBicepResourceScope("module-rg", "module-subscription");
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("module-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("module-subscription", scope["subscription"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SetScopeAsync_ExistingResourceStillUsesAnnotationScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddAzureStorage("storage")
+            .AsExistingInResourceGroup("existing-storage", "existing-rg", "existing-subscription").Resource;
+
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("existing-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("existing-subscription", scope["subscription"]?.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SetScopeAsync_ExistingComputeEnvironmentWithModuleScopedReferenceUsesAnnotationScope(bool foundryProject)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        AzureBicepResource resource;
+        if (foundryProject)
+        {
+            resource = builder.AddFoundry("foundry")
+                .AsExistingInResourceGroup("existing-account", "existing-rg", "existing-subscription")
+                .AddProject("project")
+                .AsExistingInResourceGroup("existing-project", "existing-rg", "existing-subscription").Resource;
+        }
+        else
+        {
+            var identity = builder.AddAzureUserAssignedIdentity("identity")
+                .AsExistingInResourceGroup("existing-identity", "existing-rg", "existing-subscription");
+            resource = builder.AddAzureSandboxGroup("sandbox")
+                .WithAcrPullIdentity(identity)
+                .AsExistingInResourceGroup("existing-sandbox", "existing-rg", "existing-subscription").Resource;
+        }
+
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("existing-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("existing-subscription", scope["subscription"]?.GetValue<string>());
+    }
+
+    [Theory]
     [InlineData(DistributedApplicationOperation.Run, null, "", null)]
     [InlineData(DistributedApplicationOperation.Run, "dev-a", "dev-a", null)]
     [InlineData(DistributedApplicationOperation.Publish, "production", "production", null)]
