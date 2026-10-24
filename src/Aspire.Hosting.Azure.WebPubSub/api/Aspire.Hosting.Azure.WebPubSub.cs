@@ -25,6 +25,9 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "Use the AddHub overload with the optional hubName parameter instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureWebPubSubHubResource> AddHub(this ApplicationModel.IResourceBuilder<ApplicationModel.AzureWebPubSubResource> builder, string hubName) { throw null; }
 
+        [AspireExport(RunSyncOnBackgroundThread = true)]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureWebPubSubResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<ApplicationModel.AzureWebPubSubResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureWebPubSubEmulatorResource>>? configureContainer = null) { throw null; }
+
         [AspireExportIgnore(Reason = "WebPubSubBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureWebPubSubRole-based overload instead.")]
         public static ApplicationModel.IResourceBuilder<T> WithRoleAssignments<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.AzureWebPubSubResource> target, params global::Azure.Provisioning.WebPubSub.WebPubSubBuiltInRole[] roles)
             where T : ApplicationModel.IResource { throw null; }
@@ -45,9 +48,11 @@ namespace Aspire.Hosting.ApplicationModel
         public string HubName { get { throw null; } set { } }
 
         public AzureWebPubSubResource Parent { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
-    public partial class AzureWebPubSubResource : Azure.AzureProvisioningResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences, Azure.IAzurePrivateEndpointTarget
+    public partial class AzureWebPubSubResource : Azure.AzureProvisioningResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences, IResourceWithEndpoints, Azure.IAzurePrivateEndpointTarget
     {
         public AzureWebPubSubResource(string name, System.Action<Azure.AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -56,6 +61,8 @@ namespace Aspire.Hosting.ApplicationModel
         public Azure.BicepOutputReference Endpoint { get { throw null; } }
 
         public Azure.BicepOutputReference Id { get { throw null; } }
+
+        public bool IsEmulator { get { throw null; } }
 
         public Azure.BicepOutputReference NameOutputReference { get { throw null; } }
 
@@ -68,5 +75,15 @@ namespace Aspire.Hosting.ApplicationModel
         System.Collections.Generic.IEnumerable<string> Azure.IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
 
         System.Collections.Generic.IEnumerable<string> Azure.IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
+    }
+}
+
+namespace Aspire.Hosting.Azure
+{
+    public partial class AzureWebPubSubEmulatorResource : ApplicationModel.ContainerResource, ApplicationModel.IResource
+    {
+        public AzureWebPubSubEmulatorResource(ApplicationModel.AzureWebPubSubResource innerResource) : base(default!, default) { }
+
+        public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
     }
 }

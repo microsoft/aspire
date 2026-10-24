@@ -25,6 +25,8 @@ namespace Aspire.Hosting.Azure
     {
         public AzureFrontDoorResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
+        public BicepOutputReference GetEndpointId(string originResourceName) { throw null; }
+
         public BicepOutputReference GetEndpointUrl(string originResourceName) { throw null; }
     }
 }
