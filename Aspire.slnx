@@ -411,6 +411,11 @@
     <Project Path="playground/Redis/Redis.ApiService/Redis.ApiService.csproj" />
     <Project Path="playground/Redis/Redis.AppHost/Redis.AppHost.csproj" />
   </Folder>
+  <Folder Name="/playground/RemoteDependencies/">
+    <Project Path="playground/RemoteDependencies/RemoteDependencies.Api/RemoteDependencies.Api.csproj" />
+    <Project Path="playground/RemoteDependencies/RemoteDependencies.AppHost/RemoteDependencies.AppHost.csproj" />
+    <Project Path="playground/RemoteDependencies/RemoteDependencies.Tools/RemoteDependencies.Tools.csproj" />
+  </Folder>
   <Folder Name="/playground/JavaSpringBoot/">
     <Project Path="playground/JavaSpringBoot/JavaSpringBoot.AppHost/JavaSpringBoot.AppHost.csproj" />
   </Folder>
@@ -571,6 +576,7 @@
     <Project Path="tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Hosting/">
+    <Project Path="tests/Aspire.Hosting.RemoteDependencies.Tests/Aspire.Hosting.RemoteDependencies.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Analyzers.Tests/Aspire.Hosting.Analyzers.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Azure.Kubernetes.Tests/Aspire.Hosting.Azure.Kubernetes.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Azure.Kusto.Tests/Aspire.Hosting.Azure.Kusto.Tests.csproj" />
