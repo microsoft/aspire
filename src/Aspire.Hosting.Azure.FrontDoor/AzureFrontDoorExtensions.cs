@@ -38,6 +38,10 @@ public static class AzureFrontDoorExtensions
     /// <see cref="AzureProvisioningResourceExtensions.ConfigureInfrastructure{T}"/> to customize the
     /// generated infrastructure directly.
     /// </para>
+    /// <para>
+    /// To reach apps in an Azure Container Apps environment over Private Link instead of the public Internet, see
+    /// <see cref="AzureFrontDoorPrivateLinkExtensions.WithAzureFrontDoorPrivateLink"/>.
+    /// </para>
     /// <example>
     /// Add an Azure Front Door resource with origins:
     /// <code lang="C#">
@@ -78,6 +82,7 @@ public static class AzureFrontDoorExtensions
             // Create a separate endpoint → origin group → origin → route per WithOrigin call.
             // This gives each backend app its own Front Door hostname.
             var originAnnotations = azureResource.Annotations.OfType<AzureFrontDoorOriginAnnotation>().ToList();
+            var privateLink = new PrivateLinkConfigurator(infrastructure, azureResource);
             foreach (var originAnnotation in originAnnotations)
             {
                 var originResource = originAnnotation.Resource;
@@ -133,6 +138,9 @@ public static class AzureFrontDoorExtensions
                     origin.GetResourceNameRequirements().MaxLength);
                 infrastructure.Add(origin);
 
+                // Reach origins in an environment connected through Private Link over the private endpoint.
+                privateLink.ConfigureOrigin(computeEnv, originResource.Name, origin);
+
                 // Route
                 var route = new FrontDoorRoute($"{originBicepId}Route")
                 {
@@ -158,6 +166,8 @@ public static class AzureFrontDoorExtensions
                     Value = endpoint.Id
                 });
             }
+
+            privateLink.Complete(profile);
         };
 
         var resource = new AzureFrontDoorResource(name, configureInfrastructure);
@@ -254,5 +264,103 @@ public static class AzureFrontDoorExtensions
         }
 
         return ("/", HealthProbeProtocol.Https);
+    }
+
+    // Converts the origins of one Front Door template that run in a compute environment connected with
+    // WithAzureFrontDoorPrivateLink into Private Link origins.
+    private sealed class PrivateLinkConfigurator(AzureResourceInfrastructure infrastructure, AzureFrontDoorResource frontDoor)
+    {
+        // The Bicep values that identify a connected environment. Every origin in the environment shares them, and Front
+        // Door shares one private endpoint across those origins.
+        private readonly Dictionary<AzureFrontDoorPrivateLinkAnnotation, (ProvisioningParameter EnvironmentId, BicepValue<string> Location)> _targets = [];
+
+        private ProvisioningVariable? _regions;
+
+        // Converts the origin into a Private Link origin when it runs in a connected environment.
+        public void ConfigureOrigin(
+            IComputeEnvironmentResource computeEnvironment,
+            string originName,
+            FrontDoorOrigin origin)
+        {
+            if (computeEnvironment is not IAzureCdnPrivateLinkTarget environment ||
+                !environment.Annotations.OfType<PrivateEndpointTargetAnnotation>().Any(annotation => annotation.PrivateEndpointResource is AzureFrontDoorResource))
+            {
+                return;
+            }
+
+            var connection = frontDoor.Annotations
+                .OfType<AzureFrontDoorPrivateLinkAnnotation>()
+                .FirstOrDefault(annotation => ReferenceEquals(annotation.Environment, environment));
+            if (connection is null)
+            {
+                // The environment refuses public traffic, so a Front Door that isn't connected to it can't reach the origin.
+                throw new InvalidOperationException(
+                    $"Origin '{originName}' of Azure Front Door '{frontDoor.Name}' runs in compute environment '{environment.Name}', " +
+                    $"which is connected to another Azure Front Door through Private Link and has public network access disabled. " +
+                    $"Call {nameof(AzureFrontDoorPrivateLinkExtensions.WithAzureFrontDoorPrivateLink)} on '{environment.Name}' with '{frontDoor.Name}' to connect it.");
+            }
+
+            if (!_targets.TryGetValue(connection, out var target))
+            {
+                target = CreateTarget(environment);
+                _targets.Add(connection, target);
+            }
+
+            // The compute environment routes requests by host name, so the origin host header must be the app's own host name,
+            // which AddAzureFrontDoor already sets. The certificate name check must stay on for a Private Link origin.
+            origin.EnforceCertificateNameCheck = true;
+            origin.SharedPrivateLinkResource = new SharedPrivateLinkResourceProperties
+            {
+                PrivateLinkId = target.EnvironmentId,
+                PrivateLinkLocation = target.Location,
+                GroupId = connection.Environment.PrivateLinkGroupId,
+                RequestMessage = connection.RequestMessage,
+            };
+        }
+
+        // Finishes the template after every origin is added: Private Link needs the Premium SKU, and a connection
+        // that no origin uses is a mistake, because Front Door would never request it.
+        public void Complete(CdnProfile profile)
+        {
+            foreach (var connection in frontDoor.Annotations.OfType<AzureFrontDoorPrivateLinkAnnotation>())
+            {
+                if (!_targets.ContainsKey(connection))
+                {
+                    throw new InvalidOperationException(
+                        $"Azure Front Door '{frontDoor.Name}' is connected to compute environment '{connection.Environment.Name}' through Private Link, " +
+                        $"but none of its origins run in that environment. Add apps in '{connection.Environment.Name}' with " +
+                        $"{nameof(WithOrigin)}, or remove the {nameof(AzureFrontDoorPrivateLinkExtensions.WithAzureFrontDoorPrivateLink)} call.");
+                }
+            }
+
+            if (_targets.Count > 0)
+            {
+                // Private Link isn't supported for origins of a Standard profile.
+                // https://learn.microsoft.com/azure/frontdoor/private-link
+                profile.SkuName = CdnSkuName.PremiumAzureFrontDoor;
+            }
+        }
+
+        private (ProvisioningParameter EnvironmentId, BicepValue<string> Location) CreateTarget(IAzureCdnPrivateLinkTarget environment)
+        {
+            var environmentIdentifier = Infrastructure.NormalizeBicepIdentifier(environment.Name);
+            var environmentId = environment.Id.AsProvisioningParameter(infrastructure, $"{environmentIdentifier}_environment_id");
+
+            // The environment's region is an output of the environment module, so it is only known at deployment. The output
+            // is already the programmatic region name, such as 'westus2'. Front Door Private Link isn't available in every
+            // region, so the private endpoint goes to the supported region in the same geography when there is one.
+            var environmentLocation = environment.Location.AsProvisioningParameter(infrastructure, $"{environmentIdentifier}_location");
+
+            if (_regions is null)
+            {
+                _regions = new ProvisioningVariable(FrontDoorPrivateLinkRegions.BicepVariableName, typeof(object))
+                {
+                    Value = FrontDoorPrivateLinkRegions.CreateBicepObject()
+                };
+                infrastructure.Add(_regions);
+            }
+
+            return (environmentId, FrontDoorPrivateLinkRegions.CreateLookup(_regions.BicepIdentifier, environmentLocation.BicepIdentifier));
+        }
     }
 }
