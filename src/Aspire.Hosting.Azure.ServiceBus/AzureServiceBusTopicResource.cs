@@ -25,6 +25,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureServiceBusTopicResource(string name, string topicName, AzureServiceBusResource parent)
     : Resource(name), IResourceWithParent<AzureServiceBusResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Service Bus Topic";
+
     private string _topicName = ThrowIfNullOrEmpty(topicName);
 
     /// <summary>

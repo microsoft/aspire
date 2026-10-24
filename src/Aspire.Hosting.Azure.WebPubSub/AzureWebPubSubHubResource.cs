@@ -15,6 +15,9 @@ namespace Aspire.Hosting.ApplicationModel;
 public class AzureWebPubSubHubResource(string name, AzureWebPubSubResource webpubsub) : Resource(name),
     IResourceWithParent<AzureWebPubSubResource>, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Web PubSub Hub";
+
     /// <summary>
     /// Represents an Azure Web PubSub Hub setting resource.
     /// </summary>

@@ -17,6 +17,9 @@ namespace Aspire.Hosting.ApplicationModel;
 public class AzureSignalRResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithEndpoints, IAzurePrivateEndpointTarget
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure SignalR Service";
+
     internal EndpointReference EmulatorEndpoint => new(this, "emulator");
 
     /// <summary>

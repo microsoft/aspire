@@ -18,6 +18,9 @@ namespace Aspire.Hosting.Azure;
 public class AzurePostgresFlexibleServerDatabaseResource(string name, string databaseName, AzurePostgresFlexibleServerResource postgresParentResource)
     : Resource(name), IResourceWithParent<AzurePostgresFlexibleServerResource>, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Database for PostgreSQL Database";
+
     /// <summary>
     /// Gets the parent Azure PostgresSQL resource.
     /// </summary>

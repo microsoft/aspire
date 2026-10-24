@@ -15,6 +15,9 @@ namespace Aspire.Hosting.ApplicationModel;
 [AspireExport(ExposeProperties = true)]
 public class RedisResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Redis";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="RedisResource"/> class.
     /// </summary>

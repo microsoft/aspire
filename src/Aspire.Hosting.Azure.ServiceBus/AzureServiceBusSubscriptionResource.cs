@@ -25,6 +25,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureServiceBusSubscriptionResource(string name, string subscriptionName, AzureServiceBusTopicResource parent)
     : Resource(name), IResourceWithParent<AzureServiceBusTopicResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Service Bus Subscription";
+
     private string _subscriptionName = ThrowIfNullOrEmpty(subscriptionName);
 
     /// <summary>

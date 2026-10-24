@@ -724,6 +724,7 @@ public sealed class TelemetryExportService
             Name = resource.Name,
             DisplayName = resource.DisplayName,
             ResourceType = resource.ResourceType,
+            ServiceDisplayName = resource.ServiceDisplayName,
             Uid = resource.Uid,
             State = resource.State,
             WaitingFor = resource.TryGetResolvedWaitingForDependencies(allResources, out var waitingForDependencies) ? [.. waitingForDependencies] : null,

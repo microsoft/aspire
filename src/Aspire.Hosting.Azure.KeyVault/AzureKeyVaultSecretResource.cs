@@ -17,6 +17,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureKeyVaultSecretResource(string name, string secretName, AzureKeyVaultResource parent, object value)
     : Resource(name), IResourceWithParent<AzureKeyVaultResource>, IAzureKeyVaultSecretReference
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Key Vault Secret";
+
     private readonly IAzureKeyVaultSecretReference _secret = parent.GetSecret(secretName);
 
     /// <summary>

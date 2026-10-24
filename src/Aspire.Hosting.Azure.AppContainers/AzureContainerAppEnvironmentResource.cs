@@ -24,6 +24,9 @@ public class AzureContainerAppEnvironmentResource :
     AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureDelegatedSubnetResource
 #pragma warning restore CS0618 // Type or member is obsolete
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Container Apps Environment";
+
     /// <inheritdoc />
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.ContainerAppEnvironments;
 

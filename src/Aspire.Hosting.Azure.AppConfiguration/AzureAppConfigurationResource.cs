@@ -18,6 +18,9 @@ public class AzureAppConfigurationResource(string name, Action<AzureResourceInfr
     : AzureProvisioningResource(name, configureInfrastructure),
     IResourceWithConnectionString, IResourceWithEndpoints, IAzurePrivateEndpointTarget
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure App Configuration";
+
     private EndpointReference EmulatorEndpoint => new(this, "emulator");
 
     /// <summary>

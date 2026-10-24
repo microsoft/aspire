@@ -11,6 +11,9 @@ namespace Aspire.Hosting;
 /// <param name="name"></param>
 public sealed class KafkaUIContainerResource(string name) : ContainerResource(name)
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Kafka UI";
+
     internal const string PrimaryEndpointName = "http";
 
     private EndpointReference? _primaryEndpoint;

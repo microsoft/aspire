@@ -18,6 +18,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureServiceBusResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithAzureFunctionsConfig, IResourceWithEndpoints, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Service Bus";
+
     internal List<AzureServiceBusQueueResource> Queues { get; } = [];
     internal List<AzureServiceBusTopicResource> Topics { get; } = [];
 

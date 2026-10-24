@@ -27,7 +27,7 @@ public sealed partial class SqliteResourceRepository
                 "resource_name", "replica_index", "resource_type", "display_name", "uid", "state",
                 "created_at_seconds", "created_at_nanos", "state_style",
                 "started_at_seconds", "started_at_nanos", "stopped_at_seconds", "stopped_at_nanos",
-                "is_hidden", "supports_detailed_telemetry", "icon_name", "icon_variant", "console_logs_loaded"
+                "is_hidden", "supports_detailed_telemetry", "icon_name", "icon_variant", "console_logs_loaded", "service_display_name"
             ],
             static (resourceToSave, parameters) =>
             {
@@ -50,6 +50,7 @@ public sealed partial class SqliteResourceRepository
                 parameters[15].Value = resource.HasIconName ? resource.IconName : DBNull.Value;
                 parameters[16].Value = resource.HasIconVariant ? (int)resource.IconVariant : DBNull.Value;
                 parameters[17].Value = resourceToSave.ConsoleLogsLoaded;
+                parameters[18].Value = resource.HasServiceDisplayName ? resource.ServiceDisplayName : DBNull.Value;
             });
 
         var resourceModels = resources.Select(resource => resource.Resource).ToArray();
@@ -365,6 +366,7 @@ public sealed partial class SqliteResourceRepository
                 resource_name AS ResourceName,
                 replica_index AS ReplicaIndex,
                 resource_type AS ResourceType,
+                service_display_name AS ServiceDisplayName,
                 display_name AS DisplayName,
                 uid AS Uid,
                 state AS State,
@@ -613,6 +615,10 @@ public sealed partial class SqliteResourceRepository
 
     private static void SetOptionalResourceFields(Resource resource, ResourceRecord record)
     {
+        if (record.ServiceDisplayName is not null)
+        {
+            resource.ServiceDisplayName = record.ServiceDisplayName;
+        }
         if (record.State is not null)
         {
             resource.State = record.State;
@@ -663,6 +669,7 @@ public sealed partial class SqliteResourceRepository
         public required string ResourceName { get; init; }
         public required int ReplicaIndex { get; init; }
         public required string ResourceType { get; init; }
+        public string? ServiceDisplayName { get; init; }
         public required string DisplayName { get; init; }
         public required string Uid { get; init; }
         public string? State { get; init; }

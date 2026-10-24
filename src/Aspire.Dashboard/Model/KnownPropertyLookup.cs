@@ -19,6 +19,8 @@ public sealed class KnownPropertyLookup : IKnownPropertyLookup
         _resourceProperties =
         [
             new(new(KnownProperties.Resource.DisplayName, loc => loc[nameof(ResourcesDetailsDisplayNameProperty)]), KnownResourcePropertySortOrder.DisplayName),
+            new(new(KnownProperties.Resource.Type, loc => loc[nameof(ResourcesTypeColumnHeader)]), KnownResourcePropertySortOrder.ResourceType),
+            new(new(KnownProperties.Resource.ServiceDisplayName, loc => loc[nameof(ResourcesDetailsServiceDisplayNameProperty)]), KnownResourcePropertySortOrder.ServiceDisplayName),
             new(new(KnownProperties.Resource.State, loc => loc[nameof(ResourcesDetailsStateProperty)]), KnownResourcePropertySortOrder.State),
             new(new(KnownProperties.Resource.HealthState, loc => loc[nameof(ResourcesDetailsHealthStateProperty)]), KnownResourcePropertySortOrder.HealthState),
             new(new(KnownProperties.Resource.StartTime, loc => loc[nameof(ResourcesDetailsStartTimeProperty)]), KnownResourcePropertySortOrder.StartTime),

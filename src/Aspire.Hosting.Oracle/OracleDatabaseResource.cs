@@ -19,6 +19,9 @@ namespace Aspire.Hosting.ApplicationModel;
 public class OracleDatabaseResource(string name, string databaseName, OracleDatabaseServerResource parent)
     : Resource(name), IResourceWithParent<OracleDatabaseServerResource>, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Oracle Database";
+
     /// <summary>
     /// Gets the parent Oracle container resource.
     /// </summary>

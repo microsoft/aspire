@@ -18,6 +18,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureRedisCacheResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Cache for Redis";
+
     /// <summary>
     /// Gets the "connectionString" output reference from the bicep template for the Azure Redis resource.
     ///

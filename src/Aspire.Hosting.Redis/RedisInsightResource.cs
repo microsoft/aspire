@@ -11,6 +11,9 @@ namespace Aspire.Hosting.Redis;
 /// <param name="name">The name of the resource.</param>
 public class RedisInsightResource(string name) : ContainerResource(name)
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Redis Insight";
+
     internal const string PrimaryEndpointName = "http";
 
     private EndpointReference? _primaryEndpoint;

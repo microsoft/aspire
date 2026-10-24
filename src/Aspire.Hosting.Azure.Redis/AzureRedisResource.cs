@@ -14,6 +14,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureRedisResource(RedisResource innerResource, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(innerResource.Name, configureInfrastructure), IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Cache for Redis";
+
     private readonly RedisResource _innerResource = innerResource ?? throw new ArgumentNullException(nameof(innerResource));
 
     /// <summary>

@@ -17,6 +17,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString, IAzureKeyVaultResource, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Key Vault";
+
     /// <summary>
     /// The secrets for this Key Vault.
     /// </summary>

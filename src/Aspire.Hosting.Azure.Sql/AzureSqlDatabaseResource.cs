@@ -20,6 +20,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureSqlDatabaseResource(string name, string databaseName, AzureSqlServerResource parent)
     : Resource(name), IResourceWithParent<AzureSqlServerResource>, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure SQL Database";
+
     /// <summary>
     /// SKU associated with the free offer
     /// </summary>

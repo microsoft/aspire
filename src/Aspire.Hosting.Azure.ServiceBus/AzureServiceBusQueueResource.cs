@@ -25,6 +25,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureServiceBusQueueResource(string name, string queueName, AzureServiceBusResource parent)
     : Resource(name), IResourceWithParent<AzureServiceBusResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Service Bus Queue";
+
     private string _queueName = ThrowIfNullOrEmpty(queueName);
 
     /// <summary>

@@ -18,6 +18,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var resource = CreateResource("api-123", "api");
+        resource.ServiceDisplayName = "Orders API";
 
         {
             using var repositoryContext = CreateRepository(workspace.Path);
@@ -478,7 +479,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
             item => Assert.Equal("set", item.Value));
         Assert.Equal(nestedValue, actual.Properties["nested"].Value);
         Assert.True(actual.Properties["nested"].IsValueSensitive);
-        Assert.Equal(14, actual.Properties["nested"].SortOrder);
+        Assert.Equal(16, actual.Properties["nested"].SortOrder);
         var command = Assert.Single(actual.Commands);
         Assert.Equal("configure", command.Name);
         var input = Assert.Single(command.ArgumentInputs);
@@ -1054,6 +1055,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         Assert.Equal(expected.Name, actual.Name);
         Assert.Equal(expected.DisplayName, actual.DisplayName);
         Assert.Equal(expected.ResourceType, actual.ResourceType);
+        Assert.Equal(expected.HasServiceDisplayName ? expected.ServiceDisplayName : expected.ResourceType, actual.ServiceDisplayName);
         Assert.Equal(expected.Uid, actual.Uid);
         Assert.Equal(replicaIndex, actual.ReplicaIndex);
         Assert.Equal(state, actual.State);

@@ -18,6 +18,9 @@ namespace Aspire.Hosting.Azure;
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Container = {ContainerName}")]
 public class AzureCosmosDBContainerResource : Resource, IResourceWithParent<AzureCosmosDBDatabaseResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Cosmos DB Container";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureCosmosDBContainerResource"/> class.
     /// </summary>

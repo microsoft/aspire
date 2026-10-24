@@ -21,6 +21,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureEventHubConsumerGroupResource(string name, string consumerGroupName, AzureEventHubResource parent)
     : Resource(name), IResourceWithParent<AzureEventHubResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Event Hub Consumer Group";
+
     /// <summary>
     /// The event hub consumer group name.
     /// </summary>

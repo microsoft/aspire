@@ -184,6 +184,9 @@
   <data name="ResourcesDetailsDisplayNameProperty" xml:space="preserve">
     <value>Display name</value>
   </data>
+  <data name="ResourcesDetailsServiceDisplayNameProperty" xml:space="preserve">
+    <value>Service</value>
+  </data>
   <data name="ResourcesDetailsExecutableArgumentsProperty" xml:space="preserve">
     <value>Executable arguments</value>
   </data>

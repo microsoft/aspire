@@ -79,7 +79,7 @@
                 </FluentPopover>
             </div>
 
-            <SummaryDetailsView DetailsTitle="@(PageViewModel.SelectedResource != null ? $"{PageViewModel.SelectedResource.ResourceType}: {GetResourceName(PageViewModel.SelectedResource)}" : null)"
+            <SummaryDetailsView DetailsTitle="@(PageViewModel.SelectedResource != null ? $"{PageViewModel.SelectedResource.ServiceDisplayName}: {GetResourceName(PageViewModel.SelectedResource)}" : null)"
                                 ShowDetails="@showDetailsView"
                                 OnDismiss="@(() => ClearSelectedResourceAsync(causedByUserAction: true))"
                                 SelectedValue="@PageViewModel.SelectedResource"
@@ -154,7 +154,7 @@
                                             @* FluentDataGrid rows activate on Enter/NumpadEnter from Blazor keydown handlers.
                                                Stop Blazor keydown propagation from nested controls so keyboard activation doesn't
                                                also open resource details. Browser-native keyboard behavior still runs on the control. *@
-                                            <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" Sortable="true" SortBy="@_nameSort" Tooltip="true" TooltipText="@(c => $"{c.Resource.ResourceType}: {GetResourceName(c.Resource)}")" Class="expand-col">
+                                            <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" Sortable="true" SortBy="@_nameSort" Tooltip="true" TooltipText="@(c => $"{c.Resource.ServiceDisplayName}: {GetResourceName(c.Resource)}")" Class="expand-col">
                                                 @{
                                                     var indent = context.Depth * 16;
                                                 }
@@ -176,7 +176,7 @@
                                             <AspireTemplateColumn ColumnId="@StartTimeColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]" Sortable="true" SortBy="@_startTimeSort" TooltipText="@(context => context.Resource.StartTimeStamp != null ? FormatHelpers.FormatDateTime(TimeProvider, context.Resource.StartTimeStamp.Value, MillisecondsDisplay.None, CultureInfo.CurrentCulture) : null)" Tooltip="true">
                                                 <StartTimeColumnDisplay Resource="@context.Resource" />
                                             </AspireTemplateColumn>
-                                            <AspirePropertyColumn ColumnId="@TypeColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]" Property="@(c => c.Resource.ResourceType)" Sortable="true" SortBy="@_typeSort" Tooltip="true" TooltipText="@(c => c.Resource.ResourceType)" />
+                                            <AspirePropertyColumn ColumnId="@TypeColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]" Property="@(c => c.Resource.ServiceDisplayName)" Sortable="true" SortBy="@_typeSort" Tooltip="true" TooltipText="@(c => c.Resource.ServiceDisplayName)" />
                                             <AspireTemplateColumn ColumnId="@SourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]" Tooltip="true" TooltipText="@(ctx => ResourceSourceViewModel.GetSourceViewModel(ctx.Resource)?.Tooltip)">
                                                 @if (ResourceSourceViewModel.GetSourceViewModel(context.Resource) is { } columnDisplay)
                                                 {

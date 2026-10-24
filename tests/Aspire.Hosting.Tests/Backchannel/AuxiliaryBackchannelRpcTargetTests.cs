@@ -155,6 +155,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var paramSnapshot = Assert.Single(result, r => r.Name == "myparam");
         Assert.Equal("myparam", paramSnapshot.DisplayName);
         Assert.Equal("Parameter", paramSnapshot.ResourceType);
+        Assert.Equal("Parameter", paramSnapshot.ServiceDisplayName);
 
         // Resource with DcpInstancesAnnotation should return multiple instances
         Assert.Contains(result, r => r.Name == "myresource-abc123");
@@ -180,6 +181,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
         await notificationService.PublishUpdateAsync(custom.Resource, s => s with
         {
+            ServiceDisplayName = "Custom Service",
             State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
             CreationTimeStamp = createdAt,
             StartTimeStamp = startedAt,
@@ -253,6 +255,9 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
 
         var snapshot = Assert.Single(result);
+
+        Assert.Equal("CustomResource", snapshot.ResourceType);
+        Assert.Equal("Custom Service", snapshot.ServiceDisplayName);
 
         // State
         Assert.Equal("Running", snapshot.State);

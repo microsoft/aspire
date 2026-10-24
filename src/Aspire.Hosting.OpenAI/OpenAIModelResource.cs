@@ -12,6 +12,9 @@ namespace Aspire.Hosting.OpenAI;
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Model = {Model}")]
 public class OpenAIModelResource : Resource, IResourceWithParent<OpenAIResource>, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "OpenAI Model";
+
     /// <summary>
     /// Parent OpenAI account resource from which settings (like API key) can be shared.
     /// </summary>

@@ -14,6 +14,30 @@ namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class ResourceViewModelTests
 {
+    [Theory]
+    [InlineData(null, "Container")]
+    [InlineData("", "Container")]
+    [InlineData("Redis", "Redis")]
+    public void ToViewModel_ServiceDisplayNamePreservesTechnicalType(string? serviceDisplayName, string expected)
+    {
+        var resource = new Resource
+        {
+            Name = "cache",
+            ResourceType = "Container",
+            CreatedAt = Timestamp.FromDateTime(s_dateTime)
+        };
+        if (serviceDisplayName is not null)
+        {
+            resource.ServiceDisplayName = serviceDisplayName;
+        }
+
+        var vm = ToViewModel(resource);
+
+        Assert.Equal("Container", vm.ResourceType);
+        Assert.Equal(expected, vm.ServiceDisplayName);
+        Assert.True(vm.IsContainer());
+    }
+
     private static readonly DateTime s_dateTime = new(2000, 12, 30, 23, 59, 59, DateTimeKind.Utc);
 
     [Theory]

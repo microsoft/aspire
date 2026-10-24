@@ -349,6 +349,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Service.
+        /// </summary>
+        public static string ResourcesDetailsServiceDisplayNameProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsServiceDisplayNameProperty", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Executable arguments.
         /// </summary>
         public static string ResourcesDetailsExecutableArgumentsProperty {

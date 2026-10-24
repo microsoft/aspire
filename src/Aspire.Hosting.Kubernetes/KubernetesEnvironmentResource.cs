@@ -31,6 +31,9 @@ namespace Aspire.Hosting.Kubernetes;
 [AspireExport(ExposeProperties = true)]
 public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Kubernetes Environment";
+
     private const int HttpRouteHostnameLimit = 16;
     private const string HttpRouteSpecDocumentationUrl = "https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#httproutespec";
 

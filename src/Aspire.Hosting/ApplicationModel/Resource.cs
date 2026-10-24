@@ -17,6 +17,17 @@ public abstract class Resource : IResource
     public virtual string Name { get; }
 
     /// <summary>
+    /// Gets the default human-readable name of the service represented by this resource.
+    /// </summary>
+    /// <remarks>
+    /// Override this property to identify the service, such as Redis or PostgreSQL Server,
+    /// independently of its technical resource type. The default is the resource type.
+    /// This label does not change the resource name, service discovery, or OpenTelemetry identity.
+    /// Use <see cref="ResourceBuilderExtensions.WithServiceDisplayName{T}"/> to override the label for an instance.
+    /// </remarks>
+    public virtual string ServiceDisplayName => this.GetResourceType();
+
+    /// <summary>
     /// Gets the annotations associated with the resource.
     /// </summary>
     public virtual ResourceAnnotationCollection Annotations { get; } = new();

@@ -34,4 +34,8 @@ namespace Aspire.Hosting.Go;
 /// <param name="workingDirectory">The working directory for the Go application, typically the directory containing <c>go.mod</c>.</param>
 [AspireExport(ExposeProperties = true)]
 public class GoAppResource(string name, string workingDirectory)
-    : ExecutableResource(name, "go", workingDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource;
+    : ExecutableResource(name, "go", workingDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource
+{
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Go";
+}

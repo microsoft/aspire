@@ -149,6 +149,7 @@ internal static class ResourceSnapshotMapper
             Name = snapshot.Name,
             DisplayName = snapshot.DisplayName,
             ResourceType = snapshot.ResourceType,
+            ServiceDisplayName = snapshot.ServiceDisplayName,
             State = snapshot.State,
             WaitingFor = waitingFor,
             StateStyle = snapshot.StateStyle,

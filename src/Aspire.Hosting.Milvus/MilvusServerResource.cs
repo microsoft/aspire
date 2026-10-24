@@ -11,6 +11,9 @@ namespace Aspire.Hosting.Milvus;
 [AspireExport(ExposeProperties = true)]
 public class MilvusServerResource : ContainerResource, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Milvus Server";
+
     internal const string PrimaryEndpointName = "grpc";
 
     /// <summary>

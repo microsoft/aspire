@@ -18,6 +18,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureCosmosDBDatabaseResource(string name, string databaseName, AzureCosmosDBResource parent)
     : Resource(name), IResourceWithParent<AzureCosmosDBResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Cosmos DB Database";
+
     /// <summary>
     /// Gets or sets the database name.
     /// </summary>

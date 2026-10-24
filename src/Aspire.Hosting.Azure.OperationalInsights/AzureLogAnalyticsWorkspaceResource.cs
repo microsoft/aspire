@@ -16,6 +16,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureLogAnalyticsWorkspaceResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure), IAzureNspAssociationTarget
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Log Analytics Workspace";
+
     /// <summary>
     /// Gets the "name" output reference for the resource.
     /// </summary>

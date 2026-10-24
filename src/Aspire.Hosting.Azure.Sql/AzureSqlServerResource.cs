@@ -29,6 +29,9 @@ namespace Aspire.Hosting.Azure;
 [AspireExport(ExposeProperties = true)]
 public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzurePrivateEndpointTargetNotification, IAzureNspAssociationTarget
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure SQL Server";
+
     private readonly Dictionary<string, AzureSqlDatabaseResource> _databases = new Dictionary<string, AzureSqlDatabaseResource>(StringComparers.ResourceName);
     private readonly bool _createdWithInnerResource;
 

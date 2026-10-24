@@ -17,6 +17,9 @@ namespace Aspire.Hosting.Azure;
 [AspireExport(ExposeProperties = true)]
 public class AzureKustoReadWriteDatabaseResource : Resource, IResourceWithParent<AzureKustoClusterResource>, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Data Explorer Database";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureKustoReadWriteDatabaseResource"/> class.
     /// </summary>

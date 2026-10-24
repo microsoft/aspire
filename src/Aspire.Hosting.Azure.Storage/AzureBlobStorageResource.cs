@@ -18,6 +18,9 @@ public class AzureBlobStorageResource(string name, AzureStorageResource storage)
     IResourceWithAzureFunctionsConfig,
     IAzurePrivateEndpointTarget
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Blob Storage";
+
     /// <summary>
     /// Gets the parent AzureStorageResource of this AzureBlobStorageResource.
     /// </summary>

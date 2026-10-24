@@ -14,6 +14,9 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 public class AzureContainerAppResource : AzureProvisioningResource
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Container App";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureContainerAppResource"/> class.
     /// </summary>

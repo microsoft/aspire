@@ -17,6 +17,7 @@ internal static class KnownProperties
         public const string Uid = "resource.uid";
         public const string Name = "resource.name";
         public const string Type = "resource.type";
+        public const string ServiceDisplayName = "resource.serviceDisplayName";
         public const string DisplayName = "resource.displayName";
         public const string State = "resource.state";
         public const string ExitCode = "resource.exitCode";
@@ -87,12 +88,14 @@ internal static class KnownProperties
 internal static class KnownResourcePropertySortOrder
 {
     public const int DisplayName = 0;
-    public const int State = 1;
-    public const int HealthState = 2;
-    public const int StartTime = 3;
-    public const int StopTime = 4;
-    public const int ExitCode = 5;
-    public const int ConnectionString = 6;
+    public const int ResourceType = 1;
+    public const int ServiceDisplayName = 2;
+    public const int State = 3;
+    public const int HealthState = 4;
+    public const int StartTime = 5;
+    public const int StopTime = 6;
+    public const int ExitCode = 7;
+    public const int ConnectionString = 8;
 
     // Producers use local sort orders for their own resource-specific properties. The
     // dashboard normalizes those values after the generic dashboard-owned properties.

@@ -12,4 +12,8 @@ namespace Aspire.Hosting.Java;
 /// <param name="entrypoint">An optional entrypoint that replaces the image's own.</param>
 [AspireExport(ExposeProperties = true)]
 public class JavaContainerResource(string name, string? entrypoint = null)
-    : ContainerResource(name, entrypoint), IJavaAppResource, IResourceWithServiceDiscovery;
+    : ContainerResource(name, entrypoint), IJavaAppResource, IResourceWithServiceDiscovery
+{
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Java";
+}

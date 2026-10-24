@@ -20,6 +20,9 @@ namespace Aspire.Hosting.ApplicationModel;
 public class MySqlDatabaseResource(string name, string databaseName, MySqlServerResource parent)
     : Resource(name), IResourceWithParent<MySqlServerResource>, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "MySQL Database";
+
     /// <summary>
     /// Gets the parent MySQL container resource.
     /// </summary>

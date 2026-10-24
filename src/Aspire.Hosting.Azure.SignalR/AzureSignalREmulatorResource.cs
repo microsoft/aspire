@@ -11,6 +11,9 @@ namespace Aspire.Hosting.Azure;
 /// <param name="innerResource">The inner resource used to store annotations.</param>
 public class AzureSignalREmulatorResource(AzureSignalRResource innerResource) : ContainerResource(innerResource.Name), IResource
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure SignalR Emulator";
+
     private readonly AzureSignalRResource _innerResource = innerResource ?? throw new ArgumentNullException(nameof(innerResource));
 
     /// <inheritdoc/>

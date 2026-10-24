@@ -10,6 +10,9 @@ namespace Aspire.Hosting.ApplicationModel;
 [AspireExport(ExposeProperties = true)]
 public class SeqResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Seq";
+
     internal const string PrimaryEndpointName = "http";
 
     private EndpointReference? _primaryEndpoint;

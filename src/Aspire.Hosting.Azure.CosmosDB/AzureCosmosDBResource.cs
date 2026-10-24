@@ -24,6 +24,9 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     IAzurePrivateEndpointTarget,
     IAzureNspAssociationTarget
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Cosmos DB";
+
     internal List<AzureCosmosDBDatabaseResource> Databases { get; } = [];
 
     internal EndpointReference EmulatorEndpoint => new(this, "emulator");

@@ -10,6 +10,9 @@ namespace Aspire.Hosting.ApplicationModel;
 [AspireExport(ExposeProperties = true)]
 public class GarnetResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Garnet";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="GarnetResource"/> class.
     /// </summary>

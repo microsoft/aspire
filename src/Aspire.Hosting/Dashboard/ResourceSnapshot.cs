@@ -12,6 +12,7 @@ namespace Aspire.Hosting.Dashboard;
 internal abstract class ResourceSnapshot
 {
     public abstract string ResourceType { get; }
+    public virtual string ServiceDisplayName => ResourceType;
 
     public required string Name { get; init; }
     public required string DisplayName { get; init; }
@@ -42,6 +43,10 @@ internal abstract class ResourceSnapshot
             yield return (KnownProperties.Resource.Uid, Value.ForString(Uid), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
             yield return (KnownProperties.Resource.Name, Value.ForString(Name), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
             yield return (KnownProperties.Resource.Type, Value.ForString(ResourceType), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
+            if (ServiceDisplayName != ResourceType)
+            {
+                yield return (KnownProperties.Resource.ServiceDisplayName, Value.ForString(ServiceDisplayName), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
+            }
             yield return (KnownProperties.Resource.DisplayName, Value.ForString(DisplayName), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
             yield return (KnownProperties.Resource.State, State is null ? Value.ForNull() : Value.ForString(State), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
             yield return (KnownProperties.Resource.ExitCode, ExitCode is null ? Value.ForNull() : Value.ForString(ExitCode.Value.ToString("D", CultureInfo.InvariantCulture)), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);

@@ -20,6 +20,9 @@ namespace Aspire.Hosting.ApplicationModel;
 public class PostgresDatabaseResource(string name, string databaseName, PostgresServerResource postgresParentResource)
     : Resource(name), IResourceWithParent<PostgresServerResource>, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "PostgreSQL Database";
+
     /// <summary>
     /// Gets the parent PostgresSQL container resource.
     /// </summary>

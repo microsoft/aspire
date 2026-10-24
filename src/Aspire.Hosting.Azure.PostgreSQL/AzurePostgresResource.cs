@@ -14,6 +14,9 @@ namespace Aspire.Hosting.Azure;
 public class AzurePostgresResource(PostgresServerResource innerResource, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(innerResource.Name, configureInfrastructure), IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Database for PostgreSQL Server";
+
     private readonly PostgresServerResource _innerResource = innerResource ?? throw new ArgumentNullException(nameof(innerResource));
 
     /// <summary>

@@ -11,6 +11,22 @@ namespace Aspire.Cli.Tests.Backchannel;
 
 public class ResourceSnapshotMapperTests
 {
+    [Theory]
+    [InlineData("""{"Name":"cache","ResourceType":"Container"}""", "Container")]
+    [InlineData("""{"Name":"cache","ResourceType":"Container","ServiceDisplayName":"Redis"}""", "Redis")]
+    [InlineData("""{"Name":"cache","ResourceType":"Container","ServiceDisplayName":""}""", "Container")]
+    [InlineData("""{"Name":"cache","ResourceType":"Container","ServiceDisplayName":null}""", "Container")]
+    public void ServiceDisplayName_DeserializesAndMapsWithFallback(string json, string expected)
+    {
+        var snapshot = JsonSerializer.Deserialize(json, BackchannelJsonSerializerContext.Default.ResourceSnapshot);
+        Assert.NotNull(snapshot);
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot]);
+
+        Assert.Equal("Container", result.ResourceType);
+        Assert.Equal(expected, result.ServiceDisplayName);
+    }
+
     [Fact]
     public void ResourceSnapshotDeserialization_WithNumericPropertyValue_PreservesJsonNumber()
     {

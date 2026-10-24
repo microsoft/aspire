@@ -15,4 +15,8 @@ namespace Aspire.Hosting.JavaScript;
 [AspireExport(ExposeProperties = true)]
 [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class DenoAppResource(string name, string command, string workingDirectory)
-    : JavaScriptAppResource(name, command, workingDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource;
+    : JavaScriptAppResource(name, command, workingDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource
+{
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Deno";
+}

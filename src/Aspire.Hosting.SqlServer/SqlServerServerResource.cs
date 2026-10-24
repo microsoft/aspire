@@ -9,6 +9,9 @@ namespace Aspire.Hosting.ApplicationModel;
 [AspireExport(ExposeProperties = true)]
 public class SqlServerServerResource : ContainerResource, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "SQL Server";
+
     internal const string PrimaryEndpointName = "tcp";
     private const string DefaultUserName = "sa";
 

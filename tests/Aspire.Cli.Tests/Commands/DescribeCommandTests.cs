@@ -19,6 +19,25 @@ namespace Aspire.Cli.Tests.Commands;
 public class DescribeCommandTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task DescribeCommand_DefaultTable_UsesServiceDisplayNameAndTypeFallback()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter,
+        [
+            new ResourceSnapshot { Name = "cache", ResourceType = "Container", ServiceDisplayName = "Redis", State = "Running" },
+            new ResourceSnapshot { Name = "postgres", ResourceType = "Container", ServiceDisplayName = "PostgreSQL Server", State = "Running" },
+            new ResourceSnapshot { Name = "orders", ResourceType = "Project", ServiceDisplayName = "Orders [API]", State = "Running" },
+            new ResourceSnapshot { Name = "generic", ResourceType = "Container", State = "Running" }
+        ], disableAnsi: true);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("", outputWriter.Logs), "txt");
+    }
+
+    [Fact]
     public async Task DescribeCommand_Help_Works()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -13,4 +13,8 @@ namespace Aspire.Hosting.JavaScript;
 /// <param name="workingDirectory">The working directory to use for the command.</param>
 [AspireExport(ExposeProperties = true)]
 public sealed class BunAppResource(string name, string command, string workingDirectory)
-    : JavaScriptAppResource(name, command, workingDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource;
+    : JavaScriptAppResource(name, command, workingDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource
+{
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Bun";
+}

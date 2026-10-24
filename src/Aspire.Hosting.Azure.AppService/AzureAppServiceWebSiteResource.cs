@@ -14,6 +14,9 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 public class AzureAppServiceWebSiteResource : AzureProvisioningResource
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure App Service";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureAppServiceWebSiteResource"/> class.
     /// </summary>

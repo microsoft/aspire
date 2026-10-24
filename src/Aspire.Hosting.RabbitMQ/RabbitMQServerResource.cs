@@ -9,6 +9,9 @@ namespace Aspire.Hosting.ApplicationModel;
 [AspireExport(ExposeProperties = true)]
 public class RabbitMQServerResource : ContainerResource, IResourceWithConnectionString, IResourceWithEnvironment
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "RabbitMQ";
+
     internal const string PrimaryEndpointName = "tcp";
     internal const string ManagementEndpointName = "management";
     private const string DefaultUserName = "guest";

@@ -13,6 +13,9 @@ namespace Aspire.Hosting.JavaScript;
 public class ViteAppResource(string name, string command, string workingDirectory)
     : JavaScriptAppResource(name, command, workingDirectory)
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Vite";
+
     /// <summary>
     /// Gets or sets the path to the Vite configuration file.
     /// </summary>

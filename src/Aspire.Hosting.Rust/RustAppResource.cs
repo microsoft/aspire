@@ -14,6 +14,9 @@ namespace Aspire.Hosting.Rust;
 public class RustAppResource(string name, string workingDirectory)
     : ExecutableResource(name, "cargo", workingDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Rust";
+
     /// <summary>
     /// The cargo arguments produced the last time the resource's command line was built.
     /// </summary>

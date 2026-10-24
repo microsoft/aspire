@@ -19,6 +19,9 @@ namespace Aspire.Hosting.ApplicationModel;
 public class MongoDBDatabaseResource(string name, string databaseName, MongoDBServerResource parent)
     : Resource(name), IResourceWithParent<MongoDBServerResource>, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "MongoDB Database";
+
     /// <summary>
     /// Gets the connection string expression for the MongoDB database.
     /// </summary>

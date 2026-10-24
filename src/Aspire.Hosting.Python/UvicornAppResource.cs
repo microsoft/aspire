@@ -25,4 +25,8 @@ namespace Aspire.Hosting.Python;
 /// of your Python project containing your ASGI application module.
 /// </param>
 public class UvicornAppResource(string name, string executablePath, string appDirectory)
-    : PythonAppResource(name, executablePath, appDirectory);
+    : PythonAppResource(name, executablePath, appDirectory)
+{
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Uvicorn";
+}

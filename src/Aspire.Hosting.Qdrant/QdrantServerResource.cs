@@ -9,6 +9,9 @@ namespace Aspire.Hosting.ApplicationModel;
 [AspireExport(ExposeProperties = true)]
 public class QdrantServerResource : ContainerResource, IResourceWithConnectionString, IResourceWithCustomWithReference<QdrantServerResource>
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Qdrant";
+
     internal const string PrimaryEndpointName = "grpc";
     internal const string HttpEndpointName = "http";
 

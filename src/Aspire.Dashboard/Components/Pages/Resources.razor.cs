@@ -181,7 +181,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private readonly EnumerableGridSort<ResourceGridViewModel> _nameSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
     private readonly EnumerableGridSort<ResourceGridViewModel> _stateSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.State).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
     private readonly EnumerableGridSort<ResourceGridViewModel> _startTimeSort = EnumerableGridSort<ResourceGridViewModel>.ByDescending(item => item.Resource.StartTimeStamp).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
-    private readonly EnumerableGridSort<ResourceGridViewModel> _typeSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.ResourceType).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
+    private readonly EnumerableGridSort<ResourceGridViewModel> _typeSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.ServiceDisplayName).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
 
     protected override async Task OnInitializedAsync()
     {

@@ -11,6 +11,9 @@ namespace Aspire.Hosting.Azure;
 /// <param name="innerResource">The inner resource used to store annotations.</param>
 public class AzureWebPubSubEmulatorResource(AzureWebPubSubResource innerResource) : ContainerResource((innerResource ?? throw new ArgumentNullException(nameof(innerResource))).Name), IResource
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Web PubSub Emulator";
+
     private readonly AzureWebPubSubResource _innerResource = innerResource;
 
     /// <inheritdoc/>

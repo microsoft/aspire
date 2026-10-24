@@ -24,6 +24,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureEventHubResource(string name, string hubName, AzureEventHubsResource parent)
     : Resource(name), IResourceWithParent<AzureEventHubsResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Event Hub";
+
     /// <summary>
     /// The event hub name.
     /// </summary>

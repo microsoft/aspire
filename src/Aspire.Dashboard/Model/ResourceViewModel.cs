@@ -26,6 +26,11 @@ public sealed class ResourceViewModel
 
     public required string Name { get; init; }
     public required string ResourceType { get; init; }
+    public string ServiceDisplayName
+    {
+        get => string.IsNullOrWhiteSpace(field) ? ResourceType : field;
+        init;
+    }
     public required string DisplayName { get; init; }
     public required string Uid { get; init; }
     public required int ReplicaIndex { get; init; }
@@ -164,7 +169,8 @@ public sealed class ResourceViewModel
     internal bool MatchesFilter(string filter)
     {
         // TODO let ResourceType define the additional data values we include in searches
-        return Name.Contains(filter, StringComparisons.UserTextSearch);
+        return Name.Contains(filter, StringComparisons.UserTextSearch) ||
+            ServiceDisplayName.Contains(filter, StringComparisons.UserTextSearch);
     }
 
     public string? GetResourcePropertyValue(string propertyName)

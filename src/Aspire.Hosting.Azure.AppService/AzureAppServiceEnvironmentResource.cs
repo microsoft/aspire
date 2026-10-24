@@ -33,6 +33,9 @@ public class AzureAppServiceEnvironmentResource :
 #pragma warning restore CS0618 // Type or member is obsolete
 #pragma warning restore ASPIREAZURE003
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure App Service Environment";
+
     /// <inheritdoc />
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.AppServiceEnvironments;
 

@@ -22,6 +22,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IAzurePrivateEndpointTarget
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Managed Redis";
+
     /// <summary>
     /// Gets the "connectionString" output reference from the bicep template for the Azure Managed Redis resource.
     ///

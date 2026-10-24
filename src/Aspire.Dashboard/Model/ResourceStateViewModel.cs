@@ -105,19 +105,19 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
     {
         if (resource.IsFailedToStart())
         {
-            return loc.GetString(nameof(Columns.StateColumnResourceFailedToStart), resource.ResourceType);
+            return loc.GetString(nameof(Columns.StateColumnResourceFailedToStart), resource.ServiceDisplayName);
         }
         else if (resource.IsStopped())
         {
             if (resource.TryGetExitCode(out var exitCode) && exitCode is not 0)
             {
                 // Process completed unexpectedly, hence the non-zero code. This is almost certainly an error, so warn users.
-                return loc.GetString(nameof(Columns.StateColumnResourceExitedUnexpectedly), resource.ResourceType, exitCode);
+                return loc.GetString(nameof(Columns.StateColumnResourceExitedUnexpectedly), resource.ServiceDisplayName, exitCode);
             }
             else
             {
                 // Process completed, which may not have been unexpected.
-                return loc.GetString(nameof(Columns.StateColumnResourceExited), resource.ResourceType);
+                return loc.GetString(nameof(Columns.StateColumnResourceExited), resource.ServiceDisplayName);
             }
         }
         else if (resource is { KnownState: KnownResourceState.Running, HealthStatus: not HealthStatus.Healthy })

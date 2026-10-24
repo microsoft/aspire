@@ -26,6 +26,9 @@ public sealed class MongoDBReplicaSetResource(
     ParameterResource sharedPassword
 ) : Resource(name), IResourceWithWaitSupport, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "MongoDB Replica Set";
+
     /// <summary>
     /// Gets the combined connection string for the MongoDB replica set, which includes the endpoints of all members, interpretable by the MongoDB driver.
     /// </summary>

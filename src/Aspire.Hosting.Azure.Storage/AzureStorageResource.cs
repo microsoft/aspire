@@ -17,6 +17,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureStorageResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithAzureFunctionsConfig, IAzureNspAssociationTarget
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Storage";
+
     internal const string BlobsConnectionKeyPrefix = "Aspire__Azure__Storage__Blobs";
     internal const string QueuesConnectionKeyPrefix = "Aspire__Azure__Storage__Queues";
     internal const string TablesConnectionKeyPrefix = "Aspire__Azure__Data__Tables";

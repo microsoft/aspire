@@ -380,7 +380,7 @@ internal sealed class DescribeCommand : BaseCommand
                     .Select(e => FormatEndpointUrl(e.Url, e.DisplayProperties?.DisplayName)))
                 : "-";
 
-            var type = snapshot.ResourceType?.EscapeMarkup() ?? "-";
+            var type = snapshot.ServiceDisplayName?.EscapeMarkup() ?? "-";
             var stateText = ColorState(snapshot.State);
             var healthText = ColorHealth(snapshot.HealthStatus?.EscapeMarkup() ?? "-");
 

@@ -18,6 +18,9 @@ namespace Aspire.Hosting.Azure;
 public class AzureEventHubsResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithEndpoints, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azure Event Hubs";
+
     private static readonly string[] s_eventHubClientNames =
     [
         "EventHubProducerClient",

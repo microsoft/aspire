@@ -12,6 +12,9 @@ namespace Aspire.Hosting;
 [AspireExport(ExposeProperties = true)]
 public class KafkaServerResource(string name) : ContainerResource(name), IResourceWithConnectionString, IResourceWithEnvironment
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Kafka";
+
     // This endpoint is used for host processes Kafka broker communication.
     internal const string PrimaryEndpointName = "tcp";
     // This endpoint is used for container to broker communication.

@@ -5114,6 +5114,34 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
+    /// Overrides the human-readable service label displayed for the resource.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="serviceDisplayName">The service label, such as Redis or Orders API.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// When not specified, the resource class supplies the default label, falling back to the resource type.
+    /// This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+    /// Repeated calls replace the previous override.
+    /// </remarks>
+    /// <example>
+    /// <code lang="C#">
+    /// builder.AddProject&lt;Projects.Orders&gt;("orders").WithServiceDisplayName("Orders API");
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">The builder is null.</exception>
+    /// <exception cref="ArgumentException">The service display name is empty or whitespace.</exception>
+    [AspireExport]
+    public static IResourceBuilder<T> WithServiceDisplayName<T>(this IResourceBuilder<T> builder, string serviceDisplayName) where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceDisplayName);
+
+        return builder.WithAnnotation(new ResourceServiceDisplayNameAnnotation(serviceDisplayName), ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    /// <summary>
     /// Specifies the icon to use when displaying the resource in the dashboard.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>

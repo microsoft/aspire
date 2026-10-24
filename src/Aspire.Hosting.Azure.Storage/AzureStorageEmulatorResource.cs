@@ -11,6 +11,9 @@ namespace Aspire.Hosting.Azure;
 /// <param name="innerResource">The inner resource used to store annotations.</param>
 public class AzureStorageEmulatorResource(AzureStorageResource innerResource) : ContainerResource(innerResource.Name), IResource
 {
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Azurite";
+
     private readonly AzureStorageResource _innerResource = innerResource ?? throw new ArgumentNullException(nameof(innerResource));
 
     /// <inheritdoc/>

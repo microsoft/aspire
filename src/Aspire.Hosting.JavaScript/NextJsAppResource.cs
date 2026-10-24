@@ -14,4 +14,8 @@ namespace Aspire.Hosting.JavaScript;
 [AspireExport(ExposeProperties = true)]
 [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class NextJsAppResource(string name, string command, string workingDirectory)
-    : JavaScriptAppResource(name, command, workingDirectory);
+    : JavaScriptAppResource(name, command, workingDirectory)
+{
+    /// <inheritdoc/>
+    public override string ServiceDisplayName => "Next.js";
+}

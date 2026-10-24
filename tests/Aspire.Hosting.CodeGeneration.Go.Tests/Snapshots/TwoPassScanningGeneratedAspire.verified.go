@@ -1552,6 +1552,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithSerializedAnnotation(annotationId string, json string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithServiceDisplayName(serviceDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithTerminal() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -3400,6 +3401,18 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithSerialized
 	return s
 }
 
+// WithServiceDisplayName overrides the human-readable service label displayed for the resource.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithServiceDisplayName(serviceDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["serviceDisplayName"] = serializeValue(serviceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withServiceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -3844,6 +3857,7 @@ type CSharpAppResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) CSharpAppResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) CSharpAppResource
 	WithSerializedAnnotation(annotationId string, json string) CSharpAppResource
+	WithServiceDisplayName(serviceDisplayName string) CSharpAppResource
 	WithSessionLifetime() CSharpAppResource
 	WithStatus(status TestResourceStatus) CSharpAppResource
 	WithTerminal() CSharpAppResource
@@ -5425,6 +5439,18 @@ func (s *cSharpAppResource) WithSerializedAnnotation(annotationId string, json s
 	return s
 }
 
+// WithServiceDisplayName overrides the human-readable service label displayed for the resource.
+func (s *cSharpAppResource) WithServiceDisplayName(serviceDisplayName string) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["serviceDisplayName"] = serializeValue(serviceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withServiceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *cSharpAppResource) WithSessionLifetime() CSharpAppResource {
 	if s.err != nil { return s }
@@ -6791,6 +6817,7 @@ type ContainerRegistryResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerRegistryResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerRegistryResource
 	WithSerializedAnnotation(annotationId string, json string) ContainerRegistryResource
+	WithServiceDisplayName(serviceDisplayName string) ContainerRegistryResource
 	WithSessionLifetime() ContainerRegistryResource
 	WithStatus(status TestResourceStatus) ContainerRegistryResource
 	WithTerminal() ContainerRegistryResource
@@ -7648,6 +7675,18 @@ func (s *containerRegistryResource) WithSerializedAnnotation(annotationId string
 	return s
 }
 
+// WithServiceDisplayName overrides the human-readable service label displayed for the resource.
+func (s *containerRegistryResource) WithServiceDisplayName(serviceDisplayName string) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["serviceDisplayName"] = serializeValue(serviceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withServiceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *containerRegistryResource) WithSessionLifetime() ContainerRegistryResource {
 	if s.err != nil { return s }
@@ -7900,6 +7939,7 @@ type ContainerResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerResource
 	WithSerializedAnnotation(annotationId string, json string) ContainerResource
+	WithServiceDisplayName(serviceDisplayName string) ContainerResource
 	WithSessionLifetime() ContainerResource
 	WithStatus(status TestResourceStatus) ContainerResource
 	WithTerminal() ContainerResource
@@ -9744,6 +9784,18 @@ func (s *containerResource) WithSerializedAnnotation(annotationId string, json s
 	reqArgs["annotationId"] = serializeValue(annotationId)
 	reqArgs["json"] = serializeValue(json)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithServiceDisplayName overrides the human-readable service label displayed for the resource.
+func (s *containerResource) WithServiceDisplayName(serviceDisplayName string) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["serviceDisplayName"] = serializeValue(serviceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withServiceDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11631,6 +11683,7 @@ type DotnetToolResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) DotnetToolResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) DotnetToolResource
 	WithSerializedAnnotation(annotationId string, json string) DotnetToolResource
+	WithServiceDisplayName(serviceDisplayName string) DotnetToolResource
 	WithSessionLifetime() DotnetToolResource
 	WithStatus(status TestResourceStatus) DotnetToolResource
 	WithTerminal() DotnetToolResource
@@ -13195,6 +13248,18 @@ func (s *dotnetToolResource) WithSerializedAnnotation(annotationId string, json 
 	return s
 }
 
+// WithServiceDisplayName overrides the human-readable service label displayed for the resource.
+func (s *dotnetToolResource) WithServiceDisplayName(serviceDisplayName string) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["serviceDisplayName"] = serializeValue(serviceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withServiceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *dotnetToolResource) WithSessionLifetime() DotnetToolResource {
 	if s.err != nil { return s }
@@ -14557,6 +14622,7 @@ type ExecutableResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExecutableResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExecutableResource
 	WithSerializedAnnotation(annotationId string, json string) ExecutableResource
+	WithServiceDisplayName(serviceDisplayName string) ExecutableResource
 	WithSessionLifetime() ExecutableResource
 	WithStatus(status TestResourceStatus) ExecutableResource
 	WithTerminal() ExecutableResource
@@ -16115,6 +16181,18 @@ func (s *executableResource) WithSerializedAnnotation(annotationId string, json 
 	return s
 }
 
+// WithServiceDisplayName overrides the human-readable service label displayed for the resource.
+func (s *executableResource) WithServiceDisplayName(serviceDisplayName string) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["serviceDisplayName"] = serializeValue(serviceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withServiceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *executableResource) WithSessionLifetime() ExecutableResource {
 	if s.err != nil { return s }
@@ -16623,6 +16701,7 @@ type ExternalServiceResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExternalServiceResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExternalServiceResource
 	WithSerializedAnnotation(annotationId string, json string) ExternalServiceResource
+	WithServiceDisplayName(serviceDisplayName string) ExternalServiceResource
 	WithSessionLifetime() ExternalServiceResource
 	WithStatus(status TestResourceStatus) ExternalServiceResource
 	WithTerminal() ExternalServiceResource
@@ -17495,6 +17574,18 @@ func (s *externalServiceResource) WithSerializedAnnotation(annotationId string, 
 	reqArgs["annotationId"] = serializeValue(annotationId)
 	reqArgs["json"] = serializeValue(json)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithServiceDisplayName overrides the human-readable service label displayed for the resource.
+func (s *externalServiceResource) WithServiceDisplayName(serviceDisplayName string) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["serviceDisplayName"] = serializeValue(serviceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withServiceDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -19361,6 +19452,7 @@ type ParameterResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ParameterResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ParameterResource
 	WithSerializedAnnotation(annotationId string, json string) ParameterResource
+	WithServiceDisplayName(serviceDisplayName string) ParameterResource
 	WithSessionLifetime() ParameterResource
 	WithStatus(status TestResourceStatus) ParameterResource
 	WithTerminal() ParameterResource
@@ -20317,6 +20409,18 @@ func (s *parameterResource) WithSerializedAnnotation(annotationId string, json s
 	return s
 }
 
+// WithServiceDisplayName overrides the human-readable service label displayed for the resource.
+func (s *parameterResource) WithServiceDisplayName(serviceDisplayName string) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["serviceDisplayName"] = serializeValue(serviceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withServiceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *parameterResource) WithSessionLifetime() ParameterResource {
 	if s.err != nil { return s }
@@ -21251,6 +21355,7 @@ type ProjectResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ProjectResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ProjectResource
 	WithSerializedAnnotation(annotationId string, json string) ProjectResource
+	WithServiceDisplayName(serviceDisplayName string) ProjectResource
 	WithSessionLifetime() ProjectResource
 	WithStatus(status TestResourceStatus) ProjectResource
 	WithTerminal() ProjectResource
@@ -22829,6 +22934,18 @@ func (s *projectResource) WithSerializedAnnotation(annotationId string, json str
 	reqArgs["annotationId"] = serializeValue(annotationId)
 	reqArgs["json"] = serializeValue(json)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithServiceDisplayName overrides the human-readable service label displayed for the resource.
+func (s *projectResource) WithServiceDisplayName(serviceDisplayName string) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["serviceDisplayName"] = serializeValue(serviceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withServiceDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -24740,6 +24857,7 @@ type TestDatabaseResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestDatabaseResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestDatabaseResource
 	WithSerializedAnnotation(annotationId string, json string) TestDatabaseResource
+	WithServiceDisplayName(serviceDisplayName string) TestDatabaseResource
 	WithSessionLifetime() TestDatabaseResource
 	WithStatus(status TestResourceStatus) TestDatabaseResource
 	WithTerminal() TestDatabaseResource
@@ -26587,6 +26705,18 @@ func (s *testDatabaseResource) WithSerializedAnnotation(annotationId string, jso
 	return s
 }
 
+// WithServiceDisplayName overrides the human-readable service label displayed for the resource.
+func (s *testDatabaseResource) WithServiceDisplayName(serviceDisplayName string) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["serviceDisplayName"] = serializeValue(serviceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withServiceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *testDatabaseResource) WithSessionLifetime() TestDatabaseResource {
 	if s.err != nil { return s }
@@ -27095,6 +27225,7 @@ type TestRedisResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestRedisResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestRedisResource
 	WithSerializedAnnotation(annotationId string, json string) TestRedisResource
+	WithServiceDisplayName(serviceDisplayName string) TestRedisResource
 	WithSessionLifetime() TestRedisResource
 	WithStatus(status TestResourceStatus) TestRedisResource
 	WithTerminal() TestRedisResource
@@ -29250,6 +29381,18 @@ func (s *testRedisResource) WithSerializedAnnotation(annotationId string, json s
 	reqArgs["annotationId"] = serializeValue(annotationId)
 	reqArgs["json"] = serializeValue(json)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithServiceDisplayName overrides the human-readable service label displayed for the resource.
+func (s *testRedisResource) WithServiceDisplayName(serviceDisplayName string) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["serviceDisplayName"] = serializeValue(serviceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withServiceDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
