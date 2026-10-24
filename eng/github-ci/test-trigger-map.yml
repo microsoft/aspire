@@ -135,6 +135,11 @@ ignore:
 # only. targets may be test: / job: / a GROUP name / ALL.
 path_rules:
   - paths:
+      - eng/scripts/prepare-windows-arm-dev-drive.ps1
+    targets: [CLI_ARCHIVE_CONSUMERS, test:Infrastructure.Tests]
+    reason: Windows ARM native archive storage provisioning and its behavioral safety tests
+
+  - paths:
       - eng/scripts/test-native-hosting.sh
     targets: [test:Infrastructure.Tests]
     reason: native hosting harness coverage is guarded by infrastructure tests and executed by its dedicated PR workflow
