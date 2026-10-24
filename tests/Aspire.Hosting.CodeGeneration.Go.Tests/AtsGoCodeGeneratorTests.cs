@@ -205,6 +205,169 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedRuntime_PassesGoTests()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "runtime_test.go"), """
+                package aspire
+
+                import (
+                    "reflect"
+                    "strings"
+                    "testing"
+                )
+
+                func TestDeepUpdateKeepsCallback(t *testing.T) {
+                    calls := 0
+                    merged := deepUpdate(&WithOptionalCallbackOptions{}, &WithOptionalCallbackOptions{
+                        Callback: func(TestCallbackContext) { calls++ },
+                    })
+                    if merged.Callback == nil {
+                        t.Fatal("callback was dropped")
+                    }
+                    merged.Callback(nil)
+                    if calls != 1 {
+                        t.Fatalf("expected the callback to run once, ran %d times", calls)
+                    }
+                }
+
+                func TestDeepUpdateAcceptsNilCallback(t *testing.T) {
+                    merged := deepUpdate(&WithOptionalCallbackOptions{}, &WithOptionalCallbackOptions{})
+                    if merged.Callback != nil {
+                        t.Fatal("unexpected callback")
+                    }
+                }
+
+                func TestDeepUpdateKeepsCancellationToken(t *testing.T) {
+                    token := NewCancellationToken()
+                    merged := deepUpdate(&GetStatusAsyncOptions{}, &GetStatusAsyncOptions{CancellationToken: token})
+                    if merged.CancellationToken != token {
+                        t.Fatal("cancellation token was replaced")
+                    }
+                }
+
+                func TestDeepUpdateMergesNestedValuesWithoutModifyingInputs(t *testing.T) {
+                    dst := &TestNestedDto{Id: "dst", Config: &TestConfigDto{Name: "dst"}, Counts: map[string]float64{"a": 1, "b": 2}}
+                    src := &TestNestedDto{Id: "src", Config: &TestConfigDto{Name: "src"}, Counts: map[string]float64{"b": 3, "c": 4}}
+
+                    merged := deepUpdate(dst, src)
+
+                    want := &TestNestedDto{Id: "src", Config: &TestConfigDto{Name: "src"}, Counts: map[string]float64{"a": 1, "b": 3, "c": 4}}
+                    if !reflect.DeepEqual(merged, want) {
+                        t.Fatalf("got %+v, want %+v", merged, want)
+                    }
+                    if len(dst.Counts) != 2 || len(src.Counts) != 2 || dst.Id != "dst" || dst.Config.Name != "dst" {
+                        t.Fatal("merge modified its inputs")
+                    }
+                }
+
+                type namedHandle interface{ Name() string }
+
+                type namedValue string
+
+                func (n namedValue) Name() string { return string(n) }
+
+                // workDto and nestedCallbackOptions mirror generated DTOs with callback
+                // properties and optional handle parameters, which the test types do not have.
+                type workDto struct {
+                    Label *string `json:"label,omitempty"`
+                    Work  func()  `json:"work,omitempty"`
+                }
+
+                type nestedCallbackOptions struct {
+                    Progress *workDto     `json:"progress,omitempty"`
+                    Handle   *namedHandle `json:"handle,omitempty"`
+                }
+
+                func TestDeepUpdateKeepsCallbacksAndHandlesInNestedValues(t *testing.T) {
+                    label := "step"
+                    ran := false
+                    var handle namedHandle = namedValue("resource")
+                    src := &nestedCallbackOptions{
+                        Progress: &workDto{Label: &label, Work: func() { ran = true }},
+                        Handle:   &handle,
+                    }
+
+                    merged := deepUpdate(&nestedCallbackOptions{Progress: &workDto{}}, src)
+
+                    merged.Progress.Work()
+                    if !ran || *merged.Progress.Label != label || (*merged.Handle).Name() != "resource" {
+                        t.Fatalf("nested callback or handle was lost: %+v", merged)
+                    }
+                }
+
+                // The client has no connection, so a value that passes the union guard fails later with
+                // a transport error, while a value that does not pass it fails with the guard's error.
+                func scalarFieldError(value any) error {
+                    resource := newTestRedisResourceFromHandle(&handle{HandleID: "1", TypeID: "type"}, newClient(""))
+                    resource.WithScalarField("spec.maxReplicaCount", value)
+                    return resource.Err()
+                }
+
+                func TestUnionGuardAcceptsEveryGoNumericType(t *testing.T) {
+                    values := []any{
+                        "text", true, 1.5, float32(1.5), 3, int8(3), int16(3), int32(3), int64(3),
+                        uint(3), uint8(3), uint16(3), uint32(3), uint64(3),
+                    }
+                    for _, value := range values {
+                        err := scalarFieldError(value)
+                        if err == nil || !strings.Contains(err.Error(), "not connected to AppHost") {
+                            t.Errorf("%T: got %v, want the transport error", value, err)
+                        }
+                    }
+                }
+
+                func TestUnionGuardRejectsOtherTypes(t *testing.T) {
+                    for _, value := range []any{nil, []string{"a"}, map[string]any{"a": 1}} {
+                        err := scalarFieldError(value)
+                        if err == nil || !strings.Contains(err.Error(), "must be one of [string, float64, bool]") {
+                            t.Errorf("%T: got %v, want the guard error", value, err)
+                        }
+                    }
+                }
+                """, timeout.Token);
+
+            using var process = Process.Start(new ProcessStartInfo("go")
+            {
+                WorkingDirectory = directory.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                ArgumentList = { "test", "-timeout", "30s", "." }
+            })!;
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go runtime test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_NullablePrimitiveArrayElementsUsePointers()
     {
         var nullableNumbers = Assert.IsType<AtsTypeRef>(AtsCapabilityScanner.CreateTypeRef(typeof(double?[])));

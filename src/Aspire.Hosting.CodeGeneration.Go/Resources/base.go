@@ -840,6 +840,15 @@ func decodeStructFields[T any](raw any) (T, bool) {
 //	for _, opt := range options {
 //	    if opt != nil { merged = deepUpdate(merged, opt) }
 //	}
+//
+// Neither argument is modified. Fields are merged by reflection rather than
+// through a JSON round trip because Options structs hold values encoding/json
+// cannot represent: callbacks (every func field fails to marshal, even a nil
+// one), *CancellationToken and handle wrappers.
+//
+// Struct fields and map entries present on both sides are merged recursively.
+// Any other value, including nil, is taken from src. A struct with unexported
+// fields (such as *CancellationToken) is opaque and is taken from src whole.
 func deepUpdate[T any](dst, src T) T {
 	dstType := reflect.TypeOf(dst)
 	srcType := reflect.TypeOf(src)
@@ -856,88 +865,77 @@ func deepUpdate[T any](dst, src T) T {
 		return src
 	}
 
-	v := reflect.ValueOf(dst)
-	kind := v.Kind()
-	if kind == reflect.Ptr {
-		kind = v.Elem().Kind()
-	}
-
-	switch kind {
-	case reflect.Map, reflect.Struct:
-		dstMap, _ := toMap(dst)
-		srcMap, _ := toMap(src)
-		mergedMap := merge(dstMap, srcMap, 0)
-
-		bytes, _ := json.Marshal(mergedMap)
-
-		var result T
-		if reflect.TypeOf(result).Kind() == reflect.Ptr {
-			result = reflect.New(reflect.TypeOf(result).Elem()).Interface().(T)
-		}
-
-		if err := json.Unmarshal(bytes, &result); err != nil {
-			panic(fmt.Sprintf("aspire: merge error: %v", err))
-		}
-		return result
-	default:
-		return src
-	}
+	return mergeValues(reflect.ValueOf(dst), reflect.ValueOf(src), 0).Interface().(T)
 }
 
-func merge(dst, src map[string]any, depth int) map[string]any {
+func mergeValues(dst, src reflect.Value, depth int) reflect.Value {
 	const depthLimit = 32
 	if depth > depthLimit {
 		panic("aspire: deep update recursion limit of '32' exceeded")
 	}
 
-	for key, srcVal := range src {
-		if dstVal, ok := dst[key]; ok {
-			srcSub, srcOk := toMap(srcVal)
-			dstSub, dstOk := toMap(dstVal)
-
-			if srcOk && dstOk {
-				dst[key] = merge(dstSub, srcSub, depth+1)
-				continue
-			}
-		}
-		dst[key] = srcVal
+	// Interface-typed fields (any, handles) are merged by their dynamic type.
+	if dst.Kind() == reflect.Interface && src.Kind() == reflect.Interface && !dst.IsNil() && !src.IsNil() {
+		dst, src = dst.Elem(), src.Elem()
 	}
-	return dst
-}
-
-func toMap(i any) (map[string]any, bool) {
-	if i == nil {
-		return nil, false
+	if dst.Type() != src.Type() {
+		return src
 	}
 
-	v := reflect.ValueOf(i)
-	if v.Kind() == reflect.Ptr {
-		if v.IsNil() {
-			return nil, false
+	switch src.Kind() {
+	case reflect.Pointer:
+		if dst.IsNil() || src.IsNil() || !isPlainStruct(src.Type().Elem()) {
+			return src
 		}
-		v = v.Elem()
-	}
-
-	switch v.Kind() {
-	case reflect.Map:
-		m := make(map[string]any)
-		for _, k := range v.MapKeys() {
-			m[fmt.Sprintf("%v", k.Interface())] = v.MapIndex(k).Interface()
-		}
-		return m, true
+		merged := reflect.New(src.Type().Elem())
+		merged.Elem().Set(mergeValues(dst.Elem(), src.Elem(), depth))
+		return merged
 
 	case reflect.Struct:
-		m := make(map[string]any)
-		t := v.Type()
-		for i := 0; i < v.NumField(); i++ {
-			field := t.Field(i)
-			if field.PkgPath == "" {
-				m[field.Name] = v.Field(i).Interface()
-			}
+		if !isPlainStruct(src.Type()) {
+			return src
 		}
-		return m, true
+		merged := reflect.New(src.Type()).Elem()
+		for i := 0; i < merged.NumField(); i++ {
+			merged.Field(i).Set(mergeValues(dst.Field(i), src.Field(i), depth+1))
+		}
+		return merged
+
+	case reflect.Map:
+		if dst.IsNil() {
+			return src
+		}
+		if src.IsNil() {
+			return dst
+		}
+		merged := reflect.MakeMapWithSize(src.Type(), dst.Len()+src.Len())
+		for it := dst.MapRange(); it.Next(); {
+			merged.SetMapIndex(it.Key(), it.Value())
+		}
+		for it := src.MapRange(); it.Next(); {
+			value := it.Value()
+			if existing := merged.MapIndex(it.Key()); existing.IsValid() {
+				value = mergeValues(existing, value, depth+1)
+			}
+			merged.SetMapIndex(it.Key(), value)
+		}
+		return merged
 
 	default:
-		return nil, false
+		return src
 	}
+}
+
+// isPlainStruct reports whether every field of t is exported, which is what
+// lets reflection build a merged copy of it.
+func isPlainStruct(t reflect.Type) bool {
+	if t.Kind() != reflect.Struct {
+		return false
+	}
+	for i := 0; i < t.NumField(); i++ {
+		if !t.Field(i).IsExported() {
+			return false
+		}
+	}
+	return true
 }
