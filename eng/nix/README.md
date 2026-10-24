@@ -2,7 +2,21 @@
 
 This directory contains the first-party Nix packaging for the Aspire CLI.
 
-The package is a binary package: it fetches the official versioned GitHub release archive for the current system, pins it by hash, unpacks the full archive contents, and writes the Nix install-route sidecar into the package output. It does not build the Aspire repository from source.
+The package is a binary package: it fetches the official versioned GitHub release archive for the current system, pins it by hash, expands the embedded bundle during installation, and writes the Nix install-route sidecar into the package output. It does not build the Aspire repository from source.
+
+## Bundle installation and NixOS
+
+The derivation runs `aspire setup --install-path` to expand the bundle under `$out/lib/aspire-cli` while the output is writable. On Linux it first patches the outer CLI so setup can run in the Nix sandbox, then uses `autoPatchelfHook`'s helper to patch the expanded host executables and shared libraries, including DCP, the managed host, Dashboard, and TerminalHost when present. DCP's container-side tunnel client (`dcptun_c`) remains unchanged because it runs inside an Azure Linux container, not on the Nix host. The wrapper supplies the library search path for libraries loaded dynamically, including OpenSSL and ICU. All shipped binaries retain their existing dynamic linking; no static builds or system-wide `programs.nix-ld` configuration are required.
+
+At runtime, the `nix` install route uses the package-owned layout without extracting the embedded payload again or creating bundle leases. Caches, logs, and other user state still use the normal Aspire home directory. Upgrade or repair the bundle through Nix, not by extracting new binaries into the store.
+
+## Runtime validation
+
+The Nix CI job builds `runtime-image.nix` from the current CLI archive and runs `runtime-smoke/run.sh` in a non-root Nix-only image with a read-only root filesystem and writable workspace and `/tmp` mounts. The image has no generic Linux ELF interpreter or `nix-ld`; an unpatched DCP control must fail before the packaged CLI is exercised.
+
+The smoke creates an AppHost from the matching template package, starts an HTTP project, and verifies a container can reach it through Aspire's container tunnel. It checks Dashboard availability, package-owned executable paths, absence of runtime bundle extraction, and cleanup across two start/stop cycles. Host networking, the Docker socket, and identical host/container workspace paths are used only on the disposable Linux CI runner.
+
+This validates the loader and filesystem constraints relevant to NixOS, not a booted NixOS system or the macOS tray. Diagnostics are uploaded as the `nix-runtime-smoke` artifact.
 
 ## Usage
 

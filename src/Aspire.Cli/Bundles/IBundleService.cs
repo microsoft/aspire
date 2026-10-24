@@ -35,6 +35,7 @@ internal interface IBundleService
     /// so cleanup cannot delete the selected version before the lease protects it.
     /// Callers that start bundle-owned processes should use this method and keep the returned lease alive
     /// until the child process has exited or acquired its own lease.
+    /// Package-owned Nix layouts are returned without a lease or runtime extraction.
     /// </summary>
     /// <param name="holderKind">Diagnostic category for the lease holder.</param>
     /// <param name="commandName">Optional command name for diagnostics.</param>
@@ -54,12 +55,14 @@ internal interface IBundleService
     /// <item><description>Packager-managed sources (<c>source=winget</c> /
     /// <c>source=brew</c> / <c>source=dotnet-tool</c>): the directory containing the
     /// binary (symlinks resolved first).</description></item>
+    /// <item><description>Nix: <see langword="null"/>; the package owns extraction
+    /// and its immutable layout must not be modified at runtime.</description></item>
     /// <item><description>No sidecar / unmanaged installs: the default Aspire home
     /// directory (<c>ASPIRE_HOME</c> when set, otherwise <c>~/.aspire</c>).</description></item>
     /// </list>
     /// </summary>
     /// <param name="processPath">An absolute path to the CLI binary.</param>
-    /// <returns>The extraction directory, or <see langword="null"/> if it cannot be determined.</returns>
+    /// <returns>The extraction directory, or <see langword="null"/> if extraction is package-owned or the directory cannot be determined.</returns>
     string? GetDefaultExtractDir(string processPath);
 }
 
