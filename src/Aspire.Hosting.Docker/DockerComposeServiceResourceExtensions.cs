@@ -47,6 +47,12 @@ internal static class DockerComposeServiceResourceExtensions
 
             if (value is EndpointReferenceExpression epExpr)
             {
+                // TLS state comes from the endpoint annotation; the compose port mapping does not track it.
+                if (epExpr.Property == EndpointProperty.TlsEnabled)
+                {
+                    return epExpr.Endpoint.TlsEnabled ? bool.TrueString : bool.FalseString;
+                }
+
                 var referencedResource = resource.Parent.ResourceMapping[epExpr.Endpoint.Resource];
 
                 var mapping = referencedResource.EndpointMappings[epExpr.Endpoint.EndpointName];
