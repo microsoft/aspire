@@ -24,7 +24,7 @@ jobs:
         run: ./eng/scripts/generate-template-cgmanifest.ps1
 
       - name: Upload template component manifest
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: template-component-manifest
           path: artifacts/cg/templates/cgmanifest.json
@@ -37,7 +37,7 @@ jobs:
           rm -rf artifacts/obj
 
       - name: Upload built NuGets
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: built-nugets
           path: artifacts/packages
@@ -47,7 +47,7 @@ jobs:
       # Always upload logs, even if the build fails, to enable debugging
       - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: build_packages_logs
           path: artifacts/log

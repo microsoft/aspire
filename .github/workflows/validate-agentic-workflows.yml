@@ -38,7 +38,7 @@ jobs:
       # workflows are byte-for-byte comparable with what a contributor generates locally; see
       # .github/workflows/README.md.
       - name: Install gh-aw extension
-        uses: github/gh-aw-actions/setup-cli@f3b81cdb3070066a47faa9bdf440f4f1dc78b1f0 # v0.89.17
+        uses: github/gh-aw-actions/setup-cli@ebb97091a4afcc9bf2d594071dbabe861e9a34fc # v0.92.5
         with:
           version: v0.89.17
 
