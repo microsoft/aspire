@@ -341,6 +341,15 @@ jobs:
             cliBinary: aspire.exe
             useXvfb: false
           - name: Linux
+            shardName: resource-debug-tools
+            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installResourceDebug: true
+          - name: Linux
             shardName: java-apphost
             spec: out/test-e2e/test-e2e/javaAppHost.e2e.test.js
             runner: ubuntu-latest
@@ -404,6 +413,23 @@ jobs:
             archivePattern: aspire-cli-linux-x64*.tar.gz
             cliBinary: aspire
             useXvfb: true
+          - name: Windows
+            shardName: resource-debug-tools
+            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            installResourceDebug: true
+          - name: Windows
+            shardName: resource-debug-tools-negative
+            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
           - name: Windows
             shardName: cli-path-rejection
             spec: out/test-e2e/test-e2e/{cliPathRejectionNotification,usefulnessSurvey}.e2e.test.js
@@ -629,7 +655,7 @@ jobs:
           }
 
       - name: .NET debugger E2E prerequisites
-        if: ${{ matrix.installDotnetDebugger || matrix.installAzureFunctions }}
+        if: ${{ matrix.installDotnetDebugger || matrix.installAzureFunctions || matrix.installResourceDebug }}
         run: |
           function Get-PinnedArtifact {
             param(
@@ -676,6 +702,15 @@ jobs:
             "ASPIRE_EXTENSION_E2E_CSHARP_VSIX=$csharpVsix"
           ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+          if ('${{ matrix.installResourceDebug }}' -eq 'true') {
+            $goVsix = Join-Path $env:RUNNER_TEMP 'vscode-go-0.56.0.vsix'
+            Get-PinnedArtifact `
+              -Uri 'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/golang/vsextensions/Go/0.56.0/vspackage' `
+              -OutFile $goVsix `
+              -ExpectedSha256 '9f5959fb17ba0a8dbd804387ddda50975fcaa9dd5267aa33eaaa89912072aacb'
+            "ASPIRE_EXTENSION_E2E_GO_VSIX=$goVsix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+
       - name: Azure Functions E2E prerequisites
         if: ${{ matrix.installAzureFunctions || matrix.installAzureFunctionsCoreTools }}
         shell: bash
@@ -720,6 +755,35 @@ jobs:
               echo "ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX=$azure_functions_vsix"
             } >> "$GITHUB_ENV"
           fi
+
+      - name: Install resource debug E2E prerequisites
+        if: ${{ matrix.installResourceDebug }}
+        run: |
+          # Ubuntu's Yama default allows ptrace only when the debugger is an ancestor of the target.
+          # DCP launches the Go resource independently from Delve, so packaged attach needs this test-only policy.
+          if ($env:RUNNER_OS -eq 'Linux') {
+            sudo sysctl --write kernel.yama.ptrace_scope=0
+            if ($LASTEXITCODE -ne 0 -or (Get-Content /proc/sys/kernel/yama/ptrace_scope).Trim() -ne '0') {
+              throw 'Could not enable ptrace for Go resource attachment.'
+            }
+          }
+
+          $debuggerBin = Join-Path $env:RUNNER_TEMP 'resource-debug-bin'
+          New-Item -ItemType Directory -Path $debuggerBin -Force | Out-Null
+          $env:GOBIN = $debuggerBin
+          $env:GOTOOLCHAIN = 'local'
+          go install github.com/go-delve/delve/cmd/dlv@v1.25.2
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not install Delve for resource debugging.'
+          }
+          $debuggerBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:PATH = "$debuggerBin$([IO.Path]::PathSeparator)$env:PATH"
+          dlv version
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not run Delve for resource debugging.'
+          }
+
+          'ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG=true' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Install WinUI E2E debugger prerequisites
         if: ${{ matrix.installWinUI }}

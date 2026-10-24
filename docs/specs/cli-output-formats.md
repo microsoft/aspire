@@ -369,10 +369,14 @@ Progress and informational messages go to stderr, so redirection captures only M
 | `relationships` | Related resources as `{ "type": "...", "resourceName": "..." }`. |
 | `urls` | Endpoint objects with `name`, `displayName`, `url`, and `isInternal`. |
 | `volumes` | Volume objects with `source`, `target`, `mountType`, and `isReadOnly`. |
-| `properties` | Resource properties keyed by property name. |
+| `properties` | Resource properties keyed by property name. Common debug-related keys include `project.path`, `project.launchProfile`, `project.launchCommand`, `project.configuration`, `project.targetFramework`, and `resource.launchConfigurationType`. For current AppHosts, `project.launchCommand` is `run`, `watch`, `ide`, or `null` when a .NET project launch command cannot be classified. |
 | `environment` | Environment variables keyed by variable name. |
 | `healthReports` | Health report objects keyed by report name. |
 | `commands` | Resource command metadata keyed by command name. |
+
+For recognized IDE-managed .NET project launches, `project.launchCommand` is `ide`. In that mode,
+`executable.pid`, when present, identifies the application process rather than a `dotnet run` or
+`dotnet watch` launcher.
 
 ## Logs
 

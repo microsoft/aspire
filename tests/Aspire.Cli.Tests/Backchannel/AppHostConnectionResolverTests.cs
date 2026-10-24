@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -12,6 +14,7 @@ using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using StreamJsonRpc;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
@@ -87,6 +90,42 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, Path.Combine("TestAppHost", "TestAppHost.csproj")),
             result.ErrorMessage);
         Assert.False(File.Exists(socketPath));
+    }
+
+    [Fact]
+    public async Task ResolveConnectionAsync_WithExplicitProjectFileAndPid_SelectsMatchingInstance()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectFile = CreateProjectFile(workspace.WorkspaceRoot, "TestAppHost", "TestAppHost.csproj");
+        using var otherServer = TestResolverBackchannelServer.Start(projectFile.FullName, processId: 1111);
+        using var requestedServer = TestResolverBackchannelServer.Start(projectFile.FullName, processId: 2222);
+        var resolver = new AppHostConnectionResolver(
+            new TestAuxiliaryBackchannelMonitor(),
+            new TestInteractionService(),
+            new TestProjectLocator(),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()),
+            (_, _, _, _) => [otherServer.AppHostSocket, requestedServer.AppHostSocket]);
+
+        var result = await resolver.ResolveConnectionAsync(
+            projectFile,
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken,
+            appHostPid: 2222);
+
+        Assert.True(result.Success);
+        Assert.Equal(2222, result.Connection.AppHostInfo?.ProcessId);
+        await otherServer.WaitForClientDisconnectAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        var appHostInfo = await result.Connection.GetAppHostInfoV2Async(TestContext.Current.CancellationToken);
+        Assert.Equal("2222", appHostInfo?.Pid);
+
+        result.Connection.Dispose();
+        await requestedServer.WaitForClientDisconnectAsync().WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact]
@@ -579,5 +618,109 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             $"{appHostId}a1b2C3d4.{pid.ToString(CultureInfo.InvariantCulture)}");
         File.WriteAllText(socketPath, "");
         return socketPath;
+    }
+
+    private sealed class TestResolverBackchannelServer : IDisposable
+    {
+        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
+        private readonly CancellationTokenSource _cancellationSource = new();
+        private readonly List<IDisposable> _disposables = [];
+        private readonly TaskCompletionSource _clientDisconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private TestResolverBackchannelServer(string appHostPath, int processId)
+        {
+            _listener.Start();
+            AppHostSocket = new TestAppHostSocket($"test-socket-{processId}")
+            {
+                ConnectAsyncCallback = ConnectAsync
+            };
+            _ = AcceptClientAsync(appHostPath, processId);
+        }
+
+        public TestAppHostSocket AppHostSocket { get; }
+
+        public static TestResolverBackchannelServer Start(string appHostPath, int processId)
+            => new(appHostPath, processId);
+
+        public Task WaitForClientDisconnectAsync() => _clientDisconnected.Task;
+
+        public void Dispose()
+        {
+            _cancellationSource.Cancel();
+            foreach (var disposable in _disposables)
+            {
+                disposable.Dispose();
+            }
+
+            _listener.Stop();
+            _cancellationSource.Dispose();
+        }
+
+        private async ValueTask<Socket> ConnectAsync(CancellationToken cancellationToken)
+        {
+            var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            try
+            {
+                await socket.ConnectAsync((IPEndPoint)_listener.LocalEndpoint, cancellationToken);
+                return socket;
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
+        }
+
+        private async Task AcceptClientAsync(string appHostPath, int processId)
+        {
+            var socket = await _listener.AcceptSocketAsync(_cancellationSource.Token);
+            var stream = new NetworkStream(socket, ownsSocket: true);
+            var messageHandler = new HeaderDelimitedMessageHandler(
+                stream,
+                stream,
+                BackchannelJsonSerializerContext.CreateRpcMessageFormatter());
+            var rpc = new JsonRpc(messageHandler, new TestResolverRpcTarget(appHostPath, processId));
+            rpc.Disconnected += (_, _) => _clientDisconnected.TrySetResult();
+            rpc.StartListening();
+            _disposables.Add(rpc);
+            _disposables.Add(messageHandler);
+            _disposables.Add(stream);
+        }
+    }
+
+    private sealed class TestResolverRpcTarget(string appHostPath, int processId)
+    {
+        private readonly string[] _capabilities =
+        [
+            AuxiliaryBackchannelCapabilities.V1,
+            AuxiliaryBackchannelCapabilities.V2
+        ];
+
+        public Task<AppHostInformation> GetAppHostInformationAsync()
+            => Task.FromResult(new AppHostInformation
+            {
+                AppHostPath = appHostPath,
+                ProcessId = processId
+            });
+
+        public Task<GetCapabilitiesResponse> GetCapabilitiesAsync(GetCapabilitiesRequest? request = null)
+        {
+            _ = request;
+            return Task.FromResult(new GetCapabilitiesResponse
+            {
+                Capabilities = _capabilities
+            });
+        }
+
+        public Task<GetAppHostInfoResponse> GetAppHostInfoAsync(GetAppHostInfoRequest? request = null)
+        {
+            _ = request;
+            return Task.FromResult(new GetAppHostInfoResponse
+            {
+                Pid = processId.ToString(CultureInfo.InvariantCulture),
+                AppHostPath = appHostPath,
+                AspireHostVersion = "test"
+            });
+        }
     }
 }
