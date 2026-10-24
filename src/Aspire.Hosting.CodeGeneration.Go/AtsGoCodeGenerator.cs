@@ -64,6 +64,15 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     // capabilityId → resolved Options type name (qualified when simple name collides with a DTO or another capability's Options)
     private readonly Dictionary<string, string> _optionsTypeNames = new(StringComparer.Ordinal);
 
+    // typeId → accepting interface name (e.g., "AnyKubernetesNodePoolResource"). Present only for
+    // concrete handle types that at least one other concrete handle type derives from.
+    private readonly Dictionary<string, string> _acceptingNames = new(StringComparer.Ordinal);
+
+    // typeId → marker method names (e.g., "isKubernetesNodePoolResource") that the concrete type
+    // declares and implements: one per accepting interface of the type itself or of a base type.
+    // The accepting interface of the type declares the same set.
+    private readonly Dictionary<string, List<string>> _acceptingMarkers = new(StringComparer.Ordinal);
+
     /// <inheritdoc />
     public string Language => "Go";
 
@@ -109,6 +118,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         GenerateDtoTypes(context.DtoTypes);
         GenerateExportedValues(context.ExportedValues, context.DtoTypes.ToDictionary(dto => dto.TypeId, StringComparer.Ordinal));
         GenerateMarkerInterfaces(capabilitiesByDirectTarget);
+        GenerateAcceptingInterfaces();
         GenerateConcreteHandleTypes(capabilitiesByConcreteImpl);
         GenerateOptionsStructs(context.Capabilities);
         GenerateRegisterWrappers();
@@ -127,6 +137,8 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         _isResourceBuilder.Clear();
         _dtoNames.Clear();
         _enumNames.Clear();
+        _acceptingNames.Clear();
+        _acceptingMarkers.Clear();
 
         foreach (var enumType in context.EnumTypes)
         {
@@ -305,7 +317,78 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
             _optionsTypeNames[capability.CapabilityId] = resolvedName;
         }
+
+        BuildAcceptingInterfaces(context);
     }
+
+    // Go has no return-type covariance, so the interface of a derived handle type never satisfies the
+    // interface of its base type: each interface re-declares the fluent methods with its own return
+    // type. A parameter typed as a base (WithNodePool takes KubernetesNodePoolResource) would therefore
+    // reject the derived builder AddNodePool returns (AksNodePoolResource).
+    //
+    // Every concrete handle type that another concrete handle type derives from gets an accepting
+    // interface, Any<Type>, used only where a caller supplies a value. It embeds handleReference and
+    // declares unexported marker methods: the marker of the type itself and of each base type that has
+    // an accepting interface too. The type and each of its derived types implement all of them. That
+    // keeps the check at compile time (a builder outside the family lacks the marker) without changing
+    // the fluent interface of any type. The base-type markers are what let an Any<Type> value be
+    // passed where the Any<Base> of one of its base types is expected, because Go converts an
+    // interface value to another interface only when its method set has every method of the target.
+    private void BuildAcceptingInterfaces(AtsContext context)
+    {
+        var ancestorIdsByType = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var baseTypeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var handleType in context.HandleTypes)
+        {
+            if (!_implNames.ContainsKey(handleType.AtsTypeId))
+            {
+                continue;
+            }
+
+            // BaseTypeHierarchy lists every base class, including ones that are not emitted as handle
+            // types (for example the abstract Resource class); those have no Go type to accept.
+            var ancestorIds = handleType.BaseTypeHierarchy
+                .Select(baseType => baseType.TypeId)
+                .Where(_implNames.ContainsKey)
+                .ToList();
+            ancestorIdsByType[handleType.AtsTypeId] = ancestorIds;
+            baseTypeIds.UnionWith(ancestorIds);
+        }
+
+        if (baseTypeIds.Count == 0)
+        {
+            return;
+        }
+
+        // Options struct names are resolved above but not reserved, so reserve them here to keep an
+        // accepting interface from colliding with one. This is the last step of BuildNameMaps, so it
+        // cannot change a name chosen earlier.
+        _reservedNames.UnionWith(_optionsTypeNames.Values);
+
+        foreach (var typeId in baseTypeIds.OrderBy(id => _interfaceNames[id], StringComparer.Ordinal))
+        {
+            _acceptingNames[typeId] = ReserveName($"Any{_interfaceNames[typeId]}", takenLowercase: false);
+        }
+
+        // Every type with an implementation takes part, including a base type that capabilities
+        // reference but HandleTypes does not list. It has no known ancestors, yet it still has an
+        // accepting interface and must implement that interface's own marker.
+        foreach (var typeId in _implNames.Keys)
+        {
+            var markers = (ancestorIdsByType.GetValueOrDefault(typeId) ?? [])
+                .Append(typeId)
+                .Where(_acceptingNames.ContainsKey)
+                .Select(GetAcceptingMarkerName)
+                .Order(StringComparer.Ordinal)
+                .ToList();
+            if (markers.Count > 0)
+            {
+                _acceptingMarkers[typeId] = markers;
+            }
+        }
+    }
+
+    private string GetAcceptingMarkerName(string typeId) => $"is{_interfaceNames[typeId]}";
 
     private static void CollectHandleTypeIds(HashSet<string> set, AtsTypeRef? typeRef)
     {
@@ -812,6 +895,51 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         }
     }
 
+    // ── Accepting interfaces (concrete handle types with derived types) ──────
+    //
+    // See BuildAcceptingInterfaces for why these exist. They are declared before the handle
+    // wrappers; the marker methods that satisfy them are declared on each handle's interface and
+    // implemented on its impl (see GenerateConcreteHandleTypes).
+
+    private void GenerateAcceptingInterfaces()
+    {
+        if (_acceptingNames.Count == 0)
+        {
+            return;
+        }
+
+        WriteLine("// ============================================================================");
+        WriteLine("// Accepting interfaces (handle types with derived types)");
+        WriteLine("// ============================================================================");
+        WriteLine("// Go has no return-type covariance, so the interface of a derived handle type does not");
+        WriteLine("// satisfy the interface of its base type. Each Any<Type> below accepts <Type> or a handle");
+        WriteLine("// of any type derived from it, and is used wherever a method, options struct, or DTO takes");
+        WriteLine("// a <Type> as input. The unexported marker methods restrict it to that family of types.");
+        WriteLine();
+
+        foreach (var (typeId, name) in _acceptingNames.OrderBy(kv => kv.Value, StringComparer.Ordinal))
+        {
+            var interfaceName = _interfaceNames[typeId];
+            WriteLine($"// {name} accepts {interfaceName} or a handle of any type derived from it.");
+            WriteLine($"type {name} interface {{");
+            WriteLine("\thandleReference");
+
+            // The markers of the base types are declared too: Go converts an interface value to another
+            // interface only when its method set has every method of the target, so without them an
+            // Any<Type> value could not be passed where the Any<Base> of a base type is expected. That
+            // admits nothing the base type rejects, since every handle of this family belongs to the
+            // family of each base type. BaseTypeHierarchy lists the whole base chain, so each derived
+            // type implements every marker declared here.
+            foreach (var marker in _acceptingMarkers[typeId])
+            {
+                WriteLine($"\t{marker}()");
+            }
+
+            WriteLine("}");
+            WriteLine();
+        }
+    }
+
     // ── Concrete handle types: interface + impl + methods ─────────────────────
 
     private void GenerateConcreteHandleTypes(Dictionary<string, List<AtsCapabilityInfo>> capabilitiesByConcreteImpl)
@@ -842,6 +970,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             EmitConcreteInterface(typeId, interfaceName, capabilities, listDictGetters);
             EmitConcreteStruct(interfaceName, implName, listDictGetters);
             EmitConcreteConstructor(interfaceName, implName);
+            EmitAcceptingMarkerMethods(typeId, implName);
 
             foreach (var capability in capabilities)
             {
@@ -898,6 +1027,16 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine($"// {interfaceName} is the public interface for handle type {interfaceName}.");
         WriteLine($"type {interfaceName} interface {{");
         WriteLine("\thandleReference");
+
+        // The interface itself must declare the markers: a value whose static type is this interface
+        // is assignable to an accepting interface only if its method set includes the marker.
+        if (_acceptingMarkers.TryGetValue(typeId, out var markers))
+        {
+            foreach (var marker in markers)
+            {
+                WriteLine($"\t{marker}()");
+            }
+        }
 
         // Capability methods (skip list/dict getters — they're rendered as
         // distinct accessor methods below).
@@ -968,6 +1107,21 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine($"func new{interfaceName}FromHandle(h *handle, c *client) {interfaceName} {{");
         WriteLine($"\treturn &{implName}{{resourceBuilderBase: newResourceBuilderBase(h, c)}}");
         WriteLine("}");
+        WriteLine();
+    }
+
+    private void EmitAcceptingMarkerMethods(string typeId, string implName)
+    {
+        if (!_acceptingMarkers.TryGetValue(typeId, out var markers))
+        {
+            return;
+        }
+
+        WriteLine($"// {implName} implements the marker of each accepting interface for its own type and its base types.");
+        foreach (var marker in markers)
+        {
+            WriteLine($"func (*{implName}) {marker}() {{}}");
+        }
         WriteLine();
     }
 
@@ -1119,7 +1273,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         {
             return "*CancellationToken";
         }
-        return MapTypeRefToGo(p.Type, p.IsOptional);
+        return MapInputTypeRefToGo(p.Type, p.IsOptional);
     }
 
     /// <summary>
@@ -1736,7 +1890,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     /// <summary>
     /// Field type for an Options struct member. Callbacks render as their
     /// typed Go function signature; CT renders as *CancellationToken; other
-    /// values use the standard MapTypeRefToGo with optional/nilable wrapping.
+    /// values use the input mapping with optional/nilable wrapping.
     /// </summary>
     private string RenderOptionsFieldType(AtsParameterInfo p)
     {
@@ -1748,7 +1902,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         {
             return "*CancellationToken";
         }
-        return MapTypeRefToGo(p.Type, isOptional: true);
+        return MapInputTypeRefToGo(p.Type, isOptional: true);
     }
 
     private string GetOptionsTypeName(AtsCapabilityInfo capability)
@@ -1889,7 +2043,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         }
 
         var allowedTypes = types
-            .Select(type => MapTypeRefToGo(type, isOptional: false))
+            .Select(type => MapInputTypeRefToGo(type, isOptional: false))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
@@ -2089,7 +2243,19 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
     // ── Type mapping ─────────────────────────────────────────────────────────
 
-    private string MapTypeRefToGo(AtsTypeRef? typeRef, bool isOptional)
+    private string MapTypeRefToGo(AtsTypeRef? typeRef, bool isOptional) =>
+        MapTypeRefToGo(typeRef, isOptional, asInput: false);
+
+    /// <summary>
+    /// Maps a type in a position where the caller supplies the value (method parameter, options
+    /// field, DTO field, union member). A handle type with derived types maps to its accepting
+    /// interface there, so a derived builder can be passed; return types, callback signatures and
+    /// everything else use <see cref="MapTypeRefToGo(AtsTypeRef?, bool)"/>.
+    /// </summary>
+    private string MapInputTypeRefToGo(AtsTypeRef? typeRef, bool isOptional) =>
+        MapTypeRefToGo(typeRef, isOptional, asInput: true);
+
+    private string MapTypeRefToGo(AtsTypeRef? typeRef, bool isOptional, bool asInput)
     {
         if (typeRef is null)
         {
@@ -2101,19 +2267,22 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             return "*ReferenceExpression";
         }
 
+        // Mutable lists and dictionaries wrap a server-side collection and are generic over their
+        // element type, which Go treats as invariant: a *List[AnyX] is not a *List[X]. Their elements
+        // therefore stay concrete even for inputs.
         var baseType = typeRef.Category switch
         {
             AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId),
             AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
-            AtsTypeCategory.Handle => MapHandleType(typeRef.TypeId),
+            AtsTypeCategory.Handle => MapHandleType(typeRef.TypeId, asInput),
             AtsTypeCategory.Dto => "*" + MapDtoType(typeRef.TypeId),
             AtsTypeCategory.Callback => "func(...any) any",
-            AtsTypeCategory.Array => $"[]{MapTypeRefToGo(typeRef.ElementType, false)}",
+            AtsTypeCategory.Array => $"[]{MapTypeRefToGo(typeRef.ElementType, false, asInput)}",
             AtsTypeCategory.List => typeRef.IsReadOnly
-                ? $"[]{MapTypeRefToGo(typeRef.ElementType, false)}"
+                ? $"[]{MapTypeRefToGo(typeRef.ElementType, false, asInput)}"
                 : $"*List[{MapTypeRefToGo(typeRef.ElementType, false)}]",
             AtsTypeCategory.Dict => typeRef.IsReadOnly
-                ? $"map[{MapTypeRefToGo(typeRef.KeyType, false)}]{MapTypeRefToGo(typeRef.ValueType, false)}"
+                ? $"map[{MapTypeRefToGo(typeRef.KeyType, false, asInput)}]{MapTypeRefToGo(typeRef.ValueType, false, asInput)}"
                 : $"*Dict[{MapTypeRefToGo(typeRef.KeyType, false)}, {MapTypeRefToGo(typeRef.ValueType, false)}]",
             AtsTypeCategory.Union => "any",
             AtsTypeCategory.Unknown => "any",
@@ -2144,7 +2313,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             AtsTypeCategory.Array or AtsTypeCategory.List => $"[]{MapDtoPropertyTypeToGo(typeRef.ElementType, false)}",
             AtsTypeCategory.Dict => $"map[{MapDtoPropertyTypeToGo(typeRef.KeyType, false)}]{MapDtoPropertyTypeToGo(typeRef.ValueType, false)}",
             AtsTypeCategory.Union => "any",
-            _ => MapTypeRefToGo(typeRef, isOptional: false)
+            _ => MapInputTypeRefToGo(typeRef, isOptional: false)
         };
 
         if (isOptional && !IsNilableGoType(baseType))
@@ -2167,11 +2336,16 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         && typeRef.TypeId is not (AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken);
 
     /// <summary>
-    /// Handle types map to their Go interface name. Interfaces in Go are
-    /// already reference types — no leading * required.
+    /// Handle types map to their Go interface name, or to their accepting interface when the value
+    /// is an input and the type has derived types. Interfaces in Go are already reference types —
+    /// no leading * required.
     /// </summary>
-    private string MapHandleType(string typeId)
+    private string MapHandleType(string typeId, bool asInput)
     {
+        if (asInput && _acceptingNames.TryGetValue(typeId, out var acceptingName))
+        {
+            return acceptingName;
+        }
         if (_interfaceNames.TryGetValue(typeId, out var name))
         {
             return name;
