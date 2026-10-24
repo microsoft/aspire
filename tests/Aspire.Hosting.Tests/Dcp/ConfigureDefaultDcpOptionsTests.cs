@@ -317,6 +317,17 @@ public class ConfigureDefaultDcpOptionsTests
         Assert.Equal("custom-subcommand", options.TerminalHostInvocationArgs);
     }
 
+    [Fact]
+    public void PersistPortsInIsolatedModeUsesProjectedConfiguration()
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            [KnownConfigNames.PersistPortsInIsolatedMode] = "true",
+        });
+
+        Assert.True(options.PersistPortsInIsolatedMode);
+    }
+
     private static DcpOptions ConfigureWithDcpPublisher(Dictionary<string, string?> dcpPublisherSettings)
     {
         var configuration = new ConfigurationBuilder()
