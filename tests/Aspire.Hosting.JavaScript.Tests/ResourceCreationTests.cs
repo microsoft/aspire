@@ -210,4 +210,26 @@ public class ResourceCreationTests
         Assert.True(installerResource.TryGetLastAnnotation<CertificateAuthorityCollectionAnnotation>(out var certAnnotation));
         Assert.Equal(CertificateTrustScope.None, certAnnotation.Scope);
     }
+
+    [Fact]
+    public void InstallerResourceHasHiddenOnCompletionAnnotation()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var nodeApp = builder.AddJavaScriptApp("test-app", "./test-app");
+        nodeApp.WithNpm(install: true);
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Verify the installer resource was created
+        var installerResource = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
+        Assert.Equal("test-app-installer", installerResource.Name);
+
+        // Verify the installer has HiddenBehavior.OnCompletion and exit code 0
+        Assert.True(installerResource.TryGetLastAnnotation<HiddenAnnotation>(out var hiddenAnnotation));
+        Assert.Equal(HiddenBehavior.OnCompletion, hiddenAnnotation.Behavior);
+        Assert.Contains(0, hiddenAnnotation.SuccessfulExitCodes);
+    }
 }
