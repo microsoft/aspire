@@ -646,6 +646,42 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task InitCommand_WhenTypeScriptSelected_RecordsTheJavaScriptHostingPackageWithoutAspireAdd()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        // The real scaffolder runs against a fake AppHost server, so only the CLI side is exercised.
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.LanguageServiceFactory = (sp) =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(
+                    DefaultLanguageDiscovery.AllLanguages.Single(language => language.LanguageId.Value == KnownLanguageId.TypeScript));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+        });
+        services.AddSingleton<IAppHostServerProjectFactory>(_ => new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        });
+        services.AddSingleton<IAppHostServerSessionFactory>(
+            FakeAppHostServerSessionFactory.CreateForScaffolding());
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init --language typescript");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(config?.Packages);
+        Assert.Contains("Aspire.Hosting.JavaScript", config.Packages.Keys);
+    }
+
+    [Fact]
     public async Task InitCommand_WhenAspireifySkillSelected_PrintsToolSpecificFollowUpCommands()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

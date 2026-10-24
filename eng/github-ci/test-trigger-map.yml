@@ -486,6 +486,12 @@ path_rules:
     targets: [test:Infrastructure.Tests]
     reason: Infrastructure.Tests/Pipelines/NpmCliPackageTests renders this template and verifies the packaged README
   - paths:
+      - src/Aspire.Hosting.Go/Aspire.Hosting.Go.csproj
+      - src/Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.csproj
+      - src/Aspire.Hosting.Python/Aspire.Hosting.Python.csproj
+    targets: [test:Aspire.Cli.Tests]
+    reason: DefaultHostingPackagesTests reads these project files to guard that each default hosting package ships a stable version.
+  - paths:
       - src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package.json
       - src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package-lock.json
     targets: [test:Aspire.Cli.Tests]
