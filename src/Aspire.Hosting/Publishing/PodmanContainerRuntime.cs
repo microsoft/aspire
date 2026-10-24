@@ -194,6 +194,9 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
         // Add stage if specified
         arguments += BuildStageString(stage);
 
+        // Add additional arguments if specified (e.g., cache backend configuration)
+        arguments += BuildAdditionalArgumentsString(options?.AdditionalArguments);
+
         arguments += $" \"{contextPath}\"";
 
         // Prepare environment variables for build secrets (only for environment-type secrets)

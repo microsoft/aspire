@@ -345,6 +345,29 @@ public class ContainerRuntimeBaseTests
         Assert.False(result.TryGetManifest("linux", "amd64", out _));
     }
 
+    [Fact]
+    public void BuildAdditionalArgumentsString_EmptyOrNull_ReturnsEmptyString()
+    {
+        Assert.Equal(string.Empty, TestContainerRuntime.BuildAdditionalArguments(null));
+        Assert.Equal(string.Empty, TestContainerRuntime.BuildAdditionalArguments([]));
+    }
+
+    [Fact]
+    public void BuildAdditionalArgumentsString_AppendsEntriesVerbatim()
+    {
+        // Entries must not be quoted or escaped: cache flags like
+        // --cache-to take comma-separated key=value lists that quoting would corrupt.
+        var result = TestContainerRuntime.BuildAdditionalArguments(
+        [
+            "--cache-from",
+            "type=registry,ref=cr.example.com/app:cache",
+            "--cache-to",
+            "type=registry,ref=cr.example.com/app:cache,mode=max"
+        ]);
+
+        Assert.Equal(" --cache-from type=registry,ref=cr.example.com/app:cache --cache-to type=registry,ref=cr.example.com/app:cache,mode=max", result);
+    }
+
     private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
     {
         protected override string RuntimeExecutable => runtimeExecutable ?? (OperatingSystem.IsWindows() ? "cmd" : "sh");
@@ -371,6 +394,11 @@ public class ContainerRuntimeBaseTests
                 "Test command succeeded.",
                 "Test command failed with exit code {0}.",
                 cancellationToken);
+        }
+
+        public static string BuildAdditionalArguments(IReadOnlyList<string>? additionalArguments)
+        {
+            return BuildAdditionalArgumentsString(additionalArguments);
         }
 
         public Task<string> RunCommandForOutputAsync(CancellationToken cancellationToken = default)
