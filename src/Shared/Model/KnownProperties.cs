@@ -24,6 +24,7 @@ internal static class KnownProperties
         public const string StartTime = "resource.startTime";
         public const string StopTime = "resource.stopTime";
         public const string Source = "resource.source";
+        public const string SourcePath = "resource.sourcePath";
         public const string HealthState = "resource.healthState";
         public const string ConnectionString = "resource.connectionString";
         public const string ConnectionProperties = "resource.connectionProperties";

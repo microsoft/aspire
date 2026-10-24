@@ -2,9 +2,10 @@ import * as assert from 'assert';
 import * as path from 'path';
 import { findResource, getCommandInvocationCount, getDebugLaunchCount, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForDebugConsoleOutput, waitForDebugLaunch, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost, waitForWorkspaceAppHostCandidate } from './helpers/assertions';
 import { assertClipboardMatchesLastExpectationForE2E, clearWorkspaceFolderCliPathsForE2E, createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, setWorkspaceFolderCliPathForE2E, setWorkspaceFoldersForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning, writeBaselineActionCliWrapper, writeGatedDeployActionCliWrapper, writeLegacyPipelineActionCliWrapper } from './helpers/fixtures';
-import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
+import { getCliPath, getPrimaryAppHostProjectPath, getRunRoot, getWorkspaceRoot } from './helpers/paths';
 import { readExtensionLogs } from './helpers/logs';
-import { answerActiveInput, answerActiveInputByMessage, cancelActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForTreeItem, waitForTreeItemDescription, waitForWorkbenchText, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { answerActiveInput, answerActiveInputByMessage, cancelActiveInput, chooseActiveQuickPick, executeCommandFromPalette, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForExplorerSelection, waitForNotificationMessage, waitForTreeItem, waitForTreeItemDescription, waitForWorkbenchText, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { VSBrowser } from './helpers/extester';
 
 interface ActiveEditorInfo {
     uri?: string;
@@ -331,6 +332,86 @@ suite('Aspire tree action command E2E', function () {
         const noCommandsResource = await waitForTreeItem(section, 'e2e-no-commands', 60000);
         await noCommandsResource.expand();
         assert.strictEqual(await noCommandsResource.findChildItem('Commands'), undefined);
+
+        for (const resourceName of ['e2e-image-source', 'e2e-tool-source', 'e2e-suppressed-source', 'e2e-display-source']) {
+            await waitForResource(resourceName);
+            const sourceItem = await waitForTreeItem(section, resourceName, 60000);
+            const sourceMenu = await sourceItem.openContextMenu();
+            try {
+                assert.strictEqual(await sourceMenu.hasItem('Open resource source'), false, `Unexpected source action for ${resourceName}.`);
+                await VSBrowser.instance.takeScreenshot(`resource-go-to-source-hidden-${resourceName}`);
+            } finally {
+                // A resource refresh can dismiss the menu before cleanup; Escape targets the stable workbench.
+                await VSBrowser.instance.driver.actions().sendKeys('\uE00C').perform();
+            }
+        }
+
+        before = getCommandInvocationCount('aspire-vscode.openResourceSource');
+        const missingSourceItem = await waitForTreeItem(section, 'e2e-missing-source', 60000);
+        const missingSourceMenu = await missingSourceItem.openContextMenu();
+        await missingSourceMenu.select('Open resource source');
+        await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
+        const missingSourcePath = path.join(getWorkspaceRoot(), 'AspireE2E.Worker', 'AspireE2E.Worker.missing.csproj');
+        const missingSourceMessage = `Failed to open resource source: ${missingSourcePath}`;
+        const missingSourceNotification = await waitForNotificationMessage(missingSourceMessage);
+        assert.strictEqual(await missingSourceNotification.getMessage(), missingSourceMessage);
+        // The toast's hover-only dismiss button is not reliably visible on Linux.
+        await executeCommandFromPalette('Notifications: Clear All Notifications');
+
+        before = getCommandInvocationCount('aspire-vscode.openResourceSource');
+        section = await openAspireView();
+        const outsideWorkspaceSourceItem = await waitForTreeItem(section, 'e2e-outside-workspace-source', 60000);
+        const outsideWorkspaceSourceMenu = await outsideWorkspaceSourceItem.openContextMenu();
+        await outsideWorkspaceSourceMenu.select('Open resource source');
+        await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
+        const runRoot = getRunRoot();
+        assert.ok(runRoot, 'Expected the owned E2E runtime directory.');
+        const outsideWorkspaceSourcePath = path.join(runRoot, 'e2e-outside-workspace-source');
+        const outsideWorkspaceSourceMessage = `Resource source is outside the current workspace: ${outsideWorkspaceSourcePath}. Add its folder to the workspace to reveal it in Explorer.`;
+        const outsideWorkspaceSourceNotification = await waitForNotificationMessage(outsideWorkspaceSourceMessage);
+        assert.strictEqual(await outsideWorkspaceSourceNotification.getMessage(), outsideWorkspaceSourceMessage);
+        await executeCommandFromPalette('Notifications: Clear All Notifications');
+
+        before = getCommandInvocationCount('aspire-vscode.openResourceSource');
+        section = await openAspireView();
+        const directorySourceItem = await waitForTreeItem(section, 'e2e-directory-source', 60000);
+        const directorySourceMenu = await directorySourceItem.openContextMenu();
+        await directorySourceMenu.select('Open resource source');
+        await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
+        await waitForExplorerSelection(['AspireE2E.Worker']);
+
+        for (const language of ['python', 'java']) {
+            const resourceName = `e2e-${language}-source`;
+            before = getCommandInvocationCount('aspire-vscode.openResourceSource');
+            section = await openAspireView();
+            await waitForResource(resourceName);
+            const languageSourceItem = await waitForTreeItem(section, resourceName, 60000);
+            const languageSourceMenu = await languageSourceItem.openContextMenu();
+            await languageSourceMenu.select('Open resource source');
+            await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
+            await waitForExplorerSelection(['AspireE2E.AppHost', resourceName]);
+            await VSBrowser.instance.takeScreenshot(`resource-${language}-source-directory`);
+        }
+
+        before = getCommandInvocationCount('aspire-vscode.openResourceSource');
+        section = await openAspireView();
+        const sourceWorkerItem = await waitForTreeItem(section, 'e2e-worker', 60000);
+        const resourceContextMenu = await sourceWorkerItem.openContextMenu();
+        await VSBrowser.instance.takeScreenshot('resource-go-to-source-context-menu');
+        // Selecting the action dismisses the menu and transfers focus to the source.
+        await resourceContextMenu.select('Open resource source');
+        await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
+        const workerSourcePath = path.join(getWorkspaceRoot(), 'AspireE2E.Worker', 'AspireE2E.Worker.csproj');
+        await VSBrowser.instance.driver.wait(async () => {
+            const editor = (await executeE2eControlCommand({ name: 'getActiveEditor' })).result as ActiveEditorInfo;
+            return isSamePath(editor.fileName ?? '', workerSourcePath)
+                && editor.uri?.startsWith('file:')
+                && editor.text?.includes('<Project');
+        }, 30000, `Expected resource source '${workerSourcePath}' to open in the editor.`);
+        await VSBrowser.instance.driver.wait(
+            () => VSBrowser.instance.driver.executeScript<boolean>('return Boolean(document.activeElement?.closest(".monaco-editor"));'),
+            30000, 'Expected the resource source editor to have keyboard focus.');
+        await VSBrowser.instance.takeScreenshot('resource-source-editor');
 
         await snapshotClipboardForE2E();
         await executeE2eControlCommand({ name: 'copyAppHostPath', appHostPath });

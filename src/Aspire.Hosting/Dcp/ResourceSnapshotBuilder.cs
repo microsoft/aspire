@@ -170,9 +170,17 @@ internal class ResourceSnapshotBuilder
         }
 
         var launchArguments = GetLaunchArgs(executable, effectiveArgs);
-        var properties = GetLaunchConfigurationType(appModelResource) is { } launchConfigurationType
-            ? previous.Properties.SetResourceProperty(KnownProperties.Resource.LaunchConfigurationType, launchConfigurationType)
-            : previous.Properties.RemoveResourceProperty(KnownProperties.Resource.LaunchConfigurationType);
+        var properties = previous.Properties;
+        // A language application's source does not change when terminal or persistent execution disables debugging.
+        if (appModelResource is ExecutableResource sourceResource
+            && sourceResource.HasAnnotationOfType<SupportsDebuggingAnnotation>())
+        {
+            properties = properties.SetResourceProperty(KnownProperties.Resource.SourcePath, sourceResource.WorkingDirectory);
+        }
+
+        properties = GetLaunchConfigurationType(appModelResource) is { } launchConfigurationType
+            ? properties.SetResourceProperty(KnownProperties.Resource.LaunchConfigurationType, launchConfigurationType)
+            : properties.RemoveResourceProperty(KnownProperties.Resource.LaunchConfigurationType);
 
         if (projectPath is not null)
         {

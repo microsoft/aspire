@@ -107,6 +107,8 @@ Editor-assistance regressions live in `editorAssistanceTools.test.ts`; shared or
 
 Multi-root lifecycle tests must round-trip returned `appHostPath` selectors through subsequent operations. MCP registration tests must cover ownership changes between nested workspace folders while preserving labels and definitions for unaffected pins.
 
+Resource source navigation uses path-bearing metadata, not the display-only `resource.source`. `project.path` takes precedence over `resource.sourcePath`, which hosting publishes for language application directories even when terminal or persistent execution disables debugging. For older hosts without that property, a nonempty `resource.launchConfigurationType` selects `executable.workDir` instead of the runtime/launcher `executable.path`. Regression fixtures must include existing absolute launchers, such as Python's interpreter and Java's Windows `cmd.exe`, so they cannot pass through a missing-file fallback.
+
 Start/stop confirmations expire against monotonic time. Expiry regressions must vary wall time independently, checking just before and exactly at the deadline for both tools.
 
 The launch-failure store retains one sanitized failure per AppHost for 30 minutes using monotonic time, with a global limit of 50 AppHosts. A replacement refreshes expiry and write-order eviction; reads do not. Cover reads and writes, including the production singleton, when testing clock changes. Verify duplicate-capture suppression by counting writes, not retained entries. CLI filesystem normalization coverage must include caseless Unicode names such as Hangul, not only names with upper/lowercase variants.

@@ -229,6 +229,9 @@
     <trans-unit id="aspire-vscode.strings.appHostSourceNotFound">
       <source xml:lang="en">Could not determine the AppHost source file to open.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceSourceNotFound">
+      <source xml:lang="en">Could not determine the resource source to open.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.blazorWasmDebugRelayFailed">
       <source xml:lang="en">Could not prepare Blazor WebAssembly debugging. See the Aspire output for details, then try again.</source>
     </trans-unit>
@@ -444,6 +447,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostSourceOpenFailed">
       <source xml:lang="en">Failed to open AppHost source file: {0}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceSourceOpenFailed">
+      <source xml:lang="en">Failed to open resource source: {0}</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.failedToParseConfigInfo">
       <source xml:lang="en">Failed to parse Aspire config info: {0}. Try updating the Aspire CLI with: aspire update</source>
@@ -724,6 +730,9 @@
     <trans-unit id="aspire-vscode.strings.directLink">
       <source xml:lang="en">Open local URL</source>
     </trans-unit>
+    <trans-unit id="command.openResourceSource">
+      <source xml:lang="en">Open resource source</source>
+    </trans-unit>
     <trans-unit id="command.openResourceTerminal">
       <source xml:lang="en">Open terminal</source>
     </trans-unit>
@@ -825,6 +834,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.requiredCapability">
       <source xml:lang="en">Required capability: {0}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceSourceOutsideWorkspace">
+      <source xml:lang="en">Resource source is outside the current workspace: {0}. Add its folder to the workspace to reveal it in Explorer.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourcesGroupLabel">
       <source xml:lang="en">Resources</source>
