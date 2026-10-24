@@ -636,4 +636,299 @@ public class KubernetesGatewayTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("/api", match.Path?.Value);
     }
+
+    [Fact]
+    public async Task AddGateway_WithGrpcRoute_GeneratesGatewayAndGrpcRoute()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("istio");
+
+        var greeter = builder.AddContainer("greeter", "grpc-sample")
+            .WithHttpEndpoint(targetPort: 50051)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithGrpcRoute(greeter.GetEndpoint("http"), service: "greet.Greeter", method: "SayHello");
+
+        using var app = builder.Build();
+        app.Run();
+
+        var gatewayPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
+        var grpcRoutePath = Path.Combine(workspace.Path, "templates", "public", "grpcroute.yaml");
+
+        await Verify(File.ReadAllText(gatewayPath), "yaml")
+            .AppendContentAsFile(File.ReadAllText(grpcRoutePath), "yaml");
+    }
+
+    [Fact]
+    public async Task AddGateway_WithHostGrpcRoute_GeneratesHostnameInGrpcRoute()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("istio");
+
+        var greeter = builder.AddContainer("greeter", "grpc-sample")
+            .WithHttpEndpoint(targetPort: 50051)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithGrpcRoute("grpc.example.com", greeter.GetEndpoint("http"), service: "greet.Greeter");
+
+        using var app = builder.Build();
+        app.Run();
+
+        var grpcRoutePath = Path.Combine(workspace.Path, "templates", "public", "grpc-example-com-grpcroute.yaml");
+
+        await Verify(File.ReadAllText(grpcRoutePath), "yaml");
+    }
+
+    [Fact]
+    public void AddGateway_WithGrpcRoute_NoServiceOrMethod_MatchesEveryRequest()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("istio");
+
+        var greeter = builder.AddContainer("greeter", "grpc-sample")
+            .WithHttpEndpoint(targetPort: 50051)
+            .WithExternalHttpEndpoints();
+
+        // No service/method narrows nothing, so the generated rule must carry no matches —
+        // an empty GRPCRouteMatch with a method match that has neither service nor method is
+        // rejected by the API server.
+        gateway.WithGrpcRoute(greeter.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var route = Assert.Single(gateway.Resource.GeneratedGrpcRoutes);
+        var rule = Assert.Single(route.Spec.Rules);
+        Assert.Empty(rule.Matches);
+        var backend = Assert.Single(rule.BackendRefs);
+        Assert.Equal("greeter-service", backend.Name);
+        Assert.Equal(50051, backend.Port);
+    }
+
+    [Fact]
+    public void AddGateway_WithGrpcRoute_MethodOnly_OmitsService()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("istio");
+
+        var greeter = builder.AddContainer("greeter", "grpc-sample")
+            .WithHttpEndpoint(targetPort: 50051)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithGrpcRoute(greeter.GetEndpoint("http"), method: "SayHello");
+
+        using var app = builder.Build();
+        app.Run();
+
+        var route = Assert.Single(gateway.Resource.GeneratedGrpcRoutes);
+        var rule = Assert.Single(route.Spec.Rules);
+        var match = Assert.Single(rule.Matches);
+        Assert.NotNull(match.Method);
+        Assert.Null(match.Method.Service);
+        Assert.Equal("SayHello", match.Method.Method);
+        Assert.Equal("Exact", match.Method.Type);
+    }
+
+    [Theory]
+    [InlineData("/greet.Greeter")]
+    [InlineData("greet.Greeter/SayHello")]
+    [InlineData("1greet")]
+    public void WithGrpcRoute_InvalidService_Throws(string service)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("istio");
+
+        var greeter = builder.AddContainer("greeter", "grpc-sample")
+            .WithHttpEndpoint(targetPort: 50051);
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            gateway.WithGrpcRoute(greeter.GetEndpoint("http"), service: service));
+        Assert.Equal("service", ex.ParamName);
+    }
+
+    [Theory]
+    [InlineData("Say/Hello")]
+    [InlineData("Say.Hello")]
+    public void WithGrpcRoute_InvalidMethod_Throws(string method)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("istio");
+
+        var greeter = builder.AddContainer("greeter", "grpc-sample")
+            .WithHttpEndpoint(targetPort: 50051);
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            gateway.WithGrpcRoute(greeter.GetEndpoint("http"), method: method));
+        Assert.Equal("method", ex.ParamName);
+    }
+
+    [Fact]
+    public void WithGrpcRoute_RegularExpressionWithoutServiceOrMethod_Throws()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("istio");
+
+        var greeter = builder.AddContainer("greeter", "grpc-sample")
+            .WithHttpEndpoint(targetPort: 50051);
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            gateway.WithGrpcRoute(greeter.GetEndpoint("http"), matchType: GrpcMethodMatchType.RegularExpression));
+        Assert.Equal("matchType", ex.ParamName);
+    }
+
+    [Fact]
+    public void WithGrpcRoute_RegularExpression_AllowsPatternService()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("istio");
+
+        var greeter = builder.AddContainer("greeter", "grpc-sample")
+            .WithHttpEndpoint(targetPort: 50051)
+            .WithExternalHttpEndpoints();
+
+        // RegularExpression service values use an implementation-specific dialect and must not be
+        // validated against the Exact-match character rules.
+        gateway.WithGrpcRoute(greeter.GetEndpoint("http"), service: "greet\\..*", matchType: GrpcMethodMatchType.RegularExpression);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var route = Assert.Single(gateway.Resource.GeneratedGrpcRoutes);
+        var match = Assert.Single(Assert.Single(route.Spec.Rules).Matches);
+        Assert.Equal("RegularExpression", match.Method?.Type);
+        Assert.Equal("greet\\..*", match.Method?.Service);
+    }
+
+    [Fact]
+    public void AddGateway_WithGrpcRoute_ExceedingMaximumSupportedHostnames_ThrowsOnPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("istio");
+
+        foreach (var index in Enumerable.Range(1, 17))
+        {
+            gateway.WithHostname($"host-{index}.example.com");
+        }
+
+        var greeter = builder.AddContainer("greeter", "grpc-sample")
+            .WithHttpEndpoint(targetPort: 50051)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithGrpcRoute(greeter.GetEndpoint("http"), service: "greet.Greeter");
+
+        using var app = builder.Build();
+        var aggregate = Assert.Throws<AggregateException>(app.Run);
+        var exception = aggregate.Flatten().InnerExceptions
+            .Select(e => e.InnerException)
+            .OfType<InvalidOperationException>()
+            .First(e => e.Message.StartsWith("Gateway 'public'", StringComparison.Ordinal));
+
+        Assert.Equal(
+            "Gateway 'public' configures 17 hostnames that would be inherited by a hostless gRPC route, " +
+            "but Kubernetes Gateway API GRPCRoute.spec.hostnames supports at most 16 entries. " +
+            "Define explicit host-scoped routes with WithGrpcRoute(hostname, endpoint) so each GRPCRoute stays within the limit. " +
+            "See the Kubernetes Gateway API documentation: https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#grpcroutespec",
+            exception.Message);
+    }
+
+    [Fact]
+    public void AddGateway_WithGrpcRoute_NonExternalEndpoint_ThrowsOnPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("istio");
+
+        var greeter = builder.AddContainer("greeter", "grpc-sample")
+            .WithHttpEndpoint(targetPort: 50051);
+
+        gateway.WithGrpcRoute(greeter.GetEndpoint("http"), service: "greet.Greeter");
+
+        using var app = builder.Build();
+        var aggregate = Assert.Throws<AggregateException>(app.Run);
+        var ex = aggregate.Flatten().InnerExceptions.OfType<InvalidOperationException>().First(e => e.Message.Contains("WithExternalHttpEndpoints"));
+
+        Assert.Contains("greeter", ex.Message);
+        Assert.Contains("public", ex.Message);
+    }
+
+    [Fact]
+    public async Task AddGateway_WithHttpAndGrpcRouteSharingHostname_WarnsAboutConflict()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var testSink = new TestSink();
+        builder.Services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("istio");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithRoute("shared.example.com", "/", api.GetEndpoint("http"));
+        gateway.WithGrpcRoute("shared.example.com", api.GetEndpoint("http"), service: "greet.Greeter");
+
+        using var app = builder.Build();
+        app.Run();
+
+        var warning = Assert.Single(
+            testSink.Writes,
+            w => w.LogLevel == LogLevel.Warning && w.Message is not null && w.Message.Contains("HTTP and gRPC routes", StringComparison.Ordinal));
+
+        Assert.Contains("public", warning.Message);
+    }
+
+    [Fact]
+    public async Task AddGateway_WhenDeploymentTargetsArePreparedTwice_DoesNotDuplicateGrpcRoutes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("istio");
+
+        var greeter = builder.AddContainer("greeter", "grpc-sample")
+            .WithHttpEndpoint(targetPort: 50051)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithGrpcRoute(greeter.GetEndpoint("http"), service: "greet.Greeter", method: "SayHello");
+
+        var app = builder.Build();
+
+        var steps = await CreateStepsAsync(app.Services, k8s.Resource);
+        var prepareStep = Assert.Single(steps, step => step.Name == "prepare-deployment-targets-env");
+
+        await RunStepAsync(app.Services, prepareStep);
+        await RunStepAsync(app.Services, prepareStep);
+
+        var route = Assert.Single(gateway.Resource.GeneratedGrpcRoutes);
+        var rule = Assert.Single(route.Spec.Rules);
+        var match = Assert.Single(rule.Matches);
+        Assert.Equal("greet.Greeter", match.Method?.Service);
+    }
 }
