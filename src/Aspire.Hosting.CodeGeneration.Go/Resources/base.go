@@ -27,6 +27,11 @@ import (
 // Callers retrieve the chain's error with Err() at any logical boundary
 // (typically once at the end of a builder chain or before using the result of
 // a value-returning method).
+//
+// Wrappers are not synchronized: err is read and written without a lock. The
+// AppHost runs each callback on its own goroutine, so a callback should use the
+// wrappers it receives as arguments, not a wrapper that the goroutine running
+// the builder chain (or another callback) uses at the same time.
 
 type handleWrapperBase struct {
 	handle *handle
@@ -752,7 +757,7 @@ func callbackArg[T any](args []any, idx int) T {
 
 // decodeAs converts an arbitrary RPC result into a typed value via JSON
 // round-trip. Used by typed read methods on List/Dict and by value-returning
-// capabilities.
+// capabilities. Slices and maps are decoded element by element, see decodeInto.
 func decodeAs[T any](raw any) (T, error) {
 	var zero T
 	if raw == nil {
@@ -760,6 +765,13 @@ func decodeAs[T any](raw any) (T, error) {
 	}
 	if v, ok := raw.(T); ok {
 		return v, nil
+	}
+	if kind := reflect.TypeFor[T]().Kind(); kind == reflect.Slice || kind == reflect.Map {
+		var out T
+		if err := decodeInto(reflect.ValueOf(&out).Elem(), raw); err != nil {
+			return zero, err
+		}
+		return out, nil
 	}
 	bytes, err := json.Marshal(raw)
 	if err != nil {
@@ -773,6 +785,53 @@ func decodeAs[T any](raw any) (T, error) {
 		return zero, err
 	}
 	return out, nil
+}
+
+// decodeInto decodes raw into dst, which must be addressable and hold its zero
+// value. wrapIfHandle replaces the handle envelopes inside a []any or
+// map[string]any with wrapper values, and encoding/json cannot decode those into
+// an interface element type such as []Resource. So a list or a string-keyed map
+// is decoded one element at a time: an element that is already assignable to the
+// element type, like a handle wrapper, is stored as is, and only the others take
+// a JSON round trip.
+func decodeInto(dst reflect.Value, raw any) error {
+	if raw == nil {
+		return nil
+	}
+	if v := reflect.ValueOf(raw); v.Type().AssignableTo(dst.Type()) {
+		dst.Set(v)
+		return nil
+	}
+	switch src := raw.(type) {
+	case []any:
+		if dst.Kind() == reflect.Slice {
+			dst.Set(reflect.MakeSlice(dst.Type(), len(src), len(src)))
+			for i, item := range src {
+				if err := decodeInto(dst.Index(i), item); err != nil {
+					return fmt.Errorf("aspire: cannot decode element %d of %v: %w", i, dst.Type(), err)
+				}
+			}
+			return nil
+		}
+	case map[string]any:
+		if dst.Kind() == reflect.Map && dst.Type().Key().Kind() == reflect.String {
+			dst.Set(reflect.MakeMapWithSize(dst.Type(), len(src)))
+			for key, item := range src {
+				// Map values are not addressable, so decode into a fresh value and store a copy.
+				elem := reflect.New(dst.Type().Elem()).Elem()
+				if err := decodeInto(elem, item); err != nil {
+					return fmt.Errorf("aspire: cannot decode entry %q of %v: %w", key, dst.Type(), err)
+				}
+				dst.SetMapIndex(reflect.ValueOf(key).Convert(dst.Type().Key()), elem)
+			}
+			return nil
+		}
+	}
+	bytes, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(bytes, dst.Addr().Interface())
 }
 
 func decodeStructFields[T any](raw any) (T, bool) {
