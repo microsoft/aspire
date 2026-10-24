@@ -17,6 +17,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Templating;
+using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
@@ -643,7 +644,8 @@ internal sealed class InitCommand : BaseCommand
             };
         }
 
-        File.WriteAllText(configPath, JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject));
+        var configJson = JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject);
+        File.WriteAllText(configPath, ConfigurationHelper.EnsureFinalNewline(configJson));
 
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, AspireConfigFile.FileName));
         return (CliExitCodes.Success, effectivePorts);
@@ -837,7 +839,8 @@ internal sealed class InitCommand : BaseCommand
             }
         };
 
-        File.WriteAllText(path, JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject));
+        var runJson = JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject);
+        File.WriteAllText(path, ConfigurationHelper.EnsureFinalNewline(runJson));
 
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, fileName));
     }

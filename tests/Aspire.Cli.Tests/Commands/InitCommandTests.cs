@@ -269,6 +269,23 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task InitCommand_WhenNoSolutionExists_WritesConfigFilesWithOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"));
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json"));
+    }
+
+    [Fact]
     public async Task InitCommand_SingleFileSkeleton_CreatesAppHostRunJsonWithDashboardEnvVars()
     {
         // Regression for https://github.com/microsoft/aspire/issues/15986: without
@@ -864,6 +881,26 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         // Pre-existing properties must be preserved.
         Assert.Equal("stable", merged["channel"]!.GetValue<string>());
         Assert.True(merged["features"]!.AsObject()["polyglotSupportEnabled"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenAspireConfigHasNonOsLineBreaks_RewritesItWithOsLineBreaks()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, "{\n  \"channel\": \"stable\"\n}\n".ReplaceLineEndings(LineEndingAssert.NonOsNewLine));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(configPath);
+        Assert.Equal("stable", JsonNode.Parse(await File.ReadAllTextAsync(configPath))!["channel"]!.GetValue<string>());
     }
 
     [Fact]
