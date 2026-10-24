@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
@@ -78,6 +80,15 @@ internal class MauiBuildQueueEventSubscriber(
         if (!parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var queueAnnotation))
         {
             return;
+        }
+
+        // Provision the generated .props directory through the tracked file system service so it is
+        // cleaned up on shutdown (matching the environment .targets directory). This runs before both
+        // the pre-build below and the later launch args, so both import from the same directory.
+        if (resource.TryGetLastAnnotation<MauiMSBuildPropertiesAnnotation>(out var msbuildProperties))
+        {
+            var fileSystemService = @event.Services.GetRequiredService<IFileSystemService>();
+            msbuildProperties.EnsurePropsDirectory(fileSystemService);
         }
 
         // DCP deletes an executable before publishing BeforeResourceStartedEvent for its replacement.
@@ -194,6 +205,14 @@ internal class MauiBuildQueueEventSubscriber(
         }
 
         args.AddRange(buildInfo.AdditionalBuildArguments);
+
+        // Apply user-supplied build-time MSBuild properties via a generated .props file import. These must
+        // be present on the pre-build so values like authentication configuration influence the compile.
+        if (resource.TryGetLastAnnotation<MauiMSBuildPropertiesAnnotation>(out var msbuildProperties)
+            && msbuildProperties.CreateBuildPropsArgument(resource.Name) is { } buildPropsArgument)
+        {
+            args.Add(buildPropsArgument);
+        }
 
         var psi = new ProcessStartInfo("dotnet")
         {

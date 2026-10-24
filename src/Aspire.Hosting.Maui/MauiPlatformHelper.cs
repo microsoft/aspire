@@ -38,9 +38,44 @@ internal static class MauiPlatformHelper
             TargetKind = targetKind,
             Device = device,
             RuntimeIdentifier = runtimeIdentifier,
-            MsBuildProperties = msBuildProperties
+            MsBuildProperties = MergeIdeLaunchMsBuildProperties(resourceBuilder.Resource, msBuildProperties)
         }, MauiLaunchConfigurationType);
 #pragma warning restore ASPIREEXTENSION001
+    }
+
+    /// <summary>
+    /// Merges user-supplied MSBuild properties (from <see cref="MauiMSBuildPropertiesAnnotation"/>) into the
+    /// platform default properties so an IDE debug launch applies the same values as the dashboard build/run.
+    /// </summary>
+    /// <remarks>
+    /// The IDE launch metadata carries key/value MSBuild properties directly (the IDE does not consume the
+    /// generated <c>.props</c> file used by the dashboard build/run flow), so the properties are merged in here.
+    /// </remarks>
+    private static Dictionary<string, string>? MergeIdeLaunchMsBuildProperties(IResource resource, Dictionary<string, string>? platformProperties)
+    {
+        if (!resource.TryGetLastAnnotation<MauiMSBuildPropertiesAnnotation>(out var msbuildProperties)
+            || (msbuildProperties.BuildProperties.Count == 0 && msbuildProperties.RunProperties.Count == 0))
+        {
+            return platformProperties;
+        }
+
+        var merged = platformProperties is null
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            : new Dictionary<string, string>(platformProperties, StringComparer.Ordinal);
+
+        // Build properties first, then run properties, so a run-only property overrides a build property
+        // with the same name (matching the dashboard run command ordering).
+        foreach (var (name, value) in msbuildProperties.BuildProperties)
+        {
+            merged[name] = value;
+        }
+
+        foreach (var (name, value) in msbuildProperties.RunProperties)
+        {
+            merged[name] = value;
+        }
+
+        return merged;
     }
 
     /// <summary>
@@ -132,6 +167,24 @@ internal static class MauiPlatformHelper
             foreach (var arg in additionalArgs)
             {
                 context.Args.Add(arg);
+            }
+
+            // Apply user-supplied MSBuild properties last so they can override the platform defaults.
+            // Build properties are imported from the SAME generated .props file used by the pre-build, so the
+            // launch sees identical build inputs and does not rebuild. Run properties are launch selectors
+            // passed as -p: args (launch command only); command-line properties also override same-named
+            // build properties coming from the imported file.
+            if (resourceBuilder.Resource.TryGetLastAnnotation<MauiMSBuildPropertiesAnnotation>(out var msbuildProperties))
+            {
+                if (msbuildProperties.CreateBuildPropsArgument(resourceBuilder.Resource.Name) is { } buildPropsArgument)
+                {
+                    context.Args.Add(buildPropsArgument);
+                }
+
+                foreach (var runPropertyArgument in msbuildProperties.CreateRunPropertyArguments())
+                {
+                    context.Args.Add(runPropertyArgument);
+                }
             }
         });
 
