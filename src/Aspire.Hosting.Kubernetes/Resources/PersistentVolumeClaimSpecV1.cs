@@ -14,6 +14,7 @@ namespace Aspire.Hosting.Kubernetes.Resources;
 /// It serves as an abstraction to request specific storage with desired attributes such as size and access modes.
 /// This class defines the set of properties that can be configured for a PVC.
 /// </remarks>
+[AspireExport]
 [YamlSerializable]
 public sealed class PersistentVolumeClaimSpecV1
 {
@@ -45,6 +46,7 @@ public sealed class PersistentVolumeClaimSpecV1
     /// whose <c>storageClassName</c> is also empty. If no default StorageClass is configured and
     /// this value is not set, the claim cannot be dynamically provisioned.
     /// </remarks>
+    [AspireExport]
     [YamlMember(Alias = "storageClassName")]
     [PreserveEmptyString]
     public string? StorageClassName { get; set; } = null;
@@ -72,6 +74,7 @@ public sealed class PersistentVolumeClaimSpecV1
     /// This property is important for ensuring compatibility between the volume type
     /// and the application accessing it.
     /// </remarks>
+    [AspireExport]
     [YamlMember(Alias = "volumeMode")]
     public string VolumeMode { get; set; } = null!;
 
@@ -82,6 +85,7 @@ public sealed class PersistentVolumeClaimSpecV1
     /// This property allows the user to bind the PersistentVolumeClaim to a pre-existing PersistentVolume
     /// by its name. When specified, the claim is directly associated with the named volume.
     /// </remarks>
+    [AspireExport]
     [YamlMember(Alias = "volumeName")]
     public string VolumeName { get; set; } = null!;
 
@@ -127,6 +131,7 @@ public sealed class PersistentVolumeClaimSpecV1
     /// - ReadOnlyMany: The volume can be mounted as read-only by many nodes.
     /// - ReadWriteMany: The volume can be mounted as read-write by many nodes.
     /// </remarks>
+    [AspireExport]
     [YamlMember(Alias = "accessModes")]
     public List<string> AccessModes { get; } = [];
 
@@ -135,6 +140,7 @@ public sealed class PersistentVolumeClaimSpecV1
     /// Defines the requested and limit capacities for the volume resources,
     /// including storage and other related attributes.
     /// </summary>
+    [AspireExport]
     [YamlMember(Alias = "resources")]
     public VolumeResourceRequirementsV1 Resources { get; set; } = new();
 }
