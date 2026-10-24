@@ -1,0 +1,542 @@
+﻿{
+  "schemaVersion": 1,
+  "language": "go",
+  "generator": {
+    "name": "Aspire.Hosting.CodeGeneration.Go",
+    "version": "1.0.0"
+  },
+  "package": {
+    "name": "Aspire.Hosting.CodeGeneration.Go.Tests",
+    "version": "13.5.0",
+    "importPath": "apphost/modules/aspire"
+  },
+  "modules": [
+    {
+      "name": "Aspire.Hosting.CodeGeneration.Go.Tests",
+      "items": [
+        {
+          "id": "function:CreateBuilder",
+          "kind": "function",
+          "name": "CreateBuilder",
+          "typeId": "Aspire.Hosting/createBuilder",
+          "owningAssembly": "Aspire.Hosting",
+          "declaration": "func CreateBuilder(options ...*CreateBuilderOptions) (DistributedApplicationBuilder, error)",
+          "summary": "CreateBuilder establishes a connection to the AppHost and returns a new builder."
+        },
+        {
+          "id": "interface:DistributedApplicationBuilder",
+          "kind": "interface",
+          "name": "DistributedApplicationBuilder",
+          "typeId": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+          "owningAssembly": "Aspire.Hosting",
+          "declaration": "type DistributedApplicationBuilder interface",
+          "summary": "A builder for creating instances of {@ats-ref type:DistributedApplication}.",
+          "members": [
+            {
+              "id": "DistributedApplicationBuilder.AddTestRedis",
+              "kind": "method",
+              "name": "AddTestRedis",
+              "declaration": "AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource",
+              "capabilityId": "Aspire.Hosting.CodeGeneration.Go.Tests/addTestRedis",
+              "targetTypeId": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+              "capabilityKind": "method",
+              "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+              "returnType": "TestRedisResource",
+              "errorModel": "deferred",
+              "summary": "Adds a test Redis resource from ATS documentation.",
+              "returns": "The ATS test Redis resource builder.",
+              "returnsBuilder": true,
+              "parameters": [
+                {
+                  "name": "name",
+                  "type": "string",
+                  "optional": false,
+                  "summary": "The ATS resource name."
+                }
+              ],
+              "options": {
+                "typeName": "AddTestRedisOptions",
+                "fields": [
+                  {
+                    "name": "Port",
+                    "type": "*float64",
+                    "optional": true,
+                    "jsonName": "port"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "DistributedApplicationBuilder.Build",
+              "kind": "method",
+              "name": "Build",
+              "declaration": "Build() (DistributedApplication, error)",
+              "capabilityId": "Aspire.Hosting/build",
+              "targetTypeId": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+              "owningAssembly": "Aspire.Hosting",
+              "returnType": "(DistributedApplication, error)",
+              "errorModel": "returned",
+              "summary": "Build invokes the build capability and returns the running application.",
+              "synthesized": true
+            },
+            {
+              "id": "DistributedApplicationBuilder.Err",
+              "kind": "method",
+              "name": "Err",
+              "declaration": "Err() error",
+              "returnType": "error",
+              "errorModel": "none",
+              "summary": "Err returns the first error recorded on this wrapper. Returns nil if the wrapper resolved successfully and no chained operation has failed.",
+              "synthesized": true
+            }
+          ]
+        },
+        {
+          "id": "interface:DistributedApplication",
+          "kind": "interface",
+          "name": "DistributedApplication",
+          "typeId": "Aspire.Hosting/Aspire.Hosting.DistributedApplication",
+          "owningAssembly": "Aspire.Hosting",
+          "declaration": "type DistributedApplication interface",
+          "summary": "Represents a distributed application that implements the {@ats-ref type:IHost} and {@ats-ref type:IAsyncDisposable} interfaces.",
+          "members": [
+            {
+              "id": "DistributedApplication.Err",
+              "kind": "method",
+              "name": "Err",
+              "declaration": "Err() error",
+              "returnType": "error",
+              "errorModel": "none",
+              "summary": "Err returns the first error recorded on this wrapper. Returns nil if the wrapper resolved successfully and no chained operation has failed.",
+              "synthesized": true
+            }
+          ]
+        },
+        {
+          "id": "interface:InteractionInputCollection",
+          "kind": "interface",
+          "name": "InteractionInputCollection",
+          "typeId": "Aspire.Hosting/Aspire.Hosting.InteractionInputCollection",
+          "owningAssembly": "Aspire.Hosting",
+          "declaration": "type InteractionInputCollection interface",
+          "summary": "A collection of interaction inputs that supports both indexed and name-based access.",
+          "members": [
+            {
+              "id": "InteractionInputCollection.Get",
+              "kind": "method",
+              "name": "Get",
+              "declaration": "Get(name string) (*InteractionInput, error)",
+              "returnType": "(*InteractionInput, error)",
+              "errorModel": "returned",
+              "summary": "Get returns the input with the specified name, or nil if no input matches.",
+              "synthesized": true
+            },
+            {
+              "id": "InteractionInputCollection.Required",
+              "kind": "method",
+              "name": "Required",
+              "declaration": "Required(name string) (*InteractionInput, error)",
+              "returnType": "(*InteractionInput, error)",
+              "errorModel": "returned",
+              "summary": "Required returns the input with the specified name, or an error if no input matches.",
+              "synthesized": true
+            },
+            {
+              "id": "InteractionInputCollection.Value",
+              "kind": "method",
+              "name": "Value",
+              "declaration": "Value(name string) (string, error)",
+              "returnType": "(string, error)",
+              "errorModel": "returned",
+              "summary": "Value returns the value of the input with the specified name, or an empty string if no input matches or it has no value.",
+              "synthesized": true
+            },
+            {
+              "id": "InteractionInputCollection.RequiredValue",
+              "kind": "method",
+              "name": "RequiredValue",
+              "declaration": "RequiredValue(name string) (string, error)",
+              "returnType": "(string, error)",
+              "errorModel": "returned",
+              "summary": "RequiredValue returns the value of the input with the specified name, or an error if no input matches.",
+              "synthesized": true
+            },
+            {
+              "id": "InteractionInputCollection.Err",
+              "kind": "method",
+              "name": "Err",
+              "declaration": "Err() error",
+              "returnType": "error",
+              "errorModel": "none",
+              "summary": "Err returns the first error recorded on this wrapper. Returns nil if the wrapper resolved successfully and no chained operation has failed.",
+              "synthesized": true
+            }
+          ]
+        },
+        {
+          "id": "interface:TestRedisResource",
+          "kind": "interface",
+          "name": "TestRedisResource",
+          "typeId": "Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource",
+          "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+          "declaration": "type TestRedisResource interface",
+          "implements": [
+            "ExpressionValue",
+            "IComputeResource",
+            "Resource",
+            "ResourceWithArgs",
+            "ResourceWithConnectionString",
+            "ResourceWithEndpoints",
+            "ResourceWithEnvironment",
+            "ResourceWithWaitSupport"
+          ],
+          "members": [
+            {
+              "id": "TestRedisResource.GetStatusAsync",
+              "kind": "method",
+              "name": "GetStatusAsync",
+              "declaration": "GetStatusAsync(options ...*GetStatusAsyncOptions) (string, error)",
+              "capabilityId": "Aspire.Hosting.CodeGeneration.Go.Tests/getStatusAsync",
+              "targetTypeId": "Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource",
+              "capabilityKind": "method",
+              "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+              "returnType": "(string, error)",
+              "errorModel": "returned",
+              "summary": "Gets the status of the resource asynchronously",
+              "options": {
+                "typeName": "GetStatusAsyncOptions",
+                "fields": [
+                  {
+                    "name": "CancellationToken",
+                    "type": "*CancellationToken",
+                    "optional": true
+                  }
+                ]
+              }
+            },
+            {
+              "id": "TestRedisResource.GetTags",
+              "kind": "method",
+              "name": "GetTags",
+              "declaration": "GetTags() *List[string]",
+              "capabilityId": "Aspire.Hosting.CodeGeneration.Go.Tests/getTags",
+              "targetTypeId": "Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource",
+              "capabilityKind": "method",
+              "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+              "returnType": "*List[string]",
+              "errorModel": "none",
+              "summary": "Gets the tags for the resource"
+            },
+            {
+              "id": "TestRedisResource.WithPersistence",
+              "kind": "method",
+              "name": "WithPersistence",
+              "declaration": "WithPersistence(options ...*WithPersistenceOptions) TestRedisResource",
+              "capabilityId": "Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence",
+              "targetTypeId": "Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource",
+              "capabilityKind": "method",
+              "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+              "returnType": "TestRedisResource",
+              "errorModel": "deferred",
+              "summary": "Configures the Redis resource with persistence",
+              "returnsReceiver": true,
+              "returnsBuilder": true,
+              "options": {
+                "typeName": "WithPersistenceOptions",
+                "fields": [
+                  {
+                    "name": "Mode",
+                    "type": "*TestPersistenceMode",
+                    "optional": true,
+                    "jsonName": "mode"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "TestRedisResource.WithUnionDependency",
+              "kind": "method",
+              "name": "WithUnionDependency",
+              "declaration": "WithUnionDependency(dependency any) TestRedisResource",
+              "capabilityId": "Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency",
+              "targetTypeId": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource",
+              "capabilityKind": "method",
+              "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+              "returnType": "TestRedisResource",
+              "errorModel": "deferred",
+              "summary": "Adds a dependency from a string or another resource",
+              "returnsReceiver": true,
+              "returnsBuilder": true,
+              "parameters": [
+                {
+                  "name": "dependency",
+                  "type": "any",
+                  "optional": false,
+                  "allowedTypes": [
+                    "string",
+                    "ResourceWithConnectionString"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "TestRedisResource.WithValidator",
+              "kind": "method",
+              "name": "WithValidator",
+              "declaration": "WithValidator(validator func(arg TestResourceContext) bool) TestRedisResource",
+              "capabilityId": "Aspire.Hosting.CodeGeneration.Go.Tests/withValidator",
+              "targetTypeId": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource",
+              "capabilityKind": "method",
+              "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+              "returnType": "TestRedisResource",
+              "errorModel": "deferred",
+              "summary": "Adds validation callback",
+              "returnsReceiver": true,
+              "returnsBuilder": true,
+              "parameters": [
+                {
+                  "name": "validator",
+                  "type": "func(arg TestResourceContext) bool",
+                  "optional": false,
+                  "callback": true
+                }
+              ]
+            },
+            {
+              "id": "TestRedisResource.Err",
+              "kind": "method",
+              "name": "Err",
+              "declaration": "Err() error",
+              "returnType": "error",
+              "errorModel": "none",
+              "summary": "Err returns the first error recorded on this wrapper. Returns nil if the wrapper resolved successfully and no chained operation has failed.",
+              "synthesized": true
+            }
+          ]
+        },
+        {
+          "id": "options:WithPersistenceOptions",
+          "kind": "options",
+          "name": "WithPersistenceOptions",
+          "typeId": "Aspire.Hosting.CodeGeneration.Go.Tests/WithPersistenceOptions",
+          "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+          "declaration": "type WithPersistenceOptions struct",
+          "summary": "WithPersistenceOptions carries optional parameters for WithPersistence.",
+          "usedBy": [
+            "Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence"
+          ],
+          "members": [
+            {
+              "id": "WithPersistenceOptions.Mode",
+              "kind": "field",
+              "name": "Mode",
+              "declaration": "Mode *TestPersistenceMode \u0060json:\u0022mode,omitempty\u0022\u0060",
+              "jsonName": "mode"
+            },
+            {
+              "id": "WithPersistenceOptions.ToMap",
+              "kind": "method",
+              "name": "ToMap",
+              "declaration": "ToMap() map[string]any",
+              "returnType": "map[string]any",
+              "errorModel": "none",
+              "synthesized": true
+            }
+          ]
+        },
+        {
+          "id": "dto:TestConfigDto",
+          "kind": "dto",
+          "name": "TestConfigDto",
+          "typeId": "Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestConfigDto",
+          "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+          "declaration": "type TestConfigDto struct",
+          "summary": "TestConfigDto represents TestConfigDto.",
+          "members": [
+            {
+              "id": "TestConfigDto.Name",
+              "kind": "field",
+              "name": "Name",
+              "declaration": "Name string \u0060json:\u0022name,omitempty\u0022\u0060",
+              "jsonName": "name"
+            },
+            {
+              "id": "TestConfigDto.Port",
+              "kind": "field",
+              "name": "Port",
+              "declaration": "Port float64 \u0060json:\u0022port,omitempty\u0022\u0060",
+              "jsonName": "port"
+            },
+            {
+              "id": "TestConfigDto.Enabled",
+              "kind": "field",
+              "name": "Enabled",
+              "declaration": "Enabled bool \u0060json:\u0022enabled,omitempty\u0022\u0060",
+              "jsonName": "enabled"
+            },
+            {
+              "id": "TestConfigDto.OptionalField",
+              "kind": "field",
+              "name": "OptionalField",
+              "declaration": "OptionalField *string \u0060json:\u0022optionalField,omitempty\u0022\u0060",
+              "jsonName": "optionalField"
+            },
+            {
+              "id": "TestConfigDto.ToMap",
+              "kind": "method",
+              "name": "ToMap",
+              "declaration": "ToMap() map[string]any",
+              "returnType": "map[string]any",
+              "errorModel": "none",
+              "summary": "ToMap converts the DTO to a map for JSON serialization.",
+              "synthesized": true
+            }
+          ]
+        },
+        {
+          "id": "enum:TestResourceStatus",
+          "kind": "enum",
+          "name": "TestResourceStatus",
+          "typeId": "enum:Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceStatus",
+          "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+          "declaration": "type TestResourceStatus string",
+          "summary": "TestResourceStatus represents TestResourceStatus.",
+          "members": [
+            {
+              "id": "TestResourceStatus.TestResourceStatusPending",
+              "kind": "constant",
+              "name": "TestResourceStatusPending",
+              "declaration": "TestResourceStatusPending TestResourceStatus = \u0022Pending\u0022",
+              "value": "Pending"
+            },
+            {
+              "id": "TestResourceStatus.TestResourceStatusRunning",
+              "kind": "constant",
+              "name": "TestResourceStatusRunning",
+              "declaration": "TestResourceStatusRunning TestResourceStatus = \u0022Running\u0022",
+              "value": "Running"
+            },
+            {
+              "id": "TestResourceStatus.TestResourceStatusStopped",
+              "kind": "constant",
+              "name": "TestResourceStatusStopped",
+              "declaration": "TestResourceStatusStopped TestResourceStatus = \u0022Stopped\u0022",
+              "value": "Stopped"
+            },
+            {
+              "id": "TestResourceStatus.TestResourceStatusFailed",
+              "kind": "constant",
+              "name": "TestResourceStatusFailed",
+              "declaration": "TestResourceStatusFailed TestResourceStatus = \u0022Failed\u0022",
+              "value": "Failed"
+            }
+          ]
+        },
+        {
+          "id": "variable:TestConfigs",
+          "kind": "variable",
+          "name": "TestConfigs",
+          "typeId": "Aspire.Hosting.CodeGeneration.Go.Tests/TestConfigs",
+          "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+          "declaration": "var TestConfigs = struct {\n\tDefault *TestConfigDto\n\tProfiles struct {\n\t\tDevelopment *TestConfigDto\n\t}\n\tSecure *TestConfigDto\n\tUnicodeGreeting string\n}{\n\tDefault: \u0026TestConfigDto{Name: \u0022default\u0022, Port: 6379, Enabled: true, OptionalField: func(value string) *string { return \u0026value }(\u0022cache\u0022)},\n\tProfiles: struct {\n\t\tDevelopment *TestConfigDto\n\t}{\n\t\tDevelopment: \u0026TestConfigDto{Name: \u0022development\u0022, Port: 5001, Enabled: false, OptionalField: nil},\n\t},\n\tSecure: \u0026TestConfigDto{Name: \u0022secure\u0022, Port: 6380, Enabled: true, OptionalField: nil},\n\tUnicodeGreeting: \u0022\u4F60\u597D\u3053\u3093\u306B\u3061\u306F\u0022,\n}",
+          "members": [
+            {
+              "id": "TestConfigs.Default",
+              "kind": "field",
+              "name": "Default",
+              "declaration": "Default *TestConfigDto",
+              "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+              "summary": "The default test configuration.",
+              "value": "\u0026TestConfigDto{Name: \u0022default\u0022, Port: 6379, Enabled: true, OptionalField: func(value string) *string { return \u0026value }(\u0022cache\u0022)}"
+            },
+            {
+              "id": "TestConfigs.Profiles.Development",
+              "kind": "field",
+              "name": "Profiles.Development",
+              "declaration": "Profiles.Development *TestConfigDto",
+              "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+              "value": "\u0026TestConfigDto{Name: \u0022development\u0022, Port: 5001, Enabled: false, OptionalField: nil}"
+            },
+            {
+              "id": "TestConfigs.Secure",
+              "kind": "field",
+              "name": "Secure",
+              "declaration": "Secure *TestConfigDto",
+              "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+              "value": "\u0026TestConfigDto{Name: \u0022secure\u0022, Port: 6380, Enabled: true, OptionalField: nil}"
+            },
+            {
+              "id": "TestConfigs.UnicodeGreeting",
+              "kind": "field",
+              "name": "UnicodeGreeting",
+              "declaration": "UnicodeGreeting string",
+              "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+              "value": "\u0022\u4F60\u597D\u3053\u3093\u306B\u3061\u306F\u0022"
+            }
+          ]
+        },
+        {
+          "id": "type:AtsErrorCode",
+          "kind": "type",
+          "name": "AtsErrorCode",
+          "typeId": "aspire:runtime:AtsErrorCode",
+          "owningAssembly": "Aspire.Hosting",
+          "declaration": "type AtsErrorCode string",
+          "summary": "AtsErrorCode contains standard ATS error codes.",
+          "members": [
+            {
+              "id": "AtsErrorCode.CapabilityNotFound",
+              "kind": "constant",
+              "name": "CapabilityNotFound",
+              "declaration": "CapabilityNotFound AtsErrorCode = \u0022CAPABILITY_NOT_FOUND\u0022",
+              "value": "CAPABILITY_NOT_FOUND"
+            },
+            {
+              "id": "AtsErrorCode.HandleNotFound",
+              "kind": "constant",
+              "name": "HandleNotFound",
+              "declaration": "HandleNotFound AtsErrorCode = \u0022HANDLE_NOT_FOUND\u0022",
+              "value": "HANDLE_NOT_FOUND"
+            },
+            {
+              "id": "AtsErrorCode.TypeMismatch",
+              "kind": "constant",
+              "name": "TypeMismatch",
+              "declaration": "TypeMismatch AtsErrorCode = \u0022TYPE_MISMATCH\u0022",
+              "value": "TYPE_MISMATCH"
+            },
+            {
+              "id": "AtsErrorCode.InvalidArgument",
+              "kind": "constant",
+              "name": "InvalidArgument",
+              "declaration": "InvalidArgument AtsErrorCode = \u0022INVALID_ARGUMENT\u0022",
+              "value": "INVALID_ARGUMENT"
+            },
+            {
+              "id": "AtsErrorCode.ArgumentOutOfRange",
+              "kind": "constant",
+              "name": "ArgumentOutOfRange",
+              "declaration": "ArgumentOutOfRange AtsErrorCode = \u0022ARGUMENT_OUT_OF_RANGE\u0022",
+              "value": "ARGUMENT_OUT_OF_RANGE"
+            },
+            {
+              "id": "AtsErrorCode.CallbackError",
+              "kind": "constant",
+              "name": "CallbackError",
+              "declaration": "CallbackError AtsErrorCode = \u0022CALLBACK_ERROR\u0022",
+              "value": "CALLBACK_ERROR"
+            },
+            {
+              "id": "AtsErrorCode.InternalError",
+              "kind": "constant",
+              "name": "InternalError",
+              "declaration": "InternalError AtsErrorCode = \u0022INTERNAL_ERROR\u0022",
+              "value": "INTERNAL_ERROR"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "declarations": []
+}

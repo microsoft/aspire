@@ -51,6 +51,31 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task SdkExportResolvesTheGoGeneratorWhenTheGoFeatureIsEnabled()
+    {
+        var interactionService = new TestInteractionService();
+        var rpcClient = new StubExportRpcClient();
+        var project = new CapturingAppHostServerProject();
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.ExperimentalPolyglotGo, true);
+        using var provider = CreateProvider(
+            interactionService,
+            out var workspace,
+            rpcClient,
+            project,
+            features: features);
+        using var workspaceLease = workspace;
+
+        var exitCode = await InvokeAsync(provider, "sdk export --language go --package Contoso.Aspire.Widgets@2.0");
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(("Go", "Contoso.Aspire.Widgets", "2.0.0"), rpcClient.LastExportRequest);
+        Assert.Contains(
+            project.Integrations,
+            integration => integration.Name == "Aspire.Hosting.CodeGeneration.Go");
+    }
+
+    [Fact]
     public async Task SdkExportRestoresExactPackageAndWritesOnlyJsonToStdout()
     {
         var interactionService = new TestInteractionService();
@@ -371,7 +396,8 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
         IAppHostRpcClient rpcClient,
         IAppHostServerProject appHostServerProject,
         TemporaryWorkspace? existingWorkspace = null,
-        string? identityVersion = null)
+        string? identityVersion = null,
+        IFeatures? features = null)
     {
         workspace = existingWorkspace ?? TemporaryWorkspace.CreateForCli(outputHelper);
         var testWorkspace = workspace;
@@ -383,6 +409,11 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
                 options.CliExecutionContextFactory = _ => testWorkspace.CreateExecutionContext(
                     identityVersion: identityVersion,
                     identityOverridden: true);
+            }
+
+            if (features is not null)
+            {
+                options.FeatureFlagsFactory = _ => features;
             }
         });
 

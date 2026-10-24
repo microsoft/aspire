@@ -34,7 +34,7 @@ internal sealed class GoExportedValueTreeNode
 ///   - Variadic options merge via the deepUpdate helper in base.go.
 ///   - Union parameters use Go 1.18+ type-set generics — no AspireUnion wrapper.
 /// </summary>
-internal sealed class AtsGoCodeGenerator : ICodeGenerator
+internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 {
     private static readonly HashSet<string> s_goKeywords = new(StringComparer.Ordinal)
     {
