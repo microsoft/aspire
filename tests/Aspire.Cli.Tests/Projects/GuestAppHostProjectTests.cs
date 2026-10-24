@@ -2112,13 +2112,17 @@ public class GuestAppHostProjectTests : IDisposable
             }
         };
 
+        // The extension is faked, but its launcher still resolves the runtime executable.
+        // Use the test host so this lifecycle test does not require Node on PATH.
+        var runtimeExecutable = Environment.ProcessPath;
+        Assert.NotNull(runtimeExecutable);
         var runtimeSpec = new RuntimeSpec
         {
             Language = "typescript/nodejs",
             DisplayName = "TypeScript (Node.js)",
             CodeGenLanguage = "TypeScript",
             DetectionPatterns = ["apphost.ts"],
-            Execute = new CommandSpec { Command = "node", Args = ["apphost.js"] },
+            Execute = new CommandSpec { Command = runtimeExecutable, Args = ["apphost.js"] },
             ExtensionLaunchCapability = "node"
         };
         var serverSession = new FakeAppHostServerSession(new FakeAppHostRpcClient { RuntimeSpec = runtimeSpec });
@@ -2136,22 +2140,30 @@ public class GuestAppHostProjectTests : IDisposable
         {
             AppHostFile = appHostFile,
             WorkingDirectory = _workspace.WorkspaceRoot,
-            EnvironmentVariables = new Dictionary<string, string>(),
+            EnvironmentVariables = new Dictionary<string, string> { ["PATH"] = string.Empty },
             BuildCompletionSource = buildCompletionSource,
             BackchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously)
         };
         using var cancellationSource = new CancellationTokenSource();
 
         var runTask = project.RunAsync(context, cancellationSource.Token);
-        await launchStarted.Task.DefaultTimeout();
+        try
+        {
+            Assert.Same(launchStarted.Task, await Task.WhenAny(launchStarted.Task, runTask).DefaultTimeout());
+            await launchStarted.Task.DefaultTimeout();
 
-        Assert.False(buildCompletionSource.Task.IsCompleted);
+            Assert.False(buildCompletionSource.Task.IsCompleted);
 
-        allowLaunchToComplete.TrySetResult();
-        Assert.True(await buildCompletionSource.Task.DefaultTimeout());
-
-        await cancellationSource.CancelAsync();
-        Assert.Equal(CliExitCodes.Cancelled, await runTask.DefaultTimeout());
+            allowLaunchToComplete.TrySetResult();
+            Assert.True(await buildCompletionSource.Task.DefaultTimeout());
+        }
+        finally
+        {
+            allowLaunchToComplete.TrySetResult();
+            await cancellationSource.CancelAsync();
+            await runTask.DefaultTimeout();
+        }
+        Assert.Equal(CliExitCodes.Cancelled, await runTask);
     }
 
     [Theory]
