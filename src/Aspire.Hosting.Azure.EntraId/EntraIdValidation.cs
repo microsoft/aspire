@@ -104,6 +104,48 @@ internal static class EntraIdValidation
         return "Expected an absolute HTTPS URL with no query string or fragment, such as 'https://login.microsoftonline.com/'.";
     }
 
+    /// <summary>
+    /// Validates an application ID URI, which must be an absolute URI without a query string or fragment.
+    /// </summary>
+    internal static string? ValidateApplicationIdUri(string? uri)
+    {
+        if (string.IsNullOrEmpty(uri))
+        {
+            return NoValueError;
+        }
+
+        // Microsoft Graph limits identifier URIs to 255 characters and rejects ones that contain whitespace.
+        if (uri.Length <= 255 &&
+            !uri.Any(char.IsWhiteSpace) &&
+            !uri.Contains('?') &&
+            !uri.Contains('#') &&
+            Uri.TryCreate(uri, UriKind.Absolute, out _))
+        {
+            return null;
+        }
+
+        return "Expected an absolute URI of at most 255 characters with no whitespace, query string or fragment, such as 'api://contoso-orders' or 'https://contoso.onmicrosoft.com/orders'.";
+    }
+
+    /// <summary>
+    /// Validates the name of an exposed scope, the value that appears in the token's <c>scp</c> claim.
+    /// </summary>
+    internal static string? ValidateScopeName(string? name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return NoValueError;
+        }
+
+        // The granted scopes of a consent are stored as one space-separated string, so a scope name cannot contain a space.
+        if (name.Length <= 120 && name.All(static c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-' or ':'))
+        {
+            return null;
+        }
+
+        return "Expected at most 120 ASCII letters, digits, '.', '_', '-' or ':' characters, such as 'access_as_user'.";
+    }
+
     private static EntraIdSignInAudience? GetSignInAudienceForKeyword(string tenantId)
     {
         if (string.Equals(tenantId, "organizations", StringComparison.OrdinalIgnoreCase))

@@ -117,7 +117,70 @@ entraWeb.WithIdTokenIssuance();
 
 ID-token issuance through implicit or hybrid flows is disabled by default. `WithIdTokenIssuance` enables only ID-token issuance, not implicit access-token issuance, and only affects registrations created by Aspire. For existing registrations, enable **ID tokens (used for implicit and hybrid flows)** in their **Authentication** settings instead. It is not needed for authorization-code-only flows. For new production applications, prefer authorization code flow with PKCE and configure a confidential-client credential when the application redeems codes.
 
-Creating a registration does not protect a workload's routes or authorize API requests. Configure authentication and authorization in the consuming application using Microsoft.Identity.Web or the corresponding library for that language. A web-to-API flow additionally requires an API identifier URI, exposed scopes, client permissions/consent, a client credential, and scope or role validation in the API. These are not provisioned by this initial increment.
+Creating a registration does not protect a workload's routes or authorize API requests. Configure authentication and authorization in the consuming application using Microsoft.Identity.Web or the corresponding library for that language. A web-to-API flow also needs a client credential and scope or role validation in the API. The next section covers the identifier URI, exposed scopes, client permissions and consent.
+
+### Expose an API and call it
+
+A registration becomes an API by exposing scopes. A client registration then declares the permissions it needs, and, only if you ask, consent is granted for them. Declaration, consent and pre-authorization are separate, and Aspire never combines them implicitly.
+
+```csharp
+var entraApi = builder.AddEntraIdApplication("entra-api")
+                      .WithScope("access_as_user", "Allows the app to call the API on behalf of the signed-in user.");
+
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .WithRedirectUris("https://localhost:7123/signin-oidc")
+                      // Lists the scope under the client's API permissions. Grants nothing.
+                      .WithApiPermissions(entraApi, "access_as_user")
+                      // Optional: consent for all users, so that nobody is prompted.
+                      .WithAdminConsent(entraApi, "access_as_user");
+
+builder.AddProject<Projects.Web>("web")
+       .WithReference(entraWeb)
+       .WithEnvironment("DownstreamApis__Api__Scopes__0", entraApi.Resource.GetScopeUri("access_as_user"));
+```
+
+* **Application ID URI.** A registration with scopes uses `api://{clientId}`. The client ID exists only after the registration is created, so Aspire sets the URI with a second update of the same registration in the same deployment. `api://{clientId}` is accepted by every tenant's default application-management policy. Call `WithApplicationIdUri("api://contoso-orders")` for a custom URI, which must be unique in the tenant and satisfy its policy (by default `api://{clientId}`, `api://{tenantId}/{name}` or a verified domain). The deployment fails when the policy rejects the URI. `GetScopeUri` returns the full scope name, for example `api://{clientId}/access_as_user`.
+* **Stable scope IDs.** Scope IDs derive from the registration and scope names, so every deployment, and every tenant, produces the same IDs. Set `EntraIdScope.Id` to adopt a scope that already exists.
+* **Retiring a scope.** Microsoft Graph rejects a deployment that removes an enabled scope or renames it. Retire a scope in two deployments: set `IsEnabled = false` through `WithScope`'s callback and deploy, then remove the scope and deploy again. Scopes can't be requested, declared or pre-authorized while disabled.
+* **Scopes are explicit.** Aspire doesn't derive scopes from the permissions that callers request.
+* **One resource per token.** A token request covers the scopes of one API. Request the scopes of the API and of Microsoft Graph in separate token requests (for example, `AADSTS28000` occurs when one request mixes them).
+
+#### Call Microsoft Graph and other first-party APIs
+
+An API that isn't an Aspire resource is identified by its well-known application ID. `EntraIdApi.MicrosoftGraph`, `EntraIdApi.AzureResourceManager` and `EntraIdApi.AzureStorage` know their common permissions by name; other permissions are passed with their ID, and other APIs are identified with `EntraIdApi.FromApplicationId`. Unknown names are rejected when you write the AppHost.
+
+```csharp
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+    // Delegated permissions (scopes) act on behalf of a signed-in user.
+    .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read"))
+    // Application permissions (app roles) act as the application itself. They are separate permissions from
+    // delegated ones, even with the same name.
+    .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Application("User.Read.All"))
+    // Opt in to consent. Delegated permissions become a grant for all users, application permissions
+    // become an app role assignment to the registration's service principal.
+    .WithAdminConsent(
+        EntraIdApi.MicrosoftGraph,
+        EntraIdApiPermission.Delegated("User.Read"),
+        EntraIdApiPermission.Application("User.Read.All"));
+```
+
+Consent needs a deploying identity that can grant it, for example the Privileged Role Administrator or Cloud Application Administrator role, or the `DelegatedPermissionGrant.ReadWrite.All` (delegated grants) and `AppRoleAssignment.ReadWrite.All` (application permissions) Microsoft Graph permissions. Without `WithAdminConsent`, no grant is made and the deploying identity needs no extra privileges. Application permissions to broad scopes such as `Directory.Read.All` give the application access to the whole tenant, so declare only what the application needs. A permission must be declared before consent is granted for it.
+
+#### Pre-authorize a client
+
+`WithPreAuthorizedApplication` lets a trusted client request some of the API's scopes without a consent prompt. It is separate from the client's declaration and from consent:
+
+```csharp
+var entraApi = builder.AddEntraIdApplication("entra-api")
+                      .WithScope("access_as_user", "Allows the app to call the API on behalf of the signed-in user.")
+                      .WithPreAuthorizedApplication(entraDaemon, "access_as_user");
+```
+
+Each registration deploys as its own module. Pre-authorization makes the API's module wait for the client's ID, and a declaration makes the client's module wait for the API's ID, so two registrations can't use both: Aspire rejects the second call with an error. Use a declaration with `WithAdminConsent` on the client, or pre-authorization alone.
+
+#### Existing registrations
+
+Existing registrations stay configuration-only. Use `WithApplicationIdUri` and `WithScope` (with `EntraIdScope.Id` set to the ID the registration defines) on an existing registration so that callers can declare permissions to it and build scope names with `GetScopeUri`. Aspire doesn't modify an existing registration, and an existing client registration's declarations and consent aren't deployed.
 
 ### Assign explicit owners
 
@@ -328,10 +391,10 @@ var entraApi = builder.AddExistingEntraApplication("entra-api", tenantId: tenant
 The integration can reference existing registrations or create registrations and service principals. It doesn't yet:
 
 * Automatically add the referencing resources' URLs as redirect URIs.
-* Expose API scopes or grant API permissions.
+* Assign app roles that an API defines (app roles of Aspire-modeled APIs) or create user and group role assignments.
 * Create, store, or rotate client secrets and certificates.
 
-Existing registrations are never modified. Continue configuring their redirect URIs, API permissions, and credentials in the [Microsoft Entra admin center](https://entra.microsoft.com).
+Existing registrations are never modified. Continue configuring their redirect URIs, exposed scopes, API permissions, and credentials in the [Microsoft Entra admin center](https://entra.microsoft.com).
 
 ## Additional documentation
 
