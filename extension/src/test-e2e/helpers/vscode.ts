@@ -528,8 +528,13 @@ export async function captureScreenshot(name: string): Promise<void> {
     await VSBrowser.instance.takeScreenshot(name).catch(() => undefined);
 }
 
-export async function interactWithModalDialog(buttonTitle: string, timeoutMs = 120000, screenshotName?: string): Promise<ModalDialogInteraction> {
+export async function interactWithModalDialog(
+    buttonTitle: string,
+    timeoutMs = 120000,
+    screenshotName?: string,
+    expectedText?: string): Promise<ModalDialogInteraction> {
     let lastError: unknown;
+    const expectedTextDescription = expectedText ? ` containing '${expectedText}'` : '';
     const interaction = await VSBrowser.instance.driver.wait(async () => {
         try {
             const dialog = new ModalDialog();
@@ -538,6 +543,11 @@ export async function interactWithModalDialog(buttonTitle: string, timeoutMs = 1
             // Debug launch errors can have an empty heading with the entire
             // "Unable to launch browser: ..." message in the details element.
             if (!message && !details) {
+                return false;
+            }
+            // A modal from another flow can use the same button title. Match caller-provided text
+            // before interacting so failure cleanup cannot dismiss an unrelated prompt.
+            if (expectedText && !`${message}\n${details}`.includes(expectedText)) {
                 return false;
             }
 
@@ -552,7 +562,7 @@ export async function interactWithModalDialog(buttonTitle: string, timeoutMs = 1
             lastError = error;
             return false;
         }
-    }, timeoutMs, `Timed out waiting for a modal dialog with a '${buttonTitle}' button. Last error: ${lastError}`);
+    }, timeoutMs, `Timed out waiting for a modal dialog${expectedTextDescription} with a '${buttonTitle}' button. Last error: ${lastError}`);
 
     return interaction as ModalDialogInteraction;
 }

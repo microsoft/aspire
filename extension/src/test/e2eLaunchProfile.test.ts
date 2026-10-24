@@ -852,11 +852,27 @@ suite('E2E launch profile', () => {
         });
     }
 
-    for (const dialogText of [
-        { message: 'Unable to launch browser', details: '' },
-        { message: '', details: 'Unable to launch browser: "Could not attach to main target"' },
+    for (const dialogCase of [
+        {
+            description: 'dismisses a launch error dialog with text in its heading',
+            message: 'Unable to launch browser',
+            details: '',
+            expectedMatch: true,
+        },
+        {
+            description: 'dismisses a launch error dialog with text in its details',
+            message: '',
+            details: 'Unable to launch browser: "Could not attach to main target"',
+            expectedMatch: true,
+        },
+        {
+            description: 'does not dismiss an unrelated modal dialog',
+            message: 'Start Aspire AppHost',
+            details: 'Start this AppHost?',
+            expectedMatch: false,
+        },
     ]) {
-        test(`dismisses a launch error dialog with text in its ${dialogText.message ? 'heading' : 'details'}`, async () => {
+        test(dialogCase.description, async () => {
             const helpers = fs.readFileSync(path.resolve(__dirname, '..', '..', 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
             const source = ts.createSourceFile('vscode.ts', helpers, ts.ScriptTarget.Latest, true);
             const declaration = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'interactWithModalDialog');
@@ -864,26 +880,48 @@ suite('E2E launch profile', () => {
             const compiled = ts.transpileModule(declaration.getText(source), {
                 compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
             }).outputText;
-            const exported: { interactWithModalDialog?: (buttonTitle: string) => Promise<{ message: string; details: string }> } = {};
+            const exported: {
+                interactWithModalDialog?: (
+                    buttonTitle: string,
+                    timeoutMs?: number,
+                    screenshotName?: string,
+                    expectedText?: string) => Promise<{ message: string; details: string }>;
+            } = {};
             const pressed: string[] = [];
             vm.runInNewContext(compiled, {
                 exports: exported,
                 ModalDialog: class {
-                    async getMessage() { return dialogText.message; }
-                    async getDetails() { return dialogText.details; }
+                    async getMessage() { return dialogCase.message; }
+                    async getDetails() { return dialogCase.details; }
                     async pushButton(title: string) { pressed.push(title); }
                 },
                 VSBrowser: { instance: { driver: { wait: async (predicate: () => Promise<unknown>) => {
                     const result = await predicate();
-                    assert.ok(result, 'A visible launch error must not be ignored because its heading is empty.');
+                    if (!dialogCase.expectedMatch) {
+                        assert.strictEqual(result, false);
+                        throw new Error('No matching dialog.');
+                    }
+
+                    assert.ok(result, 'A matching launch error must be returned.');
                     return result;
                 } } } },
             });
             assert.ok(exported.interactWithModalDialog);
-            const accepted = await exported.interactWithModalDialog('Cancel');
-            assert.strictEqual(accepted.message, dialogText.message);
-            assert.strictEqual(accepted.details, dialogText.details);
-            assert.deepStrictEqual(pressed, ['Cancel']);
+            const interaction = exported.interactWithModalDialog(
+                'Cancel',
+                120000,
+                undefined,
+                'Unable to launch browser');
+            if (dialogCase.expectedMatch) {
+                const accepted = await interaction;
+                assert.strictEqual(accepted.message, dialogCase.message);
+                assert.strictEqual(accepted.details, dialogCase.details);
+                assert.deepStrictEqual(pressed, ['Cancel']);
+            }
+            else {
+                await assert.rejects(interaction, /No matching dialog/);
+                assert.deepStrictEqual(pressed, []);
+            }
         });
     }
 
@@ -1404,12 +1442,23 @@ builder.Build().Run();
         const nonWindowsSkip = `if (process.platform !== 'win32') {
             this.skip();
         }`;
+        const cleanupStartIndex = normalizedDebugBrowserTest.indexOf('await runE2eTeardown([');
+        const cleanupStopIndex = normalizedDebugBrowserTest.indexOf("() => executeE2eControlCommand({ name: 'stopDebugging' })", cleanupStartIndex);
+        const cleanupAspireWaitIndex = normalizedDebugBrowserTest.indexOf('() => waitForNoDebugSessions()', cleanupStopIndex);
+        const cleanupBrowserWaitIndex = normalizedDebugBrowserTest.indexOf('() => waitForNoBrowserDebugSessions()', cleanupAspireWaitIndex);
+        const browserFailureRethrowIndex = normalizedDebugBrowserTest.indexOf('if (browserLaunchError) {\n            throw browserLaunchError;');
 
         assert.deepStrictEqual({
             nonWindowsSkipPrecedesDashboardBrowserSetting: normalizedDebugBrowserTest.indexOf(nonWindowsSkip) >= 0
                 && normalizedDebugBrowserTest.indexOf(nonWindowsSkip) < normalizedDebugBrowserTest.indexOf("writeWorkspaceSetting('aspire.dashboardBrowser', 'debugChrome')"),
             waitsForBrowserDebugSession: debugBrowserTest.includes('await waitForBrowserDebugSession()'),
-            waitsForNoBrowserDebugSessions: debugBrowserTest.includes('await waitForNoBrowserDebugSessions()'),
+            waitsForNoBrowserDebugSessions: debugBrowserTest.includes('waitForNoBrowserDebugSessions()'),
+            cancelsKnownLaunchFailureDialog: debugBrowserTest.includes("await acceptModalDialog('Cancel', 10000, 'dashboard-debug-launch-failure', 'Unable to launch browser');"),
+            completesEveryCleanupAfterStopFailure: cleanupStartIndex >= 0
+                && cleanupStartIndex < cleanupStopIndex
+                && cleanupStopIndex < cleanupAspireWaitIndex
+                && cleanupAspireWaitIndex < cleanupBrowserWaitIndex
+                && cleanupBrowserWaitIndex < browserFailureRethrowIndex,
             hasNonblockingUnitTest: aspireDebugSessionTests.includes("test('openDashboard does not wait for a dashboard debug session to start'"),
             usesNeverSettlingBrowserLaunch: nonblockingUnitTest.includes('new Promise<boolean>(() => { })'),
             removedOptionalModalHelper: !vscodeHelpers.includes('export async function dismissModalDialogIfPresent('),
@@ -1417,6 +1466,8 @@ builder.Build().Run();
             nonWindowsSkipPrecedesDashboardBrowserSetting: true,
             waitsForBrowserDebugSession: true,
             waitsForNoBrowserDebugSessions: true,
+            cancelsKnownLaunchFailureDialog: true,
+            completesEveryCleanupAfterStopFailure: true,
             hasNonblockingUnitTest: true,
             usesNeverSettlingBrowserLaunch: true,
             removedOptionalModalHelper: true,

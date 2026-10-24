@@ -5,7 +5,7 @@ import { getBrowserDebugSessions, getCommandInvocationCount, getDebugLaunchCount
 import { VSBrowser } from './helpers/extester';
 import { executeE2eControlCommand, resetDashboardDefaultChangedNotificationForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceSetting } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { getNotificationMessages, openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { acceptModalDialog, getNotificationMessages, openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
 suite('Aspire debug dashboard E2E', function () {
     this.timeout(240000);
@@ -109,25 +109,62 @@ suite('Aspire debug dashboard E2E', function () {
 
         await waitForDebugSessionStartup();
 
-        // The debug browser is only launched once the dashboard URL is known, so wait for that
-        // milestone separately. Folding both waits into one budget makes a slow dashboard start
-        // look like a missing browser session.
-        await waitForDebugDashboardUrl();
+        let browserLaunchError: unknown;
+        try {
+            // The debug browser is only launched once the dashboard URL is known, so wait for that
+            // milestone separately. Folding both waits into one budget makes a slow dashboard start
+            // look like a missing browser session.
+            await waitForDebugDashboardUrl();
 
-        const browserSession = await waitForBrowserDebugSession();
-        assert.deepStrictEqual(
-            getBrowserDebugSessions().filter(session => session.parentSessionType === 'aspire').map(session => ({ id: session.id, type: session.type })),
-            [{ id: browserSession.id, type: 'pwa-chrome' }]);
+            const browserSession = await waitForBrowserDebugSession();
+            assert.deepStrictEqual(
+                getBrowserDebugSessions().filter(session => session.parentSessionType === 'aspire').map(session => ({ id: session.id, type: session.type })),
+                [{ id: browserSession.id, type: 'pwa-chrome' }]);
+        }
+        catch (error) {
+            browserLaunchError = error;
+            if (error instanceof Error && error.message.includes('waiting for dashboard browser debug session to start')) {
+                // js-debug can leave this modal open after a launch failure. Cancel only that known
+                // dialog so it cannot block teardown or every later Selenium interaction.
+                try {
+                    await acceptModalDialog('Cancel', 10000, 'dashboard-debug-launch-failure', 'Unable to launch browser');
+                }
+                catch (dialogError) {
+                    browserLaunchError = new AggregateError(
+                        [error, dialogError],
+                        `${error.message}\nLaunch-dialog cleanup failed: ${dialogError instanceof Error ? dialogError.message : String(dialogError)}`);
+                }
+            }
+        }
 
-        await executeE2eControlCommand({ name: 'stopDebugging' });
-        await waitForNoDebugSessions();
+        let cleanupError: unknown;
+        try {
+            await runE2eTeardown([
+                () => executeE2eControlCommand({ name: 'stopDebugging' }),
+                () => waitForNoDebugSessions(),
+                // The Aspire session ending is not enough on its own. VS Code leaves the child
+                // browser session running unless the extension stops it explicitly, which is what
+                // left orphaned dashboard browsers behind in https://github.com/microsoft/aspire/issues/19289.
+                () => waitForNoBrowserDebugSessions(),
+            ], 'Dashboard debug browser cleanup failed.');
+        }
+        catch (error) {
+            cleanupError = error;
+        }
 
-        // The Aspire session ending is not enough on its own. VS Code leaves the child browser
-        // session running unless the extension stops it explicitly, which is what left orphaned
-        // dashboard browsers behind in https://github.com/microsoft/aspire/issues/19289. Asserting
-        // on the extension's own debugSessions cannot catch that regression: it was already empty
-        // while the browser kept running.
-        await waitForNoBrowserDebugSessions();
+        if (browserLaunchError && cleanupError) {
+            throw new AggregateError(
+                [browserLaunchError, cleanupError],
+                `Dashboard browser validation and cleanup both failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
+        }
+
+        if (cleanupError) {
+            throw cleanupError;
+        }
+
+        if (browserLaunchError) {
+            throw browserLaunchError;
+        }
     });
 
     test('workspace debug stop removes running apphost', async () => {
