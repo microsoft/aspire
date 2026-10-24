@@ -491,6 +491,11 @@ path_rules:
     targets: [test:Aspire.Cli.Tests]
     reason: TemplatePackageLockTests reads the shipped frontend manifest and lockfile to guard dependency versions and registry hosts.
   - paths:
+      - src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs
+      - src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs
+    targets: [test:Aspire.Cli.Tests]
+    reason: GoAppHostToolingCheckTests reads the go.mod templates to guard the minimum Go version.
+  - paths:
       - .github/workflows/update-nix-cli-flake.yml
       - flake.nix
       - flake.lock

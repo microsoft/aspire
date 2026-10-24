@@ -655,6 +655,7 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostToolingCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, GoAppHostToolingCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();
