@@ -35,20 +35,13 @@ public class MicrosoftIdentityWebConfigurationTests
             .WithInstance("https://login.microsoftonline.us/")
             .WithSignInAudience(EntraIdSignInAudience.AzureADMultipleOrgs)
             .WithClientSecret(secret)
-            .WithCredential(new EntraIdFederatedIdentityCredential(ManagedIdentityClientId)
-            {
-                TokenExchangeUrl = "api://AzureADTokenExchangeUSGov",
-                TokenExchangeAuthority = $"https://login.microsoftonline.us/{TenantId}"
-            })
+            .WithCredential(builder.CreateEntraIdFederatedIdentityCredential(
+                ManagedIdentityClientId, "api://AzureADTokenExchangeUSGov", $"https://login.microsoftonline.us/{TenantId}"))
             .WithCertificateFromKeyVault("https://contoso.vault.usgovcloudapi.net", "web-certificate")
             .WithCertificateThumbprint("CurrentUser/My", "ABC123")
             .WithCertificateDistinguishedName("LocalMachine/My", "CN=Contoso")
-            .WithCredential(new EntraIdFileCertificateCredential
-            {
-                FilePath = "/certificates/web.pfx",
-                Password = password.Resource
-            })
-            .WithCredential(new EntraIdSignedAssertionFileCredential { FilePath = "/var/run/secrets/assertion" })
+            .WithCredential(builder.CreateEntraIdFileCertificateCredential("/certificates/web.pfx", password))
+            .WithCredential(builder.CreateEntraIdSignedAssertionFileCredential("/var/run/secrets/assertion"))
             .WithClientCapability("cp1")
             .WithAudience($"api://{ClientId}")
             .WithSendX5C()

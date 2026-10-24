@@ -22,6 +22,42 @@ aspire add Aspire.Hosting.Azure.EntraId
 
 Then, in the AppHost, add an Entra ID application resource and reference it from another resource.
 
+### Polyglot AppHosts
+
+The integration is available in TypeScript, Python, Go, Java, and Rust AppHosts. For example, reference an existing
+registration without enabling Azure provisioning:
+
+```typescript
+const tenant = await builder.addParameter("tenant");
+const client = await builder.addParameter("client");
+const secret = await builder.addParameter("client-secret", { secret: true });
+const entra = await builder.addExistingEntraApplicationFromParameters("entra", tenant, client)
+    .withClientSecret(secret);
+const web = await builder.addContainer("web", "my-web-image")
+    .withReference(entra);
+```
+
+`withReference` uses the same resource-specific configuration rules as C#. `withEntraIdReference` is also available
+when an explicit Entra ID reference is preferred. Neither method configures authentication middleware in the workload.
+
+Literal and parameter overloads use distinct names: `addExistingEntraApplication` / `addExistingEntraApplicationFromParameters`,
+`asExistingApplication` / `asExistingApplicationFromParameters`, and the owner methods / their `FromParameters` variants.
+Redirect URI variants are `withRedirectUris`, `withRedirectUrisFromParameters`, `withRedirectUrisForEndpoint`, and
+`withRedirectUrisForHost`. Array arguments are passed as arrays rather than variadic arguments.
+
+`publishWithFederatedManagedIdentityCredential()` trusts every consumer; its optional `identity` option accepts either a
+compute resource or an Azure user-assigned identity. As in C#, this only applies when publishing registrations that Aspire
+creates; it does not create trust for existing registrations.
+
+Advanced credentials can be constructed with `createEntraIdFederatedIdentityCredential` (including token exchange URL and
+authority overrides), `createEntraIdFileCertificateCredential` (with an optional secret password parameter), and
+`createEntraIdSignedAssertionFileCredential` (with an optional file path), then passed to `withCredential`:
+
+```typescript
+const credential = await builder.createEntraIdFileCertificateCredential("/certificates/web.pfx", { password: secret });
+await entra.withCredential(credential);
+```
+
 ### Create registrations
 
 `AddEntraIdApplication` creates a registration and its service principal using the Microsoft Graph Bicep extension:

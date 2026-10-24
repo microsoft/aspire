@@ -1160,6 +1160,31 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     }
 
     [Theory]
+    [InlineData("TypeScript/apphost.mts")]
+    [InlineData("Python/apphost.py")]
+    [InlineData("Go/apphost.go")]
+    [InlineData("Java/AppHost.java")]
+    [InlineData("Rust/apphost.rs")]
+    public void RealMapEntraFixturesAndIntegrationRunPolyglotValidation(string fixture)
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(
+            mapPath,
+            EnumerateMatrixTestProjects(),
+            LoadProjectDirectories(),
+            EnumerateAllTestProjects());
+
+        var fixtureResult = selector.Select(
+            [$"tests/PolyglotAppHosts/Aspire.Hosting.Azure.EntraId/{fixture}"], [], new SelectorOptions());
+        var integrationResult = selector.Select([], ["Aspire.Hosting.Azure.EntraId"], new SelectorOptions());
+
+        Assert.False(fixtureResult.SelectsAll);
+        Assert.False(integrationResult.SelectsAll);
+        Assert.Equal(["job:polyglot"], fixtureResult.Jobs);
+        Assert.Contains("job:polyglot", integrationResult.Jobs);
+    }
+
+    [Theory]
     [InlineData("Aspire.Hosting.Analyzers")]
     [InlineData("Aspire.Hosting.Tasks")]
     public void RealMapFixturelessHostingProjectsDoNotRunPolyglotValidation(string project)

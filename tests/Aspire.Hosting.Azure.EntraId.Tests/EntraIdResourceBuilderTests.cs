@@ -14,6 +14,98 @@ public class EntraIdResourceBuilderTests
     private const string TenantId = "aaaabbbb-0000-cccc-1111-dddd2222eeee";
     private const string ClientId = "00001111-aaaa-2222-bbbb-3333cccc4444";
 
+    [Theory]
+    [InlineData(false, null, "ENTRA")]
+    [InlineData(false, "Identity", "IDENTITY")]
+    [InlineData(true, null, "AzureAd")]
+    [InlineData(true, "Identity", "Identity")]
+    public async Task PolyglotReference_UsesEntraConfiguration(bool dotnet, string? connectionName, string prefix)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId);
+        IResourceBuilder<IResourceWithEnvironment> consumer = dotnet
+            ? builder.AddResource(new ProjectResource("web"))
+            : builder.AddContainer("web", "myimage");
+
+        var result = DispatchReference<EntraIdApplicationResource>(consumer, entra, connectionName);
+
+        Assert.Same(consumer, result);
+        Assert.Same(consumer.Resource, Assert.Single(entra.Resource.Consumers));
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+        var separator = dotnet ? "__" : "_";
+        Assert.Equal(new Dictionary<string, string>
+        {
+            [$"{prefix}{separator}{(dotnet ? "Instance" : "INSTANCE")}"] = "https://login.microsoftonline.com/",
+            [$"{prefix}{separator}{(dotnet ? "TenantId" : "TENANT_ID")}"] = TenantId,
+            [$"{prefix}{separator}{(dotnet ? "ClientId" : "CLIENT_ID")}"] = ClientId
+        }, env);
+    }
+
+    [Theory]
+    [InlineData(true, null)]
+    [InlineData(false, "service")]
+    public void PolyglotReference_RejectsUnsupportedOptions(bool optional, string? name)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId);
+        var consumer = builder.AddContainer("web", "myimage");
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            DispatchReference<EntraIdApplicationResource>(consumer, entra, optional: optional, name: name));
+
+        Assert.Equal("Entra ID references do not support optional or named service references. Use connectionName to customize the configuration prefix.", exception.Message);
+        Assert.Empty(entra.Resource.Consumers);
+    }
+
+    [Theory]
+    [InlineData("all")]
+    [InlineData("compute")]
+    [InlineData("identity")]
+    public void PolyglotFederation_DispatchesToTypedOverloads(string target)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var entra = builder.AddEntraIdApplication("entra");
+        var web = builder.AddContainer("web", "myimage").WithReference(entra);
+        var identity = builder.AddAzureUserAssignedIdentity("identity");
+        object? argument = target switch
+        {
+            "compute" => web,
+            "identity" => identity,
+            _ => null
+        };
+
+        Assert.Same(entra, entra.PublishWithFederatedManagedIdentityCredentialForPolyglot(argument));
+
+        var credential = Assert.IsType<EntraIdFederatedIdentityCredential>(Assert.Single(entra.Resource.ClientCredentials));
+        Assert.Equal(target == "all", credential.UsesConsumerIdentity);
+        Assert.Same(target == "compute" ? web.Resource : null, credential.ComputeTarget);
+        Assert.Same(target == "identity" ? identity.Resource : null, credential.ManagedIdentity);
+#pragma warning disable ASPIREAZURE003 // The federation adapter requests the experimental managed identity annotation.
+        Assert.Equal(target != "identity", web.Resource.HasAnnotationOfType<ManagedIdentityRequiredAnnotation>());
+#pragma warning restore ASPIREAZURE003
+    }
+
+    [Fact]
+    public void PolyglotCredentialFactories_RequireSecretPassword()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var password = builder.AddParameter("password");
+
+        var exception = Assert.Throws<ArgumentException>(() => builder.CreateEntraIdFileCertificateCredential("/certs/web.pfx", password));
+
+        Assert.Equal(nameof(EntraIdFileCertificateCredential.Password), exception.ParamName);
+    }
+
+    private static IResourceBuilder<IResourceWithEnvironment>? DispatchReference<TSource>(
+        IResourceBuilder<IResourceWithEnvironment> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName = null,
+        bool optional = false,
+        string? name = null)
+        where TSource : IResource, IResourceWithCustomWithReference<TSource>
+        => TSource.TryWithReference(builder, source, connectionName, optional, name);
+
     [Fact]
     public void AddExistingEntraApplication_CreatesResource()
     {

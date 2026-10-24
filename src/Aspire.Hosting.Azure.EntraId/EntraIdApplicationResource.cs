@@ -37,10 +37,30 @@ namespace Aspire.Hosting.Azure;
 /// <c>Microsoft.Identity.Abstractions</c>.
 /// </para>
 /// </remarks>
-public class EntraIdApplicationResource : AzureProvisioningResource
+public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWithCustomWithReference<EntraIdApplicationResource>
 {
     private const string DefaultInstance = "https://login.microsoftonline.com/";
     private readonly IResourceAnnotation[] _provisioningAnnotations;
+
+    static IResourceBuilder<TDestination>? IResourceWithCustomWithReference<EntraIdApplicationResource>.TryWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName,
+        bool optional,
+        string? name)
+    {
+        if (source is not IResourceBuilder<EntraIdApplicationResource> application)
+        {
+            return null;
+        }
+
+        if (optional || name is not null)
+        {
+            throw new InvalidOperationException("Entra ID references do not support optional or named service references. Use connectionName to customize the configuration prefix.");
+        }
+
+        return builder.WithReference(application, connectionName);
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="EntraIdApplicationResource"/> class.
@@ -627,6 +647,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource
 /// <item><description><see cref="EntraIdSignedAssertionFileCredential"/> — signed assertion file (AKS workload identity).</description></item>
 /// </list>
 /// </remarks>
+[AspireExport]
 public abstract class EntraIdClientCredential
 {
     /// <summary>
