@@ -39,6 +39,19 @@ public sealed class TestTriggerMapTests
         Assert.Empty(result.Jobs);
     }
 
+    [Theory]
+    [InlineData(".github/scripts/flaky_investigation/controller.py")]
+    [InlineData(".github/scripts/flaky_investigation/evidence.py")]
+    [InlineData(".github/scripts/flaky_investigation/future-adapter.py")]
+    public void FlakyInvestigationInputsSelectBehavioralCoverage(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Equal(["Infrastructure.Tests"], result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
     [Fact]
     public void TemplateManifestBuildTargetSelectsInfrastructureCoverage()
     {

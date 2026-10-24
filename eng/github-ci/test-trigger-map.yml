@@ -135,6 +135,11 @@ ignore:
 # only. targets may be test: / job: / a GROUP name / ALL.
 path_rules:
   - paths:
+      - .github/scripts/flaky_investigation/**
+    targets: [test:Infrastructure.Tests]
+    reason: infrastructure tests exercise trusted flaky-test orchestration and evidence accounting
+
+  - paths:
       - eng/scripts/test-native-hosting.sh
     targets: [test:Infrastructure.Tests]
     reason: native hosting harness coverage is guarded by infrastructure tests and executed by its dedicated PR workflow

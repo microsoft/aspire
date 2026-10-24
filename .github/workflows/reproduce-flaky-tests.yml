@@ -12,7 +12,20 @@
 name: Reproduce Flaky Tests
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      investigation_issue_url:
+        description: Optional trusted investigation issue URL; requires investigation_revision
+        required: false
+        type: string
+      investigation_revision:
+        description: Immutable investigation checkpoint revision; requires investigation_issue_url
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
 
 # ============================================================
 # CONFIGURATION — Edit these values to customize the test run
@@ -48,10 +61,26 @@ jobs:
     if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.generate.outputs.matrix }}
-      is_cli_e2e: ${{ steps.detect_cli_e2e.outputs.is_cli_e2e }}
+      matrix: ${{ steps.investigation.outputs.matrix || steps.generate.outputs.matrix }}
+      is_cli_e2e: ${{ steps.investigation.outputs.is_cli_e2e || steps.detect_cli_e2e.outputs.is_cli_e2e }}
+      is_investigation: ${{ steps.investigation.outputs.active }}
+      source_sha: ${{ steps.investigation.outputs.source_sha || github.sha }}
     steps:
+      - name: Checkout trusted investigation configuration
+        if: inputs.investigation_issue_url != '' || inputs.investigation_revision != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve immutable investigation settings
+        id: investigation
+        if: inputs.investigation_issue_url != '' || inputs.investigation_revision != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INVESTIGATION_ISSUE_URL: ${{ inputs.investigation_issue_url }}
+          INVESTIGATION_REVISION: ${{ inputs.investigation_revision }}
+        run: python3 .github/scripts/flaky_investigation/worker.py setup
       - name: Validate configuration
+        if: inputs.investigation_issue_url == '' && inputs.investigation_revision == ''
         shell: bash
         run: |
           ERRORS=0
@@ -93,6 +122,7 @@ jobs:
 
       - name: Detect CLI E2E project
         id: detect_cli_e2e
+        if: inputs.investigation_issue_url == '' && inputs.investigation_revision == ''
         shell: bash
         run: |
           if [ "${{ env.TEST_PROJECT }}" = "Cli.EndToEnd" ]; then
@@ -103,6 +133,7 @@ jobs:
 
       - name: Generate runner matrix
         id: generate
+        if: inputs.investigation_issue_url == '' && inputs.investigation_revision == ''
         shell: bash
         run: |
           IFS=',' read -ra OSES <<< "${{ env.TARGET_OSES }}"
@@ -147,25 +178,38 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     env:
-      DOTNET_ROOT: ${{ github.workspace }}/.dotnet
+      DOTNET_ROOT: ${{ github.workspace }}${{ needs.setup.outputs.is_investigation == 'true' && '/candidate' || '' }}/.dotnet
+    defaults:
+      run:
+        working-directory: ${{ needs.setup.outputs.is_investigation == 'true' && 'candidate' || '.' }}
 
     steps:
+      - name: Checkout trusted workflow code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout isolated candidate source
+        if: needs.setup.outputs.is_investigation == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: candidate
+          ref: ${{ needs.setup.outputs.source_sha }}
+          persist-credentials: false
+
       - name: Setup vars (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           echo "DOTNET_SCRIPT=./dotnet.sh" >> $GITHUB_ENV
           echo "BUILD_SCRIPT=./build.sh" >> $GITHUB_ENV
-          echo "${{ github.workspace }}/.dotnet" >> $GITHUB_PATH
+          echo "${{ env.DOTNET_ROOT }}" >> $GITHUB_PATH
 
       - name: Setup vars (Windows)
         if: runner.os == 'Windows'
         run: |
           echo "DOTNET_SCRIPT=.\dotnet.cmd" >> $env:GITHUB_ENV
           echo "BUILD_SCRIPT=.\build.cmd" >> $env:GITHUB_ENV
-          echo "${{ github.workspace }}\.dotnet" >> $env:GITHUB_PATH
-
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+          echo "${{ env.DOTNET_ROOT }}" >> $env:GITHUB_PATH
 
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
@@ -220,6 +264,7 @@ jobs:
         uses: ./.github/actions/unlock-macos-keychain
 
       - name: Compute test project path
+        if: needs.setup.outputs.is_investigation != 'true'
         shell: pwsh
         run: |
           $testShortName = "${{ env.TEST_PROJECT }}"
@@ -238,6 +283,18 @@ jobs:
           echo "TEST_PROJECT_PATH=$projectPath" >> $env:GITHUB_ENV
           Write-Host "Resolved test project: $projectPath"
 
+      - name: Validate owned run and candidate configuration
+        if: needs.setup.outputs.is_investigation == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INVESTIGATION_ISSUE_URL: ${{ inputs.investigation_issue_url }}
+          INVESTIGATION_REVISION: ${{ inputs.investigation_revision }}
+        run: |
+          $python = if ($IsWindows) { "python" } else { "python3" }
+          & $python "${{ github.workspace }}/.github/scripts/flaky_investigation/worker.py" runner
+          exit $LASTEXITCODE
+
       - name: Build test project
         run: >
           ${{ env.BUILD_SCRIPT }}
@@ -247,7 +304,7 @@ jobs:
           /p:RunQuarantinedTests=true
 
       - name: Run test iterations (Linux/macOS)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && needs.setup.outputs.is_investigation != 'true'
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
@@ -315,7 +372,7 @@ jobs:
           if [ "$FAIL" -gt 0 ]; then exit 1; fi
 
       - name: Run test iterations (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && needs.setup.outputs.is_investigation != 'true'
         shell: pwsh
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
@@ -382,21 +439,45 @@ jobs:
           if ($fail -gt 0) { exit 1 }
 
       - name: Upload failure logs
-        if: failure()
+        if: failure() && needs.setup.outputs.is_investigation != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: failures-${{ matrix.os }}-${{ matrix.index }}
           path: all-results/
           if-no-files-found: ignore
 
+      - name: Run investigation iterations with original evidence
+        if: needs.setup.outputs.is_investigation == 'true'
+        shell: pwsh
+        env:
+          FLAKY_RUNNER_OS: ${{ matrix.os }}
+          FLAKY_RUNNER_INDEX: ${{ matrix.index }}
+          ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/candidate/testresults/dcp
+          NUGET_PACKAGES: ${{ github.workspace }}/candidate/.packages
+          TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: netaspireci.azurecr.io
+          SkipDefaultTestFilters: true
+        run: |
+          $python = if ($IsWindows) { "python" } else { "python3" }
+          & $python "${{ github.workspace }}/.github/scripts/flaky_investigation/runner.py"
+          exit $LASTEXITCODE
+
+      - name: Preserve original investigation evidence
+        if: always() && needs.setup.outputs.is_investigation == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flaky-evidence-${{ matrix.os }}-${{ matrix.index }}
+          path: candidate/flaky-evidence/
+          if-no-files-found: error
+
   results:
     if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     name: Reproduce Results
-    needs: [reproduce]
+    needs: [setup, reproduce]
     permissions: {}
     steps:
       - name: Summary
+        if: needs.setup.outputs.is_investigation != 'true'
         shell: bash
         run: |
           echo "## Reproduce Flaky Test Results" >> $GITHUB_STEP_SUMMARY
@@ -418,6 +499,17 @@ jobs:
           else
             echo "### ⚠️ Reproduce job was ${{ needs.reproduce.result }}" >> $GITHUB_STEP_SUMMARY
           fi
+
+      - name: Investigation evidence summary
+        if: needs.setup.outputs.is_investigation == 'true'
+        env:
+          SOURCE_SHA: ${{ needs.setup.outputs.source_sha }}
+          RESULT: ${{ needs.reproduce.result }}
+        run: |
+          echo "## Investigation reproduction: $RESULT" >> "$GITHUB_STEP_SUMMARY"
+          echo "Candidate source: \`$SOURCE_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Original per-iteration reports and receipts are retained in flaky-evidence artifacts." >> "$GITHUB_STEP_SUMMARY"
+          echo "The trusted controller validates target executions; a green job alone is not evidence." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail if reproduce did not succeed
         if: ${{ needs.reproduce.result != 'success' }}
