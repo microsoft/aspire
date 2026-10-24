@@ -117,6 +117,7 @@ public static class ExternalServiceBuilderExtensions
         }
         else if (resource.UrlParameter is not null)
         {
+            resourceBuilder.WithReferenceRelationship(resource.UrlParameter);
             resourceBuilder.WithUrl(ReferenceExpression.Create($"{resource.UrlParameter}"));
         }
 

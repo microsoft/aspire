@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Azure.EntraId.Tests;
 
@@ -13,6 +15,75 @@ public class EntraIdResourceBuilderTests
     // Placeholder IDs from the Microsoft Learn documentation. They are well-formed but identify nothing.
     private const string TenantId = "aaaabbbb-0000-cccc-1111-dddd2222eeee";
     private const string ClientId = "00001111-aaaa-2222-bbbb-3333cccc4444";
+
+    [Fact]
+    public async Task LateConfiguredParametersBlockOnlyTheirActualConsumers()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestDcpExecutor(options => options.DisableDashboard = false);
+        var tenantId = builder.AddParameter("tenant");
+        var clientId = builder.AddParameter("client");
+        var secret = builder.AddParameter("secret", secret: true);
+        var certificatePassword = builder.AddParameter("certificate-password", secret: true);
+        var unused = builder.AddParameter("unused", secret: true);
+        var entra = builder.AddEntraIdApplication("entra").WithClientSecret(unused);
+        var consumer = builder.AddContainer("consumer", "test-image").WithReference(entra);
+
+        entra.Resource.ClientCredentials.Clear();
+        entra.AsExistingApplication(tenantId, clientId)
+            .WithClientSecret(secret)
+            .WithCredential(new EntraIdFileCertificateCredential
+            {
+                FilePath = "/certs/app.pfx",
+                Password = certificatePassword.Resource
+            });
+
+        using var app = builder.Build();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()), cts.Token);
+        var orchestrator = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+
+        Assert.True(app.Services.GetRequiredService<IInteractionService>().IsAvailable);
+        await orchestrator.PublishResourcesPreparedAsync(cts.Token);
+        await orchestrator.PublishResourceStartingAsync(consumer.Resource, cts.Token);
+
+        Assert.True(notifications.TryGetCurrentState(entra.Resource.Name, out var sourceState));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, sourceState.Snapshot.State?.Text);
+        Assert.Equal(
+            ["client", "tenant"],
+            Assert.IsType<string[]>(Assert.Single(sourceState.Snapshot.Properties, p => p.Name == "resource.unresolvedParameters").Value));
+        Assert.True(notifications.TryGetCurrentState(consumer.Resource.Name, out var consumerState));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, consumerState.Snapshot.State?.Text);
+        Assert.Equal(
+            ["certificate-password", "client", "secret", "tenant"],
+            Assert.IsType<string[]>(Assert.Single(consumerState.Snapshot.Properties, p => p.Name == "resource.unresolvedParameters").Value));
+
+        var configurationTask = ExecutionConfigurationBuilder.Create(consumer.Resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(builder.ExecutionContext, NullLogger.Instance, cts.Token);
+        Assert.False(configurationTask.IsCompleted);
+        await tenantId.Resource.SetValueAsync(TenantId, cts.Token);
+        await clientId.Resource.SetValueAsync(ClientId, cts.Token);
+
+        var running = await notifications.WaitForResourceAsync(entra.Resource.Name, e => e.Snapshot.State?.Text == KnownResourceStates.Running, cts.Token);
+        Assert.Empty(running.Snapshot.Properties.Where(p => p.Name == "resource.unresolvedParameters"));
+        await notifications.WaitForResourceAsync(consumer.Resource.Name, e =>
+            e.Snapshot.Properties.Any(p => p.Name == "resource.unresolvedParameters" &&
+                p.Value is string[] names && names.SequenceEqual(["certificate-password", "secret"])), cts.Token);
+        Assert.False(configurationTask.IsCompleted);
+
+        await secret.Resource.SetValueAsync("client-secret", cts.Token);
+        await certificatePassword.Resource.SetValueAsync("certificate-secret", cts.Token);
+        var configuration = await configurationTask;
+        Assert.Null(configuration.Exception);
+        var environment = configuration.EnvironmentVariables.ToDictionary();
+        Assert.Equal(TenantId, environment["ENTRA_TENANT_ID"]);
+        Assert.Equal(ClientId, environment["ENTRA_CLIENT_ID"]);
+        Assert.Equal("client-secret", environment["ENTRA_CLIENT_CREDENTIALS_0_CLIENT_SECRET"]);
+        Assert.Equal("certificate-secret", environment["ENTRA_CLIENT_CREDENTIALS_1_CERTIFICATE_PASSWORD"]);
+        var starting = await notifications.WaitForResourceAsync(consumer.Resource.Name, e => e.Snapshot.State?.Text == KnownResourceStates.Starting, cts.Token);
+        Assert.Empty(starting.Snapshot.Properties.Where(p => p.Name == "resource.unresolvedParameters"));
+    }
 
     [Fact]
     public void AddExistingEntraApplication_CreatesResource()

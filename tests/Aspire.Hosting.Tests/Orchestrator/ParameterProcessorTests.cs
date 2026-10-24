@@ -1884,6 +1884,9 @@ public class ParameterProcessorTests
         await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
         await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("savedValue", saveToUserSecrets: "true"), CancellationToken.None).DefaultTimeout();
         await parameterProcessor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None).DefaultTimeout();
+        var deletedValueTask = parameter.GetValueAsync(CancellationToken.None).AsTask();
+
+        Assert.False(deletedValueTask.IsCompleted);
 
         var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
         Assert.Equal(InteractionStrings.ParametersBarTitle, notificationInteraction.Title);
@@ -1897,7 +1900,194 @@ public class ParameterProcessorTests
         inputsInteraction.Inputs["testParam"].Value = "newValue";
         inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
 
-        Assert.Equal("newValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.Equal("newValue", await deletedValueTask.DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task DeleteParameterCoreAsync_WithoutInteraction_TracksUnresolvedParameterWithoutPrompting()
+    {
+        var interactionService = new TestInteractionService { IsAvailable = false };
+        var processor = CreateParameterProcessor(interactionService: interactionService);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+        var notifications = new List<ParameterResource>();
+        processor.ParameterBecameUnresolved += changedParameter =>
+        {
+            notifications.Add(changedParameter);
+            return Task.CompletedTask;
+        };
+
+        await processor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        var result = await processor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.True(processor.HasUnresolvedParameters);
+        Assert.True(processor.IsParameterUnresolved(parameter));
+        Assert.Same(parameter, Assert.Single(notifications));
+        Assert.NotNull(parameter.WaitForValueTcs);
+        Assert.False(parameter.WaitForValueTcs.Task.IsCompleted);
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
+
+        await parameter.SetValueAsync("resolvedValue").DefaultTimeout();
+
+        Assert.False(processor.HasUnresolvedParameters);
+        Assert.False(processor.IsParameterUnresolved(parameter));
+        Assert.Equal("resolvedValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task DeleteParameterCoreAsync_WhenInteractionBecomesAvailable_PromptsForExistingPendingValue()
+    {
+        var interactionService = new TestInteractionService { IsAvailable = false };
+        var processor = CreateParameterProcessor(interactionService: interactionService);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+
+        await processor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        await processor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None).DefaultTimeout();
+        var pendingValueTask = parameter.WaitForValueTcs?.Task;
+        Assert.NotNull(pendingValueTask);
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
+
+        try
+        {
+            interactionService.IsAvailable = true;
+            await processor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None).DefaultTimeout();
+
+            Assert.Same(pendingValueTask, parameter.WaitForValueTcs?.Task);
+            var notification = await interactionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+            Assert.Equal(InteractionStrings.ParametersBarTitle, notification.Title);
+        }
+        finally
+        {
+            await parameter.SetValueAsync("cleanupValue").DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task DeleteParameterCoreAsync_DuringResolutionCancellationStartsNewResolutionTask()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var parameter = CreateParameterWithMissingValue("testParam");
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        var deleteTaskSource = new TaskCompletionSource<Task<ExecuteCommandResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = inputsInteraction.CancellationToken.Register(() =>
+        {
+            deleteTaskSource.SetResult(parameterProcessor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None));
+        });
+
+        inputsInteraction.Inputs[parameter.Name].Value = "firstValue";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        var deleteTask = await deleteTaskSource.Task.DefaultTimeout();
+        var deleteResult = await deleteTask.DefaultTimeout();
+        Assert.True(deleteResult.Success);
+
+        var replacementNotification = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(InteractionStrings.ParametersBarTitle, replacementNotification.Title);
+        Assert.False(replacementNotification.CancellationToken.IsCancellationRequested);
+
+        await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("finalValue"), CancellationToken.None).DefaultTimeout();
+        replacementNotification.CompletionTcs.SetResult(InteractionResult.Ok(false));
+    }
+
+    [Fact]
+    public async Task DeleteParameterCoreAsync_PreservesExistingPendingValueTask()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+        var existingWaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        parameter.WaitForValueTcs = existingWaitForValueTcs;
+        var existingValueTask = parameter.GetValueAsync(CancellationToken.None).AsTask();
+
+        await parameterProcessor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None).DefaultTimeout();
+
+        Assert.Same(existingWaitForValueTcs, parameter.WaitForValueTcs);
+        Assert.False(existingValueTask.IsCompleted);
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        inputsInteraction.Inputs["testParam"].Value = "newValue";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        Assert.Equal("newValue", await existingValueTask.DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeleteParameterCoreAsync_WithOverlappingValueChange_NotifiesReplacementValueTask(bool replaceValueTask)
+    {
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var processor = CreateParameterProcessor(interactionService: interactionService);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+        await processor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        var notificationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resumeNotification = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var notifiedValueTasks = new List<Task<string?>?>();
+        processor.ParameterBecameUnresolved += async changedParameter =>
+        {
+            Assert.Same(parameter, changedParameter);
+            notifiedValueTasks.Add(changedParameter.WaitForValueTcs?.Task);
+            if (notifiedValueTasks.Count == 1)
+            {
+                notificationStarted.SetResult();
+                await resumeNotification.Task;
+            }
+        };
+
+        var firstDelete = processor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None);
+        Task valueChange = Task.CompletedTask;
+        Task<ExecuteCommandResult>? secondDelete = null;
+        try
+        {
+            await notificationStarted.Task.DefaultTimeout();
+            var originalValueTask = parameter.WaitForValueTcs?.Task;
+            Assert.NotNull(originalValueTask);
+            Assert.False(originalValueTask.IsCompleted);
+
+            // Keep the first unresolved notification inside the per-parameter lock while a set
+            // completes its task and a subsequent delete replaces it before the set is observed.
+            if (replaceValueTask)
+            {
+                valueChange = parameter.SetValueAsync("supersededValue");
+                Assert.True(originalValueTask.IsCompletedSuccessfully);
+            }
+            secondDelete = processor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None);
+            var currentValueTask = parameter.WaitForValueTcs?.Task;
+            Assert.NotNull(currentValueTask);
+            Assert.False(currentValueTask.IsCompleted);
+            Assert.Equal(replaceValueTask, !ReferenceEquals(originalValueTask, currentValueTask));
+
+            resumeNotification.SetResult();
+            await Task.WhenAll(firstDelete, valueChange, secondDelete).DefaultTimeout();
+            Assert.True((await firstDelete).Success);
+            Assert.True((await secondDelete).Success);
+            Assert.Equal(
+                replaceValueTask ? [originalValueTask, currentValueTask] : new[] { originalValueTask },
+                notifiedValueTasks);
+        }
+        finally
+        {
+            resumeNotification.TrySetResult();
+            await firstDelete.DefaultTimeout();
+            await valueChange.DefaultTimeout();
+            if (secondDelete is not null)
+            {
+                await secondDelete.DefaultTimeout();
+            }
+            await parameter.SetValueAsync("cleanupValue").DefaultTimeout();
+        }
     }
 
     [Fact]

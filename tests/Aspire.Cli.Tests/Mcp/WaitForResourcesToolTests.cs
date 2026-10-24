@@ -533,16 +533,19 @@ public class WaitForResourcesToolTests
                 "Resource wait failed."));
     }
 
-    [Fact]
-    public async Task WaitForResourcesTool_UsesTimeoutOutcomeWhenNoResourceFails()
+    [Theory]
+    [InlineData("Starting", "Starting")]
+    [InlineData("UnresolvedParameters", "UnresolvedParameters")]
+    [InlineData("Downloading model ghcr.io/private/repository:latest", "unknown")]
+    public async Task WaitForResourcesTool_UsesTimeoutOutcomeWhenNoResourceFails(string state, string expectedState)
     {
         var connection = CreateConnection(
             new ResourceSnapshot { Name = "ready", State = "Running" },
-            new ResourceSnapshot { Name = "slow", State = "Starting" });
+            new ResourceSnapshot { Name = "slow", State = state });
         connection.WaitForResourceHandler = (resourceName, _, _, _) =>
             Task.FromResult(resourceName == "ready"
                 ? new WaitForResourceResponse { Success = true, State = "Running", HealthStatus = "Healthy" }
-                : new WaitForResourceResponse { Success = false, TimedOut = true, State = "Starting" });
+                : new WaitForResourceResponse { Success = false, TimedOut = true, State = state });
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection(connection.Hash, connection.SocketPath, connection);
         var tool = CreateTool(monitor);
@@ -553,11 +556,10 @@ public class WaitForResourcesToolTests
 
         using var json = GetWaitResult(result);
         Assert.Equal("timeout", json.RootElement.GetProperty("outcome").GetString());
-        Assert.Equal(
-            ["success", "timeout"],
-            json.RootElement.GetProperty("resources")
-                .EnumerateArray()
-                .Select(static resource => resource.GetProperty("outcome").GetString()));
+        Assert.Collection(
+            json.RootElement.GetProperty("resources").EnumerateArray(),
+            resource => AssertResourceOutcome(resource, "ready", "Running", "success", null),
+            resource => AssertResourceOutcome(resource, "slow", expectedState, "timeout", "Timed out waiting for the target state."));
     }
 
     [Fact]

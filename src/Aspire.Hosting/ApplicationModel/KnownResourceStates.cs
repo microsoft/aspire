@@ -55,6 +55,11 @@ public static class KnownResourceStates
     public static readonly string Waiting = nameof(Waiting);
 
     /// <summary>
+    /// The unresolved parameters state. Useful for showing that a resource is waiting for parameter values.
+    /// </summary>
+    public static readonly string UnresolvedParameters = nameof(UnresolvedParameters);
+
+    /// <summary>
     /// The not started state. Useful for showing the resource was created without being started.
     /// </summary>
     public static readonly string NotStarted = nameof(NotStarted);
@@ -80,7 +85,12 @@ public static class KnownResourceStates
     public static readonly IReadOnlyList<string> TerminalStates = [Finished, FailedToStart, Exited];
 
     /// <summary>
+    /// List of states in which startup is waiting for dependencies or parameter values.
+    /// </summary>
+    public static readonly IReadOnlyList<string> WaitingStates = [Waiting, UnresolvedParameters];
+
+    /// <summary>
     /// List of states in which a resource can be rebuilt.
     /// </summary>
-    public static readonly IReadOnlyList<string> BuildableStates = [Running, Waiting, Finished, FailedToStart, Exited];
+    public static readonly IReadOnlyList<string> BuildableStates = [Running, .. WaitingStates, .. TerminalStates];
 }

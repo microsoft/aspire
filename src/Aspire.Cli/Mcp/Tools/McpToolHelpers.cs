@@ -166,6 +166,7 @@ internal static class McpToolHelpers
             "RuntimeUnhealthy" or
             "Starting" or
             "Stopping" or
+            "UnresolvedParameters" or
             "ValueMissing" or
             "Waiting" => state,
             _ => "unknown"

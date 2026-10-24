@@ -28,7 +28,7 @@ public sealed class ParameterProcessor(
     internal const string SetParameterValueName = "Value";
 
     private readonly List<ParameterResource> _unresolvedParameters = [];
-    private readonly Dictionary<ParameterResource, long> _unresolvedParameterVersions = [];
+    private readonly Dictionary<ParameterResource, (long Version, Task<string?>? ValueTask)> _unresolvedParameterStates = [];
     private readonly HashSet<ParameterResource> _observedParameters = [];
     private readonly Dictionary<ParameterResource, SemaphoreSlim> _parameterUpdateLocks = [];
     private readonly object _observedParametersLock = new();
@@ -36,6 +36,18 @@ public sealed class ParameterProcessor(
     private CancellationTokenSource? _allParametersResolvedCts;
     private Task _allParametersResolvedCancellation = Task.CompletedTask;
     private Task? _parameterResolutionTask;
+
+    internal event Func<ParameterResource, Task>? ParameterBecameUnresolved;
+
+    internal bool HasUnresolvedParameters => AreParametersUnresolved(_unresolvedParameters);
+
+    internal bool IsParameterUnresolved(ParameterResource parameterResource)
+    {
+        lock (_unresolvedParametersLock)
+        {
+            return _unresolvedParameters.Contains(parameterResource);
+        }
+    }
 
     /// <summary>
     /// AppHost-scoped history that records resolved secret parameter values so <c>aspire describe</c>/<c>watch</c>
@@ -66,7 +78,7 @@ public sealed class ParameterProcessor(
 
         // If interaction service is available, we can handle unresolved parameters.
         // This will allow the user to provide values for parameters that could not be initialized.
-        if (interactionService.IsAvailable && HasUnresolvedParameters(_unresolvedParameters))
+        if (interactionService.IsAvailable && AreParametersUnresolved(_unresolvedParameters))
         {
             // Start the loop that will allow the user to specify values for unresolved parameters.
             var task = EnsureParameterResolutionTaskRunningAsync();
@@ -284,7 +296,13 @@ public sealed class ParameterProcessor(
 
             if (eventArgs.Exception is MissingParameterValueException)
             {
-                if (interactionService.IsAvailable && AddUnresolvedParameter(parameterResource, eventArgs.Version))
+                // Non-interactive commands suppress prompts, not tracking of startup blockers.
+                if (AddUnresolvedParameter(parameterResource, eventArgs.Version))
+                {
+                    await NotifyParameterBecameUnresolvedAsync(parameterResource).ConfigureAwait(false);
+                }
+
+                if (interactionService.IsAvailable)
                 {
                     _ = EnsureParameterResolutionTaskRunningAsync();
                 }
@@ -582,7 +600,7 @@ public sealed class ParameterProcessor(
             if (parameterResource.Required)
             {
                 ObserveParameterValueChanges(parameterResource);
-                await parameterResource.SetExceptionAsync(new MissingParameterValueException("Parameter value has been deleted."), cancellationToken).ConfigureAwait(false);
+                await parameterResource.ResetValueAsync(cancellationToken).ConfigureAwait(false);
             }
             else
             {
@@ -681,7 +699,7 @@ public sealed class ParameterProcessor(
         var stateModified = false;
 
         // This method will continue in a loop until all unresolved parameters are resolved.
-        while (!allParametersResolvedToken.IsCancellationRequested && HasUnresolvedParameters(unresolvedParameters))
+        while (!allParametersResolvedToken.IsCancellationRequested && AreParametersUnresolved(unresolvedParameters))
         {
             var showNotification = executionContext.IsRunMode;
             var showSaveToSecrets = executionContext.IsRunMode;
@@ -825,7 +843,7 @@ public sealed class ParameterProcessor(
             lock (_unresolvedParametersLock)
             {
                 unresolvedParameters.Remove(parameter);
-                _unresolvedParameterVersions.Remove(parameter);
+                _unresolvedParameterStates.Remove(parameter);
 
                 if (unresolvedParameters.Count == 0 && _allParametersResolvedCts is { IsCancellationRequested: false } cts)
                 {
@@ -845,19 +863,43 @@ public sealed class ParameterProcessor(
     {
         lock (_unresolvedParametersLock)
         {
-            if (_unresolvedParameters.Contains(parameter))
+            var valueTask = parameter.WaitForValueTcs?.Task;
+            if (_unresolvedParameterStates.TryGetValue(parameter, out var previousState))
             {
-                _unresolvedParameterVersions[parameter] = version;
-                return false;
+                _unresolvedParameterStates[parameter] = (version, valueTask);
+
+                // A set can be superseded by a delete before its observer removes the parameter.
+                // A replacement value task still needs a new dependent-resource monitor.
+                return !ReferenceEquals(previousState.ValueTask, valueTask);
             }
 
             _unresolvedParameters.Add(parameter);
-            _unresolvedParameterVersions.Add(parameter, version);
+            _unresolvedParameterStates.Add(parameter, (version, valueTask));
             return true;
         }
     }
 
-    private bool HasUnresolvedParameters(IList<ParameterResource> unresolvedParameters)
+    private async Task NotifyParameterBecameUnresolvedAsync(ParameterResource parameterResource)
+    {
+        if (ParameterBecameUnresolved is not { } parameterBecameUnresolved)
+        {
+            return;
+        }
+
+        foreach (Func<ParameterResource, Task> handler in parameterBecameUnresolved.GetInvocationList())
+        {
+            try
+            {
+                await handler(parameterResource).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to publish unresolved state for parameter {ParameterName}.", parameterResource.Name);
+            }
+        }
+    }
+
+    private bool AreParametersUnresolved(IList<ParameterResource> unresolvedParameters)
     {
         if (ReferenceEquals(unresolvedParameters, _unresolvedParameters))
         {
@@ -876,7 +918,7 @@ public sealed class ParameterProcessor(
         {
             lock (_unresolvedParametersLock)
             {
-                return [.. unresolvedParameters.Select(parameter => (parameter, _unresolvedParameterVersions[parameter]))];
+                return [.. unresolvedParameters.Select(parameter => (parameter, _unresolvedParameterStates[parameter].Version))];
             }
         }
 
@@ -928,6 +970,14 @@ public sealed class ParameterProcessor(
 
     private async Task UpdateParameterStateAsync(ParameterResource parameterResource, string? value, ResourceStateSnapshot? state)
     {
+        // Referenced-only parameters may share an ID with a model resource. Preserve the existing
+        // snapshot owner without skipping the parameter's value task or unresolved-state processing.
+        if (notificationService.TryGetCurrentState(parameterResource.Name, out var currentState) &&
+            !ReferenceEquals(currentState.Resource, parameterResource))
+        {
+            return;
+        }
+
         await notificationService.PublishUpdateAsync(parameterResource, s =>
         {
             var properties = value is null

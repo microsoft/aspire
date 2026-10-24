@@ -417,6 +417,23 @@ public class ParameterResource : Resource, IExpressionValue
         return NotifyValueChangedAsync(eventArgs, cancellationToken);
     }
 
+    internal Task ResetValueAsync(CancellationToken cancellationToken)
+    {
+        ParameterResourceValueChangedEventArgs eventArgs;
+
+        lock (_valueTaskLock)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Clearing a required parameter starts a new resolution without faulting existing startup
+            // waiters. Keep a pending source, or replace the completed value under the assignment lock.
+            _ = GetOrCreateResettableWaitForValueTcs();
+            eventArgs = CreateValueChangedEventArgs(new MissingParameterValueException("Parameter value has been deleted."));
+        }
+
+        return NotifyValueChangedAsync(eventArgs, cancellationToken);
+    }
+
     private ParameterResourceValueChangedEventArgs CreateValueChangedEventArgs(string? value) =>
         new(++_valueChangeVersion, value, exception: null);
 

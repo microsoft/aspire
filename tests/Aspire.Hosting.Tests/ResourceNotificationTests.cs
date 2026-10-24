@@ -826,20 +826,26 @@ public class ResourceNotificationTests
         Assert.DoesNotContain(completedWaitingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
     }
 
-    [Fact]
-    public async Task PublishUpdateClearsWaitingForDependenciesWhenResourceLeavesWaiting()
+    [Theory]
+    [InlineData(nameof(KnownResourceStates.Waiting))]
+    [InlineData(nameof(KnownResourceStates.UnresolvedParameters))]
+    [InlineData("waiting")]
+    [InlineData("unresolvedparameters")]
+    public async Task PublishUpdateClearsWaitingForDependenciesWhenResourceLeavesWaiting(string state)
     {
         var resource = new CustomResource("resource");
         var notificationService = ResourceNotificationServiceTestHelpers.Create();
 
         await notificationService.PublishUpdateAsync(resource, s => s with
         {
-            State = KnownResourceStates.Waiting,
+            State = state,
             Properties = [new ResourcePropertySnapshot(KnownProperties.Resource.WaitingFor, new[] { "dependency" })]
         }).DefaultTimeout();
 
         Assert.True(notificationService.TryGetCurrentState(resource.Name, out var waitingEvent));
-        Assert.Contains(waitingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+        var property = Assert.Single(waitingEvent.Snapshot.Properties);
+        Assert.Equal(KnownProperties.Resource.WaitingFor, property.Name);
+        Assert.Equal(new[] { "dependency" }, Assert.IsType<string[]>(property.Value));
 
         await notificationService.PublishUpdateAsync(resource, s => s with
         {
@@ -847,7 +853,31 @@ public class ResourceNotificationTests
         }).DefaultTimeout();
 
         Assert.True(notificationService.TryGetCurrentState(resource.Name, out var runningEvent));
-        Assert.DoesNotContain(runningEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+        Assert.Empty(runningEvent.Snapshot.Properties);
+    }
+
+    [Fact]
+    public async Task PublishUpdateClearsUnresolvedParametersWhenResourceLeavesUnresolvedParametersState()
+    {
+        var resource = new CustomResource("resource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(resource, s => s with
+        {
+            State = KnownResourceStates.UnresolvedParameters,
+            Properties = [new ResourcePropertySnapshot(KnownProperties.Resource.UnresolvedParameters, new[] { "parameter" })]
+        }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var unresolvedEvent));
+        Assert.Contains(unresolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+
+        await notificationService.PublishUpdateAsync(resource, s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var runningEvent));
+        Assert.DoesNotContain(runningEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
     }
 
     [Fact]

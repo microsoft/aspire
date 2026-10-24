@@ -17,5 +17,6 @@ public enum KnownResourceState
     ValueMissing,
     Unknown,
     RuntimeUnhealthy,
-    NotStarted
+    NotStarted,
+    UnresolvedParameters
 }
