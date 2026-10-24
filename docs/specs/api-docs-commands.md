@@ -7,7 +7,7 @@ This specification describes a new `aspire docs api` command group for browsing,
 The new command group lives under `aspire docs`, but it uses a different ingestion pipeline than the existing prose docs commands:
 
 - `aspire docs` indexes `llms-full.txt`
-- `aspire docs api` indexes `sitemap-0.xml` and uses direct API page routes as addressable items
+- `aspire docs api` indexes the `sitemap-index.xml` sitemap index (or a plain `urlset` sitemap) and uses direct API page routes as addressable items
 
 ## Goals
 
@@ -131,17 +131,34 @@ For items whose identifier maps directly to a page route, `get` fetches the mark
 
 The implementation uses:
 
-- `https://aspire.dev/sitemap-0.xml` as the API catalog source
+- `https://aspire.dev/sitemap-index.xml` as the API catalog source, overridable with `docs:api:sitemapUrl`
 - A fixed markdown resolution rule that appends `.md` to the canonical API page URL
-- ETag-based caching and disk persistence for both the sitemap and page content
+- ETag-based caching and disk persistence for every sitemap and for page content
 
 The implementation should not hardcode the sitemap and markdown endpoints directly into the command handlers.
+
+### Sitemap index resolution
+
+The configured source is resolved by its XML root element:
+
+- `sitemapindex`: every `<sitemap><loc>` is fetched as a child sitemap and the child entries are merged. This lets a site list API routes outside `sitemap-0.xml`, for example in a `sitemap-api.xml` when API pages are rendered on demand instead of generated statically.
+- `urlset`: used as is. This keeps overrides and deployments that list every API route in one sitemap working unchanged.
+
+Child sitemaps are handled as follows:
+
+- Each child uses its own ETag and content cache entry, so an unchanged child stays a `304 Not Modified` when another child changes.
+- Child URLs are rebased onto the host of the configured sitemap URL, the same way page URLs are rebased, so a staging or local override reads only that host's sitemaps.
+- Entries are unioned and de-duplicated, because a page can be listed in more than one child.
+- The index fingerprint is computed from the merged entries in a deterministic order, so a change in any child rebuilds the index. The index schema version is bumped when the source shape changes so persisted indexes from older CLIs are rebuilt.
+- If a child cannot be fetched and has no cached copy, the refresh fails and the CLI falls back to its cached index. If there is no cached index, a warning is logged and the catalog stays empty, rather than building a catalog that is missing part of the API surface.
+
+Pages are always fetched from `<page-url>.md`. On-demand pages can respond with `Cache-Control: no-store` and no ETag; the page fetcher tolerates that and simply downloads the content again.
 
 ## Parsing strategy
 
 The API pipeline consists of:
 
-1. Fetch sitemap
+1. Fetch the sitemap index (or sitemap) and any child sitemaps
 2. Parse C# and TypeScript API routes
 3. Build a hierarchical API map
 4. Persist the built index to disk

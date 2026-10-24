@@ -29,7 +29,7 @@ namespace Aspire.Cli.Configuration;
 ///   "channel": "stable",
 ///   "docs": {
 ///     "llmsTxtUrl": "https://aspire.dev/llms-full.txt",
-///     "api": { "sitemapUrl": "https://aspire.dev/sitemap-0.xml" }
+///     "api": { "sitemapUrl": "https://aspire.dev/sitemap-index.xml" }
 ///   },
 ///   "certificates": { "nssDbPaths": "firefox=/path/to/profile" },
 ///   "containerTunnel": { "baseImage": "example.com/aspire-tunnel:latest" },
