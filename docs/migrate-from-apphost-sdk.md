@@ -80,7 +80,7 @@ moved to the central file. See [NuGet/Home#12967](https://github.com/NuGet/Home/
 ```
 
 The bundle is the default and cannot be disabled. The explicit property above can be omitted.
-Setting it to `false` produces the unsuppressible `ASPIRE010` error.
+Setting it to `false` produces the unsuppressible `ASPIRE013` error.
 The dashboard and DCP are resolved from your Aspire CLI installation
 (see [the CLI bundle spec](specs/bundle.md)) instead of being added as RID-specific
 `PackageReference` items. Make sure the [Aspire CLI](https://get.aspire.dev) is installed.
