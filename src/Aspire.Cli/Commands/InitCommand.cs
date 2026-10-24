@@ -6,6 +6,8 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.ClaudeCode;
+using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -111,9 +113,10 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_languageOption);
         Options.Add(_fileBasedOption);
         Options.Add(NewCommand.s_suppressAgentInitOption);
-        Options.Add(AgentInitCommand.s_agentsOption);
+        Options.Add(_agentInitCommand.AgentsOption);
         Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
+        Options.Add(AgentInitCommand.s_aspireSourceOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -182,12 +185,12 @@ internal sealed class InitCommand : BaseCommand
             CliExitCodes.Success,
             workspaceRoot,
             agentInitBinding,
-            PromptBinding.Create(parseResult, AgentInitCommand.s_agentsOption),
-            PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption),
+            PromptBinding.Create(parseResult, _agentInitCommand.AgentsOption),
+            PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption, CommonAgentApplicators.AspireSkillName),
+            PromptBinding.Create(parseResult, AgentInitCommand.s_aspireSourceOption, "embedded"),
             PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
             cancellationToken);
 
-        // Step 5: Print follow-up commands only when the user selected the one-time init skill.
         if (agentInitResult.ExitCode == CliExitCodes.Success &&
             agentInitResult.SelectedSkills.Any(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName)))
         {
@@ -229,16 +232,16 @@ internal sealed class InitCommand : BaseCommand
         }
     }
 
-    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<AgentClient> selectedClients)
+    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<IAgentClient> selectedClients)
     {
         var commands = new List<string>();
 
-        if (selectedClients.Contains(AgentClient.ClaudeCode))
+        if (selectedClients.Any(client => client.Id == ClaudeCodeAgentClient.ClientId))
         {
             commands.Add("claude \"run the aspireify skill\"");
         }
 
-        if (selectedClients.Contains(AgentClient.OpenCode))
+        if (selectedClients.Any(client => client.Id == OpenCodeAgentClient.ClientId))
         {
             commands.Add("opencode --prompt \"run the aspireify skill\"");
         }
