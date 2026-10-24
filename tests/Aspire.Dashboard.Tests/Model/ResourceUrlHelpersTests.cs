@@ -9,9 +9,9 @@ namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class ResourceUrlHelpersTests
 {
-    public static List<DisplayedUrl> GetUrls(ResourceViewModel resource, bool includeInternalUrls = false)
+    public static List<DisplayedUrl> GetUrls(ResourceViewModel resource, bool includeInternalUrls = false, bool includeNonEndpointUrls = false)
     {
-        return ResourceUrlHelpers.GetUrls(resource, includeInternalUrls);
+        return ResourceUrlHelpers.GetUrls(resource, includeInternalUrls, includeNonEndpointUrls);
     }
 
     [Fact]
@@ -30,7 +30,7 @@ public sealed class ResourceUrlHelpersTests
         Assert.Collection(endpoints,
             e =>
             {
-                Assert.Equal("http://localhost:8080", e.Text);
+                Assert.Equal("Test (8080)", e.Text);
                 Assert.Equal("Test", e.Name);
                 Assert.Equal("http://localhost:8080", e.Url);
                 Assert.Equal("localhost", e.Address);
@@ -49,7 +49,7 @@ public sealed class ResourceUrlHelpersTests
         Assert.Collection(endpoints,
             e =>
             {
-                Assert.Equal("http://localhost:8080", e.Text);
+                Assert.Equal("Test (8080)", e.Text);
                 Assert.Equal("Test", e.Name);
                 Assert.Equal("http://localhost:8080", e.Url);
                 Assert.Equal("localhost", e.Address);
@@ -57,7 +57,7 @@ public sealed class ResourceUrlHelpersTests
             },
             e =>
             {
-                Assert.Equal("http://localhost:8081", e.Text);
+                Assert.Equal("Test2 (8081)", e.Text);
                 Assert.Equal("Test2", e.Name);
                 Assert.Equal("http://localhost:8081", e.Url);
                 Assert.Equal("localhost", e.Address);
@@ -76,7 +76,7 @@ public sealed class ResourceUrlHelpersTests
         Assert.Collection(endpoints,
             e =>
             {
-                Assert.Equal("http://localhost:8080", e.Text);
+                Assert.Equal("Test (8080)", e.Text);
                 Assert.Equal("Test", e.Name);
                 Assert.Equal("http://localhost:8080", e.Url);
                 Assert.Equal("localhost", e.Address);
@@ -84,7 +84,7 @@ public sealed class ResourceUrlHelpersTests
             },
             e =>
             {
-                Assert.Equal("tcp://localhost:8081", e.Text);
+                Assert.Equal("Test2 (8081)", e.Text);
                 Assert.Equal("Test2", e.Name);
                 Assert.Null(e.Url);
                 Assert.Equal("localhost", e.Address);
@@ -104,7 +104,7 @@ public sealed class ResourceUrlHelpersTests
         Assert.Collection(endpoints,
             e =>
             {
-                Assert.Equal("myapp://resource/123", e.Text);
+                Assert.Equal("Custom", e.Text);
                 Assert.Equal("Custom", e.Name);
                 Assert.Equal("myapp://resource/123", e.Url);
                 Assert.Equal("resource", e.Address);
@@ -112,7 +112,7 @@ public sealed class ResourceUrlHelpersTests
             },
             e =>
             {
-                Assert.Equal("mailto:test@example.com", e.Text);
+                Assert.Equal("Email (25)", e.Text);
                 Assert.Equal("Email", e.Name);
                 Assert.Equal("mailto:test@example.com", e.Url);
                 Assert.Equal("example.com", e.Address);
@@ -120,7 +120,7 @@ public sealed class ResourceUrlHelpersTests
             },
             e =>
             {
-                Assert.Equal("ftp://files.example.com/path", e.Text);
+                Assert.Equal("FTP (21)", e.Text);
                 Assert.Equal("FTP", e.Name);
                 Assert.Equal("ftp://files.example.com/path", e.Url);
                 Assert.Equal("files.example.com", e.Address);
@@ -139,7 +139,7 @@ public sealed class ResourceUrlHelpersTests
         Assert.Collection(endpoints,
             e =>
             {
-                Assert.Equal("https://localhost:8080/test", e.Text);
+                Assert.Equal("First (8080)", e.Text);
                 Assert.Equal("First", e.Name);
                 Assert.Equal("https://localhost:8080/test", e.Url);
                 Assert.Equal("localhost", e.Address);
@@ -147,7 +147,7 @@ public sealed class ResourceUrlHelpersTests
             },
             e =>
             {
-                Assert.Equal("https://localhost:8081/test2", e.Text);
+                Assert.Equal("Test (8081)", e.Text);
                 Assert.Equal("Test", e.Name);
                 Assert.Equal("https://localhost:8081/test2", e.Url);
                 Assert.Equal("localhost", e.Address);
@@ -166,7 +166,7 @@ public sealed class ResourceUrlHelpersTests
         Assert.Collection(endpoints,
             e =>
             {
-                Assert.Equal("https://localhost:8081/test2", e.Text);
+                Assert.Equal("Test (8081)", e.Text);
                 Assert.Equal("Test", e.Name);
                 Assert.Equal("https://localhost:8081/test2", e.Url);
                 Assert.Equal("localhost", e.Address);
@@ -185,7 +185,7 @@ public sealed class ResourceUrlHelpersTests
         Assert.Collection(endpoints,
             e =>
             {
-                Assert.Equal("https://localhost:8081/test2", e.Text);
+                Assert.Equal("Test (8081)", e.Text);
                 Assert.Equal("Test", e.Name);
                 Assert.Equal("https://localhost:8081/test2", e.Url);
                 Assert.Equal("localhost", e.Address);
@@ -205,7 +205,7 @@ public sealed class ResourceUrlHelpersTests
         Assert.Collection(endpoints,
             e =>
             {
-                Assert.Equal("https://localhost:8080/test", e.Text);
+                Assert.Equal("First (8080)", e.Text);
                 Assert.Equal("First", e.Name);
                 Assert.Equal("https://localhost:8080/test", e.Url);
                 Assert.Equal("localhost", e.Address);
@@ -213,12 +213,64 @@ public sealed class ResourceUrlHelpersTests
             },
             e =>
             {
-                Assert.Equal("https://localhost:8081/test2", e.Text);
+                Assert.Equal("Test (8081)", e.Text);
                 Assert.Equal("Test", e.Name);
                 Assert.Equal("https://localhost:8081/test2", e.Url);
                 Assert.Equal("localhost", e.Address);
                 Assert.Equal(8081, e.Port);
             });
+    }
+
+    [Fact]
+    public void GetUrls_ExplicitDisplayName_OverridesDefault()
+    {
+        var endpoints = GetUrls(ModelTestHelpers.CreateResource(urls: [
+            new("Test", new("http://localhost:8080"), isInternal: false, isInactive: false, displayProperties: new UrlDisplayPropertiesViewModel("Custom Display Name", 0))
+        ]));
+
+        Assert.Collection(endpoints,
+            e =>
+            {
+                Assert.Equal("Custom Display Name", e.Text);
+                Assert.Equal("Test", e.Name);
+                Assert.Equal("http://localhost:8080", e.Url);
+            });
+    }
+
+    // The endpoint name arrives as "" rather than null after a round trip through the resource service's
+    // gRPC contract (proto3 strings default to "", not null), so both must be treated as "no endpoint".
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void GetUrls_NonEndpointUrl_DefaultsToFullUrl(string? endpointName)
+    {
+        var endpoints = GetUrls(ModelTestHelpers.CreateResource(urls: [
+            new(endpointName, new("https://example.com"), isInternal: false, isInactive: false, displayProperties: UrlDisplayPropertiesViewModel.Empty)
+        ]), includeNonEndpointUrls: true);
+
+        Assert.Collection(endpoints,
+            e =>
+            {
+                Assert.Equal("https://example.com", e.Text);
+                Assert.Equal("-", e.Name);
+                Assert.Equal("https://example.com", e.Url);
+            });
+    }
+
+    [Fact]
+    public void GetUrls_NonClickableUrl_AddressIsNotDisplayText()
+    {
+        var endpoints = GetUrls(ModelTestHelpers.CreateResource(urls: [
+            new("tcp", new("tcp://localhost:8081"), isInternal: false, isInactive: false, displayProperties: new UrlDisplayPropertiesViewModel("Custom", 0))
+        ]));
+
+        var url = Assert.Single(endpoints);
+        Assert.Null(url.Url);
+        Assert.Equal("Custom", url.Text);
+        // Address-oriented members must use the real URL rather than the (display name based) Text.
+        Assert.Equal("tcp://localhost:8081", url.OriginalUrlString);
+        Assert.Equal("tcp://localhost:8081", url.ValueToVisualize);
+        Assert.True(url.MatchesFilter("localhost:8081"));
     }
 
     [Fact]

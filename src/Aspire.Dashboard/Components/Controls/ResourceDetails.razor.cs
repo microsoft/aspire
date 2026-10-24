@@ -125,7 +125,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
         set { _isMaskAllChecked = value; }
     }
 
-    private readonly EnumerableGridSort<DisplayedUrl> _urlValueSort = EnumerableGridSort<DisplayedUrl>.ByAscending(vm => vm.Url ?? vm.Text);
+    private readonly EnumerableGridSort<DisplayedUrl> _urlValueSort = EnumerableGridSort<DisplayedUrl>.ByAscending(vm => vm.Url ?? vm.OriginalUrlString);
 
     protected override void OnParametersSet()
     {

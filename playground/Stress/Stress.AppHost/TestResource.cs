@@ -142,6 +142,41 @@ static class TestResourceExtensions
 
         return rb;
     }
+
+    /// <summary>
+    /// Adds resources showcasing the various forms endpoints and non-endpoint URLs can take in the
+    /// dashboard's Urls column: a default endpoint, an endpoint with a customized display name, a URL
+    /// with no associated endpoint, and a URL that points at an endpoint on a different resource - each
+    /// shown for both a clickable (http) and a non-clickable (tcp) protocol.
+    /// </summary>
+    [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
+    public static void AddUrlEndpointShowcaseResources<T>(this IDistributedApplicationBuilder builder, IResourceBuilder<T> otherResourceBuilder, string otherResourceEndpointName)
+        where T : IResourceWithEndpoints
+    {
+        var target = builder.AddContainer("url-endpoint-showcase-target", "alpine")
+            .WithEntrypoint("sleep")
+            .WithArgs("3600")
+            .WithEndpoint(targetPort: 9204, scheme: "tcp", name: "tcp");
+
+        builder.AddContainer("url-endpoint-showcase", "alpine")
+            .WithEntrypoint("sleep")
+            .WithArgs("3600")
+            // Default endpoint - no customization, so the dashboard falls back to "{endpoint-name} ({port})".
+            .WithHttpEndpoint(targetPort: 9200, name: "http")
+            // Endpoint with a customized display name.
+            .WithHttpEndpoint(targetPort: 9201, name: "http-custom")
+            .WithUrlForEndpoint("http-custom", url => url.DisplayText = "Custom Endpoint Name")
+            // Url with no associated endpoint.
+            .WithUrl("https://example.com/no-endpoint", "External Link")
+            // Url pointing at an endpoint on another resource.
+            .WithUrl($"{otherResourceBuilder.GetEndpoint(otherResourceEndpointName)}/from-{otherResourceBuilder.Resource.Name}", "Link To Another Resource")
+            // Non-clickable protocol (tcp) variants of all of the above.
+            .WithEndpoint(targetPort: 9202, scheme: "tcp", name: "tcp")
+            .WithEndpoint(targetPort: 9203, scheme: "tcp", name: "tcp-custom")
+            .WithUrlForEndpoint("tcp-custom", url => url.DisplayText = "Custom Tcp Endpoint Name")
+            .WithUrl("tcp://example.com:9999", "External Tcp Link")
+            .WithUrl($"{target.GetEndpoint("tcp")}", "Link To Another Resource (Tcp)");
+    }
 }
 
 internal sealed class TestResourceLifecycle(
