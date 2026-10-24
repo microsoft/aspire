@@ -10,6 +10,7 @@ namespace Aspire.Hosting.Dcp;
 internal sealed class DcpResourceState(IDictionary<string, IResource> applicationModel, IEnumerable<IAppResource> appResources)
 {
     public readonly ConcurrentDictionary<string, Container> ContainersMap = [];
+    public readonly ConcurrentDictionary<string, ContainerVolumeReset> ContainerVolumeResetsMap = [];
     public readonly ConcurrentDictionary<string, Executable> ExecutablesMap = [];
     public readonly ConcurrentDictionary<string, ContainerExec> ContainerExecsMap = [];
     public readonly ConcurrentDictionary<string, Service> ServicesMap = [];

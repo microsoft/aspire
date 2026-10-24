@@ -46,6 +46,11 @@ internal sealed class ResourceCommand : BaseCommand
     {
         Description = SharedCommandStrings.IncludeHiddenOptionDescription
     };
+    private static readonly Option<bool> s_yesOption = new("--yes")
+    {
+        Description = ResourceCommandStrings.YesOptionDescription,
+        Aliases = { "-y" }
+    };
     // Hidden integration point for VS Code. It sends the current partial prompt state to
     // the AppHost and receives the dynamically-loaded command input metadata as JSON.
     private static readonly Option<bool> s_loadArgumentsOption = new("--load-arguments")
@@ -63,6 +68,7 @@ internal sealed class ResourceCommand : BaseCommand
         ["stop"] = ("Stopping", "stop", "stopped"),
         ["restart"] = ("Restarting", "restart", "restarted"),
         ["rebuild"] = ("Rebuilding", "rebuild", "rebuilt"),
+        ["reset-volumes"] = ("Resetting volumes for", "reset volumes for", "volumes reset"),
         ["set-parameter"] = ("Setting parameter for", "set parameter for", "set"),
         ["delete-parameter"] = ("Deleting parameter for", "delete parameter for", "deleted"),
         ["parameter-set"] = ("Setting parameter for", "set parameter for", "set"),
@@ -92,6 +98,7 @@ internal sealed class ResourceCommand : BaseCommand
         Arguments.Add(s_commandArgument);
         Options.Add(s_appHostOption);
         Options.Add(s_includeHiddenOption);
+        Options.Add(s_yesOption);
         Options.Add(s_loadArgumentsOption);
         Options.Add(new HelpOption { Action = new ResourceCommandHelpAction(this) });
         TreatUnmatchedTokensAsErrors = false;
@@ -153,6 +160,25 @@ internal sealed class ResourceCommand : BaseCommand
         if (loadArguments)
         {
             return await LoadCommandArgumentsAsync(parseResult, connection, resourceName, commandName, commandArguments, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (!string.IsNullOrWhiteSpace(command?.ConfirmationMessage))
+        {
+            if (parseResult.GetValue(RootCommand.NonInteractiveOption) && !parseResult.GetValue(s_yesOption))
+            {
+                return CommandResult.Failure(
+                    CliExitCodes.MissingRequiredArgument,
+                    string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.NonInteractiveRequiresYesFormat, Name));
+            }
+
+            if (!await InteractionService.PromptConfirmAsync(
+                command.ConfirmationMessage,
+                binding: PromptBinding.Create(parseResult, s_yesOption, defaultValue: false),
+                cancellationToken: cancellationToken).ConfigureAwait(false))
+            {
+                InteractionService.DisplayCancellationMessage();
+                return CommandResult.FromExitCode(CliExitCodes.FailedToExecuteResourceCommand);
+            }
         }
 
         // Use display metadata for well-known command names.

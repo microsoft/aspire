@@ -17,6 +17,68 @@ public class ResourceSnapshotBuilderTests
     private const string DcpTemplateArgument = "{{- portForServing \"exe\" -}}";
     private const string ResolvedPortArgument = "52731";
 
+    [Theory]
+    [InlineData("Pending", true, "Pending")]
+    [InlineData("Running", true, "Running")]
+    [InlineData("Failed", true, null)]
+    [InlineData("Succeeded", true, null)]
+    [InlineData("Pending", false, null)]
+    [InlineData(null, true, "Pending")]
+    public void ContainerSnapshotPublishesOnlyActiveOperationForMatchingContainerUid(string? resetState, bool matchesContainer, string? expected)
+    {
+        var container = Container.Create("container", "image");
+        container.Metadata.Uid = "container-uid";
+        container.Status = new ContainerStatus
+        {
+            State = KnownResourceStates.Running
+        };
+        var state = new DcpResourceState(new Dictionary<string, IResource>(), []);
+        var operation = ContainerVolumeReset.Create("reset", container.Metadata.Name, matchesContainer ? container.Metadata.Uid : "previous-container-uid");
+        operation.Status = new ContainerVolumeResetStatus { State = resetState };
+        state.ContainerVolumeResetsMap[operation.Metadata.Name] = operation;
+        var builder = new DcpResourceSnapshotBuilder(state);
+
+        var snapshot = builder.ToSnapshot(container, CreatePreviousSnapshot());
+
+        Assert.Equal(KnownResourceStates.Running, snapshot.State?.Text);
+        if (expected is not null)
+        {
+            Assert.Equal(expected, GetProperty(snapshot, KnownProperties.Container.VolumeResetState).Value);
+        }
+        else
+        {
+            Assert.Empty(snapshot.Properties.Where(p => p.Name == KnownProperties.Container.VolumeResetState));
+        }
+        state.ContainerVolumeResetsMap.TryRemove(operation.Metadata.Name, out _);
+        var resumed = builder.ToSnapshot(container, snapshot);
+        Assert.Empty(resumed.Properties.Where(p => p.Name == KnownProperties.Container.VolumeResetState));
+    }
+
+    [Fact]
+    public void ContainerSnapshotKeepsOrdinaryStartAvailableAfterStoppedReset()
+    {
+        var container = Container.Create("container", "image");
+        container.Spec.Stop = true;
+        container.Status = new ContainerStatus { State = ContainerState.NotFound };
+
+        var snapshot = CreateSnapshotBuilder().ToSnapshot(container, CreatePreviousSnapshot());
+
+        Assert.Equal(KnownResourceStates.Exited, snapshot.State?.Text);
+        Assert.Null(snapshot.ExitCode);
+    }
+
+    [Fact]
+    public void ContainerSnapshotKeepsExplicitStartIntentAfterRuntimeRemoval()
+    {
+        var container = Container.Create("container", "image");
+        container.Spec.Start = false;
+        container.Status = new ContainerStatus { State = ContainerState.NotFound };
+
+        var snapshot = CreateSnapshotBuilder().ToSnapshot(container, CreatePreviousSnapshot());
+
+        Assert.Equal(KnownResourceStates.NotStarted, snapshot.State?.Text);
+    }
+
     [Fact]
     public void ContainerSnapshotAddsDisplayMetadataForDashboardProperties()
     {

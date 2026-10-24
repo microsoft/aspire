@@ -1219,6 +1219,11 @@ internal sealed class ResourceSnapshotCommand
     public string? Description { get; init; }
 
     /// <summary>
+    /// Gets the warning that callers must confirm before executing the command.
+    /// </summary>
+    public string? ConfirmationMessage { get; init; }
+
+    /// <summary>
     /// Gets the ordered inputs that describe the invocation arguments accepted by the command.
     /// </summary>
     public ResourceSnapshotCommandArgument[] ArgumentInputs { get; init; } = [];

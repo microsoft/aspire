@@ -11,6 +11,7 @@ Arguments:
 Options:
   --apphost <apphost>                                                    The path to the Aspire AppHost project file or a directory to search
   --include-hidden                                                       Include hidden resources in the output
+  -y, --yes                                                              Confirm resource commands that require confirmation without prompting
   -?, -h, --help                                                         Show help and usage information
   -l, --log-level <Critical|Debug|Error|Information|None|Trace|Warning>  Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)
   --non-interactive                                                      Run the command in non-interactive mode, disabling all interactive prompts and spinners

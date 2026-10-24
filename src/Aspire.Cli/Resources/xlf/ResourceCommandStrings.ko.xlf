@@ -67,6 +67,11 @@
         <target state="translated">연결 대상</target>
         <note />
       </trans-unit>
+      <trans-unit id="YesOptionDescription">
+        <source>Confirm resource commands that require confirmation without prompting</source>
+        <target state="new">Confirm resource commands that require confirmation without prompting</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>
