@@ -6,8 +6,11 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 namespace Aspire.Hosting.Go.Tests;
@@ -870,6 +873,229 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishWithExistingDockerfileThrowsWhenPackagePathIsNotDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+
+        var sourceDir = CreateGoAppDirectoryWithDockerfile(workspace);
+        var app = builder.AddGoApp("api", sourceDir, packagePath: "./cmd/server");
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, workspace.Path));
+
+        Assert.Equal(
+            $"Go app resource 'api' is configured to run package './cmd/server', but publish is using the existing Dockerfile '{Path.Combine(sourceDir, "Dockerfile")}'. " +
+            "An existing Dockerfile entrypoint cannot be changed automatically from packagePath. " +
+            "Remove or rename the Dockerfile so Aspire can generate one, or call PublishAsDockerFile(...) and set the container entrypoint explicitly.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishModelWithExistingDockerfileThrowsWhenPackagePathIsNotDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+
+        builder.AddGoApp("api", CreateGoAppDirectoryWithDockerfile(workspace), packagePath: "./cmd/server");
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifestForModel(appModel, workspace.Path));
+
+        Assert.Contains("package './cmd/server'", exception.Message);
+        Assert.Contains("packagePath", exception.Message);
+        Assert.Contains("Dockerfile", exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishPipelineWithExistingDockerfileThrowsFromValidationStepWhenPackagePathIsNotDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "validate-go-dockerfile-package-path-api");
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        builder.AddGoApp("api", CreateGoAppDirectoryWithDockerfile(workspace), packagePath: "./cmd/server");
+
+        using var app = builder.Build();
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+        var context = CreatePipelineContext(app);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => pipeline.ExecuteAsync(context));
+
+        Assert.Contains("package './cmd/server'", exception.Message);
+        Assert.Contains("packagePath", exception.Message);
+        Assert.Contains("Dockerfile", exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileAllowsDefaultPackagePath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+
+        var app = builder.AddGoApp("api", CreateGoAppDirectoryWithDockerfile(workspace));
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileAllowsBuildFlagsWithDefaultPackagePath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+
+        // Build flags do not select what the Dockerfile runs, so they are not an entrypoint conflict.
+        var app = builder.AddGoApp("api", CreateGoAppDirectoryWithDockerfile(workspace), buildTags: ["netgo"], ldFlags: "-s -w", gcFlags: "-N -l", raceDetector: true);
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileAllowsExplicitEntrypointOverride()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+
+        var app = builder.AddGoApp("api", CreateGoAppDirectoryWithDockerfile(workspace), packagePath: "./cmd/server")
+            .PublishAsDockerFile(container => container.WithEntrypoint("/app/server"));
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+        Assert.Equal("/app/server", manifest["entrypoint"]?.ToString());
+    }
+
+    [Fact]
+    public async Task PublishPipelineWithoutDockerfileDoesNotFailValidationStepWhenPackagePathIsNotDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "validate-go-dockerfile-package-path-api");
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        // Without an existing Dockerfile Aspire generates one that builds the requested package,
+        // which VerifyPublish_PackagePath_UsedInDockerfileBuildCommand covers through the manifest.
+        builder.AddGoApp("api", workspace.CreateDirectory("source").FullName, packagePath: "./cmd/server");
+
+        using var app = builder.Build();
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+
+        await pipeline.ExecuteAsync(CreatePipelineContext(app));
+    }
+
+    [Fact]
+    public async Task PublishAsDockerFileWithDockerfileThrowsFromValidationStepWhenPackagePathIsNotDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "validate-go-dockerfile-package-path-api");
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        var sourceDir = CreateGoAppDirectoryWithDockerfile(workspace);
+        var publishDockerfile = CreateDockerfile(sourceDir, "Dockerfile.prod");
+        builder.AddGoApp("api", sourceDir, packagePath: "./cmd/server")
+            .PublishAsDockerFile(container => container.WithDockerfile(sourceDir, publishDockerfile));
+
+        using var app = builder.Build();
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+        var context = CreatePipelineContext(app);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => pipeline.ExecuteAsync(context));
+
+        Assert.Contains("package './cmd/server'", exception.Message);
+        Assert.Contains(publishDockerfile, exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishAsDockerFileWithDockerfileAndExplicitEntrypointPassesValidationStep()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "validate-go-dockerfile-package-path-api");
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        var sourceDir = CreateGoAppDirectoryWithDockerfile(workspace);
+        var publishDockerfile = CreateDockerfile(sourceDir, "Dockerfile.prod");
+        builder.AddGoApp("api", sourceDir, packagePath: "./cmd/server")
+            .PublishAsDockerFile(container => container.WithDockerfile(sourceDir, publishDockerfile).WithEntrypoint("/app/server"));
+
+        using var app = builder.Build();
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+
+        await pipeline.ExecuteAsync(CreatePipelineContext(app));
+    }
+
+    [Fact]
+    public async Task PublishPipelineValidationStepIsNoOpForResourceExcludedFromManifest()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        var sourceDir = CreateGoAppDirectoryWithDockerfile(workspace);
+        builder.AddGoApp("excluded", sourceDir, packagePath: "./cmd/server").ExcludeFromManifest();
+        builder.AddGoApp("sibling", sourceDir);
+
+        using var app = builder.Build();
+        var pipeline = (DistributedApplicationPipeline)app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+        var context = CreatePipelineContext(app);
+
+        var validationStepNames = (await pipeline.ResolveStepsAsync(context))
+            .Select(step => step.Name)
+            .Where(name => name.StartsWith("validate-go-dockerfile-package-path-", StringComparison.Ordinal))
+            .ToList();
+
+        foreach (var stepName in validationStepNames)
+        {
+            await pipeline.ExecuteStepSequentiallyAsync(stepName, context);
+        }
+
+        Assert.Equal(
+            ["validate-go-dockerfile-package-path-excluded", "validate-go-dockerfile-package-path-sibling"],
+            validationStepNames.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task PublishPipelineRunsValidationStepBeforeImageBuildStep()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        builder.AddGoApp("api", CreateGoAppDirectoryWithDockerfile(workspace), packagePath: "./cmd/server");
+
+        using var app = builder.Build();
+        var pipeline = (DistributedApplicationPipeline)app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+
+        var steps = (await pipeline.ResolveStepsAsync(CreatePipelineContext(app)))
+            .ToDictionary(step => step.Name, StringComparer.Ordinal);
+
+        // Compute environments such as Azure Container Apps depend on the image build step without the aggregate Build step.
+        var buildStepClosure = DistributedApplicationPipeline.ComputeTransitiveDependencies(steps["build-api"], steps);
+
+        Assert.Contains(buildStepClosure, step => step.Name == "validate-go-dockerfile-package-path-api");
+    }
+
+    [Fact]
+    public async Task PublishManifestOmitsResourceExcludedFromManifestWithExistingDockerfileAndNonDefaultPackagePath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+
+        var sourceDir = CreateGoAppDirectoryWithDockerfile(workspace);
+        builder.AddGoApp("excluded", sourceDir, packagePath: "./cmd/server").ExcludeFromManifest();
+        builder.AddGoApp("sibling", sourceDir);
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var manifest = await ManifestUtils.GetManifestForModel(appModel, workspace.Path);
+
+        Assert.Equal(["sibling"], manifest["resources"]!.AsObject().Select(resource => resource.Key));
+    }
+
+    [Fact]
     public async Task VerifyPublish_RespectsDockerfileBaseImageAnnotation()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1181,6 +1407,32 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
 
         await Verify(content);
     }
+
+    private static string CreateGoAppDirectoryWithDockerfile(TemporaryWorkspace workspace)
+    {
+        var sourceDir = workspace.CreateDirectory("source");
+
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "Dockerfile"), "FROM scratch\nENTRYPOINT [\"/app/api\"]\n");
+
+        return sourceDir.FullName;
+    }
+
+    private static string CreateDockerfile(string directory, string fileName)
+    {
+        var dockerfilePath = Path.Combine(directory, fileName);
+
+        File.WriteAllText(dockerfilePath, "FROM scratch\nENTRYPOINT [\"/app/api\"]\n");
+
+        return dockerfilePath;
+    }
+
+    private static PipelineContext CreatePipelineContext(DistributedApplication app) => new(
+        app.Services.GetRequiredService<DistributedApplicationModel>(),
+        app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+        app.Services,
+        app.Services.GetRequiredService<ILogger<AddGoAppTests>>(),
+        CancellationToken.None);
 
     private static async Task<GoLaunchConfiguration> CreateLaunchConfigurationAsync(IResource resource)
     {
