@@ -6,6 +6,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Lifecycle;
+using Aspire.Hosting.Maui.Utilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -609,6 +610,173 @@ public class MauiBuildQueueTests
         Assert.True(originalStopInvoked);
     }
 
+    [Theory]
+    [InlineData("Running", true)]
+    [InlineData("Finished", false)]
+    [SkipOnPlatform(TestPlatforms.Windows, "The synthetic adb uses a POSIX shell script.")]
+    public async Task StopCommand_AndroidResource_StopsAppRecordedByLaunchSignalOnlyWhileRunning(string state, bool expectAppStopped)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        var launchSignal = AddLaunchSignal(env);
+        AddOriginalStopCommand(env.Android);
+
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None).DefaultTimeout();
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot(state, KnownResourceStateStyles.Success)
+        }).DefaultTimeout();
+
+        var adbDirectory = Directory.CreateTempSubdirectory("aspire-maui-fake-adb");
+        try
+        {
+            var argumentsFile = Path.Combine(adbDirectory.FullName, "arguments.txt");
+            var adbPath = Path.Combine(adbDirectory.FullName, "adb");
+            File.WriteAllText(adbPath, $"#!/bin/sh\necho \"$@\" > \"{argumentsFile}\"\n");
+            File.SetUnixFileMode(adbPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+            // The launch writes the signal after ComputeRunArguments, once the app is deployed.
+            File.WriteAllLines(launchSignal.FilePath,
+            [
+                $"{MauiAndroidLaunchSignal.AdbToolPathKey}={adbDirectory.FullName}",
+                $"{MauiAndroidLaunchSignal.AdbToolExeKey}=adb",
+                $"{MauiAndroidLaunchSignal.AdbTargetKey}=-s emulator-5554",
+                $"{MauiAndroidLaunchSignal.PackageKey}=com.example.app"
+            ]);
+
+            var stopCommand = env.Android.Annotations
+                .OfType<ResourceCommandAnnotation>()
+                .Single(a => a.Name == KnownResourceCommands.StopCommand);
+
+            var result = await stopCommand.ExecuteCommand(CreateExecuteCommandContext(env)).DefaultTimeout();
+
+            Assert.True(result.Success);
+            if (expectAppStopped)
+            {
+                Assert.Equal("-s emulator-5554 shell am force-stop com.example.app", File.ReadAllText(argumentsFile).Trim());
+            }
+            else
+            {
+                // A launch that already ended no longer owns the app, which another launch may have replaced.
+                Assert.False(File.Exists(argumentsFile));
+            }
+        }
+        finally
+        {
+            adbDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task StopCommand_RunningAndroidResourceWithoutLaunchSignal_OnlyStopsLaunch()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        AddLaunchSignal(env);
+        var originalStopInvoked = false;
+        AddOriginalStopCommand(env.Android, () => originalStopInvoked = true);
+
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None).DefaultTimeout();
+
+        var stopCommand = env.Android.Annotations
+            .OfType<ResourceCommandAnnotation>()
+            .Single(a => a.Name == KnownResourceCommands.StopCommand);
+
+        var result = await stopCommand.ExecuteCommand(CreateExecuteCommandContext(env)).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.True(originalStopInvoked);
+    }
+
+    [Fact]
+    public async Task BeforeResourceStarted_AndroidWithSerial_SelectsSerialWithoutListingDevices()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        var deviceSelection = new MauiAndroidDeviceSelectionAnnotation("-s emulator-5556");
+        env.Android.Annotations.Add(deviceSelection);
+
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal("emulator-5556", deviceSelection.SelectedDevice);
+        Assert.Equal(0, env.Subscriber.AndroidDeviceQueries);
+    }
+
+    [Theory]
+    [InlineData("-e", "emulator-5554")]
+    [InlineData("-d", "0A041FDD400327")]
+    public async Task BeforeResourceStarted_AndroidWithoutSerial_SelectsOnlyOnlineDeviceOfType(string adbTarget, string expectedDevice)
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        var deviceSelection = new MauiAndroidDeviceSelectionAnnotation(adbTarget);
+        env.Android.Annotations.Add(deviceSelection);
+        env.Android.Annotations.Add(new MauiBuildInfoAnnotation("/fake/path.csproj", "/fake", "net10.0-android"));
+        env.Subscriber.AndroidDevicesJson = """
+            { "Items": { "Devices": [
+              { "Identity": "emulator-5554", "Type": "Emulator", "Status": "Online" },
+              { "Identity": "0A041FDD400327", "Type": "Device", "Status": "Online" }
+            ] } }
+            """;
+
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(expectedDevice, deviceSelection.SelectedDevice);
+        Assert.Equal(1, env.Subscriber.AndroidDeviceQueries);
+    }
+
+    [Fact]
+    public async Task BeforeResourceStarted_AndroidEmulatorWithSeveralOnline_LeavesDeviceUnselected()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        var deviceSelection = new MauiAndroidDeviceSelectionAnnotation("-e") { SelectedDevice = "emulator-5554" };
+        env.Android.Annotations.Add(deviceSelection);
+        env.Android.Annotations.Add(new MauiBuildInfoAnnotation("/fake/path.csproj", "/fake", "net10.0-android"));
+        env.Subscriber.AndroidDevicesJson = """
+            { "Items": { "Devices": [
+              { "Identity": "emulator-5554", "Type": "Emulator", "Status": "Online" },
+              { "Identity": "emulator-5556", "Type": "Emulator", "Status": "Online" }
+            ] } }
+            """;
+
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None).DefaultTimeout();
+
+        // Like adb -e, the launch cannot pick between two emulators; the previous launch's choice must not carry over.
+        Assert.Null(deviceSelection.SelectedDevice);
+    }
+
+    [Fact]
+    public async Task BeforeResourceStarted_DeletesLaunchSignalFromPreviousLaunch()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        var launchSignal = AddLaunchSignal(env);
+        File.WriteAllText(launchSignal.FilePath, $"{MauiAndroidLaunchSignal.PackageKey}=com.example.app");
+
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.False(File.Exists(launchSignal.FilePath));
+    }
+
     [Fact]
     public async Task CancelBuildingResource_ReleasesSemaphore()
     {
@@ -743,6 +911,84 @@ public class MauiBuildQueueTests
         await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
         {
             State = new ResourceStateSnapshot("Terminated", KnownResourceStateStyles.Success)
+        }).DefaultTimeout();
+
+        await releaseTask.DefaultTimeout();
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_AndroidReleasesOnLaunchSignalWhileAppRuns()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        var launchSignal = AddLaunchSignal(env);
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        await annotation!.BuildSemaphore.WaitAsync();
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot("Building", KnownResourceStateStyles.Info)
+        }).DefaultTimeout();
+
+        var subscriber = new MauiBuildQueueEventSubscriber(
+            env.NotificationService,
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>())
+        {
+            LaunchSignalPollInterval = TimeSpan.FromMilliseconds(10)
+        };
+        var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.Android,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: false,
+            env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android),
+            CancellationToken.None);
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
+        }).DefaultTimeout();
+
+        // 'dotnet run' is still building or deploying until the launch signal appears.
+        await Assert.ThrowsAsync<TimeoutException>(() => releaseTask.WaitAsync(TimeSpan.FromMilliseconds(100)));
+        Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
+
+        File.WriteAllText(launchSignal.FilePath, $"{MauiAndroidLaunchSignal.PackageKey}=com.example.app");
+
+        await releaseTask.DefaultTimeout();
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_AndroidReleasesWhenLaunchEndsBeforeSignal()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        AddLaunchSignal(env);
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        await annotation!.BuildSemaphore.WaitAsync();
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot("Building", KnownResourceStateStyles.Info)
+        }).DefaultTimeout();
+
+        var subscriber = new MauiBuildQueueEventSubscriber(
+            env.NotificationService,
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>());
+        var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.Android,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: false,
+            env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android),
+            CancellationToken.None);
+
+        // A failed build or an Android SDK that starts the app without waiting ends the launch without a signal.
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.Exited, KnownResourceStateStyles.Error)
         }).DefaultTimeout();
 
         await releaseTask.DefaultTimeout();
@@ -1107,6 +1353,13 @@ public class MauiBuildQueueTests
         Assert.Equal(1, annotation!.BuildSemaphore.CurrentCount);
     }
 
+    private static MauiAndroidLaunchSignalAnnotation AddLaunchSignal(BuildQueueTestEnvironment env)
+    {
+        var launchSignal = new MauiAndroidLaunchSignalAnnotation(env.Services.GetRequiredService<IFileSystemService>());
+        env.Android.Annotations.Add(launchSignal);
+        return launchSignal;
+    }
+
     private static void AddOriginalStopCommand(IResource resource, Action? onExecute = null)
     {
         AddOriginalStopCommand(resource, _ =>
@@ -1202,6 +1455,18 @@ public class MauiBuildQueueTests
 
         /// <summary>When true, delegates to the real <see cref="MauiBuildQueueEventSubscriber.ReleaseSemaphoreAfterLaunchAsync"/>.</summary>
         public bool UseRealLaunchHandoff { get; set; }
+
+        /// <summary>The <c>-getItem:Devices</c> output returned instead of querying the Android SDK.</summary>
+        public string? AndroidDevicesJson { get; set; }
+
+        /// <summary>The number of times the Android SDK was asked for devices.</summary>
+        public int AndroidDeviceQueries { get; private set; }
+
+        internal override Task<string?> GetAvailableAndroidDevicesAsync(MauiBuildInfoAnnotation buildInfo, ILogger logger, CancellationToken cancellationToken)
+        {
+            AndroidDeviceQueries++;
+            return Task.FromResult(AndroidDevicesJson);
+        }
 
         /// <summary>Waits until <see cref="RunBuildAsync"/> is entered for the given resource.</summary>
         public Task WaitForBuildStartedAsync(IResource resource, TimeSpan? timeout = null)

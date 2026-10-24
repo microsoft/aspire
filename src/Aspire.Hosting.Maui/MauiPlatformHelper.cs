@@ -89,18 +89,26 @@ internal static class MauiPlatformHelper
         // Check if the project has the platform TFM and get the actual TFM value
         var platformTfm = ProjectFileReader.GetPlatformTargetFramework(projectPath, platformName);
 
-        // Override the default DCP launch command from 'dotnet run' to 'dotnet build --no-restore /t:Run'.
         // The Build target is run separately by MauiBuildQueueEventSubscriber before DCP starts
         // the process, giving reliable exit-code-based build completion detection and allowing
-        // the "Building" state to persist in the dashboard. Most platforms can skip Build while
-        // Android must retain the full Run target for required fast-deploy/runtime upload work.
+        // the "Building" state to persist in the dashboard. Most platforms then launch with
+        // 'dotnet build --no-restore /t:Run' and skip Build.
+        // Android launches with 'dotnet run', which still builds (the generated environment targets
+        // file must reach the APK), deploys, and then starts Microsoft.Android.Run. That process keeps
+        // running for the lifetime of the app and streams the app's logcat output, so the resource
+        // tracks the app instead of a short-lived Run target.
         var isAndroid = string.Equals(platformName, "android", StringComparison.Ordinal);
         var launchOverrideArgs = isAndroid
-            ? new List<string> { "build", "--no-restore", "/t:Run" }
+            ? new List<string> { "run", "--no-restore", "--no-launch-profile", "--project" }
             // Clear BuildDependsOn before setting NoBuild to avoid NETSDK1085 in .NET SDK 10.0.201.
             : new List<string> { "build", "--no-restore", "/t:Run", "-p:BuildDependsOn=", "-p:NoBuild=true" };
 
         resourceBuilder.WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(launchOverrideArgs, leadingResourceArgumentToRemove: "run"));
+
+        if (isAndroid)
+        {
+            resourceBuilder.WithAnnotation(new MauiAndroidLaunchSignalAnnotation(resourceBuilder.ApplicationBuilder.FileSystemService));
+        }
 
         // Store build parameters so the event subscriber can run 'dotnet build' before launch.
         // The annotation captures the same target framework, configuration, and MSBuild properties
