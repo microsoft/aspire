@@ -20,6 +20,57 @@ namespace Aspire.Hosting.Redis.Tests;
 
 public class AddRedisTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public async Task AddRedisExecutesServerWithPasswordPersistenceAndModules(DistributedApplicationOperation operation)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
+        var redis = builder.AddRedis("redis")
+            .WithPersistence(TimeSpan.FromSeconds(10), 2)
+            .WithModule(RedisModules.Json);
+
+        var context = new CommandLineArgsCallbackContext([], redis.Resource)
+        {
+            ExecutionContext = builder.ExecutionContext
+        };
+        var annotation = Assert.Single(redis.Resource.Annotations.OfType<CommandLineArgsCallbackAnnotation>());
+        await annotation.Callback(context);
+
+        if (operation == DistributedApplicationOperation.Run)
+        {
+            Assert.Collection(context.Args,
+                arg => Assert.Equal("exec", arg),
+                arg => Assert.Equal("redis-server", arg),
+                arg => Assert.Equal("--requirepass", arg),
+                arg => Assert.Equal("$REDIS_PASSWORD", arg),
+                arg => Assert.Equal("--save", arg),
+                arg => Assert.Equal("10", arg),
+                arg => Assert.Equal("2", arg),
+                arg => Assert.Equal("--loadmodule", arg),
+                arg => Assert.Equal("/usr/local/lib/redis/modules/rejson.so", arg));
+        }
+        else
+        {
+            Assert.Collection(context.Args,
+                arg => Assert.Equal("-c", arg),
+                arg => Assert.Equal("exec redis-server --requirepass $REDIS_PASSWORD --save 10 2 --loadmodule /usr/local/lib/redis/modules/rejson.so", arg));
+        }
+    }
+
+    [Fact]
+    public async Task AddRedisExecutesServerWithoutPassword()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("redis").WithPassword(null);
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(redis.Resource);
+
+        Assert.Collection(args,
+            arg => Assert.Equal("exec", arg),
+            arg => Assert.Equal("redis-server", arg));
+    }
+
     [Fact]
     public void AddRedisAddsHealthCheckAnnotationToResource()
     {
@@ -976,6 +1027,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(redis.Resource, app.Services).AsTask().WaitAsync(TimeSpan.FromSeconds(60));
 
+        Assert.Equal("exec", args[0]);
         Assert.Equal("6379", args[args.IndexOf("--tls-port") + 1]);
         Assert.Equal("6380", args[args.IndexOf("--port") + 1]);
     }
