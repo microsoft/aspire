@@ -755,12 +755,14 @@ affected_project_rules:
       - Aspire.Hosting
       - Aspire.Hosting.AppHost
       - Aspire.Hosting.Blazor
+      - Aspire.Hosting.CodeGeneration.Go
       - Aspire.Hosting.CodeGeneration.Java
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.Docker
       - Aspire.Hosting.Dotnet
       - Aspire.Hosting.EntityFrameworkCore
       - Aspire.Hosting.Garnet
+      - Aspire.Hosting.Go
       - Aspire.Hosting.Java
       - Aspire.Hosting.JavaScript
       - Aspire.Hosting.Kubernetes
