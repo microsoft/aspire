@@ -35,11 +35,9 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
 
         using var builder = TestDistributedApplicationBuilder.Create(o => { }, testOutputHelper);
 
-        var oracleDbName = "freepdb1";
-
         var oracle = builder.AddOracle("oracle");
 
-        var db = oracle.AddDatabase(oracleDbName);
+        var db = oracle.AddDatabase("db");
 
         using var app = builder.Build();
 
