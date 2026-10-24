@@ -148,7 +148,11 @@ output queueEndpoint string = depscriptstorage.properties.primaryEndpoints.queue
 
 output tableEndpoint string = depscriptstorage.properties.primaryEndpoints.table
 
+output fileEndpoint string = depscriptstorage.properties.primaryEndpoints.file
+
 output name string = depscriptstorage.name
+
+output resourceGroupName string = resourceGroup().name
 
 output id string = depscriptstorage.id
 

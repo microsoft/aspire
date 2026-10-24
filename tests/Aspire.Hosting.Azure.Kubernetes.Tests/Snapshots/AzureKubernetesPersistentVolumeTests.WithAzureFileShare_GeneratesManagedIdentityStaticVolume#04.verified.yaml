@@ -1,0 +1,9 @@
+﻿parameters: {}
+secrets: {}
+config:
+  aks_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
+  media_volume:
+    storage_outputs_resourceGroupName: ""
+    storage_outputs_name: ""
+    media_volume_identity_outputs_clientId: ""

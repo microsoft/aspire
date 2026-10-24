@@ -632,7 +632,11 @@ output queueEndpoint string = sql_store.properties.primaryEndpoints.queue
 
 output tableEndpoint string = sql_store.properties.primaryEndpoints.table
 
+output fileEndpoint string = sql_store.properties.primaryEndpoints.file
+
 output name string = sql_store.name
+
+output resourceGroupName string = resourceGroup().name
 
 output id string = sql_store.id
 
