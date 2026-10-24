@@ -1234,6 +1234,81 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task KubernetesHttpProbeOnProjectDefaultHttpsEndpointUsesHttpScheme()
+    {
+        // Without an endpoint name, WithHttpProbe prefers the https endpoint. The default https endpoint
+        // of a project shares the http endpoint's port, where the container serves plain HTTP, so the
+        // probe must use the HTTP scheme with that port (issue #20999). Kubernetes only accepts the
+        // uppercase "HTTP" and "HTTPS" values for httpGet.scheme (issue #18271).
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("k8s");
+
+        builder.AddProject<TestProjectWithLaunchSettings>("project1")
+            .WithHttpProbe(ProbeType.Readiness, "/health")
+            .WithHttpProbe(ProbeType.Liveness, "/alive");
+
+        var app = builder.Build();
+        app.Run();
+
+        var filePath = Path.Combine(workspace.Path, "templates/project1/deployment.yaml");
+        await Verify(File.ReadAllText(filePath), "yaml");
+    }
+
+    [Fact]
+    public async Task KubernetesHttpProbeOnHttpsEndpointWithOwnTargetPortUsesHttpsScheme()
+    {
+        // An https endpoint with its own target port is served by the container, so the probe keeps
+        // the HTTPS scheme even when the resource also has an http endpoint.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("k8s");
+
+        builder.AddContainer("api", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithHttpsEndpoint(targetPort: 8443)
+            .WithHttpProbe(ProbeType.Readiness, "/health");
+
+        var app = builder.Build();
+        app.Run();
+
+        var filePath = Path.Combine(workspace.Path, "templates/api/deployment.yaml");
+        await Verify(File.ReadAllText(filePath), "yaml");
+    }
+
+    [Fact]
+    public async Task KubernetesHttpProbeOnProjectWithKestrelHttpEndpointUsesHttpScheme()
+    {
+        // A Kestrel http endpoint gives the project's default https endpoint the same known target port,
+        // where the container serves plain HTTP, so the probe must use the HTTP scheme.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.CreateDirectory("project1");
+        var projectPath = Path.Combine(projectDirectory.FullName, "project1.csproj");
+        File.WriteAllText(projectPath, "<Project Sdk=\"Microsoft.NET.Sdk.Web\" />");
+        File.WriteAllText(Path.Combine(projectDirectory.FullName, "appsettings.json"), """
+            {
+              "Kestrel": {
+                "Endpoints": {
+                  "Http": { "Url": "http://*:8080" }
+                }
+              }
+            }
+            """);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("k8s");
+
+        builder.AddProject("project1", projectPath)
+            .WithHttpProbe(ProbeType.Readiness, "/health");
+
+        var app = builder.Build();
+        app.Run();
+
+        var filePath = Path.Combine(workspace.Path, "templates/project1/deployment.yaml");
+        await Verify(File.ReadAllText(filePath), "yaml");
+    }
+
+    [Fact]
     public async Task PublishAsync_EmbeddedParametersInEnvironmentExpressionsPopulateValues()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
