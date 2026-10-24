@@ -12,6 +12,8 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "3")]
 public class WithOtlpExporterTests
 {
+    private const string ServiceInstanceIdTemplate = "service.instance.id={{- index .Annotations \"otel-service-instance-id\" -}}";
+
     [InlineData(default, "http://localhost:8889", null, "http://localhost:8889", "grpc")]
     [InlineData(default, "http://localhost:8889", "http://localhost:8890", "http://localhost:8889", "grpc")]
     [InlineData(default, null, "http://localhost:8890", "http://localhost:8890", "http/protobuf")]
@@ -330,5 +332,119 @@ public class WithOtlpExporterTests
 
         // The endpoint should point to the collector, not the dashboard.
         Assert.Equal("http://localhost:4317", config["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+    }
+
+    [Fact]
+    public async Task ResourceAttributesSetAfterWithOtlpExporterKeepServiceInstanceId()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddResource(new ContainerResource("testSource"))
+            .WithOtlpExporter()
+            .WithEnvironment("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=dev");
+
+        using var app = builder.Build();
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            container.Resource,
+            serviceProvider: app.Services
+            ).DefaultTimeout();
+
+        Assert.Equal($"deployment.environment=dev,{ServiceInstanceIdTemplate}", config["OTEL_RESOURCE_ATTRIBUTES"]);
+    }
+
+    [Fact]
+    public async Task ResourceAttributesSetBeforeWithOtlpExporterAreKept()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var executable = builder.AddResource(new ExecutableResource("testExe", "test.exe", "."))
+            .WithEnvironment("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=dev")
+            .WithOtlpExporter();
+
+        using var app = builder.Build();
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            executable.Resource,
+            serviceProvider: app.Services
+            ).DefaultTimeout();
+
+        Assert.Equal($"deployment.environment=dev,{ServiceInstanceIdTemplate}", config["OTEL_RESOURCE_ATTRIBUTES"]);
+    }
+
+    [InlineData(true, "service.instance.id=custom-id")]
+    [InlineData(false, "service.instance.id=custom-id")]
+    [InlineData(true, "deployment.environment=dev, service.instance.id=custom-id")]
+    [InlineData(false, "deployment.environment=dev, service.instance.id=custom-id")]
+    [Theory]
+    public async Task ExplicitServiceInstanceIdIsNotReplaced(bool setBeforeWithOtlpExporter, string resourceAttributes)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddResource(new ContainerResource("testSource"));
+        if (setBeforeWithOtlpExporter)
+        {
+            container = container
+                .WithEnvironment("OTEL_RESOURCE_ATTRIBUTES", resourceAttributes)
+                .WithOtlpExporter();
+        }
+        else
+        {
+            container = container
+                .WithOtlpExporter()
+                .WithEnvironment("OTEL_RESOURCE_ATTRIBUTES", resourceAttributes);
+        }
+
+        using var app = builder.Build();
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            container.Resource,
+            serviceProvider: app.Services
+            ).DefaultTimeout();
+
+        Assert.Equal(resourceAttributes, config["OTEL_RESOURCE_ATTRIBUTES"]);
+    }
+
+    [Fact]
+    public async Task ResourceAttributesRemovedByLaterCallbackStayRemoved()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddResource(new ContainerResource("testSource"))
+            .WithOtlpExporter()
+            .WithEnvironment(context => context.EnvironmentVariables.Remove("OTEL_RESOURCE_ATTRIBUTES"));
+
+        using var app = builder.Build();
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            container.Resource,
+            serviceProvider: app.Services
+            ).DefaultTimeout();
+
+        Assert.False(config.ContainsKey("OTEL_RESOURCE_ATTRIBUTES"));
+        Assert.Equal("{{- index .Annotations \"otel-service-name\" -}}", config["OTEL_SERVICE_NAME"]);
+    }
+
+    [Fact]
+    public async Task ResourceAttributesUnchangedInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // In run mode the id from the first value would be added back to the last one. Publish mode passes the
+        // values to the deployment target exactly as the AppHost wrote them.
+        var container = builder.AddResource(new ContainerResource("testSource"))
+            .WithEnvironment("OTEL_RESOURCE_ATTRIBUTES", "service.instance.id=custom-id")
+            .WithOtlpExporter()
+            .WithEnvironment("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=prod");
+
+        using var app = builder.Build();
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            container.Resource,
+            DistributedApplicationOperation.Publish,
+            app.Services
+            ).DefaultTimeout();
+
+        Assert.Equal("deployment.environment=prod", config["OTEL_RESOURCE_ATTRIBUTES"]);
     }
 }
