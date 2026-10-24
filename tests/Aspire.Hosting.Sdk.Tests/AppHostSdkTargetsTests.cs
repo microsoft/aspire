@@ -30,6 +30,68 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         "osx-arm64"
     ];
 
+    [Theory]
+    [InlineData("package", true, false, false)]
+    [InlineData("package", true, true, false)]
+    [InlineData("sdk", true, false, false)]
+    [InlineData("sdk", true, true, false)]
+    [InlineData("sdk-first", true, false, false)]
+    [InlineData("sdk-first", true, true, false)]
+    [InlineData("package-first", true, false, false)]
+    [InlineData("package-first", true, true, false)]
+    [InlineData("sdk-first", true, false, true)]
+    [InlineData("package-first", true, false, true)]
+    [InlineData("package", false, false, false)]
+    [InlineData("package", false, true, false)]
+    public async Task FileNestingCapabilitiesArePreservedWithoutDuplicates(string imports, bool isAspireHost, bool fileBased, bool existingCapabilities)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var repoRoot = GetRepoRoot();
+        var sdkTargets = Path.Combine(workspace.Path, "Sdk.targets");
+        var packageTargets = Path.Combine(workspace.Path, "Aspire.Hosting.AppHost.targets");
+        await File.WriteAllTextAsync(sdkTargets,
+            (await File.ReadAllTextAsync(Path.Combine(repoRoot, "src", "Aspire.AppHost.Sdk", "SDK", "Sdk.in.targets")))
+                .Replace("@VERSION@", AspireCliVersion));
+        await File.WriteAllTextAsync(packageTargets,
+            (await File.ReadAllTextAsync(Path.Combine(repoRoot, "src", "Aspire.Hosting.AppHost", "build", "Aspire.Hosting.AppHost.in.targets")))
+                .Replace("@VERSION@", AspireCliVersion));
+        var sdkImport = $"""<Import Project="{SecurityElement.Escape(sdkTargets)}" />""";
+        var packageImport = $"""<Import Project="{SecurityElement.Escape(packageTargets)}" />""";
+        var importXml = imports switch
+        {
+            "package" => packageImport,
+            "sdk" => sdkImport,
+            "sdk-first" => sdkImport + packageImport,
+            "package-first" => packageImport + sdkImport,
+            _ => throw new ArgumentOutOfRangeException(nameof(imports))
+        };
+        var existingItems = existingCapabilities
+            ? """<ItemGroup><ProjectCapability Include="DynamicFileNesting;DynamicFileNestingEnabled" /></ItemGroup>"""
+            : string.Empty;
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "AppHost.csproj"),
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <IsAspireHost>{{isAspireHost.ToString().ToLowerInvariant()}}</IsAspireHost>
+                <FileBasedProgram>{{fileBased.ToString().ToLowerInvariant()}}</FileBasedProgram>
+              </PropertyGroup>
+              {{existingItems}}
+              {{importXml}}
+            </Project>
+            """);
+
+        var result = await RunDotNetWithArgumentsAsync(workspace.Path,
+            ["msbuild", "-nologo", "-getItem:ProjectCapability"]);
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        var capabilities = document.RootElement.GetProperty("Items").GetProperty("ProjectCapability")
+            .EnumerateArray().Select(item => item.GetProperty("Identity").GetString()).ToArray();
+        Assert.Equal(isAspireHost ? 1 : 0, capabilities.Count(capability => capability == "DynamicFileNesting"));
+        Assert.Equal(isAspireHost ? 1 : 0, capabilities.Count(capability => capability == "DynamicFileNestingEnabled"));
+        Assert.Equal(imports == "package" ? 0 : 1, capabilities.Count(capability => capability == "AspireOrchestration"));
+    }
+
     [Fact]
     public async Task AddReferenceToDashboardAndDcpIsSkippedWhenCliBundleIsDefaulted()
     {

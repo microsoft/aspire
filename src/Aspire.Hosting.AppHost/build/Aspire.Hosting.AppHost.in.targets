@@ -33,6 +33,8 @@
   <ItemGroup>
     <ProjectCapability Include="Aspire" Condition=" '$(IsAspireHost)' == 'true' " />
     <ProjectCapability Include="Aspire_@VERSION@" Condition=" '$(IsAspireHost)' == 'true' " />
+    <ProjectCapability Include="DynamicFileNesting" Condition="'$(IsAspireHost)' == 'true' and '@(ProjectCapability->WithMetadataValue('Identity', 'DynamicFileNesting'))' == ''" />
+    <ProjectCapability Include="DynamicFileNestingEnabled" Condition="'$(IsAspireHost)' == 'true' and '@(ProjectCapability->WithMetadataValue('Identity', 'DynamicFileNestingEnabled'))' == ''" />
   </ItemGroup>
 
   <ItemGroup>
