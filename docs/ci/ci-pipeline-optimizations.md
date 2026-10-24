@@ -102,11 +102,12 @@ That makes Linux the best place to spend extra build capacity: finishing the sha
 
 ### 2. `build_packages` skips RID-specific bundle dependencies
 
-`build_packages` uses `SkipBundleDeps=true`, while the CLI archive jobs use `BuildBundleDepsOnly=true`.
+`build_packages` uses `SkipBundleDeps=true` and `SkipNativeBuild=true`, while the CLI archive jobs use `BuildBundleDepsOnly=true`.
 
 Those two settings work together:
 
 - the shared package build avoids work that would otherwise be duplicated
+- CLI archives and their .NET tool and npm packages are produced only by the per-RID CLI archive jobs
 - each CLI archive job becomes responsible for the RID-specific dependencies it actually needs
 - package build and archive build can proceed in parallel without racing to produce the same artifacts
 
@@ -123,10 +124,22 @@ That keeps `build_packages` focused on the shared package feed, and because `ext
 `build_packages` uses:
 
 ```bash
-./build.sh -restore -build -ci -pack -bl -p:InstallBrowsersForPlaywright=false -p:SkipTestProjects=true -p:SkipPlaygroundProjects=true -p:SkipBundleDeps=true
+./build.sh \
+  -restore \
+  -build \
+  -ci \
+  -pack \
+  -bl \
+  -p:InstallBrowsersForPlaywright=false \
+  -p:SkipTestProjects=true \
+  -p:SkipPlaygroundProjects=true \
+  -p:SkipBundleDeps=true \
+  -p:SkipNativeBuild=true
 ```
 
 `SkipBundleDeps=true` matters because the RID-specific bundle dependencies are produced by the per-OS CLI archive jobs, not by the shared package build.
+
+`SkipNativeBuild=true` also excludes the CLI archive projects and their .NET tool and npm packaging targets. Without it, those projects invoke CLI publishing even though `SkipBundleDeps=true` removes the CLI from the managed project list.
 
 ### `build-cli-native-archives.yml`
 
@@ -139,6 +152,11 @@ Each CLI archive job:
 5. Uploads the native archive as `cli-native-archives-{rid}`
 
 This makes the archive job self-sufficient for the RID-specific artifacts it needs.
+
+`built-nugets-for-{rid}` contains only NuGet packages. The npm pointer and
+RID-specific tarballs are uploaded separately as `cli-npm-packages-{rid}` for
+investigation and manual downloads, so NuGet consumers do not download the npm
+payloads. npm packaging and verification still run in each CLI archive job.
 
 ### Native CLI packaging
 
