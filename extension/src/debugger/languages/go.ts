@@ -54,3 +54,39 @@ export const goDebuggerExtension: ResourceDebuggerExtension = {
         debugConfiguration.args = args ?? [];
     }
 };
+
+// Splits the Go AppHost launch command the CLI sends into the pieces the debug adapter needs.
+//
+// GoLanguageSupport starts the AppHost with `go run .` from the AppHost directory, and the CLI
+// prepends the resolved executable, so the command arrives as:
+//
+//   ["C:\\Program Files\\Go\\bin\\go.exe", "run", "."]
+//   ["/usr/local/go/bin/go", "run", ".", ...appHostArgs]
+//
+// The Go debug adapter builds and starts the package itself, so the executable and the `run` verb are
+// dropped and only the package and the AppHost's own arguments are kept. The executable is checked
+// rather than launched: the adapter finds the toolchain through the Go extension's own settings.
+//
+// Returns null for any other shape, including `go run` flags such as -tags or -race. A launch
+// configuration has no place for them on this path, and forwarding one would hand a flag to the
+// adapter as the program to debug.
+export function parseGoAppHostCommand(args: string[]): { packagePath: string; appHostArgs: string[] } | null {
+    if (args.length < 3) {
+        return null;
+    }
+
+    // Split on both separators so the name is found whichever path flavour the CLI reported.
+    const executable = args[0].split(/[\\/]/).pop()?.toLowerCase();
+    if (executable !== 'go' && executable !== 'go.exe') {
+        return null;
+    }
+
+    if (args[1] !== 'run' || args[2].startsWith('-')) {
+        return null;
+    }
+
+    return {
+        packagePath: args[2],
+        appHostArgs: args.slice(3)
+    };
+}

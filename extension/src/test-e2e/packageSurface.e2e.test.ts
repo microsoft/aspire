@@ -560,6 +560,7 @@ const expectedActivationEvents = [
     'workspaceContains:**/apphost.mjs',
     'workspaceContains:**/apphost.cjs',
     'workspaceContains:**/apphost.rs',
+    'workspaceContains:**/apphost.go',
     'workspaceContains:**/AppHost.java',
     'workspaceContains:**/apphost.java',
     'workspaceContains:**/src/main/java/AppHost.java',

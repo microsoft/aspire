@@ -16,6 +16,7 @@ export type Capability =
     | 'ms-python.python' // Older AppHost versions used this extension identifier instead of python
     | 'go' // Support for running Go projects
     | 'golang.go' // Older AppHost versions used this extension identifier instead of go
+    | 'go-apphost.v1' // Support for debugging Go AppHosts through the Go extension's Delve adapter
     | 'rust' // Support for running Rust projects
     | 'ms-vscode.cpptools' // Rust debug adapter extension identifier on Windows (cppvsdbg)
     | 'vadimcn.vscode-lldb' // Rust debug adapter extension identifier on macOS/Linux (CodeLLDB)
@@ -245,6 +246,10 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
     if (isGoInstalled()) {
         capabilities.push("go");
         capabilities.push("golang.go");
+        // `go` only means "can debug Go resources", and extension builds that cannot launch a Go AppHost
+        // advertise it too. The CLI gates AppHost launching on this separate versioned name so those
+        // builds are never asked to start apphost.go (they would hand it to the .NET debugger).
+        capabilities.push("go-apphost.v1");
     }
 
     if (isRustInstalled(platform)) {
