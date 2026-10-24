@@ -106,7 +106,7 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
 
         var dimensionAttributes = InstrumentViewModel.MatchedDimensions.Select(d => d.Attributes).ToList();
         if (_renderedInstrument is null || _renderedInstrument != InstrumentViewModel.Instrument.GetKey() ||
-            _renderedDimensionAttributes is null || !_renderedDimensionAttributes.SequenceEqual(dimensionAttributes) ||
+            _renderedDimensionAttributes is null || !DimensionAttributesEqual(_renderedDimensionAttributes, dimensionAttributes) ||
             _renderedTheme != InstrumentViewModel.Theme ||
             _renderedShowCount != InstrumentViewModel.ShowCount)
         {
@@ -136,6 +136,28 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
             _currentDataStartTime = GetCurrentDataTime(out _);
             _previousDataEndTime = DataEndTime;
         }
+    }
+
+    // Compares attribute values, not array references. Refreshing instrument data merges it into new
+    // DimensionScope instances with new attribute arrays even when the dimensions are unchanged. Comparing
+    // references made every refresh look like a dimension change, so the chart was fully re-initialized
+    // about every second under traffic: it flickered, lost hover state and could reset the page's scroll.
+    private static bool DimensionAttributesEqual(List<KeyValuePair<string, string>[]> left, List<KeyValuePair<string, string>[]> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (!MetricInstrumentDataCache.AttributesEqual(left[i], right[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private Task OnInstrumentDataUpdate()

@@ -174,6 +174,52 @@ public class PlotlyChartTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task UpdateDataAsync_RefreshedDimensionsWithEqualAttributes_DoesNotReinitializeChart()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        MetricsSetupHelpers.SetupPlotlyChart(this);
+
+        var context = new OtlpContext { Options = new TelemetryLimitOptions(), Logger = NullLogger.Instance };
+        var resource = new OtlpResource("resource", instanceId: null, uninstrumentedPeer: false, context);
+        var instrumentSummary = new OtlpInstrumentSummary
+        {
+            Name = "requests",
+            Unit = "{request}",
+            Description = string.Empty,
+            Parent = new OtlpScope("meter", string.Empty, []),
+            Type = OtlpInstrumentType.Sum,
+            AggregationTemporality = OtlpAggregationTemporality.Cumulative,
+            ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
+        };
+
+        // Refreshing instrument data builds new dimension instances with new attribute arrays,
+        // even when the attribute values are the same.
+        DimensionScope CreateDimension(int value)
+        {
+            var dimension = new DimensionScope(capacity: 100, [KeyValuePair.Create("http.route", "/"), KeyValuePair.Create("http.response.status_code", "200")]);
+            dimension.AddPointValue(new NumberDataPoint { AsInt = value, StartTimeUnixNano = 0, TimeUnixNano = long.MaxValue }, context);
+            return dimension;
+        }
+
+        var model = new InstrumentViewModel();
+        await model.UpdateDataAsync(instrumentSummary, [CreateDimension(1)], hasOverflow: false);
+
+        var cut = Render<PlotlyChart>(builder =>
+        {
+            builder.Add(p => p.InstrumentViewModel, model);
+            builder.Add(p => p.Duration, TimeSpan.FromSeconds(1));
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        cut.WaitForAssertion(() => Assert.Single(JSInterop.Invocations, i => i.Identifier == "initializeChart"));
+
+        await cut.InvokeAsync(() => model.UpdateDataAsync(instrumentSummary, [CreateDimension(2)], hasOverflow: false));
+        cut.Render();
+
+        // A full re-initialization replaces the chart's DOM, which flickers and can reset the page's scroll position.
+        Assert.Single(JSInterop.Invocations, i => i.Identifier == "initializeChart");
+    }
+
+    [Fact]
     public async Task UpdateDataAsync_SubscriptionRemovedDuringUpdate_CompletesSuccessfully()
     {
         var model = new InstrumentViewModel();
