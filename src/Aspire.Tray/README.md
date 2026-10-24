@@ -139,6 +139,24 @@ macOS, Segoe UI Variable Text or Segoe UI on Windows); layout never measures tex
 each renderer truncates it to its box. The panel follows the light or dark appearance,
 the macOS **Increase contrast** setting, and the Windows high-contrast theme.
 
+Everything lines up on one grid, defined by the constants at the top of `TrayPanel`:
+- **Columns:** the leading column is centered at x 30 (the logo, status glyphs, icons and
+  the Settings back arrow), and text starts at 52. Nested items' labels start at 78. The
+  trailing column mirrors the leading one, with buttons centered at 330, 300 and 270.
+  Row highlights and cards span 8 to 352.
+- **Lines:** each kind of line has one vertical center. The header and footer bars are at
+  22, a row's glyph and buttons at 26 with its name and detail at 17 and 35, section labels
+  at 16, and action list items at 15.
+- **Text placement:** single-line text sits on its line by its capitals. The scene gives each
+  text a baseline half a cap height (0.70 em) below its line's center. Both renderers draw
+  at that baseline, snapped to device pixels, rather than centering the font's line box,
+  which lands differently in SF and Segoe UI. The header's status shares the title's baseline.
+
+The scene also emits this grid as guides (`TrayPanelScene.Guides`): columns, line centers,
+the shared baseline, and the box each glyph should fill. Layout tests check every sample state
+against them, and the SVG previews are also written with the guides drawn over them
+(`*-guides.svg`).
+
 Screen readers see the panel as native elements. Along with the display list, `TrayPanel`
 produces an accessibility list in reading order: buttons (rows, row buttons, action list
 items, Back, the confirmation and footer buttons), switches with an on/off state (Launch at sign-in, with the
@@ -602,6 +620,19 @@ An isolated preview `.app` can set `ASPIRE_TRAY_SMOKE_INTERACTIVE=1` and
 `ASPIRE_TRAY_SMOKE_CLI=<absolute CLI path>` in its `LSEnvironment` to support
 Launch Services opening it without arguments. Normal product bundles do not set
 these variables.
+
+To check alignment on a real screen, the interactive preview takes three more variables:
+- `ASPIRE_TRAY_SMOKE_PREVIEW_APPEARANCE`: `light` or `dark`.
+- `ASPIRE_TRAY_SMOKE_PREVIEW_STATE`: `hover` (shows the first row's buttons), `actions`
+  (opens its action list) or `settings`.
+- `ASPIRE_TRAY_SMOKE_PREVIEW_EXPORT`: a JSON path. The preview writes there what the scene
+  draws and the guides it intends. On macOS the export names the window, for
+  `screencapture -o -l <windowId>`. On Windows the tray also saves the composited screen under
+  the panel as PNG next to the JSON.
+
+Run the Windows preview from the interactive desktop (Windows App or the console), not over
+SSH, since an SSH session has no desktop to show or capture. Drawing the guides over a
+screenshot at its scale shows where each element actually landed.
 
 Platform-independent tests exercise protocol framing and validation, subprocess
 cleanup, reconnects, lifetime replacement, concurrent stops, and controller

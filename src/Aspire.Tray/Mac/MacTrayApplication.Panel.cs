@@ -557,13 +557,18 @@ internal sealed partial class MacTrayApplication
                 AppKit.String(text.Text), attributes);
             try
             {
-                // Size the box from the font's line metrics: a single line is centered between
-                // ascent and descent, multi-line text starts at the top of its bounds.
-                var lineHeight = AppKit.GetDouble(font, Draw.Ascender) - AppKit.GetDouble(font, Draw.Descender)
-                    + AppKit.GetDouble(font, Draw.Leading);
+                // Size the box from the font's line metrics. A single line is placed so its baseline
+                // lands on the scene's baseline, snapped to a device pixel: with the line fragment
+                // origin option, AppKit draws the first baseline one ascender below the box's top.
+                // Centering the line box instead put SF text about 1 DIP low (its descender is
+                // shallower than its ascender). Multi-line text starts at the top of its bounds.
+                var ascender = AppKit.GetDouble(font, Draw.Ascender);
+                var lineHeight = ascender - AppKit.GetDouble(font, Draw.Descender) + AppKit.GetDouble(font, Draw.Leading);
+                var scale = _panelWindow == 0 ? 1 : AppKit.GetDouble(_panelWindow, AppKit.Selector("backingScaleFactor"));
+                var baseline = Math.Round(text.Baseline * scale) / scale;
                 var bounds = text.MaxLines > 1
                     ? new AppKit.NativeRect(new(text.Bounds.X, text.Bounds.Y), new(text.Bounds.Width, Math.Min(text.Bounds.Height, lineHeight * text.MaxLines)))
-                    : new AppKit.NativeRect(new(text.Bounds.X, text.Bounds.CenterY - lineHeight / 2), new(text.Bounds.Width, lineHeight));
+                    : new AppKit.NativeRect(new(text.Bounds.X, baseline - ascender), new(text.Bounds.Width, lineHeight));
                 // NSStringDrawingUsesLineFragmentOrigin (1) | NSStringDrawingTruncatesLastVisibleLine (32).
                 // https://developer.apple.com/documentation/foundation/nsstring/drawingoptions
                 AppKit.DrawWithRect(value, Draw.DrawWithRect, bounds, 1 | 32, 0);

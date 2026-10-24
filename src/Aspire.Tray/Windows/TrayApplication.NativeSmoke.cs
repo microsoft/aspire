@@ -48,7 +48,112 @@ internal sealed unsafe partial class TrayApplication
         RequireSmoke();
         _interactiveSmoke = true;
         _smokeDeadline = null;
+        ShowPreviewPanel();
+    }
+
+    // PNG encoder of GDI+ (ImageCodecInfo.Clsid for image/png).
+    private static readonly Guid s_pngEncoder = new("557CF406-1A04-11D3-9A73-0000F81EF32E");
+    private static TrayPanelPalette? s_previewPalette;
+    private string? _previewExport;
+    private long _previewStateAt;
+    private long _previewCaptureAt;
+
+    /// <summary>
+    /// Opens the interactive preview's panel. For alignment screenshots, environment variables
+    /// pick its palette (ASPIRE_TRAY_SMOKE_PREVIEW_APPEARANCE: light or dark), its state
+    /// (ASPIRE_TRAY_SMOKE_PREVIEW_STATE: hover shows the first row's buttons, actions opens its
+    /// action list, settings opens the Settings view), and a JSON file to export the scene to
+    /// (ASPIRE_TRAY_SMOKE_PREVIEW_EXPORT). The state is applied a moment after the panel opens,
+    /// once the preview's fake AppHosts have arrived, and the scene is exported together with a
+    /// PNG of the composited screen under the panel once DWM has presented it, so both describe
+    /// the same frame.
+    /// </summary>
+    private void ShowPreviewPanel()
+    {
+        s_previewPalette = Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_PREVIEW_APPEARANCE") switch
+        {
+            "light" => TrayPanelPalette.Light,
+            "dark" => TrayPanelPalette.Dark,
+            _ => null
+        };
         ShowPanel();
+        _previewStateAt = Environment.TickCount64 + 1500;
+        _previewExport = Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_PREVIEW_EXPORT") is { Length: > 0 } export ? export : null;
+    }
+
+    /// <summary>Applies the preview's state on the timer, after the fake AppHosts have arrived.</summary>
+    private void ApplyPreviewState()
+    {
+        if (_previewStateAt == 0 || Environment.TickCount64 < _previewStateAt || !_panelVisible)
+        {
+            return;
+        }
+        _previewStateAt = 0;
+        var panel = _panel!;
+        var first = panel.Scene.Targets.FirstOrDefault(target => target.Kind == PanelTargetKind.Row);
+        switch (Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_PREVIEW_STATE"))
+        {
+            case "hover" when first is not null:
+                // Straight to the panel, not through WM_MOUSEMOVE: the real pointer is elsewhere,
+                // and TrackMouseEvent would report it leaving at once.
+                ApplyPanelResponse(panel.PointerMoved(first.HitBounds.X + 40, first.HitBounds.CenterY));
+                break;
+            case "actions" when first is not null:
+                ApplyPanelResponse(panel.Invoke(first.Key with { Kind = PanelTargetKind.More }));
+                break;
+            case "settings":
+                RunPanelAction(new(PanelActionKind.Settings));
+                break;
+        }
+        _previewCaptureAt = Environment.TickCount64 + 700;
+    }
+
+    /// <summary>
+    /// Exports the scene and saves the composited screen under the panel window, as presented,
+    /// once the state has been applied and painted.
+    /// </summary>
+    private void CapturePreviewForSmoke()
+    {
+        ApplyPreviewState();
+        if (_previewExport is not { } export || _previewCaptureAt == 0 || Environment.TickCount64 < _previewCaptureAt || !_panelVisible)
+        {
+            return;
+        }
+        _previewExport = null;
+        var path = Path.ChangeExtension(export, ".png");
+        NativeCallException.Require(NativeMethods.GetWindowRect(_panelWindow, out var rect) != 0, "GetWindowRect(capture)");
+        TrayPanelSceneJson.Write(export, _panel!.Scene, "Windows", Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_PREVIEW_APPEARANCE") ?? "system",
+            PanelScale, _panelWindow, (rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top));
+        var width = rect.Right - rect.Left;
+        var height = rect.Bottom - rect.Top;
+        var screen = NativeMethods.GetDC(0);
+        NativeCallException.Require(screen != 0, "GetDC(screen)");
+        var memory = NativeMethods.CreateCompatibleDC(screen);
+        var bitmap = NativeMethods.CreateCompatibleBitmap(screen, width, height);
+        try
+        {
+            var previous = NativeMethods.SelectObject(memory, bitmap);
+            // SRCCOPY | CAPTUREBLT: read the composited desktop, including layered windows.
+            NativeCallException.Require(NativeMethods.BitBlt(memory, 0, 0, width, height, screen, rect.Left, rect.Top, 0x00CC0020 | 0x40000000) != 0,
+                "BitBlt(capture)");
+            NativeMethods.SelectObject(memory, previous);
+            RequireGdiplus(NativeMethods.GdipCreateBitmapFromHBITMAP(bitmap, 0, out var image), "GdipCreateBitmapFromHBITMAP");
+            try
+            {
+                RequireGdiplus(NativeMethods.GdipSaveImageToFile(image, path, in s_pngEncoder, 0), "GdipSaveImageToFile");
+            }
+            finally
+            {
+                NativeMethods.GdipDisposeImage(image);
+            }
+            Program.Log($"Preview captured to {path}.");
+        }
+        finally
+        {
+            Cleanup(NativeMethods.DeleteObject(bitmap) != 0, "DeleteObject(capture)");
+            Cleanup(NativeMethods.DeleteDC(memory) != 0, "DeleteDC(capture)");
+            NativeMethods.ReleaseDC(0, screen);
+        }
     }
 
     internal void ShowMessageForSmoke()

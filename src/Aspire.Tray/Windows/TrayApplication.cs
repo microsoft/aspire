@@ -400,6 +400,10 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
             }
         }
         RefreshState();
+        if (smokeSeconds is not null)
+        {
+            CapturePreviewForSmoke();
+        }
         if (smokeSeconds is not null && _modalDepth != 0)
         {
             CompleteDialogForSmoke();

@@ -526,8 +526,50 @@ internal sealed partial class MacTrayApplication
         => Route(self, sender, static (app, _) =>
         {
             ReleaseSmokeTimer(ref app._smokePreviewTimer);
-            app.ShowPanel();
+            app.ShowPreviewPanel();
         });
+
+    /// <summary>
+    /// Opens the interactive preview's panel. For alignment screenshots, environment variables
+    /// pick its appearance (ASPIRE_TRAY_SMOKE_PREVIEW_APPEARANCE: light or dark), its state
+    /// (ASPIRE_TRAY_SMOKE_PREVIEW_STATE: hover shows the first row's buttons, actions opens its
+    /// action list, settings opens the Settings view) and a JSON file to export the scene and the
+    /// window's number and frame to (ASPIRE_TRAY_SMOKE_PREVIEW_EXPORT), so `screencapture -l`
+    /// can capture exactly that window.
+    /// </summary>
+    private void ShowPreviewPanel()
+    {
+        var appearance = Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_PREVIEW_APPEARANCE");
+        if (appearance is "light" or "dark")
+        {
+            AppKit.Set(_application, "setAppearance:", AppKit.Get(AppKit.Class("NSAppearance"), "appearanceNamed:",
+                AppKit.Constant(appearance == "dark" ? "NSAppearanceNameDarkAqua" : "NSAppearanceNameAqua")));
+        }
+        ShowPanel();
+        var panel = _panel!;
+        var first = panel.Scene.Targets.FirstOrDefault(target => target.Kind == PanelTargetKind.Row);
+        switch (Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_PREVIEW_STATE"))
+        {
+            case "hover" when first is not null:
+                ApplyPanelResponse(panel.PointerMoved(first.HitBounds.X + 40, first.HitBounds.CenterY));
+                break;
+            case "actions" when first is not null:
+                ApplyPanelResponse(panel.Invoke(first.Key with { Kind = PanelTargetKind.More }));
+                break;
+            case "settings":
+                RunPanelAction(new(PanelActionKind.Settings));
+                break;
+        }
+        if (Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_PREVIEW_EXPORT") is { Length: > 0 } export)
+        {
+            LayoutPanel();
+            var frame = AppKit.GetRect(_panelWindow, "frame");
+            var scale = AppKit.GetDouble(_panelWindow, AppKit.Selector("backingScaleFactor"));
+            TrayPanelSceneJson.Write(export, panel.Scene, "macOS", appearance ?? "system", scale, AppKit.Get(_panelWindow, "windowNumber"),
+                ((int)frame.Origin.X, (int)frame.Origin.Y, (int)frame.Size.Width, (int)frame.Size.Height));
+            Console.WriteLine($"Preview scene exported to {export}.");
+        }
+    }
 }
 
 internal sealed record NativePanelInspection(

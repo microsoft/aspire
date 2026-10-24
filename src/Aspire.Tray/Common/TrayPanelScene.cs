@@ -32,6 +32,12 @@ internal static class PanelFonts
     };
 
     public static bool IsSemibold(PanelFontRole role) => role is not PanelFontRole.Body;
+
+    /// <summary>
+    /// The height of capital letters. SF Pro and Segoe UI both draw capitals 0.70 em tall, so
+    /// centering capitals on a line puts the baseline half of this below the line's center.
+    /// </summary>
+    public static double CapHeight(PanelFontRole role) => 0.7 * Size(role);
 }
 
 internal enum PanelTextAlignment
@@ -57,8 +63,10 @@ internal sealed record StrokePathCommand(PanelPath Path, PanelColor Color, doubl
 
 /// <summary>
 /// Draws text inside fixed bounds. The layout never measures text: a renderer truncates with
-/// an ellipsis to fit. Single-line text is centered vertically from the font's ascent and
-/// descent; multi-line text wraps at word boundaries and is top-aligned.
+/// an ellipsis to fit. Single-line text sits on <see cref="Baseline"/>, which by default centers
+/// its capitals on the bounds' middle; renderers place the baseline there exactly instead of
+/// centering the font's line box, because SF and Segoe UI have different ascents and descents.
+/// Multi-line text wraps at word boundaries and is top-aligned.
 /// </summary>
 internal sealed record TextCommand(
     PanelRect Bounds,
@@ -67,7 +75,15 @@ internal sealed record TextCommand(
     PanelColor Color,
     PanelTextAlignment Alignment = PanelTextAlignment.Leading,
     int MaxLines = 1,
-    PanelTruncation Truncation = PanelTruncation.End) : PanelCommand;
+    PanelTruncation Truncation = PanelTruncation.End,
+    double? ExplicitBaseline = null) : PanelCommand
+{
+    /// <summary>
+    /// The y of a single line's baseline: <see cref="ExplicitBaseline"/> when set (text sharing a
+    /// baseline with larger text beside it), otherwise the one that centers the capitals.
+    /// </summary>
+    public double Baseline => ExplicitBaseline ?? Bounds.CenterY + PanelFonts.CapHeight(Font) / 2;
+}
 
 /// <summary>Draws the full-color Aspire logo scaled into the bounds.</summary>
 internal sealed record LogoCommand(PanelRect Bounds) : PanelCommand;
@@ -221,7 +237,33 @@ internal sealed record TrayPanelScene(
     double Height,
     IReadOnlyList<PanelCommand> Commands,
     IReadOnlyList<PanelHitTarget> Targets,
-    IReadOnlyList<PanelAccessibleElement> Accessibility);
+    IReadOnlyList<PanelAccessibleElement> Accessibility)
+{
+    /// <summary>
+    /// The alignment grid the layout intends, for tests and screenshot overlays: the columns,
+    /// the vertical center of each visible element, and the boxes glyphs should fill. Renderers
+    /// ignore it.
+    /// </summary>
+    public IReadOnlyList<PanelGuide> Guides { get; init; } = [];
+}
+
+internal enum PanelGuideKind
+{
+    /// <summary>A vertical line at <see cref="PanelGuide.Position"/> (x), spanning <see cref="PanelGuide.Bounds"/>.</summary>
+    Column,
+    /// <summary>
+    /// A horizontal line at <see cref="PanelGuide.Position"/> (y), spanning <see cref="PanelGuide.Bounds"/>: where
+    /// the vertical center of the elements on that line should be.
+    /// </summary>
+    Center,
+    /// <summary>The box a glyph, icon or logo should fill, centered on its column and line.</summary>
+    Box,
+    /// <summary>A horizontal line at <see cref="PanelGuide.Position"/> (y) where text on that line shares its baseline.</summary>
+    Baseline
+}
+
+/// <summary>One line or box of the alignment grid. <see cref="Label"/> names it in overlays and test failures.</summary>
+internal sealed record PanelGuide(PanelGuideKind Kind, double Position, string Label, PanelRect Bounds);
 
 internal enum PanelActionKind
 {

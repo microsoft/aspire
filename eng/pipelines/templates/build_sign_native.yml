@@ -45,8 +45,12 @@ jobs:
       jobs:
       - job: BuildNative_${{ replace(targetRid, '-', '_') }}
         displayName: ${{ replace(targetRid, '-', '_') }}
-        # macOS signs and notarizes both the payload and final CLI; allow for remote-service latency.
-        timeoutInMinutes: ${{ iif(and(eq(parameters.agentOs, 'macos'), eq(parameters.codeSign, true)), 120, 60) }}
+        # Signing and notarization can push successful macOS jobs close to an hour.
+        ${{ if eq(parameters.agentOs, 'macos') }}:
+          # The unified signed build also signs/notarizes the component payload.
+          timeoutInMinutes: ${{ iif(eq(parameters.codeSign, true), 120, 90) }}
+        ${{ else }}:
+          timeoutInMinutes: 60
 
         variables:
         - TeamName: ${{ parameters.teamName }}

@@ -388,6 +388,10 @@ internal sealed unsafe partial class TrayApplication
 
     private static TrayPanelPalette GetPanelPalette()
     {
+        if (s_previewPalette is { } preview)
+        {
+            return preview;
+        }
         // SPI_GETHIGHCONTRAST; HCF_HIGHCONTRASTON = 1.
         var contrast = new NativeMethods.HighContrast { Size = (uint)sizeof(NativeMethods.HighContrast) };
         if (NativeMethods.GetHighContrast(0x42, contrast.Size, ref contrast, 0) != 0 && (contrast.Flags & 1) != 0)
@@ -673,8 +677,14 @@ internal sealed unsafe partial class TrayApplication
             }
             else
             {
-                // DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS (0x8000).
-                format |= 0x20 | 0x4 | 0x8000;
+                // DT_SINGLELINE | DT_END_ELLIPSIS (0x8000), top-aligned: the box's top is placed one
+                // ascent above the scene's baseline (in whole device pixels), so the baseline lands
+                // there exactly. DT_VCENTER centered Segoe UI's line box instead, whose ascent and
+                // descent differ from SF's, so text sat at a different height than on macOS.
+                format |= 0x20 | 0x8000;
+                NativeCallException.Require(NativeMethods.GetTextMetrics(dc, out var metrics) != 0, "GetTextMetricsW(flyout)");
+                rect.Top = (int)Math.Round(text.Baseline * PanelScale) - metrics.Ascent;
+                rect.Bottom = rect.Top + metrics.Height;
             }
             var value = text.MaxLines <= 1 && text.Truncation == PanelTruncation.Middle
                 ? FitMiddle(dc, text.Text, rect.Right - rect.Left)
@@ -903,8 +913,9 @@ internal sealed unsafe partial class TrayApplication
                     return 0;
                 }
                 break;
-            case NativeMethods.WmActivate when (wParam & 0xFFFF) == 0:
-                // WA_INACTIVE: clicking anywhere else closes the flyout, like a menu.
+            case NativeMethods.WmActivate when (wParam & 0xFFFF) == 0 && _previewExport is null:
+                // WA_INACTIVE: clicking anywhere else closes the flyout, like a menu. A pending
+                // smoke preview capture keeps it open: the console that launched it takes focus back.
                 HidePanel();
                 return 0;
             case NativeMethods.WmDpiChanged when _panelVisible:

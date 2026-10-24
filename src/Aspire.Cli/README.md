@@ -424,6 +424,12 @@ Prefix a path with `firefox=` or `chromium=` to apply the trust settings expecte
 
 The `certificates.nssDbPaths` setting takes precedence over the upstream `DOTNET_DEV_CERTS_NSSDB_PATHS` environment variable. When the Aspire setting has no value, the CLI preserves the upstream behavior.
 
+## Diagnostic log privacy
+
+On Unix, CLI diagnostic log files use owner-only read/write permissions (`0600`), including when an existing log file is reused. The dedicated Aspire logs directory uses owner-only access (`0700`), repairing permissions if it already exists. Newly created custom log directories also use `0700`; existing custom parent directories and Windows file permission behavior are unchanged.
+
+Diagnostic logs can contain sensitive data, including dashboard login URLs captured from AppHost output. Review logs before sharing them.
+
 ## Additional documentation
 
 * [CLI output formats](../../docs/specs/cli-output-formats.md)

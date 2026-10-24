@@ -29,6 +29,9 @@ internal static class EntraIdBicepConstants
     /// <summary>The Microsoft Graph service principal resource type.</summary>
     internal const string ServicePrincipalResourceType = "Microsoft.Graph/servicePrincipals";
 
+    /// <summary>The Microsoft Graph federated identity credential resource type.</summary>
+    internal const string FederatedIdentityCredentialResourceType = "Microsoft.Graph/applications/federatedIdentityCredentials";
+
     /// <summary>
     /// The service principal tag that marks it as an integrated enterprise application. The Entra portal sets it when it
     /// creates a service principal, but one created through Microsoft Graph has no tags. Without it the service principal

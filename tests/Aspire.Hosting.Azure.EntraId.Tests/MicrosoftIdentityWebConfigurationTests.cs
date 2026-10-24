@@ -35,9 +35,8 @@ public class MicrosoftIdentityWebConfigurationTests
             .WithInstance("https://login.microsoftonline.us/")
             .WithSignInAudience(EntraIdSignInAudience.AzureADMultipleOrgs)
             .WithClientSecret(secret)
-            .WithCredential(new EntraIdFederatedIdentityCredential
+            .WithCredential(new EntraIdFederatedIdentityCredential(ManagedIdentityClientId)
             {
-                ManagedIdentityClientId = ManagedIdentityClientId,
                 TokenExchangeUrl = "api://AzureADTokenExchangeUSGov",
                 TokenExchangeAuthority = $"https://login.microsoftonline.us/{TenantId}"
             })

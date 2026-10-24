@@ -236,7 +236,7 @@ public class Program
             ((args[0] == "mcp" && args[1] == "start") || (args[0] == "agent" && args[1] == "mcp"));
 
         // Create file logger provider from pre-computed path info
-        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, errorWriter);
+        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter);
 
         var factory = LoggerFactory.Create(builder =>
         {

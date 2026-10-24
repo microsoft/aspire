@@ -20,7 +20,7 @@ internal static class TrayPanelSvgRenderer
     private static readonly XNamespace s_xlink = "http://www.w3.org/1999/xlink";
 
     /// <summary>Renders the scene. <paramref name="logoPng"/> is embedded as a data URI when given.</summary>
-    public static string Render(TrayPanelScene scene, byte[]? logoPng = null, double margin = 0)
+    public static string Render(TrayPanelScene scene, byte[]? logoPng = null, double margin = 0, bool guides = false)
     {
         var width = scene.Width + 2 * margin;
         var height = scene.Height + 2 * margin;
@@ -97,7 +97,58 @@ internal static class TrayPanelSvgRenderer
         {
             throw new InvalidOperationException("Unbalanced clip commands.");
         }
+        if (guides)
+        {
+            AddGuides(root, scene);
+        }
         return root.ToString();
+    }
+
+    /// <summary>
+    /// Draws the scene's alignment grid over the panel, in the same colors as the screenshot
+    /// overlays: columns in cyan, line centers in magenta, shared baselines in green, and the
+    /// boxes glyphs should fill in yellow, with the text baselines the renderers will use in red.
+    /// </summary>
+    private static void AddGuides(XElement root, TrayPanelScene scene)
+    {
+        var layer = new XElement(s_svg + "g", new XAttribute("font-family", "Menlo, Consolas, monospace"), new XAttribute("font-size", "4"));
+        root.Add(layer);
+        static XElement Line(double x1, double y1, double x2, double y2, string color, string? dash = null)
+        {
+            var line = new XElement(s_svg + "line", new XAttribute("x1", F(x1)), new XAttribute("y1", F(y1)), new XAttribute("x2", F(x2)),
+                new XAttribute("y2", F(y2)), new XAttribute("stroke", color), new XAttribute("stroke-width", "0.5"));
+            if (dash is not null)
+            {
+                line.Add(new XAttribute("stroke-dasharray", dash));
+            }
+            return line;
+        }
+        foreach (var guide in scene.Guides)
+        {
+            var b = guide.Bounds;
+            switch (guide.Kind)
+            {
+                case PanelGuideKind.Column:
+                    layer.Add(Line(guide.Position, b.Y, guide.Position, b.Bottom, "#00E5FF"));
+                    layer.Add(new XElement(s_svg + "text", new XAttribute("x", F(guide.Position)), new XAttribute("y", "-2"),
+                        new XAttribute("fill", "#00A8C0"), new XAttribute("text-anchor", "middle"), F(guide.Position)));
+                    break;
+                case PanelGuideKind.Center:
+                    layer.Add(Line(b.X, guide.Position, b.Right, guide.Position, "#FF2BD6"));
+                    break;
+                case PanelGuideKind.Baseline:
+                    layer.Add(Line(b.X, guide.Position, b.Right, guide.Position, "#2BB52B", "2 1"));
+                    break;
+                case PanelGuideKind.Box:
+                    layer.Add(new XElement(s_svg + "rect", Bounds(b), new XAttribute("fill", "none"), new XAttribute("stroke", "#E6B800"),
+                        new XAttribute("stroke-width", "0.5")));
+                    break;
+            }
+        }
+        foreach (var text in scene.Commands.OfType<TextCommand>().Where(text => text.MaxLines == 1))
+        {
+            layer.Add(Line(text.Bounds.X, text.Baseline, text.Bounds.X + Math.Min(text.Bounds.Width, 40), text.Baseline, "#FF3B30", "1 0.6"));
+        }
     }
 
     public static string ToPathData(PanelPath path)
@@ -139,8 +190,9 @@ internal static class TrayPanelSvgRenderer
         }
         if (text.MaxLines == 1)
         {
-            // Center a single line from the em box, as the native renderers do from ascent and descent.
-            element.Add(new XAttribute("y", F(text.Bounds.CenterY + size * 0.35)), lines[0]);
+            // Put a single line on the scene's baseline, as the native renderers do: it centers the
+            // capitals on the line, or is the baseline the header status shares with the title.
+            element.Add(new XAttribute("y", F(text.Baseline)), lines[0]);
             return element;
         }
         for (var i = 0; i < lines.Count; i++)

@@ -854,6 +854,108 @@ public class TrayPanelTests
 
     [Theory]
     [MemberData(nameof(SampleNames))]
+    public void EverySingleLineTextStartsOnAColumnAndSitsOnItsLine(string name)
+    {
+        var scene = CreatePanel(name, TrayPanelPalette.Light).Scene;
+        double[] columns = [TrayPanel.EdgeMargin, TrayPanel.TextLeft, TrayPanel.NestedTextLeft];
+        foreach (var text in scene.Commands.OfType<TextCommand>().Where(text => text.MaxLines == 1))
+        {
+            // Leading text starts on a column, except the header status, which follows the
+            // title on its baseline.
+            if (text.Alignment == PanelTextAlignment.Leading && text.ExplicitBaseline is null)
+            {
+                Assert.True(columns.Contains(text.Bounds.X), $"{name}: \"{text.Text}\" starts at {text.Bounds.X}, not on a column");
+            }
+            // Its capitals are centered on the line it belongs to, or it shares that line's baseline.
+            var capMiddle = text.Baseline - PanelFonts.CapHeight(text.Font) / 2;
+            var lines = scene.Guides.Where(guide => guide.Bounds.Contains(text.Bounds.CenterX, text.Bounds.CenterY)).ToList();
+            Assert.True(lines.Any(guide => guide.Kind == PanelGuideKind.Center && Math.Abs(guide.Position - capMiddle) < 0.01
+                    || guide.Kind == PanelGuideKind.Baseline && Math.Abs(guide.Position - text.Baseline) < 0.01),
+                $"{name}: \"{text.Text}\" has its capitals centered at {capMiddle:F2}, on none of the lines {string.Join(", ", lines.Where(l => l.Kind != PanelGuideKind.Column).Select(l => $"{l.Label} {l.Position}"))}");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(SampleNames))]
+    public void IconButtonsAndGlyphsSitOnTheLeadingAndTrailingColumns(string name)
+    {
+        var scene = CreatePanel(name, TrayPanelPalette.Dark).Scene;
+        // Trailing buttons are 28 DIPs wide with a 2-DIP gap: centers at 330, 300 and 270.
+        double[] trailing = [TrayPanel.TrailingCenter, TrayPanel.TrailingCenter - 30, TrayPanel.TrailingCenter - 60];
+        var centers = scene.Guides.Where(guide => guide.Kind == PanelGuideKind.Center).ToList();
+        foreach (var button in scene.Targets.Where(target => target.Kind is PanelTargetKind.Dashboard or PanelTargetKind.Stop
+            or PanelTargetKind.Start or PanelTargetKind.More or PanelTargetKind.Settings or PanelTargetKind.Documentation
+            or PanelTargetKind.Quit or PanelTargetKind.Back).Where(target => !target.HitBounds.IsEmpty))
+        {
+            Assert.Equal(TrayPanel.ButtonSize, button.Bounds.Width);
+            if (button.Kind == PanelTargetKind.Back)
+            {
+                Assert.Equal(TrayPanel.LeadingCenter, button.Bounds.CenterX);
+            }
+            else
+            {
+                Assert.Contains(button.Bounds.CenterX, trailing);
+            }
+            Assert.True(centers.Any(guide => guide.Bounds.Contains(button.Bounds.CenterX, button.Bounds.CenterY) && guide.Position == button.Bounds.CenterY),
+                $"{name}: {button.Key} is centered at y {button.Bounds.CenterY}, on no line");
+        }
+        foreach (var box in scene.Guides.Where(guide => guide.Kind == PanelGuideKind.Box))
+        {
+            if (box.Label is "footer icon" or "row button icon" or "recent chevron")
+            {
+                Assert.Contains(box.Bounds.CenterX, trailing);
+            }
+            else if (box.Label == "open-in app icon")
+            {
+                // Nested applications draw their own icon on the text column; the guide must be where it is drawn.
+                Assert.Contains(scene.Commands.OfType<AppIconCommand>(), icon => icon.Bounds == box.Bounds);
+                Assert.Equal(TrayPanel.TextLeft, box.Bounds.X);
+            }
+            else if (box.Label != "empty art")
+            {
+                Assert.Equal(TrayPanel.LeadingCenter, box.Bounds.CenterX);
+            }
+        }
+        // Row highlights and cards share the row inset on both sides.
+        Assert.All(scene.Targets.Where(target => target.Kind is PanelTargetKind.Row or PanelTargetKind.LaunchAtSignIn),
+            row => Assert.True(row.Bounds.X == TrayPanel.RowInset && row.Bounds.Right == TrayPanel.Width - TrayPanel.RowInset, $"{name}: {row.Key} at {row.Bounds}"));
+    }
+
+    [Fact]
+    public void OpenInApplicationGuidesSitOnTheirDrawnIcons()
+    {
+        var scene = CreatePanel("actions-open-in", TrayPanelPalette.Light).Scene;
+        var icons = scene.Commands.OfType<AppIconCommand>().Select(icon => icon.Bounds).ToList();
+        var guides = scene.Guides.Where(guide => guide.Label == "open-in app icon").Select(guide => guide.Bounds).ToList();
+
+        Assert.NotEmpty(icons);
+        Assert.Equal(icons, guides);
+        Assert.All(scene.Guides.Where(guide => guide.Label == "action icon"), guide => Assert.Equal(TrayPanel.LeadingCenter, guide.Bounds.CenterX));
+    }
+
+    [Fact]
+    public void LogoTitleAndStatusShareTheHeaderLine()
+    {
+        var scene = new TrayPanel(TrayPanelSamples.Typical(), TrayPanelPalette.Light).Scene;
+        var logo = scene.Commands.OfType<LogoCommand>().Single();
+        var title = scene.Commands.OfType<TextCommand>().Single(text => text.Text == "Aspire");
+        var status = scene.Commands.OfType<TextCommand>().Single(text => text.ExplicitBaseline is not null);
+        var dot = scene.Commands.OfType<FillPathCommand>().Single(fill => fill.Path.GetControlBounds() is { Width: 8, Height: 8 } bounds
+            && bounds.CenterY < TrayPanel.HeaderHeight);
+
+        // The logo and the title's capitals are centered on the bar, like the footer's icons.
+        Assert.Equal(TrayPanel.HeaderHeight / 2, logo.Bounds.CenterY);
+        Assert.Equal(TrayPanel.HeaderHeight / 2, title.Baseline - PanelFonts.CapHeight(PanelFontRole.Title) / 2);
+        Assert.Equal(TrayPanel.LeadingCenter, logo.Bounds.CenterX);
+        Assert.Equal(TrayPanel.TextLeft, title.Bounds.X);
+        // The smaller status shares the title's baseline, and the dot is centered on its capitals.
+        Assert.Equal(title.Baseline, status.Baseline);
+        Assert.Equal(status.Baseline - PanelFonts.CapHeight(PanelFontRole.Body) / 2, dot.Path.GetControlBounds().CenterY, 3);
+        Assert.Equal(TrayPanel.Width - TrayPanel.EdgeMargin, status.Bounds.Right);
+    }
+
+    [Theory]
+    [MemberData(nameof(SampleNames))]
     public void HeaderIsAOneLineBarMatchingTheFooter(string name)
     {
         foreach (var palette in new[] { TrayPanelPalette.Light, TrayPanelPalette.Dark,
@@ -1179,6 +1281,10 @@ public class TrayPanelTests
                 var path = Path.Combine(directory, $"{name}-{palette.Name}.svg");
                 File.WriteAllText(path, TrayPanelSvgRenderer.Render(panel.Scene, logo, margin: 24));
                 written.Add(path);
+                // The same preview with the alignment grid drawn over it.
+                var guides = Path.Combine(directory, $"{name}-{palette.Name}-guides.svg");
+                File.WriteAllText(guides, TrayPanelSvgRenderer.Render(panel.Scene, logo, margin: 24, guides: true));
+                written.Add(guides);
             }
         }
 
