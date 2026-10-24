@@ -29,6 +29,25 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
+    [InlineData("tools/AnalyzeCiFailure/Program.cs")]
+    [InlineData("tools/AnalyzeCiFailure/Directory.Build.props")]
+    [InlineData("tools/AnalyzeCiFailure/Directory.Build.targets")]
+    [InlineData("tools/AnalyzeCiFailure/Directory.Packages.props")]
+    [InlineData(".github/workflows/analyze-ci-failure.md")]
+    [InlineData(".github/workflows/analyze-ci-failure.lock.yml")]
+    [InlineData(".github/workflows/analyze-ci-failure-persistence.sh")]
+    [InlineData(".github/workflows/analyze-ci-failure-comment.sh")]
+    public void AnalysisValidatorInputsSelectInfrastructureTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["Infrastructure.Tests"], result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Theory]
     [InlineData("eng/scripts/generate-template-cgmanifest.ps1")]
     public void TemplateManifestInputsSelectInfrastructureCoverage(string path)
     {

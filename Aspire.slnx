@@ -639,6 +639,7 @@
     <Project Path="tests/testproject/TestProject.WorkerA/TestProject.WorkerA.csproj" />
   </Folder>
   <Folder Name="/Tools/">
+    <Project Path="tools/AnalyzeCiFailure/AnalyzeCiFailure.csproj" />
     <Project Path="src/Tools/ConfigurationSchemaGenerator/ConfigurationSchemaGenerator.csproj" />
     <Project Path="tools/Aspire.TestTools/Aspire.TestTools.csproj" />
     <Project Path="tools/AspireMcpTools/AspireMcpTools.csproj" />

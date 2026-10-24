@@ -732,11 +732,16 @@ safe-outputs:
           with:
             persist-credentials: false
             sparse-checkout: |
-              .github/workflows/analyze-ci-failure-validation.sh
+              global.json
+              tools/AnalyzeCiFailure/
               .github/workflows/analyze-ci-failure-persistence.sh
               .github/workflows/analyze-ci-failure-comment.sh
               .github/workflows/analyze-ci-failure-issue.sh
             sparse-checkout-cone-mode: false
+        - name: Set up validation SDK
+          uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+          with:
+            global-json-file: global.json
         - uses: actions/download-artifact@v8.0.1
           with:
             name: ci-failure-data
@@ -744,7 +749,8 @@ safe-outputs:
         - name: Validate analysis scope
           env:
             ANALYSIS_DIR: ${{ steps.download-analysis.outputs.download-path }}
-          run: bash .github/workflows/analyze-ci-failure-validation.sh
+          # Build only trusted workflow-ref sources, never the failed run's ref or agent files.
+          run: dotnet run --project tools/AnalyzeCiFailure/AnalyzeCiFailure.csproj --configuration Release -- validate
         - name: Publish analysis data and comment on PR
           env:
             ANALYSIS_DIR: ${{ steps.download-analysis.outputs.download-path }}

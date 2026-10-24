@@ -53,9 +53,9 @@ matching a recurring cause, so a failed prerequisite cannot be treated as a
 test failure merely because it occurred in a test job.
 
 Before any side effect, the
-[`analyze-ci-failure-validation.sh`](../../.github/workflows/analyze-ci-failure-validation.sh)
-boundary rebuilds trusted run, attempt, SHA, PR, failed-job, test, and cause
-identity from collected artifacts. It rejects output that adds, omits, or
+[`AnalyzeCiFailure`](../../tools/AnalyzeCiFailure/Program.cs)
+command validates run and subject PR identity, failed jobs, tests, and causes
+against collected artifacts. It rejects output that adds, omits, or
 rebinds trusted records. Published diagnostics are reconstructed from trusted
 evidence rather than copied from agent output.
 
@@ -80,6 +80,9 @@ Complete evidence requires the agent to report exactly the same unique
 `{test, job}` records. Diagnostic rebinding and flaky-cause validation use that
 exact pair, so a real test from one job cannot be attributed to another failed
 job. Every flaky `{test, job}` pair must also be covered by a matching cause.
+The join uses the exact display test name and trusted job name, not a new
+numeric test-observation identity. Distinct numeric jobs may share a name,
+and more than one cause may cover the same flaky test/job pair.
 The ten-cause budget fails closed rather than silently dropping distinct flaky
 test identities.
 
@@ -122,10 +125,91 @@ The source workflow is
 generated executable workflow is
 [`analyze-ci-failure.lock.yml`](../../.github/workflows/analyze-ci-failure.lock.yml).
 Collection and persistence helpers live beside the workflow as
-`analyze-ci-failure-*.sh`; final output validation is in
-`analyze-ci-failure-validation.sh`.
+`analyze-ci-failure-*.sh`; final output validation is the dependency-free
+`tools/AnalyzeCiFailure` C# executable. The command reads existing
+`ci-failure-data/` files relative to the working directory and the existing
+agent proposal and cause files under `ANALYSIS_DIR`. It does not collect data,
+change history identity, or add run-attempt/SHA checks.
 
-Focused coverage lives in
+Validation keeps the existing single-test cause identity and run-only history.
+It checks run identity, exact job/test binding, compatible causes and ownership,
+unchanged stored cause type/test name, verdict consistency, and the ten-cause
+and 65,000-byte PR-comment budgets. Sanitization and comment rendering still
+call the publisher's bash helpers, keeping redaction and rendered output
+single-sourced. Required unavailable TRX evidence blocks publication; optional
+Mocha collection behavior is unchanged.
+
+Semantic rules live in
+[`ValidationRules.cs`](../../tools/AnalyzeCiFailure/ValidationRules.cs), operating
+on immutable records in
+[`ValidationModels.cs`](../../tools/AnalyzeCiFailure/ValidationModels.cs).
+[`Validator.cs`](../../tools/AnalyzeCiFailure/Validator.cs) sequences those checks
+and owns file access, JSON projection, sanitization, trusted diagnostic rebinding,
+and rendering. JSON decoding and compatibility policy stay at that boundary.
+
+To add or change a rule, edit the plainly named method (for example,
+`RequireExactTestCoverage`) and add accepted and rejected typed-input cases in
+[`AnalyzeCiFailureRuleTests.cs`](../../tests/Infrastructure.Tests/WorkflowScripts/AnalyzeCiFailureRuleTests.cs).
+These tests call production rules without JSON, shell, or file fixtures.
+Keep command-level coverage for boundary behavior and error ordering; rules do
+not need a registry, framework, or per-rule class.
+
+Numeric matching preserves the shell validator's distinct checks: failed-job
+summaries must match the collected IDs' jq-serialized forms, while cause references
+use numeric equality. Cause-ID validation retains jq's floating-point `floor`
+coercion rather than introducing a stricter integer-only JSON contract.
+
+Raw collected JSON uses last-property-wins semantics, including decoded duplicate
+names and replacement by null. Scope and verdict extraction preserves Bash's
+NUL removal and trailing-LF stripping without changing exact JSON test/job joins.
+Matching `causes/*.json` directories count toward the cause budget and are rejected
+as invalid cause files; hidden entries remain ignored.
+
+### Compatibility limits
+
+The covered producer-generated artifacts do not establish universal numeric,
+scalar-extraction, or parser parity with jq. Verified differences remain:
+
+- **Valid JSON numeric spellings:** raw run-context and run-metadata IDs written
+  as `1.23e2` or `123e0`, and numeric context `pr_numbers` such as `4.2e1`, can
+  pass the shell validator but be rejected by C#. These are standard JSON forms,
+  distinct from the ordinary producer representations and from invalid JSON
+  spellings such as `0123` or `+123`. Job/cause numeric coverage does not prove
+  equivalence for these raw identity fields.
+- **Other shell-extracted scalars:** trailing LFs in `run_id`, `html_url`,
+  context `pr_numbers`, test-evidence `state`, and stored prior-cause `type`
+  can be stripped by Bash but retained by C#, causing controlled rejection.
+  The scope/verdict normalization above is not applied globally.
+- **Parser limits and nonstandard grammar:** nesting beyond the default depth
+  of 64 and lone low-surrogate escapes can be accepted by jq but rejected by
+  C#. jq's nonstandard `nan` grammar can also be accepted where C# rejects it;
+  this is separate from the valid scientific-number forms above.
+- **Encoding:** a UTF-16LE-BOM raw trusted context is accepted by C# but rejected
+  by the baseline jq validator. Unlike the rejection-only differences above,
+  this difference is not fail-closed. It is not a claim about all BOM encodings.
+
+These residuals remain rollout caveats; they are not addressed by the existing
+fixture passes or by the sparse-build smoke check.
+
+### Trusted publication build
+
+The publication job checks out the tool, `global.json`, and shell dependencies
+from the trusted workflow ref, installs the pinned SDK, and runs:
+
+```bash
+ANALYSIS_DIR=/path/to/downloaded/ci-analysis-output \
+  dotnet run --project tools/AnalyzeCiFailure/AnalyzeCiFailure.csproj \
+  --configuration Release -- validate
+```
+
+Local `Directory.Build.props`, `Directory.Build.targets`, and
+`Directory.Packages.props` stop root Arcade and central-package inheritance.
+No packages are required in the sparse checkout. Never build the failed PR's
+ref or agent-written sources in this write-token job.
+
+Command-level validator fixtures invoke the application entry point as a real
+command; direct rule tests complement them, and the remaining shell helpers
+retain their behavioral tests. Boundary coverage lives in
 [`AnalyzeCiFailureWorkflowTests`](../../tests/Infrastructure.Tests/WorkflowScripts/AnalyzeCiFailureWorkflowTests.cs).
 When changing the workflow, helpers, or the job/artifact naming contract, keep
 the source workflow, generated lock, scripts, tests, and this document aligned.
@@ -133,7 +217,9 @@ the source workflow, generated lock, scripts, tests, and this document aligned.
 ```bash
 dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj \
   --no-launch-profile -- \
+  --filter-class "*.AnalyzeCiFailureRuleTests" \
   --filter-class "*.AnalyzeCiFailureWorkflowTests" \
+  --filter-class "*.AnalyzeCiFailureTextTests" \
   --filter-not-trait "quarantined=true" \
   --filter-not-trait "outerloop=true"
 

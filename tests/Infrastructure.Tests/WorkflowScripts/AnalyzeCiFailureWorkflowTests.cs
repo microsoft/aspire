@@ -12,7 +12,6 @@ namespace Infrastructure.Tests;
 
 public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : IDisposable
 {
-    private const string ValidationScriptRelativePath = ".github/workflows/analyze-ci-failure-validation.sh";
     private const string HistoryScriptRelativePath = ".github/workflows/analyze-ci-failure-history.sh";
     private const string CandidatesScriptRelativePath = ".github/workflows/analyze-ci-failure-candidates.sh";
     private const string IssueScriptRelativePath = ".github/workflows/analyze-ci-failure-issue.sh";
@@ -22,6 +21,268 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(output);
 
     public void Dispose() => _workspace.Dispose();
+
+    [Theory]
+    [RequiresTools(["bash", "jq"])]
+    [InlineData("run-context.json", """{"run_scope":"main","run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""")]
+    [InlineData("run.json", """{"id":999,"id":123,"html_url":"https://github.com/microsoft/aspire/actions/runs/123"}""")]
+    [InlineData("test-evidence.json", """{"state":"unavailable","state":"complete"}""")]
+    [InlineData("prior-causes/flaky.json", """{"test_name":"Tests.Flaky","type":"infra-failure","type":"flaky-test"}""")]
+    public async Task AnalysisValidatorUsesLastDuplicateTrustedProperty(string file, string json)
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"flaky-test"}],"failed_tests":[{"name":"Tests.Flaky","job":"Tests","error":"boom","classification":"flaky","reason":"Intermittent"}],"causes":["flaky"]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "flaky.json", CreateCause("flaky", "flaky-test", 123));
+        var path = Path.Combine(_workspace.Path, "ci-failure-data", file);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, json);
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(0, result.ExitCode);
+    }
+
+    [Theory]
+    [RequiresTools(["bash", "jq"])]
+    [InlineData("verdict", "flaky-test\0")]
+    [InlineData("verdict", "flaky\0-test")]
+    [InlineData("verdict", "flaky-test\n")]
+    [InlineData("analysis-scope", "main\0\n")]
+    [InlineData("context-scope", "main\0\n")]
+    public async Task AnalysisValidatorPreservesShellScopeAndVerdictExtraction(string target, string value)
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"main","verdict":"flaky-test","pr":null,"failed_jobs":[{"id":123,"classification":"flaky-test"}],"failed_tests":[{"name":"Tests.Flaky","job":"Tests","error":"boom","classification":"flaky","reason":"Intermittent"}],"causes":["flaky"]}""",
+            """{"run_id":123,"run_scope":"main"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "flaky.json", CreateCause("flaky", "flaky-test", 123));
+        var path = target == "context-scope"
+            ? Path.Combine(_workspace.Path, "ci-failure-data", "run-context.json")
+            : Path.Combine(_workspace.Path, "ci-analysis-output", "analysis-result.json");
+        var document = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        document[target == "verdict" ? "verdict" : "run_scope"] = value;
+        await File.WriteAllTextAsync(path, document.ToJsonString());
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(0, result.ExitCode);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsCauseJsonDirectory()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"code-issue","pr":null,"failed_jobs":[{"id":123,"classification":"code-issue"}],"failed_tests":[],"causes":[]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":""}""",
+            """[{"id":123,"name":"Build"}]""");
+        Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-analysis-output", "causes", "ghost.json"));
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Equal("::error::Invalid JSON in cause file: ghost.json\n", result.Output.ReplaceLineEndings("\n"));
+    }
+
+    [Theory]
+    [RequiresTools(["bash", "jq"])]
+    [InlineData("\"null\"")]
+    [InlineData("\"null\\n\\n\"")]
+    [InlineData("\"n\\u0000ull\"")]
+    [InlineData("\"null\\n\\u0000\"")]
+    public async Task AnalysisValidatorPreservesMainPrShellTextEquivalence(string pr)
+    {
+        await WriteValidationFixtureAsync(
+            $$"""{"run_id":123,"run_scope":"main","verdict":"transient-infra","pr":{{pr}},"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["infra"]}""",
+            """{"run_id":123,"run_scope":"main"}""",
+            """[{"id":123,"name":"Build"}]""",
+            "infra.json", CreateCause("infra", "infra-failure", 123));
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(0, result.ExitCode);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorPreservesSerializedJobIdentity()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"code-issue","pr":null,"failed_jobs":[{"id":123.0,"classification":"code-issue"}],"failed_tests":[],"causes":[]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":""}""",
+            """[{"id":123,"name":"Build"}]""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Equal("::error::Analysis failed-job IDs do not match the trusted failed jobs\n", result.Output.ReplaceLineEndings("\n"));
+    }
+
+    [Theory]
+    [RequiresTools(["bash", "jq"])]
+    [InlineData("123.000000000000000001", 0)]
+    [InlineData("123.00000000000001", 1)]
+    [InlineData("1e-400", 0)]
+    [InlineData("1e400", 0)]
+    public async Task AnalysisValidatorPreservesJqCauseIntegerPredicate(string id, int expectedExitCode)
+    {
+        await WriteValidationFixtureAsync(
+            $$"""{"run_id":123,"run_scope":"main","verdict":"transient-infra","pr":null,"failed_jobs":[{"id":{{id}},"classification":"transient-infra"}],"failed_tests":[],"causes":["infra"]}""",
+            """{"run_id":123,"run_scope":"main"}""",
+            $$"""[{"id":{{id}},"name":"Build"}]""",
+            "infra.json",
+            $$"""{"id":"infra","type":"infra-failure","title":"Infra","error_pattern":"boom","job_ids":[{{id}}]}""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(expectedExitCode, result.ExitCode);
+        if (expectedExitCode != 0)
+        {
+            Assert.Equal("::error::Cause infra.json contains unsupported or publisher-owned fields\n", result.Output.ReplaceLineEndings("\n"));
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsMalformedPropertyNameWithoutStackTrace()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"code-issue","pr":null,"failed_jobs":[{"id":123,"classification":"code-issue"}],"failed_tests":[],"causes":[]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"","bad\ud800":0}""",
+            """[{"id":123,"name":"Build"}]""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Equal("::error::JSON contains malformed Unicode text\n", result.Output.ReplaceLineEndings("\n"));
+    }
+
+    [Theory]
+    [InlineData()]
+    [InlineData("collect")]
+    [InlineData("validate", "--scripts-dir")]
+    [InlineData("validate", "--unexpected", "value")]
+    public async Task AnalysisValidatorRejectsInvalidCommand(params string[] arguments)
+    {
+        var result = await RunValidatorCommandAsync(arguments, analysisDirectory: "");
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Equal(
+            "Usage: AnalyzeCiFailure validate [--working-dir <directory> --scripts-dir <directory>]\n",
+            result.Output.ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    public async Task AnalysisValidatorRequiresAnalysisDirectoryAtCommandBoundary()
+    {
+        var result = await RunValidatorCommandAsync(["validate"], analysisDirectory: "");
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Equal(
+            "::error::ANALYSIS_DIR is required (download-analysis step missing?)\n",
+            result.Output.ReplaceLineEndings("\n"));
+    }
+
+    [Theory]
+    [RequiresTools(["bash", "jq"])]
+    [InlineData("\"123\"", "false", "false", "123.0")]
+    [InlineData("123", "null", "\"reason\"", "1.23e2")]
+    public async Task AnalysisValidatorPreservesLooseAnalysisContract(
+        string runId, string subjectPr, string reason, string jobId)
+    {
+        await WriteValidationFixtureAsync(
+            $$"""{"run_id":{{runId}},"run_scope":"main","verdict":"transient-infra","pr":{{subjectPr}},"unknown":{"keep":true},"failed_jobs":[{"id":{{jobId}},"classification":"transient-infra","reason":{{reason}},"extra":false}],"failed_tests":[],"causes":["infra"]}""",
+            """{"run_id":123,"run_scope":"main"}""",
+            $$"""[{"id":{{jobId}},"name":"Build","extra":null}]""",
+            "infra.json",
+            """{"id":"infra","type":"infra-failure","title":"Infrastructure","error_pattern":"boom","job_ids":[123],"test_name":false}""");
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(0, result.ExitCode);
+        using var normalized = JsonDocument.Parse(await File.ReadAllTextAsync(
+            Path.Combine(_workspace.Path, "ci-analysis-output", "analysis-result.json")));
+        Assert.True(normalized.RootElement.GetProperty("unknown").GetProperty("keep").GetBoolean());
+        Assert.False(normalized.RootElement.GetProperty("failed_jobs")[0].GetProperty("extra").GetBoolean());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorAcceptsFractionalSummaryJobIds()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"code-issue","pr":null,"failed_jobs":[{"id":123.5,"classification":"code-issue"}],"failed_tests":[],"causes":[]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":""}""",
+            """[{"id":123.5,"name":"Build"}]""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(0, result.ExitCode);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorKeepsDistinctLargeJobIds()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"code-issue","pr":null,"failed_jobs":[{"id":9007199254740992,"classification":"code-issue"},{"id":9007199254740993,"classification":"code-issue"}],"failed_tests":[],"causes":[]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":""}""",
+            """[{"id":9007199254740992,"name":"Build"},{"id":9007199254740993,"name":"Tests"}]""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(0, result.ExitCode);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsSubstitutedLargeJobId()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"code-issue","pr":null,"failed_jobs":[{"id":9007199254740992,"classification":"code-issue"}],"failed_tests":[],"causes":[]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":""}""",
+            """[{"id":9007199254740993,"name":"Build"}]""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Equal("::error::Analysis failed-job IDs do not match the trusted failed jobs\n", result.Output.ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsMalformedTrustedUnicodeWithoutStackTrace()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"code-issue","pr":null,"failed_jobs":[{"id":123,"classification":"code-issue"}],"failed_tests":[],"causes":[]}""",
+            """{"run_id":123,"run_scope":"\ud800","pr_numbers":""}""",
+            """[{"id":123,"name":"Build"}]""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Equal("::error::JSON contains malformed Unicode text\n", result.Output.ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorAllowsMultipleCausesForSameTestAndJob()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"flaky-test"}],"failed_tests":[{"name":"Tests.Flaky","job":"Tests","error":"boom","classification":"flaky","reason":"Intermittent"}],"causes":["first","second"]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            new Dictionary<string, string>
+            {
+                ["first.json"] = CreateCause("first", "flaky-test", 123),
+                ["second.json"] = CreateCause("second", "flaky-test", 123),
+            });
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(0, result.ExitCode);
+    }
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
@@ -4698,31 +4959,17 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         return $$"""{"id":"{{id}}","type":"{{type}}","title":"Failure"{{testName}},"error_pattern":"boom","job_ids":{{JsonSerializer.Serialize(new[] { jobId }.Concat(additionalJobIds))}}}""";
     }
 
-    private async Task<CommandResult> RunValidationScriptAsync(string agentOutputPath)
-    {
-        var scriptPath = Path.Combine(RepoRoot.Path, ValidationScriptRelativePath);
-        Assert.True(File.Exists(scriptPath), $"Expected validation helper at '{ValidationScriptRelativePath}'.");
+    private Task<CommandResult> RunValidationScriptAsync(string _)
+        => RunValidatorCommandAsync(
+            ["validate", "--working-dir", _workspace.Path, "--scripts-dir", Path.Combine(RepoRoot.Path, ".github", "workflows")],
+            Path.Combine(_workspace.Path, "ci-analysis-output"));
 
-        using var process = new Process();
-        process.StartInfo.FileName = "bash";
-        process.StartInfo.ArgumentList.Add(scriptPath);
-        process.StartInfo.WorkingDirectory = _workspace.Path;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.Environment["GH_AW_AGENT_OUTPUT"] = agentOutputPath;
-        process.StartInfo.Environment["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output");
-
-        process.Start();
-
-        // Read both streams concurrently to avoid deadlock when the validator emits diagnostics.
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await process.WaitForExitAsync(timeout.Token);
-
-        return new CommandResult(process.ExitCode, await stdoutTask + await stderrTask);
-    }
+    private Task<CommandResult> RunValidatorCommandAsync(IReadOnlyList<string> arguments, string analysisDirectory)
+        => RunProcessAsync(
+            Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet",
+            ["exec", "--runtimeconfig", Path.ChangeExtension(typeof(AnalyzeCiFailureWorkflowTests).Assembly.Location, ".runtimeconfig.json"),
+                typeof(AnalyzeCiFailure.Program).Assembly.Location, .. arguments],
+            new Dictionary<string, string> { ["ANALYSIS_DIR"] = analysisDirectory });
 
     private async Task<CommandResult> RunHistoryScriptAsync(
         string fakeGh,
