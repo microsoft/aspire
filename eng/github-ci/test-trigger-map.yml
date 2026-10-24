@@ -122,7 +122,7 @@ ignore:
   # native-hosting-validation.yml lane, not a tests.yml run_* target.
   - .github/workflows/native-hosting-validation.yml
   - playground/NativeIntegrations/TypeScript/**        # executed by the dedicated native hosting workflow
-  # Schedule/dispatch-only workflows that regenerate API/ATS surface baselines; no PR-CI path.
+  # Baseline regeneration has dedicated workflows, not a tests.yml target.
   - .github/workflows/generate-api-diffs.yml
   - .github/workflows/generate-ats-diffs.yml
   # NOTE: src/Shared/**/*.cs and tests/Shared/**/*.cs are deliberately NOT ignored -- Layer 1 attributes

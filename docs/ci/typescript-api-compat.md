@@ -6,12 +6,9 @@ The TypeScript API compatibility check prevents pull requests from introducing u
 
 The checked-in `src/Aspire.Hosting*/api/*.ats.txt` files are the release compatibility baseline. The scheduled `.github/workflows/generate-ats-diffs.yml` workflow remains the review and release mechanism for updating the checked-in ATS files after API changes are accepted.
 
-The daily `generate-ats-diffs.yml` and `generate-api-diffs.yml` workflows
-generate review PRs for `main` and the active release branches listed in each
-workflow's scheduled matrix (currently `release/13.6`). Manual runs accept
-`main` or any `release/*` target branch. Each job checks out its selected
-target and opens a PR from a distinct generated branch back into that target.
-Only the `main` PRs receive the `NO-MERGE` label.
+The API and ATS generation workflows open baseline-update PRs for review.
+Changes to those workflows are validated on the proposing PR without
+publishing baseline updates.
 
 In pull request CI, `.github/workflows/typescript-api-compat.yml` compares the checked-in ATS release baseline from the pull request target branch with fresh `aspire sdk dump --format ci` output generated from the pull request. The checked-in baseline is copied directly from the target branch, so the workflow does not regenerate the base ATS surface for every pull request.
 
