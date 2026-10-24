@@ -631,6 +631,32 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task Publish_DownstreamApi_FlowsIntoContainerAppBicep()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper, workspace.Path);
+        builder.AddAzureContainerAppEnvironment("env");
+        var entraApi = builder.AddEntraIdApplication("entra-api");
+        var entraWeb = builder.AddExistingEntraApplication("entra-web", tenantId: TenantId, clientId: ClientId);
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint()
+            .WithReference(entraApi);
+        var web = builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithReference(entraWeb)
+            .WithDownstreamApi(entraApi, api, scopes: ["access_as_user"]);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        // The scope's client ID is the created registration's output and the base URL is the API's endpoint on the
+        // container app environment, so both are wired into the web app's module instead of being baked in.
+        var target = Assert.IsAssignableFrom<AzureProvisioningResource>(web.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        await Verify(target.GetBicepTemplateString(), "bicep");
+    }
+
+    [Fact]
     public async Task Publish_CreatesSelfContainedGraphModulesAndOutputReferences()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

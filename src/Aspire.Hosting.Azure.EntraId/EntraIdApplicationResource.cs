@@ -121,6 +121,39 @@ public class EntraIdApplicationResource : AzureProvisioningResource
         ? (object?)ClientIdParameter ?? ClientId
         : ClientIdOutputReference;
 
+    /// <summary>
+    /// Creates the application ID URI that prefixes this registration's scopes.
+    /// </summary>
+    /// <remarks>
+    /// The expression keeps parameter and output references unresolved so values supplied at deployment time or by
+    /// provisioning flow through to the consuming resource. A registration with no explicit or provisioned application ID URI
+    /// uses the default <c>api://{clientId}</c>.
+    /// </remarks>
+    internal ReferenceExpression CreateApplicationIdUriExpression()
+    {
+        // The provisioned output only exists when the deployment sets an application ID URI.
+        if (ApplicationIdUri is not null || (!IsExistingApplication && HasApplicationIdUri))
+        {
+            return ApplicationIdUriValue switch
+            {
+                // Scopes are joined with a "/" separator, so a trailing slash in the configured URI would double it.
+                string uri => ReferenceExpression.Create($"{uri.TrimEnd('/')}"),
+                BicepOutputReference output => ReferenceExpression.Create($"{output}"),
+                _ => throw new InvalidOperationException($"The application ID URI of '{Name}' is not configured.")
+            };
+        }
+
+        return ClientIdValue switch
+        {
+            ParameterResource clientIdParameter => ReferenceExpression.Create($"api://{clientIdParameter}"),
+            BicepOutputReference clientIdOutput => ReferenceExpression.Create($"api://{clientIdOutput}"),
+            string clientId => ReferenceExpression.Create($"api://{clientId}"),
+            _ => throw new InvalidOperationException(
+                $"Resource '{Name}' has no application ID URI or client ID. Configure a client ID, or call " +
+                $"{nameof(EntraIdResourceExtensions.WithApplicationIdUri)} to set the URI that its scopes use.")
+        };
+    }
+
     /// <inheritdoc />
     public override string GetBicepTemplateString()
     {

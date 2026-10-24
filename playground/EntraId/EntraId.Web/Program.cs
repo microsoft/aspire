@@ -7,16 +7,27 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.Identity.Abstractions;
 using Microsoft.Identity.Web;
+
+// The name of the DownstreamApis entry that WithDownstreamApi adds. It's the API service's resource name in the AppHost.
+const string ApiName = "api";
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
 
-// The AppHost's WithReference(entraWeb) fills in the AzureAd section with the tenant and client IDs.
+// The AppHost's WithReference(entraWeb) fills in the AzureAd section with the tenant, client ID and client secret, and
+// WithDownstreamApi fills in the DownstreamApis section with the API's base URL and fully qualified scopes.
+// With a client secret, Microsoft.Identity.Web signs in with the authorization code flow so the app can call the API for the user.
+// Requesting the API's scopes at sign-in lets the user consent once, instead of when the API is first called.
+var apiScopes = builder.Configuration.GetSection($"DownstreamApis:{ApiName}:Scopes").Get<string[]>();
 builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
-    .AddMicrosoftIdentityWebApp(builder.Configuration);
+    .AddMicrosoftIdentityWebApp(builder.Configuration)
+    .EnableTokenAcquisitionToCallDownstreamApi(apiScopes)
+    .AddInMemoryTokenCaches();
+builder.Services.AddDownstreamApis(builder.Configuration.GetSection("DownstreamApis"));
 
 builder.Services.AddAuthorization();
 builder.Services.AddAntiforgery();
@@ -42,12 +53,30 @@ app.MapGet("/", (HttpContext context, IAntiforgery antiforgery) =>
     var antiforgeryTokens = antiforgery.GetAndStoreTokens(context);
     return Page("Entra ID playground", $"""
         <p>Signed in as <strong>{WebUtility.HtmlEncode(identity.Name)}</strong>.</p>
+        <p><a href="/weather">Call the weather API</a></p>
         <form method="post" action="/signout">
             <input type="hidden" name="{antiforgeryTokens.FormFieldName}" value="{antiforgeryTokens.RequestToken}">
             <button type="submit">Sign out</button>
         </form>
         """);
 });
+
+// The API validates the token's audience and requires the delegated "access_as_user" scope. Show its response, including
+// the claims it received, so a rejected request (401 for the wrong audience, 403 for a missing scope) is visible.
+app.MapGet("/weather", async (HttpContext context, IDownstreamApi downstreamApi) =>
+{
+    using var response = await downstreamApi.CallApiForUserAsync(
+        ApiName,
+        options => options.RelativePath = "weatherforecast",
+        user: context.User);
+    var body = await response.Content.ReadAsStringAsync();
+
+    return Page("Weather API", $"""
+        <p>Status: <strong>{(int)response.StatusCode} {response.StatusCode}</strong></p>
+        <pre>{WebUtility.HtmlEncode(body)}</pre>
+        <p><a href="/">Back</a></p>
+        """);
+}).RequireAuthorization();
 
 app.MapGet("/signin", () => Results.Challenge(new AuthenticationProperties { RedirectUri = "/" }));
 

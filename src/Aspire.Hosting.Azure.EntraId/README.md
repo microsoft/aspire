@@ -271,6 +271,56 @@ Each consumer chooses its own connection name without affecting other references
 same registration. Non-.NET applications read these variables and map the values into their authentication library's
 options; the integration does not automatically configure those libraries.
 
+## Call a downstream API
+
+Applications that call a web API on the user's behalf configure Microsoft.Identity.Web's `DownstreamApis` section with the API's
+base URL and scopes. `WithDownstreamApi` emits that section from the AppHost model. Pass the API's registration and its service
+explicitly; neither is inferred from other references or call order, and the caller's own registration still comes from `WithReference`:
+
+```csharp
+var webRegistration = builder.AddExistingEntraApplication("entra-web", tenantId, webClientId);
+var apiRegistration = builder.AddExistingEntraApplication("entra-api", tenantId, apiClientId);
+
+var api = builder.AddProject<Projects.Api>("api")
+                 .WithReference(apiRegistration);
+
+builder.AddProject<Projects.Web>("web")
+       .WithReference(webRegistration)
+       .WithDownstreamApi(apiRegistration, api, scopes: ["access_as_user"]);
+```
+
+The web app keeps its normal Microsoft.Identity.Web registration code and reads the generated section. No Aspire client wrapper is required:
+
+```csharp
+builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApp(builder.Configuration)
+    .EnableTokenAcquisitionToCallDownstreamApi()
+    .AddInMemoryTokenCaches();
+builder.Services.AddDownstreamApis(builder.Configuration.GetSection("DownstreamApis"));
+
+// Later: await downstreamApi.CallApiForUserAsync("api", ...);
+```
+
+For a .NET program, this produces `DownstreamApis__api__BaseUrl` and `DownstreamApis__api__Scopes__0`. Other resources get
+`DOWNSTREAM_APIS_API_BASE_URL` and `DOWNSTREAM_APIS_API_SCOPES_0`. The entry name defaults to the service's resource name;
+set `name` to use another one.
+
+* **Base URL.** When a .NET program runs locally, the URL is `https+http://{service}` and the caller also receives the API's service
+  discovery configuration. Microsoft.Identity.Web creates a named `HttpClient` for each downstream API, so service discovery must be
+  added to HTTP clients, as the Aspire service defaults do. In publish and deploy modes, and for non-.NET resources, the URL is the
+  API service's HTTPS endpoint (or HTTP when it has none), which each deployment target resolves.
+* **Scopes.** A scope without a URI scheme, such as `access_as_user` or `.default`, is qualified with the API registration's application
+  ID URI. A fully qualified scope, such as `api://00001111-aaaa-2222-bbbb-3333cccc4444/access_as_user` or
+  `https://graph.microsoft.com/User.Read`, is used as is, and so are `openid`, `profile`, `email` and `offline_access`.
+* **Application ID URI.** The default is `api://{clientId}`. When the API registration has an application ID URI, from
+  `WithApplicationIdUri` or provisioned with its scopes, that URI is used instead.
+* **`.default`.** `.default` requests the permissions already granted to the caller on the API. It doesn't make the call app-only;
+  `WithDownstreamApi` never sets `RequestAppToken`, so the request uses the signed-in user's delegated token.
+* **Deferred values.** Parameters and provisioned outputs for the client ID or application ID URI stay unresolved until the
+  configuration is evaluated, so scopes are correct for literal and parameter IDs and for created registrations.
+
+`WithDownstreamApi` doesn't create scopes, permissions, credentials or consent. Expose the scope on the API's registration, grant it
+to the caller's registration and configure the caller's credential separately.
 ## Sign-in audiences
 
 By default, only accounts in the app's home tenant can sign in. When the app registration's **Supported account types** setting allows other accounts, call `WithSignInAudience` with the matching value:

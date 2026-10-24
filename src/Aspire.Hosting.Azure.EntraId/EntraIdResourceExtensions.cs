@@ -2130,4 +2130,196 @@ public static class EntraIdResourceExtensions
 
         return builder;
     }
+
+    /// <summary>
+    /// Configures a Microsoft.Identity.Web downstream API that calls a web API protected by an Entra ID registration.
+    /// </summary>
+    /// <typeparam name="T">The type of the calling resource.</typeparam>
+    /// <param name="builder">The calling resource, such as a web front end, that receives the configuration.</param>
+    /// <param name="apiRegistration">The Entra ID application registration that represents the web API and issues its scopes.</param>
+    /// <param name="apiService">The service that hosts the web API. Its address becomes the downstream API's base URL.</param>
+    /// <param name="scopes">
+    /// The scopes to request. A scope without a URI scheme, such as <c>access_as_user</c>, is qualified with the API's application ID URI.
+    /// A fully qualified scope, such as <c>api://00001111-aaaa-2222-bbbb-3333cccc4444/access_as_user</c>, is used as is.
+    /// <c>.default</c> requests the permissions already granted to the caller on the API. Names without a scheme must not contain white space.
+    /// </param>
+    /// <param name="name">
+    /// The name that the application passes to <c>IDownstreamApi</c>. When <see langword="null"/>, uses the name of <paramref name="apiService"/>.
+    /// </param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentException"><paramref name="scopes"/> is empty or contains an invalid scope, or <paramref name="name"/> is invalid.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// A downstream API with the same name is already configured on the resource, or the API service has no HTTP endpoint.
+    /// </exception>
+    /// <remarks>
+    /// <para>
+    /// This method adds the <c>BaseUrl</c> and <c>Scopes</c> settings of an entry in the <c>DownstreamApis</c> configuration section that
+    /// Microsoft.Identity.Web's <c>IDownstreamApi</c> reads. For .NET program resources they're environment variables such as
+    /// <c>DownstreamApis__api__BaseUrl</c> and <c>DownstreamApis__api__Scopes__0</c>. Other resources receive uppercase snake case names
+    /// such as <c>DOWNSTREAM_APIS_API_BASE_URL</c> and <c>DOWNSTREAM_APIS_API_SCOPES_0</c>. The application keeps its normal
+    /// Microsoft.Identity.Web registration code, for example:
+    /// </para>
+    /// <code lang="csharp">
+    /// builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+    ///     .AddMicrosoftIdentityWebApp(builder.Configuration)
+    ///     .EnableTokenAcquisitionToCallDownstreamApi()
+    ///     .AddDownstreamApis(builder.Configuration.GetSection("DownstreamApis"))
+    ///     .AddInMemoryTokenCaches();
+    /// </code>
+    /// <para>
+    /// The API's registration and service are passed explicitly. Neither is inferred from other references or call order, and the caller's
+    /// own registration is still configured with <c>WithReference</c>.
+    /// </para>
+    /// <para>
+    /// When a .NET program runs locally, the base URL is <c>https+http://{apiService}</c> and the caller also receives the API's
+    /// service discovery configuration, so the named <c>HttpClient</c> that Microsoft.Identity.Web creates resolves the
+    /// address when service discovery is added to HTTP clients, as the Aspire service defaults do. In publish and deploy modes, and for
+    /// other kinds of resources, the base URL is the API service's HTTPS endpoint (or HTTP when it has none), which each deployment target resolves.
+    /// </para>
+    /// <para>
+    /// Parameters and provisioned outputs in the application ID URI or client ID stay unresolved until the configuration is evaluated.
+    /// By default the application ID URI is <c>api://{clientId}</c>; call <see cref="WithApplicationIdUri(IResourceBuilder{EntraIdApplicationResource}, string)"/>
+    /// on the registration for a different one. The request uses the signed-in user's delegated permissions. A <c>.default</c> scope does not
+    /// switch the request to the app's own identity, so this method never configures <c>RequestAppToken</c>.
+    /// </para>
+    /// <para>
+    /// This method does not create scopes, permissions, credentials or consent. Expose the scope on the API's registration and
+    /// grant it to the caller's registration separately.
+    /// </para>
+    /// <example>
+    /// <code lang="csharp">
+    /// var webRegistration = builder.AddExistingEntraApplication("entra-web", tenantId, webClientId);
+    /// var apiRegistration = builder.AddExistingEntraApplication("entra-api", tenantId, apiClientId);
+    /// var api = builder.AddProject&lt;Projects.Api&gt;("api").WithReference(apiRegistration);
+    ///
+    /// builder.AddProject&lt;Projects.Web&gt;("web")
+    ///     .WithReference(webRegistration)
+    ///     .WithDownstreamApi(apiRegistration, api, scopes: ["access_as_user"]);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    public static IResourceBuilder<T> WithDownstreamApi<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<EntraIdApplicationResource> apiRegistration,
+        IResourceBuilder<IResourceWithEndpoints> apiService,
+        string[] scopes,
+        string? name = null)
+        where T : IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(apiRegistration);
+        ArgumentNullException.ThrowIfNull(apiService);
+        ArgumentNullException.ThrowIfNull(scopes);
+
+        if (scopes.Length == 0)
+        {
+            throw new ArgumentException("At least one scope is required.", nameof(scopes));
+        }
+
+        foreach (var scope in scopes)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(scope, nameof(scopes));
+
+            // A space-separated list would be sent as one scope, so ask for one entry per scope instead.
+            if (scope.Any(char.IsWhiteSpace))
+            {
+                throw new ArgumentException($"The scope '{scope}' contains white space. Pass each scope as a separate entry.", nameof(scopes));
+            }
+        }
+
+        var downstreamApiName = name ?? apiService.Resource.Name;
+        ArgumentException.ThrowIfNullOrEmpty(downstreamApiName, nameof(name));
+
+        // ":" separates configuration keys, so it can't be part of the entry name.
+        if (downstreamApiName.Contains(':', StringComparison.Ordinal))
+        {
+            throw new ArgumentException($"The downstream API name '{downstreamApiName}' must not contain ':'.", nameof(name));
+        }
+
+        if (builder.Resource.Annotations.OfType<EntraIdDownstreamApiAnnotation>()
+            .Any(a => string.Equals(a.Name, downstreamApiName, StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException($"Resource '{builder.Resource.Name}' already has a downstream API named '{downstreamApiName}'. Use the name parameter to give each downstream API a distinct name.");
+        }
+
+        // Inspect the resource itself so .NET defaults also apply when the builder's type has been erased.
+#pragma warning disable ASPIREPROJECTS001
+        var isDotnetProgram = builder.Resource is IDotnetProgramResource;
+#pragma warning restore ASPIREPROJECTS001
+        var useServiceDiscovery = isDotnetProgram && !builder.ApplicationBuilder.ExecutionContext.IsPublishMode;
+
+        builder.WithAnnotation(new EntraIdDownstreamApiAnnotation(downstreamApiName));
+        builder.WithReferenceRelationship(apiRegistration.Resource);
+        builder.WithReferenceRelationship(apiService.Resource);
+
+        var entra = apiRegistration.Resource;
+        var service = apiService.Resource;
+        var separator = isDotnetProgram ? "__" : "_";
+        var keyPrefix = $"DownstreamApis{separator}{downstreamApiName}{separator}";
+
+        builder.WithEnvironment(context =>
+        {
+            var endpoint = GetDownstreamApiEndpoint(service);
+            var environmentVariables = new Dictionary<string, object>
+            {
+                [$"{keyPrefix}BaseUrl"] = useServiceDiscovery
+                    ? $"https+http://{service.Name}"
+                    : endpoint
+            };
+
+            if (useServiceDiscovery)
+            {
+                // The base URL above resolves through the .NET service discovery setting for the same endpoint. It's set here
+                // rather than with WithReference so that any service with HTTP endpoints works, not only those that support
+                // service discovery, and so that only the endpoint the token is sent to is exposed.
+                context.EnvironmentVariables[$"services__{service.Name}__{endpoint.EndpointAnnotation.UriScheme}__0"] = endpoint;
+            }
+
+            var applicationIdUri = entra.CreateApplicationIdUriExpression();
+            for (var i = 0; i < scopes.Length; i++)
+            {
+                environmentVariables[$"{keyPrefix}Scopes{separator}{i}"] = QualifyScope(scopes[i], applicationIdUri);
+            }
+
+            if (!isDotnetProgram)
+            {
+                environmentVariables = environmentVariables.ToDictionary(
+                    kvp => JsonNamingPolicy.SnakeCaseUpper.ConvertName(EnvironmentVariableNameEncoder.Encode(kvp.Key)),
+                    kvp => kvp.Value);
+            }
+
+            foreach (var variable in environmentVariables)
+            {
+                context.EnvironmentVariables[variable.Key] = variable.Value;
+            }
+        });
+
+        return builder;
+    }
+
+    private static EndpointReference GetDownstreamApiEndpoint(IResourceWithEndpoints service)
+    {
+        var httpEndpoints = service.GetEndpoints()
+            .Where(e => e.EndpointAnnotation.UriScheme is "http" or "https")
+            .ToList();
+
+        // Prefer HTTPS so the caller's bearer token isn't sent over an unencrypted connection when both exist.
+        return httpEndpoints.FirstOrDefault(e => e.EndpointAnnotation.UriScheme == "https")
+            ?? httpEndpoints.FirstOrDefault()
+            ?? throw new InvalidOperationException($"Resource '{service.Name}' has no HTTP or HTTPS endpoint, so it can't be used as a downstream API. Add an endpoint to it.");
+    }
+
+    private static object QualifyScope(string scope, ReferenceExpression applicationIdUri)
+    {
+        // Scopes such as "api://<client-id>/access_as_user" or "https://graph.microsoft.com/User.Read" carry their own resource.
+        // The OpenID Connect scopes aren't tied to an API, so they're sent unqualified.
+        if (scope.Contains("://", StringComparison.Ordinal)
+            || scope is "openid" or "profile" or "email" or "offline_access")
+        {
+            return scope;
+        }
+
+        // "access_as_user" and ".default" both become "{applicationIdUri}/{scope}".
+        return ReferenceExpression.Create($"{applicationIdUri}/{scope}");
+    }
 }

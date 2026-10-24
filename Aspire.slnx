@@ -299,6 +299,7 @@
     <Project Path="playground/withdockerfile/WithDockerfile.AppHost/WithDockerfile.AppHost.csproj" />
   </Folder>
   <Folder Name="/playground/EntraId/">
+    <Project Path="playground/EntraId/EntraId.ApiService/EntraId.ApiService.csproj" />
     <Project Path="playground/EntraId/EntraId.AppHost/EntraId.AppHost.csproj" />
     <Project Path="playground/EntraId/EntraId.Web/EntraId.Web.csproj" />
   </Folder>
