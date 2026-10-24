@@ -566,6 +566,77 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("typescript/nodejs", appHost["language"]!.GetValue<string>());
     }
 
+    [Fact]
+    public async Task InitCommand_WhenGoLanguageSpecified_ScaffoldsGoAppHostWithoutFeatureFlags()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        string? scaffoldedLanguageId = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.LanguageServiceFactory = sp => ActivatorUtilities.CreateInstance<LanguageService>(sp);
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (context, _) =>
+                {
+                    scaffoldedLanguageId = context.Language.LanguageId.Value;
+                    return Task.FromResult(true);
+                }
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init --language go --suppress-agent-init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(KnownLanguageId.Go, scaffoldedLanguageId);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenPromptingForLanguage_OffersGoWithoutFeatureFlags()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        string[]? offeredLanguages = null;
+        string? scaffoldedLanguageId = null;
+
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, _, _) =>
+            {
+                var languages = choices.Cast<LanguageInfo>().ToArray();
+                offeredLanguages = languages.Select(language => language.DisplayName).ToArray();
+                return languages.Single(language => language.LanguageId.Value == KnownLanguageId.Go);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.LanguageServiceFactory = sp => ActivatorUtilities.CreateInstance<LanguageService>(sp);
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (context, _) =>
+                {
+                    scaffoldedLanguageId = context.Language.LanguageId.Value;
+                    return Task.FromResult(true);
+                }
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init --suppress-agent-init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(offeredLanguages);
+        Assert.Contains(KnownLanguageId.GoDisplayName, offeredLanguages);
+        Assert.Equal(KnownLanguageId.Go, scaffoldedLanguageId);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData(" --file-based false")]

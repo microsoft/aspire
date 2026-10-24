@@ -51,7 +51,6 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             options.FeatureFlagsFactory = _ =>
             {
                 var features = new TestFeatures();
-                features.SetFeature(KnownFeatures.ExperimentalPolyglotGo, true);
                 features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
                 features.SetFeature(KnownFeatures.ExperimentalPolyglotPython, true);
                 features.SetFeature(KnownFeatures.ExperimentalPolyglotRust, true);
@@ -924,6 +923,59 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandWithoutTemplateOffersGoWithoutFeatureFlags()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var scaffoldedLanguageId = string.Empty;
+        (string Name, string Description)[]? promptedTemplates = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => new TestInteractionService
+            {
+                PromptForSelectionCallback = (promptText, choices, choiceFormatter, cancellationToken) =>
+                    promptText == "Which language would you like to use?"
+                        ? choices.Cast<object>().Single(choice => string.Equals(choiceFormatter(choice), KnownLanguageId.GoDisplayName, StringComparison.Ordinal))
+                        : choices.Cast<object>().First()
+            };
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+                prompter.PromptForTemplateCallback = templates =>
+                {
+                    promptedTemplates = templates.Select(t => (t.Name, t.Description)).ToArray();
+                    return templates.Single(t => t.Name.Equals(KnownTemplateId.CSharpEmptyAppHost, StringComparison.OrdinalIgnoreCase));
+                };
+
+                return prompter;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                scaffoldedLanguageId = context.Language.LanguageId.Value;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.go"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new --name TestApp --output ./output");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(KnownLanguageId.Go, scaffoldedLanguageId);
+        Assert.NotNull(promptedTemplates);
+        Assert.Contains((KnownTemplateId.GoStarter, "Starter App (Go API + Redis, Go AppHost)"), promptedTemplates);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.go")));
+    }
+
+    [Fact]
     public void NewCommandTemplateSubcommandsListTechnicalNamesForNonInteractiveFlows()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -953,7 +1005,6 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             options.FeatureFlagsFactory = _ =>
             {
                 var features = new TestFeatures();
-                features.SetFeature(KnownFeatures.ExperimentalPolyglotGo, true);
                 features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
                 features.SetFeature(KnownFeatures.ExperimentalPolyglotPython, true);
                 features.SetFeature(KnownFeatures.ExperimentalPolyglotRust, true);
@@ -1021,9 +1072,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(promptedLanguages);
         Assert.Contains(KnownLanguageId.CSharpDisplayName, promptedLanguages);
         Assert.Contains("TypeScript (Node.js)", promptedLanguages);
+        Assert.Contains(KnownLanguageId.GoDisplayName, promptedLanguages);
         Assert.DoesNotContain(KnownLanguageId.PythonDisplayName, promptedLanguages);
         Assert.DoesNotContain(KnownLanguageId.JavaDisplayName, promptedLanguages);
-        Assert.DoesNotContain(KnownLanguageId.GoDisplayName, promptedLanguages);
         Assert.DoesNotContain(KnownLanguageId.RustDisplayName, promptedLanguages);
     }
 
@@ -1085,7 +1136,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("TypeScript (Node.js)", promptedLanguages);
         Assert.Contains(KnownLanguageId.PythonDisplayName, promptedLanguages);
         Assert.Contains(KnownLanguageId.JavaDisplayName, promptedLanguages);
-        Assert.DoesNotContain(KnownLanguageId.GoDisplayName, promptedLanguages);
+        Assert.Contains(KnownLanguageId.GoDisplayName, promptedLanguages);
         Assert.DoesNotContain(KnownLanguageId.RustDisplayName, promptedLanguages);
     }
 
@@ -1293,7 +1344,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [InlineData("typescript", null, "apphost.mts")]
     [InlineData("java", "experimentalPolyglotJava", "AppHost.java")]
     [InlineData("python", "experimentalPolyglotPython", "apphost.py")]
-    [InlineData("go", "experimentalPolyglotGo", "apphost.go")]
+    [InlineData("go", null, "apphost.go")]
     [InlineData("rust", "experimentalPolyglotRust", "apphost.rs")]
     public async Task NewCommandWithEmptyTemplateAndSourceOverridePersistsSourceForLaterRestore(string language, string? featureFlag, string scaffoldFileName)
     {
@@ -1538,6 +1589,34 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(KnownLanguageId.Python, scaffoldedLanguageId);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.py")));
+    }
+
+    [Fact]
+    public async Task NewCommandWithExplicitGoEmptyTemplateCreatesGoAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        string? scaffoldedLanguageId = null;
+
+        var services = CreateServiceCollection(workspace);
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                scaffoldedLanguageId = context.Language.LanguageId.Value;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.go"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-go-empty --name TestApp --output ./output --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(KnownLanguageId.Go, scaffoldedLanguageId);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.go")));
     }
 
     [Fact]
@@ -2408,6 +2487,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(availableTemplatesMessage);
         Assert.Contains(KnownTemplateId.TypeScriptEmptyAppHost, availableTemplatesMessage);
         Assert.Contains(KnownTemplateId.JavaEmptyAppHost, availableTemplatesMessage);
+        Assert.Contains(KnownTemplateId.GoEmptyAppHost, availableTemplatesMessage);
+        Assert.Contains(KnownTemplateId.GoStarter, availableTemplatesMessage);
     }
 
     [Fact]

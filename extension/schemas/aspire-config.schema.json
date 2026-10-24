@@ -120,22 +120,6 @@
           "description": "Enable experimental hosting integrations authored outside .NET",
           "default": false
         },
-        "experimentalPolyglotGo": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          ],
-          "description": "Enable or disable experimental Go language support for polyglot Aspire applications",
-          "default": false
-        },
         "experimentalPolyglotJava": {
           "anyOf": [
             {
