@@ -13,10 +13,11 @@ param api_containerimage string
 
 param enable_feature_value string
 
-resource api 'Microsoft.App/containerApps@2025-10-02-preview' = {
+resource api 'Microsoft.App/containerApps@2026-03-02-preview' = {
   name: 'api'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       registries: [
@@ -31,7 +32,6 @@ resource api 'Microsoft.App/containerApps@2025-10-02-preview' = {
         }
       }
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {

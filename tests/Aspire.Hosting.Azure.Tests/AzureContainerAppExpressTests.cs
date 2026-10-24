@@ -248,7 +248,7 @@ public class AzureContainerAppExpressTests(ITestOutputHelper testOutputHelper)
                 app.Template.Scale.MinReplicas = minimum;
                 app.Configuration.Ingress.TargetPort = port;
                 app.Configuration.Ingress.ClientCertificateMode = ContainerAppIngressClientCertificateMode.Ignore;
-                app.Configuration.Ingress.StickySessionsAffinity = StickySessionAffinity.None;
+                app.Configuration.Ingress.StickySessionAffinity = StickySessionAffinity.None;
                 app.Configuration.Dapr.IsEnabled = false;
                 app.Template.Scale.Rules.Add(new ContainerAppScaleRule
                 {
