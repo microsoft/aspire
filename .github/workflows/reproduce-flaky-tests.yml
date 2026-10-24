@@ -8,11 +8,40 @@
 #
 # The configuration is designed to be edited by agents (Copilot, etc.)
 # who modify the env vars below and push to trigger a run.
+# Optional dispatch inputs and receipts: docs/ci/reproduce-flaky-tests.md
 
 name: Reproduce Flaky Tests
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      test_project:
+        description: Test project shortname (empty uses TEST_PROJECT below)
+        type: string
+      test_method:
+        description: Exact fully qualified method (no wildcards)
+        type: string
+      mode:
+        description: single-test or quarantine-project (empty uses method or manual filter)
+        type: string
+      os:
+        description: Comma-separated ubuntu-latest, windows-latest, macos-latest
+        type: string
+      repetitions:
+        description: Iterations per runner (1-50; empty uses configuration below)
+        type: string
+      runner_count:
+        description: Runners per OS (1-10; empty uses configuration below)
+        type: string
+      candidate_commit:
+        description: Exact 40-character candidate SHA in this repository (empty uses dispatch ref)
+        type: string
+      correlation_id:
+        description: Optional caller correlation ID (1-100 safe characters)
+        type: string
+
+permissions:
+  contents: read
 
 # ============================================================
 # CONFIGURATION — Edit these values to customize the test run
@@ -48,82 +77,26 @@ jobs:
     if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.generate.outputs.matrix }}
-      is_cli_e2e: ${{ steps.detect_cli_e2e.outputs.is_cli_e2e }}
+      matrix: ${{ steps.configure.outputs.matrix }}
+      is_cli_e2e: ${{ steps.configure.outputs.is_cli_e2e }}
+      config: ${{ steps.configure.outputs.config }}
+      candidate_commit: ${{ steps.configure.outputs.candidate_commit }}
+      test_project: ${{ steps.configure.outputs.test_project }}
+      test_filter: ${{ steps.configure.outputs.test_filter }}
+      repetitions: ${{ steps.configure.outputs.repetitions }}
     steps:
-      - name: Validate configuration
-        shell: bash
-        run: |
-          ERRORS=0
+      - name: Checkout workflow configuration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
 
-          # Validate RUNNERS_PER_OS is a positive integer
-          if ! [[ "${{ env.RUNNERS_PER_OS }}" =~ ^[1-9][0-9]*$ ]]; then
-            echo "::error::RUNNERS_PER_OS must be a positive integer, got '${{ env.RUNNERS_PER_OS }}'"
-            ERRORS=1
-          fi
-
-          # Validate ITERATIONS_PER_RUNNER is a positive integer
-          if ! [[ "${{ env.ITERATIONS_PER_RUNNER }}" =~ ^[1-9][0-9]*$ ]]; then
-            echo "::error::ITERATIONS_PER_RUNNER must be a positive integer, got '${{ env.ITERATIONS_PER_RUNNER }}'"
-            ERRORS=1
-          fi
-
-          # Validate TARGET_OSES is not empty and contains only known runners
-          if [[ -z "${{ env.TARGET_OSES }}" ]]; then
-            echo "::error::TARGET_OSES must not be empty"
-            ERRORS=1
-          else
-            IFS=',' read -ra CHECK_OSES <<< "${{ env.TARGET_OSES }}"
-            for os in "${CHECK_OSES[@]}"; do
-              os=$(echo "$os" | xargs)
-              if [[ "$os" != "ubuntu-latest" && "$os" != "windows-latest" && "$os" != "macos-latest" ]]; then
-                echo "::error::Unknown OS in TARGET_OSES: '$os'. Allowed: ubuntu-latest, windows-latest, macos-latest"
-                ERRORS=1
-              fi
-            done
-          fi
-
-          # Validate TEST_FILTER is not the placeholder
-          if [[ "${{ env.TEST_FILTER }}" == *"YourTestMethodName"* ]]; then
-            echo "::error::TEST_FILTER still contains the placeholder 'YourTestMethodName'. Configure it with the actual test to reproduce."
-            ERRORS=1
-          fi
-
-          if [[ $ERRORS -ne 0 ]]; then exit 1; fi
-
-      - name: Detect CLI E2E project
-        id: detect_cli_e2e
-        shell: bash
-        run: |
-          if [ "${{ env.TEST_PROJECT }}" = "Cli.EndToEnd" ]; then
-            echo "is_cli_e2e=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_cli_e2e=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Generate runner matrix
-        id: generate
-        shell: bash
-        run: |
-          IFS=',' read -ra OSES <<< "${{ env.TARGET_OSES }}"
-          RUNNERS=${{ env.RUNNERS_PER_OS }}
-
-          ENTRIES=""
-          for os in "${OSES[@]}"; do
-            os=$(echo "$os" | xargs)
-            for i in $(seq 1 "$RUNNERS"); do
-              if [ -n "$ENTRIES" ]; then ENTRIES="$ENTRIES,"; fi
-              ENTRIES="${ENTRIES}{\"os\":\"${os}\",\"index\":${i}}"
-            done
-          done
-
-          MATRIX="{\"include\":[${ENTRIES}]}"
-          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
-
-          TOTAL=$(echo "$ENTRIES" | tr ',' '\n' | wc -l)
-          echo "Generated matrix: $TOTAL runners across ${#OSES[@]} OS(es)"
-          echo "Each runner will execute ${{ env.ITERATIONS_PER_RUNNER }} iterations"
-          echo "Total test executions: $(( TOTAL * ${{ env.ITERATIONS_PER_RUNNER }} ))"
+      - name: Validate configuration and generate matrix
+        id: configure
+        shell: pwsh
+        env:
+          DISPATCH_INPUTS: ${{ toJSON(inputs) }}
+        run: ./eng/scripts/reproduction-worker.ps1 -Operation Configure
 
   build_cli_e2e_image:
     name: Build CLI E2E Docker image
@@ -148,6 +121,13 @@ jobs:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     env:
       DOTNET_ROOT: ${{ github.workspace }}/.dotnet
+      TEST_PROJECT: ${{ needs.setup.outputs.test_project }}
+      TEST_FILTER: ${{ needs.setup.outputs.test_filter }}
+      ITERATIONS_PER_RUNNER: ${{ needs.setup.outputs.repetitions }}
+      WORKER_CONFIG: ${{ needs.setup.outputs.config }}
+      WORKER_WORKFLOW_REF: ${{ github.workflow_ref }}
+      WORKER_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      WORKER_RUNNER_INDEX: ${{ matrix.index }}
 
     steps:
       - name: Setup vars (Linux/macOS)
@@ -166,6 +146,23 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.setup.outputs.candidate_commit || github.sha }}
+          persist-credentials: false
+
+      # Keep receipt logic at the workflow revision, not at the candidate revision.
+      - name: Checkout worker
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .reproduction-worker
+          persist-credentials: false
+          sparse-checkout: eng/scripts/reproduction-worker.ps1
+          sparse-checkout-cone-mode: false
+
+      - name: Record workflow and source identities
+        shell: pwsh
+        run: ./.reproduction-worker/eng/scripts/reproduction-worker.ps1 -Operation Start
 
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
@@ -269,37 +266,36 @@ jobs:
             done
             sleep 1
 
-            # Run test (capture output for zero-test detection)
-            ITER_OUTPUT="${{ github.workspace }}/iter-output-$i.log"
+            # Retain output and TRX even when the iteration passes.
+            ITER_DIR="${{ github.workspace }}/all-results/iteration-$i"
+            mkdir -p "$ITER_DIR"
+            ITER_OUTPUT="$ITER_DIR/test-output.log"
             set +e  # Disable errexit so pipefail doesn't abort before PIPESTATUS capture
             ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" \
               --no-restore \
               --no-build \
               -- \
               --timeout 10m \
+              --report-trx \
               --results-directory "${{ github.workspace }}/testresults" \
               ${{ env.TEST_FILTER }} \
               2>&1 | tee "$ITER_OUTPUT"
             RESULT=${PIPESTATUS[0]}
             set -e
 
-            # Detect zero-test runs (--ignore-exit-code 8 in Testing.targets masks exit code 8)
-            if [ "$RESULT" -eq 0 ]; then
-              if ! grep -qiE "total:\s*[1-9]" "$ITER_OUTPUT" 2>/dev/null; then
-                echo "::error::Iteration $i: Zero tests executed. Verify TEST_FILTER and quarantine settings."
-                RESULT=8
-              fi
+            if [ -d "${{ github.workspace }}/testresults" ]; then
+              cp -R "${{ github.workspace }}/testresults/." "$ITER_DIR/"
             fi
-            rm -f "$ITER_OUTPUT"
+            RECEIPT_RESULT=0
+            pwsh -NoProfile -File ./.reproduction-worker/eng/scripts/reproduction-worker.ps1 \
+              -Operation Iteration -Iteration "$i" -ProcessExitCode "$RESULT" || RECEIPT_RESULT=$?
 
-            if [ "$RESULT" -eq 0 ]; then
+            if [ "$RECEIPT_RESULT" -eq 0 ]; then
               echo "✅ Iteration $i: PASS"
               PASS=$((PASS + 1))
             else
               echo "❌ Iteration $i: FAIL (exit $RESULT)"
               FAIL=$((FAIL + 1))
-              mkdir -p "${{ github.workspace }}/all-results/failure-$i"
-              cp -r "${{ github.workspace }}/testresults/"* "${{ github.workspace }}/all-results/failure-$i/" 2>/dev/null || true
             fi
 
             echo "::endgroup::"
@@ -336,37 +332,34 @@ jobs:
             Get-Process | Where-Object { $_.ProcessName -match '^dcp' } | Stop-Process -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 1
 
-            # Run test (capture output for zero-test detection)
-            $iterOutput = Join-Path "${{ github.workspace }}" "iter-output-$i.log"
+            # Retain output and TRX even when the iteration passes.
+            $iterDirectory = Join-Path "${{ github.workspace }}/all-results" "iteration-$i"
+            New-Item -ItemType Directory -Path $iterDirectory -Force | Out-Null
+            $iterOutput = Join-Path $iterDirectory 'test-output.log'
             & ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" `
               --no-restore `
               --no-build `
               -- `
               --timeout 10m `
+              --report-trx `
               --results-directory "${{ github.workspace }}/testresults" `
               ${{ env.TEST_FILTER }} *> $iterOutput
             $result = $LASTEXITCODE
             Get-Content $iterOutput
 
-            # Detect zero-test runs (--ignore-exit-code 8 in Testing.targets masks exit code 8)
-            if ($result -eq 0) {
-              $content = Get-Content $iterOutput -Raw -ErrorAction SilentlyContinue
-              if (-not ($content -match '(?i)total:\s*[1-9]')) {
-                Write-Host "::error::Iteration ${i}: Zero tests executed. Verify TEST_FILTER and quarantine settings."
-                $result = 8
-              }
+            if (Test-Path "${{ github.workspace }}/testresults") {
+              Copy-Item -Recurse "${{ github.workspace }}/testresults/*" $iterDirectory
             }
-            Remove-Item $iterOutput -ErrorAction SilentlyContinue
+            & pwsh -NoProfile -File ./.reproduction-worker/eng/scripts/reproduction-worker.ps1 `
+              -Operation Iteration -Iteration $i -ProcessExitCode $result
+            $receiptResult = $LASTEXITCODE
 
-            if ($result -eq 0) {
+            if ($receiptResult -eq 0) {
               Write-Host "✅ Iteration ${i}: PASS"
               $pass++
             } else {
               Write-Host "❌ Iteration ${i}: FAIL (exit $result)"
               $fail++
-              $dest = "${{ github.workspace }}/all-results/failure-$i"
-              New-Item -ItemType Directory -Path $dest -Force | Out-Null
-              Copy-Item -Recurse "${{ github.workspace }}/testresults/*" $dest -ErrorAction SilentlyContinue
             }
 
             Write-Host "::endgroup::"
@@ -381,6 +374,14 @@ jobs:
 
           if ($fail -gt 0) { exit 1 }
 
+      - name: Upload execution evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reproduction-${{ matrix.os }}-${{ matrix.index }}
+          path: all-results/
+          if-no-files-found: error
+
       - name: Upload failure logs
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -393,30 +394,29 @@ jobs:
     if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     name: Reproduce Results
-    needs: [reproduce]
+    needs: [setup, reproduce]
     permissions: {}
     steps:
       - name: Summary
         shell: bash
+        env:
+          WORKER_CONFIG: ${{ needs.setup.outputs.config }}
+          REPRODUCE_RESULT: ${{ needs.reproduce.result }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           echo "## Reproduce Flaky Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Test Project | \`${{ env.TEST_PROJECT }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Filter | \`${{ env.TEST_FILTER }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| OSes | ${{ env.TARGET_OSES }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Runners per OS | ${{ env.RUNNERS_PER_OS }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Iterations per runner | ${{ env.ITERATIONS_PER_RUNNER }} |" >> $GITHUB_STEP_SUMMARY
+          printf 'Workflow SHA: `%s`\n\n' "$WORKFLOW_SHA" >> "$GITHUB_STEP_SUMMARY"
+          printf '```json\n%s\n```\n' "$WORKER_CONFIG" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ needs.reproduce.result }}" = "success" ]; then
+          if [ "$REPRODUCE_RESULT" = "success" ]; then
             echo "### ✅ All iterations passed on all runners" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.reproduce.result }}" = "failure" ]; then
+          elif [ "$REPRODUCE_RESULT" = "failure" ]; then
             echo "### ❌ Some runners reported failures" >> $GITHUB_STEP_SUMMARY
-            echo "Check individual job logs and uploaded failure artifacts for details." >> $GITHUB_STEP_SUMMARY
+            echo "Check individual job logs and reproduction artifacts for execution counts and failures." >> $GITHUB_STEP_SUMMARY
           else
-            echo "### ⚠️ Reproduce job was ${{ needs.reproduce.result }}" >> $GITHUB_STEP_SUMMARY
+            echo "### ⚠️ Reproduce job was $REPRODUCE_RESULT" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Fail if reproduce did not succeed

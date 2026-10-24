@@ -441,6 +441,10 @@ path_rules:
 
   # --- runtime / loose-file dependencies (invisible to the csproj graph) ----------------------
   - paths:
+      - eng/scripts/reproduction-worker.ps1
+    targets: [test:Infrastructure.Tests]
+    reason: behavioral tests exercise reproduction configuration and execution receipts
+  - paths:
       - eng/scripts/get-aspire-cli.sh
       - eng/scripts/get-aspire-cli.ps1
       - eng/scripts/get-aspire-cli-pr.sh
