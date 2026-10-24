@@ -1,0 +1,32 @@
+﻿FROM oven/bun:1 AS build
+
+WORKDIR /app
+RUN corepack enable pnpm
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/web/package.json ./packages/web/package.json
+RUN --mount=type=cache,target=/pnpm/store pnpm install --frozen-lockfile
+COPY . .
+
+RUN pnpm --filter 'web^...' run --if-present 'build prod'"'"'s;$HOME'
+
+RUN pnpm --filter web run 'build prod'"'"'s;$HOME'
+
+FROM oven/bun:1 AS prod-deps
+
+WORKDIR /app
+RUN corepack enable pnpm
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/web/package.json ./packages/web/package.json
+RUN --mount=type=cache,target=/pnpm/store pnpm install --frozen-lockfile --prod
+
+FROM oven/bun:1 AS runtime
+
+WORKDIR /app
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY . .
+
+ENV NODE_ENV=production
+
+USER bun
+
+ENTRYPOINT ["bun","packages/web/dist/index.js"]
