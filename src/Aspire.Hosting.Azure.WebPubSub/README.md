@@ -41,7 +41,7 @@ const web = await builder.addNodeApp("webfrontend", "../web-frontend", "server.j
 
 ## Run locally with the emulator
 
-Call `RunAsEmulator` to use `mcr.microsoft.com/webpubsub/emulator:1.0.0-beta.2` during local development. Aspire supplies the HTTP endpoint and access key in the connection string. Publishing continues to provision Azure Web PubSub.
+Call `RunAsEmulator` to use `mcr.microsoft.com/webpubsub/emulator:1.0.0-beta.3` during local development. Aspire supplies the HTTP endpoint and access key in the connection string. Publishing continues to provision Azure Web PubSub.
 
 **C#**
 
