@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -18,6 +19,7 @@ using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.TemplateEngine.Abstractions;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -1394,7 +1396,8 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
 
         var interaction = new TestInteractionService();
         var services = CreateServices(workspace, interaction, interactive: false);
-        services.AddSingleton<IProcessExecutionFactory>(new ProcessExecutionFactory(new HostEnvironment(), NullLogger<ProcessExecutionFactory>.Instance));
+        services.AddSingleton<IProcessExecutionFactory>(provider => TestProcessExecutionFactory.CreateWithLogging(
+            new HostEnvironment(), provider.GetRequiredService<ILogger<ProcessExecutionFactory>>()));
         var extractionRequested = false;
         services.AddSingleton<IBundleService>(new TestBundleService(isBundle: true)
         {
@@ -1414,7 +1417,10 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
                 arguments.AddRange(["--template-path", "templates/first"]);
             }
 
+            var stopwatch = Stopwatch.StartNew();
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Starting repository template generation; nested={specifyTemplatePath}.");
             var exitCode = await provider.GetRequiredService<RootCommand>().Parse(arguments.ToArray()).InvokeAsync().DefaultTimeout();
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Repository template generation returned {exitCode} after {stopwatch.Elapsed}.");
 
             Assert.Equal(CliExitCodes.Success, exitCode);
             Assert.True(extractionRequested);
@@ -1694,9 +1700,14 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
 
         async Task GenerateAsync(string label, string? reference)
         {
+            var stopwatch = Stopwatch.StartNew();
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Starting generation '{label}', ref '{reference ?? "HEAD"}'.");
             var interaction = new TestInteractionService();
+            interaction.ShowStatusCallback = status =>
+                outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Generation '{label}' after {stopwatch.Elapsed}: {status}");
             var services = CreateServices(workspace, interaction, interactive: false);
-            services.AddSingleton<IProcessExecutionFactory>(new ProcessExecutionFactory(new HostEnvironment(), NullLogger<ProcessExecutionFactory>.Instance));
+            services.AddSingleton<IProcessExecutionFactory>(provider => TestProcessExecutionFactory.CreateWithLogging(
+                new HostEnvironment(), provider.GetRequiredService<ILogger<ProcessExecutionFactory>>()));
             using var provider = services.BuildServiceProvider();
             var repositoryPath = Path.GetRelativePath(provider.GetRequiredService<CliExecutionContext>().WorkingDirectory.FullName, repository.FullName);
             List<string> arguments = ["new", "--template-repository", repositoryPath,
@@ -1707,6 +1718,7 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
             }
 
             var exitCode = await provider.GetRequiredService<RootCommand>().Parse(arguments.ToArray()).InvokeAsync().DefaultTimeout();
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Generation '{label}' returned {exitCode} after {stopwatch.Elapsed}.");
 
             Assert.Equal(CliExitCodes.Success, exitCode);
             Assert.Empty(interaction.DisplayedErrors);

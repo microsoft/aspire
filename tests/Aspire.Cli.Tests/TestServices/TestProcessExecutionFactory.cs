@@ -11,7 +11,6 @@ using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.TestServices;
 
@@ -19,9 +18,9 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
 {
     private int _attemptCount;
 
-    internal static IProcessExecutionFactory CreateForCliGuardian(IEnvironment environment)
+    internal static IProcessExecutionFactory CreateForCliGuardian(IEnvironment environment, ILogger<ProcessExecutionFactory> logger)
     {
-        var factory = new ProcessExecutionFactory(environment, NullLogger<ProcessExecutionFactory>.Instance);
+        var factory = new ProcessExecutionFactory(environment, logger);
         static void ConfigureGuardian(ProcessInvocationOptions options)
         {
             // MTP cannot re-enter guardian mode. Only replace the executable and argv:
@@ -47,6 +46,26 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
             {
                 ConfigureGuardian(options);
                 return factory.CreateExecution(fileName, arguments, environment, directory, options);
+            }
+        };
+    }
+
+    internal static IProcessExecutionFactory CreateWithLogging(IEnvironment environment, ILogger<ProcessExecutionFactory> logger)
+    {
+        var factory = new ProcessExecutionFactory(environment, logger);
+        return new TestProcessExecutionFactory
+        {
+            CreateExecutionWithFileNameCallback = (fileName, arguments, variables, directory, options) =>
+            {
+                // Only use this with synthetic test inputs. Production Git deliberately suppresses
+                // diagnostics because command arguments and output can contain credentials.
+                options.SuppressLogging = false;
+                return factory.CreateExecution(fileName, arguments, variables, directory, options);
+            },
+            CreateExecutionFromStartInfoCallback = (startInfo, options) =>
+            {
+                options.SuppressLogging = false;
+                return factory.CreateExecution(startInfo, options);
             }
         };
     }

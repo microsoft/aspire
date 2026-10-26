@@ -52,22 +52,31 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
         }
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         cancellation.CancelAfter(TimeSpan.FromSeconds(30));
+        var stopwatch = Stopwatch.StartNew();
+        void Log(string message) => outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] [{stopwatch.Elapsed}] {message}");
+        Log($"Starting captured process '{startInfo.FileName}'; parentExits={parentExits}, captureTimeoutOutput={captureTimeoutOutput}.");
         var run = ConfigSourceGitClient.RunProcessAsync(startInfo, captureTimeoutOutput, cancellation.Token);
+        Log($"Captured process launched; task status={run.Status}. Waiting for descendant PID in '{pidFile}'.");
         Process? child = null;
         try
         {
             var pid = await ProcessTestHelpers.WaitForProcessIdAsync(pidFile, cancellation.Token);
             child = Process.GetProcessById(pid);
+            Log($"Descendant PID={pid}; waiting for {(parentExits ? "post-exit pipe drain" : "cancellation")}.");
 
             if (parentExits)
             {
                 var error = await Assert.ThrowsAsync<ConfigSourceException>(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
                 Assert.Equal(ConfigSourceStrings.RepositoryUnavailable, error.Message);
+                Log("Post-exit pipe drain returned the expected failure.");
             }
             else
             {
+                Log("Requesting cancellation.");
                 cancellation.Cancel();
+                Log("Cancellation requested; waiting for captured process to return.");
                 var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
+                Log($"Captured process returned {error.GetType().Name}; waiting for descendant {pid} to exit.");
                 if (captureTimeoutOutput)
                 {
                     var interrupted = Assert.IsType<ConfigSourceGitClient.GitProcessCanceledException>(error);
@@ -78,21 +87,28 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
                 }
                 await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
                 Assert.True(child.HasExited);
+                Log($"Descendant {pid} exited.");
             }
         }
         finally
         {
+            Log($"Starting cleanup; captured task status={run.Status}.");
             cancellation.Cancel();
+            Log("Cleanup cancellation completed.");
             if (child is not null)
             {
                 if (!child.HasExited)
                 {
+                    Log($"Killing descendant tree {child.Id}.");
                     child.Kill(entireProcessTree: true);
+                    Log($"Kill returned for descendant {child.Id}; waiting for exit.");
                     await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                    Log($"Descendant {child.Id} cleanup completed.");
                 }
                 child.Dispose();
             }
-            await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
+            var cleanupError = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
+            Log($"Cleanup finished; captured task status={run.Status}, capture exception={cleanupError?.GetType().Name ?? "none"}.");
         }
     }
 
