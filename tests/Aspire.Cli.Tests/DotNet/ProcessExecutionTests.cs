@@ -9,6 +9,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Cli.Tests.TestServices.ProcessTestHelpers;
 
@@ -29,16 +30,25 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             TryKillProcess(pid);
             return Task.FromResult(true);
         });
-        await using var execution = CreateExecution(scriptFile, isolateConsole: false, signaler, shutdownService);
+        await using var lifetime = AsyncTestHelpers.WithDisposeTimeout(
+            () => CreateExecution(scriptFile, isolateConsole: false, signaler, shutdownService));
+        var execution = lifetime.Instance;
         await execution.StartAsync(TestContext.Current.CancellationToken);
         shutdownService.IsEnabled = enabled;
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cancellation.Token));
+        try
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cancellation.Token)).DefaultTimeout();
 
-        Assert.True(execution.HasExited);
-        Assert.Equal(enabled ? [execution.ProcessId] : Array.Empty<int>(), signaler.Pids);
+            Assert.True(execution.HasExited);
+            Assert.Equal(enabled ? [execution.ProcessId] : Array.Empty<int>(), signaler.Pids);
+        }
+        finally
+        {
+            shutdownService.Expire();
+        }
     }
 
     [Theory]
@@ -57,18 +67,27 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             return Task.FromResult(true);
         });
 
-        await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
+        await using var lifetime = AsyncTestHelpers.WithDisposeTimeout(
+            () => CreateExecution(scriptFile, isolateConsole, signaler, shutdownService));
+        var execution = lifetime.Instance;
 
         Assert.True(await execution.StartAsync(CancellationToken.None));
 
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
+        try
+        {
+            await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token)).DefaultTimeout();
 
-        Assert.Single(signaler.Pids);
-        Assert.False(shutdownService.GracefulShutdownToken.IsCancellationRequested);
-        Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to exit after graceful signal.");
+            Assert.Single(signaler.Pids);
+            Assert.False(shutdownService.GracefulShutdownToken.IsCancellationRequested);
+            Assert.True(WaitForProcessExit(execution.ProcessId, TestConstants.DefaultTimeoutTimeSpan), $"Expected process {execution.ProcessId} to exit after graceful signal.");
+        }
+        finally
+        {
+            shutdownService.Expire();
+        }
     }
 
     [Theory]
@@ -88,7 +107,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             return Task.FromResult(true);
         });
 
-        await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
+        await using var lifetime = AsyncTestHelpers.WithDisposeTimeout(
+            () => CreateExecution(scriptFile, isolateConsole, signaler, shutdownService));
+        var execution = lifetime.Instance;
 
         Assert.True(await execution.StartAsync(CancellationToken.None));
 
@@ -96,14 +117,19 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         await cts.CancelAsync();
 
         var waitTask = Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
-        await signaled.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        try
+        {
+            await signaled.Task.DefaultTimeout();
+        }
+        finally
+        {
+            shutdownService.Expire();
+        }
 
-        shutdownService.Expire();
-
-        await waitTask.WaitAsync(TimeSpan.FromSeconds(30));
+        await waitTask.DefaultTimeout();
 
         Assert.Single(signaler.Pids);
-        Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to be killed after graceful expiration.");
+        Assert.True(WaitForProcessExit(execution.ProcessId, TestConstants.DefaultTimeoutTimeSpan), $"Expected process {execution.ProcessId} to be killed after graceful expiration.");
     }
 
     [Theory]
@@ -118,7 +144,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         var signaler = new RecordingGracefulSignaler(onSignal: _ =>
             throw new InvalidOperationException("simulated DCP failure"));
 
-        await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
+        await using var lifetime = AsyncTestHelpers.WithDisposeTimeout(
+            () => CreateExecution(scriptFile, isolateConsole, signaler, shutdownService));
+        var execution = lifetime.Instance;
 
         Assert.True(await execution.StartAsync(CancellationToken.None));
 
@@ -126,10 +154,10 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         await cts.CancelAsync();
         shutdownService.Expire();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token)).DefaultTimeout();
 
         Assert.Single(signaler.Pids);
-        Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to be killed after signaler failure.");
+        Assert.True(WaitForProcessExit(execution.ProcessId, TestConstants.DefaultTimeoutTimeSpan), $"Expected process {execution.ProcessId} to be killed after signaler failure.");
     }
 
     [Theory]
@@ -211,13 +239,13 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             });
 
         Assert.True(await execution.StartAsync(CancellationToken.None));
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await started.Task.DefaultTimeout();
 
         var signal = await SendCtrlCThroughAttachedConsoleAsync(execution.ProcessId);
         Assert.True(signal.ExitStatus.ExitCode == 0, $"Signaler exited with {signal.ExitStatus.ExitCode}: {signal.StandardError}");
 
         // STATUS_CONTROL_C_EXIT: ping handled CTRL+C and exited, rather than being killed.
-        Assert.Equal(unchecked((int)0xC000013A), await execution.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Equal(unchecked((int)0xC000013A), await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout());
     }
 
     /// <summary>
@@ -254,7 +282,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             RedirectStandardError = true,
         };
 
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        using var timeout = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
         return await Process.RunAndCaptureTextAsync(startInfo, timeout.Token);
     }
 

@@ -1,0 +1,13 @@
+﻿<configuration>
+  <disabledPackageSources>
+    <clear />
+    <add key="user-disabled" value="true" />
+    <add key="future-private" value="true" />
+  </disabledPackageSources>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="selected">
+      <package pattern="Aspire*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>

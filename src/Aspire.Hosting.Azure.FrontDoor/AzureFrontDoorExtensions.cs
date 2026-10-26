@@ -153,6 +153,10 @@ public static class AzureFrontDoorExtensions
                 {
                     Value = BicepFunction.Interpolate($"https://{endpoint.HostName}")
                 });
+                infrastructure.Add(new ProvisioningOutput($"{originBicepId}_endpointId", typeof(string))
+                {
+                    Value = endpoint.Id
+                });
             }
         };
 

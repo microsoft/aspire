@@ -1,19 +1,22 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+
 using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Utils;
-using System.Globalization;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Templating;
 
 /// <summary>
-/// Handles NuGet.config creation and updates for template output directories,
+/// Creates template NuGet.config files and configures existing .NET AppHosts,
 /// and provides channel-aware template package resolution and installation.
 /// </summary>
 internal sealed class TemplateNuGetConfigService(
@@ -21,7 +24,8 @@ internal sealed class TemplateNuGetConfigService(
     CliExecutionContext executionContext,
     IPackagingService packagingService,
     ITemplateVersionPrompter templateVersionPrompter,
-    ICliHostEnvironment hostEnvironment)
+    ICliHostEnvironment hostEnvironment,
+    BundleNuGetService nuGetService)
 {
     /// <summary>
     /// The name of the NuGet package that ships the Aspire project templates.
@@ -29,69 +33,33 @@ internal sealed class TemplateNuGetConfigService(
     public const string TemplatesPackageName = "Aspire.ProjectTemplates";
 
     /// <summary>
-    /// Applies NuGet.config create/update behavior for a resolved package channel.
+    /// Creates initial template NuGet configuration when the selected channel requires it.
     /// </summary>
-    /// <param name="channel">The resolved package channel.</param>
-    /// <param name="outputPath">The output path where the project was created.</param>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    public async Task PromptToCreateOrUpdateNuGetConfigAsync(PackageChannel channel, string outputPath, CancellationToken cancellationToken)
+    public async Task PromptToCreateNuGetConfigAsync(PackageChannel channel, string outputPath, CancellationToken cancellationToken)
     {
-        // Implicit channels (and any explicit channel without feed mappings) resolve from the
-        // ambient NuGet config, so there's nothing to create or merge — return before touching
-        // the output directory (which may not exist yet during `aspire new`).
-        var mappings = channel.Mappings;
-        if (mappings is null || mappings.Length == 0)
-        {
-            return;
-        }
-
-        // If this channel shouldn't get a fresh project NuGet.config (e.g. stable → nuget.org),
-        // only update an *existing* config in the target directory to clean up stale feeds from a
-        // previous channel; never create a new one, because a <clear/>-based config would wipe the
-        // user's other feeds. If the output directory doesn't exist yet there can't be an existing
-        // config, so there's nothing to do. See: https://github.com/microsoft/aspire/issues/18124
         if (!channel.ShouldCreateNuGetConfig())
         {
-            var targetDir = new DirectoryInfo(outputPath);
-            if (!targetDir.Exists || !NuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDir, out _))
-            {
-                return;
-            }
+            return;
         }
 
-        var workingDir = executionContext.WorkingDirectory;
         var outputDir = new DirectoryInfo(outputPath);
-
-        var normalizedOutputPath = Path.GetFullPath(outputPath);
-        var normalizedWorkingPath = workingDir.FullName;
-        var isInPlaceCreation = string.Equals(normalizedOutputPath, normalizedWorkingPath, StringComparison.OrdinalIgnoreCase);
-
-        var nugetConfigPrompter = new NuGetConfigPrompter(interactionService);
-
-        if (!isInPlaceCreation)
+        if (string.Equals(outputDir.FullName, executionContext.WorkingDirectory.FullName, StringComparisons.FileSystemPath) &&
+            !await interactionService.PromptConfirmAsync(
+                Resources.TemplatingStrings.CreateNugetConfigConfirmation,
+                binding: PromptBinding.CreateDefault(true),
+                cancellationToken: cancellationToken))
         {
-            await nugetConfigPrompter.CreateOrUpdateWithoutPromptAsync(outputDir, channel, cancellationToken);
             return;
         }
 
-        await nugetConfigPrompter.PromptToCreateOrUpdateAsync(workingDir, channel, cancellationToken);
+        await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride: null, outputDir, cancellationToken);
+        interactionService.DisplayMessage(KnownEmojis.Package, Resources.TemplatingStrings.NuGetConfigCreatedConfirmationMessage);
     }
 
     /// <summary>
-    /// Applies NuGet.config create/update behavior for a channel name resolved from any of
-    /// the equivalent channel-name sources: <c>--channel</c>, per-project
-    /// <c>aspire.config.json#channel</c>, or the running CLI's
-    /// <see cref="CliExecutionContext.IdentityChannel"/>.
+    /// Resolves a channel name and creates its initial template NuGet configuration.
     /// </summary>
-    /// <param name="channelName">
-    /// The channel name to look up in the packaging service. May be sourced from
-    /// <c>--channel</c>, per-project <c>aspire.config.json#channel</c>, or the running
-    /// CLI's <see cref="CliExecutionContext.IdentityChannel"/> — all are name-equivalent
-    /// lookup keys for this entrypoint.
-    /// </param>
-    /// <param name="outputPath">The output path where the project was created.</param>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    public async Task PromptToCreateOrUpdateNuGetConfigAsync(string? channelName, string outputPath, CancellationToken cancellationToken)
+    public async Task PromptToCreateNuGetConfigAsync(string? channelName, string outputPath, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(channelName))
         {
@@ -107,29 +75,13 @@ internal sealed class TemplateNuGetConfigService(
             return;
         }
 
-        await PromptToCreateOrUpdateNuGetConfigAsync(matchingChannel, outputPath, cancellationToken);
+        await PromptToCreateNuGetConfigAsync(matchingChannel, outputPath, cancellationToken);
     }
 
     /// <summary>
-    /// Creates or updates NuGet.config for the given channel name without prompting the user
-    /// and without displaying a confirmation message containing "NuGet.config" (which can
-    /// trip up automation/tests that match on substrings). Suitable for non-interactive
-    /// code paths such as <c>aspire init</c> where the caller wants to display its own
-    /// message (or none). The channel name may come from any of the equivalent
-    /// channel-name sources: <c>--channel</c>, per-project
-    /// <c>aspire.config.json#channel</c>, or the running CLI's
-    /// <see cref="CliExecutionContext.IdentityChannel"/>.
+    /// Applies a channel's shared NuGet policy to a .NET AppHost's local configuration without prompting.
     /// </summary>
-    /// <param name="channelName">
-    /// The channel name to look up in the packaging service. May be sourced from
-    /// <c>--channel</c>, per-project <c>aspire.config.json#channel</c>, or the running
-    /// CLI's <see cref="CliExecutionContext.IdentityChannel"/> — all are name-equivalent
-    /// lookup keys for this entrypoint.
-    /// </param>
-    /// <param name="outputPath">The output path where the NuGet.config should be created or updated.</param>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns><see langword="true"/> if a NuGet.config was created or updated; otherwise <see langword="false"/>.</returns>
-    public async Task<bool> CreateOrUpdateNuGetConfigWithoutPromptAsync(string? channelName, string outputPath, CancellationToken cancellationToken)
+    public async Task<bool> ConfigureDotNetAppHostNuGetConfigAsync(string? channelName, string outputPath, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(channelName))
         {
@@ -145,40 +97,45 @@ internal sealed class TemplateNuGetConfigService(
             return false;
         }
 
-        // Implicit channels (and any explicit channel without feed mappings) resolve from the
-        // ambient NuGet config, so there's nothing to create or merge — return before touching
-        // the output directory (which may not exist yet).
-        var mappings = matchingChannel.Mappings;
-        if (mappings is null || mappings.Length == 0)
+        if (matchingChannel.Mappings is not { Length: > 0 })
         {
             return false;
         }
 
-        // If this channel shouldn't get a fresh project NuGet.config (e.g. stable → nuget.org),
-        // only update an *existing* config to clean up stale feeds from a previous channel; never
-        // create a new one — a <clear/>-based config would hide the ambient nuget.org feed and the
-        // user's other feeds. If the output directory doesn't exist yet there can't be an existing
-        // config, so there's nothing to do. See: https://github.com/microsoft/aspire/issues/18124
+        // Stable uses ambient configuration. Only update an existing file to retire old
+        // channel policy; do not create a redundant local config.
+        // See: https://github.com/microsoft/aspire/issues/18124
         if (!matchingChannel.ShouldCreateNuGetConfig())
         {
             var targetDir = new DirectoryInfo(outputPath);
-            if (!targetDir.Exists || !NuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDir, out _))
+            if (!targetDir.Exists || !DotNetAppHostNuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDir, out _))
             {
                 return false;
             }
         }
 
-        // Call the merger directly — bypass NuGetConfigPrompter so we don't emit a
-        // confirmation message containing the substring "NuGet.config", which the
-        // AspireInitAsync test helper false-matches as a user-facing Y/n prompt.
-        await NuGetConfigMerger.CreateOrUpdateAsync(new DirectoryInfo(outputPath), matchingChannel, cancellationToken: cancellationToken);
+        var targetDirectory = new DirectoryInfo(outputPath);
+        var configuration = nuGetService.BuildChannelConfiguration(
+            targetDirectory,
+            AppHostWorkloadId.Create(targetDirectory.FullName),
+            matchingChannel,
+            packageSourceOverride: null,
+            executionContext.NuGetServiceIndexOverride,
+            cancellationToken);
+        await new DotNetAppHostNuGetConfigMerger(nuGetService).CreateOrUpdateAsync(
+            targetDirectory,
+            configuration,
+            matchingChannel.ShouldCreateNuGetConfig(),
+            matchingChannel.ConfigureGlobalPackagesFolder ? CliPathHelper.StagingNuGetPackagesFolderName : null,
+            confirmationCallback: null,
+            cancellationToken);
         return true;
     }
 
     /// <summary>
-    /// Creates or updates a project NuGet.config that maps Aspire packages to an explicit package source override.
+    /// Creates initial template NuGet configuration for an explicit package source override.
     /// </summary>
-    public async Task<bool> CreateOrUpdateNuGetConfigForSourceOverrideAsync(
+    public async Task<bool> CreateNuGetConfigForSourceOverrideAsync(
         string? sourceOverride,
         string? channelName,
         string outputPath,
@@ -198,31 +155,63 @@ internal sealed class TemplateNuGetConfigService(
                 string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
         }
 
-        return await CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, matchingChannel, outputPath, cancellationToken, executionContext.NuGetServiceIndexOverride);
+        return await CreateNuGetConfigForSourceOverrideAsync(sourceOverride, matchingChannel, outputPath, cancellationToken);
     }
 
     /// <summary>
-    /// Creates or updates a project NuGet.config that maps Aspire packages to an explicit package source override.
+    /// Creates initial template NuGet configuration for an explicit package source override.
     /// </summary>
-    public static async Task<bool> CreateOrUpdateNuGetConfigForSourceOverrideAsync(
+    public async Task<bool> CreateNuGetConfigForSourceOverrideAsync(
         string? sourceOverride,
         PackageChannel? channel,
         string outputPath,
-        CancellationToken cancellationToken,
-        string? nugetServiceIndexOverride = null)
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(sourceOverride))
         {
             return false;
         }
+        if (PackageSourceOverrideMappings.HasCredentialMaterial(sourceOverride))
+        {
+            throw new ArgumentException("Credential-bearing HTTP sources cannot be persisted.", nameof(sourceOverride));
+        }
 
-        var mappings = PackageSourceOverrideMappings.Create(sourceOverride, channel, nugetServiceIndexOverride);
-        await NuGetConfigMerger.CreateOrUpdateAsync(
-            new DirectoryInfo(outputPath),
-            mappings,
-            channel?.ConfigureGlobalPackagesFolder ?? false,
-            cancellationToken: cancellationToken);
+        await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride, new DirectoryInfo(outputPath), cancellationToken);
         return true;
+    }
+
+    private async Task WriteNewAppHostNuGetConfigAsync(
+        PackageChannel? channel,
+        string? sourceOverride,
+        DirectoryInfo outputDirectory,
+        CancellationToken cancellationToken)
+    {
+        outputDirectory.Create();
+        var existingConfig = outputDirectory.EnumerateFiles()
+            .FirstOrDefault(static file => string.Equals(file.Name, "nuget.config", StringComparison.OrdinalIgnoreCase));
+        if (existingConfig is not null)
+        {
+            throw new IOException($"Cannot create template NuGet configuration because '{existingConfig.FullName}' already exists.");
+        }
+
+        var configuration = nuGetService.BuildChannelConfiguration(
+            outputDirectory,
+            AppHostWorkloadId.Create(outputDirectory.FullName),
+            channel,
+            sourceOverride,
+            executionContext.NuGetServiceIndexOverride,
+            cancellationToken);
+        var targetFile = new FileInfo(Path.Combine(outputDirectory.FullName, "nuget.config"));
+        var content = await nuGetService.CreatePersistentNuGetConfigContentAsync(
+            configuration,
+            targetFile,
+            originalContent: null,
+            channel?.ConfigureGlobalPackagesFolder == true ? CliPathHelper.StagingNuGetPackagesFolderName : null,
+            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        await using var stream = targetFile.Open(
+            FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        await stream.WriteAsync(content, CancellationToken.None);
     }
 
     /// <summary>
@@ -299,22 +288,25 @@ internal sealed class TemplateNuGetConfigService(
 
             await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
             {
-                var templateSearchMappings = string.IsNullOrWhiteSpace(query.SourceOverride)
-                    ? channel.Mappings
-                    : PackageSourceOverrideMappings.CreateForTemplateOperations(query.SourceOverride);
-                var templatePackages = await channel.GetTemplatePackagesAsync(
-                    executionContext.WorkingDirectory,
-                    templateSearchMappings,
-                    // Init and explicit source/version overrides historically enumerate the source
-                    // before this service selects a version. Keep pin filtering only for channel
-                    // resolution in `aspire new`; unqualified local resolution selects the exact
-                    // CLI identity version below from the complete candidate set.
-                    filterLocalPackagesToPinnedVersion:
-                        query.IncludePrHives &&
-                        !isUnqualifiedLocalResolution &&
-                        string.IsNullOrWhiteSpace(query.VersionOverride) &&
-                        string.IsNullOrWhiteSpace(query.SourceOverride),
-                    ct);
+                // Init and explicit source/version overrides historically enumerate the source
+                // before this service selects a version. Keep pin filtering only for channel
+                // resolution in `aspire new`; unqualified local resolution selects the exact
+                // CLI identity version below from the complete candidate set.
+                var filterLocalPackagesToPinnedVersion =
+                    query.IncludePrHives &&
+                    !isUnqualifiedLocalResolution &&
+                    string.IsNullOrWhiteSpace(query.VersionOverride) &&
+                    string.IsNullOrWhiteSpace(query.SourceOverride);
+                var templatePackages = string.IsNullOrWhiteSpace(query.SourceOverride)
+                    ? await channel.GetTemplatePackagesFromChannelAsync(
+                        executionContext.WorkingDirectory,
+                        filterLocalPackagesToPinnedVersion,
+                        ct)
+                    : await channel.GetTemplatePackagesAsync(
+                        executionContext.WorkingDirectory,
+                        PackageSourceOverrideMappings.CreateForSourceOnlyOperations(query.SourceOverride),
+                        filterLocalPackagesToPinnedVersion,
+                        ct);
                 lock (resultsLock)
                 {
                     results.AddRange(templatePackages.Select(p => (p, channel)));
@@ -418,22 +410,10 @@ internal sealed class TemplateNuGetConfigService(
         KnownEmoji? statusEmoji,
         CancellationToken cancellationToken)
     {
-        var templateInstallMappings = string.IsNullOrWhiteSpace(sourceOverride)
-            ? selection.Channel.Mappings
-            : PackageSourceOverrideMappings.CreateForTemplateOperations(sourceOverride);
-
-        // Whilst we install the templates - if source mappings are available we need
-        // to generate a temporary NuGet.config file to make sure we install the right package
-        // from the right feed. Without mappings we just use the ambient configuration
-        // (although we should still specify the source) because the user would have selected it.
-        //
-        // The temporary config is disposed when this method returns. That is intentional —
-        // only `dotnet new install` consumes the config; the subsequent `dotnet new <template>`
-        // call (in DotNetTemplateFactory and InitCommand) operates against the already-installed
-        // template hive and uses the ambient NuGet configuration.
-        using var temporaryConfig = templateInstallMappings is not null
-            ? await TemporaryNuGetConfig.CreateAsync(templateInstallMappings)
-            : null;
+        using var installationConfiguration = await selection.Channel.CreatePackageOperationConfigurationAsync(
+            executionContext.WorkingDirectory,
+            sourceOverride,
+            cancellationToken);
 
         var collector = new OutputCollector();
 
@@ -450,7 +430,10 @@ internal sealed class TemplateNuGetConfigService(
                 return await runner.InstallTemplateAsync(
                     packageName: TemplatesPackageName,
                     version: selection.Package.Version,
-                    nugetConfigFile: temporaryConfig?.ConfigFile,
+                    // dotnet new install has no --configfile option. Running from the generated
+                    // overlay directory lets NuGet discover the overlay and continue walking the
+                    // original workspace hierarchy for ambient sources and credentials.
+                    nugetConfigFile: installationConfiguration.ConfigurationFile,
                     nugetSource: string.IsNullOrWhiteSpace(sourceOverride) ? selection.Package.Source : sourceOverride,
                     force: true,
                     options: options,

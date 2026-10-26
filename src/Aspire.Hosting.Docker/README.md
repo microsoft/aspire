@@ -28,6 +28,8 @@ builder.AddDockerComposeEnvironment("compose");
 await builder.addDockerComposeEnvironment("compose");
 ```
 
+The dashboard container included in the published Compose file opts out of dashboard usage and error telemetry by default (`ASPIRE_DASHBOARD_TELEMETRY_OPTOUT=true`). This does not affect the application's OpenTelemetry data sent to the dashboard.
+
 ### Volumes
 
 Use an environment variable so projects and executables can use a local Aspire store directory while Docker Compose mounts the published named volume:

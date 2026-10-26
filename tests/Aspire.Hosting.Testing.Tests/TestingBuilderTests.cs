@@ -34,6 +34,23 @@ public class TestingBuilderTests(ITestOutputHelper output)
         Assert.Empty(missingProperties);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FileSystemServiceDelegatesToUnderlyingBuilder(bool useEntryPoint)
+    {
+        await using var builder = useEntryPoint
+            ? await DistributedApplicationTestingBuilder.CreateAsync<Projects.TestingAppHost1_AppHost>()
+            : DistributedApplicationTestingBuilder.Create();
+
+        var fileSystemService = builder.FileSystemService;
+        Assert.NotNull(fileSystemService);
+        Assert.Same(fileSystemService, ((IDistributedApplicationBuilder)builder).FileSystemService);
+
+        await using var app = await builder.BuildAsync();
+        Assert.Same(app.Services.GetRequiredService<IFileSystemService>(), fileSystemService);
+    }
+
     [Fact]
     [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/dotnet/dnceng/issues/6232", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnAzdoBuildMachine))]

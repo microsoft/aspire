@@ -79,11 +79,11 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to {0} (exited code={1}).
+        ///   Looks up a localized string similar to Cannot resolve the terminal endpoint for instance &apos;{0}&apos; because its replica metadata is missing, invalid, or unavailable. Use &apos;aspire ps&apos; or &apos;aspire describe&apos; to check the current resource instances..
         /// </summary>
-        internal static string ReplicaExited {
+        internal static string InstanceTerminalUnavailable {
             get {
-                return ResourceManager.GetString("ReplicaExited", resourceCulture);
+                return ResourceManager.GetString("InstanceTerminalUnavailable", resourceCulture);
             }
         }
 
@@ -97,34 +97,25 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The 0-based replica index. Required for replicated resources in non-interactive mode..
+        ///   Looks up a localized string similar to Resource &apos;{0}&apos; matches multiple instances. Specify an exact instance ID. Available instance IDs: {1}..
         /// </summary>
-        internal static string ReplicaOptionDescription {
+        internal static string ResourceAmbiguous {
             get {
-                return ResourceManager.GetString("ReplicaOptionDescription", resourceCulture);
+                return ResourceManager.GetString("ResourceAmbiguous", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Resource &apos;{0}&apos; has {1} replicas. Pass --replica &lt;index&gt; to choose one in non-interactive mode..
+        ///   Looks up a localized string similar to Resource &apos;{0}&apos; has multiple terminal instances. Specify an exact instance ID from &apos;aspire ps&apos; or &apos;aspire describe&apos;..
         /// </summary>
-        internal static string ReplicaRequired {
+        internal static string ResourceInstanceRequired {
             get {
-                return ResourceManager.GetString("ReplicaRequired", resourceCulture);
+                return ResourceManager.GetString("ResourceInstanceRequired", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to {0} (running).
-        /// </summary>
-        internal static string ReplicaRunning {
-            get {
-                return ResourceManager.GetString("ReplicaRunning", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The name of the resource whose terminal runs the tape..
+        ///   Looks up a localized string similar to The resource display name for a singleton, or the exact resource instance ID for a replica. Use &apos;aspire ps&apos; or &apos;aspire describe&apos; to discover instance IDs..
         /// </summary>
         internal static string ResourceArgumentDescription {
             get {
@@ -147,15 +138,6 @@ namespace Aspire.Cli.Resources {
         internal static string ResourceRequired {
             get {
                 return ResourceManager.GetString("ResourceRequired", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Select a replica of &apos;{0}&apos; to attach to:.
-        /// </summary>
-        internal static string SelectReplica {
-            get {
-                return ResourceManager.GetString("SelectReplica", resourceCulture);
             }
         }
 

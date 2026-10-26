@@ -40,6 +40,7 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
         // non-reproducible.
         return builder.CreateResourceBuilder(resource)
                       .WithImage(DashboardImage.Name, DashboardImage.ResolveTag())
+                      .WithEnvironment(KnownConfigNames.DashboardTelemetryOptOut, "true")
                       .WithHttpEndpoint(targetPort: 18888)
                       // Expose the HTTP endpoint so ingress or explicit host port mapping can route browser traffic to the dashboard.
                       .WithEndpoint("http", e => e.IsExternal = true)

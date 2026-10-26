@@ -17,7 +17,7 @@ permissions:
 jobs:
   update-and-pr:
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository == 'microsoft/aspire' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -47,22 +47,6 @@ jobs:
             ./eng/scripts/update-aspire-skills-bundle.ps1 -Version $env:VERSION
           }
 
-      - name: Restore solution
-        run: ./restore.sh
-
-      - name: Test Aspire skills bundle and telemetry hooks
-        run: >
-          dotnet test --project tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj
-          --no-launch-profile
-          --
-          --filter-class "*.AspireSkillsInstallerTests"
-          --filter-class "*.AspireSkillsBundleTests"
-          --filter-class "*.AgentInitCommandTests"
-          --filter-class "*.TelemetryHookInstallerTests"
-          --filter-class "*.TelemetryHookScriptTests"
-          --filter-not-trait "quarantined=true"
-          --filter-not-trait "outerloop=true"
-
       - name: Generate GitHub App Token for pull request
         id: pr-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -74,6 +58,7 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
+      # PR CI owns behavioral validation so compatibility failures remain visible on the draft PR.
       - name: Create or update pull request
         uses: ./.github/actions/create-pull-request
         with:

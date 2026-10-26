@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <PackageTags>$(ComponentAzurePackageTags) ai foundry openai projects</PackageTags>
+    <Description>Registers Foundry project and Azure OpenAI account clients with Aspire configuration, Microsoft Entra authentication and telemetry.</Description>
+    <PackageIconFullPath>$(SharedDir)AzureOpenAI_256x.png</PackageIconFullPath>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <NoWarn>$(NoWarn);SYSLIB1100;SYSLIB1101;OPENAI001</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\Common\AzureComponent.cs" Link="AzureComponent.cs" />
+    <Compile Include="..\Common\AzureAIProjectConnectionString.cs" Link="AzureAIProjectConnectionString.cs" />
+    <Compile Include="..\Common\AITelemetryHelpers.cs" Link="AITelemetryHelpers.cs" />
+    <Compile Include="..\Common\ConfigurationSchemaAttributes.cs" Link="ConfigurationSchemaAttributes.cs" />
+    <Compile Include="..\Common\HealthChecksExtensions.cs" Link="HealthChecksExtensions.cs" />
+    <Compile Include="..\Common\ConnectionStringConfigurationExtensions.cs" Link="ConnectionStringConfigurationExtensions.cs" />
+    <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" Link="EnvironmentVariableNameEncoder.cs" />
+    <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="KnownOtelConfigNames.cs" />
+    <Compile Include="$(SharedDir)AzureCredentialHelper.cs" Link="AzureCredentialHelper.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Azure.AI.Extensions.OpenAI" />
+    <PackageReference Include="Microsoft.Extensions.Azure" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Condition="'$(TargetFramework)' == 'net10.0'" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <ProjectReference Include="..\Aspire.OpenAI\Aspire.OpenAI.csproj" />
+  </ItemGroup>
+</Project>

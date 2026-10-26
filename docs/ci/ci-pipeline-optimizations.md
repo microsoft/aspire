@@ -200,3 +200,10 @@ step. A successful build alone does not establish indexing coverage. Preserve
 the full managed project selection, including tests and playground, and verify
 source-index conversion/upload and CodeQL finalization on an active-scan run.
 The job timeout and CodeQL configuration are unchanged.
+
+## CodeQL pipeline SDK setup
+
+The scheduled CodeQL pipeline runs `build.cmd -restore`, which bootstraps the
+SDK pinned in `global.json`. Do not add `UseDotNet@2` with `useGlobalJson: true`
+before that command: this mode excludes prerelease SDKs, and fails before the
+repository's bootstrap can install the pinned SDK.

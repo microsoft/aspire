@@ -12,6 +12,7 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Func<GetLogsContext, CancellationToken, Task<PagedResult<LogSummary>>>? GetLogSummariesAsyncHandler { get; init; }
 
     public bool IsReadOnly => inner.IsReadOnly;
+    public bool HasReceivedTelemetry => inner.HasReceivedTelemetry;
     public bool HasDisplayedMaxLogLimitMessage { get => inner.HasDisplayedMaxLogLimitMessage; set => inner.HasDisplayedMaxLogLimitMessage = value; }
     public DashboardMessageBarReference? MaxLogLimitMessage { get => inner.MaxLogLimitMessage; set => inner.MaxLogLimitMessage = value; }
     public bool HasDisplayedMaxTraceLimitMessage { get => inner.HasDisplayedMaxTraceLimitMessage; set => inner.HasDisplayedMaxTraceLimitMessage = value; }

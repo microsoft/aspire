@@ -74,6 +74,7 @@ export const disconnectingFromSession = vscode.l10n.t('Disconnecting from Aspire
 export const processExitedWithCode = (code: number | string) => vscode.l10n.t('Process exited with code {0}.', code);
 export const failedToStartPythonProgram = (errorMessage: string) => vscode.l10n.t('Failed to start Python program: {0}.', errorMessage);
 export const denoInspectorPortAllocationFailed = vscode.l10n.t('Failed to allocate a Deno inspector port.');
+export const azureFunctionsNodeInspectorPortAllocationFailed = vscode.l10n.t('Failed to allocate a Node inspector port.');
 export const denoTaskDebuggingUnsupported = vscode.l10n.t('Deno task launches cannot be debugged automatically because Deno does not accept inspector flags on the task subcommand. Use a direct Deno entrypoint for Aspire debugging, or configure and launch a Deno task that starts with an inspector flag manually.');
 export const csharpSupportNotEnabled = vscode.l10n.t('C# support is not enabled in this workspace. This project should have started through the Aspire CLI.');
 export const failedToStartProject = (errorMessage: string) => vscode.l10n.t('Failed to start project: {0}.', errorMessage);
@@ -200,6 +201,7 @@ export const denoAppHostRunCommandMissing = vscode.l10n.t("The Deno AppHost comm
 export const failedToCleanUpMsBuildTemporaryDirectory = (directoryPath: string, error: string) => vscode.l10n.t("Failed to clean up temporary MSBuild directory '{0}': {1}", directoryPath, error);
 export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}', url);
 export const browserLabel = vscode.l10n.t('Browser');
+export const blazorWasmDebugRelayFailed = vscode.l10n.t('Could not prepare Blazor WebAssembly debugging. See the Aspire output for details, then try again.');
 export const unsupportedBrowserDebugTarget = (browser: string, url: string, supportedBrowsers: string) => vscode.l10n.t("Browser '{0}' cannot be debugged for '{1}'. Supported browsers are: {2}.", browser, url, supportedBrowsers);
 export const unsupportedBrowserDebugTargetWithoutUrl = (browser: string, supportedBrowsers: string) => vscode.l10n.t("Browser '{0}' cannot be debugged. Supported browsers are: {1}.", browser, supportedBrowsers);
 export const csharpExtensionMissingForBlazorDebugging = (extensionId: string, minimumVersion: string) => vscode.l10n.t('Debugging this Blazor client requires {0} version {1} or later. Install the C# extension, then start debugging again.', extensionId, minimumVersion);

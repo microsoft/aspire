@@ -13,6 +13,8 @@ using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
+using Aspire.Shared.UserSecrets;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
 using Aspire.Dashboard.Utils;
@@ -46,6 +48,8 @@ internal abstract class PipelineCommandBase : BaseCommand
     private readonly IConfiguration _configuration;
     private readonly IFeatures _features;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly AspireSecretsStoreResolver _aspireSecretsStoreResolver;
+    private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly IAnsiConsole _ansiConsole;
 
@@ -90,7 +94,7 @@ internal abstract class PipelineCommandBase : BaseCommand
     private static bool IsCompletionStateWarning(string completionState) =>
         completionState == CompletionStates.CompletedWithWarning;
 
-    protected PipelineCommandBase(string name, string description, IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger logger, IAnsiConsole ansiConsole, CommonCommandServices services)
+    protected PipelineCommandBase(string name, string description, IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, IEnvironment environment, AspireSecretsStoreResolver aspireSecretsStoreResolver, ILogger logger, IAnsiConsole ansiConsole, CommonCommandServices services)
         : base(name, description, services)
     {
         _runner = runner;
@@ -99,6 +103,8 @@ internal abstract class PipelineCommandBase : BaseCommand
         _configuration = configuration;
         _features = features;
         _projectFactory = projectFactory;
+        _aspireSecretsStoreResolver = aspireSecretsStoreResolver;
+        _environment = environment;
         _logger = logger;
         _ansiConsole = ansiConsole;
 
@@ -268,6 +274,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             {
                 runArguments = [.. runArguments, "--operation", "inspect", "--list-steps", "true"];
             }
+            await AddAspireSecretsFileEnvironmentVariableAsync(effectiveAppHostFile, project, env, runArguments, cancellationToken);
 
             // Create the publish context and delegate to IAppHostProject
             publishContext = new PublishContext
@@ -483,6 +490,46 @@ internal abstract class PipelineCommandBase : BaseCommand
                 InteractionService.DisplayLines(outputCollector.GetLines());
             }
             return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts);
+        }
+    }
+
+    private async Task AddAspireSecretsFileEnvironmentVariableAsync(
+        FileInfo appHostFile,
+        IAppHostProject project,
+        IDictionary<string, string> environmentVariables,
+        string[] args,
+        CancellationToken cancellationToken)
+    {
+        // Pipeline commands run deployment-oriented operations, so default to Production while still
+        // honoring environment values supplied by the command line or ambient process. This keeps the
+        // CLI-selected Aspire secrets file aligned with the environment the AppHost will observe.
+        var effectiveEnvironment = AppHostEnvironmentDefaults.ResolveEffectiveEnvironment(
+            environmentVariables,
+            AppHostEnvironmentDefaults.ProductionEnvironmentName,
+            _environment.GetEnvironmentVariables().ToDictionary(pair => pair.Name, pair => pair.Value),
+            args);
+
+        // Keep existing custom host environments working, even if secret commands
+        // cannot address them. An explicit file also takes precedence over automatic selection.
+        environmentVariables.TryGetValue(KnownConfigNames.AspireSecretsFile, out var explicitSecretsFile);
+        explicitSecretsFile ??= _environment.GetEnvironmentVariable(KnownConfigNames.AspireSecretsFile);
+        if (!string.IsNullOrWhiteSpace(explicitSecretsFile))
+        {
+            environmentVariables[KnownConfigNames.AspireSecretsFile] = explicitSecretsFile;
+            return;
+        }
+
+        if (!AspireSecretsPathHelper.IsValidEnvironmentName(effectiveEnvironment))
+        {
+            return;
+        }
+
+        var result = await _aspireSecretsStoreResolver.ResolveAsync(appHostFile, project, effectiveEnvironment, cancellationToken);
+        if (result is not null)
+        {
+            // The secrets file may not exist yet; deployment parameter prompts can create it later.
+            // Passing the path up front lets the AppHost and any deployment steps share the same store.
+            environmentVariables[KnownConfigNames.AspireSecretsFile] = result.AspireSecretsFilePath;
         }
     }
 

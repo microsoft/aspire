@@ -499,9 +499,9 @@ public class AtsGoCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireGo = files["aspire.go"];
 
-        Assert.Contains("if appHostFilePath, ok := resolved[\"AppHostFilePath\"].(string); !ok || appHostFilePath == \"\"", aspireGo);
+        Assert.Contains("if appHostFilePath, ok := resolved[\"appHostFilePath\"].(string); !ok || appHostFilePath == \"\"", aspireGo);
         Assert.Contains("os.Getenv(\"ASPIRE_APPHOST_FILEPATH\")", aspireGo);
-        Assert.Contains("resolved[\"AppHostFilePath\"] = appHostFilePath", aspireGo);
+        Assert.Contains("resolved[\"appHostFilePath\"] = appHostFilePath", aspireGo);
     }
 
     [Fact]
@@ -512,8 +512,8 @@ public class AtsGoCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireGo = files["aspire.go"];
 
-        Assert.Contains("if dashboardApplicationName, ok := resolved[\"DashboardApplicationName\"].(string); ok && dashboardApplicationName == \"\"", aspireGo);
-        Assert.Contains("delete(resolved, \"DashboardApplicationName\")", aspireGo);
+        Assert.Contains("if dashboardApplicationName, ok := resolved[\"dashboardApplicationName\"].(string); ok && dashboardApplicationName == \"\"", aspireGo);
+        Assert.Contains("delete(resolved, \"dashboardApplicationName\")", aspireGo);
     }
 
     [Fact]

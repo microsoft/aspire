@@ -77,14 +77,12 @@ public partial class ResourcesTests : DashboardTestContext
                 new AspireTelemetryProperty(expectedView, AspireTelemetryPropertyType.UserSetting)), property));
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
         Assert.Equal(TelemetryEventKeys.ParametersSet, log.Message);
-        Assert.Collection(log.Attributes.OrderBy(p => p.Key, StringComparer.Ordinal),
-            property => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, property.Key),
-            property => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.DashboardComponentId, TelemetryComponentIds.Resources), property),
-            property => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.DashboardComponentType, nameof(Components.Pages.ComponentType.Page)), property),
-            property => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ResourceView, expectedView), property),
-            property => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, property.Key),
-            property => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ParametersSet), property),
-            property => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ParametersSet), property));
+        fixture.AssertAttributes(log.Attributes,
+            new(TelemetryPropertyKeys.DashboardComponentId, TelemetryComponentIds.Resources),
+            new(TelemetryPropertyKeys.DashboardComponentType, nameof(Components.Pages.ComponentType.Page)),
+            new(TelemetryPropertyKeys.ResourceView, expectedView),
+            new("microsoft.operation_name", TelemetryEventKeys.ParametersSet),
+            new("{OriginalFormat}", TelemetryEventKeys.ParametersSet));
         Assert.Equal(activity.TraceId, log.TraceId);
         Assert.Equal(activity.SpanId, log.SpanId);
         Assert.Empty(activity.Events);

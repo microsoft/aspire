@@ -107,24 +107,59 @@
         <target state="needs-review-translation">Управляйте интеграциями агентов ИИ.</target>
         <note />
       </trans-unit>
+      <trans-unit id="Environment_ClaudeCode">
+        <source>Claude Code</source>
+        <target state="new">Claude Code</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Environment_Copilot">
+        <source>GitHub Copilot</source>
+        <target state="new">GitHub Copilot</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Environment_OpenCode">
+        <source>OpenCode</source>
+        <target state="new">OpenCode</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
         <target state="new">Install Aspire MCP server</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServerPrompt">
-        <source>Configure the Aspire MCP server for detected agent environments?</source>
-        <target state="new">Configure the Aspire MCP server for detected agent environments?</target>
+        <source>Configure the Aspire MCP server for selected agent environments?</source>
+        <target state="new">Configure the Aspire MCP server for selected agent environments?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
-        <source>Initialize agent environment configuration for detected agents</source>
+        <source>Initialize configuration and skills for selected agent clients</source>
         <target state="needs-review-translation">Инициализировать конфигурацию среды агента для обнаруженных агентов.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_EnvironmentLocationDescription">
+        <source>{0}: {1}</source>
+        <target state="new">{0}: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_EnvironmentsOptionDescription">
+        <source>Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</source>
+        <target state="new">Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_FailedToInstallSkill">
         <source>Failed to install {0} skill at {1}: {2}</source>
         <target state="new">Failed to install {0} skill at {1}: {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_GlobalScope">
+        <source>Global (Install in your home directory; available across all projects)</source>
+        <target state="new">Global (Install in your home directory; available across all projects)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstallationLocations">
+        <source>Installation locations:</source>
+        <target state="new">Installation locations:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledPlaywrightCli">
@@ -147,9 +182,34 @@
         <target state="new">Skills: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_InvalidEnvironments">
+        <source>Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
+        <target state="new">Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InvalidScope">
+        <source>Invalid scope '{0}'. Use 'project' or 'global'.</source>
+        <target state="new">Invalid scope '{0}'. Use 'project' or 'global'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_McpConfigurationDescription">
+        <source>Configure Aspire MCP for {0} at {1}</source>
+        <target state="new">Configure Aspire MCP for {0} at {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_McpLocationHint">
+        <source>MCP: {0}</source>
+        <target state="new">MCP: {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_McpOptionDescription">
-        <source>Configure the Aspire MCP server for detected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</source>
-        <target state="new">Configure the Aspire MCP server for detected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</target>
+        <source>Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</source>
+        <target state="new">Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NoConfigurationSelected">
+        <source>No agent configuration selected. Existing configuration was left unchanged.</source>
+        <target state="new">No agent configuration selected. Existing configuration was left unchanged.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
@@ -157,9 +217,39 @@
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_SkillLocationsOptionDescription">
-        <source>Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'</source>
-        <target state="new">Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'</target>
+      <trans-unit id="InitCommand_ProjectScope">
+        <source>Project (Install in your workspace root; committed with your project)</source>
+        <target state="new">Project (Install in your workspace root; committed with your project)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ScopeOptionDescription">
+        <source>Configuration and skill scope: project or global (default: project)</source>
+        <target state="new">Configuration and skill scope: project or global (default: project)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectAgentsPrompt">
+        <source>Which agents do you use?</source>
+        <target state="new">Which agents do you use?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectScopePrompt">
+        <source>Installation scope</source>
+        <target state="new">Installation scope</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SharedLocation">
+        <source>{0} (shared: {1})</source>
+        <target state="new">{0} (shared: {1})</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SharedLocationNotice">
+        <source>Shared files may be discovered by agents that aren't selected.</source>
+        <target state="new">Shared files may be discovered by agents that aren't selected.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillsLocationHint">
+        <source>Skills: {0}</source>
+        <target state="new">Skills: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
@@ -202,6 +292,11 @@
         <target state="new">The Aspire skills bundle is invalid: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="McpServerContainerMustBeJsonObject">
+        <source>The MCP server container '{0}' in '{1}' must be a JSON object.</source>
+        <target state="new">The MCP server container '{0}' in '{1}' must be a JSON object.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToDownload">
         <source>Failed to download {0}.</source>
         <target state="new">Failed to download {0}.</target>
@@ -215,6 +310,11 @@
       <trans-unit id="PlaywrightCliInstaller_FailedToInstallGlobally">
         <source>Failed to install {0} globally via npm.</source>
         <target state="new">Failed to install {0} globally via npm.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightCliInstaller_FailedToMirrorSkillFiles">
+        <source>Failed to copy Playwright CLI skill files to the selected locations.</source>
+        <target state="new">Failed to copy Playwright CLI skill files to the selected locations.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToResolvePackage">
@@ -270,51 +370,6 @@
       <trans-unit id="SkillDescription_PlaywrightCli">
         <source>Browser automation and functional testing</source>
         <target state="new">Browser automation and functional testing</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_ClaudeCodeDescription">
-        <source>Required for Claude Code</source>
-        <target state="new">Required for Claude Code</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_ClaudeCodeName">
-        <source>Claude Code (.claude/skills/)</source>
-        <target state="new">Claude Code (.claude/skills/)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_GitHubSkillsDescription">
-        <source>Legacy location for GitHub Copilot skills</source>
-        <target state="new">Legacy location for GitHub Copilot skills</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_GitHubSkillsName">
-        <source>VS Code / GitHub Copilot (.github/skills/)</source>
-        <target state="new">VS Code / GitHub Copilot (.github/skills/)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_OpenCodeDescription">
-        <source>Legacy location for OpenCode skills</source>
-        <target state="new">Legacy location for OpenCode skills</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_OpenCodeName">
-        <source>OpenCode (.opencode/skill/)</source>
-        <target state="new">OpenCode (.opencode/skill/)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_StandardDescription">
-        <source>Supported by VS Code, GitHub Copilot, and OpenCode (also installs at ~/)</source>
-        <target state="new">Supported by VS Code, GitHub Copilot, and OpenCode (also installs at ~/)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_StandardName">
-        <source>Standard (.agents/skills/)</source>
-        <target state="new">Standard (.agents/skills/)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_SelectSkillLocations">
-        <source>Where should skill files be installed?</source>
-        <target state="new">Where should skill files be installed?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectSkills">

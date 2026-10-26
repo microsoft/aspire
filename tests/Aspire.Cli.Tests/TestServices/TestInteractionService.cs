@@ -47,6 +47,7 @@ internal sealed class TestInteractionService : IInteractionService
     public List<StringPromptCall> StringPromptCalls { get; } = [];
     public List<FilePathPromptCall> FilePathPromptCalls { get; } = [];
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
+    public List<(string PromptText, string? DefaultValue, IReadOnlyList<object> PreSelected)> MultiSelectionPromptCalls { get; } = [];
     public List<string> DisplayedErrors { get; } = [];
     public List<string> ValidationFailures { get; } = [];
     public List<(KnownEmoji Emoji, string Message, ConsoleOutput? ConsoleOverride)> DisplayedMessages { get; } = [];
@@ -208,6 +209,11 @@ internal sealed class TestInteractionService : IInteractionService
 
     public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
     {
+        lock (_displayLock)
+        {
+            MultiSelectionPromptCalls.Add((promptText, binding?.DefaultValue, preSelected?.Cast<object>().ToArray() ?? []));
+        }
+
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
             throw new OperationCanceledException();

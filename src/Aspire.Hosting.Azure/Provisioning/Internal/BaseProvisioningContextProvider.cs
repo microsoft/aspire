@@ -30,6 +30,7 @@ internal abstract partial class BaseProvisioningContextProvider(
     internal const string SubscriptionIdName = "SubscriptionId";
     internal const string ResourceGroupName = "ResourceGroup";
     internal const string TenantName = "Tenant";
+    internal const string TenantResourceSuffixName = "TenantResourceSuffix";
 
     protected readonly IInteractionService _interactionService = interactionService;
     protected readonly AzureProvisionerOptions _options = options.Value;
@@ -44,7 +45,8 @@ internal abstract partial class BaseProvisioningContextProvider(
         Location = options.Value.Location,
         SubscriptionId = options.Value.SubscriptionId,
         ResourceGroup = options.Value.ResourceGroup,
-        TenantId = options.Value.TenantId
+        TenantId = options.Value.TenantId,
+        TenantResourceSuffix = options.Value.TenantResourceSuffix
     };
     protected readonly IHostEnvironment _environment = environment;
     protected readonly ILogger _logger = logger;
@@ -224,6 +226,11 @@ internal abstract partial class BaseProvisioningContextProvider(
         azureSection["Location"] = _options.Location;
         azureSection["SubscriptionId"] = _options.SubscriptionId;
         azureSection["ResourceGroup"] = resourceGroupName;
+        if (_options.TenantResourceSuffix is { } tenantResourceSuffix)
+        {
+            // Persist an empty suffix too, so clearing the dialog field overrides a configured default.
+            azureSection["TenantResourceSuffix"] = tenantResourceSuffix;
+        }
 
         if (!string.IsNullOrEmpty(tenantId))
         {

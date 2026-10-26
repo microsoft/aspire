@@ -28,6 +28,7 @@
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
     <!-- AspireCliChannel identifies the acquisition channel the CLI binary was built for.
          For non-PR builds the value is one of: stable | staging | daily | local. For PR
          builds CI emits the per-PR hive label directly as `pr-<PR_NUMBER>` (no separate
@@ -183,11 +184,13 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)CliExitCodes.cs" Link="CliExitCodes.cs" />
+    <Compile Include="$(SharedDir)DcpKubeconfigData.cs" Link="Utils\DcpKubeconfigData.cs" />
     <Compile Include="$(SharedDir)TrayCliProtocol.cs" Link="TrayCliProtocol.cs" />
     <Compile Include="$(SharedDir)AppHostProfilePortGenerator.cs" Link="Utils\AppHostProfilePortGenerator.cs" />
     <Compile Include="$(SharedDir)AspireCliIdentityEnvVars.cs" Link="Acquisition\AspireCliIdentityEnvVars.cs" />
     <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="Utils\AssemblyVersionHelper.cs" />
     <Compile Include="$(SharedDir)Telemetry\*.cs" LinkBase="Telemetry\Shared" />
+    <Compile Include="$(SharedDir)FlexibleBooleanConverter.cs" Link="Configuration\FlexibleBooleanConverter.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)TerminalHostPayload.cs" Link="Layout\TerminalHostPayload.cs" />
     <Compile Include="$(SharedDir)WindowsTrayPayload.cs" Link="Layout\WindowsTrayPayload.cs" />
@@ -210,6 +213,8 @@
     <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="Utils\DashboardConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownContainerRuntimes.cs" Link="Utils\KnownContainerRuntimes.cs" />
     <Compile Include="$(SharedDir)ContainerRuntimeDetector.cs" Link="Utils\ContainerRuntimeDetector.cs" />
+    <Compile Include="$(SharedDir)ContainerRuntimeProbe.cs" Link="Utils\ContainerRuntimeProbe.cs" />
+    <Compile Include="$(SharedDir)WslcContainerRuntimeProbe.cs" Link="Utils\WslcContainerRuntimeProbe.cs" />
     <Compile Include="$(SharedDir)DashboardExitCodes.cs" Link="Utils\DashboardExitCodes.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownFormats.cs" Link="Utils\KnownFormats.cs" />
@@ -242,6 +247,7 @@
     <Compile Include="$(SharedDir)FormatHelpers.cs" Link="Utils\FormatHelpers.cs" />
     <Compile Include="$(SharedDir)DateFormatStringsHelpers.cs" Link="Utils\DateFormatStringsHelpers.cs" />
     <Compile Include="$(SharedDir)TimeProviderExtensions.cs" Link="Extensions\TimeProviderExtensions.cs" />
+    <Compile Include="$(SharedDir)UserSecrets\AspireSecretsPathHelper.cs" Link="Utils\AspireSecretsPathHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\UserSecretsPathHelper.cs" Link="Utils\UserSecretsPathHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\IsolatedUserSecretsHelper.cs" Link="Utils\IsolatedUserSecretsHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\SecretsStore.cs" Link="Secrets\SecretsStore.cs" />
@@ -320,7 +326,7 @@
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-32.png" Link="Mcp\Resources\aspire-32.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-48.png" Link="Mcp\Resources\aspire-48.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-64.png" Link="Mcp\Resources\aspire-64.png" />
-    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills-v0.0.3.tgz" LogicalName="aspire-skills.bundle.tgz">
+    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills-v0.0.4.tgz" LogicalName="aspire-skills.bundle.tgz">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills.metadata.json" LogicalName="aspire-skills.metadata.json">

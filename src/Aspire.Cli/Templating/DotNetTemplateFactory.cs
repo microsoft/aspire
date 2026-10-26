@@ -553,11 +553,11 @@ internal class DotNetTemplateFactory(
             // For channels that route Aspire packages to a custom feed, optionally create or update
             // a NuGet.config. If none exists in the current working directory, create one in the
             // newly created project's output directory. The `stable` channel is skipped inside
-            // PromptToCreateOrUpdateNuGetConfigAsync (ShouldCreateNuGetConfig) because its packages
+            // PromptToCreateNuGetConfigAsync (ShouldCreateNuGetConfig) because its packages
             // are on nuget.org and a <clear/>-based config would clobber the user's ambient sources.
-            if (!await TemplateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, selectedTemplateDetails.Channel, outputPath, cancellationToken, executionContext.NuGetServiceIndexOverride))
+            if (!await templateNuGetConfigService.CreateNuGetConfigForSourceOverrideAsync(inputs.Source, selectedTemplateDetails.Channel, outputPath, cancellationToken))
             {
-                await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selectedTemplateDetails.Channel, outputPath, cancellationToken);
+                await templateNuGetConfigService.PromptToCreateNuGetConfigAsync(selectedTemplateDetails.Channel, outputPath, cancellationToken);
             }
 
             interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));

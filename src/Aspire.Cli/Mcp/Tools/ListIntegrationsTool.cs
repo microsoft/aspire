@@ -4,6 +4,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using ModelContextProtocol.Protocol;
 using Semver;
@@ -108,7 +109,8 @@ internal sealed class ListIntegrationsTool(IPackagingService packagingService, C
             var distinctPackages = packagesWithParsedVersions
                 .GroupBy(p => p.PackageId)
                 .Select(g => g.OrderByDescending(p => p.ParsedVersion!, SemVersion.PrecedenceComparer).First())
-                .OrderBy(p => p.FriendlyName)
+                .OrderByDescending(p => PackageIdFilters.IsOfficialIntegrationPackageId(p.PackageId))
+                .ThenBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             var integrations = distinctPackages

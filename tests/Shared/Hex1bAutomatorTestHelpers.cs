@@ -489,13 +489,13 @@ internal static class Hex1bAutomatorTestHelpers
 
     /// <summary>
     /// Runs <c>aspire new</c> interactively up to and including accepting the chained agent init
-    /// confirmation prompt, landing on whatever prompt comes next (skill location or skill selection,
-    /// depending on whether <paramref name="extraArguments"/> includes <c>--skill-locations</c>).
+    /// confirmation prompt, landing on the next client, scope, or skill selection prompt,
+    /// depending on the options supplied in <paramref name="extraArguments"/>.
     /// Used by tests that need to drive the chained agent-init flow instead of declining it via
     /// <see cref="AspireNewAsync"/>. <paramref name="beforeAcceptingAgentInit"/> runs after the
-    /// project has been scaffolded but before the prompt is accepted, so callers can seed a
-    /// detectable agent environment (e.g. a <c>.vscode</c> folder in the CLI's working directory)
-    /// before the chained scan runs.
+    /// project has been scaffolded but before the prompt is accepted, so callers can seed agent
+    /// configuration or detection evidence in the selected project's directory before agent
+    /// initialization runs.
     /// </summary>
     internal static async Task AspireNewAcceptingAgentInitAsync(
         this Hex1bTerminalAutomator auto,
@@ -508,8 +508,8 @@ internal static class Hex1bAutomatorTestHelpers
     {
         await auto.RunAspireNewPromptsAsync(projectName, template, useRedisCache, useDevLocalhost, extraArguments);
 
-        // Agent init prompt: wait for it, then optionally let the caller seed a detectable agent
-        // environment before ACCEPTING it (type 'y') to reach the chained skill selection prompt.
+        // Wait for the agent init prompt, then let the caller seed the selected project's agent
+        // configuration before accepting it to reach the chained skill selection prompt.
         await auto.WaitUntilAsync(
             s => s.ContainsText("configure AI agent environments"),
             timeout: TimeSpan.FromSeconds(120),

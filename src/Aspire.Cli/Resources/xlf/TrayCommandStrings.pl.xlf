@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Started">
-        <source>The experimental Aspire tray is ready.</source>
-        <target state="new">The experimental Aspire tray is ready.</target>
+        <source>The Aspire Tray is starting.</source>
+        <target state="new">The Aspire Tray is starting.</target>
         <note />
       </trans-unit>
       <trans-unit id="StopDescription">

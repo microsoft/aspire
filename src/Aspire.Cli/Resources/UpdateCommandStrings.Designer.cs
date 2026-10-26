@@ -295,6 +295,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Update failed regenerating the SDK code for project {0}. Configuration changes were not persisted..
+        /// </summary>
+        internal static string FailedToRegenerateSdkAfterUpdateFormat {
+            get {
+                return ResourceManager.GetString("FailedToRegenerateSdkAfterUpdateFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Failed to restore packages for project {0} after update..
         /// </summary>
         internal static string FailedToRestoreAfterUpdateFormat {
@@ -777,6 +786,48 @@ namespace Aspire.Cli.Resources {
         internal static string YesOptionDescription {
             get {
                 return ResourceManager.GetString("YesOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string ChannelUpdateRequiresAmbientNuGetConfigurationFormat {
+            get {
+                return ResourceManager.GetString("ChannelUpdateRequiresAmbientNuGetConfigurationFormat", resourceCulture);
+            }
+        }
+
+        internal static string NuGetConfigOutsideHierarchyFormat {
+            get {
+                return ResourceManager.GetString("NuGetConfigOutsideHierarchyFormat", resourceCulture);
+            }
+        }
+
+        internal static string PreparingSdkForUpdateStatus {
+            get {
+                return ResourceManager.GetString("PreparingSdkForUpdateStatus", resourceCulture);
+            }
+        }
+
+        internal static string UpdateCandidateFileChangedFormat {
+            get {
+                return ResourceManager.GetString("UpdateCandidateFileChangedFormat", resourceCulture);
+            }
+        }
+
+        internal static string UpdateCandidatePolicyChangedFormat {
+            get {
+                return ResourceManager.GetString("UpdateCandidatePolicyChangedFormat", resourceCulture);
+            }
+        }
+
+        internal static string UpdateCandidateRollbackFailed {
+            get {
+                return ResourceManager.GetString("UpdateCandidateRollbackFailed", resourceCulture);
+            }
+        }
+
+        internal static string UpdateCandidateRollbackFileChangedFormat {
+            get {
+                return ResourceManager.GetString("UpdateCandidateRollbackFileChangedFormat", resourceCulture);
             }
         }
     }

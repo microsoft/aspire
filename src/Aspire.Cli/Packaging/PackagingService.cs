@@ -19,6 +19,11 @@ namespace Aspire.Cli.Packaging;
 
 internal interface IPackagingService
 {
+    /// <summary>
+    /// Gets the ambient NuGet channel without discovering CLI-identity or hive feeds.
+    /// </summary>
+    PackageChannel GetImplicitChannel();
+
     public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null);
 
     /// <summary>
@@ -129,6 +134,12 @@ internal class PackagingService : IPackagingService
     private int _stagingFeedDerivationFailedLogged;
     private int _stagingDiagnosticOverrideLogged;
 
+    public PackageChannel GetImplicitChannel()
+        => PackageChannel.CreateImplicitChannel(
+            _nuGetPackageCache, _features, _logger,
+            currentCliVersion: _executionContext.IdentitySdkVersion,
+            validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
+
     public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null)
     {
         // Emit the diagnostic-override warning up front so any invocation that has the overrides set
@@ -137,7 +148,7 @@ internal class PackagingService : IPackagingService
         WarnIfStagingDiagnosticOverridesActive();
 
         var nugetOrg = NuGetOrgUrl;
-        var defaultChannel = PackageChannel.CreateImplicitChannel(_nuGetPackageCache, _features, _logger, currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
+        var defaultChannel = GetImplicitChannel();
 
         var stableChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, new[]
         {

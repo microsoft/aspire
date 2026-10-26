@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Threading.Channels;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Utils;
@@ -81,7 +82,7 @@ internal interface IKubernetesService
     Task CleanupResourcesAsync(CancellationToken cancellationToken = default);
 }
 
-internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOptions<DcpOptions> dcpOptions, Locations locations, IConfiguration configuration) : IKubernetesService, IDisposable
+internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOptions<DcpOptions> dcpOptions, Locations locations, IConfiguration configuration, TimeProvider timeProvider) : IKubernetesService, IDisposable
 {
     // A pseudo-resource type used for log operations on the DCP execution document.
     private const string DcpExecutionResourceType = "DcpExecution";
@@ -94,6 +95,8 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
     private bool _kubernetesApiReady;
     private ResiliencePipeline? _resiliencePipeline;
     private bool _disposed;
+
+    internal TimeSpan WatchRestartInterval { get; set; } = TimeSpan.FromMinutes(5);
 
     public Task<T> GetAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default)
         where T : CustomResource, IKubernetesStaticMetadata
@@ -138,7 +141,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         // A timed-out write can still commit. Confirm ambiguous creates before retrying the same object.
         // Kubernetes explicitly allows operations to complete after a timeout:
         // https://github.com/kubernetes/apimachinery/blob/master/pkg/api/errors/errors.go
-        return await new ResiliencePipelineBuilder()
+        return await new ResiliencePipelineBuilder { TimeProvider = timeProvider }
             .AddTimeout(new TimeoutStrategyOptions
             {
                 Timeout = recoveryTimeout,
@@ -302,8 +305,14 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         ObjectDisposedException.ThrowIf(_disposed, this);
         var resourceType = GetResourceFor<T>();
 
-        // WatchAsync can become unresponsive if running long enough
-        // We use a helper to periodically restart the inner watch enumerable
+        using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var channel = Channel.CreateUnbounded<(WatchEventType, T)>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = true,
+            AllowSynchronousContinuations = false
+        });
+
         var innerWatchFactory = ((WatchEventType, T)? lastValue, CancellationToken restartCancellationToken) =>
         {
             return ExecuteWithRetry(
@@ -311,39 +320,58 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                 T.ObjectKind,
                 async (kubernetes, operationCancellationToken) =>
                 {
-                    var responseTask = string.IsNullOrEmpty(namespaceParameter)
-                        ? kubernetes.CustomObjects.ListClusterCustomObjectWithHttpMessagesAsync(
-                            GroupVersion.Group,
-                            GroupVersion.Version,
-                            resourceType,
-                            watch: true,
-                            cancellationToken: operationCancellationToken)
-                        : kubernetes.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(
-                            GroupVersion.Group,
-                            GroupVersion.Version,
-                            namespaceParameter,
-                            resourceType,
-                            watch: true,
-                            cancellationToken: operationCancellationToken);
-
-                    // KubernetesClient's lazy WatchAsync does not await the HTTP response until enumeration starts.
-                    await responseTask.ConfigureAwait(false);
-
-                    // TODO: KubernetesClient v18 marked WatchAsync extension method as obsolete.
-                    // The new pattern uses Watcher<T> directly, but requires significant refactoring.
-                    // This API still works in v18.x and will be updated in a future change.
-#pragma warning disable CS0618 // Type or member is obsolete
-                    return responseTask.WatchAsync<T, object>(onError: null, restartCancellationToken);
-#pragma warning restore CS0618 // Type or member is obsolete
+                    // The per-attempt budget covers response headers, not the lifetime of the
+                    // stream. Its owner uses the restart token after the attempt has completed.
+                    return await kubernetes.CreateWatchAsync<T>(
+                        GroupVersion.Group, GroupVersion.Version, resourceType,
+                        namespaceParameter, restartCancellationToken,
+                        operationCancellationToken).ConfigureAwait(false);
                 },
                 RetryOnConnectivityAndConflictErrors,
                 restartCancellationToken,
                 timeoutEachAttempt: true);
         };
 
-        await foreach (var item in PeriodicRestartAsyncEnumerable.CreateAsync(innerWatchFactory, restartInterval: TimeSpan.FromMinutes(5), cancellationToken: cancellationToken).ConfigureAwait(false))
+        // Drain DCP independently of resource handlers. Waiting on the resource watcher's output
+        // semaphore, lifecycle callbacks, or synchronous log subscribers must not leave HTTP/2
+        // flow control blocking DCP mutations. Keep every event, including intermediate states.
+        var watchTask = Task.Run(async () =>
         {
-            yield return item;
+            Exception? error = null;
+            try
+            {
+                await foreach (var item in PeriodicRestartAsyncEnumerable.CreateAsync(
+                    innerWatchFactory, WatchRestartInterval, watchCts.Token).ConfigureAwait(false))
+                {
+                    channel.Writer.TryWrite(item);
+                }
+            }
+            catch (OperationCanceledException) when (watchCts.IsCancellationRequested)
+            {
+                // The consumer canceled or disposed its enumeration.
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+            finally
+            {
+                channel.Writer.TryComplete(error);
+            }
+        }, CancellationToken.None);
+
+        try
+        {
+            await foreach (var item in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return item;
+            }
+        }
+        finally
+        {
+            await watchCts.CancelAsync().ConfigureAwait(false);
+            await watchTask.ConfigureAwait(false);
         }
     }
 
@@ -457,7 +485,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             return;
         }
 
-        var retryPipeline = new ResiliencePipelineBuilder<ApiServerExecution>()
+        var retryPipeline = new ResiliencePipelineBuilder<ApiServerExecution> { TimeProvider = timeProvider }
             .AddRetry(new RetryStrategyOptions<ApiServerExecution>()
             {
                 ShouldHandle = new PredicateBuilder<ApiServerExecution>()
@@ -613,7 +641,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         }
     }
 
-    private static DateTimeOffset? GetCreateRetryAfter(Exception exception, TimeSpan recoveryTimeout)
+    private DateTimeOffset? GetCreateRetryAfter(Exception exception, TimeSpan recoveryTimeout)
     {
         // Retry-After is either a delay in seconds ("5") or an HTTP date
         // ("Mon, 05 Oct 2026 18:00:00 GMT"). Keep a deadline so confirmation time counts toward the wait.
@@ -632,13 +660,13 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             // very large delta-seconds values from overflowing DateTimeOffset.
             var delay = retryAfter.Delta!.Value;
 
-            return DateTimeOffset.UtcNow + (delay > recoveryTimeout ? recoveryTimeout : delay);
+            return timeProvider.GetUtcNow() + (delay > recoveryTimeout ? recoveryTimeout : delay);
         }
 
         return null;
     }
 
-    private static async Task<TimeSpan> DelayCreateRetryAsync(
+    private async Task<TimeSpan> DelayCreateRetryAsync(
         DateTimeOffset? retryAfter,
         TimeSpan retryDelay,
         TimeSpan recoveryTimeout,
@@ -647,10 +675,10 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         // Full jitter avoids synchronizing concurrent creates; Retry-After is a server-imposed minimum.
         // https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
         var delay = retryAfter is { } deadline
-            ? TimeSpan.FromTicks(Math.Max((deadline - DateTimeOffset.UtcNow).Ticks, 0))
+            ? TimeSpan.FromTicks(Math.Max((deadline - timeProvider.GetUtcNow()).Ticks, 0))
             : TimeSpan.FromMilliseconds(Random.Shared.NextDouble() * retryDelay.TotalMilliseconds);
         // A longer delay cannot lead to another attempt, and may exceed Task.Delay's supported range.
-        await Task.Delay(delay > recoveryTimeout ? recoveryTimeout : delay, cancellationToken).ConfigureAwait(false);
+        await Task.Delay(delay > recoveryTimeout ? recoveryTimeout : delay, timeProvider, cancellationToken).ConfigureAwait(false);
 
         return TimeSpan.FromMilliseconds(Math.Min(retryDelay.TotalMilliseconds * 2, 5000));
     }
@@ -705,8 +733,8 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         // Regular API calls have one total retry budget. Watches instead retry a stalled connection
         // after each timeout until their outer periodic-restart token is canceled.
         return timeoutEachAttempt
-            ? new ResiliencePipelineBuilder().AddRetry(retryOptions).AddTimeout(timeoutOptions).Build()
-            : new ResiliencePipelineBuilder().AddTimeout(timeoutOptions).AddRetry(retryOptions).Build();
+            ? new ResiliencePipelineBuilder { TimeProvider = timeProvider }.AddRetry(retryOptions).AddTimeout(timeoutOptions).Build()
+            : new ResiliencePipelineBuilder { TimeProvider = timeProvider }.AddTimeout(timeoutOptions).AddRetry(retryOptions).Build();
     }
 
     private ResiliencePipeline CreateReadKubeconfigResiliencePipeline()
@@ -732,7 +760,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                 }
             };
 
-            _resiliencePipeline = new ResiliencePipelineBuilder().AddRetry(configurationReadRetry).Build();
+            _resiliencePipeline = new ResiliencePipelineBuilder { TimeProvider = timeProvider }.AddRetry(configurationReadRetry).Build();
         }
 
         return _resiliencePipeline;
@@ -781,7 +809,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     var fileInfo = new FileInfo(locations.DcpKubeconfigPath);
                     while (!fileInfo.Exists)
                     {
-                        await Task.Delay(TimeSpan.FromMilliseconds(dcpOptions.Value.KubernetesConfigReadRetryIntervalMilliseconds), cancellationToken).ConfigureAwait(false);
+                        await Task.Delay(TimeSpan.FromMilliseconds(dcpOptions.Value.KubernetesConfigReadRetryIntervalMilliseconds), timeProvider, cancellationToken).ConfigureAwait(false);
                         fileInfo = new FileInfo(locations.DcpKubeconfigPath);
                     }
                     fileWaitStopwatch.Stop();

@@ -1,0 +1,23 @@
+﻿{
+  "preference": true,
+  "mcpServers": {
+    "aspire": {
+      "command": "pinned-aspire",
+      "args": [
+        "--pinned"
+      ]
+    }
+  },
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "aspire": {
+      "type": "local",
+      "command": [
+        "aspire",
+        "agent",
+        "mcp"
+      ],
+      "enabled": true
+    }
+  }
+}

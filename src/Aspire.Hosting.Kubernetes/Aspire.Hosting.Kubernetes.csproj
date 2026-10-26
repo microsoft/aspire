@@ -3,7 +3,8 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <!-- No stable package has shipped yet to use as a compatibility baseline. -->
+    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
     <PackageTags>aspire hosting kubernetes</PackageTags>
     <Description>Kubernetes publishing for Aspire.</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -20,6 +21,7 @@
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessUtil.cs" LinkBase="Process" />
     <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)DashboardImage.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)KnownConfigNames.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)PublishingContextUtils.cs" LinkBase="Shared" />

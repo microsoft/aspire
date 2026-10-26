@@ -167,6 +167,11 @@
         <target state="needs-review-translation">Origine NuGet da usare per l'integrazione.</target>
         <note />
       </trans-unit>
+      <trans-unit id="SourceWithCredentialsNotSupported">
+        <source>The --source URL includes credentials, a query string, or a fragment. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
+        <target state="new">The --source URL includes credentials, a query string, or a fragment. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SpecifiedVersionNotFoundForPackage">
         <source>The requested version '{1}' was not found for package '{0}'.</source>
         <target state="new">The requested version '{1}' was not found for package '{0}'.</target>

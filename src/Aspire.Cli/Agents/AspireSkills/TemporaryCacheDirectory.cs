@@ -4,7 +4,7 @@
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Owns a leased temporary directory under the Aspire skills cache root.
+/// Owns a leased temporary directory under a CLI-managed cache root.
 /// </summary>
 internal sealed class TemporaryCacheDirectory : IDisposable
 {
@@ -38,20 +38,25 @@ internal sealed class TemporaryCacheDirectory : IDisposable
         Action<string> deleteFile)
     {
         var fullName = Path.Combine(parentDirectory, $".{prefix}-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(fullName);
         var leasePath = GetLeasePath(fullName);
+        FileStream? lease = null;
 
         try
         {
+            // Acquire the sibling lease before making the directory visible. A concurrent stale-directory
+            // sweep can therefore never claim and remove a directory between its creation and lease acquisition.
+            lease = OpenLease(fullName);
+            Directory.CreateDirectory(fullName);
             return new TemporaryCacheDirectory(
                 fullName,
                 leasePath,
-                OpenLease(fullName),
+                lease,
                 deleteDirectory,
                 deleteFile);
         }
         catch
         {
+            lease?.Dispose();
             deleteDirectory(fullName);
             deleteFile(leasePath);
             throw;

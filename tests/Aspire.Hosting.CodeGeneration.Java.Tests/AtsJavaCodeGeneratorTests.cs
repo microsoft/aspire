@@ -2679,10 +2679,10 @@ public class AtsJavaCodeGeneratorTests
         Assert.Contains($"public String get{expectedAccessorSuffix}() {{ return {expectedField}; }}", generated);
         Assert.Contains($"public void set{expectedAccessorSuffix}(String value) {{ this.{expectedField} = value; }}", generated);
 
-        // The transport key stays the original property name: escaping is a Java source concern and
-        // must not change the shape of the wire payload the .NET host reads and writes.
-        Assert.Contains($"map.get(\"{propertyName}\")", generated);
-        Assert.Contains($"map.put(\"{propertyName}\", AspireClient.serializeValue({expectedField}))", generated);
+        // Java keyword escaping must not leak into the host's camel-case JSON property names.
+        var wireName = System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(propertyName);
+        Assert.Contains($"map.get(\"{wireName}\")", generated);
+        Assert.Contains($"map.put(\"{wireName}\", AspireClient.serializeValue({expectedField}))", generated);
     }
 
     [Fact]
@@ -2743,7 +2743,7 @@ public class AtsJavaCodeGeneratorTests
             public class TypedArrayProbe {
                 public static void main(String[] args) {
                     var value = KeywordProbe.fromMap(Map.of(
-                        "Matrix",
+                        "matrix",
                         List.of(List.of("one", "two"), List.of("three"))));
                     String[][] matrix = value.getMatrix();
 
@@ -3167,8 +3167,8 @@ public class AtsJavaCodeGeneratorTests
                     callbackCall.get(2, TimeUnit.SECONDS);
 
                     Map<String, Object> dtoMap = new HashMap<>();
-                    dtoMap.put("Numbers", Arrays.asList(1.0, null, 2.5));
-                    dtoMap.put("Flags", List.of(Arrays.asList(true, null), List.of(false)));
+                    dtoMap.put("numbers", Arrays.asList(1.0, null, 2.5));
+                    dtoMap.put("flags", List.of(Arrays.asList(true, null), List.of(false)));
                     var dto = ArrayDto.fromMap(dtoMap);
                     assertNumbers(dto.getNumbers());
                     assertFlags(dto.getFlags());
@@ -3343,11 +3343,11 @@ public class AtsJavaCodeGeneratorTests
                     var options = new CallbackOptions();
                     options.setCallback(context -> context.setValue("after"));
 
-                    var callback = (Function<Object, Object>) options.toMap().get("Callback");
-                    var result = (Map<String, Object>) callback.apply(Map.of("Value", "before"));
+                    var callback = (Function<Object, Object>) options.toMap().get("callback");
+                    var result = (Map<String, Object>) callback.apply(Map.of("value", "before"));
                     var serializedResult = (Map<String, Object>) AspireClient.serializeValue(result);
                     var context = (Map<String, Object>) serializedResult.get("p0");
-                    if (serializedResult.size() != 1 || !"after".equals(context.get("Value"))) {
+                    if (serializedResult.size() != 1 || !"after".equals(context.get("value"))) {
                         throw new IllegalStateException("unexpected callback result: " + serializedResult);
                     }
 
@@ -3456,11 +3456,11 @@ public class AtsJavaCodeGeneratorTests
                     writeMessage(serverOutput,
                         "{\"jsonrpc\":\"2.0\",\"id\":9001,\"method\":\"invokeCallback\","
                             + "\"params\":{\"callbackId\":\"" + callbackId + "\","
-                            + "\"args\":{\"p0\":{\"Value\":\"before\"}}}}" );
+                            + "\"args\":{\"p0\":{\"value\":\"before\"}}}}" );
 
                     String callbackResponse = readMessage(serverInput);
                     if (!callbackResponse.contains("\"id\":9001")
-                        || !callbackResponse.contains("\"result\":{\"p0\":{\"Value\":\"after\"}}") ) {
+                        || !callbackResponse.contains("\"result\":{\"p0\":{\"value\":\"after\"}}") ) {
                         throw new IllegalStateException("callback did not return mutated arguments: " + callbackResponse);
                     }
 

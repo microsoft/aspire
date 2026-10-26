@@ -25,6 +25,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
+using Aspire.Shared.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
@@ -85,11 +86,15 @@ internal static class CliTestHelper
         var services = new ServiceCollection();
 
         var configBuilder = new ConfigurationBuilder();
+        services.AddSingleton<ConfigSourceService>();
+        services.AddSingleton<IConfigSourceGitClient, TestConfigSourceGitClient>();
+        services.AddSingleton<IInternalMicrosoftDetector, TestConfigSourceDetector>();
 
         var configurationValues = new Dictionary<string, string?>();
 
         // Populate feature flag configuration in in-memory collection.
-        options.ConfigurationCallback += config => {
+        options.ConfigurationCallback += config =>
+        {
             foreach (var featureFlag in options.EnabledFeatures)
             {
                 config[$"{KnownFeatures.FeaturePrefix}:{featureFlag}"] = "true";
@@ -112,7 +117,7 @@ internal static class CliTestHelper
 
         var globalSettingsFilePath = Path.Combine(options.WorkingDirectory.FullName, ".aspire", "settings.global.json");
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
-        ConfigurationHelper.RegisterSettingsFiles(configBuilder, options.WorkingDirectory, globalSettingsFile);
+        ConfigurationHelper.RegisterSettingsFiles(configBuilder, options.WorkingDirectory, globalSettingsFile, persistNormalization: true);
 
         var configuration = configBuilder.Build();
         services.AddSingleton<IConfiguration>(configuration);
@@ -351,7 +356,7 @@ internal static class CliTestHelper
         services.AddTransient<SecretListCommand>();
         services.AddTransient<SecretPathCommand>();
         services.AddTransient<SecretDeleteCommand>();
-        services.AddTransient<SecretStoreResolver>();
+        services.AddTransient<AspireSecretsStoreResolver>();
 #if DEBUG
         services.AddTransient<RenderCommand>();
 #endif
@@ -495,7 +500,7 @@ internal sealed class CliServiceCollectionTestOptions
             ?? new AppHostCandidateFinder(gitRepository, environment, profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        return new ProjectLocator(logger, executionContext, environment, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, appHostCandidateFinder, telemetry, configuration);
+        return new ProjectLocator(logger, executionContext, environment, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, appHostCandidateFinder, telemetry, configuration, serviceProvider.GetRequiredService<ConfigSourceService>());
     }
 
     public ISolutionLocator CreateDefaultSolutionLocatorFactory(IServiceProvider serviceProvider)
@@ -518,7 +523,7 @@ internal sealed class CliServiceCollectionTestOptions
         var cache = serviceProvider.GetRequiredService<IMemoryCache>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         var fallbackParser = serviceProvider.GetRequiredService<FallbackProjectParser>();
-        return new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        return new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, serviceProvider.GetRequiredService<BundleNuGetService>());
     };
 
     public Func<IServiceProvider, ICliHostEnvironment> CliHostEnvironmentFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -599,7 +604,8 @@ internal sealed class CliServiceCollectionTestOptions
         var cache = serviceProvider.GetRequiredService<IMemoryCache>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var features = serviceProvider.GetRequiredService<IFeatures>();
-        return new NuGetPackageCache(cliRunner, cache, telemetry, features);
+        var nuGetService = serviceProvider.GetRequiredService<BundleNuGetService>();
+        return new NuGetPackageCache(cliRunner, cache, telemetry, features, nuGetService);
     };
 
     public Func<IServiceProvider, INuGetClient> NuGetClientFactory { get; set; } = _ => new FakeNuGetClient();

@@ -853,15 +853,18 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.True(filter.IsExcluded("pyrightconfig.json"));
 
         // Dev/AzDO-only inputs with no regular GitHub PR CI consumer.
-        Assert.True(filter.IsExcluded(".config/dotnet-tools.json"));
         Assert.True(filter.IsExcluded("eng/Version.Details.xml"));
+
+        // Terminal package-pairing checks consume these manifests at runtime.
+        Assert.False(filter.IsExcluded(".config/dotnet-tools.json"));
+        Assert.False(filter.IsExcluded(".mcp.json"));
 
         // Generated API/ATS baselines under src/*/api/: no PR CI is needed when these are the only
         // changed files.
         Assert.True(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.cs"));
         Assert.True(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.ats.txt"));
         Assert.True(filter.IsExcluded("src/Aspire.Hosting.Redis/api/Aspire.Hosting.Redis.cs"));
-        Assert.True(filter.IsExcluded("src/Components/Aspire.Azure.AI.Inference/api/Aspire.Azure.AI.Inference.cs"));
+        Assert.True(filter.IsExcluded("src/Components/Aspire.OpenAI/api/Aspire.OpenAI.cs"));
         Assert.False(filter.IsExcluded("src/Aspire.Hosting/api/Helper.cs"));
         Assert.False(filter.IsExcluded("src/Aspire.Dashboard/api/ApiAuthenticationHandler.cs"));
         Assert.False(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.tscompat.suppression.txt"));

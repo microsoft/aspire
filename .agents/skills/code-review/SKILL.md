@@ -169,8 +169,10 @@ Flag concrete selection gaps:
 Selector behavior changes must keep the action, workflow gates, tool, map,
 tests, and canonical documentation synchronized. Require real-map tests for
 curated routing changes: a representative positive per distinct routing
-boundary, focused negatives for deliberately excluded consumers, and a
-structural assertion for consumer lists duplicated across rule types. Do not
+boundary and focused negatives for deliberately excluded consumers. Audit
+intentionally duplicated consumer lists for consistency and exercise selector
+behavior through each routing mechanism, rather than asserting equality of
+configuration lists. Do not
 request an acceptance case per consumer; instead audit the complete curated
 list against the consuming workflow. Treat a widened or relaxed negative
 expectation as a finding until the workflow's artifacts and execution lane
@@ -178,6 +180,13 @@ justify it. Require focused synthetic-map tests for engine or CLI behavior.
 See `docs/ci/test-trigger-map.md` for the complete contract.
 
 ### Test Coverage Review
+
+For `tests/Infrastructure.Tests/**`, apply
+`.github/instructions/infrastructure-tests.instructions.md`. A matching test
+class is not proof of coverage: identify the production entry point it executes
+and the observable regression its assertions catch. Source-text checks,
+extracted snippets, and test-owned reimplementations do not establish coverage
+of the production path.
 
 Every review must evaluate whether the PR has appropriate tests for the type of behavior being changed. Do not require tests for purely mechanical refactors, comments, or documentation-only changes, but do flag missing or insufficient coverage when production behavior changes and there is no explicit, convincing justification in the PR. Regression coverage is especially important: bug fixes and behavior changes should include tests that would have failed before the fix, not just broad happy-path coverage or regenerated snapshots.
 

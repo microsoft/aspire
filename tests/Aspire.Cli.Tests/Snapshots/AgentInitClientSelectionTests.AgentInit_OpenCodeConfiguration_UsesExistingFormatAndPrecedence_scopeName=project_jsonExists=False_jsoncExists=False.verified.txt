@@ -1,0 +1,17 @@
+﻿{
+  opencode.jsonc:
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "aspire": {
+      "type": "local",
+      "command": [
+        "aspire",
+        "agent",
+        "mcp"
+      ],
+      "enabled": true
+    }
+  }
+}
+}

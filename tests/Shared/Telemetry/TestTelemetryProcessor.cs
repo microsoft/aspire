@@ -11,7 +11,10 @@ internal sealed class TestTelemetryProcessor<T> : BaseProcessor<T> where T : cla
 
     public Func<int, bool> ForceFlushCallback { get; set; } = static _ => true;
     public Func<int, bool> ShutdownCallback { get; set; } = static _ => true;
+    public Action<T>? EndCallback { get; set; }
     public int DisposeCount => Volatile.Read(ref _disposeCount);
+
+    public override void OnEnd(T data) => EndCallback?.Invoke(data);
 
     protected override bool OnForceFlush(int timeoutMilliseconds) => ForceFlushCallback(timeoutMilliseconds);
 

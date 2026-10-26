@@ -133,6 +133,31 @@ dotnet test tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj
 dotnet test tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj -- --filter-class "Aspire.Cli.EndToEnd.Tests.AspireNewCommandTests"
 ```
 
+### KinD ACME External Account Binding
+
+`KubernetesDeployWithCertManagerTests` runs the same scenario with C# and TypeScript
+AppHosts. Each test creates an isolated KinD cluster, uses `aspire deploy` to install
+cert-manager and configure three issuers, and starts a private Pebble ACME server that
+requires EAB. It checks successful registration, rejection of an incorrect HMAC,
+account-key preservation on redeployment, and issuer/EAB Secret cleanup through
+`aspire destroy`. A test-only admission policy rejects deletion of one issuer,
+verifying that both managed EAB Secrets are still removed while the ACME account
+key is retained. The other issuer has EAB removed before redeployment and is deleted
+normally. A foreign Secret for an issuer without EAB is retained.
+The fixture uses synthetic credentials and test-only TLS trust;
+no Azure subscription or commercial ACME account is needed. This verifies account
+registration, not public certificate issuance.
+
+Run both cases against a freshly built Linux CLI/package archive:
+
+```bash
+ASPIRE_E2E_ARCHIVE=/path/to/aspire-linux.tar.gz \
+  dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+  --no-launch-profile -- \
+  --filter-class "*.KubernetesDeployWithCertManagerTests" \
+  --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+```
+
 ## Requirements
 
 - **Linux only**: Hex1b requires a Linux terminal environment. Tests are skipped on Windows and macOS.

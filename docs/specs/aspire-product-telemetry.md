@@ -15,6 +15,7 @@ Each application has a recording service and a telemetry manager:
 | Responsibility | Implementation |
 | --- | --- |
 | Shared activity creation, structured event recording, and property filtering | [AspireTelemetryBase](../../src/Shared/Telemetry/AspireTelemetryBase.cs) |
+| Shared activity and log-record default-metadata enrichment | [ActivityTagEnrichmentProcessor](../../src/Shared/Telemetry/ActivityTagEnrichmentProcessor.cs), [LogRecordTagEnrichmentProcessor](../../src/Shared/Telemetry/LogRecordTagEnrichmentProcessor.cs) |
 | CLI instrumentation and resolved machine, version, environment, and coding-agent metadata | [AspireCliTelemetry](../../src/Aspire.Cli/Telemetry/AspireCliTelemetry.cs) |
 | Dashboard instrumentation and classified-property policy | [DashboardTelemetryService](../../src/Aspire.Dashboard/Telemetry/DashboardTelemetryService.cs) |
 | CLI enablement, initialization, and shutdown | [TelemetryManager](../../src/Aspire.Cli/Telemetry/TelemetryManager.cs) |
@@ -66,9 +67,11 @@ Events and errors do not create activities or add activity events. Logs use only
 
 Default metadata and event properties pass through the application's property policy before logging. String collections admitted by that policy are serialized with `string.Join(",")`; individual values are not escaped. The Dashboard policy excludes collection values. Activity tags retain their typed values.
 
+Both product log pipelines also register `LogRecordTagEnrichmentProcessor` before their exporters. It adds missing default metadata after applying the application's property policy, preserving existing event properties and avoiding duplicate attributes. It does not import application logs or scopes. Both products calculate their default metadata once in a background `TelemetryTagsSource`; recorders and processors wait for it when necessary.
+
 ### Operations
 
-Reported operations use activities whose duration ends when the caller disposes them. The CLI records command and operation spans, including `aspire/cli/main` for ordinary invocations. CLI spans are enriched with currently resolved tags by `CliTagEnrichmentProcessor.OnEnd`, before the Azure export processor queues them.
+Reported operations use activities whose duration ends when the caller disposes them. The CLI records command and operation spans, including `aspire/cli/main` for ordinary invocations. Both applications register the shared `ActivityTagEnrichmentProcessor.OnEnd` before export to apply default metadata through their respective property policies. CLI metadata is resolved from its background calculation; detector-health spans continue to exclude raw Microsoft-internal alias and domain.
 
 The Dashboard uses the following events and operation:
 
@@ -83,7 +86,19 @@ The Dashboard uses the following events and operation:
 
 Component lifecycle events are recorded when they occur, with any available ambient trace correlation. [DashboardCommandExecutor](../../src/Aspire.Dashboard/Model/DashboardCommandExecutor.cs) calls `StartOperation`, sets the result through `SetOperationStatus`, and disposes the activity after command execution, before the UI recovery delay.
 
-Startup events record success, duration, failure type, and launch context. The context is read from `DashboardOptions.LaunchContext`, configured by `Dashboard:LaunchContext` or `DASHBOARD__LAUNCHCONTEXT`. Only `apphost`, `cli`, `container`, and `unknown` are reported; other values map to `unknown`. Startup failure recording uses the bound options snapshot so configuration validation failures can still report their launch context.
+Startup events record success, duration in milliseconds, failure type, launch context, and configured persistence mode. The context is read from `DashboardOptions.LaunchContext`, configured by `Dashboard:LaunchContext` or `DASHBOARD__LAUNCHCONTEXT`. Only `apphost`, `cli`, `container`, and `unknown` are reported; other values map to `unknown`. Persistence mode is read from `DashboardOptions.Data.PersistenceMode`, configured by `Dashboard:Data:PersistenceMode` or `ASPIRE_DASHBOARD_PERSISTENCE_MODE`, and reported as `none`, `run`, or `resume` in `aspire.dashboard.startup.persistence_mode`. Unparseable input and undefined persistence mode values, such as numeric `999`, are reported as `unknown` to keep the telemetry dimension bounded. A failed environment-variable parse reports `unknown` even when the options retain a default or previously configured enum value. Startup failure recording uses the bound options snapshot so configuration validation failures can still report their launch context and configured persistence mode.
+
+All Dashboard product events and operations report `deployment.environment.name` as `ci` or `local`, matching the CLI. The Dashboard and CLI share CI detection based on known process environment variables, including `CI`, `GITHUB_ACTIONS`, and `TF_BUILD`. Detection does not read application configuration or report the environment variable values.
+
+All Dashboard product events and operations also report the standard `os.name`, `os.type`, and `os.version` attributes using OS detection shared with the CLI. Known OS names are `Windows`, `Linux`, and `macOS`; their types are `windows`, `linux`, and `darwin`. Other platforms use the runtime OS description as their name and `unknown` as their type. OS version uses `Environment.OSVersion.Version.ToString()`. These values are default metadata, not duplicated in startup-specific properties.
+
+Both products use shared machine-information providers to report `machine.mac_address_hash` and a persisted `machine.device_id` when available. They use the same OS-specific DeveloperTools device-ID storage, so processes running as the same user on the same machine reuse the stored ID.
+
+The shared Microsoft-internal detector reports whether the current user or machine appears internal, using the CLI's existing staged OS/account and GitHub-membership probes. Dashboard defaults use `aspire.dashboard.is_microsoft_internal` and, when detected and available, `aspire.dashboard.microsoft_internal_source`. Alias and domain are reported as `aspire.dashboard.microsoft_internal_alias` and `aspire.dashboard.microsoft_internal_domain` only outside CI; the CLI retains its corresponding `aspire.cli.*` names. Detection is skipped when product reporting is disabled.
+
+The detector keeps its existing six-hour cache schema and CI-mode validation. Dashboard detection uses `<resolved default Aspire home>/cache/internal-microsoft/detector.json`, honoring `ASPIRE_HOME`; the CLI uses its resolved CLI cache directory. Standard installations share the cache when running as the same user, while custom installation roots or separate container users can use different caches. Cache writes are atomic but simultaneous refreshes are not serialized across processes.
+
+Dashboard attribute names follow [OpenTelemetry naming conventions](https://opentelemetry.io/docs/specs/semconv/general/naming/): lowercase namespaces separated by dots and multi-word components separated by underscores. Standard attributes are used where applicable, including `exception.type` and `process.runtime.version`. Dashboard-specific attributes use the `aspire.dashboard.*` namespace, such as `aspire.dashboard.component.id`, `aspire.dashboard.console_logs.show_timestamp`, and `aspire.dashboard.startup.duration_ms`. Version metadata uses `aspire.dashboard.version` on events and operations, matching the CLI's `aspire.cli.version`; the OpenTelemetry resource retains standard `service.version`. These names replace the earlier PascalCase `Aspire.Dashboard.*` keys; event names and property filtering are unchanged.
 
 Dashboard recording APIs accept classified properties. Activity property setters also apply the shared property policy, but direct mutation of a returned `Activity` bypasses that policy. Instrumentation must use the recording service's property APIs.
 
@@ -91,7 +106,7 @@ Dashboard recording APIs accept classified properties. Activity property setters
 
 ### Dashboard
 
-The Dashboard admits known property keys and excludes PII-classified values, resource names, raw browser user agents, exception messages, and stack traces. It reports bounded component, command, and UI metadata, plus Dashboard version/build information and exception type/runtime version.
+The Dashboard admits known property keys and excludes PII-classified instrumentation values, resource names, raw browser user agents, exception messages, and stack traces. It reports bounded component, command, and UI metadata, Dashboard version/build information, exception type/runtime version, and the common environment/machine defaults above. Detected Microsoft-internal alias and domain are explicitly allowed as trusted detector-supplied defaults outside CI; classified event properties cannot override those defaults.
 
 The property policy enforces:
 
@@ -176,6 +191,8 @@ Dashboard shutdown retains its service-style policy, even when the host's cancel
 [AgentTelemetryCatalog](../../src/Aspire.Cli/Agents/Hooks/AgentTelemetryCatalog.cs) obtains skill and reference inventories from the embedded bundle's `skill-manifest.json`, without extracting files. The MCP tool inventory comes from the embedded canonical hook. Mutable installed scripts, arbitrary local skills, and non-reference assets do not extend the reporting catalog.
 
 The classifier produces event type, client name, timestamp, and the applicable skill, tool, or skills-relative reference identifier. It includes a session ID only when the incoming value is a GUID. It does not export the raw hook payload, prompts, tool arguments, file contents, or absolute paths.
+
+Client attribution checks `AI_AGENT=github_copilot_app_agent` first and reports `copilot-app`, even when `COPILOT_CLI` is also set. Without that marker, the classifier preserves Copilot CLI, VS Code, and Claude Code detection from the environment and hook payload.
 
 ### Input bounds and recording
 

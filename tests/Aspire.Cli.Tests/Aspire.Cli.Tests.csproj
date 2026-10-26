@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <Using Include="Aspire.Tests.Utils" />
+    <None Update="TestServices\NuGetTestSettings.config" CopyToOutputDirectory="PreserveNewest" TargetPath="NuGetTestSettings.config" />
   </ItemGroup>
 
   <!-- The CLI bootstrap reads AspireCliChannel from typeof(Aspire.Cli.Program).Assembly — the
@@ -39,6 +40,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Cli\Aspire.Cli.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Managed\Aspire.Managed.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
   </ItemGroup>
 
@@ -59,6 +61,7 @@
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)Logging\*.cs" LinkBase="shared/Logging" />
     <Compile Include="$(TestsSharedDir)Telemetry\TestTelemetryProcessor.cs" LinkBase="shared/Telemetry" />
+    <Compile Include="$(TestsSharedDir)Telemetry\TestTelemetryMetadataProviders.cs" LinkBase="shared/Telemetry" />
     <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" Link="shared/TestModuleInitializer.cs" />
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared\TemporaryWorkspace.cs" />

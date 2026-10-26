@@ -37,6 +37,46 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public partial class MetricsTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(AspireDataType.StructuredLogs)]
+    [InlineData(AspireDataType.Traces)]
+    [InlineData(AspireDataType.Metrics)]
+    public async Task EmptyState_HelpDisappearsAfterAnySignalAndStaysHiddenAfterClear(AspireDataType signal)
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var cut = Render<Metrics>(parameters => parameters.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".telemetry-help-button")));
+        Assert.Equal(Resources.Metrics.MetricsSelectAResource, cut.Find(".telemetry-empty-content > div").TextContent.Trim());
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await TelemetryHelpSetupHelpers.AddSignalAsync(repository, signal);
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".telemetry-help-button")));
+        await repository.ClearStructuredLogsAsync();
+        await repository.ClearTracesAsync();
+        await repository.ClearMetricsAsync();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".telemetry-empty-content"));
+            Assert.Empty(cut.FindAll(".telemetry-help-button"));
+        });
+    }
+
+    [Fact]
+    public async Task EmptyState_SelectedResourceWithoutMetrics_ShowsHelp()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        await Services.GetRequiredService<SqliteTelemetryRepository>().AddMetricsAsync(new(),
+            [new ResourceMetrics { Resource = CreateResource("test") }]);
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var cut = Render<Metrics>(parameters => parameters.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".telemetry-help-button")));
+        Assert.Equal(Resources.Metrics.MetricsNoMetricsForResource, cut.Find(".telemetry-empty-content > div").TextContent.Trim());
+    }
+
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     [Theory]

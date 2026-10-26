@@ -106,9 +106,11 @@ Selector behavior changes should include focused coverage in
 `tests/Infrastructure.Tests/TestTriggerMap/`. Audit the complete curated
 consumer and path lists whenever a PR changes routing or runtime consumption;
 tests are regression guards, not a second copy of that audit. Cover each
-distinct heavy-target routing boundary with a representative positive, record
-deliberate exclusions in focused negative cases, and add a structural assertion
-when the same consumer list is intentionally duplicated across rule types.
+distinct heavy-target routing boundary with a representative positive and record
+deliberate exclusions in focused negative cases. When the same consumer list is
+intentionally duplicated across rule types, audit the lists for consistency and
+exercise the selector behavior through each route rather than asserting equality
+of the configuration lists.
 Treat a relaxed negative expectation as a signal to verify the consuming
 workflow's artifacts and execution lane. See `docs/ci/test-trigger-map.md` for
 the map vocabulary and maintenance guidance.
@@ -675,4 +677,5 @@ Additional instructions are automatically applied when editing files matching sp
 | `src/Components/**/README.md` | `.github/instructions/client-readme.instructions.md` - Client integration READMEs |
 | `tools/QuarantineTools/*` | `.github/instructions/quarantine.instructions.md` - QuarantineTools usage |
 | `tests/**/*.cs` | `.github/instructions/test-review-guidelines.instructions.md` - Flaky test patterns and test review guidelines |
+| `tests/Infrastructure.Tests/**` | `.github/instructions/infrastructure-tests.instructions.md` - Behavioral infrastructure tests and build-time validation |
 | `eng/scripts/get-aspire-cli*.sh`, `eng/scripts/get-aspire-cli*.ps1` | `.github/instructions/acquisition-tests.instructions.md` - CLI acquisition script tests |

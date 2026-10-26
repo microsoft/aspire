@@ -1254,7 +1254,9 @@ internal sealed class PythonModuleBuilder
             def register_callback(
                 self,
                 callback: typing.Callable[..., typing.Any] | None,
-                parameter_type_ids: typing.Sequence[str | None] | None = None
+                parameter_type_ids: typing.Sequence[str | None] | None = None,
+                *,
+                dto_writeback: bool = False
             ) -> str | None:
                 '''
                 Register a callback function that can be invoked from the .NET side.
@@ -1293,7 +1295,11 @@ internal sealed class PythonModuleBuilder
                                 break
 
                         if arg_array:
-                            return callback(*arg_array)
+                            result = callback(*arg_array)
+                            # Void DTO callbacks return mutated positional arguments, for example
+                            # {"p0": {"minCount": 2, "osSku": "AzureLinux"}}, rather than Python's None.
+                            # Opt in only for these callbacks so nullable callback results stay null.
+                            return args if dto_writeback else result
 
                     # No args or null
                     if args is None:
@@ -1714,7 +1720,7 @@ internal sealed class PythonModuleBuilder
                         return False
                     if not _validate_type(value, value_type):
                         return False
-            elif typing.get_origin(expected_type) is typing.Callable:
+            elif typing.get_origin(expected_type) is typing.get_origin(typing.Callable):
                 return callable(arg)
             elif isinstance(arg, (tuple, typing.Mapping)):
                 return False
@@ -1872,29 +1878,29 @@ internal sealed class PythonModuleBuilder
             # Default args and project_directory if not provided
             effective_options = options or CreateBuilderOptions()
             if args is not None:
-                effective_options['Args'] = args
-            elif not effective_options.get('Args'):
-                effective_options['Args'] = sys.argv[1:]
+                effective_options['args'] = args
+            elif not effective_options.get('args'):
+                effective_options['args'] = sys.argv[1:]
             if project_directory is not None:
-                effective_options['ProjectDirectory'] = project_directory
-            elif not effective_options.get('ProjectDirectory'):
-                effective_options['ProjectDirectory'] = os.environ.get('ASPIRE_PROJECT_DIRECTORY', os.getcwd())
+                effective_options['projectDirectory'] = project_directory
+            elif not effective_options.get('projectDirectory'):
+                effective_options['projectDirectory'] = os.environ.get('ASPIRE_PROJECT_DIRECTORY', os.getcwd())
             if app_host_file_path is not None:
-                effective_options['AppHostFilePath'] = app_host_file_path
-            elif not effective_options.get('AppHostFilePath'):
+                effective_options['appHostFilePath'] = app_host_file_path
+            elif not effective_options.get('appHostFilePath'):
                 app_host_file_path = os.environ.get('ASPIRE_APPHOST_FILEPATH')
                 if app_host_file_path:
-                    effective_options['AppHostFilePath'] = app_host_file_path
+                    effective_options['appHostFilePath'] = app_host_file_path
             if container_registry_override is not None:
-                effective_options['ContainerRegistryOverride'] = container_registry_override
+                effective_options['containerRegistryOverride'] = container_registry_override
             if disable_dashboard is not None:
-                effective_options['DisableDashboard'] = disable_dashboard
+                effective_options['disableDashboard'] = disable_dashboard
             if dashboard_application_name is not None:
-                effective_options['DashboardApplicationName'] = dashboard_application_name
+                effective_options['dashboardApplicationName'] = dashboard_application_name
             if allow_unsecured_transport is not None:
-                effective_options['AllowUnsecuredTransport'] = allow_unsecured_transport
+                effective_options['allowUnsecuredTransport'] = allow_unsecured_transport
             if enable_resource_logging is not None:
-                effective_options['EnableResourceLogging'] = enable_resource_logging
+                effective_options['enableResourceLogging'] = enable_resource_logging
 
             return DistributedApplicationBuilder(client, effective_options)
         """;

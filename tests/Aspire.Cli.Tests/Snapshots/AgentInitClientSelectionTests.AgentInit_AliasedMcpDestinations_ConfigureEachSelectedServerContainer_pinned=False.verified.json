@@ -1,0 +1,31 @@
+﻿{
+  "preference": true,
+  "mcpServers": {
+    "aspire": {
+      "type": "local",
+      "command": "aspire",
+      "args": [
+        "agent",
+        "mcp"
+      ],
+      "env": {
+        "DOTNET_ROOT": "${DOTNET_ROOT}"
+      },
+      "tools": [
+        "*"
+      ]
+    }
+  },
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "aspire": {
+      "type": "local",
+      "command": [
+        "aspire",
+        "agent",
+        "mcp"
+      ],
+      "enabled": true
+    }
+  }
+}

@@ -15,7 +15,7 @@ import { AppHostDataRepository, shortenPath, shortenPaths } from '../data/AppHos
 import { AspireCliFailedError } from '../data/appHostCliContracts';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { getResourceContextValue, getResourceIcon, getResourceCommandIcon, resolveAppHostSourcePath, buildResourceDescription, buildResourceTooltip } from '../views/treePresentation';
-import { AppHostItem, WorkspaceAppHostItem, WorkspaceResourcesItem } from '../views/treeItems';
+import { AppHostItem, ResourceItem, WorkspaceAppHostItem, WorkspaceResourcesItem } from '../views/treeItems';
 import type { Clipboard } from '../views/AspireAppHostTreeProvider';
 import type { AppHostDisplayInfo, ResourceJson, ViewMode } from '../data/AppHostDataRepository';
 import { AppHostCliRunner } from '../data/appHostCliRunner';
@@ -31,6 +31,7 @@ import {
     lsJsonStreamCapability,
     pipelineInteractionCapability,
     pipelineStepListJsonCapability,
+    terminalInstanceSelectionCapability,
     type ConfigInfo,
 } from '../types/configInfo';
 import { windowCliPathTarget, workspaceFolderCliPathTarget, type CliPathResolutionTarget } from '../utils/cliPathVariables';
@@ -3310,46 +3311,55 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
-    test('openResourceTerminal adds replica when terminal metadata includes index', async () => {
-        const commands: AspireSubcommand[] = [];
-        const appHostPath = '/repo/apps/Store/AppHost.csproj';
-        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
-        const repository = {
-            viewMode: 'workspace' as ViewMode,
-            appHosts: [],
-            workspaceResources: [],
-            workspaceAppHost: makeAppHost({
-                appHostPath,
-                resources: [makeResource({
-                    name: 'cache',
-                    properties: {
-                        'terminal.enabled': 'true',
-                        'terminal.replicaIndex': '2',
-                    },
-                })],
-            }),
-            workspaceAppHostPath: appHostPath,
-            workspaceAppHostName: 'apps/Store/AppHost.csproj',
-            workspaceAppHostCandidatePaths: [appHostPath],
-            workspaceAppHostDescription: undefined,
-            onDidChangeData,
-        } as unknown as AppHostDataRepository;
-        const terminalProvider = {
-            getAspireCliExecutablePath: async () => 'aspire',
-            createEnvironment: () => ({}),
-            sendAspireCommandToAspireTerminal: (command: AspireSubcommand) => commands.push(command),
-        } as unknown as AspireTerminalProvider;
-        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
+    for (const supportsInstanceSelection of [false, true]) {
+        test(`openResourceTerminal selects the instance with ${supportsInstanceSelection ? 'current' : 'legacy'} CLI syntax`, async () => {
+            const hasCapability = sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'hasCapability').resolves(supportsInstanceSelection);
+            const commands: AspireSubcommand[] = [];
+            const appHostPath = '/repo/apps/Store/AppHost.csproj';
+            const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+            const repository = {
+                viewMode: 'workspace' as ViewMode,
+                appHosts: [],
+                workspaceResources: [],
+                workspaceAppHost: makeAppHost({
+                    appHostPath,
+                    resources: [makeResource({
+                        name: 'cache-abc123',
+                        displayName: 'cache',
+                        properties: {
+                            'terminal.enabled': 'true',
+                            'terminal.replicaIndex': '2',
+                        },
+                    })],
+                }),
+                workspaceAppHostPath: appHostPath,
+                workspaceAppHostName: 'apps/Store/AppHost.csproj',
+                workspaceAppHostCandidatePaths: [appHostPath],
+                workspaceAppHostDescription: undefined,
+                onDidChangeData,
+            } as unknown as AppHostDataRepository;
+            const terminalProvider = {
+                getAspireCliExecutablePath: async () => 'aspire',
+                createEnvironment: () => ({}),
+                sendAspireCommandToAspireTerminal: (command: AspireSubcommand) => commands.push(command),
+            } as unknown as AspireTerminalProvider;
+            const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
 
-        const [workspaceItem] = provider.getChildren();
-        const [resourceItem] = provider.getChildren(workspaceItem);
-        await provider.openResourceTerminal(resourceItem as any);
+            const [workspaceItem] = provider.getChildren();
+            const [resourceItem] = provider.getChildren(workspaceItem);
+            assert.ok(resourceItem instanceof ResourceItem);
+            await provider.openResourceTerminal(resourceItem);
 
-        assert.deepStrictEqual(commands, [
-            ['terminal', 'attach', shellArg('cache'), '--apphost', shellArg(appHostPath), '--replica', shellArg('2')],
-        ]);
-        provider.dispose();
-    });
+            assert.deepStrictEqual(commands, [
+                ['terminal', 'attach', shellArg('cache-abc123'), '--apphost', shellArg(appHostPath),
+                    ...(supportsInstanceSelection ? [] : ['--replica', shellArg('2')])],
+            ]);
+            assert.strictEqual(hasCapability.calledOnceWithExactly(terminalInstanceSelectionCapability, {
+                target: windowCliPathTarget,
+            }), true);
+            provider.dispose();
+        });
+    }
 
     test('workspace mode uses describe resources for selected AppHost when ps has no resources', () => {
         const selectedHostPath = '/repo/apps/Store/AppHost.csproj';

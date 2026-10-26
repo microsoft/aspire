@@ -618,13 +618,12 @@ aks.AddGateway("admin-portal").WithLoadBalancer(lb2);
 
 What `AddLoadBalancer` does:
 - Flips internal flags on the AKS environment so its emitted Bicep uses the
-  `2025-09-02-preview` API version and includes both
+  `2026-07-02-preview` API version and includes both
   `properties.ingressProfile.gatewayAPI.installation: 'Standard'` and
   `properties.ingressProfile.applicationLoadBalancer.enabled: true`. The preview API
-  shape is injected via `AksPreviewIngressProfileInjector`, which uses a small reflection
-  shim onto `ProvisionableConstruct.DefineProperty<T>` because the underlying
-  `ManagedClusterIngressProfile` type is `internal` in `Azure.Provisioning.ContainerService`
-  and cannot be subclassed like the other preview-Bicep injectors do. (These flags are
+  shape uses the SDK's typed `GatewayApiInstallation` property and an
+  `AksPreviewIngressProfile` subclass that adds `applicationLoadBalancer.enabled`
+  through `ProvisionableConstruct.DefineProperty<T>`. (These flags are
   internal-only — the cluster-level toggles are intentionally not exposed as separate
   public extensions to keep the surface small and prevent users from opting into the
   preview API by accident.)

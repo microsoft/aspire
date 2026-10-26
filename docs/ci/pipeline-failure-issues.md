@@ -37,7 +37,7 @@ re-runs of the same run.
 ## How a run is reported
 
 Each workflow's reporter job runs only on
-`failure() && github.event_name == 'schedule' && github.repository_owner == 'microsoft'`
+`failure() && github.event_name == 'schedule' && github.repository == 'microsoft/aspire'`
 (so PR/manual runs never file issues and forks stay quiet). Because the job is
 gated on `failure()`, it cannot run for a `startup_failure` (no job runs) or a
 `timed_out` run (cancelled-class); the scheduled-workflow scanner **backstops**

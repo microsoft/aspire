@@ -49,7 +49,7 @@ internal class ConfigureDefaultDashboardOptions(IConfiguration configuration, IO
 
         options.SuppressLoginUrlInStartupSummary = bool.TryParse(configuration["AppHost:SuppressDashboardLoginUrlInStartupSummary"], out var suppressLoginUrl) && suppressLoginUrl;
 
-        options.TelemetryOptOut = configuration.GetBool("ASPIRE_DASHBOARD_TELEMETRY_OPTOUT");
+        options.TelemetryOptOut = configuration.GetBool(KnownConfigNames.DashboardTelemetryOptOut);
     }
 
     private static string? NormalizeUrl(string? value)

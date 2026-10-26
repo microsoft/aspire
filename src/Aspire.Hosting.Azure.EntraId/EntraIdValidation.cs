@@ -67,6 +67,21 @@ internal static class EntraIdValidation
     }
 
     /// <summary>
+    /// Validates the client ID that selects a user-assigned managed identity for federation.
+    /// </summary>
+    internal static string? ValidateManagedIdentityClientId(string? clientId)
+    {
+        if (string.IsNullOrEmpty(clientId))
+        {
+            return NoValueError;
+        }
+
+        return IsGuid(clientId)
+            ? null
+            : "Expected the Client ID of a user-assigned managed identity as a GUID, not its Azure resource ID.";
+    }
+
+    /// <summary>
     /// Validates the Entra ID instance, which must be an absolute HTTPS URL.
     /// </summary>
     internal static string? ValidateInstance(string? instance)

@@ -23,7 +23,7 @@ jobs:
       ${{
         startsWith(github.event.comment.body, '/deployment-test') &&
         github.event.issue.pull_request &&
-        github.repository_owner == 'microsoft'
+        github.repository == 'microsoft/aspire'
       }}
     runs-on: ubuntu-latest
 

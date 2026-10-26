@@ -278,7 +278,7 @@ public class AtsPythonCodeGeneratorTests
         var aspirePy = files["aspire_app.py"];
 
         Assert.Contains("app_host_file_path: str | None = None", aspirePy);
-        Assert.Contains("effective_options['AppHostFilePath'] = app_host_file_path", aspirePy);
+        Assert.Contains("effective_options['appHostFilePath'] = app_host_file_path", aspirePy);
         Assert.Contains("app_host_file_path = os.environ.get('ASPIRE_APPHOST_FILEPATH')", aspirePy);
     }
 
@@ -353,6 +353,79 @@ public class AtsPythonCodeGeneratorTests
                     rpc_args['nullableUnion'] = nullable_union
             """,
             aspirePy);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedAksNodePoolCallbacks_ReturnMutatedDtosOnUnix()
+        => GeneratedAksNodePoolCallbacks_ReturnMutatedDtos("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedAksNodePoolCallbacks_ReturnMutatedDtosOnWindows()
+        => GeneratedAksNodePoolCallbacks_ReturnMutatedDtos("python");
+
+    private Task GeneratedAksNodePoolCallbacks_ReturnMutatedDtos(string pythonExecutable)
+    {
+        var context = AtsCapabilityScanner.ScanAssemblies(
+        [
+            typeof(DistributedApplication).Assembly,
+            typeof(global::Aspire.Hosting.Kubernetes.KubernetesNodePoolResource).Assembly,
+            typeof(global::Aspire.Hosting.Azure.Kubernetes.AksNodePoolConfig).Assembly
+        ]).ToAtsContext();
+        var files = _generator.GenerateDistributedApplication(context);
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import json
+            import typing
+            import aspire_app
+
+            assert typing.get_type_hints(aspire_app.AksNodePoolConfig) == {
+                "name": str, "vmSize": str, "minCount": int, "maxCount": int,
+                "mode": aspire_app.AksNodePoolMode, "osSku": str | None
+            }
+            client = aspire_app.AspireClient("unused")
+            handle = aspire_app.Handle({"$handle": "aks", "$type": "Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource"})
+            results = []
+
+            def configure(options):
+                assert options["name"] in ("system", "workers")
+                assert options["mode"] == ("System" if options["name"] == "system" else "User")
+                assert options["vmSize"] == "Standard_D2s_v5"
+                assert options["minCount"] == 1 and options["maxCount"] == 3
+                assert options["osSku"] is None
+                options["minCount"] = 2
+                options["maxCount"] = 5
+                options["osSku"] = "AzureLinux"
+
+            def invoke_capability(capability_id, args, kwargs=None):
+                assert capability_id in (
+                    "Aspire.Hosting.Azure.Kubernetes/withSystemNodePool",
+                    "Aspire.Hosting.Azure.Kubernetes/addNodePool",
+                )
+                callback = client._callback_registry[args["configure"]]
+                name = args.get("name", "system")
+                mode = "System" if name == "system" else "User"
+                payload = json.loads(json.dumps({"p0": {
+                    "name": name, "vmSize": "Standard_D2s_v5", "minCount": 1,
+                    "maxCount": 3, "mode": mode, "osSku": None
+                }}))
+                result = callback(payload, client)
+                assert json.loads(json.dumps(result)) == {"p0": {
+                    "name": name, "vmSize": "Standard_D2s_v5", "minCount": 2,
+                    "maxCount": 5, "mode": mode, "osSku": "AzureLinux"
+                }}
+                results.append(result)
+                return args["builder"]
+
+            client.invoke_capability = invoke_capability
+            resource = aspire_app.AzureKubernetesEnvironmentResource(handle, client)
+            assert resource.with_system_node_pool(configure) is resource
+            resource.add_node_pool("workers", configure)
+            assert len(results) == 2
+            """);
     }
 
     [Fact]

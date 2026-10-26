@@ -1,0 +1,11 @@
+﻿{
+  Agents: [
+    GitHub Copilot,
+    Claude Code,
+    OpenCode
+  ],
+  Locations:
+Installation locations:
+  MCP: .mcp.json (shared: GitHub Copilot, Claude Code)
+Shared files may be discovered by agents that aren't selected.
+}

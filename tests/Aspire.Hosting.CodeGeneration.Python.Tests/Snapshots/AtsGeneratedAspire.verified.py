@@ -1019,7 +1019,9 @@ class AspireClient:
     def register_callback(
         self,
         callback: typing.Callable[..., typing.Any] | None,
-        parameter_type_ids: typing.Sequence[str | None] | None = None
+        parameter_type_ids: typing.Sequence[str | None] | None = None,
+        *,
+        dto_writeback: bool = False
     ) -> str | None:
         '''
         Register a callback function that can be invoked from the .NET side.
@@ -1058,7 +1060,11 @@ class AspireClient:
                         break
 
                 if arg_array:
-                    return callback(*arg_array)
+                    result = callback(*arg_array)
+                    # Void DTO callbacks return mutated positional arguments, for example
+                    # {"p0": {"minCount": 2, "osSku": "AzureLinux"}}, rather than Python's None.
+                    # Opt in only for these callbacks so nullable callback results stay null.
+                    return args if dto_writeback else result
 
             # No args or null
             if args is None:
@@ -1479,7 +1485,7 @@ def _validate_type(arg: typing.Any, expected_type: typing.Any) -> bool:
                 return False
             if not _validate_type(value, value_type):
                 return False
-    elif typing.get_origin(expected_type) is typing.Callable:
+    elif typing.get_origin(expected_type) is typing.get_origin(typing.Callable):
         return callable(arg)
     elif isinstance(arg, (tuple, typing.Mapping)):
         return False
@@ -1574,20 +1580,20 @@ class DataVolumeParameters(typing.TypedDict, total=False):
 # ============================================================================
 
 class TestConfigDto(typing.TypedDict, total=False):
-    Name: str
-    Port: int
-    Enabled: bool
-    OptionalField: str | None
+    name: str
+    port: int
+    enabled: bool
+    optionalField: str | None
 
 class TestDeeplyNestedDto(typing.TypedDict, total=False):
-    NestedData: typing.Mapping[str, typing.Iterable[TestConfigDto]]
-    MetadataArray: typing.Iterable[typing.Mapping[str, str]]
+    nestedData: typing.Mapping[str, typing.Iterable[TestConfigDto]]
+    metadataArray: typing.Iterable[typing.Mapping[str, str]]
 
 class TestNestedDto(typing.TypedDict, total=False):
-    Id: str
-    Config: TestConfigDto
-    Tags: typing.Iterable[str]
-    Counts: typing.Mapping[str, int]
+    id: str
+    config: TestConfigDto
+    tags: typing.Iterable[str]
+    counts: typing.Mapping[str, int]
 
 
 # ============================================================================
@@ -1595,10 +1601,10 @@ class TestNestedDto(typing.TypedDict, total=False):
 # ============================================================================
 
 TestConfigs = types.SimpleNamespace()
-TestConfigs.Default = typing.cast(TestConfigDto, { "Name": "default", "Port": 6379, "Enabled": True, "OptionalField": "cache" })
+TestConfigs.Default = typing.cast(TestConfigDto, { "name": "default", "port": 6379, "enabled": True, "optionalField": "cache" })
 TestConfigs.Profiles = types.SimpleNamespace()
-TestConfigs.Profiles.Development = typing.cast(TestConfigDto, { "Name": "development", "Port": 5001, "Enabled": False, "OptionalField": None })
-TestConfigs.Secure = typing.cast(TestConfigDto, { "Name": "secure", "Port": 6380, "Enabled": True, "OptionalField": None })
+TestConfigs.Profiles.Development = typing.cast(TestConfigDto, { "name": "development", "port": 5001, "enabled": False, "optionalField": None })
+TestConfigs.Secure = typing.cast(TestConfigDto, { "name": "secure", "port": 6380, "enabled": True, "optionalField": None })
 TestConfigs.UnicodeGreeting = "你好こんにちは"
 
 
@@ -3155,29 +3161,29 @@ def create_builder(
     # Default args and project_directory if not provided
     effective_options = options or CreateBuilderOptions()
     if args is not None:
-        effective_options['Args'] = args
-    elif not effective_options.get('Args'):
-        effective_options['Args'] = sys.argv[1:]
+        effective_options['args'] = args
+    elif not effective_options.get('args'):
+        effective_options['args'] = sys.argv[1:]
     if project_directory is not None:
-        effective_options['ProjectDirectory'] = project_directory
-    elif not effective_options.get('ProjectDirectory'):
-        effective_options['ProjectDirectory'] = os.environ.get('ASPIRE_PROJECT_DIRECTORY', os.getcwd())
+        effective_options['projectDirectory'] = project_directory
+    elif not effective_options.get('projectDirectory'):
+        effective_options['projectDirectory'] = os.environ.get('ASPIRE_PROJECT_DIRECTORY', os.getcwd())
     if app_host_file_path is not None:
-        effective_options['AppHostFilePath'] = app_host_file_path
-    elif not effective_options.get('AppHostFilePath'):
+        effective_options['appHostFilePath'] = app_host_file_path
+    elif not effective_options.get('appHostFilePath'):
         app_host_file_path = os.environ.get('ASPIRE_APPHOST_FILEPATH')
         if app_host_file_path:
-            effective_options['AppHostFilePath'] = app_host_file_path
+            effective_options['appHostFilePath'] = app_host_file_path
     if container_registry_override is not None:
-        effective_options['ContainerRegistryOverride'] = container_registry_override
+        effective_options['containerRegistryOverride'] = container_registry_override
     if disable_dashboard is not None:
-        effective_options['DisableDashboard'] = disable_dashboard
+        effective_options['disableDashboard'] = disable_dashboard
     if dashboard_application_name is not None:
-        effective_options['DashboardApplicationName'] = dashboard_application_name
+        effective_options['dashboardApplicationName'] = dashboard_application_name
     if allow_unsecured_transport is not None:
-        effective_options['AllowUnsecuredTransport'] = allow_unsecured_transport
+        effective_options['allowUnsecuredTransport'] = allow_unsecured_transport
     if enable_resource_logging is not None:
-        effective_options['EnableResourceLogging'] = enable_resource_logging
+        effective_options['enableResourceLogging'] = enable_resource_logging
 
     return DistributedApplicationBuilder(client, effective_options)
 

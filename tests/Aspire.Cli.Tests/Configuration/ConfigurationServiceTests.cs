@@ -5,6 +5,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -34,6 +36,52 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
         var service = new ConfigurationService(configuration, executionContext, globalSettingsFile, logger);
 
         return (service, settingsFilePath);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ConfigurationMutations_WaitForFileLockAndPreserveRefreshedSettings(bool global, bool delete)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, _) = CreateService(workspace, """{"custom":"original"}""");
+        var path = service.GetSettingsFilePath(global);
+        await File.WriteAllTextAsync(path, """{"custom":"original"}""");
+        Task mutation;
+        using (var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
+            workspace.CreateExecutionContext(), new FileInfo(path), NullLogger.Instance, CancellationToken.None))
+        {
+            Assert.NotNull(configLock);
+            mutation = delete
+                ? service.DeleteConfigurationAsync("custom", global)
+                : service.SetConfigurationAsync("custom", "edited", global);
+            await Assert.ThrowsAsync<TimeoutException>(() => mutation.WaitAsync(TimeSpan.FromSeconds(1)));
+
+            // Simulate the refresh's atomic publication while it owns this same file lock.
+            await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, JsonNode.Parse("""
+                {
+                  "custom": "original",
+                  "docs": { "llmsTxtUrl": "https://updated.example/llms.txt" },
+                  "configSource": {
+                    "repository": "https://git.example/configuration",
+                    "path": "aspire.config.json",
+                    "appliedVersion": "version-2"
+                  }
+                }
+                """)!.AsObject(), CancellationToken.None);
+        }
+        await mutation.DefaultTimeout();
+
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        Assert.Equal(delete ? ["configSource", "docs"] : new[] { "configSource", "custom", "docs" }, settings.Select(p => p.Key).Order());
+        if (!delete)
+        {
+            Assert.Equal("edited", settings["custom"]!.GetValue<string>());
+        }
+        Assert.Equal("https://updated.example/llms.txt", settings["docs"]!["llmsTxtUrl"]!.GetValue<string>());
+        Assert.Equal("version-2", settings["configSource"]!["appliedVersion"]!.GetValue<string>());
     }
 
     [Fact]

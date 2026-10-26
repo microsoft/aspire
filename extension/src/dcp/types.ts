@@ -135,6 +135,10 @@ export function getLaunchConfigurationTargetPath(configuration: ExecutableLaunch
         return getNonEmptyPath(configuration.project_path);
     }
 
+    if (isAzureFunctionsNodeLaunchConfiguration(configuration)) {
+        return getNonEmptyPath(configuration.app_directory);
+    }
+
     if (isJavaScriptRuntimeLaunchConfiguration(configuration)) {
         return getNonEmptyPath(configuration.script_path) ??
             getNonEmptyPath(configuration.working_directory);
@@ -231,6 +235,18 @@ export interface AzureFunctionsLaunchConfiguration extends ExecutableLaunchConfi
 
 export function isAzureFunctionsLaunchConfiguration(obj: any): obj is AzureFunctionsLaunchConfiguration {
     return obj && obj.type === 'azure-functions';
+}
+
+export interface AzureFunctionsNodeLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "azure-functions-node";
+    app_directory: string;
+    command: string;
+    language: "typescript" | "javascript";
+    worker_runtime: "node";
+}
+
+export function isAzureFunctionsNodeLaunchConfiguration(obj: any): obj is AzureFunctionsNodeLaunchConfiguration {
+    return obj && obj.type === 'azure-functions-node';
 }
 
 export interface MauiLaunchConfiguration extends ExecutableLaunchConfiguration {

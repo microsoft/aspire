@@ -9,6 +9,8 @@ internal sealed class AzureProvisionerOptions
 {
     public string? TenantId { get; set; }
 
+    public string? TenantResourceSuffix { get; set; }
+
     public string? SubscriptionId { get; set; }
 
     public string? ResourceGroup { get; set; }

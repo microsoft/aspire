@@ -18,7 +18,7 @@ permissions:
 jobs:
   generate-and-pr:
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository == 'microsoft/aspire' }}
     strategy:
       fail-fast: false
       matrix:

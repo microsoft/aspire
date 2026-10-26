@@ -16,6 +16,7 @@ using Aspire.Cli.Processes;
 using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
@@ -74,6 +75,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly ProfileCaptureState _profileCaptureState;
     private readonly TimeProvider _timeProvider;
+    private readonly AspireSecretsStoreResolver _aspireSecretsStoreResolver;
     private readonly ConsoleCancellationManager _cancellationManager;
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
@@ -140,6 +142,7 @@ internal sealed class RunCommand : BaseCommand
         ProfilingTelemetry profilingTelemetry,
         ProfileCaptureState profileCaptureState,
         TimeProvider timeProvider,
+        AspireSecretsStoreResolver aspireSecretsStoreResolver,
         CommonCommandServices services)
         : base("run", RunCommandStrings.Description, services)
     {
@@ -157,6 +160,7 @@ internal sealed class RunCommand : BaseCommand
         _profilingTelemetry = profilingTelemetry;
         _profileCaptureState = profileCaptureState;
         _timeProvider = timeProvider;
+        _aspireSecretsStoreResolver = aspireSecretsStoreResolver;
         _cancellationManager = services.CancellationManager;
 
         Options.Add(s_detachOption);
@@ -372,6 +376,10 @@ internal sealed class RunCommand : BaseCommand
             {
                 ProfileCaptureEnvironment.AddCurrentToEnvironment(context.EnvironmentVariables);
             }
+            // Launch profiles can still change the environment in RunAsync. Pass the identity, not an
+            // environment-specific file, so Hosting selects secrets after the final environment is known.
+            context.EnvironmentVariables[KnownConfigNames.AspireUserSecretsId] =
+                await _aspireSecretsStoreResolver.ResolveAppHostIdAsync(effectiveAppHostFile, project, cancellationToken);
 
             // Start the project run as a pending task - we'll handle UX while it runs
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);

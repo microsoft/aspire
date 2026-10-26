@@ -55,7 +55,6 @@ Aspire-Core.slnf
 .github/extensions/**
 
 # Dev/AzDO/scheduled-only infrastructure with no regular GitHub PR CI consumer.
-.config/dotnet-tools.json
 eng/Version.Details.xml
 .github/actions/preload-azure-cli-requests/**
 

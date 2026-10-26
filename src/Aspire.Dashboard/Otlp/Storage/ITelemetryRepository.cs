@@ -16,6 +16,8 @@ public interface ITelemetryRepository : IDisposable
     /// </summary>
     bool IsReadOnly { get; }
 
+    bool HasReceivedTelemetry { get; }
+
     bool HasDisplayedMaxLogLimitMessage { get; set; }
     DashboardMessageBarReference? MaxLogLimitMessage { get; set; }
     bool HasDisplayedMaxTraceLimitMessage { get; set; }

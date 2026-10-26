@@ -22,8 +22,13 @@ on:
       enablePlaywrightInstall:
         required: true
         type: boolean
-      # When true, ignores test failures and checks if .trx files have nonzero test count
+      # When true, known test outcomes are non-blocking while infrastructure failures remain blocking.
       ignoreTestFailures:
+        required: false
+        type: boolean
+        default: false
+      # Allows valid zero-test results for trait-filtered project/OS lanes where no tests match.
+      allowZeroTests:
         required: false
         type: boolean
         default: false
@@ -33,7 +38,7 @@ jobs:
   generate_tests_matrix:
     name: Generate test runsheet
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository == 'microsoft/aspire' }}
     outputs:
       runsheet: ${{ steps.inject_properties.outputs.runsheet }}
       requiresNugets: ${{ steps.check_nugets.outputs.requiresNugets }}
@@ -75,33 +80,48 @@ jobs:
 
       - name: Inject enablePlaywrightInstall into runsheet properties
         id: inject_properties
+        env:
+          RUNSHEET: ${{ steps.generate_tests_matrix_raw.outputs.runsheet }}
+          ENABLE_PLAYWRIGHT_INSTALL: ${{ inputs.enablePlaywrightInstall }}
         run: |
-          RUNSHEET='${{ steps.generate_tests_matrix_raw.outputs.runsheet }}'
           if [ "$RUNSHEET" = "[]" ] || [ -z "$RUNSHEET" ]; then
-            echo "runsheet=[]" >> $GITHUB_OUTPUT
+            echo "runsheet=[]" >> "$GITHUB_OUTPUT"
           else
-            UPDATED=$(echo "$RUNSHEET" | jq -c --argjson epw ${{ inputs.enablePlaywrightInstall }} '[.[] | .properties.enablePlaywrightInstall = $epw]')
-            echo "runsheet=$UPDATED" >> $GITHUB_OUTPUT
+            UPDATED=$(printf '%s\n' "$RUNSHEET" | jq -c --argjson epw "$ENABLE_PLAYWRIGHT_INSTALL" '[.[] | .properties.enablePlaywrightInstall = $epw]')
+            echo "runsheet=$UPDATED" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check if any test requires NuGets
         id: check_nugets
+        env:
+          RUNSHEET: ${{ steps.inject_properties.outputs.runsheet }}
         run: |
-          RUNSHEET='${{ steps.inject_properties.outputs.runsheet }}'
-          if echo "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresNugets == true)' > /dev/null 2>&1; then
-            echo "requiresNugets=true" >> $GITHUB_OUTPUT
+          if printf '%s\n' "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresNugets == true)' > /dev/null 2>&1; then
+            echo "requiresNugets=true" >> "$GITHUB_OUTPUT"
           else
-            echo "requiresNugets=false" >> $GITHUB_OUTPUT
+            echo "requiresNugets=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check if any test requires CLI archives
         id: check_cli_archive
+        env:
+          RUNSHEET: ${{ steps.inject_properties.outputs.runsheet }}
         run: |
-          RUNSHEET='${{ steps.inject_properties.outputs.runsheet }}'
-          if echo "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresCliArchive == true)' > /dev/null 2>&1; then
-            echo "requiresCliArchive=true" >> $GITHUB_OUTPUT
+          if printf '%s\n' "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresCliArchive == true)' > /dev/null 2>&1; then
+            echo "requiresCliArchive=true" >> "$GITHUB_OUTPUT"
           else
-            echo "requiresCliArchive=false" >> $GITHUB_OUTPUT
+            echo "requiresCliArchive=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if any test requires GitHub token
+        id: check_github_token
+        env:
+          RUNSHEET: ${{ steps.inject_properties.outputs.runsheet }}
+        run: |
+          if printf '%s\n' "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresGitHubToken == true)' > /dev/null 2>&1; then
+            echo "requiresGitHubToken=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "requiresGitHubToken=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload logs, and test results
@@ -119,19 +139,19 @@ jobs:
   build_packages:
     name: Build packages
     needs: [generate_tests_matrix]
-    if: ${{ github.repository_owner == 'microsoft' && needs.generate_tests_matrix.outputs.requiresNugets == 'true' }}
+    if: ${{ github.repository == 'microsoft/aspire' && needs.generate_tests_matrix.outputs.requiresNugets == 'true' }}
     uses: ./.github/workflows/build-packages.yml
 
   build_cli_archives:
     name: Build native CLI archives
     needs: [generate_tests_matrix]
-    if: ${{ github.repository_owner == 'microsoft' && (needs.generate_tests_matrix.outputs.requiresNugets == 'true' || needs.generate_tests_matrix.outputs.requiresCliArchive == 'true') }}
+    if: ${{ github.repository == 'microsoft/aspire' && (needs.generate_tests_matrix.outputs.requiresNugets == 'true' || needs.generate_tests_matrix.outputs.requiresCliArchive == 'true') }}
     uses: ./.github/workflows/build-cli-native-archives.yml
 
   build_cli_e2e_image:
     name: Build CLI E2E Docker image
     needs: [generate_tests_matrix]
-    if: ${{ github.repository_owner == 'microsoft' && needs.generate_tests_matrix.outputs.requiresCliArchive == 'true' }}
+    if: ${{ github.repository == 'microsoft/aspire' && needs.generate_tests_matrix.outputs.requiresCliArchive == 'true' }}
     uses: ./.github/workflows/build-cli-e2e-image.yml
 
   run_tests:
@@ -147,27 +167,33 @@ jobs:
     # We still require generate_tests_matrix and build_packages to succeed.
     if: >-
       ${{
-        github.repository_owner == 'microsoft' &&
+        github.repository == 'microsoft/aspire' &&
         !cancelled() &&
         needs.generate_tests_matrix.result == 'success' &&
         (needs.build_packages.result == 'success' || needs.build_packages.result == 'skipped') &&
         (needs.build_cli_e2e_image.result == 'success' || needs.build_cli_e2e_image.result == 'skipped')
       }}
     uses: ./.github/workflows/run-tests.yml
+    permissions:
+      actions: read
+      contents: read
     with:
       testShortName: ${{ matrix.tests.project }}
       properties: ${{ toJson(matrix.tests.properties) }}
       os: ${{ matrix.tests.os }}
       mtpBaseArgs: ${{ matrix.tests.mtpBaseArgs }}
       extraTestArgs: ${{ inputs.extraTestArgs }}
-      ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
+      ignoreTestFailures: ${{ inputs.ignoreTestFailures || matrix.tests.properties.nonBlockingTestFailures }}
+      allowZeroTests: ${{ inputs.allowZeroTests }}
 
 
   results:
-    if: ${{ always() && github.repository_owner == 'microsoft' }}
+    if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     name: Final Results
     needs: [generate_tests_matrix, build_packages, build_cli_archives, build_cli_e2e_image, run_tests]
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

@@ -3,6 +3,8 @@ parameters:
     enable_tls: "True"
 secrets: {}
 config:
+  env_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
   myapp:
     TLS_SUFFIX: ""
     tls_suffix: ",ssl=true"

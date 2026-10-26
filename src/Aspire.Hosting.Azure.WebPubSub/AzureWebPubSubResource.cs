@@ -15,9 +15,18 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure resources.</param>
 public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IAzurePrivateEndpointTarget
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithEndpoints, IAzurePrivateEndpointTarget
 {
+    internal const string EmulatorAccessKey = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGH";
+
+    internal EndpointReference EmulatorEndpoint => new(this, "emulator");
+
     internal Dictionary<string, AzureWebPubSubHubResource> Hubs { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets a value indicating whether the Azure Web PubSub resource is running in the local emulator.
+    /// </summary>
+    public bool IsEmulator => this.IsContainer();
 
     /// <summary>
     /// Gets the "endpoint" output reference from the bicep template for Azure Web PubSub.
@@ -37,15 +46,23 @@ public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastruct
     /// <summary>
     /// Gets the connection string template for the manifest for Azure Web PubSub.
     /// </summary>
-    public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{Endpoint}");
+    public ReferenceExpression ConnectionStringExpression =>
+        IsEmulator ? ServiceConnectionStringExpression : ReferenceExpression.Create($"{Endpoint}");
+
+    internal ReferenceExpression ServiceConnectionStringExpression =>
+        IsEmulator ?
+            ReferenceExpression.Create($"Endpoint={UriExpression};AccessKey={EmulatorAccessKey};Version=1.0") :
+            ReferenceExpression.Create($"Endpoint={Endpoint}");
 
     /// <summary>
     /// Gets the service endpoint URI expression for the Azure Web PubSub resource.
     /// </summary>
     /// <remarks>
-    /// Format: <c>https://{name}.webpubsub.azure.com</c>.
+    /// Resolves to the local HTTP endpoint when running as an emulator, or
+    /// <c>https://{name}.webpubsub.azure.com</c> when using Azure.
     /// </remarks>
-    public ReferenceExpression UriExpression => ReferenceExpression.Create($"{Endpoint}");
+    public ReferenceExpression UriExpression =>
+        IsEmulator ? ReferenceExpression.Create($"{EmulatorEndpoint.Property(EndpointProperty.Url)}") : ReferenceExpression.Create($"{Endpoint}");
 
     /// <inheritdoc/>
     public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra)

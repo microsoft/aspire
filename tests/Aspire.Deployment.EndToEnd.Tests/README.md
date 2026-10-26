@@ -75,6 +75,20 @@ Common quota increase requests:
 
 ## Prerequisites
 
+### Node Azure Functions storage bindings
+
+`AzureFunctionsDeploymentTests.DeployNodeFunctionsWithStorageBindingsToAzureContainerApps`
+deploys a TypeScript Functions fixture without a Dockerfile or prebuilt JavaScript.
+It verifies the deployed Container App's `functionapp` kind and ingress port 80,
+then invokes an HTTP trigger that writes a blob and enqueues work using runtime
+output bindings. A queue trigger writes a second blob; an HTTP GET reads both
+through blob input bindings and checks the unique request payload. Storage
+connections use managed identity, including a custom queue connection name.
+This requires the current-build Aspire bundle, Docker, npm, Python 3, and Azure
+permissions to provision Container Apps, ACR, storage, and managed-identity role
+assignments. Run it on the Linux deployment test infrastructure; it creates real
+Azure resources and requests resource-group cleanup in a `finally` block.
+
 ### For Local Development
 
 1. **Linux environment** - Hex1b requires a Linux terminal (WSL2 works on Windows)
@@ -91,6 +105,7 @@ Common quota increase requests:
 | `ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_LOCATION` | Connector Namespace test only | Preview-enabled Azure region |
 | `ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_PRINCIPAL_OBJECT_ID` | Connector Namespace test only | Object ID of a tenant user used to validate connection and MCP access policies |
 | `ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_TENANT_ID` | Connector Namespace test only | Tenant ID containing the access-policy user |
+| `AZURE_TENANT_ID` | Entra test | Deployment tenant ID; supplied automatically by the workflow in CI |
 | `AZURE_DEPLOYMENT_TEST_TENANT_ID` | CI only | Azure AD tenant ID for OIDC authentication |
 | `AZURE_DEPLOYMENT_TEST_CLIENT_ID` | CI only | Azure AD app client ID for OIDC authentication |
 | `AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID` | CI only | Azure subscription ID (GitHub variable) |
@@ -110,6 +125,24 @@ export ASPIRE_DEPLOYMENT_TEST_RG_PREFIX="my-aspire-tests"
 
 ## Running Tests
 
+Starter-template scenarios use `AddDotnetProject` declarations. Source transformations
+must use `DotnetProjectDeploymentHelpers.ReplaceExactlyOnce` (or an equivalent required
+replacement) so template drift fails during setup instead of silently dropping references,
+node-pool constraints, or image annotations. The ACA starter scenario explicitly converts
+the declarations to path-based `AddProject` to retain separate `ProjectResource` coverage.
+
+The multiple-node-pool scenario pins the API to a non-default user pool and checks both
+the live workload selectors and actual node placement. The shared-storage scenario checks
+that exactly one account exists and both deployed Container Apps receive its blob endpoint
+and a managed identity with blob data access.
+
+`AksCrossResourceGroupRegistryDeploymentTests` covers both fresh deployment and upgrade
+from a system-assigned control plane with an AKS-created kubelet identity. The upgrade
+starts from a frozen Bicep topology, then applies the current Aspire model to the same
+cluster and VNet. Both scenarios verify private-image pulls from the external registry,
+the separate identity grants, a working API, and unchanged redeployment. The upgrade also
+checks that both identities changed and both node pools completed successfully.
+
 ### Run All Tests Locally
 
 ```bash
@@ -128,6 +161,32 @@ dotnet test tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Te
 ```
 
 ## CI/CD
+
+### Entra registration deployment scenario
+
+`AzureEntraIdDeploymentTests.DeployEntraRegistrationAndRedeployWithStableIds` uses native
+`aspire deploy --clear-cache --non-interactive` to create an application and service principal
+without explicit owner assignments. It queries Microsoft Graph, verifies the output-backed
+tenant/client IDs in a deployed .NET consumer's environment and live HTTP response, changes a
+redirect URI, and redeploys to verify the application object ID, client ID, and service principal
+object ID remain stable.
+
+This scenario runs as part of the deployment suite without an additional enable flag.
+Use the existing `AZURE_TENANT_ID` for the deployment tenant. The deployment identity
+must have Azure deployment permissions and admin-consented Microsoft Graph permissions to create,
+read, update, and delete applications and service principals. `Application.ReadWrite.OwnedBy`
+is the least-privileged application permission for the Graph upsert operations; ownership must
+permit the subsequent updates and cleanup. Subscription Owner does not grant directory access.
+The test does not grant permissions or configure consent.
+
+Use a current-source local-hive archive (`ASPIRE_E2E_ARCHIVE`) for local execution on Linux.
+In CI, the workflow supplies `AZURE_TENANT_ID` from its existing tenant secret. Select
+`AzureEntraIdDeploymentTests` with the deployment workflow's `test_filter`.
+
+The test creates unique names, refuses to reuse existing objects, and independently cleans up
+the service principal, application, and resource group even when deployment fails before outputs
+are available. Deleting the resource group alone does not clean up Entra registrations. Directory
+deletion is a normal Graph soft delete, not a permanent purge.
 
 ### Polyglot provisioning SDK scenarios
 

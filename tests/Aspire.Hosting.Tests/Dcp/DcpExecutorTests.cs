@@ -57,7 +57,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             events: events);
         await executor.RunApplicationAsync().DefaultTimeout();
 
-        using var restartCts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var restartCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var restartRequested = 0;
         events.Subscribe<OnResourceChangedContext>(async context =>
         {
@@ -81,7 +81,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         previous.Status = new ExecutableStatus { State = ExecutableState.Finished, ExitCode = 0 };
         kubernetesService.PushResourceModified(previous);
 
-        await restartCompleted.Task.DefaultTimeout(TimeSpan.FromSeconds(25));
+        await restartCompleted.Task.DefaultTimeout(TestConstants.LongTimeoutDuration);
         var replacement = GetCreatedExecutablesForResource(kubernetesService, "program").Last();
         Assert.NotEqual(previous.Metadata.Uid, replacement.Metadata.Uid);
     }

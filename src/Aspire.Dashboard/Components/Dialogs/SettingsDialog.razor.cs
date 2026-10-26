@@ -89,17 +89,7 @@ public partial class SettingsDialog : IDisposable
             forceLoad: true);
     }
 
-    private async Task LaunchManageDataAsync()
-    {
-        var parameters = new DialogParameters
-        {
-            Title = Loc[nameof(Dashboard.Resources.Dialogs.ManageDataDialogTitle)],
-            PrimaryAction = Loc[nameof(Dashboard.Resources.Dialogs.DialogCloseButtonText)],
-            SecondaryAction = string.Empty,
-            Width = "800px"
-        };
-        await DialogService.ShowDialogAsync<ManageDataDialog>(parameters);
-    }
+    private Task LaunchManageDataAsync() => DialogService.ShowManageDataAsync();
 
     private async Task OnTimeFormatChanged()
     {

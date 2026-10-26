@@ -18,6 +18,7 @@ permissions:
 jobs:
   setup_for_tests:
     name: Setup for tests
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     # This job checks out and runs PR-authored code (SelectTests, the test build), so it is kept at
     # contents:read with no pull-requests:write. The selection comment is posted from the
@@ -52,9 +53,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # This job runs PR-authored code; don't leave the checkout's GITHUB_TOKEN persisted in
-        # .git/config where that code could read it. The select-tests base-commit fetch is
-        # unauthenticated (public repo) and nothing here pushes, so dropping the credential is safe.
+        # .git/config where that code could read it.
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       # Compute the selected test subset + non-.NET job booleans. The action reuses this job's checkout
@@ -254,12 +255,14 @@ jobs:
 
   build_packages:
     name: Build packages
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-packages.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
   build_cli_archive_linux:
     name: Build native CLI archive (Linux)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -267,6 +270,7 @@ jobs:
 
   build_cli_archive_linux_arm64:
     name: Build native CLI archive (Linux ARM64)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -278,6 +282,7 @@ jobs:
   # without waiting for the slower Windows/macOS builds.
   build_cli_archive_windows:
     name: Build native CLI archive (Windows)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -285,6 +290,7 @@ jobs:
 
   build_cli_archive_windows_arm64:
     name: Build native CLI archive (Windows ARM64)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -293,6 +299,7 @@ jobs:
 
   build_cli_archive_macos:
     name: Build native CLI archive (macOS)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -300,6 +307,7 @@ jobs:
 
   build_cli_archive_macos_x64:
     name: Build native CLI archive (macOS x64)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -391,6 +399,7 @@ jobs:
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
+      ignoreTestFailures: ${{ matrix.properties.nonBlockingTestFailures }}
 
   # Split requires-nugets tests by OS so each group depends only on
   # the CLI archive build for its platform, avoiding cross-OS blocking.
@@ -410,6 +419,7 @@ jobs:
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
+      ignoreTestFailures: ${{ matrix.properties.nonBlockingTestFailures }}
 
   tests_requires_nugets_windows:
     name: Package tests - Windows
@@ -427,6 +437,7 @@ jobs:
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
+      ignoreTestFailures: ${{ matrix.properties.nonBlockingTestFailures }}
 
   tests_requires_nugets_macos:
     name: Package tests - macOS
@@ -444,6 +455,7 @@ jobs:
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
+      ignoreTestFailures: ${{ matrix.properties.nonBlockingTestFailures }}
 
   tests_requires_cli_archive:
     name: CLI archive tests
@@ -461,6 +473,7 @@ jobs:
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
+      ignoreTestFailures: ${{ matrix.properties.nonBlockingTestFailures }}
 
   polyglot_validation:
     name: Polyglot SDK Validation
@@ -476,7 +489,7 @@ jobs:
   cli_starter_validation_linux_x64:
     name: Aspire CLI Starter Validation (Ubuntu x64)
     needs: [setup_for_tests, build_packages, build_cli_archive_linux]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && github.repository == 'microsoft/aspire' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: ubuntu-latest
@@ -490,7 +503,7 @@ jobs:
   cli_starter_validation_linux_arm64:
     name: Aspire CLI Starter Validation (Ubuntu ARM64)
     needs: [setup_for_tests, build_packages, build_cli_archive_linux_arm64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && github.repository == 'microsoft/aspire' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: ubuntu-24.04-arm
@@ -504,7 +517,7 @@ jobs:
   cli_starter_validation_windows_x64:
     name: Aspire CLI Starter Validation (Windows x64)
     needs: [setup_for_tests, build_packages, build_cli_archive_windows]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && github.repository == 'microsoft/aspire' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: windows-latest
@@ -518,7 +531,7 @@ jobs:
   cli_starter_validation_windows_arm64:
     name: Aspire CLI Starter Validation (Windows ARM64)
     needs: [setup_for_tests, build_packages, build_cli_archive_windows_arm64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && github.repository == 'microsoft/aspire' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: windows-11-arm
@@ -532,7 +545,7 @@ jobs:
   cli_starter_validation_macos_x64:
     name: Aspire CLI Starter Validation (macOS x64)
     needs: [setup_for_tests, build_packages, build_cli_archive_macos_x64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && github.repository == 'microsoft/aspire' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: macos-15-intel
@@ -546,7 +559,7 @@ jobs:
   cli_starter_validation_macos_arm64:
     name: Aspire CLI Starter Validation (macOS ARM64)
     needs: [setup_for_tests, build_packages, build_cli_archive_macos]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && github.repository == 'microsoft/aspire' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: macos-latest
@@ -615,14 +628,9 @@ jobs:
     name: Run VS Code extension unit tests (Windows)
     uses: ./.github/workflows/extension-unit-tests.yml
     needs: [setup_for_tests]
-    # Also gated on run_extension_e2e (not just run_extension_unit): this job packages and uploads
-    # the aspire-extension VSIX that extension_e2e_tests installs. The focused workflow preserves
-    # packaging after unit-test failures so E2E
-    # still receives its VSIX and provides an independent signal.
+    # Keep the unit tests selected alongside E2E, but do not make E2E depend on
+    # their result. The E2E workflow owns the VSIX that its matrix installs.
     if: ${{ needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
-    with:
-      packageVsix: true
-      extensionVersionOverride: ${{ inputs.extensionVersionOverride }}
 
   extension_bootstrap_linux:
     name: Validate VS Code extension bootstrap (Linux)
@@ -683,13 +691,9 @@ jobs:
   extension_e2e_tests:
     name: Run VS Code extension E2E tests
     uses: ./.github/workflows/extension-e2e-tests.yml
-    # extension_tests_win stays in `needs` because it uploads the aspire-extension VSIX these shards
-    # install, but E2E is deliberately not gated on its unit-test *result*: !cancelled() keeps the
-    # shards running when those tests fail, and the VSIX packaging steps in that job carry the same
-    # condition so the artifact is published either way. Before this, one unit failure - or an npm
-    # blip on that single Windows runner - skipped all 30 shards and erased the E2E signal entirely.
-    # The remaining producers are still required by result, since a missing CLI archive or package
-    # feed makes every shard fail on a download rather than tell us anything.
+    # The reusable workflow packages and uploads its own VSIX before matrix
+    # fan-out. Unit-test failures therefore remain an independent signal, while
+    # every artifact-producing prerequisite is required to succeed.
     if: >-
       ${{ !cancelled() &&
           needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
@@ -697,7 +701,9 @@ jobs:
           needs.build_cli_archive_linux.result == 'success' &&
           needs.build_cli_archive_windows.result == 'success' &&
           needs.extension_bootstrap_linux.result == 'success' }}
-    needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_tests_win, extension_bootstrap_linux]
+    needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_bootstrap_linux]
+    with:
+      extensionVersionOverride: ${{ inputs.extensionVersionOverride }}
 
   typescript_sdk_tests:
     name: TypeScript SDK Unit Tests
@@ -712,7 +718,7 @@ jobs:
     uses: ./.github/workflows/typescript-api-compat.yml
 
   results:
-    if: ${{ always() && github.repository_owner == 'microsoft' }}
+    if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     name: Final Test Results
     needs: [

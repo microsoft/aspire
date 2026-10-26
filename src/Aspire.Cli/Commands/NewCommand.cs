@@ -5,7 +5,9 @@ using System.CommandLine;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
@@ -88,7 +90,9 @@ internal sealed class NewCommand : BaseCommand
         Options.Add(s_sourceOption);
         Options.Add(s_versionOption);
         Options.Add(s_suppressAgentInitOption);
-        Options.Add(AgentInitCommand.s_skillLocationsOption);
+        Options.Add(ConfigSourceService.s_useSourceOption);
+        Options.Add(AgentInitCommand.s_agentsOption);
+        Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
 
         // Customize description based on whether staging channel is enabled
@@ -434,15 +438,21 @@ internal sealed class NewCommand : BaseCommand
                 // When both options are explicit, the channel still owns version policy and persistence.
                 var templateDiscoveryMappings = string.IsNullOrWhiteSpace(source)
                     ? selectedChannel.Mappings
-                    : PackageSourceOverrideMappings.CreateForTemplateOperations(source);
+                    : PackageSourceOverrideMappings.CreateForSourceOnlyOperations(source);
 
                 try
                 {
-                    var packages = (await selectedChannel.GetTemplatePackagesAsync(
-                        ExecutionContext.WorkingDirectory,
-                        templateDiscoveryMappings,
-                        filterLocalPackagesToPinnedVersion: !isUnqualifiedLocalResolution,
-                        cancellationToken))
+                    var discoveredPackages = string.IsNullOrWhiteSpace(source)
+                        ? await selectedChannel.GetTemplatePackagesFromChannelAsync(
+                            ExecutionContext.WorkingDirectory,
+                            filterLocalPackagesToPinnedVersion: !isUnqualifiedLocalResolution,
+                            cancellationToken)
+                        : await selectedChannel.GetTemplatePackagesAsync(
+                            ExecutionContext.WorkingDirectory,
+                            templateDiscoveryMappings,
+                            filterLocalPackagesToPinnedVersion: !isUnqualifiedLocalResolution,
+                            cancellationToken);
+                    var packages = discoveredPackages
                         .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
                         .ToArray();
                     var hasPrHives = ExecutionContext.GetHiveCount() > 0;
@@ -494,6 +504,9 @@ internal sealed class NewCommand : BaseCommand
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
+        // Obtain consent and acquire the source before creating project files so acquisition
+        // failures or missing non-interactive consent do not leave a partial project.
+        var configSource = await ConfigSources.ResolveAndAcquireConfigSourceAsync(parseResult, cancellationToken);
         var source = parseResult.GetValue(s_sourceOption);
         if (!string.IsNullOrWhiteSpace(source) && PackageSourceOverrideMappings.HasCredentialMaterial(source))
         {
@@ -595,9 +608,13 @@ internal sealed class NewCommand : BaseCommand
         }
 
         var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
+        if (templateResult.ExitCode == CliExitCodes.Success && configSource is not null)
+        {
+            // Merge source settings after successful generation so the template cannot
+            // overwrite them and failed template creation does not persist a binding.
+            await ConfigSources.MaterializeAsync(configSource, workspaceRoot, cancellationToken);
+        }
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);
-        var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
-        var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
         // New projects get the complete default skill set, including aspireify. This chained flow
         // never registers `--mcp`, so MCP configuration is unavailable here by construction —
         // it remains reachable only through standalone `aspire agent init`.
@@ -606,8 +623,9 @@ internal sealed class NewCommand : BaseCommand
             templateResult.ExitCode,
             workspaceRoot,
             agentInitBinding,
-            skillLocationsBinding,
-            skillsBinding,
+            PromptBinding.Create(parseResult, AgentInitCommand.s_agentsOption),
+            PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption),
+            PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
             cancellationToken);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))

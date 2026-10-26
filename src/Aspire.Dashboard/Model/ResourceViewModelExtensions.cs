@@ -107,6 +107,12 @@ internal static class ResourceViewModelExtensions
         return resource.Properties.ContainsKey(KnownProperties.Terminal.Enabled);
     }
 
+    public static bool ShouldAutoFitTerminal(this ResourceViewModel resource)
+    {
+        return resource.TryGetCustomDataString(KnownProperties.Terminal.AutoFit, out var autoFit) &&
+            string.Equals(autoFit, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// Tries to get the per-replica consumer UDS path stamped onto the snapshot
     /// by the AppHost. Used by the dashboard's terminal WebSocket proxy to

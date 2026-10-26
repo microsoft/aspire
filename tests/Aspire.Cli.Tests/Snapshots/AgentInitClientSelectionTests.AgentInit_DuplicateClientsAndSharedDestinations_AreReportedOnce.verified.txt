@@ -1,0 +1,3 @@
+﻿Installed Aspire agent skills:
+  Skills: aspire
+  Locations: .agents/skills

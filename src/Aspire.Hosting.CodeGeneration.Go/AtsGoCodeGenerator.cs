@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Shared.CodeGeneration;
 using Aspire.Shared.Json;
@@ -558,7 +559,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 var propertyType = property.IsCallback
                     ? RenderCallbackType(DtoPropertyToParameterInfo(property))
                     : MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
-                var jsonTag = $"`json:\"{property.Name},omitempty\"`";
+                var jsonTag = $"`json:\"{JsonNamingPolicy.CamelCase.ConvertName(property.Name)},omitempty\"`";
                 WriteLine($"\t{propertyName} {propertyType} {jsonTag}");
             }
             WriteLine("}");
@@ -578,11 +579,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 var propertyType = MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
                 if (IsNilableGoType(propertyType))
                 {
-                    WriteLine($"\tif d.{propertyName} != nil {{ m[\"{property.Name}\"] = serializeValue(d.{propertyName}) }}");
+                    WriteLine($"\tif d.{propertyName} != nil {{ m[\"{JsonNamingPolicy.CamelCase.ConvertName(property.Name)}\"] = serializeValue(d.{propertyName}) }}");
                 }
                 else
                 {
-                    WriteLine($"\tm[\"{property.Name}\"] = serializeValue(d.{propertyName})");
+                    WriteLine($"\tm[\"{JsonNamingPolicy.CamelCase.ConvertName(property.Name)}\"] = serializeValue(d.{propertyName})");
                 }
             }
             WriteLine("\treturn m");
@@ -1532,7 +1533,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         var p = DtoPropertyToParameterInfo(property);
         WriteLine($"\tif d.{propertyName} != nil {{");
         WriteLine($"\t\tcb := d.{propertyName}");
-        WriteLine($"\t\tm[\"{property.Name}\"] = func(args ...any) any {{");
+        WriteLine($"\t\tm[\"{JsonNamingPolicy.CamelCase.ConvertName(property.Name)}\"] = func(args ...any) any {{");
         EmitGoCallbackShimBody("\t\t\t", p);
         WriteLine($"\t\t}}");
         WriteLine($"\t}}");
@@ -2045,21 +2046,21 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             WriteLine("\t\tfor k, v := range merged.ToMap() { resolved[k] = v }");
             WriteLine("\t}");
         }
-        WriteLine("\tif _, ok := resolved[\"Args\"]; !ok { resolved[\"Args\"] = os.Args[1:] }");
+        WriteLine("\tif _, ok := resolved[\"args\"]; !ok { resolved[\"args\"] = os.Args[1:] }");
         // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
         // directory (not the cwd) when matching --apphost <directory> requests.
-        WriteLine("\tif projectDirectory, ok := resolved[\"ProjectDirectory\"].(string); !ok || projectDirectory == \"\" {");
+        WriteLine("\tif projectDirectory, ok := resolved[\"projectDirectory\"].(string); !ok || projectDirectory == \"\" {");
         WriteLine("\t\tif projectDirectory := os.Getenv(\"ASPIRE_PROJECT_DIRECTORY\"); projectDirectory != \"\" {");
-        WriteLine("\t\t\tresolved[\"ProjectDirectory\"] = projectDirectory");
+        WriteLine("\t\t\tresolved[\"projectDirectory\"] = projectDirectory");
         WriteLine("\t\t} else if pwd, err := os.Getwd(); err == nil {");
-        WriteLine("\t\t\tresolved[\"ProjectDirectory\"] = pwd");
+        WriteLine("\t\t\tresolved[\"projectDirectory\"] = pwd");
         WriteLine("\t\t}");
         WriteLine("\t}");
-        WriteLine("\tif appHostFilePath, ok := resolved[\"AppHostFilePath\"].(string); !ok || appHostFilePath == \"\" {");
-        WriteLine("\t\tif appHostFilePath := os.Getenv(\"ASPIRE_APPHOST_FILEPATH\"); appHostFilePath != \"\" { resolved[\"AppHostFilePath\"] = appHostFilePath }");
+        WriteLine("\tif appHostFilePath, ok := resolved[\"appHostFilePath\"].(string); !ok || appHostFilePath == \"\" {");
+        WriteLine("\t\tif appHostFilePath := os.Getenv(\"ASPIRE_APPHOST_FILEPATH\"); appHostFilePath != \"\" { resolved[\"appHostFilePath\"] = appHostFilePath }");
         WriteLine("\t}");
-        WriteLine("\tif dashboardApplicationName, ok := resolved[\"DashboardApplicationName\"].(string); ok && dashboardApplicationName == \"\" {");
-        WriteLine("\t\tdelete(resolved, \"DashboardApplicationName\")");
+        WriteLine("\tif dashboardApplicationName, ok := resolved[\"dashboardApplicationName\"].(string); ok && dashboardApplicationName == \"\" {");
+        WriteLine("\t\tdelete(resolved, \"dashboardApplicationName\")");
         WriteLine("\t}");
         WriteLine();
         WriteLine($"\tresult, err := c.invokeCapability(context.Background(), \"{AtsConstants.CreateBuilderCapability}\", map[string]any{{\"argsOrOptions\": resolved}})");

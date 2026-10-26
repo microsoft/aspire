@@ -1019,7 +1019,9 @@ class AspireClient:
     def register_callback(
         self,
         callback: typing.Callable[..., typing.Any] | None,
-        parameter_type_ids: typing.Sequence[str | None] | None = None
+        parameter_type_ids: typing.Sequence[str | None] | None = None,
+        *,
+        dto_writeback: bool = False
     ) -> str | None:
         '''
         Register a callback function that can be invoked from the .NET side.
@@ -1058,7 +1060,11 @@ class AspireClient:
                         break
 
                 if arg_array:
-                    return callback(*arg_array)
+                    result = callback(*arg_array)
+                    # Void DTO callbacks return mutated positional arguments, for example
+                    # {"p0": {"minCount": 2, "osSku": "AzureLinux"}}, rather than Python's None.
+                    # Opt in only for these callbacks so nullable callback results stay null.
+                    return args if dto_writeback else result
 
             # No args or null
             if args is None:
@@ -1479,7 +1485,7 @@ def _validate_type(arg: typing.Any, expected_type: typing.Any) -> bool:
                 return False
             if not _validate_type(value, value_type):
                 return False
-    elif typing.get_origin(expected_type) is typing.Callable:
+    elif typing.get_origin(expected_type) is typing.get_origin(typing.Callable):
         return callable(arg)
     elif isinstance(arg, (tuple, typing.Mapping)):
         return False
@@ -1806,287 +1812,287 @@ class DataVolumeParameters(typing.TypedDict, total=False):
 # ============================================================================
 
 class AddContainerOptions(typing.TypedDict, total=False):
-    Image: str
-    Tag: str | None
+    image: str
+    tag: str | None
 
 class BoolInteractionResult(typing.TypedDict, total=False):
-    Canceled: bool
-    Value: bool
+    canceled: bool
+    value: bool
 
 class CertificateTrustExecutionConfigurationContext(typing.TypedDict, total=False):
-    CertificateBundlePath: ReferenceExpression
-    CertificateDirectoriesPath: ReferenceExpression
-    RootCertificatesPath: str
-    IsContainer: bool
+    certificateBundlePath: ReferenceExpression
+    certificateDirectoriesPath: ReferenceExpression
+    rootCertificatesPath: str
+    isContainer: bool
 
 class CertificateTrustExecutionConfigurationExportData(typing.TypedDict, total=False):
-    Scope: CertificateTrustScope
-    CertificateSubjects: typing.Iterable[str]
-    CustomBundlePaths: typing.Iterable[str]
+    scope: CertificateTrustScope
+    certificateSubjects: typing.Iterable[str]
+    customBundlePaths: typing.Iterable[str]
 
 class CommandOptions(typing.TypedDict, total=False):
-    Description: str | None
-    Parameter: typing.Any
-    Arguments: typing.Iterable[InteractionInput]
-    ValidateArguments: typing.Callable[[InputsDialogValidationContext], None]
-    Visibility: ResourceCommandVisibility
-    ConfirmationMessage: str | None
-    IconName: str | None
-    IconVariant: IconVariant | None
-    IsHighlighted: bool
-    UpdateState: typing.Callable[[UpdateCommandStateContext], ResourceCommandState]
-    Progress: CommandProgressOptions
+    description: str | None
+    parameter: typing.Any
+    arguments: typing.Iterable[InteractionInput]
+    validateArguments: typing.Callable[[InputsDialogValidationContext], None]
+    visibility: ResourceCommandVisibility
+    confirmationMessage: str | None
+    iconName: str | None
+    iconVariant: IconVariant | None
+    isHighlighted: bool
+    updateState: typing.Callable[[UpdateCommandStateContext], ResourceCommandState]
+    progress: CommandProgressOptions
 
 class CommandProgressOptions(typing.TypedDict, total=False):
-    Message: str | None
-    Title: str | None
-    HideCancelButton: bool
+    message: str | None
+    title: str | None
+    hideCancelButton: bool
 
 class CommandResultData(typing.TypedDict, total=False):
-    Value: str
-    Format: CommandResultFormat
-    DisplayImmediately: bool
+    value: str
+    format: CommandResultFormat
+    displayImmediately: bool
 
 class ContainerFilesOptions(typing.TypedDict, total=False):
-    DefaultOwner: int | None
-    DefaultGroup: int | None
-    Umask: int | None
+    defaultOwner: int | None
+    defaultGroup: int | None
+    umask: int | None
 
 class CreateBuilderOptions(typing.TypedDict, total=False):
-    Args: typing.Iterable[str]
-    ProjectDirectory: str | None
-    AppHostFilePath: str | None
-    ContainerRegistryOverride: str | None
-    DisableDashboard: bool
-    DashboardApplicationName: str | None
-    AllowUnsecuredTransport: bool
-    EnableResourceLogging: bool
+    args: typing.Iterable[str]
+    projectDirectory: str | None
+    appHostFilePath: str | None
+    containerRegistryOverride: str | None
+    disableDashboard: bool
+    dashboardApplicationName: str | None
+    allowUnsecuredTransport: bool
+    enableResourceLogging: bool
 
 class CreateInteractionInputOptions(typing.TypedDict, total=False):
-    Label: str | None
-    Description: str | None
-    EnableDescriptionMarkdown: bool | None
-    Required: bool | None
-    Placeholder: str | None
-    Value: str | None
-    AllowCustomChoice: bool | None
-    Disabled: bool | None
-    MaxLength: int | None
-    MaxFileSize: int | None
-    AllowMultipleFiles: bool | None
-    FileFilter: str | None
+    label: str | None
+    description: str | None
+    enableDescriptionMarkdown: bool | None
+    required: bool | None
+    placeholder: str | None
+    value: str | None
+    allowCustomChoice: bool | None
+    disabled: bool | None
+    maxLength: int | None
+    maxFileSize: int | None
+    allowMultipleFiles: bool | None
+    fileFilter: str | None
 
 class DynamicLoadingOptions(typing.TypedDict, total=False):
-    AlwaysLoadOnStart: bool | None
-    DependsOnInputs: typing.Iterable[str]
+    alwaysLoadOnStart: bool | None
+    dependsOnInputs: typing.Iterable[str]
 
 class ExecuteCommandResult(typing.TypedDict, total=False):
-    Success: bool
-    Canceled: bool
-    ErrorMessage: str | None
-    Message: str | None
-    Data: CommandResultData
+    success: bool
+    canceled: bool
+    errorMessage: str | None
+    message: str | None
+    data: CommandResultData
 
 class GenerateParameterDefault(typing.TypedDict, total=False):
-    MinLength: int
-    Lower: bool
-    Upper: bool
-    Numeric: bool
-    Special: bool
-    MinLower: int
-    MinUpper: int
-    MinNumeric: int
-    MinSpecial: int
+    minLength: int
+    lower: bool
+    upper: bool
+    numeric: bool
+    special: bool
+    minLower: int
+    minUpper: int
+    minNumeric: int
+    minSpecial: int
 
 class HealthCheckResult(typing.TypedDict, total=False):
-    Status: HealthStatus
-    Description: str | None
-    Data: typing.Mapping[str, str]
+    status: HealthStatus
+    description: str | None
+    data: typing.Mapping[str, str]
 
 class HttpCommandExportOptions(typing.TypedDict, total=False):
-    CommandOptions: CommandOptions
-    Description: str | None
-    ConfirmationMessage: str | None
-    IconName: str | None
-    IconVariant: IconVariant | None
-    IsHighlighted: bool
-    CommandName: str | None
-    EndpointName: str | None
-    MethodName: str | None
-    PrepareRequest: typing.Callable[[HttpCommandPrepareRequestContext], HttpCommandRequestExportData]
-    ResultMode: HttpCommandResultMode
+    commandOptions: CommandOptions
+    description: str | None
+    confirmationMessage: str | None
+    iconName: str | None
+    iconVariant: IconVariant | None
+    isHighlighted: bool
+    commandName: str | None
+    endpointName: str | None
+    methodName: str | None
+    prepareRequest: typing.Callable[[HttpCommandPrepareRequestContext], HttpCommandRequestExportData]
+    resultMode: HttpCommandResultMode
 
 class HttpCommandRequestExportData(typing.TypedDict, total=False):
-    MethodName: str | None
-    Headers: typing.Mapping[str, str]
-    Content: str | None
-    ContentType: str | None
+    methodName: str | None
+    headers: typing.Mapping[str, str]
+    content: str | None
+    contentType: str | None
 
 class HttpsCertificateExecutionConfigurationContext(typing.TypedDict, total=False):
-    CertificatePath: ReferenceExpression
-    KeyPath: ReferenceExpression
-    CertificateWithKeyPath: ReferenceExpression
-    PfxPath: ReferenceExpression
+    certificatePath: ReferenceExpression
+    keyPath: ReferenceExpression
+    certificateWithKeyPath: ReferenceExpression
+    pfxPath: ReferenceExpression
 
 class HttpsCertificateExecutionConfigurationExportData(typing.TypedDict, total=False):
-    Subject: str
-    Thumbprint: str | None
-    KeyPathExpression: str
-    PfxPathExpression: str
-    IsKeyPathReferenced: bool
-    IsCertificateWithKeyPathReferenced: bool
-    IsPfxPathReferenced: bool
-    Password: str | None
+    subject: str
+    thumbprint: str | None
+    keyPathExpression: str
+    pfxPathExpression: str
+    isKeyPathReferenced: bool
+    isCertificateWithKeyPathReferenced: bool
+    isPfxPathReferenced: bool
+    password: str | None
 
 class HttpsCertificateInfo(typing.TypedDict, total=False):
-    Subject: str
-    Issuer: str
-    Thumbprint: str | None
+    subject: str
+    issuer: str
+    thumbprint: str | None
 
 class InputInteractionResult(typing.TypedDict, total=False):
-    Canceled: bool
-    Input: InteractionInput
+    canceled: bool
+    input: InteractionInput
 
 class InteractionChoiceOption(typing.TypedDict, total=False):
-    Value: str
-    Label: str
+    value: str
+    label: str
 
 class InteractionInput(typing.TypedDict, total=False):
-    Name: str
-    Label: str | None
-    Description: str | None
-    EnableDescriptionMarkdown: bool
-    InputType: InputType
-    Required: bool
-    Options: typing.Iterable[typing.Any]
-    Value: str | None
-    Placeholder: str | None
-    AllowCustomChoice: bool
-    Disabled: bool
-    MaxLength: int | None
-    AllowMultipleFiles: bool
-    FileFilter: str | None
-    MaxFileSize: int | None
+    name: str
+    label: str | None
+    description: str | None
+    enableDescriptionMarkdown: bool
+    inputType: InputType
+    required: bool
+    options: typing.Iterable[typing.Any]
+    value: str | None
+    placeholder: str | None
+    allowCustomChoice: bool
+    disabled: bool
+    maxLength: int | None
+    allowMultipleFiles: bool
+    fileFilter: str | None
+    maxFileSize: int | None
 
 class InteractionInputsDialogOptions(typing.TypedDict, total=False):
-    PrimaryButtonText: str | None
-    SecondaryButtonText: str | None
-    ShowSecondaryButton: bool | None
-    ShowDismiss: bool | None
-    EnableMessageMarkdown: bool | None
-    ValidationCallback: typing.Callable[[InputsDialogValidationContext], None]
+    primaryButtonText: str | None
+    secondaryButtonText: str | None
+    showSecondaryButton: bool | None
+    showDismiss: bool | None
+    enableMessageMarkdown: bool | None
+    validationCallback: typing.Callable[[InputsDialogValidationContext], None]
 
 class InteractionMessageBoxOptions(typing.TypedDict, total=False):
-    PrimaryButtonText: str | None
-    SecondaryButtonText: str | None
-    ShowSecondaryButton: bool | None
-    ShowDismiss: bool | None
-    EnableMessageMarkdown: bool | None
-    Intent: MessageIntent | None
+    primaryButtonText: str | None
+    secondaryButtonText: str | None
+    showSecondaryButton: bool | None
+    showDismiss: bool | None
+    enableMessageMarkdown: bool | None
+    intent: MessageIntent | None
 
 class InteractionNotificationOptions(typing.TypedDict, total=False):
-    PrimaryButtonText: str | None
-    SecondaryButtonText: str | None
-    ShowSecondaryButton: bool | None
-    ShowDismiss: bool | None
-    EnableMessageMarkdown: bool | None
-    Intent: MessageIntent | None
-    LinkText: str | None
-    LinkUrl: str | None
+    primaryButtonText: str | None
+    secondaryButtonText: str | None
+    showSecondaryButton: bool | None
+    showDismiss: bool | None
+    enableMessageMarkdown: bool | None
+    intent: MessageIntent | None
+    linkText: str | None
+    linkUrl: str | None
 
 class InteractionProgressOptions(typing.TypedDict, total=False):
-    Title: str | None
-    PrimaryButtonText: str | None
-    EnableMessageMarkdown: bool | None
-    Work: typing.Callable[[ProgressContext], None]
+    title: str | None
+    primaryButtonText: str | None
+    enableMessageMarkdown: bool | None
+    work: typing.Callable[[ProgressContext], None]
 
 class ParameterCustomInputOptions(typing.TypedDict, total=False):
-    InputType: InputType | None
-    Label: str | None
-    Description: str | None
-    EnableDescriptionMarkdown: bool | None
-    Options: typing.Mapping[str, str]
-    Value: str | None
-    Placeholder: str | None
-    AllowCustomChoice: bool | None
-    Disabled: bool | None
-    MaxLength: int | None
+    inputType: InputType | None
+    label: str | None
+    description: str | None
+    enableDescriptionMarkdown: bool | None
+    options: typing.Mapping[str, str]
+    value: str | None
+    placeholder: str | None
+    allowCustomChoice: bool | None
+    disabled: bool | None
+    maxLength: int | None
 
 class ProcessCommandExportOptions(typing.TypedDict, total=False):
-    ExecutablePath: str | None
-    Arguments: typing.Iterable[str]
-    WorkingDirectory: str | None
-    EnvironmentVariables: typing.Mapping[str, str]
-    InheritEnvironmentVariables: bool | None
-    StandardInputContent: str | None
-    KillEntireProcessTree: bool | None
-    CreateProcessSpec: typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]
-    CommandOptions: CommandOptions
-    MaxOutputLineCount: int | None
-    DisplayImmediately: bool | None
-    SuccessExitCodes: typing.Iterable[int]
+    executablePath: str | None
+    arguments: typing.Iterable[str]
+    workingDirectory: str | None
+    environmentVariables: typing.Mapping[str, str]
+    inheritEnvironmentVariables: bool | None
+    standardInputContent: str | None
+    killEntireProcessTree: bool | None
+    createProcessSpec: typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]
+    commandOptions: CommandOptions
+    maxOutputLineCount: int | None
+    displayImmediately: bool | None
+    successExitCodes: typing.Iterable[int]
 
 class ProcessCommandResultExportOptions(typing.TypedDict, total=False):
-    CommandOptions: CommandOptions
-    MaxOutputLineCount: int | None
-    DisplayImmediately: bool | None
-    SuccessExitCodes: typing.Iterable[int]
+    commandOptions: CommandOptions
+    maxOutputLineCount: int | None
+    displayImmediately: bool | None
+    successExitCodes: typing.Iterable[int]
 
 class ProcessCommandSpecExportData(typing.TypedDict, total=False):
-    ExecutablePath: str | None
-    Arguments: typing.Iterable[str]
-    WorkingDirectory: str | None
-    EnvironmentVariables: typing.Mapping[str, str]
-    InheritEnvironmentVariables: bool | None
-    StandardInputContent: str | None
-    KillEntireProcessTree: bool | None
+    executablePath: str | None
+    arguments: typing.Iterable[str]
+    workingDirectory: str | None
+    environmentVariables: typing.Mapping[str, str]
+    inheritEnvironmentVariables: bool | None
+    standardInputContent: str | None
+    killEntireProcessTree: bool | None
 
 class ReferenceEnvironmentInjectionOptions(typing.TypedDict, total=False):
-    ConnectionString: bool
-    ConnectionProperties: bool
-    ServiceDiscovery: bool
-    Endpoints: bool
+    connectionString: bool
+    connectionProperties: bool
+    serviceDiscovery: bool
+    endpoints: bool
 
 class ResourceEventDto(typing.TypedDict, total=False):
-    ResourceName: str
-    ResourceId: str
-    State: str | None
-    StateStyle: str | None
-    HealthStatus: str | None
-    ExitCode: int | None
+    resourceName: str
+    resourceId: str
+    state: str | None
+    stateStyle: str | None
+    healthStatus: str | None
+    exitCode: int | None
 
 class ResourceUrlAnnotation(typing.TypedDict, total=False):
-    Url: str
-    DisplayText: str | None
-    Endpoint: EndpointReference
-    DisplayOrder: int | None
-    DisplayLocation: UrlDisplayLocation
+    url: str
+    displayText: str | None
+    endpoint: EndpointReference
+    displayOrder: int | None
+    displayLocation: UrlDisplayLocation
 
 class RunConfiguration(typing.TypedDict, total=False):
-    WatchEnabled: bool
+    watchEnabled: bool
 
 class TestConfigDto(typing.TypedDict, total=False):
-    Name: str
-    Port: int
-    Enabled: bool
-    OptionalField: str | None
+    name: str
+    port: int
+    enabled: bool
+    optionalField: str | None
 
 class TestDeeplyNestedDto(typing.TypedDict, total=False):
-    NestedData: typing.Mapping[str, typing.Iterable[TestConfigDto]]
-    MetadataArray: typing.Iterable[typing.Mapping[str, str]]
+    nestedData: typing.Mapping[str, typing.Iterable[TestConfigDto]]
+    metadataArray: typing.Iterable[typing.Mapping[str, str]]
 
 class TestNestedDto(typing.TypedDict, total=False):
-    Id: str
-    Config: TestConfigDto
-    Tags: typing.Iterable[str]
-    Counts: typing.Mapping[str, int]
+    id: str
+    config: TestConfigDto
+    tags: typing.Iterable[str]
+    counts: typing.Mapping[str, int]
 
 class UpdateCommandStateResourceSnapshot(typing.TypedDict, total=False):
-    ResourceType: str
-    State: str | None
-    StateStyle: str | None
-    HealthStatus: HealthStatus | None
-    ExitCode: int | None
+    resourceType: str
+    state: str | None
+    stateStyle: str | None
+    healthStatus: HealthStatus | None
+    exitCode: int | None
 
 
 # ============================================================================
@@ -2094,10 +2100,10 @@ class UpdateCommandStateResourceSnapshot(typing.TypedDict, total=False):
 # ============================================================================
 
 TestConfigs = types.SimpleNamespace()
-TestConfigs.Default = typing.cast(TestConfigDto, { "Name": "default", "Port": 6379, "Enabled": True, "OptionalField": "cache" })
+TestConfigs.Default = typing.cast(TestConfigDto, { "name": "default", "port": 6379, "enabled": True, "optionalField": "cache" })
 TestConfigs.Profiles = types.SimpleNamespace()
-TestConfigs.Profiles.Development = typing.cast(TestConfigDto, { "Name": "development", "Port": 5001, "Enabled": False, "OptionalField": None })
-TestConfigs.Secure = typing.cast(TestConfigDto, { "Name": "secure", "Port": 6380, "Enabled": True, "OptionalField": None })
+TestConfigs.Profiles.Development = typing.cast(TestConfigDto, { "name": "development", "port": 5001, "enabled": False, "optionalField": None })
+TestConfigs.Secure = typing.cast(TestConfigDto, { "name": "secure", "port": 6380, "enabled": True, "optionalField": None })
 TestConfigs.UnicodeGreeting = "你好こんにちは"
 
 WellKnownPipelineSteps = types.SimpleNamespace()
@@ -5904,7 +5910,7 @@ class InteractionInputCollection:
         """Get the input with the specified name, or None if no input matches."""
         lookup_name = name.lower()
         for interaction_input in self.to_array():
-            input_name = interaction_input.get("Name")
+            input_name = interaction_input.get("name")
             if input_name is not None and input_name.lower() == lookup_name:
                 return interaction_input
         return None
@@ -5921,11 +5927,11 @@ class InteractionInputCollection:
         interaction_input = self.get(name)
         if interaction_input is None:
             return ""
-        return interaction_input.get("Value") or ""
+        return interaction_input.get("value") or ""
 
     def required_value(self, name: str) -> str:
         """Get the input value with the specified name, or raise ValueError if no input matches."""
-        return self.required(name).get("Value") or ""
+        return self.required(name).get("value") or ""
 
 
 class InteractionInputLoadContext:
@@ -8223,7 +8229,7 @@ class _BaseResource(AbstractResource):
         """Registers a callback to update the URL displayed for the endpoint with the specified name."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['endpointName'] = endpoint_name
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, dto_writeback=True)
         result = self._client.invoke_capability(
             'Aspire.Hosting/withUrlForEndpoint',
             rpc_args,
@@ -8827,7 +8833,7 @@ class _BaseResource(AbstractResource):
             if _validate_tuple_types(_url_for_endpoint, (str, typing.Callable[[ResourceUrlAnnotation], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["endpointName"] = typing.cast(tuple[str, typing.Callable[[ResourceUrlAnnotation], None]], _url_for_endpoint)[0]
-                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[ResourceUrlAnnotation], None]], _url_for_endpoint)[1])
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[ResourceUrlAnnotation], None]], _url_for_endpoint)[1], dto_writeback=True)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withUrlForEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'url_for_endpoint'. Expected: (str, Callable[[ResourceUrlAnnotation], None])")
@@ -13453,29 +13459,29 @@ def create_builder(
     # Default args and project_directory if not provided
     effective_options = options or CreateBuilderOptions()
     if args is not None:
-        effective_options['Args'] = args
-    elif not effective_options.get('Args'):
-        effective_options['Args'] = sys.argv[1:]
+        effective_options['args'] = args
+    elif not effective_options.get('args'):
+        effective_options['args'] = sys.argv[1:]
     if project_directory is not None:
-        effective_options['ProjectDirectory'] = project_directory
-    elif not effective_options.get('ProjectDirectory'):
-        effective_options['ProjectDirectory'] = os.environ.get('ASPIRE_PROJECT_DIRECTORY', os.getcwd())
+        effective_options['projectDirectory'] = project_directory
+    elif not effective_options.get('projectDirectory'):
+        effective_options['projectDirectory'] = os.environ.get('ASPIRE_PROJECT_DIRECTORY', os.getcwd())
     if app_host_file_path is not None:
-        effective_options['AppHostFilePath'] = app_host_file_path
-    elif not effective_options.get('AppHostFilePath'):
+        effective_options['appHostFilePath'] = app_host_file_path
+    elif not effective_options.get('appHostFilePath'):
         app_host_file_path = os.environ.get('ASPIRE_APPHOST_FILEPATH')
         if app_host_file_path:
-            effective_options['AppHostFilePath'] = app_host_file_path
+            effective_options['appHostFilePath'] = app_host_file_path
     if container_registry_override is not None:
-        effective_options['ContainerRegistryOverride'] = container_registry_override
+        effective_options['containerRegistryOverride'] = container_registry_override
     if disable_dashboard is not None:
-        effective_options['DisableDashboard'] = disable_dashboard
+        effective_options['disableDashboard'] = disable_dashboard
     if dashboard_application_name is not None:
-        effective_options['DashboardApplicationName'] = dashboard_application_name
+        effective_options['dashboardApplicationName'] = dashboard_application_name
     if allow_unsecured_transport is not None:
-        effective_options['AllowUnsecuredTransport'] = allow_unsecured_transport
+        effective_options['allowUnsecuredTransport'] = allow_unsecured_transport
     if enable_resource_logging is not None:
-        effective_options['EnableResourceLogging'] = enable_resource_logging
+        effective_options['enableResourceLogging'] = enable_resource_logging
 
     return DistributedApplicationBuilder(client, effective_options)
 

@@ -7,6 +7,8 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -16,6 +18,8 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net.Sockets;
 
 namespace Aspire.Cli.Tests.DotNet;
@@ -47,6 +51,367 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         }
 
         return "dotnet";
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task ReadRestoreConfiguration_DoesNotRunLegacyValidationBeforeCandidateRestore(
+        bool fileBased, bool hasConfiguredSources)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var root = workspace.WorkspaceRoot;
+        var validationTargets = Path.Combine(root.FullName, "LegacySdk.targets");
+        // Older Aspire SDKs validate the AppHost reference before CollectPackageReferences.
+        // An update must be able to inspect policy before repairing that reference.
+        await File.WriteAllTextAsync(validationTargets, """
+            <Project>
+              <Target Name="LegacyAppHostValidation" BeforeTargets="CollectPackageReferences">
+                <Error Text="Legacy SDK validation requires an AppHost package reference." />
+              </Target>
+            </Project>
+            """);
+        var projectFile = new FileInfo(Path.Combine(root.FullName, fileBased ? "apphost.cs" : "AppHost.csproj"));
+        var sources = hasConfiguredSources ? "https://custom.example/v3/index.json" : string.Empty;
+        await File.WriteAllTextAsync(projectFile.FullName, fileBased
+            ? $$"""
+                #:property CustomAfterMicrosoftCommonTargets={{MSBuildEscaping.Escape(validationTargets)}}
+                #:property RestoreSources={{sources}}
+                #:property DisableImplicitFrameworkReferences=true
+                #:property PublishAot=false
+                #:property PublishTrimmed=false
+                #:property SelfContained=false
+                #:property UseAppHost=false
+                Console.WriteLine("Candidate");
+                """
+            : $$"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net{{Environment.Version.Major}}.0</TargetFramework>
+                    <RestoreSources>{{sources}}</RestoreSources>
+                    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+                  </PropertyGroup>
+                  <Import Project="{{MSBuildEscaping.Escape(validationTargets)}}" />
+                </Project>
+                """);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliExecutionFactoryFactory = _ =>
+                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+        }).BuildServiceProvider();
+        var runner = provider.GetRequiredService<IDotNetCliRunner>();
+
+        var settings = await DotNetRestoreConfiguration.ReadAsync(
+            runner, projectFile, TestContext.Current.CancellationToken);
+
+        Assert.Equal(fileBased ? projectFile.FullName + ".csproj" : projectFile.FullName, settings.ProjectIdentity);
+        Assert.Equal(!hasConfiguredSources, settings.UsesAmbientConfiguration);
+        Assert.Equal(hasConfiguredSources ? ["RestoreSources"] : [], settings.ConfigurationOverrides);
+        Assert.Equal("NuGet.targets", Path.GetFileName(settings.RestoreTargets));
+
+        var output = new ConcurrentQueue<string>();
+        var restoreExitCode = await runner.RestoreAsync(projectFile, new ProcessInvocationOptions
+        {
+            StandardOutputCallback = output.Enqueue,
+            StandardErrorCallback = output.Enqueue
+        }, TestContext.Current.CancellationToken);
+
+        Assert.NotEqual(0, restoreExitCode);
+        Assert.Contains(output, line => line.Contains(
+            "Legacy SDK validation requires an AppHost package reference.", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task ReadRestoreConfiguration_AdditionalProjectSourcesDoNotOverrideConfiguration(
+        bool fileBased, bool hasConfiguredSources)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var libraryPacks = workspace.CreateDirectory("library-packs");
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, fileBased ? "apphost.cs" : "AppHost.csproj"));
+        var sources = hasConfiguredSources ? "https://custom.example/v3/index.json" : string.Empty;
+        // Point the real SDK's offline-cache import at an isolated folder so the test
+        // exercises its implicit source without changing the installed SDK.
+        await File.WriteAllTextAsync(projectFile.FullName, fileBased
+            ? $$"""
+                #:property _WorkloadLibraryPacksFolder={{MSBuildEscaping.Escape(libraryPacks.FullName)}}
+                #:property DisableImplicitLibraryPacksFolder=false
+                #:property RestoreAdditionalProjectSources={{sources}}
+                #:property DisableImplicitFrameworkReferences=true
+                #:property PublishAot=false
+                #:property PublishTrimmed=false
+                #:property SelfContained=false
+                #:property UseAppHost=false
+                Console.WriteLine("Candidate");
+                """
+            : $$"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net{{Environment.Version.Major}}.0</TargetFramework>
+                    <_WorkloadLibraryPacksFolder>{{MSBuildEscaping.Escape(libraryPacks.FullName)}}</_WorkloadLibraryPacksFolder>
+                    <DisableImplicitLibraryPacksFolder>false</DisableImplicitLibraryPacksFolder>
+                    <RestoreAdditionalProjectSources>{{sources}}</RestoreAdditionalProjectSources>
+                    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+                  </PropertyGroup>
+                </Project>
+                """);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliExecutionFactoryFactory = _ =>
+                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+        }).BuildServiceProvider();
+        var runner = provider.GetRequiredService<IDotNetCliRunner>();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (exitCode, output) = await runner.GetProjectItemsAndPropertiesAsync(
+            projectFile,
+            items: [],
+            properties: ["RestoreAdditionalProjectSources"],
+            targets: [],
+            new ProcessInvocationOptions { NoRestore = true, ExcludeRestorePackageImports = true },
+            cancellationToken);
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(output);
+        using (output)
+        {
+            Assert.Equal($"{sources};{libraryPacks.FullName}",
+                output.RootElement.GetProperty("Properties").GetProperty("RestoreAdditionalProjectSources").GetString());
+        }
+
+        var settings = await DotNetRestoreConfiguration.ReadAsync(runner, projectFile, cancellationToken);
+
+        Assert.True(settings.UsesAmbientConfiguration);
+        Assert.Empty(settings.ConfigurationOverrides);
+
+        var (afterExitCode, afterOutput) = await runner.GetProjectItemsAndPropertiesAsync(
+            projectFile,
+            items: [],
+            properties: ["RestoreAdditionalProjectSources"],
+            targets: [],
+            new ProcessInvocationOptions { NoRestore = true, ExcludeRestorePackageImports = true },
+            cancellationToken);
+        Assert.Equal(0, afterExitCode);
+        Assert.NotNull(afterOutput);
+        using (afterOutput)
+        {
+            Assert.Equal($"{sources};{libraryPacks.FullName}",
+                afterOutput.RootElement.GetProperty("Properties").GetProperty("RestoreAdditionalProjectSources").GetString());
+        }
+    }
+
+    [Theory]
+    [InlineData(false, true, false, false)]
+    [InlineData(true, true, false, false)]
+    [InlineData(false, false, false, false)]
+    [InlineData(false, true, true, false)]
+    [InlineData(false, false, false, true)]
+    public async Task CandidateRestore_AcquiresSdkAndRestoresUpdatedVersionsBeforePersisting(
+        bool fileBased, bool childOwnPolicy, bool customChildTargets, bool escapedPath)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var root = escapedPath ? workspace.CreateDirectory("app ('literal')%@$") : workspace.WorkspaceRoot;
+        var oldFeed = workspace.CreateDirectory("old-feed");
+        var newFeed = workspace.CreateDirectory("new-feed");
+        var childFeed = workspace.CreateDirectory("child-feed");
+        var rootCache = workspace.CreateDirectory("root-cache");
+        var childCache = workspace.CreateDirectory("child-cache");
+        var suffix = Guid.NewGuid().ToString("N");
+        var rootPackage = $"Aspire.UpdateGraph.Root.{suffix}";
+        var childPackage = $"Aspire.UpdateGraph.Child.{suffix}";
+        var sdkVersion = $"9.4.2-native-{suffix}";
+        NuGetTestHelper.CreatePackage(oldFeed, rootPackage, "1.0.0", new Dictionary<string, string> { ["lib/net10.0/_._"] = "" });
+        NuGetTestHelper.CreatePackage(newFeed, rootPackage, "2.0.0", new Dictionary<string, string> { ["lib/net10.0/_._"] = "" });
+        NuGetTestHelper.CreatePackage(newFeed, childPackage, "1.0.0", new Dictionary<string, string> { ["lib/net10.0/_._"] = "" });
+        NuGetTestHelper.CreatePackage(childFeed, childPackage, "1.0.0", new Dictionary<string, string> { ["lib/net10.0/_._"] = "" });
+        NuGetTestHelper.CreatePackage(newFeed, "Aspire.AppHost.Sdk", sdkVersion, new Dictionary<string, string>
+        {
+            ["lib/net99.0/_._"] = "",
+            ["Sdk/Sdk.props"] = """<Project><Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" /></Project>""",
+            ["Sdk/Sdk.targets"] = """<Project><Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" /></Project>"""
+        });
+        var configFile = new FileInfo(Path.Combine(root.FullName, "NuGet.Config"));
+        await File.WriteAllTextAsync(configFile.FullName, $$"""
+            <configuration>
+              <packageSources><clear /><add key="old" value="{{oldFeed.FullName}}" /></packageSources>
+              <packageSourceMapping><clear /><packageSource key="old"><package pattern="Aspire*" /></packageSource></packageSourceMapping>
+              <config><add key="globalPackagesFolder" value="{{rootCache.FullName}}" /></config>
+            </configuration>
+            """);
+        var originalConfig = await File.ReadAllBytesAsync(configFile.FullName);
+        var (versionExitCode, versionOutput, versionError) = await RunNativeDotNetAsync(root, null, ["--version"]);
+        Assert.True(versionExitCode == 0, versionOutput + versionError);
+        var sdkDirectory = Path.Combine(Path.GetDirectoryName(GetDotNetExecutablePath())!, "sdk", versionOutput.Trim());
+        var childDirectory = Directory.CreateDirectory(Path.Combine(root.FullName, "child"));
+        var childFile = new FileInfo(Path.Combine(childDirectory.FullName, "Child.csproj"));
+        var childTargets = customChildTargets ? Path.Combine(childDirectory.FullName, "Custom;NuGet.targets") : string.Empty;
+        if (customChildTargets)
+        {
+            await File.WriteAllTextAsync(childTargets, $$"""
+                <Project>
+                  <Import Project="{{MSBuildEscaping.Escape(Path.Combine(sdkDirectory, "NuGet.targets"))}}" />
+                  <Target Name="CheckCustomNuGetTargets" BeforeTargets="_GetRestoreSettings">
+                    <WriteLinesToFile File="$(MSBuildProjectDirectory)/custom-targets-ran" Lines="preserved" Overwrite="true" />
+                  </Target>
+                </Project>
+                """);
+        }
+        await File.WriteAllTextAsync(childFile.FullName, $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net{{Environment.Version.Major}}.0</TargetFramework><RestorePackagesPath>{{childCache.FullName}}</RestorePackagesPath><DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences><NuGetRestoreTargets>{{MSBuildEscaping.Escape(childTargets)}}</NuGetRestoreTargets></PropertyGroup>
+              <ItemGroup><PackageReference Include="{{childPackage}}" Version="1.0.0" /></ItemGroup>
+            </Project>
+            """);
+        if (childOwnPolicy)
+        {
+            await File.WriteAllTextAsync(Path.Combine(childDirectory.FullName, "NuGet.Config"), $$"""
+                <configuration>
+                  <packageSources><clear /><add key="child" value="{{childFeed.FullName}}" /></packageSources>
+                  <packageSourceMapping><clear /><packageSource key="child"><package pattern="Aspire*" /></packageSource></packageSourceMapping>
+                </configuration>
+                """);
+        }
+        var projectFile = new FileInfo(Path.Combine(root.FullName, fileBased ? "apphost.cs" : "Root.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, fileBased
+            ? $$"""
+                #:sdk Aspire.AppHost.Sdk@{{sdkVersion}}
+                #:package {{rootPackage}}@2.0.0
+                #:property RestorePackagesPath={{MSBuildEscaping.Escape(rootCache.FullName)}}
+                #:property DisableImplicitFrameworkReferences=true
+                #:property PublishAot=false
+                #:property PublishTrimmed=false
+                #:property SelfContained=false
+                #:property UseAppHost=false
+                Console.WriteLine("Candidate");
+                """
+            : $$"""
+                <Project Sdk="Aspire.AppHost.Sdk/{{sdkVersion}}">
+                  <PropertyGroup><TargetFramework>net{{Environment.Version.Major}}.0</TargetFramework><RestorePackagesPath>{{MSBuildEscaping.Escape(rootCache.FullName)}}</RestorePackagesPath><DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences></PropertyGroup>
+                  <ItemGroup>
+                    <PackageReference Include="{{rootPackage}}" Version="2.0.0" />
+                    <ProjectReference Include="child/Child.csproj" />
+                  </ItemGroup>
+                </Project>
+                """);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var nuGetService = NuGetTestHelper.CreateService();
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily", PackageChannelQuality.Both, [new("Aspire*", newFeed.FullName)],
+            provider.GetRequiredService<INuGetPackageCache>(), new TestFeatures(), NullLogger.Instance);
+        var configuration = nuGetService.BuildChannelConfiguration(
+            root, "native-update", channel, null, null, TestContext.Current.CancellationToken);
+        var candidate = await new DotNetAppHostNuGetConfigMerger(nuGetService).PrepareAsync(
+            root, configuration, createIfMissing: true, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        Assert.NotNull(candidate);
+        var settings = new DotNetRestoreSettings(
+            fileBased ? projectFile.FullName + ".csproj" : projectFile.FullName,
+            Path.Combine(sdkDirectory, "NuGet.targets"), []);
+        var sdkCache = nuGetService.GetGlobalPackagesFolder(root);
+        var sdkPackageDirectory = Path.Combine(sdkCache, "aspire.apphost.sdk", sdkVersion);
+        Assert.False(Directory.Exists(sdkPackageDirectory));
+        var childRestoreTargets = childTargets;
+        if (customChildTargets)
+        {
+            var (inspectionExitCode, inspectionOutput, inspectionError) = await RunNativeDotNetAsync(childDirectory, null,
+                ["msbuild", childFile.FullName, "-getProperty:NuGetRestoreTargets", "-property:ExcludeRestorePackageImports=true"]);
+            Assert.True(inspectionExitCode == 0, inspectionOutput + inspectionError);
+            childRestoreTargets = inspectionOutput.Trim();
+            Assert.Equal(childTargets, childRestoreTargets);
+        }
+        try
+        {
+            using (var preview = await DotNetAppHostRestorePreview.CreateAsync(
+                nuGetService, candidate, settings, projectFile,
+                fileBased ? new Dictionary<string, string>() : new Dictionary<string, string> { [childFile.FullName] = childRestoreTargets },
+                TestContext.Current.CancellationToken))
+            {
+                await nuGetService.AcquirePackageAsync(
+                    ("Aspire.AppHost.Sdk", sdkVersion), preview.RootConfiguration, sdkCache,
+                    TestContext.Current.CancellationToken);
+                Assert.True(File.Exists(Path.Combine(sdkPackageDirectory, "Sdk", "Sdk.props")));
+                // SDK-only packages have no runtime-asset manifest to invalidate. A deleted
+                // package directory must be acquired again rather than treated as cached.
+                Directory.Delete(sdkPackageDirectory, recursive: true);
+                await nuGetService.AcquirePackageAsync(
+                    ("Aspire.AppHost.Sdk", sdkVersion), preview.RootConfiguration, sdkCache,
+                    TestContext.Current.CancellationToken);
+                Assert.True(File.Exists(Path.Combine(sdkPackageDirectory, "Sdk", "Sdk.props")));
+                var (exitCode, stdout, stderr) = await RunNativeDotNetAsync(root, sdkCache,
+                    ["restore", projectFile.FullName, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(preview.TargetsFile.FullName)}"]);
+                Assert.True(exitCode == 0, stdout + stderr);
+                Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configFile.FullName));
+                if (!fileBased)
+                {
+                    using var graph = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root.FullName, "obj", "Root.csproj.nuget.dgspec.json")));
+                    var projects = graph.RootElement.GetProperty("projects");
+                    Assert.Equal([newFeed.FullName], projects.GetProperty(projectFile.FullName).GetProperty("restore").GetProperty("sources")
+                        .EnumerateObject().Select(static source => source.Name).ToArray());
+                    using var childGraph = JsonDocument.Parse(await File.ReadAllTextAsync(
+                        Path.Combine(childDirectory.FullName, "obj", "Child.csproj.nuget.dgspec.json")));
+                    var childProject = childGraph.RootElement.GetProperty("projects").EnumerateObject().Single().Value;
+                    Assert.Equal([childOwnPolicy ? childFeed.FullName : newFeed.FullName], childProject.GetProperty("restore").GetProperty("sources")
+                        .EnumerateObject().Select(static source => source.Name).ToArray());
+                    Assert.Equal(childCache.FullName, childProject.GetProperty("restore").GetProperty("packagesPath").GetString()?.TrimEnd(Path.DirectorySeparatorChar));
+                    if (customChildTargets)
+                    {
+                        Assert.Equal("preserved" + Environment.NewLine,
+                            await File.ReadAllTextAsync(Path.Combine(childDirectory.FullName, "custom-targets-ran")));
+                    }
+                }
+            }
+            await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+            if (customChildTargets)
+            {
+                File.Delete(Path.Combine(childDirectory.FullName, "custom-targets-ran"));
+            }
+            var (nativeExitCode, nativeOutput, nativeError) = await RunNativeDotNetAsync(root, sdkCache, ["restore", projectFile.FullName]);
+            Assert.True(nativeExitCode == 0, nativeOutput + nativeError);
+            if (customChildTargets)
+            {
+                Assert.Equal("preserved" + Environment.NewLine,
+                    await File.ReadAllTextAsync(Path.Combine(childDirectory.FullName, "custom-targets-ran")));
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(sdkPackageDirectory))
+            {
+                Directory.Delete(sdkPackageDirectory, recursive: true);
+            }
+        }
+    }
+
+    private static async Task<(int ExitCode, string Output, string Error)> RunNativeDotNetAsync(
+        DirectoryInfo workingDirectory, string? packagesDirectory, string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo(GetDotNetExecutablePath())
+        {
+            WorkingDirectory = workingDirectory.FullName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        startInfo.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
+        startInfo.Environment["DOTNET_NOLOGO"] = "1";
+        if (packagesDirectory is not null)
+        {
+            startInfo.Environment["NUGET_PACKAGES"] = packagesDirectory;
+        }
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start dotnet.");
+        // Read both pipes concurrently; SDK restore diagnostics can fill either pipe.
+        var output = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+        var error = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+        return (process.ExitCode, await output, await error);
     }
 
     [Fact]
@@ -416,8 +781,10 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.True(DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(cliPath));
     }
 
-    [Fact]
-    public async Task RestoreAsyncRunsDotnetRestoreCommand()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RestoreAsyncRunsDotnetRestoreCommand(bool candidate)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -426,7 +793,11 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
-        var options = new ProcessInvocationOptions();
+        var targets = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "candidate;targets%('literal')@$?.targets"));
+        var options = new ProcessInvocationOptions
+        {
+            NuGetRestoreTargetsFile = candidate ? targets : null
+        };
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -434,8 +805,9 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             executionContext,
             (args, _, _, _) =>
             {
-                Assert.Equal("restore", args[0]);
-                Assert.Equal(projectFile.FullName, args[1]);
+                Assert.Equal(candidate
+                    ? ["restore", projectFile.FullName, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(targets.FullName)}"]
+                    : ["restore", projectFile.FullName], args);
             },
             0);
 
@@ -2002,6 +2374,75 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             options,
             CancellationToken.None
         );
+    }
+
+    [Theory]
+    [InlineData("apphost.cs", true)]
+    [InlineData("AppHost.csproj", false)]
+    public async Task GetProjectItemsAndPropertiesAsync_NoRestoreSettingsProbe(string fileName, bool isSingleFile)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, fileName));
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            CreateExecutionContext(workspace.WorkspaceRoot),
+            (args, _, _, options) =>
+            {
+                Assert.Equal(isSingleFile
+                    ? ["build", "--no-restore", "-property:ExcludeRestorePackageImports=true", "-getProperty:MSBuildVersion,RestoreSources", projectFile.FullName]
+                    : ["msbuild", "-property:ExcludeRestorePackageImports=true", "-getProperty:MSBuildVersion,RestoreSources", projectFile.FullName], args);
+                options.StandardOutputCallback?.Invoke("""{"Properties":{"MSBuildVersion":"17.0.0","RestoreSources":""},"Items":{}}""");
+            },
+            0);
+
+        var (exitCode, output) = await runner.GetProjectItemsAndPropertiesAsync(
+            projectFile,
+            items: [],
+            properties: ["RestoreSources"],
+            targets: [],
+            new ProcessInvocationOptions { NoRestore = true, ExcludeRestorePackageImports = true },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(output);
+        output.Dispose();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task GetProjectItemsAndPropertiesAsync_FailureDiagnosticsHonorLoggingSuppression(bool suppressLogging)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.Path, "AppHost.csproj"));
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        var logger = new FakeLogger<DotNetCliRunner>();
+        const string stdout = """{"Properties":{"RestoreSources":"https://user:password@feed.example/v3/index.json"}}""";
+        const string stderr = "Restore settings failed for https://user:password@feed.example/v3/index.json.";
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            CreateExecutionContext(workspace.WorkspaceRoot),
+            (_, _, _, options) =>
+            {
+                options.StandardOutputCallback?.Invoke(stdout);
+                options.StandardErrorCallback?.Invoke(stderr);
+            },
+            exitCode: 1,
+            logger: logger);
+
+        var (exitCode, output) = await runner.GetProjectItemsAndPropertiesAsync(
+            projectFile, items: [], properties: ["RestoreSources"], targets: [],
+            new ProcessInvocationOptions { SuppressLogging = suppressLogging },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, exitCode);
+        Assert.Null(output);
+        var error = Assert.Single(logger.Collector.GetSnapshot(), record => record.Level == LogLevel.Error);
+        Assert.Equal(
+            $"Failed to get items and properties from project. Exit code was: 1. See debug logs for more details. Stderr: {(suppressLogging ? string.Empty : stderr + Environment.NewLine)}, Stdout: {(suppressLogging ? string.Empty : stdout + Environment.NewLine)}",
+            error.Message);
     }
 
     [Fact]

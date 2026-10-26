@@ -606,6 +606,12 @@ Progress and informational messages go to stderr, so redirection captures only M
 
 ### `aspire secret list`
 
+Secret commands accept `--environment` / `-e`, defaulting to `Development`. Names contain 1-80 ASCII letters, digits, hyphens, or underscores and must start with a letter or digit. Dots, path separators, whitespace, and Windows reserved device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, and `LPT1`-`LPT9`) are rejected. For example, use `prod-eu`, not `prod/eu`.
+
+Environment names are case-insensitive. Subsequent commands reuse an existing file regardless of the requested casing, preserving the filename's spelling for display. The same resolution applies when Hosting loads secrets for the final AppHost environment.
+
+These restrictions apply to secret commands, not to existing AppHost environment names. Run and deployment commands with names such as `QA.EU` or `Local Development` continue to work, but do not automatically select an Aspire secrets file. Existing configuration inputs remain available. Set `ASPIRE_SECRETS_FILE` to an explicit JSON file path to load and persist Aspire secrets for such environments; explicit file selection takes precedence over automatic environment-file selection.
+
 `aspire secret list --format json` emits a JSON object whose property names are secret keys and whose values are secret values:
 
 ```json
@@ -617,7 +623,9 @@ Progress and informational messages go to stderr, so redirection captures only M
 
 The JSON form includes secret values. Do not redirect it to logs or files unless that destination is allowed to contain secrets.
 
-`aspire secret get <key>` emits the secret value as raw text on stdout. `aspire secret path` emits the user-secrets file path as raw text on stdout.
+`aspire secret list --all --format json` groups the same secret objects by environment name. `--all` cannot be combined with `--environment`.
+
+`aspire secret get <key>` emits the secret value as raw text on stdout. `aspire secret path` emits the Aspire environment secrets file path as raw text on stdout.
 
 ### `aspire doctor`
 

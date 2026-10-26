@@ -62,6 +62,11 @@ internal sealed class AspireConfigFile
     [JsonPropertyName("$schema")]
     public string? Schema { get; set; }
 
+    [JsonPropertyName(ConfigSource.SectionName)]
+    [Description("The Git repository, configuration path, optional branch or commit, and version last applied to this app.")]
+    [LocalAspireJsonConfigurationProperty]
+    public ConfigSource? ConfigSource { get; set; }
+
     /// <summary>
     /// AppHost entry point configuration.
     /// </summary>

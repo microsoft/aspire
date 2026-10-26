@@ -42,6 +42,11 @@
         <target state="translated">资源 "{0}" 具有永久生存期，但 AppHost 项目未配置用户机密。每次重新启动时，生成的参数值(如密码)可能会更改，从而导致重新创建永久性容器。运行 "aspire secret set" 以初始化用户机密。</target>
         <note />
       </trans-unit>
+      <trans-unit id="PublishModeNotSupportedByRunCommand">
+        <source>The AppHost is in publish mode and cannot be started with 'aspire run'. Use 'aspire publish' instead.</source>
+        <target state="new">The AppHost is in publish mode and cannot be started with 'aspire run'. Use 'aspire publish' instead.</target>
+        <note>Do not translate the command names 'aspire run' and 'aspire publish'.</note>
+      </trans-unit>
       <trans-unit id="RequiredCommandNotFound">
         <source>Required command '{0}' was not found on PATH or at the specified location.</source>
         <target state="translated">在 PATH 或指定位置找不到所需命令 "{0}"。</target>

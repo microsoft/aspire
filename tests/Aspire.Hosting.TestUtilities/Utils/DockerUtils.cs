@@ -25,8 +25,11 @@ public sealed class DockerUtils
     /// <c>ASPIRE_CONTAINER_RUNTIME=podman</c>, Aspire creates a Podman volume, and the same happens when
     /// Docker is installed but unhealthy and detection falls back to Podman. Either way a PATH-order guess
     /// would run <c>docker volume rm</c> against a volume Docker does not have, silently leaking it.
-    /// <see cref="ContainerRuntimeDetector"/> is exactly what <c>ContainerRuntimeResolver</c> uses, and the
-    /// configured-runtime precedence mirrors <c>DcpOptions</c>. The in-memory
+    /// <see cref="ContainerRuntimeDetector"/> is shared with <c>ContainerRuntimeResolver</c> and uses
+    /// Aspire's availability checks. The publishing resolver restricts auto-detection to Docker and Podman.
+    /// This helper includes WSLc because it cleans up volumes created by DCP during local development.
+    /// Runtime priority follows DCP's ordering, and configured-runtime precedence mirrors <c>DcpOptions</c>.
+    /// The in-memory
     /// <c>DcpPublisher:ContainerRuntime</c> key is deliberately not honoured — this is a static helper with
     /// no <c>IConfiguration</c>, and no test that sets that key creates volumes.
     /// </remarks>

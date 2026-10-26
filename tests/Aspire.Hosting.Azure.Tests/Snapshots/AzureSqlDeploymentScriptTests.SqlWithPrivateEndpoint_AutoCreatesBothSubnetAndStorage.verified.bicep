@@ -45,7 +45,7 @@ resource sqlServerAdmin 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-1
   name: sql_outputs_sqlserveradminname
 }
 
-resource sql_store 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
+resource sql_store 'Microsoft.Storage/storageAccounts@2026-06-01' existing = {
   name: sql_store_outputs_name
 }
 
@@ -538,7 +538,7 @@ param sql_store_outputs_name string
 
 param principalId string
 
-resource sql_store 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
+resource sql_store 'Microsoft.Storage/storageAccounts@2026-06-01' existing = {
   name: sql_store_outputs_name
 }
 
@@ -602,26 +602,26 @@ output name string = sql_nsg.name
 @description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-resource sql_store 'Microsoft.Storage/storageAccounts@2024-01-01' = {
+resource sql_store 'Microsoft.Storage/storageAccounts@2026-06-01' = {
   name: take('sqlstore${uniqueString(resourceGroup().id)}', 24)
-  kind: 'StorageV2'
-  location: location
-  sku: {
-    name: 'Standard_GRS'
-  }
-  properties: {
-    accessTier: 'Hot'
-    allowSharedKeyAccess: true
-    isHnsEnabled: false
-    minimumTlsVersion: 'TLS1_2'
-    networkAcls: {
-      defaultAction: 'Deny'
-    }
-    publicNetworkAccess: 'Disabled'
-  }
   tags: {
     'aspire-resource-name': 'sql-store'
   }
+  location: location
+  properties: {
+    isHnsEnabled: false
+    minimumTlsVersion: 'TLS1_2'
+    allowSharedKeyAccess: true
+    publicNetworkAccess: 'Disabled'
+    accessTier: 'Hot'
+    networkAcls: {
+      defaultAction: 'Deny'
+    }
+  }
+  sku: {
+    name: 'Standard_GRS'
+  }
+  kind: 'StorageV2'
 }
 
 output blobEndpoint string = sql_store.properties.primaryEndpoints.blob

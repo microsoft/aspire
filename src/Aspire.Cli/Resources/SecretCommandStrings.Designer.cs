@@ -61,6 +61,39 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string describing the AppHost environment whose secrets file is used.
+        /// </summary>
+        internal static string EnvironmentOptionDescription {
+            get {
+                return ResourceManager.GetString("EnvironmentOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string InvalidEnvironmentName {
+            get {
+                return ResourceManager.GetString("InvalidEnvironmentName", resourceCulture);
+            }
+        }
+
+        internal static string AllEnvironmentsOptionDescription {
+            get {
+                return ResourceManager.GetString("AllEnvironmentsOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string AllEnvironmentsCannotUseEnvironment {
+            get {
+                return ResourceManager.GetString("AllEnvironmentsCannotUseEnvironment", resourceCulture);
+            }
+        }
+
+        internal static string EnvironmentColumnHeader {
+            get {
+                return ResourceManager.GetString("EnvironmentColumnHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Could not find an AppHost project..
         /// </summary>
         internal static string CouldNotFindAppHost {

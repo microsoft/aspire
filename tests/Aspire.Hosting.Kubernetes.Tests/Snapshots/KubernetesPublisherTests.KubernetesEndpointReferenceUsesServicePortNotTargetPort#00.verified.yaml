@@ -1,5 +1,7 @@
 parameters: {}
 secrets: {}
 config:
+  k8s_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
   web:
     QDB_CLIENT_CONF: "http://questdb-service:9002"

@@ -322,6 +322,7 @@ namespace Projects%3B
       <Output TaskParameter="ExitCode" PropertyName="_AspireCliSetupExitCode" />
       <Output TaskParameter="TimedOut" PropertyName="_AspireCliSetupTimedOut" />
       <Output TaskParameter="FailureMessage" PropertyName="_AspireCliSetupFailureMessage" />
+      <Output TaskParameter="ConsoleOutput" PropertyName="_AspireCliSetupOutput" />
     </RunAspireCliCommand>
 
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
@@ -385,6 +386,7 @@ namespace Projects%3B
       <Output TaskParameter="ExitCode" PropertyName="_AspireCliFallbackDnxSetupExitCode" />
       <Output TaskParameter="TimedOut" PropertyName="_AspireCliFallbackDnxSetupTimedOut" />
       <Output TaskParameter="FailureMessage" PropertyName="_AspireCliFallbackDnxSetupFailureMessage" />
+      <Output TaskParameter="ConsoleOutput" PropertyName="_AspireCliFallbackDnxSetupOutput" />
     </RunAspireCliCommand>
 
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
@@ -426,6 +428,11 @@ namespace Projects%3B
         $(_AspireCliBundleNotFoundError)
         Automatic Aspire CLI bundle setup failed with exit code $(_AspireCliSetupExitCode). Run '$(_AspireCliSetupDiagnosticCommand)' to diagnose the failure.
       </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupOutput)' != ''">
+        $(_AspireCliBundleNotFoundError)
+        Output from '$(_AspireCliSetupDiagnosticCommand)':
+        $(_AspireCliSetupOutput)
+      </_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupFailureMessage)' != ''">
         $(_AspireCliBundleNotFoundError)
         Paired Aspire CLI bundle setup through DNX failed: $(_AspireCliFallbackDnxSetupFailureMessage) Run '$(_AspireCliFallbackDnxSetupDiagnosticCommand)' to diagnose the failure.
@@ -433,6 +440,11 @@ namespace Projects%3B
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupFailureMessage)' == '' and '$(_AspireCliFallbackDnxSetupExitCode)' != '' and '$(_AspireCliFallbackDnxSetupExitCode)' != '0'">
         $(_AspireCliBundleNotFoundError)
         Paired Aspire CLI bundle setup through DNX failed with exit code $(_AspireCliFallbackDnxSetupExitCode). Run '$(_AspireCliFallbackDnxSetupDiagnosticCommand)' to diagnose the failure.
+      </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupOutput)' != ''">
+        $(_AspireCliBundleNotFoundError)
+        Output from '$(_AspireCliFallbackDnxSetupDiagnosticCommand)':
+        $(_AspireCliFallbackDnxSetupOutput)
       </_AspireCliBundleNotFoundError>
     </PropertyGroup>
 
