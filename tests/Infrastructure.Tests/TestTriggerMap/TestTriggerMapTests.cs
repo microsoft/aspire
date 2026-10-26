@@ -807,10 +807,12 @@ public sealed class TestTriggerMapTests
             result.Jobs.Order(StringComparer.Ordinal));
     }
 
-    [Fact]
-    public void BuildCliNativeArchivesWorkflowSelectsOnlyCliArchiveConsumers()
+    [Theory]
+    [InlineData(".github/workflows/build-cli-native-archives.yml")]
+    [InlineData("eng/scripts/prepare-windows-arm-dev-drive.ps1")]
+    public void NativeArchiveInputsSelectOnlyCliArchiveConsumers(string path)
     {
-        var result = SelectWithRealMap(".github/workflows/build-cli-native-archives.yml");
+        var result = SelectWithRealMap(path);
 
         Assert.False(result.SelectsAll);
         Assert.Empty(result.UnmatchedFiles);

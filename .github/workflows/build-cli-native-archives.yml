@@ -58,6 +58,21 @@ jobs:
       ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/internal/release/')) && 'staging' || github.ref == 'refs/heads/main' && 'local' || 'daily' }}
 
     steps:
+      - name: Prepare Windows ARM Dev Drive
+        if: matrix.targets.runner == 'windows-11-vs2026-arm' && matrix.targets.rids == 'win-arm64'
+        shell: powershell
+        env:
+          DEV_DRIVE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Run before checkout using the caller's immutable source, including a fork PR's merge commit.
+          $script = Join-Path $env:RUNNER_TEMP 'prepare-windows-arm-dev-drive.ps1'
+          $uri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/contents/eng/scripts/prepare-windows-arm-dev-drive.ps1?ref=$env:GITHUB_SHA"
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github.raw+json' }
+          Invoke-WebRequest -UseBasicParsing -Uri $uri -Headers $headers -OutFile $script
+          & $script -RunnerEnvironment $env:DEV_DRIVE_RUNNER_ENVIRONMENT
+
       - name: Configure NuGet package cache (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -65,6 +80,11 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify Windows ARM Dev Drive build paths
+        if: matrix.targets.runner == 'windows-11-vs2026-arm' && matrix.targets.rids == 'win-arm64'
+        shell: powershell
+        run: ./eng/scripts/prepare-windows-arm-dev-drive.ps1 -VerifyOnly
 
       # Node.js is required because PackDotnetTool now depends on PackNpmPackage,
       # which shells out to `npm pack` to produce the @microsoft/aspire-cli npm
@@ -316,3 +336,11 @@ jobs:
         with:
           name: cli-native-logs-${{ matrix.targets.rids }}
           path: artifacts/log/**
+
+      - name: Upload Windows ARM storage diagnostics
+        if: always() && matrix.targets.runner == 'windows-11-vs2026-arm' && matrix.targets.rids == 'win-arm64'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-arm-dev-drive
+          path: ${{ runner.temp }}/windows-arm-dev-drive/
+          if-no-files-found: warn
