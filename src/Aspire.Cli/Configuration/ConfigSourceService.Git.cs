@@ -11,17 +11,11 @@ using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Configuration;
 
-internal interface IConfigSourceGitClient
-{
-    Task<(string Commit, string Version, JsonObject Configuration)> AcquireAsync(ConfigSource source, string directory, CancellationToken cancellationToken);
-    Task<(string Commit, string Version)> CheckAsync(ConfigSource source, string directory, CancellationToken cancellationToken);
-}
-
-internal sealed class ConfigSourceGitClient(IGitClient git, TimeProvider timeProvider) : IConfigSourceGitClient
+internal sealed partial class ConfigSourceService
 {
     private static readonly TimeSpan s_gitTimeout = TimeSpan.FromSeconds(30);
 
-    public async Task<(string Commit, string Version, JsonObject Configuration)> AcquireAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
+    private async Task<(string Commit, string Version, JsonObject Configuration)> AcquireRepositoryAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
     {
         using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
@@ -74,7 +68,7 @@ internal sealed class ConfigSourceGitClient(IGitClient git, TimeProvider timePro
         }
     }
 
-    public async Task<(string Commit, string Version)> CheckAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
+    private async Task<(string Commit, string Version)> CheckRepositoryAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
     {
         using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
@@ -108,7 +102,7 @@ internal sealed class ConfigSourceGitClient(IGitClient git, TimeProvider timePro
             allowInteractive ? GitCommandMode.Interactive : GitCommandMode.Unattended, cancellationToken);
         var commit = await git.GetCommitAsync(repositoryDirectory, "FETCH_HEAD^{commit}", GitCommandMode.Interactive, cancellationToken);
         var entry = await git.GetFileAsync(repositoryDirectory, commit, source.Path, GitCommandMode.Interactive, cancellationToken);
-        if (entry is not { Mode: "100644" or "100755", Type: "blob" })
+        if (entry is not { Mode: GitTreeEntry.RegularFileMode or GitTreeEntry.ExecutableFileMode, Type: "blob" })
         {
             throw new ConfigSourceException(ConfigSourceStrings.MissingFile);
         }

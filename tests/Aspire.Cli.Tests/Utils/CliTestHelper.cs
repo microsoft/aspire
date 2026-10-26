@@ -87,7 +87,6 @@ internal static class CliTestHelper
 
         var configBuilder = new ConfigurationBuilder();
         services.AddSingleton<ConfigSourceService>();
-        services.AddSingleton<IConfigSourceGitClient, TestConfigSourceGitClient>();
         services.AddSingleton<IInternalMicrosoftDetector, TestConfigSourceDetector>();
 
         var configurationValues = new Dictionary<string, string?>();
@@ -189,8 +188,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.AgentEnvironmentDetectorFactory);
         services.AddSingleton(options.GitRepositoryFactory);
         services.AddSingleton<IGitCommandRunner, GitCommandRunner>();
-        services.AddSingleton<IGitClient, GitClient>();
-        services.AddSingleton(options.GitRunnerFactory);
+        services.AddSingleton(options.GitClientFactory);
         services.AddSingleton(options.NpmRunnerFactory);
         services.AddSingleton(options.NpmProvenanceCheckerFactory);
         services.AddSingleton(options.AspireSkillsInstallerFactory);
@@ -691,8 +689,7 @@ internal sealed class CliServiceCollectionTestOptions
         return new GitRepository(executionContext, serviceProvider.GetRequiredService<IEnvironment>(), logger, profilingTelemetry);
     };
 
-    public Func<IServiceProvider, IGitRunner> GitRunnerFactory { get; set; } = serviceProvider =>
-        ActivatorUtilities.CreateInstance<GitRunner>(serviceProvider);
+    public Func<IServiceProvider, IGitClient> GitClientFactory { get; set; } = _ => new TestConfigSourceRepository();
 
     public Func<IServiceProvider, INpmRunner> NpmRunnerFactory { get; set; } = _ => new FakeNpmRunner();
 

@@ -77,7 +77,8 @@ Optional agent initialization still applies; `--suppress-agent-init` skips it.
 | `TemplateEngineHost` | Register concrete engine components and exclude Git metadata from the engine's source view |
 | [`TemplateHostConfiguration`](../../src/Aspire.Cli/Templating/TemplateHostConfiguration.cs) | Read the selected host file's parameter visibility and prompt labels without merging fallback files |
 | `TemplateParameterPromptState` | Evaluate interactive parameter conditions and order their dependencies using engine types and expressions |
-| [`IGitRunner` / `GitRunner`](../../src/Aspire.Cli/Git/GitRunner.cs) | Resolve refs and acquire exact-commit checkouts |
+| [`IGitClient` / `GitClient`](../../src/Aspire.Cli/Git/GitClient.cs) | Share ref resolution and Git repository operations with configuration-source acquisition |
+| [`GitCommandRunner`](../../src/Aspire.Cli/Git/GitCommandRunner.cs) | Execute Git commands with environment isolation, safe diagnostics, and classified failures |
 | [`TemplateNuGetConfigService`](../../src/Aspire.Cli/Templating/TemplateNuGetConfigService.cs) | Create missing output-root NuGet configuration without taking ownership of template-generated configuration |
 | [`PackageChannel`](../../src/Aspire.Cli/Packaging/PackageChannel.cs) and `PackagingService` | Resolve package-source policy from the running CLI identity and overrides |
 | [`BundleNuGetService`](../../src/Aspire.Cli/NuGet/BundleNuGetService.cs) | Build and persist NuGet policy using the existing configuration hierarchy |
@@ -177,10 +178,10 @@ contain private repository information or credentials. The runner classifies
 failures and exposes localized messages through `GitFailure`; callers translate
 them into command errors.
 
-Each public Git operation has a two-minute deadline. Initialization, fetching,
-checkout, and verification share one deadline within a clone operation. Caller
-cancellation remains cancellation; expiry of the runner's own deadline becomes a
-classified timeout.
+The template factory owns separate two-minute deadlines for ref resolution and
+checkout acquisition. Initialization, fetching, checkout, and verification share
+one deadline within a checkout operation. Caller cancellation remains cancellation;
+expiry of the factory's Git deadline becomes a classified timeout.
 
 ## Template parameters and generation
 
@@ -594,7 +595,7 @@ whether a source URL appears in XML.
 | [`PackageChannelTests`](../../tests/Aspire.Cli.Tests/Packaging/PackageChannelTests.cs) | Existing channel-based config-creation decisions, including stable custom sources |
 | [`TemplateNuGetConfigServiceTests`](../../tests/Aspire.Cli.Tests/Templating/TemplateNuGetConfigServiceTests.cs) | Independent built-in and template-engine policies, source-based creation, byte-preserving ownership, filename casing, inherited/nested configuration, and idempotence |
 | `NewCommandTests`, `InitCommandTests`, and template-factory tests | Existing built-in new/init consumers of shared channel policy |
-| `GitRunnerTests` and `GitCheckoutTests` | Ref resolution, exact-commit checkouts, environment isolation, deadlines, and classified failures |
+| `GitClientTests`, `GitCommandRunnerTests`, `TemplateEngineFactoryGitTests`, and `TemplateEngineFactoryGitCheckoutTests` | Ref resolution, exact-commit checkouts, environment isolation, deadlines, and classified failures |
 | [`CustomTemplateTests`](../../tests/Aspire.Cli.EndToEnd.Tests/CustomTemplateTests.cs) | Installed native CLI generation without a .NET SDK, including directory, Git, and noninteractive-default scenarios |
 
 NuGet routing assertions use `NuGetTestHelper.GetEligiblePackageSources`, which

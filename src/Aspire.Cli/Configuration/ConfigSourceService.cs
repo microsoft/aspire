@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -18,12 +19,12 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Configuration;
 
-internal sealed class ConfigSourceService(
+internal sealed partial class ConfigSourceService(
     CliExecutionContext executionContext,
     IConfigurationService configurationService,
     IEnvironment environment,
     IInternalMicrosoftDetector detector,
-    IConfigSourceGitClient git,
+    IGitClient git,
     TimeProvider timeProvider,
     IInteractionService interaction,
     ICliHostEnvironment hostEnvironment,
@@ -446,7 +447,7 @@ internal sealed class ConfigSourceService(
                 Path = source.Path,
                 Ref = source.Ref
             };
-            var (commit, version, configuration) = await git.AcquireAsync(identity, snapshotDirectory, cancellationToken);
+            var (commit, version, configuration) = await AcquireRepositoryAsync(identity, snapshotDirectory, cancellationToken);
             ConfigurationHelper.NormalizeSettings(configuration);
             var now = timeProvider.GetUtcNow();
             var snapshot = new ConfigSourceSnapshot(new(identity, commit, version, now), configuration);
@@ -538,7 +539,7 @@ internal sealed class ConfigSourceService(
                 Path = source.Path,
                 Ref = source.Ref
             };
-            var (commit, version) = await git.CheckAsync(identity, temporaryDirectory.FullName, cancellationToken);
+            var (commit, version) = await CheckRepositoryAsync(identity, temporaryDirectory.FullName, cancellationToken);
             var comparedAppliedVersions = sources.Select(binding => binding.AppliedVersion).OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
             var metadata = new ConfigSourceCheckMetadata(identity, commit, version, timeProvider.GetUtcNow(), comparedAppliedVersions);
             await WriteCheckMetadataAsync(cacheDirectory, metadata, cancellationToken);

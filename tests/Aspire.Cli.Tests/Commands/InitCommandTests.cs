@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Git;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
@@ -134,7 +135,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.True(Directory.Exists(Path.Combine(workspace.Path, "Test.AppHost")));
         Assert.True(File.Exists(Path.Combine(workspace.Path, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md")));
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         Assert.Equal(0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
     }

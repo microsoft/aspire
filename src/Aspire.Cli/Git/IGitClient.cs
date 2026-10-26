@@ -17,7 +17,13 @@ internal interface IGitClient
 
 internal sealed record GitRepositoryLocation(DirectoryInfo Directory, bool IsBare);
 
-internal sealed record GitTreeEntry(string Mode, string Type, string ObjectId);
+internal sealed record GitTreeEntry(string Mode, string Type, string ObjectId)
+{
+    public const string RegularFileMode = "100644";
+    public const string ExecutableFileMode = "100755";
+    public const string SymbolicLinkMode = "120000";
+    public const string DirectoryMode = "040000";
+}
 
 internal enum GitCommandMode
 {
