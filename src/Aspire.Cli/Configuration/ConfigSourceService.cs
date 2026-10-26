@@ -19,7 +19,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Configuration;
 
-internal sealed partial class ConfigSourceService(
+internal sealed class ConfigSourceService(
     CliExecutionContext executionContext,
     IConfigurationService configurationService,
     IEnvironment environment,
@@ -32,6 +32,7 @@ internal sealed partial class ConfigSourceService(
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
     private static readonly string[][] s_allowedSettings = [["docs", "llmsTxtUrl"], ["docs", "api", "sitemapUrl"]];
+    private static readonly TimeSpan s_gitTimeout = TimeSpan.FromSeconds(30);
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
     private string? _projectDirectory;
     private bool _projectChecked;
@@ -550,6 +551,109 @@ internal sealed partial class ConfigSourceService(
             DeleteAcquisitionDirectory(temporaryDirectory.FullName);
         }
     }
+
+    private async Task<(string Commit, string Version, JsonObject Configuration)> AcquireRepositoryAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
+    {
+        using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        try
+        {
+            var (repositoryDirectory, commit, version) = await FetchVersionAsync(source, directory, allowInteractive: true, timeout.Token);
+            var size = await git.GetObjectSizeAsync(repositoryDirectory, version, GitCommandMode.Interactive, timeout.Token);
+            if (size is null or > 4 * 1024 * 1024)
+            {
+                throw new ConfigSourceException(ConfigSourceStrings.InvalidConfiguration);
+            }
+
+            var json = await git.ReadBlobAsync(repositoryDirectory, version, GitCommandMode.Interactive, timeout.Token);
+            try
+            {
+                var configuration = JsonNode.Parse(json, documentOptions: ConfigurationHelper.ParseOptions) as JsonObject
+                    ?? throw new ConfigSourceException(ConfigSourceStrings.InvalidConfiguration);
+                // Validate the known settings as well as JSON syntax. Unknown content settings
+                // are retained for future schemas, but a source cannot enable another source.
+                if (configuration.Any(p => p.Key.Equals(ConfigSource.SectionName, StringComparison.OrdinalIgnoreCase)
+                    || p.Key.StartsWith(ConfigSource.SectionName + ":", StringComparison.OrdinalIgnoreCase)
+                    || p.Key.StartsWith(ConfigSource.SectionName + ".", StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new ConfigSourceException(ConfigSourceStrings.NestedSource);
+                }
+                // Use the same root-level flat-key compatibility as local settings before
+                // validating duplicate paths and typed values such as "features:enabled".
+                ConfigurationHelper.NormalizeSettings(configuration);
+                using var parsed = new ConfigurationManager();
+                using var stream = new MemoryStream(Encoding.UTF8.GetBytes(configuration.ToJsonString()));
+                parsed.AddJsonStream(stream);
+                _ = configuration.Deserialize(JsonSourceGenerationContext.Default.AspireConfigFile);
+                return (commit, version, configuration);
+            }
+            catch (Exception ex) when (ex is JsonException or FormatException or ArgumentException)
+            {
+                throw new ConfigSourceException(ConfigSourceStrings.InvalidConfiguration);
+            }
+        }
+        catch (GitCommandException ex)
+        {
+            throw TranslateGitFailure(ex);
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new ConfigSourceException(ConfigSourceStrings.GitTimeout)
+            {
+                GitOutput = (ex as GitProcessCanceledException)?.Output
+            };
+        }
+    }
+
+    private async Task<(string Commit, string Version)> CheckRepositoryAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
+    {
+        using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        try
+        {
+            var (_, commit, version) = await FetchVersionAsync(source, directory, allowInteractive: false, timeout.Token);
+            return (commit, version);
+        }
+        catch (GitCommandException ex)
+        {
+            throw TranslateGitFailure(ex);
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new ConfigSourceException(ConfigSourceStrings.GitTimeout)
+            {
+                GitOutput = (ex as GitProcessCanceledException)?.Output
+            };
+        }
+    }
+
+    private async Task<(GitRepositoryLocation Directory, string Commit, string Version)> FetchVersionAsync(
+        ConfigSource source, string directory, bool allowInteractive, CancellationToken cancellationToken)
+    {
+        var repositoryDirectory = new GitRepositoryLocation(new DirectoryInfo(Path.Combine(directory, "repository.git")), IsBare: true);
+        await git.InitializeAsync(new DirectoryInfo(directory), repositoryDirectory, objectFormat: null, GitCommandMode.Interactive, cancellationToken);
+        // Fetch accepts both a fully qualified branch ref and a full commit ID. Unlike
+        // clone --branch, this also acquires commits outside the default branch's shallow history.
+        // https://git-scm.com/docs/git-fetch
+        await git.FetchAsync(repositoryDirectory, source.Repository, source.GetGitRef(),
+            allowInteractive ? GitCommandMode.Interactive : GitCommandMode.Unattended, cancellationToken);
+        var commit = await git.GetCommitAsync(repositoryDirectory, "FETCH_HEAD^{commit}", GitCommandMode.Interactive, cancellationToken);
+        var entry = await git.GetFileAsync(repositoryDirectory, commit, source.Path, GitCommandMode.Interactive, cancellationToken);
+        if (entry is not { Mode: GitTreeEntry.RegularFileMode or GitTreeEntry.ExecutableFileMode, Type: "blob" })
+        {
+            throw new ConfigSourceException(ConfigSourceStrings.MissingFile);
+        }
+
+        return (repositoryDirectory, commit, entry.ObjectId);
+    }
+
+    private static ConfigSourceException TranslateGitFailure(GitCommandException exception) =>
+        new(exception.Failure switch
+        {
+            GitFailure.Unavailable => ConfigSourceStrings.GitNotFound,
+            GitFailure.AuthenticationFailed => ConfigSourceStrings.AuthenticationFailed,
+            _ => ConfigSourceStrings.RepositoryUnavailable
+        });
 
     private static Task WriteCheckMetadataAsync(string directory, ConfigSourceCheckMetadata metadata, CancellationToken cancellationToken)
     {
