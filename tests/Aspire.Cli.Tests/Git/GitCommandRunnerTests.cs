@@ -86,6 +86,38 @@ public class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDisposable
     }
 
     [Theory]
+    [InlineData(nameof(GitCommandMode.Interactive), false)]
+    [InlineData(nameof(GitCommandMode.Interactive), true)]
+    [InlineData(nameof(GitCommandMode.Unattended), false)]
+    [InlineData(nameof(GitCommandMode.Unattended), true)]
+    public void FilterEnvironment_UsesDictionaryCaseSensitivityForConfigurationSources(string mode, bool ignoreCase)
+    {
+        var comparer = ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        string[] repositoryVariables =
+        [
+            "git_dir", "Git_Work_Tree", "git_index_file", "Git_Object_Directory", "git_alternate_object_directories"
+        ];
+        var environment = new Dictionary<string, string?>(comparer);
+        foreach (var key in repositoryVariables)
+        {
+            environment[key] = "other-repository";
+        }
+        environment["GIT_CONFIG_COUNT"] = "1";
+
+        GitCommandRunner.FilterEnvironment(environment, Enum.Parse<GitCommandMode>(mode));
+
+        var expected = new Dictionary<string, string?>(comparer) { ["GIT_CONFIG_COUNT"] = "1" };
+        if (!ignoreCase)
+        {
+            foreach (var key in repositoryVariables)
+            {
+                expected[key] = "other-repository";
+            }
+        }
+        Assert.Equal(expected, environment);
+    }
+
+    [Theory]
     [InlineData("fatal: repository not found", nameof(GitFailure.RepositoryUnavailable))]
     [InlineData("fatal: could not resolve host", nameof(GitFailure.RepositoryUnavailable))]
     [InlineData("fatal: unable to access repository", nameof(GitFailure.RepositoryUnavailable))]

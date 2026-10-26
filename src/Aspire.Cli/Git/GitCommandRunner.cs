@@ -68,12 +68,19 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
 
     internal static void FilterEnvironment(IDictionary<string, string?> environment, GitCommandMode mode)
     {
+        if (mode != GitCommandMode.Captured)
+        {
+            // Removing known names preserves the environment dictionary's platform-specific casing.
+            foreach (var key in s_repositoryEnvironmentVariables)
+            {
+                environment.Remove(key);
+            }
+            return;
+        }
+
         foreach (var key in environment.Keys.ToArray())
         {
-            if ((mode == GitCommandMode.Captured
-                    ? s_repositoryEnvironmentVariables.Contains(key)
-                    : s_repositoryEnvironmentVariables.Contains(key, StringComparer.Ordinal))
-                || (mode == GitCommandMode.Captured && s_worktreeEnvironmentVariables.Contains(key)))
+            if (s_repositoryEnvironmentVariables.Contains(key) || s_worktreeEnvironmentVariables.Contains(key))
             {
                 environment.Remove(key);
             }
