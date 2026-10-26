@@ -569,6 +569,8 @@ public class Program
 
         // Git repository operations.
         builder.Services.AddSingleton<IGitRepository, GitRepository>();
+        builder.Services.AddSingleton<IGitCommandRunner, GitCommandRunner>();
+        builder.Services.AddSingleton<IGitClient, GitClient>();
         builder.Services.AddSingleton<IGitRunner, GitRunner>();
 
         // OpenCode CLI operations.

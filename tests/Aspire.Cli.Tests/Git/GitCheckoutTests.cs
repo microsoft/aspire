@@ -1,12 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
-using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.Git;
@@ -52,13 +50,30 @@ public class GitCheckoutTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResolveReference_PrefersBranchAndPeelsExplicitAnnotatedTag()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (repository, tagCommit) = await CreateRepositoryAsync(workspace, "content", [1, 2, 3]);
+        await GitTestHelper.RunGitAsync(repository.FullName, outputHelper, "tag", "-a", "same", "-m", "Annotated tag");
+        await File.WriteAllBytesAsync(Path.Combine(repository.FullName, "content"), [4, 5, 6]);
+        await GitTestHelper.RunGitAsync(repository.FullName, outputHelper, "commit", "-am", "Move branch");
+        await GitTestHelper.RunGitAsync(repository.FullName, outputHelper, "branch", "same");
+        var branchCommit = (await File.ReadAllTextAsync(Path.Combine(repository.FullName, ".git", "refs", "heads", "same"))).Trim();
+        using var provider = CreateServices(workspace).BuildServiceProvider();
+        var runner = provider.GetRequiredService<IGitRunner>();
+
+        Assert.Equal(branchCommit, await runner.ResolveReferenceAsync(repository.FullName, "same", TestContext.Current.CancellationToken));
+        Assert.Equal(tagCommit, await runner.ResolveReferenceAsync(repository.FullName, "refs/tags/same", TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task ResolveReference_FailureDoesNotLogPrivateRepositoryOrDiagnostics()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await GitTestHelper.EnsureGitAvailableAsync(outputHelper);
-        var logger = new FakeLogger<ProcessExecutionFactory>();
+        var logger = new FakeLogger<GitCommandRunner>();
         var services = CreateServices(workspace);
-        services.AddSingleton<IProcessExecutionFactory>(new ProcessExecutionFactory(new HostEnvironment(), logger));
+        services.AddSingleton<ILogger<GitCommandRunner>>(logger);
         using var provider = services.BuildServiceProvider();
 
         var exception = await Assert.ThrowsAsync<GitCommandException>(() => provider.GetRequiredService<IGitRunner>().ResolveReferenceAsync(
@@ -67,40 +82,21 @@ public class GitCheckoutTests(ITestOutputHelper outputHelper)
         Assert.Equal(GitFailure.RepositoryUnavailable, exception.Failure);
         Assert.Equal(Resources.ErrorStrings.GitRepositoryUnavailable, exception.Message);
         Assert.Null(exception.InnerException);
-        Assert.Empty(logger.Collector.GetSnapshot());
+        var logs = logger.Collector.GetSnapshot();
+        Assert.Collection(logs,
+            entry => Assert.Equal("Starting Git process.", entry.Message),
+            entry => Assert.StartsWith("Git process ", entry.Message),
+            entry => Assert.StartsWith("Git process ", entry.Message),
+            entry => Assert.StartsWith("Git process completed after ", entry.Message));
+        Assert.All(logs, entry => Assert.False(entry.Message.Contains("private-repository-secret-marker", StringComparison.Ordinal)));
     }
 
     [Fact]
-    public async Task Clone_IsolatesRepositoryEnvironment()
+    public async Task Clone_DoesNotModifySourceRepository()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (repository, commit) = await CreateRepositoryAsync(workspace, "content", [1, 2, 3]);
-        var actualFactory = new ProcessExecutionFactory(new HostEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
-        var processes = new TestProcessExecutionFactory
-        {
-            CreateExecutionWithFileNameCallback = (file, arguments, environment, directory, options) =>
-            {
-                var startInfo = new System.Diagnostics.ProcessStartInfo(file, arguments) { WorkingDirectory = directory.FullName };
-                startInfo.Environment["GIT_DIR"] = Path.Combine(repository.FullName, ".git");
-                startInfo.Environment["GIT_WORK_TREE"] = repository.FullName;
-                startInfo.Environment["GIT_INDEX_FILE"] = Path.Combine(repository.FullName, ".git", "index");
-                startInfo.Environment["GIT_CONFIG_COUNT"] = "1";
-                startInfo.Environment["GIT_CONFIG_KEY_0"] = "safe.bareRepository";
-                startInfo.Environment["GIT_CONFIG_VALUE_0"] = "explicit";
-                foreach (var variable in environment!)
-                {
-                    startInfo.Environment[variable.Key] = variable.Value;
-                }
-                var execution = actualFactory.CreateExecution(startInfo, options);
-                Assert.False(execution.EnvironmentVariables.ContainsKey("GIT_DIR"));
-                Assert.False(execution.EnvironmentVariables.ContainsKey("GIT_WORK_TREE"));
-                Assert.False(execution.EnvironmentVariables.ContainsKey("GIT_INDEX_FILE"));
-                Assert.Equal("explicit", execution.EnvironmentVariables["GIT_CONFIG_VALUE_0"]);
-                return execution;
-            }
-        };
         var services = CreateServices(workspace);
-        services.AddSingleton<IProcessExecutionFactory>(processes);
         using var provider = services.BuildServiceProvider();
         var runner = provider.GetRequiredService<IGitRunner>();
         var destination = new DirectoryInfo(Path.Combine(workspace.Path, "checkout"));
@@ -113,10 +109,7 @@ public class GitCheckoutTests(ITestOutputHelper outputHelper)
 
     private IServiceCollection CreateServices(TemporaryWorkspace workspace)
     {
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        services.AddSingleton<IProcessExecutionFactory>(
-            new ProcessExecutionFactory(new HostEnvironment(), NullLogger<ProcessExecutionFactory>.Instance));
-        return services;
+        return CliTestHelper.CreateServiceCollection(workspace, outputHelper);
     }
 
     private async Task<(DirectoryInfo Repository, string Commit)> CreateRepositoryAsync(

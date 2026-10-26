@@ -1,0 +1,98 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Aspire.Cli.Git;
+using Aspire.Cli.Tests.TestServices;
+
+namespace Aspire.Cli.Tests.Git;
+
+public class GitClientTests(ITestOutputHelper outputHelper)
+{
+    [Fact]
+    public async Task BareRepository_FetchAndQueriesExplicitlyIdentifyRepository()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var commands = new TestGitCommandRunner();
+        var client = new GitClient(commands);
+        var repository = new GitRepositoryLocation(new DirectoryInfo(Path.Combine(workspace.Path, "repository.git")), IsBare: true);
+        var token = TestContext.Current.CancellationToken;
+
+        await client.InitializeAsync(workspace.WorkspaceRoot, repository, objectFormat: null, GitCommandMode.Interactive, token);
+        await client.FetchAsync(repository, "repository with spaces", "refs/heads/main", GitCommandMode.Unattended, token);
+        Assert.Equal(TestGitRunner.DefaultCommitSha, await client.GetCommitAsync(repository, "FETCH_HEAD^{commit}", GitCommandMode.Interactive, token));
+
+        Assert.Collection(commands.Commands,
+            command =>
+            {
+                Assert.Equal(["init", "--bare", "--", repository.Directory.FullName], command.Arguments);
+                Assert.Equal(workspace.Path, command.WorkingDirectory.FullName);
+                Assert.Equal(GitCommandMode.Interactive, command.Mode);
+            },
+            command =>
+            {
+                Assert.Equal([$"--git-dir={repository.Directory.FullName}", "fetch", "--depth", "1", "--no-tags", "--", "repository with spaces", "refs/heads/main"], command.Arguments);
+                Assert.Equal(repository.Directory.FullName, command.WorkingDirectory.FullName);
+                Assert.Equal(GitCommandMode.Unattended, command.Mode);
+            },
+            command =>
+            {
+                Assert.Equal([$"--git-dir={repository.Directory.FullName}", "rev-parse", "FETCH_HEAD^{commit}"], command.Arguments);
+                Assert.Equal(GitCommandMode.Interactive, command.Mode);
+            });
+    }
+
+    [Theory]
+    [InlineData("100644", "blob")]
+    [InlineData("100755", "blob")]
+    [InlineData("120000", "blob")]
+    [InlineData("040000", "tree")]
+    public async Task GetFile_ReturnsEntryMetadataWithoutApplyingContentPolicy(string mode, string type)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string path = "settings[1] with spaces.json";
+        var objectId = TestGitRunner.DefaultCommitSha;
+        var commands = new TestGitCommandRunner { Output = $"{mode} {type} {objectId}\t{path}\0" };
+        var client = new GitClient(commands);
+        var repository = new GitRepositoryLocation(workspace.WorkspaceRoot, IsBare: true);
+
+        var entry = await client.GetFileAsync(repository, objectId, path, GitCommandMode.Interactive, TestContext.Current.CancellationToken);
+
+        Assert.Equal(new GitTreeEntry(mode, type, objectId), entry);
+        var command = Assert.Single(commands.Commands);
+        Assert.Equal([$"--git-dir={workspace.Path}", "ls-tree", "-z", objectId, "--", path], command.Arguments);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("100644 blob object\tfile")]
+    [InlineData("malformed\tfile\0")]
+    [InlineData("100644 blob object\tfirst\0" + "100644 blob object\tsecond\0")]
+    public async Task GetFile_RequiresOneCompleteTreeEntry(string output)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var client = new GitClient(new TestGitCommandRunner { Output = output });
+        var repository = new GitRepositoryLocation(workspace.WorkspaceRoot, IsBare: true);
+
+        Assert.Null(await client.GetFileAsync(repository, TestGitRunner.DefaultCommitSha, "file", GitCommandMode.Interactive, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task BlobQueries_ReportSizeAndPreserveContent()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string content = "{\r\n\"custom\": \"value\"\r\n}";
+        var objectId = TestGitRunner.DefaultCommitSha;
+        var commands = new TestGitCommandRunner
+        {
+            RunCallback = (command, _) => Task.FromResult(command.Arguments[2] == "-s" ? "23\n" : content)
+        };
+        var client = new GitClient(commands);
+        var repository = new GitRepositoryLocation(workspace.WorkspaceRoot, IsBare: true);
+
+        Assert.Equal(23, await client.GetObjectSizeAsync(repository, objectId, GitCommandMode.Interactive, TestContext.Current.CancellationToken));
+        Assert.Equal(content, await client.ReadBlobAsync(repository, objectId, GitCommandMode.Interactive, TestContext.Current.CancellationToken));
+        Assert.Collection(commands.Commands,
+            command => Assert.Equal([$"--git-dir={workspace.Path}", "cat-file", "-s", objectId], command.Arguments),
+            command => Assert.Equal([$"--git-dir={workspace.Path}", "cat-file", "blob", objectId], command.Arguments));
+    }
+}

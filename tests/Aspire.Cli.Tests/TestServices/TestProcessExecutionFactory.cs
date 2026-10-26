@@ -50,26 +50,6 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
         };
     }
 
-    internal static IProcessExecutionFactory CreateWithLogging(IEnvironment environment, ILogger<ProcessExecutionFactory> logger)
-    {
-        var factory = new ProcessExecutionFactory(environment, logger);
-        return new TestProcessExecutionFactory
-        {
-            CreateExecutionWithFileNameCallback = (fileName, arguments, variables, directory, options) =>
-            {
-                // Only use this with synthetic test inputs. Production Git deliberately suppresses
-                // diagnostics because command arguments and output can contain credentials.
-                options.SuppressLogging = false;
-                return factory.CreateExecution(fileName, arguments, variables, directory, options);
-            },
-            CreateExecutionFromStartInfoCallback = (startInfo, options) =>
-            {
-                options.SuppressLogging = false;
-                return factory.CreateExecution(startInfo, options);
-            }
-        };
-    }
-
     /// <summary>
     /// Gets or sets a callback that is invoked when <c>CreateExecution</c> is called.
     /// If this returns an <see cref="IProcessExecution"/>, that execution is returned directly.

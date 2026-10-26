@@ -188,6 +188,8 @@ internal static class CliTestHelper
         services.AddSingleton(options.AuxiliaryBackchannelMonitorFactory);
         services.AddSingleton(options.AgentEnvironmentDetectorFactory);
         services.AddSingleton(options.GitRepositoryFactory);
+        services.AddSingleton<IGitCommandRunner, GitCommandRunner>();
+        services.AddSingleton<IGitClient, GitClient>();
         services.AddSingleton(options.GitRunnerFactory);
         services.AddSingleton(options.NpmRunnerFactory);
         services.AddSingleton(options.NpmProvenanceCheckerFactory);

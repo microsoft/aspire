@@ -8,7 +8,6 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands;
-using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
@@ -19,7 +18,6 @@ using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.TemplateEngine.Abstractions;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -1396,8 +1394,6 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
 
         var interaction = new TestInteractionService();
         var services = CreateServices(workspace, interaction, interactive: false);
-        services.AddSingleton<IProcessExecutionFactory>(provider => TestProcessExecutionFactory.CreateWithLogging(
-            new HostEnvironment(), provider.GetRequiredService<ILogger<ProcessExecutionFactory>>()));
         var extractionRequested = false;
         services.AddSingleton<IBundleService>(new TestBundleService(isBundle: true)
         {
@@ -1706,8 +1702,6 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
             interaction.ShowStatusCallback = status =>
                 outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Generation '{label}' after {stopwatch.Elapsed}: {status}");
             var services = CreateServices(workspace, interaction, interactive: false);
-            services.AddSingleton<IProcessExecutionFactory>(provider => TestProcessExecutionFactory.CreateWithLogging(
-                new HostEnvironment(), provider.GetRequiredService<ILogger<ProcessExecutionFactory>>()));
             using var provider = services.BuildServiceProvider();
             var repositoryPath = Path.GetRelativePath(provider.GetRequiredService<CliExecutionContext>().WorkingDirectory.FullName, repository.FullName);
             List<string> arguments = ["new", "--template-repository", repositoryPath,
