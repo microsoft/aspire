@@ -587,7 +587,9 @@ public static class PythonAppResourceBuilderExtensions
         // changes it is an explicit request an existing Dockerfile cannot honor, so re-stating the same
         // entrypoint is not a conflict.
         if (entrypointAnnotation.Type == declaredType &&
-            string.Equals(entrypointAnnotation.Entrypoint, declaredEntrypoint, StringComparison.Ordinal))
+            (string.Equals(entrypointAnnotation.Entrypoint, declaredEntrypoint, StringComparison.Ordinal) ||
+             (declaredType == EntrypointType.Script &&
+              IsSameScriptPath(resource.WorkingDirectory, entrypointAnnotation.Entrypoint, declaredEntrypoint))))
         {
             return;
         }
@@ -600,6 +602,13 @@ public static class PythonAppResourceBuilderExtensions
             "An existing Dockerfile entrypoint cannot be changed automatically from WithEntrypoint. " +
             "Remove or rename the Dockerfile so Aspire can generate one, or call PublishAsDockerFile(...) and set the container entrypoint explicitly.");
     }
+
+    // Script entrypoints are relative to the app directory, so "main.py" and "./main.py" name the same file.
+    private static bool IsSameScriptPath(string appDirectory, string left, string right) =>
+        string.Equals(
+            Path.GetFullPath(left, appDirectory),
+            Path.GetFullPath(right, appDirectory),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     private static void GenerateUvDockerfile(DockerfileBuilderCallbackContext context, PythonAppResource resource,
         string pythonVersion, EntrypointType entrypointType, string entrypoint)

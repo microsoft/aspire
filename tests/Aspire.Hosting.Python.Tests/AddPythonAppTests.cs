@@ -1239,6 +1239,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData(EntrypointType.Script, "other.py", "script")]
+    [InlineData(EntrypointType.Script, "./other.py", "script")]
     [InlineData(EntrypointType.Module, "mymodule", "module")]
     [InlineData(EntrypointType.Executable, "pytest", "executable")]
     public async Task PublishWithExistingDockerfileThrowsWhenEntrypointIsChanged(EntrypointType entrypointType, string entrypoint, string expectedKind)
@@ -1329,6 +1330,21 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.AddPythonApp("api", CreatePythonAppDirectoryWithDockerfile(workspace), "main.py")
             .WithEntrypoint(EntrypointType.Script, "main.py");
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileAllowsRestatedScriptEntrypointWithRelativePrefix()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+
+        // Script entrypoints are relative to the app directory, so "./main.py" names the same file as "main.py".
+        var app = builder.AddPythonApp("api", CreatePythonAppDirectoryWithDockerfile(workspace), "main.py")
+            .WithEntrypoint(EntrypointType.Script, "./main.py");
 
         var manifest = await ManifestUtils.GetManifest(app.Resource, workspace.Path);
 

@@ -7,7 +7,6 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.Go;
 using Aspire.Hosting.Pipelines;
-using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -312,31 +311,23 @@ public static class GoHostingExtensions
         if (builder.ExecutionContext.IsPublishMode &&
             builder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder))
         {
-            Task WriteValidatedContainerAsync(ManifestPublishingContext context)
-            {
-                ValidateExistingDockerfilePackagePath(resource, containerBuilder.Resource);
-                return context.WriteContainerAsync(containerBuilder.Resource);
-            }
-
             var validationStepName = $"validate-go-dockerfile-package-path-{resource.Name}";
 
-            rb.WithManifestPublishingCallback(WriteValidatedContainerAsync);
-            containerBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
             // The step is added to the pipeline instead of as a PipelineStepAnnotation on the container because
             // WithDockerfile replaces the container's step annotation, which would drop this step (or throw when
             // more than one exists) if the Dockerfile is configured again after this point.
             builder.Pipeline.AddStep(new PipelineStep
             {
                 Name = validationStepName,
-                Description = $"Validates that Go app '{resource.Name}' does not publish an ignored package path with an existing Dockerfile.",
+                Description = $"Warns when Go app '{resource.Name}' publishes an existing Dockerfile that ignores its package path.",
                 RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
                 Resource = containerBuilder.Resource,
-                Action = _ =>
+                Action = context =>
                 {
-                    // A resource excluded from the manifest is never published, so it must not fail the pipeline.
+                    // A resource excluded from the manifest is never published, so there is nothing to warn about.
                     if (!containerBuilder.Resource.IsExcludedFromPublish())
                     {
-                        ValidateExistingDockerfilePackagePath(resource, containerBuilder.Resource);
+                        WarnIfExistingDockerfileIgnoresPackagePath(resource, containerBuilder.Resource, context.Logger);
                     }
 
                     return Task.CompletedTask;
@@ -344,7 +335,8 @@ public static class GoHostingExtensions
             });
 
             // Deploy environments such as Azure Container Apps run the image build step without the aggregate
-            // Build step, so the image build must wait for the validation itself.
+            // Build step, so the image build must wait for this step itself to surface the warning before a
+            // potentially long build instead of after it.
             containerBuilder.WithPipelineConfiguration(context =>
             {
                 var validationStep = context.GetSteps(containerBuilder.Resource).FirstOrDefault(step => step.Name == validationStepName);
@@ -840,12 +832,10 @@ public static class GoHostingExtensions
     }
 
     /// <summary>
-    /// Fails when publish uses an existing Dockerfile but the app was given a non-default package path.
+    /// Warns when publish uses an existing Dockerfile but the app was given a non-default package path.
     /// </summary>
-    private static void ValidateExistingDockerfilePackagePath(GoAppResource resource, ContainerResource containerResource)
+    private static void WarnIfExistingDockerfileIgnoresPackagePath(GoAppResource resource, ContainerResource containerResource, ILogger logger)
     {
-        // GoPackagePathAnnotation is only added for a package path other than ".", so its presence
-        // is the signal that the user asked for something a plain Dockerfile build does not honor.
         if (containerResource.Entrypoint is not null ||
             !containerResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) ||
             dockerfileBuildAnnotation.DockerfileFactory is not null ||
@@ -854,13 +844,25 @@ public static class GoHostingExtensions
             return;
         }
 
-        // Existing Dockerfiles are user-authored, so Aspire cannot know which package they build or
-        // which binary they run. If the user provides an explicit container entrypoint, honor it;
-        // otherwise fail instead of silently publishing an image that ignores the requested package.
-        throw new DistributedApplicationException(
-            $"Go app resource '{resource.Name}' is configured to run package '{packagePath.PackagePath}', but publish is using the existing Dockerfile '{dockerfileBuildAnnotation.DockerfilePath}'. " +
-            "An existing Dockerfile entrypoint cannot be changed automatically from packagePath. " +
-            "Remove or rename the Dockerfile so Aspire can generate one, or call PublishAsDockerFile(...) and set the container entrypoint explicitly.");
+        // GoPackagePathAnnotation is added for any package path other than the literal ".", so spellings
+        // such as "./" and "./." that still resolve to the app directory must be excluded here.
+        if (Path.GetRelativePath(resource.WorkingDirectory, Path.GetFullPath(packagePath.PackagePath, resource.WorkingDirectory)) == ".")
+        {
+            return;
+        }
+
+        // Existing Dockerfiles are user-authored, so Aspire cannot know which package they build or which
+        // binary they run, and unlike the Python entrypoint there is no later API that re-points it. This is
+        // a warning rather than an error because a Dockerfile that already builds and runs the requested
+        // package is valid, and failing would break such apps that published fine before this check existed.
+        // An explicit container entrypoint is honored and skips the warning.
+        logger.LogWarning(
+            "Go app resource '{ResourceName}' is configured to run package '{PackagePath}', but publish is using the existing Dockerfile '{DockerfilePath}'. " +
+            "Aspire does not change an existing Dockerfile, so the published image runs whatever that Dockerfile builds and starts. " +
+            "Make sure it builds and runs that package, remove or rename the Dockerfile so Aspire can generate one, or call PublishAsDockerFile(...) and set the container entrypoint explicitly.",
+            resource.Name,
+            packagePath.PackagePath,
+            dockerfileBuildAnnotation.DockerfilePath);
     }
 
     /// <summary>
