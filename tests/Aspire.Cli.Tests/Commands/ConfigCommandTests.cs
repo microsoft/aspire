@@ -27,12 +27,6 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ConfigInfo_AdvertisesPsFollowReconciliation()
-    {
-        Assert.Contains(KnownCapabilities.PsFollowReconciliation, KnownCapabilities.GetAdvertisedCapabilities());
-    }
-
-    [Fact]
     public void ConfigInfo_AdvertisesIsolatedLaunch()
     {
         Assert.Contains(KnownCapabilities.IsolatedLaunch, KnownCapabilities.GetAdvertisedCapabilities());

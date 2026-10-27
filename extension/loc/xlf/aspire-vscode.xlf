@@ -776,10 +776,10 @@
       <source xml:lang="en">Path to the AppHost to run</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.globalAppHostsPollingInterval">
-      <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts. Minimum: 1000.</source>
+      <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts when live status streaming is unavailable. While streaming, safety snapshots use at least five minutes between queries. Minimum: 1000.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.appHostsPollingInterval">
-      <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts. Minimum: 1000.</source>
+      <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts when live status streaming is unavailable. While streaming, safety snapshots use at least five minutes between queries. Minimum: 1000.</source>
     </trans-unit>
     <trans-unit id="languageModelTool.aspireAppHostStart.modelDescription">
       <source xml:lang="en">Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Start an Aspire AppHost that Aspire has already discovered in the current workspace, using the editor&apos;s own debug lifecycle. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. Also requires whether to start it in &apos;run&apos; mode (no debugger attached) or &apos;debug&apos; mode (debugger attached). Optional &apos;isolated&apos; starts the AppHost with randomized ports and isolated user secrets; when omitted, linked git worktrees start isolated automatically so they do not collide with the primary checkout. Explicit true or false overrides that inference. Optional &apos;launchProfile&apos; selects a profile from the AppHost launchSettings.json by its exact name. Does not create, pick, or guess an AppHost: if the path does not name a discovered AppHost, or names more than one, the call fails and the result lists the AppHosts you can pass. If the AppHost is already starting or already running, no second process is started. A successful new launch includes the verified effective &apos;isolated&apos; value; idempotent or uncertain results omit it.</source>

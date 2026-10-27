@@ -68,12 +68,6 @@ export const describeIncludeDisabledCommandsCapability = 'describe-include-disab
 export const lsJsonStreamCapability = 'ls-json-stream.v1';
 
 /**
- * The CLI's `ps --follow` stream periodically reconciles AppHosts without separate status queries.
- * Keep in sync with `KnownCapabilities.PsFollowReconciliation` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
- */
-export const psFollowReconciliationCapability = 'ps-follow-reconciliation.v1';
-
-/**
  * Capability advertised by the CLI when `aspire run` accepts the `--isolated` option.
  * Tooling uses this to avoid passing the option to older CLIs that reject it.
  * Keep in sync with `KnownCapabilities.IsolatedLaunch` in src/Aspire.Cli/Utils/ExtensionHelper.cs.

@@ -7,8 +7,6 @@ import { errorFetchingAppHosts, errorStoppingAppHostWatcher } from '../loc/strin
 import { AppHostCliRunner, LimitedOutputBuffer, oneShotOutputBufferLimit } from './appHostCliRunner';
 import { windowCliPathTarget } from '../utils/cliPathVariables';
 import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
-import { ConfigInfoProvider } from '../utils/configInfoProvider';
-import { psFollowReconciliationCapability } from '../types/configInfo';
 
 export interface PsOutput {
     readonly stdout: string;
@@ -31,6 +29,7 @@ interface PsProcessTermination {
 export class AppHostPsPoller implements vscode.Disposable {
     private static readonly _oneShotOutputBufferLimit = oneShotOutputBufferLimit;
     private static readonly _authoritativeSnapshotFollowOutputLimit = 256;
+    private static readonly _minimumFollowReconciliationIntervalMs = 5 * 60 * 1000;
 
     private readonly _onDidReceivePsOutput = new vscode.EventEmitter<PsOutput>();
     readonly onDidReceivePsOutput = this._onDidReceivePsOutput.event;
@@ -70,7 +69,6 @@ export class AppHostPsPoller implements vscode.Disposable {
     constructor(
         private readonly _terminalProvider: AspireTerminalProvider,
         private readonly _cliRunner: AppHostCliRunner,
-        private readonly _configInfoProvider: ConfigInfoProvider,
         private readonly _isDataActive: () => boolean,
         private readonly _clearPostStopRefreshTimers: () => void) {
     }
@@ -131,14 +129,16 @@ export class AppHostPsPoller implements vscode.Disposable {
             clearInterval(this._pollingInterval);
         }
 
-        // Older CLIs need a safety net: an AppHost can start while the CLI is
-        // transitioning from its initial scan to the follow subscription. Periodic authoritative
-        // snapshots close that missed-delta window without restarting the stream.
+        // Follow supplies normal updates. Keep only a coarse safety rescan for missed
+        // notifications: each authoritative query starts a CLI process and diagnostic log.
+        const intervalMs = Math.max(
+            this.getPollingIntervalMs(),
+            AppHostPsPoller._minimumFollowReconciliationIntervalMs);
         this._pollingInterval = setInterval(() => {
             if (!this._disposed) {
                 this.refreshAppHostsFromAuthoritativeSnapshot();
             }
-        }, this.getPollingIntervalMs());
+        }, intervalMs);
     }
 
     private _startPsIntervalPolling(fetchImmediately = true): void {
@@ -255,15 +255,8 @@ export class AppHostPsPoller implements vscode.Disposable {
     private async _startPsFollow(): Promise<void> {
         const fetchVersion = ++this._psFetchVersion;
         let cliPath: string;
-        let reconcilesInCli: boolean;
         try {
             cliPath = await this._terminalProvider.getAspireCliExecutablePath(windowCliPathTarget);
-            const configInfo = await this._configInfoProvider.getConfigInfo({
-                suppressErrors: true,
-                cliPath,
-                target: windowCliPathTarget,
-            });
-            reconcilesInCli = configInfo?.capabilities?.includes(psFollowReconciliationCapability) ?? false;
         } catch (error) {
             if (this._isCurrentPsFetch(fetchVersion)) {
                 const errorMessage = errorFetchingAppHosts(String(error));
@@ -368,7 +361,7 @@ export class AppHostPsPoller implements vscode.Disposable {
             return;
         }
 
-        if (!callbackInvoked && !reconcilesInCli) {
+        if (!callbackInvoked) {
             this._startPsFollowReconciliation();
         }
         this._onDidStartPsFollow.fire();

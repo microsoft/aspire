@@ -30,11 +30,7 @@ suite('CLI diagnostic log actions E2E', function () {
         ], 'CLI diagnostic log actions E2E teardown failed.');
     });
 
-    test('healthy status watching reuses persistent logs and stops when Aspire UI is hidden', async function () {
-        if (process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true') {
-            this.skip();
-        }
-
+    test('healthy status watching avoids frequent queries and stops when Aspire UI is hidden', async function () {
         await openAspireView();
         await waitForWorkspaceAppHost();
         await waitForRepositoryIdle();
@@ -64,8 +60,8 @@ suite('CLI diagnostic log actions E2E', function () {
             const activeSpawns = statusSpawns();
             for (let interval = 0; interval < 4; interval++) {
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                assert.deepStrictEqual(logFiles(), activeFiles, 'A healthy follow stream must reuse its existing diagnostic log.');
-                assert.strictEqual(statusSpawns(), activeSpawns, 'A self-reconciling CLI must not need periodic status processes.');
+                assert.deepStrictEqual(logFiles(), activeFiles, 'Safety snapshots must not accumulate logs at the fast fallback interval.');
+                assert.strictEqual(statusSpawns(), activeSpawns, 'A healthy follow stream must not poll at the fallback interval.');
                 assert.strictEqual(getPsFollowProcesses().filter(process => !process.exited).length, 1);
             }
 

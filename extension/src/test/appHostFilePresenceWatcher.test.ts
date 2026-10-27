@@ -5,7 +5,6 @@ import * as vscode from 'vscode';
 import { AppHostFilePresenceWatcher } from '../editor/AppHostFilePresenceWatcher';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import * as cliModule from '../utils/process/cliProcess';
 // Import parsers so they self-register before the watcher consults them.
 import '../editor/parsers/csharpAppHostParser';
@@ -106,7 +105,6 @@ suite('AppHostFilePresenceWatcher', () => {
     let onDidChangeTextStub: sinon.SinonStub;
     let textDocumentsStub: sinon.SinonStub;
     let spawnStub: sinon.SinonStub;
-    let getConfigInfoStub: sinon.SinonStub;
     let repository: AppHostDataRepository;
     let setOpenSpy: sinon.SinonSpy;
     let clock: sinon.SinonFakeTimers;
@@ -151,8 +149,6 @@ suite('AppHostFilePresenceWatcher', () => {
         }) as any);
         textDocumentsStub = sinon.stub(vscode.workspace, 'textDocuments').get(() => textDocuments);
         spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake(() => new TestChildProcess() as any);
-        getConfigInfoStub = sinon.stub(ConfigInfoProvider.prototype, 'getConfigInfo')
-            .resolves(null);
 
         const terminalProvider = new AspireTerminalProvider([]);
         sinon.stub(terminalProvider, 'getAspireCliExecutablePath').resolves('aspire');
@@ -165,7 +161,6 @@ suite('AppHostFilePresenceWatcher', () => {
         clock.restore();
         setOpenSpy.restore();
         repository.dispose();
-        getConfigInfoStub.restore();
         spawnStub.restore();
         textDocumentsStub.restore();
         onDidChangeTextStub.restore();

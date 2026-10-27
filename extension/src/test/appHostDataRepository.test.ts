@@ -12,7 +12,7 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import * as cliModule from '../utils/process/cliProcess';
 import * as configInfoProvider from '../utils/configInfoProvider';
-import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability, psFollowReconciliationCapability } from '../types/configInfo';
+import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
 import { errorFetchingAppHosts, errorStoppingAppHostWatcher } from '../loc/strings';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { createAppHostOperationTarget } from '../utils/appHostOperationTarget';
@@ -95,8 +95,7 @@ suite('AppHostDataRepository', () => {
         getCliPathStub = sinon.stub(terminalProvider, 'getAspireCliExecutablePath').resolves('aspire');
         spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
         spawnStub.callsFake(() => new TestChildProcess());
-        // Advertise streamed discovery and disabled-command support, but retain extension-side
-        // reconciliation unless a test explicitly opts into the self-reconciling follow stream.
+        // Most tests exercise the new streamed discovery path and disabled-command rows.
         getConfigInfoStub = sinon.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
             capabilities: [describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
         } as any);
@@ -7137,12 +7136,21 @@ setInterval(() => {}, 1000);
         repository.dispose();
     });
 
-    for (const support of ['supported', 'unsupported', 'unavailable'] as const) {
-        test(`ps follow reconciliation capability ${support} selects the correct periodic query behavior`, async () => {
+    for (const { name, setting, interval, reconciliationInterval } of [
+        { name: 'default polling', setting: 'appHostsPollingInterval', interval: undefined, reconciliationInterval: 300000 },
+        { name: 'fast polling', setting: 'appHostsPollingInterval', interval: 1000, reconciliationInterval: 300000 },
+        { name: 'legacy fast polling', setting: 'globalAppHostsPollingInterval', interval: 2000, reconciliationInterval: 300000 },
+        { name: 'slower polling', setting: 'appHostsPollingInterval', interval: 600000, reconciliationInterval: 600000 },
+    ]) {
+        test(`healthy ps follow uses coarse safety snapshots with ${name}`, async () => {
             const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
-            getConfigInfoStub.resolves(support === 'unavailable'
-                ? null
-                : { capabilities: support === 'supported' ? [psFollowReconciliationCapability] : [] });
+            const inspect = sinon.stub().returns({});
+            inspect.withArgs(setting).returns({ globalValue: interval });
+            const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+            getConfigurationStub.withArgs('aspire').returns({
+                inspect,
+                get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+            } as unknown as vscode.WorkspaceConfiguration);
             spawnStub.callsFake((_terminalProvider, _command, args: string[], options: cliModule.SpawnProcessOptions) => {
                 const child = new TestChildProcess();
                 if (args[0] === 'ps' && !args.includes('--follow')) {
@@ -7163,36 +7171,62 @@ setInterval(() => {}, 1000);
                 await waitForMicrotasks();
                 assert.strictEqual(psCalls().length, 1);
                 assert.strictEqual(repository.isLoading, false);
-                assert.ok(getConfigInfoStub.calledWithMatch({
-                    cliPath: 'aspire',
-                    target: windowCliPathTarget,
-                }));
+                assert.strictEqual(getConfigInfoStub.called, false, 'Status following must not require a new CLI capability.');
 
-                await clock.tickAsync(90000);
-                const expectedSnapshots = support === 'supported' ? 0 : 3;
-                assert.strictEqual(snapshotCalls().length, expectedSnapshots);
-                assert.strictEqual(psCalls().filter(call => call.args[2].includes('--follow')).length, 1);
+                await clock.tickAsync(reconciliationInterval - 1);
+                assert.strictEqual(snapshotCalls().length, 0);
 
                 repository.refreshRuntimeState();
                 await waitForMicrotasks();
-                assert.strictEqual(snapshotCalls().length, expectedSnapshots + 1, 'Explicit refresh must still request an authoritative snapshot.');
+                assert.strictEqual(snapshotCalls().length, 1, 'Explicit refresh must not wait for the safety interval.');
+
+                await clock.tickAsync(1);
+                assert.strictEqual(snapshotCalls().length, 2, 'The first safety snapshot must run at the expected interval.');
+                await clock.tickAsync(reconciliationInterval);
+                assert.strictEqual(snapshotCalls().length, 3);
+                assert.strictEqual(psCalls().filter(call => call.args[2].includes('--follow')).length, 1);
             } finally {
                 repository.dispose();
+                getConfigurationStub.restore();
                 clock.restore();
             }
         });
     }
 
-    for (const failure of ['clean exit', 'error exit', 'spawn error'] as const) {
-        test(`self-reconciling ps follow resumes interval polling after ${failure}`, async () => {
+    for (const [failure, synchronous] of [
+        ['clean exit', false],
+        ['clean exit', true],
+        ['error exit', false],
+        ['error exit', true],
+        ['spawn error', false],
+        ['spawn error', true],
+    ] as const) {
+        test(`ps follow resumes fast interval polling after ${synchronous ? 'synchronous' : 'asynchronous'} ${failure}`, async () => {
             const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
-            getConfigInfoStub.resolves({ capabilities: [psFollowReconciliationCapability] });
+            const inspect = sinon.stub().returns({});
+            inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 1000 });
+            const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+            getConfigurationStub.withArgs('aspire').returns({
+                inspect,
+                get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+            } as unknown as vscode.WorkspaceConfiguration);
+            const completeFollow = (child: TestChildProcess, options: cliModule.SpawnProcessOptions) => {
+                if (failure === 'spawn error') {
+                    options.errorCallback?.(new Error('spawn ENOENT'));
+                } else {
+                    const code = failure === 'clean exit' ? 0 : 1;
+                    child.markExited(code);
+                    options.exitCallback?.(code);
+                }
+            };
             spawnStub.callsFake((_terminalProvider, _command, args: string[], options: cliModule.SpawnProcessOptions) => {
                 const child = new TestChildProcess();
                 if (args[0] === 'ps' && !args.includes('--follow')) {
                     options.stdoutCallback?.('[]');
                     options.exitCallback?.(0);
                     child.markExited();
+                } else if (args[0] === 'ps' && synchronous) {
+                    completeFollow(child, options);
                 }
                 return child;
             });
@@ -7206,16 +7240,15 @@ setInterval(() => {}, 1000);
                 const follow = spawnStub.firstCall;
                 assert.deepStrictEqual(follow.args[2], ['ps', '--follow', '--format', 'json', '--nologo']);
 
-                if (failure === 'spawn error') {
-                    follow.args[3].errorCallback(new Error('spawn ENOENT'));
-                } else {
-                    follow.returnValue.markExited(failure === 'clean exit' ? 0 : 1);
-                    follow.args[3].exitCallback(failure === 'clean exit' ? 0 : 1);
+                if (!synchronous) {
+                    completeFollow(follow.returnValue, follow.args[3]);
                 }
                 await waitForMicrotasks();
                 assert.strictEqual(spawnStub.callCount, 2);
 
-                await clock.tickAsync(30000);
+                await clock.tickAsync(999);
+                assert.strictEqual(spawnStub.callCount, 2);
+                await clock.tickAsync(1);
                 assert.deepStrictEqual(spawnStub.getCalls().map(call => call.args[2]), [
                     ['ps', '--follow', '--format', 'json', '--nologo'],
                     ['ps', '--format', 'json', '--nologo'],
@@ -7223,14 +7256,15 @@ setInterval(() => {}, 1000);
                 ]);
             } finally {
                 repository.dispose();
+                getConfigurationStub.restore();
                 clock.restore();
             }
         });
     }
 
-    test('hiding the panel while follow capability detection is pending does not start a stale watcher', async () => {
-        const configInfo = createDeferred<{ capabilities: string[] }>();
-        getConfigInfoStub.returns(configInfo.promise);
+    test('hiding the panel while the follow executable is resolving does not start a stale watcher', async () => {
+        const cliPath = createDeferred<string>();
+        getCliPathStub.returns(cliPath.promise);
         const repository = new AppHostDataRepository(terminalProvider);
 
         try {
@@ -7238,24 +7272,21 @@ setInterval(() => {}, 1000);
             repository.setViewMode('global');
             repository.setPanelVisible(true);
             await waitForMicrotasks();
-            assert.strictEqual(getConfigInfoStub.calledOnce, true);
+            assert.strictEqual(getCliPathStub.calledOnce, true);
 
             repository.setPanelVisible(false);
-            configInfo.resolve({ capabilities: [psFollowReconciliationCapability] });
+            cliPath.resolve('aspire');
             await waitForMicrotasks();
             assert.strictEqual(spawnStub.called, false);
         } finally {
-            configInfo.resolve({ capabilities: [] });
+            cliPath.resolve('aspire');
             repository.dispose();
         }
     });
 
-    test('ps follow reconciliation capability is checked for the executable used by each watcher', async () => {
+    test('hiding and resuming resets the safety interval and uses the current CLI executable', async () => {
         const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         getCliPathStub.resolves('/current/aspire');
-        getConfigInfoStub.callsFake(async (options: configInfoProvider.ConfigInfoOptions) => ({
-            capabilities: options.cliPath === '/current/aspire' ? [psFollowReconciliationCapability] : [],
-        }));
         spawnStub.callsFake((_terminalProvider, _command, args: string[], options: cliModule.SpawnProcessOptions) => {
             const child = new TestChildProcess();
             if (args[0] === 'ps' && !args.includes('--follow')) {
@@ -7272,18 +7303,22 @@ setInterval(() => {}, 1000);
             repository.setViewMode('global');
             repository.setPanelVisible(true);
             await waitForMicrotasks();
-            await clock.tickAsync(30000);
+            await clock.tickAsync(299000);
             assert.strictEqual(spawnStub.callCount, 1);
             assert.strictEqual(spawnStub.firstCall.args[1], '/current/aspire');
 
             repository.setPanelVisible(false);
             await waitForMicrotasks();
+            await clock.tickAsync(300000);
+            assert.strictEqual(spawnStub.callCount, 1, 'Hidden UI must cancel the pending safety rescan.');
             getCliPathStub.resolves('/older/aspire');
             repository.setPanelVisible(true);
             await waitForMicrotasks();
             assert.strictEqual(spawnStub.secondCall.args[1], '/older/aspire');
 
-            await clock.tickAsync(30000);
+            await clock.tickAsync(299999);
+            assert.strictEqual(spawnStub.callCount, 2);
+            await clock.tickAsync(1);
             assert.deepStrictEqual(spawnStub.getCalls().map(call => [call.args[1], call.args[2]]), [
                 ['/current/aspire', ['ps', '--follow', '--format', 'json', '--nologo']],
                 ['/older/aspire', ['ps', '--follow', '--format', 'json', '--nologo']],
@@ -7295,7 +7330,7 @@ setInterval(() => {}, 1000);
         }
     });
 
-    test('older ps follow periodically reconciles a missed AppHost delta', async () => {
+    test('ps follow periodically reconciles a missed AppHost delta', async () => {
         const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const inspect = sinon.stub();
         inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 1000 });
@@ -7324,7 +7359,7 @@ setInterval(() => {}, 1000);
             assert.strictEqual(spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length, 0);
 
             // Simulate a running AppHost whose start delta never arrives on the long-lived stream.
-            await clock.tickAsync(1000);
+            await clock.tickAsync(300000);
             const snapshotCall = spawned.find(call => JSON.stringify(call.args) === snapshotArgs);
             assert.ok(snapshotCall, 'expected a periodic authoritative snapshot while ps --follow remains active');
             snapshotCall.options.stdoutCallback(JSON.stringify([{
@@ -7379,7 +7414,7 @@ setInterval(() => {}, 1000);
             await waitForMicrotasks();
             assert.strictEqual(repository.appHosts.length, 1);
 
-            await clock.tickAsync(1000);
+            await clock.tickAsync(300000);
             const snapshotCall = spawned.find(call =>
                 call.args[0] === 'ps' && !call.args.includes('--follow'));
             assert.ok(snapshotCall);
@@ -7441,7 +7476,7 @@ setInterval(() => {}, 1000);
             }));
             await waitForMicrotasks();
 
-            await clock.tickAsync(1000);
+            await clock.tickAsync(300000);
             const snapshotCall = spawned.find(call =>
                 call.args[0] === 'ps' && !call.args.includes('--follow'));
             assert.ok(snapshotCall);
@@ -7511,7 +7546,7 @@ setInterval(() => {}, 1000);
                 call.args[0] === 'ps' && call.args.includes('--follow'));
             assert.ok(followCall);
 
-            await clock.tickAsync(1000);
+            await clock.tickAsync(300000);
             const contestedSnapshot = spawned.find(call =>
                 call.args[0] === 'ps' && !call.args.includes('--follow'));
             assert.ok(contestedSnapshot);
@@ -7545,7 +7580,7 @@ setInterval(() => {}, 1000);
 
             // The next tick takes a fresh snapshot. Its window is uncontested, so it applies
             // normally and reconciles the state the abandoned one could not.
-            await clock.tickAsync(1000);
+            await clock.tickAsync(300000);
             const uncontestedSnapshot = spawned.filter(call =>
                 call.args[0] === 'ps' && !call.args.includes('--follow')).at(-1);
             assert.ok(uncontestedSnapshot);
@@ -7599,7 +7634,7 @@ setInterval(() => {}, 1000);
                 call.args[0] === 'ps' && call.args.includes('--follow'));
             assert.ok(followCall);
 
-            await clock.tickAsync(1000);
+            await clock.tickAsync(300000);
             const snapshotCall = spawned.find(call =>
                 call.args[0] === 'ps' && !call.args.includes('--follow'));
             assert.ok(snapshotCall);
@@ -7661,7 +7696,7 @@ setInterval(() => {}, 1000);
                 call.args[0] === 'ps' && call.args.includes('--follow'));
             assert.ok(followCall);
 
-            await clock.tickAsync(1000);
+            await clock.tickAsync(300000);
             const rejectedSnapshotCall = spawned.find(call =>
                 call.args[0] === 'ps' && !call.args.includes('--follow') && call.args.includes('--nologo'));
             assert.ok(rejectedSnapshotCall);
@@ -7734,7 +7769,7 @@ setInterval(() => {}, 1000);
                 call.args[0] === 'ps' && call.args.includes('--follow'));
             assert.ok(followCall);
 
-            await clock.tickAsync(1000);
+            await clock.tickAsync(300000);
             const snapshotCall = spawned.find(call =>
                 call.args[0] === 'ps' && !call.args.includes('--follow'));
             assert.ok(snapshotCall);

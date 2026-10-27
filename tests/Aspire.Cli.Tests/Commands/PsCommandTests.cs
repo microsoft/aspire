@@ -4,7 +4,6 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
-using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
@@ -17,7 +16,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
-using Microsoft.Extensions.Time.Testing;
 using StreamJsonRpc;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -533,7 +531,6 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     public async Task PsCommand_FollowJsonFormat_ReturnsSuccessWhenOutputCloses()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var timeProvider = new FakeTimeProvider();
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var interactionService = new TestInteractionService
         {
@@ -554,7 +551,6 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
-            options.TimeProvider = timeProvider;
         });
         using var provider = services.BuildServiceProvider();
 
@@ -565,221 +561,6 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Single(interactionService.DisplayedRawText);
-        timeProvider.Advance(TimeSpan.FromMinutes(1));
-        Assert.Equal(1, monitor.ScanCallCount);
-    }
-
-    [Fact]
-    public async Task PsCommand_FollowJsonFormat_ReconcilesAppHostChangesWithoutWatchNotifications()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var cancellation = new CancellationTokenSource();
-        var timeProvider = new FakeTimeProvider();
-        var initialScan = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var updates = Channel.CreateUnbounded<AppHostDisplayInfo>();
-        var interactionService = new TestInteractionService
-        {
-            DisplayRawTextCallback = line =>
-            {
-                var update = JsonSerializer.Deserialize(line, PsCommandJsonContext.RelaxedEscaping.AppHostDisplayInfo);
-                Assert.NotNull(update);
-                updates.Writer.TryWrite(update);
-            }
-        };
-        var connection = new TestAppHostAuxiliaryBackchannel
-        {
-            AppHostInfo = new AppHostInformation
-            {
-                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"),
-                ProcessId = 1234
-            }
-        };
-        var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.ScanAsyncCallback = _ =>
-        {
-            switch (monitor.ScanCallCount)
-            {
-                case 1:
-                    initialScan.SetResult();
-                    break;
-                case 2:
-                case 6:
-                    monitor.AddConnection("socket", connection);
-                    break;
-                case 4:
-                    monitor.RemoveConnection("socket");
-                    break;
-            }
-            return Task.CompletedTask;
-        };
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.InteractionServiceFactory = _ => interactionService;
-            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
-            options.TimeProvider = timeProvider;
-        });
-        using var provider = services.BuildServiceProvider();
-        var invocation = provider.GetRequiredService<RootCommand>().Parse("ps --follow --format json")
-            .InvokeAsync(cancellationToken: cancellation.Token);
-
-        try
-        {
-            await initialScan.Task.DefaultTimeout();
-            timeProvider.Advance(TimeSpan.FromSeconds(29));
-            Assert.Equal(1, monitor.ScanCallCount);
-            timeProvider.Advance(TimeSpan.FromSeconds(1));
-            var running = await updates.Reader.ReadAsync().AsTask().DefaultTimeout();
-            Assert.Equal(AppHostDisplayStatus.Running, running.Status);
-            Assert.Equal(connection.AppHostInfo.AppHostPath, running.AppHostPath);
-            Assert.Equal(1234, running.AppHostPid);
-
-            timeProvider.Advance(TimeSpan.FromSeconds(30));
-            var stopped = await updates.Reader.ReadAsync().AsTask().DefaultTimeout();
-            Assert.Equal(AppHostDisplayStatus.Stopped, stopped.Status);
-            Assert.Equal(running.AppHostPath, stopped.AppHostPath);
-            Assert.Equal(running.AppHostPid, stopped.AppHostPid);
-
-            timeProvider.Advance(TimeSpan.FromSeconds(30));
-            var restarted = await updates.Reader.ReadAsync().AsTask().DefaultTimeout();
-            Assert.Equal(AppHostDisplayStatus.Running, restarted.Status);
-            Assert.Equal(running.AppHostPath, restarted.AppHostPath);
-            Assert.Equal(running.AppHostPid, restarted.AppHostPid);
-            Assert.True(monitor.LastPruneOrphanedSockets);
-            Assert.True(monitor.LastThrowOnDiscoveryFailure);
-        }
-        finally
-        {
-            await cancellation.CancelAsync();
-            Assert.Equal(CliExitCodes.Success, await invocation.DefaultTimeout());
-        }
-
-        timeProvider.Advance(TimeSpan.FromMinutes(1));
-        Assert.Equal(7, monitor.ScanCallCount);
-        Assert.Equal(3, interactionService.DisplayedRawText.Count);
-    }
-
-    [Fact]
-    public async Task PsCommand_FollowJsonFormat_ReconcilesMetadataWithoutRepeatingUnchangedRows()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var cancellation = new CancellationTokenSource();
-        var timeProvider = new FakeTimeProvider();
-        var updates = Channel.CreateUnbounded<AppHostDisplayInfo>();
-        var dashboardReads = Channel.CreateUnbounded<int>();
-        var dashboardReadCount = 0;
-        var dashboardUrl = "http://localhost:18888/";
-        var interactionService = new TestInteractionService
-        {
-            DisplayRawTextCallback = line =>
-            {
-                var update = JsonSerializer.Deserialize(line, PsCommandJsonContext.RelaxedEscaping.AppHostDisplayInfo);
-                Assert.NotNull(update);
-                updates.Writer.TryWrite(update);
-            }
-        };
-        var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("socket", new TestAppHostAuxiliaryBackchannel
-        {
-            AppHostInfo = new AppHostInformation
-            {
-                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"),
-                ProcessId = 1234
-            },
-            GetDashboardUrlsHandler = _ =>
-            {
-                dashboardReads.Writer.TryWrite(Interlocked.Increment(ref dashboardReadCount));
-                return Task.FromResult<DashboardUrlsState?>(new() { BaseUrlWithLoginToken = Volatile.Read(ref dashboardUrl) });
-            }
-        });
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.InteractionServiceFactory = _ => interactionService;
-            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
-            options.TimeProvider = timeProvider;
-        });
-        using var provider = services.BuildServiceProvider();
-        var invocation = provider.GetRequiredService<RootCommand>().Parse("ps --follow --format json")
-            .InvokeAsync(cancellationToken: cancellation.Token);
-
-        try
-        {
-            var initial = await updates.Reader.ReadAsync().AsTask().DefaultTimeout();
-            Assert.Equal(dashboardUrl, initial.DashboardUrl);
-
-            Volatile.Write(ref dashboardUrl, "http://localhost:18889/");
-            timeProvider.Advance(TimeSpan.FromSeconds(30));
-            var changed = await updates.Reader.ReadAsync().AsTask().DefaultTimeout();
-            Assert.Equal(dashboardUrl, changed.DashboardUrl);
-            Assert.Equal(initial.AppHostPath, changed.AppHostPath);
-            Assert.Equal(initial.AppHostPid, changed.AppHostPid);
-            Assert.Equal(AppHostDisplayStatus.Running, changed.Status);
-
-            timeProvider.Advance(TimeSpan.FromSeconds(30));
-            while (await dashboardReads.Reader.ReadAsync().AsTask().DefaultTimeout() < 3)
-            {
-            }
-        }
-        finally
-        {
-            await cancellation.CancelAsync();
-            Assert.Equal(CliExitCodes.Success, await invocation.DefaultTimeout());
-        }
-
-        Assert.Equal(5, monitor.ScanCallCount);
-        Assert.Equal(2, interactionService.DisplayedRawText.Count);
-    }
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task PsCommand_FollowJsonFormat_ReturnsFailureWhenDiscoveryFails(bool initialFailure)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var cancellation = new CancellationTokenSource();
-        var timeProvider = new FakeTimeProvider();
-        var initialScan = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.ScanAsyncCallback = _ =>
-        {
-            if (initialFailure || monitor.ScanCallCount > 1)
-            {
-                throw new IOException("AppHost discovery failed.");
-            }
-
-            initialScan.SetResult();
-            return Task.CompletedTask;
-        };
-        var interactionService = new TestInteractionService();
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.InteractionServiceFactory = _ => interactionService;
-            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
-            options.TimeProvider = timeProvider;
-        });
-        using var provider = services.BuildServiceProvider();
-        var invocation = provider.GetRequiredService<RootCommand>().Parse("ps --follow --format json")
-            .InvokeAsync(cancellationToken: cancellation.Token);
-
-        try
-        {
-            if (!initialFailure)
-            {
-                await initialScan.Task.DefaultTimeout();
-                timeProvider.Advance(TimeSpan.FromSeconds(30));
-            }
-
-            Assert.NotEqual(CliExitCodes.Success, await invocation.DefaultTimeout());
-            Assert.Empty(interactionService.DisplayedRawText);
-        }
-        finally
-        {
-            await cancellation.CancelAsync();
-            await invocation.DefaultTimeout();
-        }
-
-        var scanCount = monitor.ScanCallCount;
-        timeProvider.Advance(TimeSpan.FromMinutes(1));
-        Assert.Equal(scanCount, monitor.ScanCallCount);
     }
 
     [Theory]

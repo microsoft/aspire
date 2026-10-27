@@ -50,9 +50,6 @@ internal static class KnownCapabilities
     // before opting into newline-delimited JSON candidate discovery.
     public const string LsJsonStream = "ls-json-stream.v1";
 
-    // The follow stream rescans periodically, so tooling can omit its own reconciliation processes.
-    public const string PsFollowReconciliation = "ps-follow-reconciliation.v1";
-
     public const string AppHostLogOutput = "apphost-log-output.v1";
 
     // Advertised so tooling can pass `aspire run --isolated` only to CLIs that understand it.
@@ -72,5 +69,5 @@ internal static class KnownCapabilities
     /// <summary>
     /// Gets the set of capabilities this CLI advertises to extensions.
     /// </summary>
-    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, LsJsonStream, PsFollowReconciliation, IsolatedLaunch, AgentMcp, LaunchProfile, TerminalInstanceSelection];
+    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, LsJsonStream, IsolatedLaunch, AgentMcp, LaunchProfile, TerminalInstanceSelection];
 }

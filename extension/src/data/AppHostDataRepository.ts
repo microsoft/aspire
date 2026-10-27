@@ -164,11 +164,9 @@ export class AppHostDataRepository {
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService, configInfoProvider?: ConfigInfoProvider) {
         this._cliRunner = new AppHostCliRunner(_terminalProvider);
-        this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
         this._psPoller = new AppHostPsPoller(
             _terminalProvider,
             this._cliRunner,
-            this._configInfoProvider,
             () => this._dataActive,
             () => this._clearPostStopRefreshTimers());
         this._psPollerDisposable = vscode.Disposable.from(
@@ -181,6 +179,7 @@ export class AppHostDataRepository {
             this._psPoller.onDidChangePsCleanupError(message => this._setPsCleanupError(message)),
             this._psPoller.onDidRequestClearLoading(() => this._clearLoading()),
             this._psPoller.onDidStartPsFollow(() => this._handlePsFollowStarted()));
+        this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
         this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider, this._configInfoProvider);
         this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
         this._appHostDiscoveryChangeDisposable = vscode.Disposable.from(

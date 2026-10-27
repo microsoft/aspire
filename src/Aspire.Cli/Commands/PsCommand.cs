@@ -80,7 +80,6 @@ internal sealed partial class PsCommand : BaseCommand
     private readonly IProcessIdentityProvider _processIdentityProvider;
     private readonly TimeProvider _timeProvider;
     private readonly TrayProtocolOutput _protocolOutput;
-    private static readonly TimeSpan s_followReconciliationInterval = TimeSpan.FromSeconds(30);
     private static readonly Option<PsOutput> s_outputOption = new("--output")
     {
         Description = PsCommandStrings.OutputOptionDescription,
@@ -219,11 +218,9 @@ internal sealed partial class PsCommand : BaseCommand
         Snapshot
     }
 
-    private enum PsFollowUpdate
-    {
-        ConnectionsChanged,
-        Reconcile
-    }
+    private abstract record PsFollowUpdate;
+
+    private sealed record ConnectionsUpdate(IReadOnlyList<IAppHostAuxiliaryBackchannel> Connections) : PsFollowUpdate;
 
     private async Task<CommandResult> ExecuteFollowAsync(OutputFormat format, CancellationToken cancellationToken)
     {
@@ -233,7 +230,6 @@ internal sealed partial class PsCommand : BaseCommand
         }
         using var followCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var followCancellationToken = followCancellationTokenSource.Token;
-        using var reconciliationTimer = new PeriodicTimer(s_followReconciliationInterval, _timeProvider);
         var updates = Channel.CreateUnbounded<PsFollowUpdate>(new UnboundedChannelOptions
         {
             SingleReader = true
@@ -242,13 +238,13 @@ internal sealed partial class PsCommand : BaseCommand
         var activeAppHosts = new Dictionary<string, AppHostDisplayInfo>(appHostKeyComparer);
         var lastJsonByAppHost = new Dictionary<string, string>(appHostKeyComparer);
 
-        var watchTask = Task.Run(async () =>
+        _ = Task.Run(async () =>
         {
             try
             {
-                await foreach (var _ in _backchannelMonitor.WatchConnectionsAsync(followCancellationToken).WithCancellation(followCancellationToken).ConfigureAwait(false))
+                await foreach (var connections in _backchannelMonitor.WatchConnectionsAsync(followCancellationToken).WithCancellation(followCancellationToken).ConfigureAwait(false))
                 {
-                    await updates.Writer.WriteAsync(PsFollowUpdate.ConnectionsChanged, followCancellationToken).ConfigureAwait(false);
+                    await updates.Writer.WriteAsync(new ConnectionsUpdate(connections), followCancellationToken).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (followCancellationToken.IsCancellationRequested)
@@ -258,82 +254,60 @@ internal sealed partial class PsCommand : BaseCommand
             catch (Exception ex)
             {
                 _logger.LogDebug(ex, "Failed while watching AppHost connections for ps --follow.");
-                updates.Writer.TryComplete(ex);
             }
             finally
             {
                 updates.Writer.TryComplete();
             }
         }, CancellationToken.None);
-        var reconciliationTask = ReconcilePeriodicallyAsync();
 
         try
         {
             await foreach (var update in updates.Reader.ReadAllAsync(followCancellationToken).ConfigureAwait(false))
             {
-                if (update == PsFollowUpdate.Reconcile)
+                if (update is ConnectionsUpdate connectionsUpdate)
                 {
-                    // Reconcile inside this process so consumers do not need a new CLI invocation
-                    // to recover missed filesystem notifications or collect orphaned AppHosts.
-                    await _collector.CollectAsync(followCancellationToken).ConfigureAwait(false);
-                    await _backchannelMonitor.ScanAsync(followCancellationToken, throwOnDiscoveryFailure: true).ConfigureAwait(false);
-                }
+                    var currentConnections = OrderConnections(connectionsUpdate.Connections);
+                    var currentAppHosts = await GatherAppHostInfosAsync(currentConnections, followCancellationToken).ConfigureAwait(false);
+                    var nextActiveAppHosts = new Dictionary<string, AppHostDisplayInfo>(appHostKeyComparer);
 
-                // A queued watch notification must not replay an older connection set after a rescan.
-                var currentConnections = OrderConnections(_backchannelMonitor.Connections);
-                var currentAppHosts = await GatherAppHostInfosAsync(currentConnections, followCancellationToken).ConfigureAwait(false);
-                var nextActiveAppHosts = new Dictionary<string, AppHostDisplayInfo>(appHostKeyComparer);
-
-                foreach (var appHost in currentAppHosts)
-                {
-                    nextActiveAppHosts[GetAppHostKey(appHost)] = appHost;
-                    if (!await TryWriteAppHostInfoAsync(appHost).ConfigureAwait(false))
+                    foreach (var appHost in currentAppHosts)
                     {
-                        return CommandResult.Success();
+                        nextActiveAppHosts[GetAppHostKey(appHost)] = appHost;
+                        if (!await TryWriteAppHostInfoAsync(appHost).ConfigureAwait(false))
+                        {
+                            return CommandResult.Success();
+                        }
                     }
-                }
 
-                foreach (var (key, appHost) in activeAppHosts)
-                {
-                    if (!nextActiveAppHosts.ContainsKey(key) &&
-                        !await TryWriteAppHostInfoAsync(CopyWithStatus(appHost, AppHostDisplayStatus.Stopped)).ConfigureAwait(false))
+                    foreach (var (key, appHost) in activeAppHosts)
                     {
-                        return CommandResult.Success();
+                        if (!nextActiveAppHosts.ContainsKey(key) &&
+                            !await TryWriteAppHostInfoAsync(CopyWithStatus(appHost, AppHostDisplayStatus.Stopped)).ConfigureAwait(false))
+                        {
+                            return CommandResult.Success();
+                        }
                     }
-                }
 
-                activeAppHosts = nextActiveAppHosts;
+                    activeAppHosts = nextActiveAppHosts;
+                }
             }
         }
         catch (OperationCanceledException) when (followCancellationToken.IsCancellationRequested)
         {
             return CommandResult.Success();
         }
+        catch (IOException ex)
+        {
+            _logger.LogDebug(ex, "Stopping ps --follow because the output stream is no longer writable.");
+            return CommandResult.Success();
+        }
         finally
         {
             await followCancellationTokenSource.CancelAsync().ConfigureAwait(false);
-            await Task.WhenAll(watchTask, reconciliationTask).ConfigureAwait(false);
         }
 
         return CommandResult.Success();
-
-        async Task ReconcilePeriodicallyAsync()
-        {
-            try
-            {
-                while (await reconciliationTimer.WaitForNextTickAsync(followCancellationToken).ConfigureAwait(false))
-                {
-                    if (!updates.Writer.TryWrite(PsFollowUpdate.Reconcile))
-                    {
-                        break;
-                    }
-                }
-            }
-            catch (OperationCanceledException) when (followCancellationToken.IsCancellationRequested)
-            {
-                // Expected when the caller stops following or the output pipe closes.
-            }
-        }
 
         async Task<bool> TryWriteAppHostInfoAsync(AppHostDisplayInfo appHost)
         {
