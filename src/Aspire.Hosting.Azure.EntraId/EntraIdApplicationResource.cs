@@ -255,21 +255,21 @@ public class EntraIdApplicationResource : AzureProvisioningResource
     // of two identities. Only a .NET program can clash, since its DownstreamApis section is the same whatever the connection name.
     internal static void ValidateConsumerReferences(IResource consumer)
     {
-        var owners = new Dictionary<string, (EntraIdApplicationResource Source, string Entry, string ConfigKey)>(StringComparer.OrdinalIgnoreCase);
+        var owners = new Dictionary<string, (EntraIdApplicationResource Source, string Entry, string Prefix)>(StringComparer.OrdinalIgnoreCase);
         foreach (var reference in consumer.Annotations.OfType<EntraIdReferenceAnnotation>())
         {
             foreach (var entry in reference.Source.ApiAccess.SelectMany(static a => a.GetDownstreamApis()))
             {
-                var key = $"{reference.DownstreamApisPrefix}{entry.Name}";
+                var key = $"{reference.EnvironmentVariablePrefix}{entry.Name}";
                 if (owners.TryGetValue(key, out var other) && !ReferenceEquals(other.Source, reference.Source))
                 {
                     throw new InvalidOperationException(
                         $"'{consumer.Name}' references the Entra ID applications '{other.Source.Name}' and '{reference.Source.Name}', and both declare permissions to an API that is configured as " +
-                        $"the DownstreamApis entry '{entry.Name}' under '{reference.DownstreamApisConfigKey}', so their scopes would be mixed. Pass a different downstreamApisConfigKey " +
+                        $"the DownstreamApis entry '{entry.Name}' under '{reference.DownstreamApisPrefix}', so their scopes would be mixed. Pass a different downstreamApisPrefix " +
                         $"to WithReference for one of them.");
                 }
 
-                owners[key] = (reference.Source, entry.Name, reference.DownstreamApisConfigKey);
+                owners[key] = (reference.Source, entry.Name, reference.DownstreamApisPrefix);
             }
         }
     }

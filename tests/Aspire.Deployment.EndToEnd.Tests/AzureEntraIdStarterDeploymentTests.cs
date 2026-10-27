@@ -63,7 +63,7 @@ public sealed class AzureEntraIdStarterDeploymentTests(ITestOutputHelper output)
             var webFrontend = builder.AddDotnetProject("webfrontend", "../{{projectName}}.Web/{{projectName}}.Web.csproj")
                 .WithExternalHttpEndpoints()
                 .WithHttpHealthCheck("/health")
-                .WithReference(webEntra, connectionName: null, downstreamApisConfigKey: "MyDownstreamApis")
+                .WithReference(webEntra, connectionName: null, downstreamApisPrefix: "MyDownstreamApis")
                 .WithReference(apiService)
                 .WaitFor(apiService);
 
@@ -147,7 +147,7 @@ public sealed class AzureEntraIdStarterDeploymentTests(ITestOutputHelper output)
             $"{resourceGroupUrl}/providers/Microsoft.ManagedIdentity/userAssignedIdentities?api-version=2023-01-31", cancellationToken);
         Assert.NotNull(identities);
         var identity = Assert.Single(identities.RootElement.GetProperty("value").EnumerateArray(),
-            entry => entry.GetProperty("name").GetString()!.StartsWith("webfrontend-identity", StringComparison.Ordinal));
+            entry => entry.GetProperty("name").GetString()!.StartsWith("webfrontend_identity", StringComparison.Ordinal));
         var identityClientId = identity.GetProperty("properties").GetProperty("clientId").GetGuid();
         var identityPrincipalId = identity.GetProperty("properties").GetProperty("principalId").GetGuid();
 

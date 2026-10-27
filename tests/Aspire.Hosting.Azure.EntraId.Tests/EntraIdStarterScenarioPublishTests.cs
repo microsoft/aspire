@@ -46,7 +46,7 @@ public class EntraIdStarterScenarioPublishTests(ITestOutputHelper outputHelper)
         var webFrontend = builder.AddDotnetProject("webfrontend", webProject)
             .WithExternalHttpEndpoints()
             .WithHttpHealthCheck("/health")
-            .WithReference(webEntra, connectionName: null, downstreamApisConfigKey: "MyDownstreamApis")
+            .WithReference(webEntra, connectionName: null, downstreamApisPrefix: "MyDownstreamApis")
             .WithReference(apiService)
             .WaitFor(apiService);
 

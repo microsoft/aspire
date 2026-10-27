@@ -1547,6 +1547,7 @@ public static class EntraIdResourceExtensions
         }
 
         builder.Resource.ApplicationIdUri = applicationIdUri;
+        builder.Resource.UsesDefaultApplicationIdUri = false;
         return builder;
     }
 
@@ -1982,12 +1983,12 @@ public static class EntraIdResourceExtensions
     /// When empty, omits the prefix and its separator, producing <c>ClientId</c> for .NET program resources and <c>CLIENT_ID</c> for other resources.
     /// For .NET program resources, <c>:</c> in the name is replaced by <c>__</c>.
     /// </param>
-    /// <param name="downstreamApisConfigKey">
-    /// The root configuration key of the <c>DownstreamApis</c> entries for the APIs that the application declared permissions to
+    /// <param name="downstreamApisPrefix">
+    /// The configuration prefix of the <c>DownstreamApis</c> entries for the APIs that the application declared permissions to
     /// (see <c>WithApiPermissions</c>). When <see langword="null"/>, uses <c>"DownstreamApis"</c>.
-    /// For .NET program resources, <c>:</c> in the key is replaced by <c>__</c>. A .NET program's <c>DownstreamApis</c> section doesn't depend on
+    /// For .NET program resources, <c>:</c> in the prefix is replaced by <c>__</c>. A .NET program's <c>DownstreamApis</c> section doesn't depend on
     /// <paramref name="connectionName"/>, so when a resource references several registrations that declare permissions to the same API,
-    /// give all but one of them their own key, or the model is rejected.
+    /// give all but one of them their own prefix, or the model is rejected.
     /// </param>
     /// <returns>The resource builder for chaining.</returns>
     /// <remarks>
@@ -2008,7 +2009,7 @@ public static class EntraIdResourceExtensions
     /// </code>
     /// <para>
     /// When the application declared permissions to other APIs, the consumer also receives one entry per API under the
-    /// <paramref name="downstreamApisConfigKey"/> section: <c>{key}__{name}__Scopes__{index}</c>. For an API registration in the AppHost,
+    /// <paramref name="downstreamApisPrefix"/> prefix: <c>{prefix}__{name}__Scopes__{index}</c>. For an API registration in the AppHost,
     /// <c>{name}</c> is the name of each resource that references that registration, like the name used for service discovery.
     /// </para>
     /// <example>
@@ -2026,14 +2027,14 @@ public static class EntraIdResourceExtensions
         this IResourceBuilder<T> builder,
         IResourceBuilder<EntraIdApplicationResource> source,
         string? connectionName = null,
-        string? downstreamApisConfigKey = null)
+        string? downstreamApisPrefix = null)
         where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(source);
-        if (downstreamApisConfigKey is not null)
+        if (downstreamApisPrefix is not null)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(downstreamApisConfigKey);
+            ArgumentException.ThrowIfNullOrWhiteSpace(downstreamApisPrefix);
         }
 
         // Inspect the resource itself so .NET defaults also apply when the builder's type has been erased.
@@ -2041,22 +2042,22 @@ public static class EntraIdResourceExtensions
         var isDotnetProgram = builder.Resource is IDotnetProgramResource;
 #pragma warning restore ASPIREPROJECTS001
         connectionName ??= isDotnetProgram ? "AzureAd" : EnvironmentVariableNameEncoder.Encode(source.Resource.Name);
-        downstreamApisConfigKey ??= "DownstreamApis";
+        downstreamApisPrefix ??= "DownstreamApis";
 
         if (isDotnetProgram)
         {
             connectionName = connectionName.Replace(":", "__", StringComparison.Ordinal);
-            downstreamApisConfigKey = downstreamApisConfigKey.Replace(":", "__", StringComparison.Ordinal);
+            downstreamApisPrefix = downstreamApisPrefix.Replace(":", "__", StringComparison.Ordinal);
         }
 
-        return WithReferenceCore(builder, source, connectionName, downstreamApisConfigKey, isDotnetProgram);
+        return WithReferenceCore(builder, source, connectionName, downstreamApisPrefix, isDotnetProgram);
     }
 
     private static IResourceBuilder<T> WithReferenceCore<T>(
         IResourceBuilder<T> builder,
         IResourceBuilder<EntraIdApplicationResource> source,
         string connectionName,
-        string downstreamApisConfigKey,
+        string downstreamApisPrefix,
         bool isDotnetProgram)
         where T : IResourceWithEnvironment
     {
@@ -2069,8 +2070,8 @@ public static class EntraIdResourceExtensions
         entra.Consumers.Add(builder.Resource);
 
         // That section is a sibling of AzureAd, not part of it, so a .NET program's entries ignore the connection name.
-        var downstreamPrefix = isDotnetProgram ? $"{downstreamApisConfigKey}__" : $"{keyPrefix}{downstreamApisConfigKey}_";
-        builder.Resource.Annotations.Add(new EntraIdReferenceAnnotation(entra, downstreamApisConfigKey, downstreamPrefix));
+        var environmentVariablePrefix = isDotnetProgram ? $"{downstreamApisPrefix}__" : $"{keyPrefix}{downstreamApisPrefix}_";
+        builder.Resource.Annotations.Add(new EntraIdReferenceAnnotation(entra, downstreamApisPrefix, environmentVariablePrefix));
 
         if (entra.ClientCredentials.OfType<EntraIdFederatedIdentityCredential>().Any(c => c.UsesConsumerIdentity))
         {
@@ -2161,7 +2162,7 @@ public static class EntraIdResourceExtensions
             EntraIdApplicationResource.ValidateConsumerReferences(builder.Resource);
             foreach (var downstreamApi in entra.ApiAccess.SelectMany(static a => a.GetDownstreamApis()))
             {
-                var apiPrefix = $"{downstreamPrefix}{downstreamApi.Name}{separator}";
+                var apiPrefix = $"{environmentVariablePrefix}{downstreamApi.Name}{separator}";
                 for (var i = 0; i < downstreamApi.Scopes.Count; i++)
                 {
                     environmentVariables[$"{apiPrefix}Scopes{separator}{i}"] = downstreamApi.Scopes[i];

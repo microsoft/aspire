@@ -979,7 +979,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("MyDownstreamApis", "MyDownstreamApis__apiservice__Scopes__0")]
     [InlineData("Section:MyApis", "Section__MyApis__apiservice__Scopes__0")]
-    public async Task WithReference_UsesTheDownstreamApisConfigKey(string key, string expected)
+    public async Task WithReference_UsesTheDownstreamApisPrefix(string prefix, string expected)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var apiEntra = builder.AddExistingEntraApplication("apiservice-entra", TenantId, ClientId)
@@ -989,7 +989,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
             .WithApiPermissions(apiEntra, "access_as_user");
         builder.AddResource(new ProjectResource("apiservice")).WithReference(apiEntra);
         var webFrontend = builder.AddResource(new ProjectResource("webfrontend"))
-            .WithReference(webEntra, connectionName: null, downstreamApisConfigKey: key);
+            .WithReference(webEntra, connectionName: null, downstreamApisPrefix: prefix);
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(webFrontend.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
@@ -999,7 +999,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task WithReference_UsesTheDownstreamApisConfigKeyForOtherLanguages()
+    public async Task WithReference_UsesTheDownstreamApisPrefixForOtherLanguages()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var apiEntra = builder.AddExistingEntraApplication("apiservice-entra", TenantId, ClientId)
@@ -1019,14 +1019,14 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void WithReference_RejectsAnEmptyDownstreamApisConfigKey()
+    public void WithReference_RejectsAnEmptyDownstreamApisPrefix()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var webEntra = builder.AddExistingEntraApplication("webfrontend-entra", TenantId, ClientId);
         var project = builder.AddResource(new ProjectResource("webfrontend"));
 
-        Assert.Throws<ArgumentException>(() => project.WithReference(webEntra, connectionName: null, downstreamApisConfigKey: ""));
-        Assert.Throws<ArgumentException>(() => project.WithReference(webEntra, connectionName: null, downstreamApisConfigKey: " "));
+        Assert.Throws<ArgumentException>(() => project.WithReference(webEntra, connectionName: null, downstreamApisPrefix: ""));
+        Assert.Throws<ArgumentException>(() => project.WithReference(webEntra, connectionName: null, downstreamApisPrefix: " "));
     }
 
     [Fact]
@@ -1254,19 +1254,19 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(
             "'frontend' references the Entra ID applications 'web-a' and 'web-b', and both declare permissions to an API that is configured as " +
-            "the DownstreamApis entry 'apiservice' under 'DownstreamApis', so their scopes would be mixed. Pass a different downstreamApisConfigKey to WithReference for one of them.",
+            "the DownstreamApis entry 'apiservice' under 'DownstreamApis', so their scopes would be mixed. Pass a different downstreamApisPrefix to WithReference for one of them.",
             exception.Message);
         Assert.Equal(exception.Message, Assert.Throws<InvalidOperationException>(first.Resource.ValidateApiAccess).Message);
     }
 
     [Fact]
-    public async Task WithReference_ADifferentDownstreamApisConfigKeyKeepsTheTwoRegistrationsApart()
+    public async Task WithReference_ADifferentDownstreamApisPrefixKeepsTheTwoRegistrationsApart()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var (first, second) = AddTwoClientsOfOneApi(builder);
         var frontend = builder.AddResource(new ProjectResource("frontend"))
             .WithReference(first, "AzureAdA")
-            .WithReference(second, "AzureAdB", downstreamApisConfigKey: "DownstreamApisB");
+            .WithReference(second, "AzureAdB", downstreamApisPrefix: "DownstreamApisB");
 
         first.Resource.ValidateApiAccess();
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(frontend.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
@@ -1329,7 +1329,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
 
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => ExecuteBeforeStartHooksAsync(app, default));
-        Assert.Contains("downstreamApisConfigKey", exception.ToString());
+        Assert.Contains("downstreamApisPrefix", exception.ToString());
     }
 
     [Fact]

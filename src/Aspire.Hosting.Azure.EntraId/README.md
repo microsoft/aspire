@@ -117,11 +117,11 @@ entraWeb.WithIdTokenIssuance();
 
 ID-token issuance through implicit or hybrid flows is disabled by default. `WithIdTokenIssuance` enables only ID-token issuance, not implicit access-token issuance, and only affects registrations created by Aspire. For existing registrations, enable **ID tokens (used for implicit and hybrid flows)** in their **Authentication** settings instead. It is not needed for authorization-code-only flows. For new production applications, prefer authorization code flow with PKCE and configure a confidential-client credential when the application redeems codes.
 
-Creating a registration does not protect a workload's routes or authorize API requests. Configure authentication and authorization in the consuming application using Microsoft.Identity.Web or the corresponding library for that language. A web-to-API flow also needs a client credential and scope or role validation in the API. The next section covers the identifier URI, exposed scopes, client permissions and consent.
+A registration doesn't protect routes or authorize requests. Configure authentication and authorization in the consuming app with Microsoft.Identity.Web or the equivalent library for its language, and validate scopes or roles in the API.
 
 ### Expose an API and call it
 
-A registration becomes an API by exposing scopes. A client registration then declares the permissions it needs, and, only if you ask, consent is granted for them. Declaration, consent and pre-authorization are separate, and Aspire never combines them implicitly.
+A registration becomes an API by exposing scopes, which you declare explicitly: Aspire doesn't derive them from caller permissions. A client registration declares the permissions it needs, and consent is granted only if you ask for it. Declaration, consent and pre-authorization are separate, and Aspire never combines them.
 
 ```csharp
 var entraApi = builder.AddEntraIdApplication("entra-api")
@@ -142,8 +142,13 @@ builder.AddProject<Projects.Web>("webfrontend")
        .WithReference(apiService);
 ```
 
-* **Configuration flows automatically.** Referencing the client registration gives the consumer an entry under `DownstreamApis` for each API the registration declared permissions to. Delegated permissions become `DownstreamApis__{name}__Scopes__{index}` (here `api://{clientId}/access_as_user`). Application permissions are a separate `{name}AppOnly` entry with the `/.default` scope and `RequestAppToken=true`, because a token request covers one resource and one flow. For an API registration in the AppHost, `{name}` is the name of each resource that references it (`apiservice`), the same name that service discovery uses; if nothing references it the registration's own name is used. A resource that references two API registrations that the same client declares permissions to would get two entries with one name, so Aspire rejects the model before anything starts: reference the registrations from different resources. For an existing API registration, call `WithApplicationIdUri` with the URI it defines, because the scope names can't be guessed; a missing URI is rejected the same way. First-party APIs are named `MicrosoftGraph`, `AzureResourceManager` and `AzureStorage`, or with the display name passed to `EntraIdApi.FromApplicationId`. Pass `downstreamApisConfigKey` to `WithReference(entraWeb, downstreamApisConfigKey: "MyDownstreamApis")` to change the root key, which defaults to `DownstreamApis`. A .NET resource that references two registrations calling the same API would write the same keys, since that section doesn't depend on the connection name, and the scopes of the two identities would be mixed. Aspire rejects that before anything starts: give one of the references its own `downstreamApisConfigKey`. Other languages get the same settings with uppercase snake-case names, for example `ENTRA_WEBFRONTEND_ENTRA_DOWNSTREAM_APIS_APISERVICE_SCOPES_0`.
-* **Use the entry in the app.** The entry holds the scopes, not the API's URL: set the client's address yourself, for example through service discovery. `AddMicrosoftIdentityMessageHandler` reads the settings from the section that you pass, so pass the API's entry, not the root:
+* **Configuration flows automatically.** Referencing the client registration gives the consumer a `DownstreamApis` entry for each API the client declared permissions to:
+  * Delegated permissions: `DownstreamApis__{name}__Scopes__{index}` (here `api://{clientId}/access_as_user`).
+  * Application permissions: a separate `{name}AppOnly` entry with the `/.default` scope and `RequestAppToken=true`, because a token request covers one resource and one flow.
+  * `{name}` is the name of each resource that references the API registration (`apiservice`), or the registration's own name if none does. First-party APIs use `MicrosoftGraph`, `AzureResourceManager`, `AzureStorage`, or the display name passed to `EntraIdApi.FromApplicationId`.
+  * `downstreamApisPrefix` on `WithReference` changes the `DownstreamApis` prefix. Other languages get uppercase snake case, for example `ENTRA_WEBFRONTEND_ENTRA_DOWNSTREAM_APIS_APISERVICE_SCOPES_0`.
+  * Entries that would collide are rejected before anything starts. Reference API registrations that one client calls from different resources, and give one of two registrations that call the same API its own `downstreamApisPrefix`.
+* **Use the entry in the app.** The entry holds scopes, not the API's URL, so set the client's address yourself, for example with service discovery. Pass the API's entry to `AddMicrosoftIdentityMessageHandler`:
 
   ```csharp
   builder.Services.AddHttpClient<WeatherApiClient>(client => client.BaseAddress = new("https+http://apiservice"))
@@ -153,16 +158,15 @@ builder.AddProject<Projects.Web>("webfrontend")
 
   `AddDownstreamApis(builder.Configuration.GetSection("DownstreamApis"))` registers every entry for `IDownstreamApi` by name instead.
 * **The API's own settings.** Referencing a registration that exposes scopes also sets `AzureAd__Scopes` to its enabled scope names, which `[RequiredScope]` reads.
-* **Application ID URI.** A registration with scopes uses `api://{clientId}`. The client ID exists only after the registration is created, so Aspire sets the URI with a second update of the same registration in the same deployment. `api://{clientId}` contains the application ID, which the tenant's default identifier URI policy accepts. Call `WithApplicationIdUri("api://contoso-orders")` for a custom URI, which must be unique in the tenant. The default policy asks a new URI to contain a verified domain, the tenant ID or the application ID, but it isn't applied when `requestedAccessTokenVersion` is 2, which Aspire always sets, so a name such as `api://contoso-orders` is normally accepted. A tenant can configure a stricter policy, and the deployment fails when it rejects the URI ([details](https://aka.ms/identifier-uri-formatting-error)). `GetScopeUri` returns the full scope name, for example `api://{clientId}/access_as_user`.
-* **Stable scope IDs.** Scope IDs derive from the registration and scope names, so every deployment, and every tenant, produces the same IDs. Set `EntraIdScope.Id` to adopt a scope that already exists.
-* **Retiring a scope.** Microsoft Graph rejects a deployment that removes an enabled scope or renames it. Retire a scope in two deployments: set `IsEnabled = false` through `WithScope`'s callback and deploy, then remove the scope and deploy again. Scopes can't be requested, declared or pre-authorized while disabled. To retire the *last* scope, keep `WithApplicationIdUri()` (or a custom URI) for the second deployment, so that the registration is still declared as an API and its empty scope list is sent.
-* **What a deployment removes.** Aspire manages what the AppHost declares, and stops managing what it no longer declares. Microsoft Graph keeps every property that a deployment omits, as with any Bicep template, and only an explicit value changes it. While a registration is declared as an API (it has scopes or a `WithApplicationIdUri` call), its application ID URIs, scopes and pre-authorized clients are sent in full, even when empty, and Graph replaces each list with what is sent. Anything in the tenant that isn't in the list is removed, including a second URI, a client pre-authorized in the portal, or a disabled scope added by hand (an enabled one fails the deployment instead, because Graph rejects removing an enabled scope). So removing the last `WithPreAuthorizedApplication` call revokes that pre-authorization, and removing a scope while others remain retires it. Once nothing declares the API any more, nothing is sent for it: the scopes, the application ID URI and the **pre-authorized clients** that an earlier deployment wrote stay in the tenant, and so do the `WithApiPermissions` declarations after the last one is removed. Pre-authorization lets a client skip consent, so revoke it in the [Microsoft Entra admin center](https://entra.microsoft.com) before you remove the API configuration, or remove the clients first and keep `WithApplicationIdUri()` for one deployment. Consent that was granted is never revoked by Aspire either.
-* **Scopes are explicit.** Aspire doesn't derive scopes from the permissions that callers request.
-* **One resource per token.** A token request covers the scopes of one API. Request the scopes of the API and of Microsoft Graph in separate token requests (for example, `AADSTS28000` occurs when one request mixes them).
+* **Application ID URI.** A registration with scopes uses `api://{clientId}`. The client ID exists only after creation, so Aspire sets the URI in a second update of the registration in the same deployment. `WithApplicationIdUri("api://contoso-orders")` sets a custom URI, which must be unique in the tenant. Aspire always sets `requestedAccessTokenVersion` to 2, which exempts the URI from the tenant's default policy, but a stricter policy fails the deployment ([details](https://aka.ms/identifier-uri-formatting-error)). `GetScopeUri` returns the full scope name.
+* **Stable scope IDs.** Scope IDs derive from the registration and scope names, so they are the same in every deployment and tenant. Set `EntraIdScope.Id` to adopt an existing scope.
+* **Retiring a scope.** Graph rejects removing or renaming an enabled scope, so retire it in two deployments: set `IsEnabled = false` in `WithScope`'s callback and deploy, then remove the scope. A disabled scope can't be requested, declared or pre-authorized. When retiring the last scope, keep `WithApplicationIdUri()` for the second deployment so the empty scope list is still sent.
+* **What a deployment removes.** Graph keeps properties that a deployment omits. While a registration is declared as an API (it has scopes or a `WithApplicationIdUri` call), its application ID URIs, scopes and pre-authorized clients are sent in full, even when empty, and Graph replaces each list: anything not listed is removed, such as a client pre-authorized in the portal. Removing the last `WithPreAuthorizedApplication` call therefore revokes it. Once nothing declares the API, nothing is sent, and earlier scopes, URIs, pre-authorized clients and `WithApiPermissions` declarations stay in the tenant, so remove pre-authorized clients first and keep `WithApplicationIdUri()` for one deployment. Aspire never revokes granted consent.
+* **One resource per token.** A token request covers the scopes of one API. Request the API's scopes and Microsoft Graph's separately; mixing them fails with `AADSTS28000`.
 
 #### Call Microsoft Graph and other first-party APIs
 
-An API that isn't an Aspire resource is identified by its well-known application ID. `EntraIdApi.MicrosoftGraph`, `EntraIdApi.AzureResourceManager` and `EntraIdApi.AzureStorage` know their common permissions by name; other permissions are passed with their ID, and other APIs are identified with `EntraIdApi.FromApplicationId(displayName, applicationId, resourceUri)`, where `resourceUri` is the API's application ID URI (the prefix of its scopes in a token request; it can't be derived from the application ID). Unknown names are rejected when you write the AppHost.
+An API that isn't an Aspire resource is identified by its application ID. `EntraIdApi.MicrosoftGraph`, `AzureResourceManager` and `AzureStorage` know their common permissions by name; pass other permissions with their ID. For other APIs use `EntraIdApi.FromApplicationId(displayName, applicationId, resourceUri)`, where `resourceUri` is the API's application ID URI (the prefix of its scopes). Unknown names are rejected when you write the AppHost.
 
 ```csharp
 var entraWeb = builder.AddEntraIdApplication("entra-web")
@@ -179,7 +183,12 @@ var entraWeb = builder.AddEntraIdApplication("entra-web")
         EntraIdApiPermission.Application("User.Read.All"));
 ```
 
-Consent needs a deploying identity that can grant it. For delegated permissions, that is a directory role such as Privileged Role Administrator, Cloud Application Administrator or Application Administrator, or the `DelegatedPermissionGrant.ReadWrite.All` Microsoft Graph permission. For Microsoft Graph application permissions, Cloud Application Administrator and Application Administrator are not enough: a user needs Privileged Role Administrator or a custom role that can grant them, and an application needs the `AppRoleAssignment.ReadWrite.All` Microsoft Graph permission (see [grant tenant-wide admin consent](https://learn.microsoft.com/entra/identity/enterprise-apps/grant-admin-consent#prerequisites)). Without `WithAdminConsent`, no grant is made and the deploying identity needs no extra privileges. Application permissions to broad scopes such as `Directory.Read.All` give the application access to the whole tenant, so declare only what the application needs. A permission must be declared before consent is granted for it.
+Consent needs a deploying identity that can grant it:
+
+* **Delegated permissions:** a directory role such as Privileged Role Administrator, Cloud Application Administrator or Application Administrator, or the `DelegatedPermissionGrant.ReadWrite.All` Graph permission.
+* **Graph application permissions:** Privileged Role Administrator or a custom role, or `AppRoleAssignment.ReadWrite.All` for an application. Cloud Application Administrator and Application Administrator are not enough.
+
+See [grant tenant-wide admin consent](https://learn.microsoft.com/entra/identity/enterprise-apps/grant-admin-consent#prerequisites). Without `WithAdminConsent`, nothing is granted and no extra privileges are needed. Declare a permission before consenting to it, and only what the application needs: application permissions such as `Directory.Read.All` reach the whole tenant.
 
 #### Pre-authorize a client
 
@@ -191,11 +200,11 @@ var entraApi = builder.AddEntraIdApplication("entra-api")
                       .WithPreAuthorizedApplication(entraDaemon, "access_as_user");
 ```
 
-Each registration deploys as its own module. Pre-authorization makes the API's module wait for the client's ID, and a declaration makes the client's module wait for the API's ID, so two registrations can't use both: Aspire rejects the second call with an error. Use a declaration with `WithAdminConsent` on the client, or pre-authorization alone.
+Each registration deploys as its own module. Pre-authorization makes the API's module wait for the client's ID, while a declaration makes the client's module wait for the API's ID, so a pair of registrations can't use both and Aspire rejects the second call. Use a declaration with `WithAdminConsent` on the client, or pre-authorization alone.
 
 #### Existing registrations
 
-Existing registrations stay configuration-only. Use `WithApplicationIdUri` and `WithScope` (with `EntraIdScope.Id` set to the ID the registration defines) on an existing registration so that callers can declare permissions to it and build scope names with `GetScopeUri`. Aspire doesn't modify an existing registration, and an existing client registration's declarations and consent aren't deployed.
+Existing registrations are configuration only. On one, call `WithApplicationIdUri` and `WithScope` (with `EntraIdScope.Id` set to the ID the registration defines) so callers can declare permissions to it and build scope names with `GetScopeUri`. An existing client registration's declarations and consent aren't deployed.
 
 ### Assign explicit owners
 
@@ -405,7 +414,6 @@ var entraApi = builder.AddExistingEntraApplication("entra-api", tenantId: tenant
 
 The integration can reference existing registrations or create registrations and service principals. It doesn't yet:
 
-* Automatically add the referencing resources' URLs as redirect URIs.
 * Assign app roles that an API defines (app roles of Aspire-modeled APIs) or create user and group role assignments.
 * Create, store, or rotate client secrets and certificates.
 
