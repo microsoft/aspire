@@ -1373,9 +1373,15 @@ public class AtsTypeScriptCodeGeneratorTests
         AssertProperties<global::Aspire.Hosting.Kubernetes.Resources.VolumeResourceRequirementsV1>(
             ["requests"]);
 
-        var storageClassSetter = Assert.Single(scanResult.Capabilities,
-            c => c.CapabilityId == "Aspire.Hosting.Kubernetes.Resources/PersistentVolumeClaimSpecV1.setStorageClassName");
-        Assert.True(Assert.Single(storageClassSetter.Parameters, p => p.Name == "value").Type?.IsNullable);
+        var defaultSpec = new global::Aspire.Hosting.Kubernetes.Resources.PersistentVolumeClaimSpecV1();
+        Assert.Null(defaultSpec.VolumeMode);
+        Assert.Null(defaultSpec.VolumeName);
+        foreach (var setter in new[] { "setStorageClassName", "setVolumeMode", "setVolumeName" })
+        {
+            var propertySetter = Assert.Single(scanResult.Capabilities,
+                c => c.CapabilityId == $"Aspire.Hosting.Kubernetes.Resources/PersistentVolumeClaimSpecV1.{setter}");
+            Assert.True(Assert.Single(propertySetter.Parameters, p => p.Name == "value").Type?.IsNullable);
+        }
 
         var generatedCode = _generator.GenerateDistributedApplication(scanResult.ToAtsContext())["aspire.mts"];
         var volumeInterface = Regex.Match(generatedCode, @"^export interface KubernetesPersistentVolumeResource \{.*?^\}",

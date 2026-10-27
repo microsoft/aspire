@@ -73,10 +73,11 @@ public sealed class PersistentVolumeClaimSpecV1
     /// - "Block": The volume is used as a raw block device.
     /// This property is important for ensuring compatibility between the volume type
     /// and the application accessing it.
+    /// If <see langword="null"/>, the field is omitted and Kubernetes defaults to filesystem mode.
     /// </remarks>
     [AspireExport]
     [YamlMember(Alias = "volumeMode")]
-    public string VolumeMode { get; set; } = null!;
+    public string? VolumeMode { get; set; }
 
     /// <summary>
     /// Gets or sets the name of the specific volume to be bound to the PersistentVolumeClaim.
@@ -84,10 +85,11 @@ public sealed class PersistentVolumeClaimSpecV1
     /// <remarks>
     /// This property allows the user to bind the PersistentVolumeClaim to a pre-existing PersistentVolume
     /// by its name. When specified, the claim is directly associated with the named volume.
+    /// If <see langword="null"/>, the field is omitted and the claim is not bound to a specific volume by name.
     /// </remarks>
     [AspireExport]
     [YamlMember(Alias = "volumeName")]
-    public string VolumeName { get; set; } = null!;
+    public string? VolumeName { get; set; }
 
     /// <summary>
     /// Specifies a reference to a data source object for the Persistent Volume Claim (PVC).

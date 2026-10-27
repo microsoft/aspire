@@ -74,20 +74,22 @@ export interface PersistentVolumeClaimSpecV1 {
      * - "Block": The volume is used as a raw block device.
      * This property is important for ensuring compatibility between the volume type
      * and the application accessing it.
+     * If `null`, the field is omitted and Kubernetes defaults to filesystem mode.
      */
     volumeMode: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
     /**
      * Gets or sets the name of the specific volume to be bound to the PersistentVolumeClaim.
      *
      * This property allows the user to bind the PersistentVolumeClaim to a pre-existing PersistentVolume
      * by its name. When specified, the claim is directly associated with the named volume.
+     * If `null`, the field is omitted and the claim is not bound to a specific volume by name.
      */
     volumeName: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
     /**
      * Defines the access modes for a Persistent Volume Claim.

@@ -90,6 +90,8 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
             await omitted.withStorageClass("fast");
             await omitted.withConfiguration(async (claim) => {
                 const spec = await claim.spec.get();
+                assert.equal(await spec.volumeMode.get(), null);
+                assert.equal(await spec.volumeName.get(), null);
                 await spec.storageClassName.set(null);
             });
 
