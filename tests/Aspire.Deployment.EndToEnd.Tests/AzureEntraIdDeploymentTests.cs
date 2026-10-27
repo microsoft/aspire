@@ -158,6 +158,309 @@ public sealed class AzureEntraIdDeploymentTests(ITestOutputHelper output)
             nameof(DeployEntraRegistrationAndRedeployWithStableIds), resourceGroupName, deploymentUrls, DateTime.UtcNow - started);
     }
 
+    /// <summary>
+    /// Deploys the Aspire starter application with Entra added: a protected API and a web front end that is granted the API's
+    /// delegated scope. The sign-in flow can't be automated, so this verifies the registrations, the permission relationship
+    /// between them and the configuration that each deployed app receives. The publish snapshot test in
+    /// Aspire.Hosting.Azure.EntraId.Tests covers the same AppHost.
+    /// </summary>
+    [Fact]
+    public async Task DeployStarterWithEntraApiAndWebRegistrations()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Deployment terminal automation requires Linux.");
+
+        var subscriptionId = DotnetProjectDeploymentHelpers.GetSubscriptionId();
+        Assert.True(Guid.TryParse(subscriptionId, out _), "The deployment subscription must be a GUID.");
+        Assert.True(Guid.TryParse(AzureAuthenticationHelpers.GetTenantId(), out var tenantId),
+            "Set AZURE_TENANT_ID to the deployment tenant ID.");
+        var strategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
+        Assert.SkipUnless(
+            strategy.Mode is CliInstallMode.Preinstalled or CliInstallMode.LocalHive or CliInstallMode.LocalArchive or CliInstallMode.PullRequest,
+            "This scenario requires current-build artifacts. Set ASPIRE_E2E_ARCHIVE for a local run.");
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        timeout.CancelAfter(TimeSpan.FromMinutes(60));
+        var cancellationToken = timeout.Token;
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var client = new HttpClient();
+        var credential = AzureAuthenticationHelpers.GetAzureCredential();
+        var suffix = Guid.NewGuid().ToString("N");
+        const string projectName = "EntraStarter";
+        // The tenant resource suffix is appended to each registration's name, which is the uniqueName that Graph Bicep upserts by.
+        var apiUniqueName = $"apiservice-entra-{suffix}";
+        var webUniqueName = $"webfrontend-entra-{suffix}";
+        var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName($"entra-starter-{suffix[..8]}");
+        var resourceGroupUrl = $"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}?api-version=2021-04-01";
+        var apiApplicationUrl = $"https://graph.microsoft.com/v1.0/applications(uniqueName='{apiUniqueName}')";
+        var webApplicationUrl = $"https://graph.microsoft.com/v1.0/applications(uniqueName='{webUniqueName}')";
+        var started = DateTime.UtcNow;
+        var deploymentAttempted = false;
+        Exception? deploymentFailure = null;
+        var deploymentUrls = new Dictionary<string, string>();
+
+        // Only take cleanup ownership after proving these test-specific names are unused.
+        using (var existingGroup = await ReadResourceAsync(client, credential, resourceGroupUrl, cancellationToken))
+        using (var existingApi = await ReadResourceAsync(client, credential, apiApplicationUrl, cancellationToken))
+        using (var existingWeb = await ReadResourceAsync(client, credential, webApplicationUrl, cancellationToken))
+        {
+            Assert.Null(existingGroup);
+            Assert.Null(existingApi);
+            Assert.Null(existingWeb);
+        }
+
+        try
+        {
+            using var terminalCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal(width: 320);
+            var pendingRun = terminal.RunAsync(terminalCancellation.Token);
+            var counter = new SequenceCounter();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+            try
+            {
+                await auto.PrepareEnvironmentAsync(workspace, counter);
+                await auto.InstallAspireCliAsync(strategy, counter, output);
+                await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
+                await auto.RunCommandAsync($"cd {projectName}", counter);
+                await DotnetProjectDeploymentHelpers.AddPackageAsync(auto, counter, "Aspire.Hosting.Azure.AppContainers");
+                await DotnetProjectDeploymentHelpers.AddPackageAsync(auto, counter, "Aspire.Hosting.Azure.EntraId");
+                var solutionDirectory = Path.Combine(workspace.Path, projectName);
+                WriteStarterWithEntra(solutionDirectory, projectName);
+                await auto.RunCommandAsync($"cd {projectName}.AppHost", counter);
+
+                await auto.RunCommandAsync(
+                    "unset ASPIRE_PLAYGROUND Azure__Location Azure__ResourceGroup Azure__SubscriptionId Azure__TenantId Azure__TenantResourceSuffix && " +
+                    $"export AZURE__LOCATION=westus3 AZURE__RESOURCEGROUP={AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)} " +
+                    $"AZURE__SUBSCRIPTIONID={AspireCliShellCommandHelpers.QuoteBashArg(subscriptionId)} " +
+                    $"AZURE__TENANTID={tenantId:D} AZURE__TENANTRESOURCESUFFIX={suffix}",
+                    counter);
+
+                deploymentAttempted = true;
+                await DeployAsync(auto, counter);
+                await VerifyStarterDeploymentAsync(
+                    client, credential, subscriptionId, resourceGroupName, apiUniqueName, webUniqueName, tenantId, deploymentUrls, cancellationToken);
+
+                await auto.TypeAsync("exit");
+                await auto.EnterAsync();
+                await pendingRun.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+            }
+            finally
+            {
+                // Stop terminal-driven deployment before cleanup, even after the test budget expires.
+                await terminalCancellation.CancelAsync();
+                try
+                {
+                    await pendingRun.WaitAsync(TimeSpan.FromSeconds(30));
+                }
+                catch (OperationCanceledException) when (terminalCancellation.IsCancellationRequested)
+                {
+                    // Terminal cancellation is expected on failure or timeout.
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            deploymentFailure = ex;
+            DeploymentReporter.ReportDeploymentFailure(
+                nameof(DeployStarterWithEntraApiAndWebRegistrations), resourceGroupName, ex.Message);
+            throw;
+        }
+        finally
+        {
+            if (deploymentAttempted)
+            {
+                // Directory objects are not owned by the resource group. Both cleanup paths must run,
+                // including when deployment failed before outputs could be read.
+                try
+                {
+                    await CleanupAsync(client, credential, resourceGroupUrl, webApplicationUrl, apiApplicationUrl);
+                    DeploymentReporter.ReportCleanupStatus(resourceGroupName, true, "Resource group and Entra directory objects deleted.");
+                }
+                catch (Exception ex)
+                {
+                    DeploymentReporter.ReportCleanupStatus(resourceGroupName, false, ex.Message);
+                    var failures = new List<Exception> { ex };
+                    if (deploymentFailure is not null)
+                    {
+                        failures.Insert(0, deploymentFailure);
+                    }
+
+                    throw new AggregateException("Entra starter deployment cleanup failed.", failures);
+                }
+            }
+        }
+
+        DeploymentReporter.ReportDeploymentSuccess(
+            nameof(DeployStarterWithEntraApiAndWebRegistrations), resourceGroupName, deploymentUrls, DateTime.UtcNow - started);
+    }
+
+    private static void WriteStarterWithEntra(string solutionDirectory, string projectName)
+    {
+        var appHostPath = Path.Combine(solutionDirectory, $"{projectName}.AppHost", "AppHost.cs");
+        File.WriteAllText(appHostPath, $$"""
+            var builder = DistributedApplication.CreateBuilder(args);
+            builder.AddAzureContainerAppEnvironment("env");
+
+            var apiEntra = builder.AddEntraIdApplication("apiservice-entra")
+                .WithScope("access_as_user", "Access the weather API on behalf of the signed-in user");
+
+            var apiService = builder.AddDotnetProject("apiservice", "../{{projectName}}.ApiService/{{projectName}}.ApiService.csproj")
+                .WithReference(apiEntra)
+                .WithHttpHealthCheck("/health");
+
+            var webEntra = builder.AddEntraIdApplication("webfrontend-entra")
+                .WithApiPermissions(apiEntra, "access_as_user")
+                .PublishWithFederatedManagedIdentityCredential();
+
+            var webFrontend = builder.AddDotnetProject("webfrontend", "../{{projectName}}.Web/{{projectName}}.Web.csproj")
+                .WithExternalHttpEndpoints()
+                .WithHttpHealthCheck("/health")
+                .WithReference(webEntra, connectionName: null, downstreamApisConfigKey: "MyDownstreamApis")
+                .WithReference(apiService)
+                .WaitFor(apiService);
+
+            webEntra.WithRedirectUris(webFrontend.GetEndpoint("https"), "/signin-oidc", "/signout-callback-oidc");
+
+            builder.Build().Run();
+            """);
+
+        // Neither app signs anyone in. Each reports the Entra settings that reached its configuration so the test can
+        // prove the environment variables of the container app are read by the running application.
+        DotnetProjectDeploymentHelpers.ReplaceInFile(Path.Combine(solutionDirectory, $"{projectName}.ApiService", "Program.cs"),
+            "app.Run();", """
+            app.MapGet("/entra-config", (IConfiguration configuration) =>
+                $"{configuration["AzureAd:ClientId"]}|{configuration["AzureAd:Scopes"]}");
+            app.Run();
+            """);
+        DotnetProjectDeploymentHelpers.ReplaceInFile(Path.Combine(solutionDirectory, $"{projectName}.Web", "Program.cs"),
+            "app.Run();", """
+            app.MapGet("/entra-config", async (IConfiguration configuration, IHttpClientFactory clients, CancellationToken cancellationToken) =>
+                $"{configuration["AzureAd:ClientId"]}|{configuration["MyDownstreamApis:apiservice:Scopes:0"]}|" +
+                await clients.CreateClient().GetStringAsync("https+http://apiservice/entra-config", cancellationToken));
+            app.Run();
+            """);
+    }
+
+    private static async Task VerifyStarterDeploymentAsync(
+        HttpClient client, TokenCredential credential, string subscriptionId, string resourceGroupName,
+        string apiUniqueName, string webUniqueName, Guid tenantId, Dictionary<string, string> deploymentUrls,
+        CancellationToken cancellationToken)
+    {
+        var apiApplication = await WaitForResourceAsync(client, credential,
+            $"https://graph.microsoft.com/v1.0/applications(uniqueName='{apiUniqueName}')",
+            resource => resource.GetProperty("identifierUris").GetArrayLength() == 1
+                && resource.GetProperty("api").GetProperty("oauth2PermissionScopes").GetArrayLength() == 1,
+            cancellationToken);
+        var apiClientId = apiApplication.GetProperty("appId").GetGuid();
+        // The Application ID URI defaults to api://{clientId}, which can only be set once Graph has assigned the client ID.
+        Assert.Equal($"api://{apiClientId:D}", Assert.Single(apiApplication.GetProperty("identifierUris").EnumerateArray()).GetString());
+        var scope = Assert.Single(apiApplication.GetProperty("api").GetProperty("oauth2PermissionScopes").EnumerateArray());
+        Assert.Equal("access_as_user", scope.GetProperty("value").GetString());
+        Assert.Equal("User", scope.GetProperty("type").GetString());
+        Assert.True(scope.GetProperty("isEnabled").GetBoolean());
+        var scopeId = scope.GetProperty("id").GetGuid();
+        Assert.Equal(0, apiApplication.GetProperty("api").GetProperty("preAuthorizedApplications").GetArrayLength());
+
+        // The API is deployed to its own container app, whose registration is only an identity: it has no redirect URIs.
+        Assert.Equal(0, apiApplication.GetProperty("web").GetProperty("redirectUris").GetArrayLength());
+
+        var webApplication = await WaitForResourceAsync(client, credential,
+            $"https://graph.microsoft.com/v1.0/applications(uniqueName='{webUniqueName}')",
+            resource => resource.GetProperty("web").GetProperty("redirectUris").GetArrayLength() == 2
+                && resource.GetProperty("requiredResourceAccess").GetArrayLength() == 1,
+            cancellationToken);
+        var webClientId = webApplication.GetProperty("appId").GetGuid();
+        var webObjectId = webApplication.GetProperty("id").GetGuid();
+        Assert.Equal(webUniqueName, webApplication.GetProperty("displayName").GetString());
+        Assert.Equal(0, webApplication.GetProperty("identifierUris").GetArrayLength());
+
+        // Calling the API on the user's behalf requires the delegated scope that the API exposes, identified by the ID Graph stores.
+        var required = Assert.Single(webApplication.GetProperty("requiredResourceAccess").EnumerateArray());
+        Assert.Equal(apiClientId, required.GetProperty("resourceAppId").GetGuid());
+        var access = Assert.Single(required.GetProperty("resourceAccess").EnumerateArray());
+        Assert.Equal(scopeId, access.GetProperty("id").GetGuid());
+        Assert.Equal("Scope", access.GetProperty("type").GetString());
+
+        foreach (var clientId in new[] { apiClientId, webClientId })
+        {
+            await WaitForResourceAsync(client, credential,
+                $"https://graph.microsoft.com/v1.0/servicePrincipals(appId='{clientId:D}')",
+                resource => resource.GetProperty("appId").GetGuid() == clientId
+                    && resource.GetProperty("tags").EnumerateArray()
+                        .Any(tag => tag.GetString() == "WindowsAzureActiveDirectoryIntegratedApp"),
+                cancellationToken);
+        }
+
+        var resourceGroupUrl = $"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}";
+        using var identities = await ReadResourceAsync(client, credential,
+            $"{resourceGroupUrl}/providers/Microsoft.ManagedIdentity/userAssignedIdentities?api-version=2023-01-31", cancellationToken);
+        Assert.NotNull(identities);
+        var identity = Assert.Single(identities.RootElement.GetProperty("value").EnumerateArray(),
+            entry => entry.GetProperty("name").GetString()!.StartsWith("webfrontend-identity", StringComparison.Ordinal));
+        var identityClientId = identity.GetProperty("properties").GetProperty("clientId").GetGuid();
+        var identityPrincipalId = identity.GetProperty("properties").GetProperty("principalId").GetGuid();
+
+        // The web app authenticates to Entra without a secret: a federated credential trusts the managed identity of its container app.
+        using var credentials = await ReadResourceAsync(client, credential,
+            $"https://graph.microsoft.com/v1.0/applications/{webObjectId:D}/federatedIdentityCredentials", cancellationToken);
+        Assert.NotNull(credentials);
+        var federated = Assert.Single(credentials.RootElement.GetProperty("value").EnumerateArray());
+        Assert.Equal($"https://login.microsoftonline.com/{tenantId:D}/v2.0", federated.GetProperty("issuer").GetString());
+        Assert.Equal(identityPrincipalId.ToString("D"), federated.GetProperty("subject").GetString());
+        Assert.Equal("api://AzureADTokenExchange", Assert.Single(federated.GetProperty("audiences").EnumerateArray()).GetString());
+
+        var (webFqdn, webEnvironment) = await GetContainerAppAsync(client, credential, resourceGroupUrl, "webfrontend", cancellationToken);
+        Assert.Equal(UriHostNameType.Dns, Uri.CheckHostName(webFqdn));
+        Assert.Equal(
+            [$"https://{webFqdn}/signin-oidc", $"https://{webFqdn}/signout-callback-oidc"],
+            webApplication.GetProperty("web").GetProperty("redirectUris").EnumerateArray().Select(uri => uri.GetString()!).Order(StringComparer.Ordinal));
+
+        var apiScope = $"api://{apiClientId:D}/access_as_user";
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["AzureAd__Instance"] = "https://login.microsoftonline.com/",
+                ["AzureAd__TenantId"] = tenantId.ToString("D"),
+                ["AzureAd__ClientId"] = webClientId.ToString("D"),
+                ["AzureAd__ClientCredentials__0__SourceType"] = "SignedAssertionFromManagedIdentity",
+                ["AzureAd__ClientCredentials__0__ManagedIdentityClientId"] = identityClientId.ToString("D"),
+                ["MyDownstreamApis__apiservice__Scopes__0"] = apiScope
+            },
+            webEnvironment.Where(entry => entry.Key.StartsWith("AzureAd__", StringComparison.Ordinal) || entry.Key.StartsWith("MyDownstreamApis__", StringComparison.Ordinal))
+                .ToDictionary(entry => entry.Key, entry => entry.Value));
+
+        var (_, apiEnvironment) = await GetContainerAppAsync(client, credential, resourceGroupUrl, "apiservice", cancellationToken);
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["AzureAd__Instance"] = "https://login.microsoftonline.com/",
+                ["AzureAd__TenantId"] = tenantId.ToString("D"),
+                ["AzureAd__ClientId"] = apiClientId.ToString("D"),
+                ["AzureAd__Scopes"] = "access_as_user"
+            },
+            apiEnvironment.Where(entry => entry.Key.StartsWith("AzureAd__", StringComparison.Ordinal))
+                .ToDictionary(entry => entry.Key, entry => entry.Value));
+
+        // The running web app reads its own settings and the API's, which it reaches through service discovery.
+        var url = $"https://{webFqdn}";
+        await DotnetProjectDeploymentHelpers.VerifyResponseAsync(
+            $"{url}/entra-config", $"{webClientId:D}|{apiScope}|{apiClientId:D}|access_as_user", cancellationToken);
+        deploymentUrls["webfrontend"] = url;
+    }
+
+    private static async Task<(string Fqdn, Dictionary<string, string> Environment)> GetContainerAppAsync(
+        HttpClient client, TokenCredential credential, string resourceGroupUrl, string name, CancellationToken cancellationToken)
+    {
+        using var app = await ReadResourceAsync(client, credential,
+            $"{resourceGroupUrl}/providers/Microsoft.App/containerApps/{name}?api-version=2026-03-02-preview", cancellationToken);
+        Assert.NotNull(app);
+        var properties = app.RootElement.GetProperty("properties");
+        var container = Assert.Single(properties.GetProperty("template").GetProperty("containers").EnumerateArray());
+        var environment = container.GetProperty("env").EnumerateArray()
+            .Where(entry => entry.TryGetProperty("value", out _))
+            .ToDictionary(entry => entry.GetProperty("name").GetString()!, entry => entry.GetProperty("value").GetString()!);
+        return (properties.GetProperty("configuration").GetProperty("ingress").GetProperty("fqdn").GetString()!, environment);
+    }
+
     private static Task DeployAsync(Hex1bTerminalAutomator auto, SequenceCounter counter)
     {
         // Graph can reject service-principal creation immediately after creating its backing app
@@ -291,7 +594,15 @@ public sealed class AzureEntraIdDeploymentTests(ITestOutputHelper output)
         }
     }
 
-    private static async Task CleanupDirectoryAsync(HttpClient client, TokenCredential credential, string applicationUrl)
+    private static async Task CleanupDirectoryAsync(HttpClient client, TokenCredential credential, string[] applicationUrls)
+    {
+        foreach (var applicationUrl in applicationUrls)
+        {
+            await CleanupApplicationAsync(client, credential, applicationUrl);
+        }
+    }
+
+    private static async Task CleanupApplicationAsync(HttpClient client, TokenCredential credential, string applicationUrl)
     {
         using var cleanup = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         using var application = await ReadResourceAsync(client, credential, applicationUrl, cleanup.Token);
@@ -314,7 +625,7 @@ public sealed class AzureEntraIdDeploymentTests(ITestOutputHelper output)
     }
 
     private static async Task CleanupAsync(
-        HttpClient client, TokenCredential credential, string resourceGroupUrl, string applicationUrl)
+        HttpClient client, TokenCredential credential, string resourceGroupUrl, params string[] applicationUrls)
     {
         var failures = new List<Exception>();
         try
@@ -330,7 +641,7 @@ public sealed class AzureEntraIdDeploymentTests(ITestOutputHelper output)
 
         try
         {
-            await CleanupDirectoryAsync(client, credential, applicationUrl);
+            await CleanupDirectoryAsync(client, credential, applicationUrls);
         }
         catch (Exception ex)
         {
