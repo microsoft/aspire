@@ -45,9 +45,11 @@ internal sealed class AtsGoApiReferenceExporter : IApiReferenceExporter
         ArgumentNullException.ThrowIfNull(options);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Project through the generator itself, so the exported documentation describes the exact
-        // names, types and signatures generation would emit rather than a second, independently
-        // derived reading of the ATS context. The generator keeps per-run name state, so every
+        // Project through the generator itself, so the exported documentation describes the names,
+        // types and signatures generation would emit rather than a second, independently derived
+        // reading of the ATS context. Names are resolved over the context passed in, which holds the
+        // exported package and the types it references, so an app host that combines more integrations
+        // can qualify a name that is bare here. The generator keeps per-run name state, so every
         // export uses a fresh instance.
         var model = new AtsGoCodeGenerator().BuildApiModel(
             context,
