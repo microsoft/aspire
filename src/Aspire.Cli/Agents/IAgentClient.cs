@@ -20,7 +20,7 @@ internal interface IAgentClient
     // Include compatibility locations the client loads, not just the CLI's install destination.
     IEnumerable<string> GetLocalSkillDirectories(AgentConfigurationScope scope, DirectoryInfo workspaceRoot);
 
-    Task<bool> HasIntegrationRegistrationAsync(
+    bool HasIntegrationRegistration(
         DirectoryInfo workspaceRoot, AgentConfigurationScope scope, CancellationToken cancellationToken);
 
     string GetIntegrationConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot);

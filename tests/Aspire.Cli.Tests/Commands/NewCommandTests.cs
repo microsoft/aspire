@@ -2497,7 +2497,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(capturedOutputPath);
         Assert.Contains("my-project", capturedOutputPath);
 
-        Assert.True(await AspireSkillsRemoteConfiguration.HasPluginRegistrationAsync(
+        Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [Path.Combine(capturedOutputPath, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
         Assert.False(Directory.Exists(Path.Combine(capturedOutputPath, ".agents", "skills")));
     }
@@ -3276,7 +3276,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             if (prompt == AgentCommandStrings.InitCommand_SelectAgentsPrompt)
             {
                 Assert.All(items, static item => Assert.IsAssignableFrom<IAgentClient>(item));
-                return items.Cast<IAgentClient>().Where(client => client.Id == "copilot").Cast<object>().ToArray();
+                return items.Cast<IAgentClient>().Where(client => string.Equals(client.Id, "copilot", StringComparisons.AgentClientId)).Cast<object>().ToArray();
             }
             Assert.Equal(AgentCommandStrings.InitCommand_SelectSkills, prompt);
             return [CommonAgentApplicators.AspireSkillName];
@@ -3298,7 +3298,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             [SharedCommandStrings.PromptRunAgentInit],
             interactionService.BooleanPromptCalls.Select(call => call.PromptText));
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
-        Assert.True(await AspireSkillsRemoteConfiguration.HasPluginRegistrationAsync(
+        Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
     }
@@ -3352,7 +3352,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
-        Assert.True(await AspireSkillsRemoteConfiguration.HasPluginRegistrationAsync(
+        Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
     }
@@ -3380,7 +3380,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
-        Assert.True(await AspireSkillsRemoteConfiguration.HasPluginRegistrationAsync(
+        Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
     }

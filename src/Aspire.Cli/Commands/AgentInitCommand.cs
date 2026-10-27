@@ -355,7 +355,7 @@ internal sealed class AgentInitCommand : BaseCommand
                 .Where(client => (client.Environments & detectedEnvironments.Value) != AgentEnvironment.None).ToArray();
             if (defaultClients.Length == 0)
             {
-                defaultClients = [_clients.Single(client => client.Id == CopilotAgentClient.ClientId)];
+                defaultClients = [_clients.Single(client => string.Equals(client.Id, CopilotAgentClient.ClientId, StringComparisons.AgentClientId))];
             }
 
             selectedClients = await InteractionService.PromptForSelectionsAsync(
@@ -496,7 +496,7 @@ internal sealed class AgentInitCommand : BaseCommand
             {
                 foreach (var client in selectedClients)
                 {
-                    if (await client.HasIntegrationRegistrationAsync(workspaceRoot, scope, cancellationToken))
+                    if (client.HasIntegrationRegistration(workspaceRoot, scope, cancellationToken))
                     {
                         conflict = AgentCommandStrings.InitCommand_RemoteSkillsConflict;
                         break;
@@ -944,10 +944,10 @@ internal sealed class AgentInitCommand : BaseCommand
 
                     return entry.Result.Message is null ? target : $"{target}{Environment.NewLine}  {entry.Result.Message}";
                 })
-                : entries.GroupBy(entry => entry.Client.Id, StringComparer.Ordinal).Select(agent =>
+                : entries.GroupBy(entry => entry.Client.Id, StringComparers.AgentClientId).Select(agent =>
                     string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfigurationTarget,
                         agent.First().Client.DisplayName,
-                        string.Join(", ", agent.Select(entry => entry.Result.TargetPath).Distinct(AgentPath.Comparer)
+                        string.Join(", ", agent.Select(entry => entry.Result.TargetPath).Distinct(StringComparers.FileSystemPath)
                             .Select(path => GetDisplayConfigurationPath(path, workspaceRoot)))));
             var format = resultGroup.Key ? AgentCommandStrings.InitCommand_FailedTarget : AgentCommandStrings.InitCommand_ConfiguredTargets;
             var message = string.Format(CultureInfo.CurrentCulture, format, string.Join($"{Environment.NewLine}  ", targets));

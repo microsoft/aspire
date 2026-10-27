@@ -20,7 +20,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ParseObject_FileAndInlineInputsShareJsoncAndBomHandling(bool bom)
+    public async Task ParseObject_FileAndInlineInputsShareJsoncHandling(bool bom)
     {
         const string json = """{/* preserved */"nested":{"value":true,},"items":["one",],}""";
         var bytes = Encoding.UTF8.GetBytes(json);
@@ -32,8 +32,8 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         var path = Path.Combine(_context.Project.FullName, "settings.json");
         await File.WriteAllBytesAsync(path, bytes).DefaultTimeout();
 
-        var inline = AgentConfiguration.ParseObject(bytes);
-        var file = await AgentConfiguration.ReadObjectAsync(path, CancellationToken.None).DefaultTimeout();
+        var inline = AgentConfiguration.ParseObject(json);
+        var file = AgentConfiguration.ReadObject(path, CancellationToken.None);
         var edit = new AgentConfiguration();
         var tracked = await edit.ReadObjectForEditAsync(path, CancellationToken.None).DefaultTimeout();
 
@@ -41,6 +41,56 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         Assert.True(JsonNode.DeepEquals(inline, tracked));
         Assert.True((bool)inline["nested"]!["value"]!);
         Assert.Equal(["one"], inline["items"]!.AsArray().Select(value => (string)value!));
+        Assert.Equal(bytes, await File.ReadAllBytesAsync(path).DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReadObject_FileReadsPreserveUtf8Characters(bool bom)
+    {
+        const string json = "{/* JSONC */\"value\":\"caf\u00e9 \u4e16\u754c \ud83d\ude80\",}";
+        var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: bom);
+        var bytes = encoding.GetPreamble().Concat(encoding.GetBytes(json)).ToArray();
+        var path = Path.Combine(_context.Project.FullName, "settings.json");
+        await File.WriteAllBytesAsync(path, bytes).DefaultTimeout();
+
+        var file = AgentConfiguration.ReadObject(path, CancellationToken.None);
+        var edit = new AgentConfiguration();
+        var tracked = await edit.ReadObjectForEditAsync(path, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal("caf\u00e9 \u4e16\u754c \ud83d\ude80", file!["value"]!.GetValue<string>());
+        Assert.True(JsonNode.DeepEquals(file, tracked));
+        Assert.Equal(bytes, await File.ReadAllBytesAsync(path).DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(1200, false)]
+    [InlineData(1200, true)]
+    [InlineData(1201, false)]
+    [InlineData(1201, true)]
+    [InlineData(12000, false)]
+    [InlineData(12000, true)]
+    [InlineData(12001, false)]
+    [InlineData(12001, true)]
+    public async Task ReadObject_FileReadsRejectNonUtf8Encodings(int codePage, bool bom)
+    {
+        var encoding = Encoding.GetEncoding(codePage);
+        var content = encoding.GetBytes("{\"value\":\"caf\u00e9\"}");
+        var bytes = bom ? encoding.GetPreamble().Concat(content).ToArray() : content;
+        var path = Path.Combine(_context.Project.FullName, "settings.json");
+        await File.WriteAllBytesAsync(path, bytes).DefaultTimeout();
+
+        var fileError = Assert.Throws<InvalidOperationException>(() =>
+            AgentConfiguration.ReadObject(path, CancellationToken.None));
+        var edit = new AgentConfiguration();
+        var trackedError = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            edit.ReadObjectForEditAsync(path, CancellationToken.None)).DefaultTimeout();
+
+        Assert.IsAssignableFrom<JsonException>(fileError.InnerException);
+        Assert.IsAssignableFrom<JsonException>(trackedError.InnerException);
+        Assert.StartsWith($"{path}: ", fileError.Message);
+        Assert.StartsWith($"{path}: ", trackedError.Message);
         Assert.Equal(bytes, await File.ReadAllBytesAsync(path).DefaultTimeout());
     }
 
@@ -60,12 +110,12 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
 
         Exception inline = json switch
         {
-            "null" => Assert.Throws<ArgumentNullException>(() => AgentConfiguration.ParseObject(bytes)),
-            "[]" => Assert.Throws<InvalidOperationException>(() => AgentConfiguration.ParseObject(bytes)),
-            _ => Assert.ThrowsAny<JsonException>(() => AgentConfiguration.ParseObject(bytes))
+            "null" => Assert.Throws<ArgumentNullException>(() => AgentConfiguration.ParseObject(json)),
+            "[]" => Assert.Throws<InvalidOperationException>(() => AgentConfiguration.ParseObject(json)),
+            _ => Assert.ThrowsAny<JsonException>(() => AgentConfiguration.ParseObject(json))
         };
-        var file = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            AgentConfiguration.ReadObjectAsync(path, CancellationToken.None)).DefaultTimeout();
+        var file = Assert.Throws<InvalidOperationException>(() =>
+            AgentConfiguration.ReadObject(path, CancellationToken.None));
         var edit = new AgentConfiguration();
         var tracked = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             edit.ReadObjectForEditAsync(path, CancellationToken.None)).DefaultTimeout();
@@ -84,7 +134,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         var path = Path.Combine(directory, "settings.json");
         var edit = new AgentConfiguration();
 
-        Assert.Null(await AgentConfiguration.ReadObjectAsync(path, CancellationToken.None).DefaultTimeout());
+        Assert.Null(AgentConfiguration.ReadObject(path, CancellationToken.None));
         Assert.Empty(AgentConfiguration.EnumerateJsonFiles(directory));
         Assert.Null(await edit.ReadBytesForEditAsync(path, CancellationToken.None).DefaultTimeout());
         Assert.Empty(edit.GetJsonFilesForEdit(directory));
@@ -127,7 +177,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         const string changed = """{"value":"external"}""";
         await File.WriteAllTextAsync(path, changed);
 
-        var discovered = await AgentConfiguration.ReadObjectAsync(path, CancellationToken.None).DefaultTimeout();
+        var discovered = AgentConfiguration.ReadObject(path, CancellationToken.None);
         var captured = await edit.ReadObjectForEditAsync(path, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal("external", discovered!["value"]!.GetValue<string>());
@@ -166,7 +216,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
     [InlineData("opencode")]
     public async Task RemoteEdit_RefusesChangedInheritedSettings(string clientId)
     {
-        var client = _context.Clients.Single(client => client.Id == clientId);
+        var client = _context.Clients.Single(client => string.Equals(client.Id, clientId, StringComparisons.AgentClientId));
         var inherited = client.GetIntegrationConfigPath(AgentConfigurationScope.Global, _context.Project);
         await AgentConfigurationTestContext.WriteAsync(inherited, "{}");
         var path = client.GetIntegrationConfigPath(AgentConfigurationScope.Project, _context.Project);
@@ -539,7 +589,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
     [InlineData("copilot", false, """{"extraKnownMarketplaces":{"aspire-skills":{"source":{"source":"directory","path":"./private-marketplace"}}}}""")]
     public async Task Plugins_RejectDisabledConflictingOrMalformedSettingsWithoutWriting(string clientId, bool local, string existing)
     {
-        var client = _context.Clients.Single(client => client.Id == clientId);
+        var client = _context.Clients.Single(client => string.Equals(client.Id, clientId, StringComparisons.AgentClientId));
         var path = local ? Path.Combine(_context.Project.FullName, ".claude", "settings.local.json")
             : client.GetIntegrationConfigPath(AgentConfigurationScope.Global, _context.Project);
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();

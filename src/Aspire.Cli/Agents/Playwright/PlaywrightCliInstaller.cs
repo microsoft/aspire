@@ -352,7 +352,7 @@ internal sealed class PlaywrightCliInstaller(
     {
         // Playwright emits Claude-format skills even when another client is selected.
         // https://github.com/microsoft/playwright-cli/issues/294
-        var primarySkillBaseDirectory = Path.GetRelativePath(repoRoot, clients.Single(client => client.Id == ClaudeCodeAgentClient.ClientId)
+        var primarySkillBaseDirectory = Path.GetRelativePath(repoRoot, clients.Single(client => string.Equals(client.Id, ClaudeCodeAgentClient.ClientId, StringComparisons.AgentClientId))
             .GetSkillBaseDirectory(AgentConfigurationScope.Project, new DirectoryInfo(repoRoot)));
         var primarySkillDir = Path.Combine(repoRoot, primarySkillBaseDirectory, PlaywrightCliSkillName);
 

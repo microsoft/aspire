@@ -20,12 +20,12 @@ internal static class AspireSkillsRemoteConfiguration
     private const string OpenCodeV1Catalog = "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/";
     private const string OpenCodeV2Catalog = "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/";
 
-    public static async Task<bool> HasPluginRegistrationAsync(IEnumerable<string> settings, CancellationToken cancellationToken)
+    public static bool HasPluginRegistration(IEnumerable<string> settings, CancellationToken cancellationToken)
     {
         var enabled = false;
         foreach (var path in settings)
         {
-            if (await AgentConfiguration.ReadObjectAsync(path, cancellationToken) is { } config &&
+            if (AgentConfiguration.ReadObject(path, cancellationToken) is { } config &&
                 OptionalObject(config, "enabledPlugins") is { } plugins &&
                 Boolean(plugins, PluginName) is { } value)
             {
@@ -172,9 +172,9 @@ internal static class AspireSkillsRemoteConfiguration
         IEnumerable<string> paths, string targetPath, AgentConfiguration edit, CancellationToken cancellationToken)
     {
         var settings = new List<JsonObject>();
-        foreach (var path in paths.Distinct(AgentPath.Comparer))
+        foreach (var path in paths.Distinct(StringComparers.FileSystemPath))
         {
-            if (!AgentPath.Comparer.Equals(path, targetPath) &&
+            if (!string.Equals(path, targetPath, StringComparisons.FileSystemPath) &&
                 await edit.ReadObjectForEditAsync(path, cancellationToken) is { } root)
             {
                 settings.Add(root);

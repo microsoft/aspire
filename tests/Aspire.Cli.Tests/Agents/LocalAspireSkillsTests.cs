@@ -34,7 +34,7 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
         var result = Scan([_context.Copilot]);
 
         Assert.Empty(result.Errors);
-        Assert.Equal(paths.Order(AgentPath.Comparer), result.Files);
+        Assert.Equal(paths.Order(StringComparers.FileSystemPath), result.Files);
         Assert.Equal(before, Directory.GetFileSystemEntries(_context.Workspace.Path, "*", SearchOption.AllDirectories).Order());
     }
 
@@ -59,7 +59,7 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
         var result = Scan([_context.Clients.Single(scanner => scanner.DisplayName == agent)]);
 
         Assert.Empty(result.Errors);
-        Assert.Equal(new[] { path, empty }.Order(AgentPath.Comparer), result.Files);
+        Assert.Equal(new[] { path, empty }.Order(StringComparers.FileSystemPath), result.Files);
         Assert.Equal(content, await File.ReadAllTextAsync(path));
         Assert.Empty(await File.ReadAllTextAsync(empty));
         Assert.Equal(timestamp, File.GetLastWriteTimeUtc(path));
@@ -77,7 +77,7 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
         var result = Scan([_context.Copilot, _context.OpenCode]);
 
         Assert.Empty(result.Errors);
-        Assert.Equal(new[] { project, user }.Order(AgentPath.Comparer), result.Files);
+        Assert.Equal(new[] { project, user }.Order(StringComparers.FileSystemPath), result.Files);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
         var result = Scan([_context.OpenCode]);
 
         Assert.Empty(result.Errors);
-        Assert.Equal(paths.Order(AgentPath.Comparer), result.Files);
+        Assert.Equal(paths.Order(StringComparers.FileSystemPath), result.Files);
     }
 
     [Theory]
@@ -144,7 +144,7 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
         var result = Scan([_context.OpenCode]);
 
         Assert.Empty(result.Errors);
-        Assert.Equal(paths.Order(AgentPath.Comparer), result.Files);
+        Assert.Equal(paths.Order(StringComparers.FileSystemPath), result.Files);
         Assert.Equal(config, await File.ReadAllTextAsync(configPath));
         foreach (var path in paths)
         {
@@ -208,7 +208,7 @@ public class LocalAspireSkillsTests(ITestOutputHelper output) : IDisposable
             [_context.Clients.Single(scanner => scanner.DisplayName == agent)], TestContext.Current.CancellationToken);
 
         Assert.Empty(result.Errors);
-        Assert.Equal(paths.Order(AgentPath.Comparer), result.Files);
+        Assert.Equal(paths.Order(StringComparers.FileSystemPath), result.Files);
         Assert.Equal(before, Directory.GetFileSystemEntries(_context.Workspace.Path, "*", SearchOption.AllDirectories).Order());
     }
 

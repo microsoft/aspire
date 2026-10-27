@@ -5,6 +5,10 @@ namespace Aspire.Cli.Agents.OpenCode;
 
 internal static class OpenCodePaths
 {
+    internal const string ConfigEnvironmentVariable = "OPENCODE_CONFIG";
+    internal const string ConfigDirectoryEnvironmentVariable = "OPENCODE_CONFIG_DIR";
+    internal const string ConfigContentEnvironmentVariable = "OPENCODE_CONFIG_CONTENT";
+
     public static string GetMcpConfigPath(DirectoryInfo directory)
         => SelectConfigPath(GetConfigPaths(directory.FullName), directory);
 
@@ -37,12 +41,12 @@ internal static class OpenCodePaths
 
     public static string GetGlobalMcpConfigPath(CliExecutionContext executionContext, IEnvironment environment)
     {
-        if (GetOverride("OPENCODE_CONFIG", executionContext, environment) is { } configFile)
+        if (GetOverride(ConfigEnvironmentVariable, executionContext, environment) is { } configFile)
         {
             return configFile;
         }
 
-        var configDirectory = GetOverride("OPENCODE_CONFIG_DIR", executionContext, environment)
+        var configDirectory = GetOverride(ConfigDirectoryEnvironmentVariable, executionContext, environment)
             ?? GetConfigDirectory(executionContext, environment);
 
         return GetMcpConfigPath(new DirectoryInfo(configDirectory));

@@ -256,12 +256,12 @@ internal sealed class InitCommand : BaseCommand
     {
         var commands = new List<string>();
 
-        if (selectedClients.Any(client => client.Id == ClaudeCodeAgentClient.ClientId))
+        if (selectedClients.Any(client => string.Equals(client.Id, ClaudeCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
         {
             commands.Add("claude \"run the aspireify skill\"");
         }
 
-        if (selectedClients.Any(client => client.Id == OpenCodeAgentClient.ClientId))
+        if (selectedClients.Any(client => string.Equals(client.Id, OpenCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
         {
             commands.Add("opencode --prompt \"run the aspireify skill\"");
         }

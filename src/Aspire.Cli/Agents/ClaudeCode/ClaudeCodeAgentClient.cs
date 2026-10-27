@@ -32,9 +32,9 @@ internal sealed class ClaudeCodeAgentClient(
         yield return GetSkillBaseDirectory(scope, workspaceRoot);
     }
 
-    public Task<bool> HasIntegrationRegistrationAsync(
+    public bool HasIntegrationRegistration(
         DirectoryInfo workspaceRoot, AgentConfigurationScope scope, CancellationToken cancellationToken)
-        => AspireSkillsRemoteConfiguration.HasPluginRegistrationAsync(
+        => AspireSkillsRemoteConfiguration.HasPluginRegistration(
             GetSettingsFiles(workspaceRoot, scope,
                 AgentConfiguration.EnumerateJsonFiles(Path.Combine(ManagedSettingsDirectory, "managed-settings.d"))), cancellationToken);
 

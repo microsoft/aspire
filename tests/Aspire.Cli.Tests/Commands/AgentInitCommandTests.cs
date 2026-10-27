@@ -284,7 +284,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         interactionService.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
             .Where(choice => choice switch
             {
-                IAgentClient client => client.Id == "copilot",
+                IAgentClient client => string.Equals(client.Id, "copilot", StringComparisons.AgentClientId),
                 string name => name == CommonAgentApplicators.AspireSkillName,
                 _ => false
             })
@@ -363,7 +363,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         interactionService.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
             .Where(choice => choice switch
             {
-                IAgentClient client => client.Id == "copilot",
+                IAgentClient client => string.Equals(client.Id, "copilot", StringComparisons.AgentClientId),
                 string name => name == CommonAgentApplicators.AspireSkillName,
                 _ => false
             })
@@ -577,7 +577,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         foreach (var client in provider.GetServices<IAgentClient>())
         {
             Assert.True(File.Exists(client.GetIntegrationConfigPath(configurationScope, context.Project)));
-            Assert.True(await client.HasIntegrationRegistrationAsync(
+            Assert.True(client.HasIntegrationRegistration(
                 context.Project, configurationScope, TestContext.Current.CancellationToken));
         }
         var skillsRoot = configurationScope is AgentConfigurationScope.Project ? context.Project : context.Home;
@@ -935,7 +935,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     public async Task Embedded_ProjectDisableOverridesGlobalEnablementWithoutChangingGlobalSetup(string clientId, string overrideLocation)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
-        var client = context.Clients.Single(client => client.Id == clientId);
+        var client = context.Clients.Single(client => string.Equals(client.Id, clientId, StringComparisons.AgentClientId));
         var global = client.GetIntegrationConfigPath(AgentConfigurationScope.Global, context.Project);
         const string enabled = """{"enabledPlugins":{"aspire@aspire-skills":true}}""";
         const string disabled = """{"enabledPlugins":{"aspire@aspire-skills":false}}""";
@@ -1340,7 +1340,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     public async Task Remote_FailedRegistration_StillConfiguresIndependentlyRequestedMcp(string clientId, string malformed)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
-        var client = context.Clients.Single(client => client.Id == clientId);
+        var client = context.Clients.Single(client => string.Equals(client.Id, clientId, StringComparisons.AgentClientId));
         var integrationPath = client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project);
         await AgentConfigurationTestContext.WriteAsync(integrationPath, malformed);
         var interaction = new TestInteractionService();

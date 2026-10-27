@@ -49,9 +49,9 @@ internal sealed class CopilotAgentClient(
             : Path.Combine(GetSettingsDirectory(), "skills");
     }
 
-    public Task<bool> HasIntegrationRegistrationAsync(
+    public bool HasIntegrationRegistration(
         DirectoryInfo workspaceRoot, AgentConfigurationScope scope, CancellationToken cancellationToken)
-        => AspireSkillsRemoteConfiguration.HasPluginRegistrationAsync(GetSettingsFiles(workspaceRoot, scope), cancellationToken);
+        => AspireSkillsRemoteConfiguration.HasPluginRegistration(GetSettingsFiles(workspaceRoot, scope), cancellationToken);
 
     public string GetIntegrationConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
     {

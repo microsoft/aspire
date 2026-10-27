@@ -33,9 +33,9 @@ internal static class LocalAspireSkills
         // Clients load project skills along the active ancestor chain, not just at its root.
         // Clamping to the workspace excludes sibling projects and unrelated current directories.
         var projectDirectories = AgentPath.ProjectDirectories(workingDirectory, workspaceRoot).ToArray();
-        var files = new Dictionary<string, string>(AgentPath.Comparer);
+        var files = new Dictionary<string, string>(StringComparers.FileSystemPath);
         var errors = new HashSet<string>(StringComparer.Ordinal);
-        var inspected = new HashSet<string>(AgentPath.Comparer);
+        var inspected = new HashSet<string>(StringComparers.FileSystemPath);
         var hasFileErrors = false;
         foreach (var agent in agents)
         {
@@ -96,6 +96,6 @@ internal static class LocalAspireSkills
             }
         }
 
-        return (files.Values.Order(AgentPath.Comparer).ToArray(), errors.Order(StringComparer.Ordinal).ToArray(), hasFileErrors);
+        return (files.Values.Order(StringComparers.FileSystemPath).ToArray(), errors.Order(StringComparer.Ordinal).ToArray(), hasFileErrors);
     }
 }

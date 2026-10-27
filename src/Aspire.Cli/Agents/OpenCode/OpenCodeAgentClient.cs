@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Hooks;
@@ -61,7 +59,7 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
         yield return Path.Combine(openCodeRoot, "skill");
         yield return Path.Combine(openCodeRoot, "skills");
         if (scope is AgentConfigurationScope.Global &&
-            OpenCodePaths.GetOverride("OPENCODE_CONFIG_DIR", context, environment) is { } custom)
+            OpenCodePaths.GetOverride(OpenCodePaths.ConfigDirectoryEnvironmentVariable, context, environment) is { } custom)
         {
             yield return Path.Combine(custom, "skill");
             yield return Path.Combine(custom, "skills");
@@ -72,18 +70,10 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
             : GlobalCatalogSettings();
         foreach (var path in settingsPaths)
         {
-            JsonObject config;
-            try
-            {
-                config = AgentConfiguration.ParseObject(File.ReadAllBytes(path));
-            }
-            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+            var config = AgentConfiguration.ReadObject(path, CancellationToken.None);
+            if (config is null)
             {
                 continue;
-            }
-            catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentException)
-            {
-                throw new InvalidOperationException($"{path}: {ex.Message}", ex);
             }
 
             foreach (var directory in GetConfiguredSkillDirectories(config))
@@ -93,9 +83,9 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
         }
 
         if (scope is AgentConfigurationScope.Global &&
-            environment.GetEnvironmentVariable("OPENCODE_CONFIG_CONTENT") is { Length: > 0 } inline)
+            environment.GetEnvironmentVariable(OpenCodePaths.ConfigContentEnvironmentVariable) is { Length: > 0 } inline)
         {
-            foreach (var directory in GetConfiguredSkillDirectories(AgentConfiguration.ParseObject(Encoding.UTF8.GetBytes(inline))))
+            foreach (var directory in GetConfiguredSkillDirectories(AgentConfiguration.ParseObject(inline)))
             {
                 yield return directory;
             }
@@ -150,14 +140,14 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
         // never enable sibling discovery. https://opencode.ai/docs/config/#locations
         var candidates = scope is AgentConfigurationScope.Project
             ? OpenCodePaths.GetProjectConfigPaths(workspaceRoot)
-            : environment.GetEnvironmentVariable("OPENCODE_CONFIG") is not { Length: > 0 }
+            : environment.GetEnvironmentVariable(OpenCodePaths.ConfigEnvironmentVariable) is not { Length: > 0 }
                 ? OpenCodePaths.GetConfigPaths(Path.GetDirectoryName(configFilePath)!)
                 : [configFilePath];
         var result = (Config: config, Path: configFilePath);
         var foundAspire = false;
         foreach (var candidate in candidates.Reverse())
         {
-            var candidateConfig = AgentPath.Comparer.Equals(candidate, configFilePath)
+            var candidateConfig = StringComparers.FileSystemPath.Equals(candidate, configFilePath)
                 ? config
                 : await McpConfigFileHelper.ReadConfigAsync(candidate, s_mcp.JsonDocumentOptions, edit, cancellationToken);
             var (servers, native) = GetMcpServerContainer(candidateConfig, candidate);
@@ -242,19 +232,19 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
             ? OpenCodePaths.GetProjectConfigPath(workspaceRoot)
             : OpenCodePaths.GetGlobalMcpConfigPath(context, environment);
 
-    public async Task<bool> HasIntegrationRegistrationAsync(
+    public bool HasIntegrationRegistration(
         DirectoryInfo workspaceRoot, AgentConfigurationScope scope, CancellationToken cancellationToken)
     {
         // Inline settings can activate skills, but are not a writable registration target.
-        if (environment.GetEnvironmentVariable("OPENCODE_CONFIG_CONTENT") is { Length: > 0 } inline &&
-            AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(AgentConfiguration.ParseObject(Encoding.UTF8.GetBytes(inline))))
+        if (environment.GetEnvironmentVariable(OpenCodePaths.ConfigContentEnvironmentVariable) is { Length: > 0 } inline &&
+            AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(AgentConfiguration.ParseObject(inline)))
         {
             return true;
         }
 
         foreach (var path in scope is AgentConfigurationScope.Project ? CatalogSettings(workspaceRoot) : GlobalCatalogSettings())
         {
-            if (await AgentConfiguration.ReadObjectAsync(path, cancellationToken) is { } config && AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(config))
+            if (AgentConfiguration.ReadObject(path, cancellationToken) is { } config && AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(config))
             {
                 return true;
             }
@@ -270,12 +260,12 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
         var configs = await AspireSkillsRemoteConfiguration.ReadSettingsAsync(
             scope is AgentConfigurationScope.Project ? CatalogSettings(workspaceRoot) : GlobalCatalogSettings(),
             GetIntegrationConfigPath(scope, workspaceRoot), edit, cancellationToken);
-        if (environment.GetEnvironmentVariable("OPENCODE_CONFIG_CONTENT") is { Length: > 0 } inline)
+        if (environment.GetEnvironmentVariable(OpenCodePaths.ConfigContentEnvironmentVariable) is { Length: > 0 } inline)
         {
-            var inlineConfig = AgentConfiguration.ParseObject(Encoding.UTF8.GetBytes(inline));
+            var inlineConfig = AgentConfiguration.ParseObject(inline);
             if (inlineConfig.ContainsKey("skills"))
             {
-                throw AspireSkillsRemoteConfiguration.ExistingConfiguration("OPENCODE_CONFIG_CONTENT.skills");
+                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{OpenCodePaths.ConfigContentEnvironmentVariable}.skills");
             }
         }
 
@@ -285,18 +275,18 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
     private IEnumerable<string> CatalogSettings(DirectoryInfo workspaceRoot)
         => AgentPath.ProjectDirectories(context.WorkingDirectory, workspaceRoot).Reverse()
             .SelectMany(OpenCodePaths.GetProjectConfigPaths)
-            .Concat(GlobalCatalogSettings()).Distinct(AgentPath.Comparer);
+            .Concat(GlobalCatalogSettings()).Distinct(StringComparers.FileSystemPath);
 
     private IEnumerable<string> GlobalCatalogSettings()
     {
         var defaultPaths = OpenCodePaths.GetConfigPaths(OpenCodePaths.GetConfigDirectory(context, environment));
-        var customDirectory = OpenCodePaths.GetOverride("OPENCODE_CONFIG_DIR", context, environment);
+        var customDirectory = OpenCodePaths.GetOverride(OpenCodePaths.ConfigDirectoryEnvironmentVariable, context, environment);
         IEnumerable<string> customPaths = customDirectory is null ? [] : OpenCodePaths.GetConfigPaths(customDirectory);
-        var globalPaths = environment.GetEnvironmentVariable("OPENCODE_CONFIG") is { Length: > 0 }
+        var globalPaths = environment.GetEnvironmentVariable(OpenCodePaths.ConfigEnvironmentVariable) is { Length: > 0 }
             ? new[] { OpenCodePaths.GetGlobalMcpConfigPath(context, environment) }.Concat(customPaths).Concat(defaultPaths)
             : defaultPaths.Concat(customPaths);
 
         return globalPaths
-            .Concat(OpenCodePaths.GetConfigPaths(OpenCodePaths.GetManagedSettingsDirectory(context, environment))).Distinct(AgentPath.Comparer);
+            .Concat(OpenCodePaths.GetConfigPaths(OpenCodePaths.GetManagedSettingsDirectory(context, environment))).Distinct(StringComparers.FileSystemPath);
     }
 }

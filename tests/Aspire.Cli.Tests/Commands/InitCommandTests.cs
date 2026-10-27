@@ -133,7 +133,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
 
         Assert.True(Directory.Exists(Path.Combine(workspace.Path, "Test.AppHost")));
-        Assert.True(await AspireSkillsRemoteConfiguration.HasPluginRegistrationAsync(
+        Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [Path.Combine(workspace.Path, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, ".agents", "skills")));
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
@@ -729,7 +729,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var subtleMessages = new List<string>();
         interactionService.DisplaySubtleMessageCallback = subtleMessages.Add;
         interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
-            choices.Cast<IAgentClient>().Where(client => client.Id == "claude").Cast<object>().ToArray();
+            choices.Cast<IAgentClient>().Where(client => string.Equals(client.Id, "claude", StringComparisons.AgentClientId)).Cast<object>().ToArray();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
