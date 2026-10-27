@@ -231,6 +231,7 @@ public sealed class Scene : IAsyncDisposable
         await Page.BringToFrontAsync();
         await Page.SetViewportSizeAsync(Width, Height);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        BaseUrl = new Uri(Page.Url).GetLeftPart(UriPartial.Authority);
         await StartCaptureCoreAsync();
         await NudgeAsync();
     }
