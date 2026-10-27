@@ -95,7 +95,11 @@ edit; source fallback does not guess whether their MSBuild conditions are active
 ## Configured template sources
 
 Register named local directories, Git repositories, or HTTPS template catalogs in the
-CLI's global configuration. Source management is always global; no `--global` flag is needed:
+CLI's global configuration. Source management is always global; no `--global` flag is needed.
+
+Interactive `aspire new` offers **Search for more templates** only when at least
+one valid global template source is configured. Checking availability reads source
+definitions only; it does not discover templates or contact remote sources.
 
 ```bash
 aspire template source add company --path /absolute/path/to/company-templates

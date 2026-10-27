@@ -365,6 +365,7 @@ public partial class NewCommandLocalTemplateTests
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cancellation = new CancellationTokenSource();
         var interaction = new TestInteractionService();
+        interaction.SetupStringPromptResponse("not-found");
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var selectionCount = 0;
         interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
@@ -388,6 +389,11 @@ public partial class NewCommandLocalTemplateTests
         {
             await WriteConfiguredSourcesAsync(provider, new() { ["missing"] = Path.Combine(workspace.Path, "missing") });
         }
+        else
+        {
+            await CreateSearchTemplateAsync(workspace, "template", "sample", "Sample", "Unused");
+            await WriteConfiguredSourcesAsync(provider, new() { ["company"] = Path.Combine(workspace.Path, "template") });
+        }
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
             .Parse("new --name Demo --output out --suppress-agent-init").InvokeAsync(cancellationToken: cancellation.Token).DefaultTimeout();
@@ -400,10 +406,9 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Fact]
-    public async Task ConfiguredSources_HelpAndInitialPickerDoNotReadSourceConfiguration()
+    public async Task ConfiguredSources_HelpDoesNotReadSourceConfiguration()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var cancellation = new CancellationTokenSource();
         var interaction = new TestInteractionService();
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
@@ -412,18 +417,75 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, await command.Parse("new --help").InvokeAsync().DefaultTimeout());
         Assert.Empty(interaction.DisplayedMessages);
-        interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("{}", false)]
+    [InlineData("""{"templates":{}}""", false)]
+    [InlineData("""{"unrelated":true}""", false)]
+    [InlineData("""{"templates":{"unfinished":{"ref":"main"}}}""", true)]
+    [InlineData("""{"templates":"invalid"}""", true)]
+    [InlineData("{", true)]
+    public async Task ConfiguredSources_InitialPickerHidesSearchWithoutUsableGlobalSources(string? globalSettings, bool warning)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cancellation = new CancellationTokenSource();
+        var interaction = new TestInteractionService();
+        using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
+        var settings = provider.GetRequiredService<IConfigurationService>();
+        if (globalSettings is not null)
         {
+            await File.WriteAllTextAsync(settings.GetSettingsFilePath(true), globalSettings);
+        }
+        var localPath = settings.GetSettingsFilePath(false);
+        Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
+        await File.WriteAllTextAsync(localPath, """{"templates":{"project-only":{"href":"https://example.test/templates"}}}""");
+        var selectionCount = 0;
+        interaction.PromptForSelectionCallback = (_, choices, _, _) =>
+        {
+            selectionCount++;
             var options = choices.Cast<object>().ToArray();
-            Assert.Equal(NewCommandStrings.SearchForMoreTemplates, formatter(options[^1]));
-            Assert.Empty(interaction.DisplayedMessages);
+            Assert.NotEmpty(options);
+            Assert.All(options, option => Assert.IsAssignableFrom<ITemplate>(option));
             cancellation.Cancel();
             throw new OperationCanceledException(cancellation.Token);
         };
 
-        await command.Parse("new").InvokeAsync(cancellationToken: cancellation.Token).DefaultTimeout();
+        var result = await provider.GetRequiredService<RootCommand>().Parse("new")
+            .InvokeAsync(cancellationToken: cancellation.Token).DefaultTimeout();
 
-        Assert.Empty(interaction.DisplayedMessages);
+        Assert.Equal(CliExitCodes.Cancelled, result);
+        Assert.Equal(1, selectionCount);
+        Assert.Empty(interaction.StringPromptCalls);
+        Assert.Empty(interaction.ShownStatuses);
+        if (warning)
+        {
+            Assert.Equal(KnownEmojis.Warning, Assert.Single(interaction.DisplayedMessages).Emoji);
+        }
+        else
+        {
+            Assert.Empty(interaction.DisplayedMessages);
+        }
+    }
+
+    [Fact]
+    public async Task ConfiguredSources_NoSourcesOrBuiltInsReportsNoTemplatesWithoutPrompting()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        interaction.PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("There are no template choices.");
+        var services = CreateServices(workspace, interaction, interactive: true);
+        services.RemoveAll<ITemplateFactory>();
+        services.AddSingleton<ITemplateFactory, TemplateEngineFactory>();
+        using var provider = services.BuildServiceProvider();
+
+        var result = await provider.GetRequiredService<RootCommand>().Parse("new").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, result);
+        Assert.Equal(["No templates are available for the current environment."], interaction.DisplayedErrors);
+        Assert.Empty(interaction.ShownStatuses);
+        Assert.Empty(interaction.StringPromptCalls);
     }
 
     [Fact]

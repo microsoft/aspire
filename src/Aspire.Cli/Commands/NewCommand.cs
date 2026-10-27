@@ -351,6 +351,17 @@ internal sealed class NewCommand : BaseCommand
         }
 
         var templatesForPrompt = GetTemplatesForPrompt(availableTemplates, parseResult);
+        if ((await _configuredTemplateSources.GetSourcesAsync(cancellationToken)).Count == 0)
+        {
+            if (templatesForPrompt.Length == 0)
+            {
+                InteractionService.DisplayError("No templates are available for the current environment.");
+                return (null, false);
+            }
+
+            return (await _prompter.PromptForTemplateAsync(templatesForPrompt, cancellationToken), false);
+        }
+
         while (true)
         {
             var selection = await _prompter.PromptForTemplateOrSearchAsync(templatesForPrompt, cancellationToken);
