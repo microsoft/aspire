@@ -4,107 +4,107 @@
     <body>
       <trans-unit id="DiscoveringSessions">
         <source>Discovering terminal sessions...</source>
-        <target state="new">Discovering terminal sessions...</target>
+        <target state="translated">Terminalsitzungen werden ermittelt...</target>
         <note />
       </trans-unit>
       <trans-unit id="InstanceTerminalUnavailable">
         <source>Cannot resolve the terminal endpoint for instance '{0}' because its replica metadata is missing, invalid, or unavailable. Use 'aspire ps' or 'aspire describe' to check the current resource instances.</source>
-        <target state="new">Cannot resolve the terminal endpoint for instance '{0}' because its replica metadata is missing, invalid, or unavailable. Use 'aspire ps' or 'aspire describe' to check the current resource instances.</target>
+        <target state="translated">Der Terminalendpunkt für die Instanz „{0}“ kann nicht aufgelöst werden, da die zugehörigen Replikatmetadaten fehlen, ungültig oder nicht verfügbar sind. Überprüfen Sie die aktuellen Ressourceninstanzen mithilfe von „a cursor ps“ oder "aspire describe“.</target>
         <note />
       </trans-unit>
       <trans-unit id="LookingUpResource">
         <source>Looking up resource...</source>
-        <target state="new">Looking up resource...</target>
+        <target state="translated">Ressource wird gesucht...</target>
         <note />
       </trans-unit>
       <trans-unit id="ReplicaNotFound">
         <source>Replica index {0} is not available for resource '{1}'. Available indices: {2}.</source>
-        <target state="new">Replica index {0} is not available for resource '{1}'. Available indices: {2}.</target>
+        <target state="translated">Der Replikatindex {0} ist für die Ressource '{1}' nicht verfügbar. Verfügbare Indizes: {2}.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceAmbiguous">
         <source>Resource '{0}' matches multiple instances. Specify an exact instance ID. Available instance IDs: {1}.</source>
-        <target state="new">Resource '{0}' matches multiple instances. Specify an exact instance ID. Available instance IDs: {1}.</target>
+        <target state="translated">Die Ressource '{0}' stimmt mit mehreren Instanzen überein. Geben Sie eine genaue instance-ID an. Verfügbare instance IDs: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The resource display name for a singleton, or the exact resource instance ID for a replica. Use 'aspire ps' or 'aspire describe' to discover instance IDs.</source>
-        <target state="new">The resource display name for a singleton, or the exact resource instance ID for a replica. Use 'aspire ps' or 'aspire describe' to discover instance IDs.</target>
+        <target state="translated">Der Ressourcenanzeigename für ein Singleton oder die genaue Ressourceninstanz-ID für ein Replikat. Verwenden Sie „aconfig ps“ oder „aspire describe“, um Instanz-IDs zu ermitteln.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceInstanceRequired">
         <source>Resource '{0}' has multiple terminal instances. Specify an exact instance ID from 'aspire ps' or 'aspire describe'.</source>
-        <target state="new">Resource '{0}' has multiple terminal instances. Specify an exact instance ID from 'aspire ps' or 'aspire describe'.</target>
+        <target state="translated">Die Ressource „{0}“ verfügt über mehrere Terminalinstanzen. Geben Sie eine genaue Instanz-ID aus „aconfig ps“ oder „aspire describe“ an.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
         <source>Resource '{0}' was not found.</source>
-        <target state="new">Resource '{0}' was not found.</target>
+        <target state="translated">Die Ressource „{0}“ wurde nicht gefunden.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceRequired">
         <source>A resource name is required.</source>
-        <target state="new">A resource name is required.</target>
+        <target state="translated">Ein Ressourcenname ist erforderlich.</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeConnectionClosed">
         <source>The terminal connection closed before tape playback completed.</source>
-        <target state="new">The terminal connection closed before tape playback completed.</target>
+        <target state="translated">Die Terminalverbindung wurde geschlossen, bevor die Bandwiedergabe abgeschlossen war.</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeDescription">
         <source>Run VHS tape scripts against resource terminals.</source>
-        <target state="new">Run VHS tape scripts against resource terminals.</target>
+        <target state="translated">VHS-Bandskripte auf Ressourcenterminals ausführen.</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeFileDescription">
         <source>The path to the VHS .tape file to play.</source>
-        <target state="new">The path to the VHS .tape file to play.</target>
+        <target state="translated">Der Pfad zur abzuspielenden VHS-Tapedatei.</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeFileReadFailed">
         <source>Could not read tape file '{0}': {1}</source>
-        <target state="new">Could not read tape file '{0}': {1}</target>
+        <target state="translated">Die Banddatei „{0}“ konnte nicht gelesen werden: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="TapePlayDescription">
         <source>Play a VHS tape against a running resource terminal and print its final screen.</source>
-        <target state="new">Play a VHS tape against a running resource terminal and print its final screen.</target>
+        <target state="translated">Spielt ein VHS-Band in einem Terminal einer ausgeführten Ressource ab und gibt den abschließenden Bildschirminhalt aus.</target>
         <note />
       </trans-unit>
       <trans-unit id="TapePlaybackFailed">
         <source>Tape playback failed: {0}</source>
-        <target state="new">Tape playback failed: {0}</target>
+        <target state="translated">Die Bandwiedergabe ist fehlgeschlagen: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeSelectAppHostAction">
         <source>play a terminal tape</source>
-        <target state="new">play a terminal tape</target>
+        <target state="translated">ein Terminalband abspielen</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeTimeout">
         <source>Terminal tape playback did not finish within {0} seconds.</source>
-        <target state="new">Terminal tape playback did not finish within {0} seconds.</target>
+        <target state="translated">Die Wiedergabe des Terminalbands wurde nicht innerhalb von {0} Sekunden abgeschlossen.</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeTimeoutDescription">
         <source>Maximum time in seconds to connect and play the tape. Defaults to 120 seconds.</source>
-        <target state="new">Maximum time in seconds to connect and play the tape. Defaults to 120 seconds.</target>
+        <target state="translated">Maximale Zeit in Sekunden zum Herstellen der Verbindung und Abspielen des Bands. Der Standardwert ist 120 Sekunden.</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeTimeoutInvalid">
         <source>The timeout must be between 1 and {0} seconds.</source>
-        <target state="new">The timeout must be between 1 and {0} seconds.</target>
+        <target state="translated">Das Timeout muss zwischen 1 und {0} Sekunden liegen.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalIncompatible">
         <source>The connected AppHost does not support 'aspire terminal'. Update Aspire.Hosting to 13.4 or later.</source>
-        <target state="new">The connected AppHost does not support 'aspire terminal'. Update Aspire.Hosting to 13.4 or later.</target>
+        <target state="translated">Der verbundene AppHost unterstützt „aspire terminal“ nicht. Aktualisieren Sie Aspire.Hosting auf Version 13.4 oder höher.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalUnavailable">
         <source>Resource '{0}' is not available for terminal attachment. Make sure the resource was registered with '.WithTerminal()' and that the terminal host has started.</source>
-        <target state="new">Resource '{0}' is not available for terminal attachment. Make sure the resource was registered with '.WithTerminal()' and that the terminal host has started.</target>
+        <target state="translated">Ressource '{0}' ist für Terminalanlagen nicht verfügbar. Stellen Sie sicher, dass die Ressource mit ' registriert wurde. WithTerminal()' und dass der Terminalhost gestartet wurde.</target>
         <note />
       </trans-unit>
     </body>

@@ -54,37 +54,37 @@
       </trans-unit>
       <trans-unit id="ResourceCommandAppHostDisconnected">
         <source>The AppHost disconnected while executing the command. Restart the AppHost and try again.</source>
-        <target state="new">The AppHost disconnected while executing the command. Restart the AppHost and try again.</target>
+        <target state="translated">AppHost отключился во время выполнения команды. Перезапустите AppHost и повторите попытку.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceCommandCancel">
         <source>Cancel</source>
-        <target state="new">Cancel</target>
+        <target state="translated">Отменить</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceCommandCanceled">
         <source>"{0}" canceled</source>
-        <target state="new">"{0}" canceled</target>
+        <target state="translated">Отменено "{0}"</target>
         <note>{0} is the display name of the command.</note>
       </trans-unit>
       <trans-unit id="ResourceCommandCanceling">
         <source>"{0}" canceling...</source>
-        <target state="new">"{0}" canceling...</target>
+        <target state="translated">Отмена "{0}"...</target>
         <note>{0} is the display name of the command.</note>
       </trans-unit>
       <trans-unit id="ResourceCommandFailed">
         <source>"{0}" failed</source>
-        <target state="new">"{0}" failed</target>
+        <target state="translated">Не удалось выполнить "{0}"</target>
         <note>{0} is the display name of the command.</note>
       </trans-unit>
       <trans-unit id="ResourceCommandStarting">
         <source>"{0}" starting</source>
-        <target state="new">"{0}" starting</target>
+        <target state="translated">Запуск "{0}"</target>
         <note>{0} is the display name of the command.</note>
       </trans-unit>
       <trans-unit id="ResourceCommandSuccess">
         <source>"{0}" succeeded</source>
-        <target state="new">"{0}" succeeded</target>
+        <target state="translated">"{0}" успешно</target>
         <note>{0} is the display name of the command.</note>
       </trans-unit>
       <trans-unit id="ResourceCommandToastViewLogs">
@@ -94,7 +94,7 @@
       </trans-unit>
       <trans-unit id="ResourceCommandViewResponse">
         <source>View response</source>
-        <target state="new">View response</target>
+        <target state="translated">Просмотреть ответ</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceDetailsViewConsoleLogs">
@@ -129,32 +129,32 @@
       </trans-unit>
       <trans-unit id="ResourcesDetailsContainerArgumentsProperty">
         <source>Container arguments</source>
-        <target state="new">Container arguments</target>
+        <target state="translated">Аргументы контейнера</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsContainerCommandProperty">
         <source>Container command</source>
-        <target state="new">Container command</target>
+        <target state="translated">Команда контейнера</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsContainerIdProperty">
         <source>Container ID</source>
-        <target state="new">Container ID</target>
+        <target state="translated">ИД контейнера</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsContainerImageProperty">
         <source>Container image</source>
-        <target state="new">Container image</target>
+        <target state="translated">Образ контейнера</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsContainerLifetimeProperty">
         <source>Container lifetime</source>
-        <target state="new">Container lifetime</target>
+        <target state="translated">Время существования контейнера</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsContainerPortsProperty">
         <source>Container ports</source>
-        <target state="new">Container ports</target>
+        <target state="translated">Порты контейнера</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsDisplayNameProperty">
@@ -164,22 +164,22 @@
       </trans-unit>
       <trans-unit id="ResourcesDetailsExecutableArgumentsProperty">
         <source>Executable arguments</source>
-        <target state="new">Executable arguments</target>
+        <target state="translated">Аргументы исполняемого файла</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsExecutablePathProperty">
         <source>Executable path</source>
-        <target state="new">Executable path</target>
+        <target state="translated">Путь исполняемого файла</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsExecutableProcessIdProperty">
         <source>Process ID</source>
-        <target state="new">Process ID</target>
+        <target state="translated">Идентификатор процесса</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsExecutableWorkingDirectoryProperty">
         <source>Working directory</source>
-        <target state="new">Working directory</target>
+        <target state="translated">Рабочий каталог</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsExitCodeProperty">
@@ -194,17 +194,17 @@
       </trans-unit>
       <trans-unit id="ResourcesDetailsParameterValueProperty">
         <source>Value</source>
-        <target state="new">Value</target>
+        <target state="translated">Значение</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsProjectLaunchProfileProperty">
         <source>Launch profile</source>
-        <target state="new">Launch profile</target>
+        <target state="translated">Профиль запуска</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsProjectPathProperty">
         <source>Project path</source>
-        <target state="new">Project path</target>
+        <target state="translated">Путь к проекту</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsStartTimeProperty">
@@ -229,12 +229,12 @@
       </trans-unit>
       <trans-unit id="ResourcesGraphExportMermaidButton">
         <source>Export as Mermaid</source>
-        <target state="new">Export as Mermaid</target>
+        <target state="translated">Экспортировать как Mermaid</target>
         <note>Opens a dialog showing the currently visible resource graph as Mermaid source, with separate actions to copy the source or download it as a .mmd file.</note>
       </trans-unit>
       <trans-unit id="ResourcesGraphExportMermaidDescription">
         <source>Mermaid is a text-based format for defining diagrams. [Learn more about Mermaid](https://aka.ms/aspire/about-mermaid).</source>
-        <target state="new">Mermaid is a text-based format for defining diagrams. [Learn more about Mermaid](https://aka.ms/aspire/about-mermaid).</target>
+        <target state="translated">Mermaid — текстовый формат для определения диаграмм. [Подробнее о Mermaid](https://aka.ms/aspire/about-mermaid).</target>
         <note>Markdown description displayed above the Mermaid source in the resource graph export dialog. Preserve the Markdown link syntax and documentation URL.</note>
       </trans-unit>
       <trans-unit id="ResourcesGraphResetButton">
@@ -244,7 +244,7 @@
       </trans-unit>
       <trans-unit id="ResourcesGraphResourceActionsButton">
         <source>Resource actions for {0}</source>
-        <target state="new">Resource actions for {0}</target>
+        <target state="translated">Действия с ресурсами для {0}</target>
         <note>Accessible label and tooltip for the cog affordance on a graph resource node that opens the resource actions menu. {0} is the resource display name.</note>
       </trans-unit>
       <trans-unit id="ResourcesGraphZoomInButton">
