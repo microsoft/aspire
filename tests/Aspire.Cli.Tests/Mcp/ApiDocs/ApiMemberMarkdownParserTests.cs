@@ -149,8 +149,10 @@ public class ApiMemberMarkdownParserTests
         Assert.Equal("Runs the emulator.", item.Summary);
     }
 
+    // Go method lists use the same "- [Name](link)" shape as C# member overview lines. Only the known
+    // grouped member pages decide whether a link becomes a member, and Go has no grouped member pages.
     [Fact]
-    public void Parse_IgnoresGoItemPage()
+    public void Parse_ReturnsNoMembersForGoItemPageWhenNoGoMemberGroupsAreKnown()
     {
         var containerItem = new ApiReferenceItem
         {
@@ -203,7 +205,7 @@ public class ApiMemberMarkdownParserTests
     }
 
     [Fact]
-    public void Parse_IgnoresGoMemberPage()
+    public void Parse_ReturnsNoMembersForGoMemberPageWhenNoGoMemberGroupsAreKnown()
     {
         var containerItem = new ApiReferenceItem
         {

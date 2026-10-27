@@ -128,7 +128,7 @@ Each level maps to a sitemap route:
 /reference/api/go/<module>/<symbol>/<member>/
 ```
 
-A module is an Aspire package such as `aspire.hosting.redis`, a symbol is an interface, struct, enum, or function exported by the module, and a member is a method or property of a symbol.
+A module is an Aspire package such as `aspire.hosting.redis`. A module item is reported as a `symbol` when it has member pages (for example, an interface with methods), and as a `member` otherwise (for example, a top-level function or a type without member pages). Items under a symbol, such as methods and properties, are reported as `member`.
 
 ## Search behavior
 

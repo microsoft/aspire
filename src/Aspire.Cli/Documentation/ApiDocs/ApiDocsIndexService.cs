@@ -752,10 +752,14 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
             });
         }
 
+        // Go routes mirror TypeScript routes segment for segment, so a Go item scores the same as its
+        // TypeScript twin. Break ties by language before id: ordering by id alone would sort "go/" ahead
+        // of "typescript/" and push the Go copy above the TypeScript result for every unfiltered search.
         return
         [
             .. results
                 .OrderByDescending(static result => result.Score)
+                .ThenBy(static result => GetLanguageSortOrder(result.Language))
                 .ThenBy(static result => result.Id, StringComparer.OrdinalIgnoreCase)
                 .Take(topK)
         ];
@@ -1025,6 +1029,14 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
         ApiReferenceKinds.MemberGroup => 3,
         ApiReferenceKinds.Member => 3,
         _ => 4
+    };
+
+    private static int GetLanguageSortOrder(string language) => language switch
+    {
+        ApiReferenceLanguages.CSharp => 0,
+        ApiReferenceLanguages.TypeScript => 1,
+        ApiReferenceLanguages.Go => 2,
+        _ => 3
     };
 
     private static string NormalizeId(string value) => value.Trim().Trim('/');

@@ -189,6 +189,22 @@ public class ApiDocsIndexServiceTests
         Assert.Contains(allResults, result => result.Id == typeScriptResult.Id);
     }
 
+    [Fact]
+    public async Task SearchAsync_ListsTypeScriptBeforeGoWhenScoresTie()
+    {
+        var service = CreateGoAndTypeScriptService();
+
+        var results = await service.SearchAsync("addredis", topK: 10);
+
+        // Go routes mirror TypeScript routes segment for segment, so the twins score the same.
+        // The language order, not the "go/" versus "typescript/" id prefix, decides which is listed first.
+        Assert.Collection(
+            results,
+            result => Assert.Equal("typescript/aspire.hosting.redis/addredis", result.Id),
+            result => Assert.Equal("go/aspire.hosting.redis/addredis", result.Id));
+        Assert.Equal(results[0].Score, results[1].Score);
+    }
+
     [Theory]
     [InlineData("go")]
     [InlineData("GO")]
