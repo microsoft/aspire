@@ -86,8 +86,10 @@ internal sealed class TemplateSourceStore(
         try
         {
             var content = await File.ReadAllTextAsync(path, cancellationToken);
-            return JsonNode.Parse(content, nodeOptions: null, ConfigurationHelper.ParseOptions) as JsonObject
+            var settings = JsonNode.Parse(content, nodeOptions: null, ConfigurationHelper.ParseOptions) as JsonObject
                 ?? throw new TemplateSourceConfigurationException("templates", NewCommandStrings.TemplateSourcesMustBeObject);
+            ConfigurationHelper.NormalizeSettings(settings);
+            return settings;
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {

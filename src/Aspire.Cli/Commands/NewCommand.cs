@@ -385,7 +385,7 @@ internal sealed class NewCommand : BaseCommand
         while (true)
         {
             var query = await InteractionService.PromptForStringAsync(
-                NewCommandStrings.TemplateSearchPrompt, cancellationToken: cancellationToken);
+                NewCommandStrings.TemplateSearchPrompt, logResponse: false, cancellationToken: cancellationToken);
             var templates = await _configuredTemplateSources.SearchAsync(query, cancellationToken);
             if (templates.Count == 0)
             {

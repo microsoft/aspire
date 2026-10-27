@@ -354,6 +354,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(3, selectionCount);
         Assert.Equal(NewCommandStrings.NoMatchingConfiguredTemplates, Assert.Single(interaction.DisplayedMessages).Message);
+        Assert.Equal([false, false, true], interaction.StringPromptLogResponses);
         await Verify(ReadOutput(workspace));
     }
 

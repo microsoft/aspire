@@ -24,7 +24,8 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         }
 
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
-            executionContext, new FileInfo(settingsFilePath), logger, cancellationToken);
+            executionContext, new FileInfo(settingsFilePath), logger, cancellationToken)
+            ?? throw new IOException("Could not acquire the configuration lock.");
         await SetConfigurationInFileAsync(settingsFilePath, key, value, cancellationToken);
     }
 
@@ -46,6 +47,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             settings = new JsonObject();
         }
 
+        ConfigurationHelper.NormalizeSettings(settings);
         key = TemplateSourceConfiguration.ValidateEditKey(settings, key);
 
         // Validate the candidate under the config lock, before writing. A rejected edit must
@@ -53,14 +55,15 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         SetNestedValue(settings, key, value);
         TemplateSourceConfiguration.ValidateEditedSource(settings, key);
 
-        await ConfigurationHelper.WriteSettingsFileAsync(settingsFilePath, settings, cancellationToken);
+        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(settingsFilePath, settings, cancellationToken);
     }
 
     public async Task<bool> DeleteConfigurationAsync(string key, bool isGlobal = false, CancellationToken cancellationToken = default)
     {
         var settingsFilePath = GetSettingsFilePath(isGlobal);
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
-            executionContext, new FileInfo(settingsFilePath), logger, cancellationToken);
+            executionContext, new FileInfo(settingsFilePath), logger, cancellationToken)
+            ?? throw new IOException("Could not acquire the configuration lock.");
 
         if (!File.Exists(settingsFilePath))
         {
@@ -84,12 +87,13 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
                 return false;
             }
 
+            ConfigurationHelper.NormalizeSettings(settings);
             // Delete using dot notation support and return whether deletion occurred
             var deleted = DeleteNestedValue(settings, TemplateSourceConfiguration.ResolveEditKey(settings, key));
 
             if (deleted)
             {
-                await ConfigurationHelper.WriteSettingsFileAsync(settingsFilePath, settings, cancellationToken);
+                await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(settingsFilePath, settings, cancellationToken);
             }
 
             return deleted;

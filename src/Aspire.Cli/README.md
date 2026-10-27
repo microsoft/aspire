@@ -146,6 +146,10 @@ that already exists (case-insensitively) fails without overwriting it.
 The `templates` section and source names are matched case-insensitively, preserving
 their existing spelling. Source add/remove fail rather than write without the
 global configuration lock.
+Source management and `config set`/`config delete` defer normalization until a
+validated update under the target file's lock. Rejected edits leave configuration
+bytes unchanged, and global updates do not normalize project settings or migrate
+legacy configuration files at startup.
 
 `source list` displays source names and their configured fields in a table.
 `--format json` writes only a JSON object keyed by source name to stdout, matching
@@ -205,6 +209,7 @@ it empty to list everything. Matching is case-insensitive, and results show the
 source name to distinguish templates with identical names. Duplicate labels within
 one source receive numeric suffixes. Select a result to
 create a project with the normal local-template parameter prompts.
+Search input remains visible while typing but is excluded from prompt diagnostic logs.
 Configured templates cannot be combined with `--source`, `--version`, `--channel`,
 or `--language`; package/version choices are owned by the template. Supplying any
 of these options therefore keeps the picker restricted to built-in templates.

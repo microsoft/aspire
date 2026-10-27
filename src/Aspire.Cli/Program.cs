@@ -296,7 +296,12 @@ public class Program
     internal static async Task<IHost> BuildApplicationAsync(string[] args, CliStartupContext startupContext, Dictionary<string, string?>? configurationValues = null)
     {
         var isCompletion = CompletionInvocation.Matches(args);
-        var readOnlySettings = isCompletion || Commands.RootCommand.MatchesCommandPath(args, "template", "source", "list");
+        // Configuration commands validate and persist only their target file under its lock.
+        // Startup must not rewrite unrelated files or change anything before a rejected edit.
+        var deferSettingsWrites = isCompletion ||
+            Commands.RootCommand.MatchesCommandPath(args, "template", "source") ||
+            Commands.RootCommand.MatchesCommandPath(args, "config", "set") ||
+            Commands.RootCommand.MatchesCommandPath(args, "config", "delete");
         // Check for --non-interactive flag early
         var nonInteractive = args?.Any(a => a == CommonOptionNames.NonInteractive) ?? false;
 
@@ -314,10 +319,10 @@ public class Program
         var builder = Host.CreateEmptyApplicationBuilder(settings);
 
         // Set up settings with appropriate paths.
-        var globalSettingsFilePath = GetGlobalSettingsPath(startupContext.Logger, migrate: !readOnlySettings);
+        var globalSettingsFilePath = GetGlobalSettingsPath(startupContext.Logger, migrate: !deferSettingsWrites);
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !readOnlySettings);
+        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !deferSettingsWrites);
         builder.Services.AddSingleton<IConfigSourceGitClient, ConfigSourceGitClient>();
         builder.Services.AddSingleton<ConfigSourceService>();
 

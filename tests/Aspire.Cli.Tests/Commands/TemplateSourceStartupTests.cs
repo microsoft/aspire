@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
@@ -45,10 +47,99 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         const string project = """{ /* project */ "features:defaultWatchEnabled": false, }""";
         File.WriteAllText(globalPath, global);
         File.WriteAllText(projectPath, project);
-        var options = new RemoteInvokeOptions();
-        options.StartInfo.WorkingDirectory = workspace.Path;
 
-        using (RemoteExecutor.Invoke(static async (homePath, commandLine) =>
+        RunStartup(home.FullName, workspace.Path, arguments);
+
+        Assert.Equal(global, File.ReadAllText(globalPath));
+        Assert.Equal(project, File.ReadAllText(projectPath));
+        if (legacyGlobal)
+        {
+            Assert.False(File.Exists(Path.Combine(home.FullName, AspireConfigFile.FileName)));
+        }
+    }
+
+    [Theory]
+    [InlineData("--log-level Debug template source add company --href https://example.com/other.json", false, CliExitCodes.InvalidCommand)]
+    [InlineData("--log-level Debug template source add company --href https://example.com/other.json", true, CliExitCodes.InvalidCommand)]
+    [InlineData("template --nologo source remove missing", false, CliExitCodes.ConfigNotFound)]
+    [InlineData("template --nologo source remove missing", true, CliExitCodes.ConfigNotFound)]
+    [InlineData("--non-interactive true config set templates.company.repository https://github.com/example/templates --global", false, CliExitCodes.InvalidCommand)]
+    [InlineData("--non-interactive true config set templates.company.repository https://github.com/example/templates --global", true, CliExitCodes.InvalidCommand)]
+    [InlineData("config delete missing --global", false, CliExitCodes.InvalidCommand)]
+    [InlineData("config delete missing --global", true, CliExitCodes.InvalidCommand)]
+    public void RejectedCommand_PreservesGlobalAndProjectConfigurationBytes(string arguments, bool legacyGlobal, int exitCode)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+        var globalPath = Path.Combine(home.FullName, legacyGlobal ? "globalsettings.json" : AspireConfigFile.FileName);
+        var projectPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        const string global = """{ /* global */ "features:defaultWatchEnabled": true, "templates:company:href": "https://example.com/templates.json", }""";
+        const string project = """{ /* project */ "features:defaultWatchEnabled": false, }""";
+        File.WriteAllText(globalPath, global);
+        File.WriteAllText(projectPath, project);
+
+        RunStartup(home.FullName, workspace.Path, arguments, exitCode);
+
+        Assert.Equal(global, File.ReadAllText(globalPath));
+        Assert.Equal(project, File.ReadAllText(projectPath));
+        if (legacyGlobal)
+        {
+            Assert.False(File.Exists(Path.Combine(home.FullName, AspireConfigFile.FileName)));
+        }
+    }
+
+    [Theory]
+    [InlineData("add", false)]
+    [InlineData("add", true)]
+    [InlineData("remove", false)]
+    [InlineData("remove", true)]
+    [InlineData("set", false)]
+    [InlineData("set", true)]
+    [InlineData("delete", false)]
+    [InlineData("delete", true)]
+    public void SuccessfulCommand_NormalizesOnlyTheUpdatedGlobalFile(string action, bool legacyGlobal)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+        var globalPath = Path.Combine(home.FullName, legacyGlobal ? "globalsettings.json" : AspireConfigFile.FileName);
+        var projectPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        const string global = """{ /* global */ "features:defaultWatchEnabled": true, "templates:company:href": "https://example.com/templates.json", }""";
+        const string project = """{ /* project */ "features:defaultWatchEnabled": false, }""";
+        File.WriteAllText(globalPath, global);
+        File.WriteAllText(projectPath, project);
+        var (arguments, expected) = action switch
+        {
+            "add" => (
+                "template source add extra --href https://example.com/other.json",
+                """{"features":{"defaultWatchEnabled":true},"templates":{"company":{"href":"https://example.com/templates.json"},"extra":{"href":"https://example.com/other.json"}}}"""),
+            "remove" => (
+                "template source remove company",
+                """{"features":{"defaultWatchEnabled":true}}"""),
+            "set" => (
+                "config set templates.company.href https://example.com/updated.json --global",
+                """{"features":{"defaultWatchEnabled":true},"templates":{"company":{"href":"https://example.com/updated.json"}}}"""),
+            "delete" => (
+                "config delete templates.company --global",
+                """{"features":{"defaultWatchEnabled":true}}"""),
+            _ => throw new ArgumentOutOfRangeException(nameof(action))
+        };
+
+        RunStartup(home.FullName, workspace.Path, arguments, CliExitCodes.Success);
+
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(expected), JsonNode.Parse(File.ReadAllText(globalPath))));
+        Assert.Equal(project, File.ReadAllText(projectPath));
+        if (legacyGlobal)
+        {
+            Assert.False(File.Exists(Path.Combine(home.FullName, AspireConfigFile.FileName)));
+        }
+    }
+
+    private static void RunStartup(string home, string workingDirectory, string arguments, int? expectedExitCode = null)
+    {
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.WorkingDirectory = workingDirectory;
+
+        using (RemoteExecutor.Invoke(static async (homePath, commandLine, exitCode) =>
         {
             Environment.SetEnvironmentVariable("ASPIRE_HOME", homePath);
             Environment.SetEnvironmentVariable("ASPIRE_EXTENSION_ENDPOINT", null);
@@ -65,16 +156,18 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
             using var host = await Program.BuildApplicationAsync(args, startupContext).DefaultTimeout();
 
             Assert.Equal("False", host.Services.GetRequiredService<IConfiguration>()["features:defaultWatchEnabled"]);
-            Assert.Equal("list", host.Services.GetRequiredService<RootCommand>().Parse(args).CommandResult.Command.Name);
-        }, home.FullName, arguments, options))
+            var parseResult = host.Services.GetRequiredService<RootCommand>().Parse(args);
+            Assert.Empty(parseResult.Errors);
+            if (exitCode.Length == 0)
+            {
+                Assert.Equal("list", parseResult.CommandResult.Command.Name);
+            }
+            else
+            {
+                Assert.Equal(int.Parse(exitCode, CultureInfo.InvariantCulture), await parseResult.InvokeAsync().DefaultTimeout());
+            }
+        }, home, arguments, expectedExitCode?.ToString(CultureInfo.InvariantCulture) ?? "", options))
         {
-        }
-
-        Assert.Equal(global, File.ReadAllText(globalPath));
-        Assert.Equal(project, File.ReadAllText(projectPath));
-        if (legacyGlobal)
-        {
-            Assert.False(File.Exists(Path.Combine(home.FullName, AspireConfigFile.FileName)));
         }
     }
 }

@@ -43,6 +43,29 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
+    public async Task ConfigurationMutations_UnavailableLockPreservesFile(bool global, bool delete)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string original = """{ /* unchanged */ "features:defaultWatchEnabled": true, }""";
+        var (service, _) = CreateService(workspace, original);
+        var path = service.GetSettingsFilePath(global);
+        await File.WriteAllTextAsync(path, original);
+        var cache = workspace.CreateExecutionContext().CacheDirectory;
+        cache.Create();
+        await File.WriteAllTextAsync(Path.Combine(cache.FullName, "workspace-config-locks"), "Blocks lock directory creation.");
+
+        await Assert.ThrowsAsync<IOException>(() => delete
+            ? service.DeleteConfigurationAsync("features.defaultWatchEnabled", global)
+            : service.SetConfigurationAsync("features.defaultWatchEnabled", "false", global));
+
+        Assert.Equal(original, await File.ReadAllTextAsync(path));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
     public async Task ConfigurationMutations_WaitForFileLockAndPreserveRefreshedSettings(bool global, bool delete)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
