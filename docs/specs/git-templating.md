@@ -157,6 +157,9 @@ available. Git's terminal credential prompts are always disabled with
 `GIT_TERMINAL_PROMPT=0`, including when Aspire itself is interactive.
 Authentication must be configured before invocation.
 
+Captured template Git commands receive EOF on stdin rather than inheriting the
+CLI's input, so Git hooks or credential helpers cannot consume pending CLI input.
+
 `GitCommandRunner` executes Git processes through `ProcessCaptureRunner`, which
 handles process-tree cancellation and bounded output draining. Git runs with
 `LC_ALL=C` and `--literal-pathspecs`. Repository-routing environment variables

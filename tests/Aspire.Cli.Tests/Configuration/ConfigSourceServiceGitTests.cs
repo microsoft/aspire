@@ -9,6 +9,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
@@ -216,8 +217,8 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
             startInfo.ArgumentList.Add("test-parent");
             startInfo.ArgumentList.Add(pidFile);
         }
-        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        cancellation.CancelAfter(TimeSpan.FromSeconds(30));
+        using var timeoutSource = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(milliseconds: 30_000);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken, timeoutSource.Token);
         var stopwatch = Stopwatch.StartNew();
         void Log(string message) => outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] [{stopwatch.Elapsed}] {message}");
         Log($"Starting captured process '{startInfo.FileName}'; parentExits={parentExits}, captureTimeoutOutput={captureTimeoutOutput}.");

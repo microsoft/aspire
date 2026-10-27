@@ -49,6 +49,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
         var startInfo = new ProcessStartInfo("git", ["--literal-pathspecs", .. arguments])
         {
             WorkingDirectory = directory,
+            RedirectStandardInput = mode == GitCommandMode.Captured,
             // Fetch prompts need not end in a newline, and Git must control password echo.
             RedirectStandardOutput = !interactiveFetch,
             RedirectStandardError = !interactiveRemote,
@@ -103,6 +104,12 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
             async (process, token) =>
             {
                 logger.LogDebug("Git process {ProcessId} started after {Elapsed}.", process.Id, stopwatch.Elapsed);
+                if (startInfo.RedirectStandardInput)
+                {
+                    // Captured template commands must see EOF, not consume the CLI's input
+                    // or wait for input until the acquisition deadline expires.
+                    process.StandardInput.Close();
+                }
                 if (!startInfo.RedirectStandardOutput)
                 {
                     return new GitOutput(string.Empty, string.Empty);

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Text;
 using Aspire.Cli.Git;
 using Aspire.Cli.Resources;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 
@@ -32,6 +33,7 @@ public class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDisposable
         Assert.Equal("C", startInfo.Environment["LC_ALL"]);
         startInfo.Environment.TryGetValue("GCM_INTERACTIVE", out var credentialManager);
         Assert.Equal(Environment.GetEnvironmentVariable("GCM_INTERACTIVE"), credentialManager);
+        Assert.True(startInfo.RedirectStandardInput);
         Assert.True(startInfo.RedirectStandardOutput);
         Assert.True(startInfo.RedirectStandardError);
         Assert.True(startInfo.CreateNoWindow);
@@ -199,6 +201,30 @@ public class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDisposable
         var output = await CreateRunner().RunProcessAsync(startInfo, captureCancellationOutput: false, GitCommandMode.Captured, TestContext.Current.CancellationToken);
 
         Assert.Equal("first\r\nsecond\0last", output);
+    }
+
+    [Fact]
+    public async Task RunProcess_CapturedCommandsReceiveStandardInputEof()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var runner = CreateRunner();
+        var startInfo = runner.CreateStartInfo(workspace.Path, ["fetch"], GitCommandMode.Captured);
+        var shell = CreateShellStartInfo(
+            """input=$(cat); if [ -n "$input" ]; then exit 1; fi; printf EOF""",
+            """$inputText = [Console]::In.ReadToEnd(); if ($inputText.Length -ne 0) { exit 1 }; [Console]::Out.Write('EOF')""");
+        startInfo.FileName = shell.FileName;
+        startInfo.ArgumentList.Clear();
+        foreach (var argument in shell.ArgumentList)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+        using var timeoutSource = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(milliseconds: 10_000);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken, timeoutSource.Token);
+
+        var output = await runner.RunProcessAsync(startInfo, captureCancellationOutput: false, GitCommandMode.Captured, cancellation.Token);
+
+        Assert.True(startInfo.RedirectStandardInput);
+        Assert.Equal("EOF", output);
     }
 
     private static ProcessStartInfo CreateShellStartInfo(string unixCommand, string windowsCommand)

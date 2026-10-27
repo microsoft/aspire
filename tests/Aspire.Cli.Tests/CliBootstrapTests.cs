@@ -20,6 +20,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -216,8 +217,8 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var aspireHome = workspace.CreateDirectory("aspire-home");
         using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
         using var host = await BuildHostAsync();
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        timeout.CancelAfter(TimeSpan.FromMinutes(2));
+        using var timeoutSource = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(milliseconds: 120_000);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken, timeoutSource.Token);
         var cancellationToken = timeout.Token;
         using var httpClient = new HttpClient();
 
