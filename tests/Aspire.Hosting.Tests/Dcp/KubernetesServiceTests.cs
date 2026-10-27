@@ -1466,7 +1466,7 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     public async Task CreateAsync_RecoveryBudgetIncludesConfirmationRetryDelay(bool useHttpDate, int retryAfterSeconds)
     {
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
-        var recoveryTimeout = TimeSpan.FromMilliseconds(500);
+        var recoveryTimeout = TimeSpan.FromSeconds(2);
         var timeProvider = new SignalingFakeTimeProvider(recoveryTimeout);
         var (service, kubeconfigPath, fileSystem) = CreateService(createRecoveryTimeout: recoveryTimeout, timeProvider: timeProvider);
         using var disposableFileSystem = fileSystem;

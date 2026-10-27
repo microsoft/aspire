@@ -228,6 +228,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         DirectoryInfo directory,
         CancellationToken cancellationToken)
     {
+        if (KnownFeatures.IsAppHostServerV2Enabled(config) &&
+            _resolvedLanguage.LanguageId != "typescript/nodejs")
+        {
+            throw new NotSupportedException("AppHost Server v2 currently supports TypeScript/Node.js AppHosts only.");
+        }
+
         var defaultSdkVersion = GetEffectiveSdkVersion();
         var integrations = config.GetIntegrationReferences(defaultSdkVersion, GetConfigDirectory(directory).FullName).ToList();
         if (integrations.Any(i => i.Source == IntegrationSource.Npm)
@@ -365,6 +371,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var integrations = await GetIntegrationReferencesAsync(config, directory, cancellationToken);
         var sdkVersion = GetPrepareSdkVersion(config);
         var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, appHostFile, cancellationToken);
+        using var serverProjectLifetime = appHostServerProject as IDisposable;
 
         var (buildSuccess, buildOutput, _, _) = await PrepareAppHostServerAsync(
             appHostServerProject,
@@ -425,11 +432,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             _logger.LogDebug("Regenerating SDK after bootstrapping npm integration host dependencies.");
             await using var serverSession = _serverSessionFactory.Create(
                 appHostServerProject,
-                environmentVariables: null,
+                environmentVariables: appHostServerProject is NativeAppHostServerProject
+                    ? new() { [KnownConfigNames.IntegrationHostBootstrap] = "true" }
+                    : null,
                 debug: false,
                 gracefulShutdownSignaler: null,
                 shutdownService: null,
                 isolateConsole: false,
+                ownsProject: false,
                 cancellationToken);
             await serverSession.StartAsync();
 
@@ -462,12 +472,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         // core-only pass instead of treating failed host startup as successful discovery.
         // Keep the caller's environment unchanged for the final server.
         var bootstrapEnvironment = serverEnvironmentVariables;
-        if (integrations.Any(integration => integration.Source == IntegrationSource.Npm))
+        if (appHostServerProject is NativeAppHostServerProject ||
+            integrations.Any(integration => integration.Source == IntegrationSource.Npm))
         {
             bootstrapEnvironment = serverEnvironmentVariables is null ? [] : new(serverEnvironmentVariables);
             bootstrapEnvironment[KnownConfigNames.IntegrationHostBootstrap] = "true";
         }
-
         await using var serverSession = _serverSessionFactory.Create(
             appHostServerProject,
             bootstrapEnvironment,
@@ -475,6 +485,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             gracefulShutdownSignaler: null,
             shutdownService: null,
             isolateConsole: false,
+            ownsProject: false,
             cancellationToken);
         await serverSession.StartAsync();
 
@@ -553,6 +564,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         try
         {
+            var config = LoadConfiguration(directory);
+            if (KnownFeatures.IsAppHostServerV2Enabled(config) && context.Debug)
+            {
+                throw new NotSupportedException("AppHost Server v2 does not support server debugging.");
+            }
+            var integrations = await GetIntegrationReferencesAsync(config, directory, cancellationToken);
+
             // Step 1: Ensure certificates are trusted
             Dictionary<string, string> certEnvVars;
             try
@@ -568,10 +586,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Step 2: Build/prepare the AppHost server (dependency install happens after server starts)
             // Load config - source of truth for SDK version and packages
-            var config = LoadConfiguration(directory);
-            var integrations = await GetIntegrationReferencesAsync(config, directory, cancellationToken);
             var sdkVersion = GetPrepareSdkVersion(config);
             var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, appHostFile, cancellationToken);
+            using var serverProjectLifetime = appHostServerProject as IDisposable;
 
             var buildResult = await _interactionService.ShowStatusAsync(
                 "Preparing Aspire server...",
@@ -608,6 +625,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 args: context.UnmatchedTokens);
             await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(launchSettingsEnvVars, directory, cancellationToken);
             launchSettingsEnvVars[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(appHostFile);
+            if (appHostServerProject is NativeAppHostServerProject)
+            {
+                // Auxiliary discovery identifies the guest file, not the native
+                // server executable or its working directory.
+                launchSettingsEnvVars["AppHost__FilePath"] = appHostFile.FullName;
+            }
 
             // Apply certificate environment variables (e.g., SSL_CERT_DIR on Linux)
             foreach (var kvp in certEnvVars)
@@ -680,6 +703,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // Isolate the child console so a user Ctrl+C reaches the CLI (and drives the shared
                 // shutdown ladder) rather than terminating the server child directly.
                 isolateConsole: true,
+                ownsProject: false,
                 serverStopCts.Token);
             Task<int> serverCompletion;
             IAppHostRpcClient rpcClient;
@@ -1389,6 +1413,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             var integrations = await GetIntegrationReferencesAsync(config, directory, cancellationToken);
             var sdkVersion = GetPrepareSdkVersion(config);
             var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, appHostFile, cancellationToken);
+            using var serverProjectLifetime = appHostServerProject as IDisposable;
 
             // Prepare the AppHost server (build for dev mode, restore for prebuilt)
             var (prepareSuccess, prepareOutput, _, needsCodeGen) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, config.Channel, cancellationToken: cancellationToken);
@@ -1413,6 +1438,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 includeLaunchProfileEnvironmentVariables: false,
                 args: context.Arguments);
             launchSettingsEnvVars[KnownConfigNames.AspireHome] = _executionContext.AspireHomeDirectory.FullName;
+            if (KnownFeatures.IsAppHostServerV2Enabled(config))
+            {
+                // The native server has no guest command line. Project the operation into its
+                // session before bootstrap so neither publish nor inspect starts local workloads.
+                launchSettingsEnvVars[NativeAppHostServerProject.OperationEnvironmentVariable] = GetNativePublishOperation(context.Arguments);
+            }
 
             // Generate a backchannel socket path for CLI to connect to AppHost server
             var backchannelSocketPath = GetBackchannelSocketPath();
@@ -1472,6 +1503,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 gracefulShutdownSignaler: null,
                 shutdownService: null,
                 isolateConsole: false,
+                ownsProject: false,
                 serverStopCts.Token);
             Task<int> serverCompletion;
             IAppHostRpcClient rpcClient;
@@ -1619,6 +1651,25 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             _interactionService.DisplayError($"Failed to publish {DisplayName} AppHost: {ex.Message}");
             return CliExitCodes.FailedToDotnetRunAppHost;
         }
+    }
+
+    private static string GetNativePublishOperation(string[] arguments)
+    {
+        // Pipeline inspection appends "--operation inspect" (or "--operation=inspect").
+        // Pass-through arguments must never turn a publish/deploy server into run mode.
+        for (var i = arguments.Length - 1; i >= 0; i--)
+        {
+            if (arguments[i].StartsWith("--operation=", StringComparison.Ordinal))
+            {
+                return arguments[i]["--operation=".Length..] == "inspect" ? "inspect" : "publish";
+            }
+            if (arguments[i] == "--operation" && i + 1 < arguments.Length)
+            {
+                return arguments[i + 1] == "inspect" ? "inspect" : "publish";
+            }
+        }
+
+        return "publish";
     }
 
     /// <summary>
@@ -2001,11 +2052,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return RunningInstanceResult.NoRunningInstance; // No directory, nothing to check
         }
 
-        var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(
-            directory.FullName,
-            appHostFile,
-            cancellationToken);
-        var genericAppHostPath = appHostServerProject.GetInstanceIdentifier();
+        var genericAppHostPath = _appHostServerProjectFactory.GetInstanceIdentifier(directory.FullName);
 
         // Find matching sockets for this AppHost
         var matchingSockets = AppHostSocketManager.FindSockets(
@@ -2427,7 +2474,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             sb.Append(DateTime.UtcNow.Ticks);
         }
 
-        var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));
+        var bytes = System.IO.Hashing.XxHash3.Hash(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));
         return Convert.ToHexString(bytes);
     }
 

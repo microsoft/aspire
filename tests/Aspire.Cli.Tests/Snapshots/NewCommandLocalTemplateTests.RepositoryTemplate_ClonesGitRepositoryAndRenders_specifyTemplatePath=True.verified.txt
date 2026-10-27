@@ -1,0 +1,11 @@
+﻿{
+  Demo.cs:
+namespace Demo;
+// Hello
+// Mode: api
+// Features: web
+// Id: Guid_1
+// Message included
+,
+  identity.txt: first
+}

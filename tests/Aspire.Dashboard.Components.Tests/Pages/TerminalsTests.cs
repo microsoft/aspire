@@ -24,6 +24,24 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public class TerminalsTests : DashboardTestContext
 {
     [Theory]
+    [InlineData(null, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void ResourceSizingPreferenceDeterminesInitialAutoFit(bool? resourceAutoFit, bool expectedAutoFit)
+    {
+        TerminalsSetupHelpers.SetupPage(this,
+            CreateClient(TerminalSetupHelpers.CreateTerminalResource("shell", autoFit: resourceAutoFit)));
+        var cut = RenderPage("shell");
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(expectedAutoFit, cut.FindComponent<TerminalView>().Instance.AutoFit);
+            var initialization = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "initTerminal");
+            Assert.Equal(expectedAutoFit, Assert.IsType<TerminalViewOptions>(initialization.Arguments[3]).AutoFit);
+        });
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task InitialResources_PreservesExplicitOrSavedSelection(bool savedSelection)

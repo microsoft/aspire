@@ -21,7 +21,6 @@ suite('E2E shard matrix', () => {
         ['Linux|apphost-tree|out/test-e2e/test-e2e/appHostTree.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
         ['Linux|azure-functions|out/test-e2e/test-e2e/azureFunctions.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19639'],
         ['Linux|browser-debugger|out/test-e2e/test-e2e/browserDebugger.e2e.test.js', 'https://github.com/microsoft/aspire/issues/20184'],
-        ['Windows|browser-debugger|out/test-e2e/test-e2e/browserDebugger.e2e.test.js', 'https://github.com/microsoft/aspire/issues/20117'],
         ['Windows|discovery-configuration|out/test-e2e/test-e2e/discoveryConfiguration.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
         ['Windows|debug-dashboard|out/test-e2e/test-e2e/debugDashboard.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
     ]);
@@ -236,7 +235,7 @@ suite('E2E shard matrix', () => {
                 browser: 'msedge',
                 installDotnetDebugger: true,
                 installAzureFunctions: undefined,
-                advisoryIssue: 'https://github.com/microsoft/aspire/issues/20117',
+                advisoryIssue: undefined,
             },
         ]);
     });

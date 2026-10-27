@@ -447,7 +447,7 @@ public static class AzureContainerAppExtensions
                     Sku = new StorageSku() { Name = StorageSkuName.StandardLrs },
                     Kind = StorageKind.StorageV2,
                     LargeFileSharesState = LargeFileSharesState.Enabled,
-                    MinimumTlsVersion = StorageMinimumTlsVersion.Tls1_2,
+                    MinimumTlsVersion = StorageMinimumTlsVersion.Tls12,
                 };
 
                 infra.Add(storageVolume);

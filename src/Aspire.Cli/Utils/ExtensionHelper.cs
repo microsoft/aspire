@@ -63,8 +63,11 @@ internal static class KnownCapabilities
     // Advertised so tooling can pass `aspire run --launch-profile` only to CLIs that understand it.
     public const string LaunchProfile = "launch-profile.v1";
 
+    // Tooling must omit the legacy --replica option when terminal commands select by instance ID.
+    public const string TerminalInstanceSelection = "terminal-instance-selection.v1";
+
     /// <summary>
     /// Gets the set of capabilities this CLI advertises to extensions.
     /// </summary>
-    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, LsJsonStream, IsolatedLaunch, AgentMcp, LaunchProfile];
+    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, LsJsonStream, IsolatedLaunch, AgentMcp, LaunchProfile, TerminalInstanceSelection];
 }

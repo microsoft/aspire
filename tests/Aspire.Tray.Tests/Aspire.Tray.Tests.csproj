@@ -22,6 +22,7 @@
     <Compile Include="$(SharedDir)TrayCliProtocol.cs" Link="Shared/TrayCliProtocol.cs" />
     <Compile Include="$(RepoRoot)tests/Shared/WindowsTrayTestPayload.cs" Link="Shared/WindowsTrayTestPayload.cs" />
     <Using Include="Xunit" />
+    <Content Include="$(SharedDir)Aspire_icon_256.png" Link="Assets/aspire.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="$(RepoRoot)tools/CreateLayout/verify-tray-payload.sh" Link="verify-tray-payload.sh" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

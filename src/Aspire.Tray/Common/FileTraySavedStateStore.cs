@@ -45,8 +45,8 @@ internal sealed class FileTraySavedStateStore : ITraySavedStateStore
         // is absent, leaving the original intact for older tray builds.
         var migrate = contents is null && _legacyPath is not null;
         // Only paths and flags are accepted:
-        // {"appHosts":[{"appHostPath":"/src/shop/apphost.cs","isPinned":true,"isRecent":true}],"confirmStop":false}
-        // Older files omit confirmStop; the JSON constructor retains confirmation.
+        // {"appHosts":[{"appHostPath":"/src/shop/apphost.cs","isPinned":true,"isRecent":true}]}
+        // Files from earlier builds may also carry "confirmStop": true|false, which is read and ignored.
         // Array order is recency; no timestamp, PID, or dashboard URL is persisted.
         var state = contents is null ? TraySavedState.Empty
             : JsonSerializer.Deserialize(contents, TraySavedStateJsonContext.Default.TraySavedState)
@@ -90,7 +90,8 @@ internal sealed class FileTraySavedStateStore : ITraySavedStateStore
             _writable = false;
             throw new IOException("Saved AppHost state changed outside the tray; the file was left unchanged.");
         }
-        var contents = JsonSerializer.SerializeToUtf8Bytes(state, TraySavedStateJsonContext.Default.TraySavedState);
+        // Drop the retired stop-confirmation preference when the file is next written.
+        var contents = JsonSerializer.SerializeToUtf8Bytes(state with { LegacyConfirmStop = null }, TraySavedStateJsonContext.Default.TraySavedState);
         if (contents.Length > MaximumFileBytes)
         {
             throw new InvalidDataException("Saved AppHost state exceeds the size limit.");

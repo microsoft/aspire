@@ -69,35 +69,44 @@ await parameterizedPersistentVolume.withCapacityParam(persistentVolumeCapacity);
 
 // === cert-manager ===
 // Validates the typed cert-manager API surface generated for TypeScript:
-// addCertManager / addIssuer / withLetsEncrypt* / withAcmeServer / withHttp01Solver /
+// addCertManager / addIssuer / withAcmeServer / withExternalAccountBinding / withHttp01Solver /
 // gateway.withGatewayTlsIssuer.
 const acmeEmail = await builder.addParameter('acme-email');
+const acmeUrl = await builder.addParameter('acme-url');
 
 const certManager = await kubernetes.addCertManager('cert-manager');
 
 const prodIssuer = await certManager.addIssuer('letsencrypt-prod');
-await prodIssuer.withLetsEncryptProduction('admin@example.com');
+await prodIssuer.withAcmeServer('https://acme-v02.api.letsencrypt.org/directory', 'admin@example.com');
 await prodIssuer.withHttp01Solver();
 
 const prodIssuerParam = await certManager.addIssuer('letsencrypt-prod-param');
-await prodIssuerParam.withLetsEncryptProductionParam(acmeEmail);
+await prodIssuerParam.withAcmeServer(acmeUrl, acmeEmail);
 await prodIssuerParam.withHttp01Solver();
 
 const stagingIssuer = await certManager.addIssuer('letsencrypt-staging');
-await stagingIssuer.withLetsEncryptStaging('admin@example.com');
+await stagingIssuer.withAcmeServer('https://acme-staging-v02.api.letsencrypt.org/directory', 'admin@example.com');
 await stagingIssuer.withHttp01Solver();
 
 const stagingIssuerParam = await certManager.addIssuer('letsencrypt-staging-param');
-await stagingIssuerParam.withLetsEncryptStagingParam(acmeEmail);
+await stagingIssuerParam.withAcmeServer(acmeUrl, acmeEmail);
 await stagingIssuerParam.withHttp01Solver();
 
 const customIssuer = await certManager.addIssuer('custom-acme');
 await customIssuer.withAcmeServer('https://acme.example.com/directory', 'admin@example.com');
+const eabKey = await builder.addParameter('eab-key', { secret: true });
+const eabKeyId = await builder.addParameter('eab-key-id');
+await customIssuer.withExternalAccountBinding(eabKeyId, eabKey);
 await customIssuer.withHttp01Solver();
 
 const customIssuerParam = await certManager.addIssuer('custom-acme-param');
-await customIssuerParam.withAcmeServerParam('https://acme.example.com/directory', acmeEmail);
+await customIssuerParam.withAcmeServer(acmeUrl, acmeEmail);
+await customIssuerParam.withExternalAccountBinding(eabKeyId, eabKey);
 await customIssuerParam.withHttp01Solver();
+
+const parameterizedServerIssuer = await certManager.addIssuer('parameterized-server');
+await parameterizedServerIssuer.withAcmeServer(acmeUrl, acmeEmail);
+await parameterizedServerIssuer.withHttp01Solver();
 
 // Wire the staging issuer onto the gateway via the typed cert-manager overload.
 await gateway.withGatewayTlsIssuer(stagingIssuer);

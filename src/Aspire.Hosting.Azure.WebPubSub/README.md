@@ -80,11 +80,23 @@ var wps = builder.AddAzureWebPubSub("wps1")
 
 When you reference an Azure Web PubSub resource using `WithReference`, the following connection properties are made available to the consuming project:
 
+### Azure Web PubSub service
+
+The Azure Web PubSub resource exposes the following connection properties:
+
 | Property Name | Description |
 |---------------|-------------|
 | `Uri` | The service endpoint, typically `https://<resource-name>.webpubsub.azure.com/`, or the local HTTP endpoint when using the emulator |
 
-Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `wps1` becomes `WPS1_URI`.
+### Azure Web PubSub hub
+
+The Azure Web PubSub hub resource inherits all properties from its parent Azure Web PubSub service and adds:
+
+| Property Name | Description |
+|---------------|-------------|
+| `HubName` | The name of the Web PubSub hub |
+
+Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `wps1` becomes `WPS1_URI`, and the `HubName` property of a hub called `chat` becomes `CHAT_HUBNAME`.
 
 ## Additional documentation
 

@@ -363,11 +363,12 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             var shutdown = dispose
                 ? process.DisposeAsync().AsTask()
                 : Assert.ThrowsAnyAsync<OperationCanceledException>(() => process.WaitForExitAsync(cancellation.Token));
-            await signaled.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            await signaled.Task.DefaultTimeout();
             Assert.False(shutdown.IsCompleted);
             gracefulBudget.Cancel();
 
-            await shutdown.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            // Owned-tree escalation can consume the supervisor's five-second termination timeout.
+            await shutdown.DefaultTimeout(TestConstants.LongTimeoutDuration);
             await ProcessTestFixture.AssertExitedAsync(identities[0]);
             if (ownedTree)
             {
@@ -377,10 +378,13 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             {
                 using var worker = Process.GetProcessById(identities[1].ProcessId);
                 Assert.False(worker.HasExited);
-                await cleanup.WaitForConnectionAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30));
+                // Register the exit wait before releasing cleanup so it retains the handle
+                // required to read ExitCode even if the worker exits immediately.
+                var workerExitTask = worker.WaitForExitAsync(TestContext.Current.CancellationToken);
+                await cleanup.WaitForConnectionAsync(TestContext.Current.CancellationToken).DefaultTimeout();
                 using var writer = new StreamWriter(cleanup, leaveOpen: true) { AutoFlush = true };
                 await writer.WriteLineAsync("cleanup");
-                await worker.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30));
+                await workerExitTask.DefaultTimeout();
                 Assert.Equal(0, worker.ExitCode);
                 Assert.Equal("completed", await File.ReadAllTextAsync(cleanupPath, TestContext.Current.CancellationToken));
             }

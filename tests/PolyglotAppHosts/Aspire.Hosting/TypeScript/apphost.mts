@@ -233,7 +233,13 @@ await aks.configureInfrastructure(async infrastructure => {
     await cluster.isRbacEnabled.set(true);
     const _rbacEnabled = await cluster.isRbacEnabled.get();
 });
-await aks.addNodePool("system", { vmSize: AksNodeVmSizes.StandardDSv5.StandardD2sV5 });
+await aks.withSystemNodePool(async pool => {
+    pool.osSku = "AzureLinux";
+});
+await aks.addNodePool("workers", async pool => {
+    pool.vmSize = AksNodeVmSizes.StandardDSv5.StandardD2sV5;
+    pool.osSku = "AzureLinux";
+});
 const aksVolume = await aks.addPersistentVolume("aks-data");
 await aksVolume.withCapacity("20Gi");
 

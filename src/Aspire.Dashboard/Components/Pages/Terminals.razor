@@ -66,13 +66,14 @@
             @if (GetSelectedResource() is { } resource && resource.HasTerminal())
             {
                 <TerminalView ResourceName="@resource.Name" ShowOpenInWindow="true"
+                              AutoFit="@resource.ShouldAutoFitTerminal()"
                               WindowResourceName="@GetResourceName(PageViewModel.SelectedResource)"
                               ResourceIcon="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)" />
             }
             else if (_resources is not null && !_redirected)
             {
-                <div class="aspire-empty-content" role="status">
-                    <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="24px" Color="Color.Primary" />&nbsp;
+                <div class="aspire-empty-content aspire-empty-message" role="status">
+                    <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="24px" Color="Color.Primary" />
                     @if (ViewportInformation.IsDesktop)
                     {
                         @Loc[nameof(TerminalStrings.TerminalsSelectAResource)]

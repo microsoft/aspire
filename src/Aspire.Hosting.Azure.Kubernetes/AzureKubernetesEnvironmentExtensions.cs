@@ -228,7 +228,7 @@ public static class AzureKubernetesEnvironmentExtensions
     /// var gpuPool = aks.AddNodePool("gpu", "Standard_NC6s_v3", 0, 5);
     /// </code>
     /// </example>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the node pool configuration callback overload.")]
     public static IResourceBuilder<AksNodePoolResource> AddNodePool(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
         [ResourceName] string name,
@@ -243,7 +243,51 @@ public static class AzureKubernetesEnvironmentExtensions
         ArgumentOutOfRangeException.ThrowIfNegative(maxCount);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(minCount, maxCount);
 
-        var config = new AksNodePoolConfig(name, vmSize, minCount, maxCount, AksNodePoolMode.User);
+        return builder.AddNodePool(name, options =>
+        {
+            options.VmSize = vmSize;
+            options.MinCount = minCount;
+            options.MaxCount = maxCount;
+        });
+    }
+
+    /// <summary>
+    /// Adds a node pool to the AKS cluster using a configuration callback.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="name">The name of the node pool.</param>
+    /// <param name="configure">A callback to configure VM size, autoscaling, and OS SKU.</param>
+    /// <returns>The resource builder for the new node pool.</returns>
+    /// <remarks>
+    /// The callback receives the node pool configuration with default VM size and node counts.
+    /// Configuration remains mutable and is validated during infrastructure generation.
+    /// Omitting the OS SKU leaves AKS to choose its default.
+    /// The returned resource can be used to schedule workloads on this pool.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">The builder or callback is null.</exception>
+    /// <exception cref="ArgumentException">The name is empty or whitespace.</exception>
+    /// <example>
+    /// <code>
+    /// var workers = aks.AddNodePool("workers", pool =>
+    /// {
+    ///     pool.MinCount = 0;
+    ///     pool.MaxCount = 5;
+    ///     pool.OsSku = "AzureLinux";
+    /// });
+    /// </code>
+    /// </example>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<AksNodePoolResource> AddNodePool(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        [ResourceName] string name,
+        Action<AksNodePoolConfig> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var config = new AksNodePoolConfig(name, "Standard_D2s_v5", 1, 3, AksNodePoolMode.User);
+        configure(config);
         builder.Resource.NodePools.Add(config);
 
         var nodePool = new AksNodePoolResource(name, config, builder.Resource);
@@ -283,7 +327,7 @@ public static class AzureKubernetesEnvironmentExtensions
     ///     .WithSystemNodePool("Standard_B2s", minCount: 2, maxCount: 5);
     /// </code>
     /// </example>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the system node pool configuration callback overload.")]
     public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithSystemNodePool(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
         string vmSize = "Standard_D2s_v5",
@@ -296,11 +340,63 @@ public static class AzureKubernetesEnvironmentExtensions
         ArgumentOutOfRangeException.ThrowIfLessThan(maxCount, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(minCount, maxCount);
 
-        // Remove existing system pool(s) and replace with the new configuration
+        return builder.WithSystemNodePool(options =>
+        {
+            options.VmSize = vmSize;
+            options.MinCount = minCount;
+            options.MaxCount = maxCount;
+        });
+    }
+
+    /// <summary>
+    /// Replaces the system node pool using a configuration callback.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="configure">A callback to configure VM size, autoscaling, and OS SKU.</param>
+    /// <returns>The AKS environment resource builder for chaining.</returns>
+    /// <remarks>
+    /// Each call replaces the previous system pool configuration, starting with default VM size and node counts.
+    /// Configuration remains mutable and is validated during infrastructure generation.
+    /// Omitting the OS SKU leaves AKS to choose its default.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">The builder or callback is null.</exception>
+    /// <example>
+    /// <code>
+    /// var aks = builder.AddAzureKubernetesEnvironment("aks")
+    ///     .WithSystemNodePool(pool =>
+    ///     {
+    ///         pool.VmSize = "Standard_D2as_v5";
+    ///         pool.OsSku = "AzureLinux";
+    ///     });
+    /// </code>
+    /// </example>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithSystemNodePool(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        Action<AksNodePoolConfig> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var config = new AksNodePoolConfig("system", "Standard_D2s_v5", 1, 3, AksNodePoolMode.System);
+        configure(config);
         builder.Resource.NodePools.RemoveAll(p => p.Mode is AksNodePoolMode.System);
-        builder.Resource.NodePools.Insert(0, new AksNodePoolConfig("system", vmSize, minCount, maxCount, AksNodePoolMode.System));
+        builder.Resource.NodePools.Insert(0, config);
 
         return builder;
+    }
+
+    private static void ValidateNodePoolConfig(AksNodePoolConfig config)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(config.VmSize, nameof(config.VmSize));
+        var minimumCount = config.Mode is AksNodePoolMode.System ? 1 : 0;
+        ArgumentOutOfRangeException.ThrowIfLessThan(config.MinCount, minimumCount, nameof(config.MinCount));
+        ArgumentOutOfRangeException.ThrowIfLessThan(config.MaxCount, minimumCount, nameof(config.MaxCount));
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(config.MinCount, config.MaxCount, nameof(config.MinCount));
+        if (config.OsSku is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(config.OsSku, nameof(config.OsSku));
+        }
     }
 
     /// <summary>
@@ -641,6 +737,8 @@ public static class AzureKubernetesEnvironmentExtensions
 
         foreach (var pool in aksResource.NodePools)
         {
+            ValidateNodePoolConfig(pool);
+
             var mode = pool.Mode switch
             {
                 AksNodePoolMode.System => AgentPoolMode.System,
@@ -659,6 +757,12 @@ public static class AzureKubernetesEnvironmentExtensions
                 Mode = mode,
                 OSType = ContainerServiceOSType.Linux,
             };
+
+            if (pool.OsSku is not null)
+            {
+                // Use a literal expression so newer Azure SKUs are not limited by the SDK's enum.
+                agentPool.OSSku = new StringLiteralExpression(pool.OsSku);
+            }
 
             // Per-pool subnet override, else environment default
             if (poolSubnetParams.TryGetValue(pool.Name, out var poolSubnetParam))

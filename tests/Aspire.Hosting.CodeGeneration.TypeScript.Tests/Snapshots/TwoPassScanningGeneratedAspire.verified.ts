@@ -1543,6 +1543,22 @@ export interface TerminalKeyModifiers {
     shift?: boolean;
 }
 
+/** Options for configuring a terminal session. */
+export interface TerminalOptions {
+    /**
+     * Gets or sets the initial number of columns for the terminal. The value must be greater than zero. Defaults to 132.
+     *
+     * Setting either dimension makes the dashboard's Terminals page adopt the producer's current grid instead of automatically fitting it to the view.
+     */
+    columns?: number;
+    /**
+     * Gets or sets the initial number of rows for the terminal. The value must be greater than zero. Defaults to 50.
+     *
+     * Setting either dimension makes the dashboard's Terminals page adopt the producer's current grid instead of automatically fitting it to the view.
+     */
+    rows?: number;
+}
+
 /** Test DTO to verify [AspireDto] generates TypeScript interfaces. */
 export interface TestConfigDto {
     /** The name of the test config. */
@@ -2176,6 +2192,11 @@ export interface WithRequiredCommandValidationOptions {
 export interface WithRequiredOptions {
     /** A value indicating whether the parameter must have a value before it can be resolved. */
     required?: boolean;
+}
+
+export interface WithTerminalOptions {
+    /** An optional callback to configure the terminal options. */
+    configure?: (obj: TerminalOptions) => Promise<void>;
 }
 
 export interface WithUrlOptions {
@@ -13911,8 +13932,12 @@ export interface ContainerRegistryResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ContainerRegistryResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ContainerRegistryResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -14250,8 +14275,12 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ContainerRegistryResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ContainerRegistryResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -15088,8 +15117,13 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<ContainerRegistryResource> {
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<ContainerRegistryResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -15097,9 +15131,14 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
         return new ContainerRegistryResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ContainerRegistryResourcePromise {
-        return new ContainerRegistryResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ContainerRegistryResourcePromise {
+        const configure = options?.configure;
+        return new ContainerRegistryResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -16450,8 +16489,12 @@ export interface ContainerResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ContainerResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -17285,8 +17328,12 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ContainerResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -19552,8 +19599,13 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<ContainerResource> {
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<ContainerResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -19561,9 +19613,14 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         return new ContainerResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ContainerResourcePromise {
+        const configure = options?.configure;
+        return new ContainerResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -20902,8 +20959,12 @@ export interface CSharpAppResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): CSharpAppResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): CSharpAppResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -21577,8 +21638,12 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): CSharpAppResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): CSharpAppResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -23432,8 +23497,13 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<CSharpAppResource> {
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<CSharpAppResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -23441,9 +23511,14 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         return new CSharpAppResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): CSharpAppResourcePromise {
+        const configure = options?.configure;
+        return new CSharpAppResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -24820,8 +24895,12 @@ export interface DotnetToolResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): DotnetToolResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): DotnetToolResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -25531,8 +25610,12 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): DotnetToolResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): DotnetToolResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -27501,8 +27584,13 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<DotnetToolResource> {
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<DotnetToolResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -27510,9 +27598,14 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
         return new DotnetToolResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): DotnetToolResourcePromise {
+        const configure = options?.configure;
+        return new DotnetToolResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -28843,8 +28936,12 @@ export interface ExecutableResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ExecutableResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ExecutableResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -29515,8 +29612,12 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ExecutableResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ExecutableResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -31375,8 +31476,13 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<ExecutableResource> {
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<ExecutableResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -31384,9 +31490,14 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
         return new ExecutableResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ExecutableResourcePromise {
+        const configure = options?.configure;
+        return new ExecutableResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -32395,8 +32506,12 @@ export interface ExternalServiceResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ExternalServiceResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ExternalServiceResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -32739,8 +32854,12 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ExternalServiceResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ExternalServiceResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -33601,8 +33720,13 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<ExternalServiceResource> {
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<ExternalServiceResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -33610,9 +33734,14 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
         return new ExternalServiceResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ExternalServiceResourcePromise {
-        return new ExternalServiceResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ExternalServiceResourcePromise {
+        const configure = options?.configure;
+        return new ExternalServiceResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -34520,8 +34649,12 @@ export interface ParameterResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ParameterResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ParameterResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -34906,8 +35039,12 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ParameterResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ParameterResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -35848,8 +35985,13 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<ParameterResource> {
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<ParameterResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -35857,9 +35999,14 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         return new ParameterResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ParameterResourcePromise {
-        return new ParameterResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ParameterResourcePromise {
+        const configure = options?.configure;
+        return new ParameterResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -37092,8 +37239,12 @@ export interface ProjectResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ProjectResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ProjectResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -37767,8 +37918,12 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ProjectResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ProjectResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -39623,8 +39778,13 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<ProjectResource> {
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<ProjectResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -39632,9 +39792,14 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         return new ProjectResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ProjectResourcePromise {
+        const configure = options?.configure;
+        return new ProjectResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -41130,8 +41295,12 @@ export interface TestDatabaseResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestDatabaseResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestDatabaseResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -41965,8 +42134,12 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestDatabaseResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestDatabaseResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -44231,8 +44404,13 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<TestDatabaseResource> {
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<TestDatabaseResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -44240,9 +44418,14 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestDatabaseResourcePromise {
+        const configure = options?.configure;
+        return new TestDatabaseResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -45758,8 +45941,12 @@ export interface TestRedisResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestRedisResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -46677,8 +46864,12 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestRedisResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -49047,8 +49238,13 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<TestRedisResource> {
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<TestRedisResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -49056,9 +49252,14 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestRedisResourcePromise {
+        const configure = options?.configure;
+        return new TestRedisResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -50851,8 +51052,12 @@ export interface TestVaultResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestVaultResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestVaultResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -51688,8 +51893,12 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestVaultResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestVaultResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -53956,8 +54165,13 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<TestVaultResource> {
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<TestVaultResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -53965,9 +54179,14 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): TestVaultResourcePromise {
+        const configure = options?.configure;
+        return new TestVaultResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */
@@ -55295,8 +55514,12 @@ export interface Resource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -55634,8 +55857,12 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise;
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ResourcePromise;
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -56473,8 +56700,13 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withTerminalInternal(): Promise<Resource> {
+    private async _withTerminalInternal(configure?: (obj: TerminalOptions) => Promise<void>): Promise<Resource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const obj = wrapIfHandle(objData) as TerminalOptions;
+            await configure(obj);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting/withTerminal',
             rpcArgs
@@ -56482,9 +56714,14 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    withTerminal(): ResourcePromise {
-        return new ResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    /**
+     * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
+     */
+    withTerminal(options?: WithTerminalOptions): ResourcePromise {
+        const configure = options?.configure;
+        return new ResourcePromiseImpl(this._withTerminalInternal(configure), this._client);
     }
 
     /** @internal */

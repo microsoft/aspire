@@ -963,10 +963,15 @@ export function restartTerminal(id) {
     reconnectTerminal(id, state.wsUrl);
 }
 
-export function reconnectTerminal(id, wsUrl) {
+export function reconnectTerminal(id, wsUrl, autoFit) {
     const state = terminals.get(id);
     if (!state || (state.ended && state.wsUrl === wsUrl)) {
         return state?.generation ?? 0;
+    }
+    // Apply the new resource's sizing policy before mounting its connection; a
+    // later interop update could otherwise resize an explicitly configured grid.
+    if (autoFit !== undefined) {
+        state.autoFit = autoFit;
     }
     if (state.wsUrl !== wsUrl) {
         releaseRetainedClient(state);

@@ -70,8 +70,8 @@ START_ATTEMPTED=false
 
 echo "=== Publish and run the generated production images ==="
 aspire publish --apphost "$APPHOST" --output-path "$WORK_ROOT/publish" --non-interactive --nologo
-docker build --quiet --tag "$API_IMAGE" --file "$WORK_ROOT/publish/api.Dockerfile" "$WORK_ROOT/playground/NuxtApp/api"
-docker build --quiet --tag "$WEB_IMAGE" --file "$WORK_ROOT/publish/web.Dockerfile" "$WORK_ROOT/playground/NuxtApp/web"
+docker build --tag "$API_IMAGE" --file "$WORK_ROOT/publish/api.Dockerfile" "$WORK_ROOT/playground/NuxtApp/api"
+docker build --tag "$WEB_IMAGE" --file "$WORK_ROOT/publish/web.Dockerfile" "$WORK_ROOT/playground/NuxtApp/web"
 docker network create "$TEST_NAME" > /dev/null
 docker run --detach --name "$TEST_NAME-api" --network "$TEST_NAME" --network-alias api \
     --env PORT=8000 --env HOST=0.0.0.0 "$API_IMAGE" > /dev/null

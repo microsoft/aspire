@@ -149,23 +149,27 @@
                 }
                 else if (PageViewModel.Instruments == null)
                 {
-                    <div class="aspire-empty-content">
-                        @if (ViewportInformation.IsDesktop)
-                        {
-                            <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary"/>@:&nbsp;
-                            @Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectAResource)]
-                        }
-                        else
-                        {
-                            <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary"/>@:&nbsp;
-                            <a href="#" @onclick="@(async () => await _contentLayout!.OpenMobileToolbarAsync())" @onclick:preventDefault="true">@Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectAResource)]</a>
-                        }
+                    <div class="aspire-empty-content metrics-empty-content">
+                        <TelemetryEmptyContent>
+                            <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary" />
+                            @if (ViewportInformation.IsDesktop)
+                            {
+                                @Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectAResource)]
+                            }
+                            else
+                            {
+                                <a href="#" @onclick="@(async () => await _contentLayout!.OpenMobileToolbarAsync())" @onclick:preventDefault="true">@Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectAResource)]</a>
+                            }
+                        </TelemetryEmptyContent>
                     </div>
                 }
                 else
                 {
-                    <div class="aspire-empty-content">
-                        <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary"/>&nbsp;@Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMetricsForResource)]
+                    <div class="aspire-empty-content metrics-empty-content">
+                        <TelemetryEmptyContent>
+                            <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary" />
+                            @Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMetricsForResource)]
+                        </TelemetryEmptyContent>
                     </div>
                 }
             </div>

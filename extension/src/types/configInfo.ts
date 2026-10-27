@@ -90,6 +90,12 @@ export const agentMcpCapability = 'agent-mcp.v1';
 export const launchProfileCapability = 'launch-profile.v1';
 
 /**
+ * CLI terminal commands select an exact resource instance and no longer accept `--replica`.
+ * Keep in sync with `KnownCapabilities.TerminalInstanceSelection` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const terminalInstanceSelectionCapability = 'terminal-instance-selection.v1';
+
+/**
  * First Aspire CLI version that accepts `aspire run --isolated`.
  */
 export const isolatedLaunchMinimumVersion = '13.2.0';

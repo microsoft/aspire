@@ -30,7 +30,6 @@ public sealed partial class LogViewer
             : HashCode.Combine(item.Type, item.LineNumber));
     private static readonly MarkupString s_spaceMarkup = new MarkupString("&#32;");
 
-    private readonly EndAnchorItemsProviderState _endAnchorItemsProviderState = new();
     private LogEntries? _logEntries;
 
     private IList<LogEntry>? _visibleEntriesCache;
@@ -138,11 +137,6 @@ public sealed partial class LogViewer
     {
         var entries = GetVisibleEntries();
 
-        if (_endAnchorItemsProviderState.GetInitialResult(r.StartIndex, entries, entries.Count) is { } initialResult)
-        {
-            return ValueTask.FromResult(new ItemsProviderResult<LogEntry>(initialResult.Items, initialResult.TotalItemCount));
-        }
-
         return ValueTask.FromResult(new ItemsProviderResult<LogEntry>(entries.Skip(r.StartIndex).Take(r.Count), entries.Count));
     }
 
@@ -226,8 +220,6 @@ public sealed partial class LogViewer
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var refreshForEndAnchor = _endAnchorItemsProviderState.TryBeginRefresh();
-
         if (_visibleEntriesChanged)
         {
             _visibleEntriesChanged = false;
@@ -238,10 +230,7 @@ public sealed partial class LogViewer
             // force a second full scan of the log buffer.
             await RefreshVirtualizeAsync();
         }
-        else if (refreshForEndAnchor)
-        {
-            await RefreshVirtualizeAsync();
-        }
+
         if (firstRender)
         {
             Logger.LogDebug("Initializing log viewer.");

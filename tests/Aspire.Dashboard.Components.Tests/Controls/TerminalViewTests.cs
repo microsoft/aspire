@@ -359,6 +359,24 @@ public class TerminalViewTests : DashboardTestContext
     }
 
     [Fact]
+    public void AutoFit_EndpointRebindingIncludesPolicyBeforeInteropCompletes()
+    {
+        var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
+        module.Setup<int>("initTerminal", _ => true).SetResult(1);
+        var reconnect = module.Setup<int>("reconnectTerminal", _ => true);
+        var cut = Render<TerminalView>(builder => builder
+            .Add(p => p.ResourceName, "auto").Add(p => p.AutoFit, true));
+
+        cut.Render(builder => builder.Add(p => p.ResourceName, "fixed").Add(p => p.AutoFit, false));
+
+        Assert.False(Assert.IsType<bool>(Assert.Single(reconnect.Invocations).Arguments[2]));
+        Assert.Equal(["initTerminal", "getSizePresets", "reconnectTerminal"], module.Invocations.Select(i => i.Identifier));
+        reconnect.SetResult(2);
+        cut.WaitForAssertion(() => Assert.Equal(
+            ["initTerminal", "getSizePresets", "reconnectTerminal"], module.Invocations.Select(i => i.Identifier)));
+    }
+
+    [Fact]
     public void AutoFit_ChangesDuringInitializationApplyWithoutReconnecting()
     {
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");

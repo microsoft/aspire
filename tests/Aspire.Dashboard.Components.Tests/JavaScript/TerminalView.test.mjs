@@ -1888,6 +1888,31 @@ test("opening an auto-fit surface takes primary once and preserves font size acr
     assert.equal(attempts.length, 1);
 });
 
+test("endpoint rebinding applies fixed sizing before mount even without a later policy update", async () => {
+    const { id, element } = mount({ options: { autoFit: true } });
+    attempts[0].resolve();
+    await settle();
+    attempts[0].role(true);
+
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=fixed", false);
+    const fixed = attempts[1];
+    fixed.resolve();
+    await settle();
+    fixed.role(true);
+    element.clientWidth = 1000;
+    element.clientHeight = 700;
+    observers[0].callback();
+    assert.equal(fixed.client.primaryRequests, 0);
+    assert.deepEqual(fixed.client.sizingCalls, []);
+
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=auto", true);
+    attempts[2].resolve();
+    await settle();
+    assert.equal(attempts[2].client.primaryRequests, 1);
+    attempts[2].role(true);
+    assert.deepEqual(attempts[2].client.sizingCalls, [{ mode: "auto", fontSize: 13 }]);
+});
+
 test("auto-fit waits for a visible writable view and does not size a deactivated pane", async () => {
     const { id, element } = mount({ visible: false, options: { autoFit: true, readOnly: true } });
     assert.equal(attempts.length, 0);

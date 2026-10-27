@@ -229,6 +229,9 @@
     <trans-unit id="aspire-vscode.strings.appHostSourceNotFound">
       <source xml:lang="en">Could not determine the AppHost source file to open.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.blazorWasmDebugRelayFailed">
+      <source xml:lang="en">Could not prepare Blazor WebAssembly debugging. See the Aspire output for details, then try again.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.denoInspectorAddressUnavailable">
       <source xml:lang="en">Could not reserve a loopback address for the Deno inspector.</source>
     </trans-unit>

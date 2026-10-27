@@ -74,23 +74,23 @@ impl std::fmt::Display for TestResourceStatus {
 /// TestConfigDto
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TestConfigDto {
-    #[serde(rename = "Name")]
+    #[serde(rename = "name", alias = "Name")]
     pub name: String,
-    #[serde(rename = "Port")]
+    #[serde(rename = "port", alias = "Port")]
     pub port: f64,
-    #[serde(rename = "Enabled")]
+    #[serde(rename = "enabled", alias = "Enabled")]
     pub enabled: bool,
-    #[serde(rename = "OptionalField")]
+    #[serde(rename = "optionalField", alias = "OptionalField")]
     pub optional_field: Option<String>,
 }
 
 impl TestConfigDto {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert("Name".to_string(), serde_json::to_value(&self.name).unwrap_or(Value::Null));
-        map.insert("Port".to_string(), serde_json::to_value(&self.port).unwrap_or(Value::Null));
-        map.insert("Enabled".to_string(), serde_json::to_value(&self.enabled).unwrap_or(Value::Null));
-        map.insert("OptionalField".to_string(), serde_json::to_value(&self.optional_field).unwrap_or(Value::Null));
+        map.insert("name".to_string(), serde_json::to_value(&self.name).unwrap_or(Value::Null));
+        map.insert("port".to_string(), serde_json::to_value(&self.port).unwrap_or(Value::Null));
+        map.insert("enabled".to_string(), serde_json::to_value(&self.enabled).unwrap_or(Value::Null));
+        map.insert("optionalField".to_string(), serde_json::to_value(&self.optional_field).unwrap_or(Value::Null));
         map
     }
 }
@@ -98,23 +98,23 @@ impl TestConfigDto {
 /// TestNestedDto
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TestNestedDto {
-    #[serde(rename = "Id")]
+    #[serde(rename = "id", alias = "Id")]
     pub id: String,
-    #[serde(rename = "Config")]
+    #[serde(rename = "config", alias = "Config")]
     pub config: TestConfigDto,
-    #[serde(rename = "Tags")]
+    #[serde(rename = "tags", alias = "Tags")]
     pub tags: Vec<String>,
-    #[serde(rename = "Counts")]
+    #[serde(rename = "counts", alias = "Counts")]
     pub counts: HashMap<String, f64>,
 }
 
 impl TestNestedDto {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert("Id".to_string(), serde_json::to_value(&self.id).unwrap_or(Value::Null));
-        map.insert("Config".to_string(), serde_json::to_value(&self.config).unwrap_or(Value::Null));
-        map.insert("Tags".to_string(), serde_json::to_value(&self.tags).unwrap_or(Value::Null));
-        map.insert("Counts".to_string(), serde_json::to_value(&self.counts).unwrap_or(Value::Null));
+        map.insert("id".to_string(), serde_json::to_value(&self.id).unwrap_or(Value::Null));
+        map.insert("config".to_string(), serde_json::to_value(&self.config).unwrap_or(Value::Null));
+        map.insert("tags".to_string(), serde_json::to_value(&self.tags).unwrap_or(Value::Null));
+        map.insert("counts".to_string(), serde_json::to_value(&self.counts).unwrap_or(Value::Null));
         map
     }
 }
@@ -122,17 +122,17 @@ impl TestNestedDto {
 /// TestDeeplyNestedDto
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TestDeeplyNestedDto {
-    #[serde(rename = "NestedData")]
+    #[serde(rename = "nestedData", alias = "NestedData")]
     pub nested_data: HashMap<String, Vec<TestConfigDto>>,
-    #[serde(rename = "MetadataArray")]
+    #[serde(rename = "metadataArray", alias = "MetadataArray")]
     pub metadata_array: Vec<HashMap<String, String>>,
 }
 
 impl TestDeeplyNestedDto {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert("NestedData".to_string(), serde_json::to_value(&self.nested_data).unwrap_or(Value::Null));
-        map.insert("MetadataArray".to_string(), serde_json::to_value(&self.metadata_array).unwrap_or(Value::Null));
+        map.insert("nestedData".to_string(), serde_json::to_value(&self.nested_data).unwrap_or(Value::Null));
+        map.insert("metadataArray".to_string(), serde_json::to_value(&self.metadata_array).unwrap_or(Value::Null));
         map
     }
 }
@@ -2019,21 +2019,21 @@ pub fn create_builder(options: Option<CreateBuilderOptions>) -> Result<IDistribu
             resolved_options.insert(k, v);
         }
     }
-    if !resolved_options.contains_key("Args") {
+    if !resolved_options.contains_key("args") {
         let args: Vec<String> = std::env::args().skip(1).collect();
-        resolved_options.insert("Args".to_string(), serde_json::to_value(args).unwrap_or(Value::Null));
+        resolved_options.insert("args".to_string(), serde_json::to_value(args).unwrap_or(Value::Null));
     }
-    if !resolved_options.contains_key("ProjectDirectory") {
+    if !resolved_options.contains_key("projectDirectory") {
         if let Some(project_directory) = std::env::var("ASPIRE_PROJECT_DIRECTORY").ok().filter(|s| !s.is_empty()) {
-            resolved_options.insert("ProjectDirectory".to_string(), Value::String(project_directory));
+            resolved_options.insert("projectDirectory".to_string(), Value::String(project_directory));
         } else if let Ok(pwd) = std::env::current_dir() {
-            resolved_options.insert("ProjectDirectory".to_string(), Value::String(pwd.to_string_lossy().to_string()));
+            resolved_options.insert("projectDirectory".to_string(), Value::String(pwd.to_string_lossy().to_string()));
         }
     }
-    if !resolved_options.contains_key("AppHostFilePath") {
+    if !resolved_options.contains_key("appHostFilePath") {
         if let Ok(app_host_file_path) = std::env::var("ASPIRE_APPHOST_FILEPATH") {
             if !app_host_file_path.is_empty() {
-                resolved_options.insert("AppHostFilePath".to_string(), Value::String(app_host_file_path));
+                resolved_options.insert("appHostFilePath".to_string(), Value::String(app_host_file_path));
             }
         }
     }

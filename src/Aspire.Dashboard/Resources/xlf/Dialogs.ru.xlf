@@ -748,6 +748,88 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Удалить все</target>
         <note />
       </trans-unit>
+      <trans-unit id="TelemetryHelpApiKeyDescription">
+        <source>Set OTEL_EXPORTER_OTLP_HEADERS to x-otlp-api-key=&lt;your-api-key&gt;, replacing &lt;your-api-key&gt; with the dashboard's configured OTLP API key.</source>
+        <target state="new">Set OTEL_EXPORTER_OTLP_HEADERS to x-otlp-api-key=&lt;your-api-key&gt;, replacing &lt;your-api-key&gt; with the dashboard's configured OTLP API key.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpButtonText">
+        <source>Add telemetry</source>
+        <target state="new">Add telemetry</target>
+        <note>Inline link following TelemetryHelpMoreInformation. Opens the telemetry setup dialog.</note>
+      </trans-unit>
+      <trans-unit id="TelemetryHelpCertificateDescription">
+        <source>Configure your OTLP exporter to present a client certificate trusted by the dashboard. Use your SDK's OTLP exporter settings to specify the certificate and private key.</source>
+        <target state="new">Configure your OTLP exporter to present a client certificate trusted by the dashboard. Use your SDK's OTLP exporter settings to specify the certificate and private key.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpContainerDescription">
+        <source>The dashboard is running in a container. Access it from the host using port forwarding.</source>
+        <target state="new">The dashboard is running in a container. Access it from the host using port forwarding.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpDialogTitle">
+        <source>Add telemetry</source>
+        <target state="new">Add telemetry</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpEndpointHeader">
+        <source>Dashboard endpoint</source>
+        <target state="new">Dashboard endpoint</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpImportDescription">
+        <source>### 📥 Import telemetry from a file
+
+Import previously exported telemetry or OTLP JSON files by selecting **{0}** in the **{1}** dialog.</source>
+        <target state="new">### 📥 Import telemetry from a file
+
+Import previously exported telemetry or OTLP JSON files by selecting **{0}** in the **{1}** dialog.</target>
+        <note>Markdown. {0} is the localized import button text, {1} is the localized data management dialog title.</note>
+      </trans-unit>
+      <trans-unit id="TelemetryHelpIntroduction">
+        <source>Visualize logs, traces, and metrics in the dashboard. To see telemetry, first send it to the dashboard using OTLP or manually import telemetry JSON files.
+
+### 📡 Send telemetry from your app
+
+Configure your app to export logs, traces, and metrics using [OTLP]({0}).</source>
+        <target state="new">Visualize logs, traces, and metrics in the dashboard. To see telemetry, first send it to the dashboard using OTLP or manually import telemetry JSON files.
+
+### 📡 Send telemetry from your app
+
+Configure your app to export logs, traces, and metrics using [OTLP]({0}).</target>
+        <note>Markdown. {0} is the OTLP specification URL.</note>
+      </trans-unit>
+      <trans-unit id="TelemetryHelpManageDataLink">
+        <source>Learn about managing dashboard data</source>
+        <target state="new">Learn about managing dashboard data</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpMessage">
+        <source>Configure your app to send telemetry to the dashboard.</source>
+        <target state="new">Configure your app to send telemetry to the dashboard.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpMoreInformation">
+        <source>For setup instructions, see</source>
+        <target state="new">For setup instructions, see</target>
+        <note>Followed by the TelemetryHelpButtonText inline link and a period.</note>
+      </trans-unit>
+      <trans-unit id="TelemetryHelpNoEndpointsDescription">
+        <source>No OTLP endpoints are configured. To receive live telemetry, configure an OTLP endpoint when starting the dashboard.</source>
+        <target state="new">No OTLP endpoints are configured. To receive live telemetry, configure an OTLP endpoint when starting the dashboard.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpProtocolHeader">
+        <source>Protocol</source>
+        <target state="new">Protocol</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpSendTelemetryLink">
+        <source>Connect your app to the dashboard</source>
+        <target state="new">Connect your app to the dashboard</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TextVisualizerDialogJsonFormat">
         <source>JSON</source>
         <target state="needs-review-translation">Формат JSON</target>

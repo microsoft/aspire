@@ -81,6 +81,7 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
         Assert.Equal(0, gpuPool.Resource.Config.MinCount);
         Assert.Equal(5, gpuPool.Resource.Config.MaxCount);
         Assert.Equal(AksNodePoolMode.User, gpuPool.Resource.Config.Mode);
+        Assert.Null(gpuPool.Resource.Config.OsSku);
         Assert.Same(aks.Resource, gpuPool.Resource.AksParent);
     }
 
@@ -102,6 +103,210 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
         Assert.Equal(1, defaultPool.MinCount);
         Assert.Equal(3, defaultPool.MaxCount);
         Assert.Equal(AksNodePoolMode.System, defaultPool.Mode);
+        Assert.Null(defaultPool.OsSku);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public void NodePoolCallbacks_ConfigureIndependentPools(DistributedApplicationOperation operation)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace, operation);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        var result = aks.WithSystemNodePool(pool =>
+        {
+            pool.VmSize = "Standard_D4s_v5";
+            pool.MinCount = 2;
+            pool.MaxCount = 4;
+            pool.OsSku = "AzureLinux";
+        });
+        var workers = aks.AddNodePool("workers", pool =>
+        {
+            pool.MinCount = 0;
+            pool.MaxCount = 5;
+            pool.OsSku = "Ubuntu";
+        });
+        var defaults = aks.AddNodePool("defaults", _ => { });
+
+        Assert.Same(aks, result);
+        Assert.Collection(aks.Resource.NodePools,
+            pool => Assert.Equal(new AksNodePoolConfig("system", "Standard_D4s_v5", 2, 4, AksNodePoolMode.System, "AzureLinux"), pool),
+            pool => Assert.Same(workers.Resource.Config, pool),
+            pool => Assert.Same(defaults.Resource.Config, pool));
+        Assert.Equal(new AksNodePoolConfig("workers", "Standard_D2s_v5", 0, 5, AksNodePoolMode.User, "Ubuntu"), workers.Resource.Config);
+        Assert.Equal(new AksNodePoolConfig("defaults", "Standard_D2s_v5", 1, 3, AksNodePoolMode.User), defaults.Resource.Config);
+    }
+
+    [Fact]
+    public async Task NodePoolCallbacks_ComposeConfigurationUntilBicepGeneration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        AksNodePoolConfig? systemConfig = null;
+        AksNodePoolConfig? workerConfig = null;
+        aks.WithSystemNodePool(pool =>
+        {
+            systemConfig = pool;
+            pool.MinCount = -1;
+            pool.OsSku = "AzureLinux";
+        });
+        var workers = aks.AddNodePool("workers", pool =>
+        {
+            workerConfig = pool;
+            pool.MinCount = -1;
+            pool.OsSku = "Ubuntu";
+        });
+
+        Assert.NotNull(systemConfig);
+        Assert.NotNull(workerConfig);
+        Assert.Same(systemConfig, aks.Resource.NodePools[0]);
+        Assert.Same(workerConfig, workers.Resource.Config);
+        Assert.NotSame(systemConfig, workerConfig);
+        systemConfig.MinCount = 1;
+        systemConfig.OsSku = "Ubuntu";
+        workers.Resource.Config.OsSku = "AzureLinux";
+        workers.Resource.Config.VmSize = "Standard_D4s_v5";
+        workers.Resource.Config.MinCount = 2;
+        workers.Resource.Config.MaxCount = 4;
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+
+        systemConfig.OsSku = "AzureLinux";
+        workerConfig.OsSku = "Ubuntu";
+        workerConfig.MinCount = 0;
+        var regenerated = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+
+        await Verify(new
+        {
+            Initial = manifest.BicepText,
+            Regenerated = regenerated.BicepText
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WithSystemNodePool_SubsequentCallResetsOptions(bool useCallback)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithSystemNodePool(pool => pool.OsSku = "AzureLinux");
+        var workers = aks.AddNodePool("workers", pool => pool.OsSku = "Ubuntu");
+
+        if (useCallback)
+        {
+            aks.WithSystemNodePool(_ => { });
+        }
+        else
+        {
+            aks.WithSystemNodePool();
+        }
+
+        Assert.Collection(aks.Resource.NodePools,
+            pool => Assert.Equal(new AksNodePoolConfig("system", "Standard_D2s_v5", 1, 3, AksNodePoolMode.System), pool),
+            pool => Assert.Same(workers.Resource.Config, pool));
+    }
+
+    [Theory]
+    [InlineData(null, 1, 3, null)]
+    [InlineData("", 1, 3, null)]
+    [InlineData(" ", 1, 3, null)]
+    [InlineData("Standard_D2s_v5", -1, 3, null)]
+    [InlineData("Standard_D2s_v5", 1, -1, null)]
+    [InlineData("Standard_D2s_v5", 4, 3, null)]
+    [InlineData("Standard_D2s_v5", 1, 3, "")]
+    [InlineData("Standard_D2s_v5", 1, 3, " ")]
+    public async Task NodePoolConfiguration_ValidatesFinalValuesDuringBicepGeneration(string? vmSize, int minCount, int maxCount, string? osSku)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        void Configure(AksNodePoolConfig pool)
+        {
+            pool.VmSize = vmSize!;
+            pool.MinCount = minCount;
+            pool.MaxCount = maxCount;
+            pool.OsSku = osSku;
+        }
+
+        aks.WithSystemNodePool(_ => { });
+        var workers = aks.AddNodePool("workers", _ => { });
+        Configure(aks.Resource.NodePools[0]);
+        Configure(workers.Resource.Config);
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(() => AzureManifestUtils.GetManifestWithBicep(aks.Resource));
+
+        aks.WithSystemNodePool();
+        await Assert.ThrowsAnyAsync<ArgumentException>(() => AzureManifestUtils.GetManifestWithBicep(aks.Resource));
+    }
+
+    [Fact]
+    public void NodePoolCallbacks_RejectNullArguments()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var original = Assert.Single(aks.Resource.NodePools);
+        IResourceBuilder<AzureKubernetesEnvironmentResource> nullBuilder = null!;
+
+        Assert.Throws<ArgumentNullException>(() => aks.WithSystemNodePool((Action<AksNodePoolConfig>)null!));
+        Assert.Throws<ArgumentNullException>(() => aks.AddNodePool("workers", (Action<AksNodePoolConfig>)null!));
+        Assert.Throws<ArgumentNullException>(() => nullBuilder.WithSystemNodePool(_ => { }));
+        Assert.Throws<ArgumentNullException>(() => nullBuilder.AddNodePool("workers", _ => { }));
+        Assert.Throws<ArgumentException>(() => aks.AddNodePool("", _ => { }));
+        Assert.Same(original, Assert.Single(aks.Resource.NodePools));
+    }
+
+    [Fact]
+    public async Task WithSystemNodePool_RejectsZeroCountsDuringBicepGeneration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        aks.WithSystemNodePool(pool => pool.MinCount = 0);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => AzureManifestUtils.GetManifestWithBicep(aks.Resource));
+
+        aks.WithSystemNodePool(pool => pool.MaxCount = 0);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => AzureManifestUtils.GetManifestWithBicep(aks.Resource));
+    }
+
+    [Fact]
+    public void NodePoolCallbacks_PropagateExceptionsWithoutMutatingModel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var original = Assert.Single(aks.Resource.NodePools);
+        var error = new InvalidOperationException("Callback failed.");
+
+        Assert.Same(error, Assert.Throws<InvalidOperationException>(() => aks.WithSystemNodePool(_ => throw error)));
+        Assert.Same(error, Assert.Throws<InvalidOperationException>(() => aks.AddNodePool("workers", _ => throw error)));
+        Assert.Same(original, Assert.Single(aks.Resource.NodePools));
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("AzureLinux", "AzureLinux")]
+    [InlineData("AzureLinux", "Ubuntu")]
+    [InlineData(null, "FutureLinuxSku")]
+    public async Task NodePoolCallbacks_BicepReflectsOsSku(string? systemOsSku, string? workerOsSku)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithSystemNodePool(pool => pool.OsSku = systemOsSku);
+        aks.AddNodePool("workers", pool => pool.OsSku = workerOsSku);
+        aks.AddNodePool("defaults");
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        var regenerated = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        Assert.Equal(manifest.BicepText, regenerated.BicepText);
+        await Verify(manifest.BicepText, extension: "bicep")
+            .UseParameters(systemOsSku, workerOsSku);
     }
 
     [Fact]

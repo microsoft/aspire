@@ -290,8 +290,10 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             }
             else
             {
+                var autoFit = AutoFit;
                 var generation = await _jsModule!.InvokeAsync<int>(
-                    "reconnectTerminal", _terminalId, BuildWebSocketUrl(newEndpoint));
+                    "reconnectTerminal", _terminalId, BuildWebSocketUrl(newEndpoint), autoFit);
+                _appliedAutoFit = autoFit;
                 _connectedGeneration = Math.Max(_connectedGeneration, generation);
             }
         }

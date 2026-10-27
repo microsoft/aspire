@@ -7,14 +7,14 @@
         <target state="new">Discovering terminal sessions...</target>
         <note />
       </trans-unit>
+      <trans-unit id="InstanceTerminalUnavailable">
+        <source>Cannot resolve the terminal endpoint for instance '{0}' because its replica metadata is missing, invalid, or unavailable. Use 'aspire ps' or 'aspire describe' to check the current resource instances.</source>
+        <target state="new">Cannot resolve the terminal endpoint for instance '{0}' because its replica metadata is missing, invalid, or unavailable. Use 'aspire ps' or 'aspire describe' to check the current resource instances.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="LookingUpResource">
         <source>Looking up resource...</source>
         <target state="new">Looking up resource...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReplicaExited">
-        <source>{0} (exited code={1})</source>
-        <target state="new">{0} (exited code={1})</target>
         <note />
       </trans-unit>
       <trans-unit id="ReplicaNotFound">
@@ -22,24 +22,19 @@
         <target state="new">Replica index {0} is not available for resource '{1}'. Available indices: {2}.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ReplicaOptionDescription">
-        <source>The 0-based replica index. Required for replicated resources in non-interactive mode.</source>
-        <target state="new">The 0-based replica index. Required for replicated resources in non-interactive mode.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReplicaRequired">
-        <source>Resource '{0}' has {1} replicas. Pass --replica &lt;index&gt; to choose one in non-interactive mode.</source>
-        <target state="new">Resource '{0}' has {1} replicas. Pass --replica &lt;index&gt; to choose one in non-interactive mode.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReplicaRunning">
-        <source>{0} (running)</source>
-        <target state="new">{0} (running)</target>
+      <trans-unit id="ResourceAmbiguous">
+        <source>Resource '{0}' matches multiple instances. Specify an exact instance ID. Available instance IDs: {1}.</source>
+        <target state="new">Resource '{0}' matches multiple instances. Specify an exact instance ID. Available instance IDs: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
-        <source>The name of the resource whose terminal runs the tape.</source>
-        <target state="new">The name of the resource whose terminal runs the tape.</target>
+        <source>The resource display name for a singleton, or the exact resource instance ID for a replica. Use 'aspire ps' or 'aspire describe' to discover instance IDs.</source>
+        <target state="new">The resource display name for a singleton, or the exact resource instance ID for a replica. Use 'aspire ps' or 'aspire describe' to discover instance IDs.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceInstanceRequired">
+        <source>Resource '{0}' has multiple terminal instances. Specify an exact instance ID from 'aspire ps' or 'aspire describe'.</source>
+        <target state="new">Resource '{0}' has multiple terminal instances. Specify an exact instance ID from 'aspire ps' or 'aspire describe'.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -50,11 +45,6 @@
       <trans-unit id="ResourceRequired">
         <source>A resource name is required.</source>
         <target state="new">A resource name is required.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SelectReplica">
-        <source>Select a replica of '{0}' to attach to:</source>
-        <target state="new">Select a replica of '{0}' to attach to:</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeConnectionClosed">

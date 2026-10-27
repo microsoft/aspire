@@ -41,6 +41,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         Assert.Equal(2, aks.Resource.NodePools.Count);
         var workloadPool = aks.Resource.NodePools.First(p => p.Mode is AksNodePoolMode.User);
         Assert.Equal("workload", workloadPool.Name);
+        Assert.Null(workloadPool.OsSku);
 
         // Compute resource should have been auto-assigned to the workload pool
         Assert.True(container.Resource.TryGetLastAnnotation<KubernetesNodePoolAnnotation>(out var affinity));

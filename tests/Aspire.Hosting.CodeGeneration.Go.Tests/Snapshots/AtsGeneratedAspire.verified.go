@@ -51,51 +51,51 @@ const (
 
 // TestConfigDto represents TestConfigDto.
 type TestConfigDto struct {
-	Name string `json:"Name,omitempty"`
-	Port float64 `json:"Port,omitempty"`
-	Enabled bool `json:"Enabled,omitempty"`
-	OptionalField *string `json:"OptionalField,omitempty"`
+	Name string `json:"name,omitempty"`
+	Port float64 `json:"port,omitempty"`
+	Enabled bool `json:"enabled,omitempty"`
+	OptionalField *string `json:"optionalField,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *TestConfigDto) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Name"] = serializeValue(d.Name)
-	m["Port"] = serializeValue(d.Port)
-	m["Enabled"] = serializeValue(d.Enabled)
-	if d.OptionalField != nil { m["OptionalField"] = serializeValue(d.OptionalField) }
+	m["name"] = serializeValue(d.Name)
+	m["port"] = serializeValue(d.Port)
+	m["enabled"] = serializeValue(d.Enabled)
+	if d.OptionalField != nil { m["optionalField"] = serializeValue(d.OptionalField) }
 	return m
 }
 
 // TestNestedDto represents TestNestedDto.
 type TestNestedDto struct {
-	Id string `json:"Id,omitempty"`
-	Config *TestConfigDto `json:"Config,omitempty"`
-	Tags []string `json:"Tags,omitempty"`
-	Counts map[string]float64 `json:"Counts,omitempty"`
+	Id string `json:"id,omitempty"`
+	Config *TestConfigDto `json:"config,omitempty"`
+	Tags []string `json:"tags,omitempty"`
+	Counts map[string]float64 `json:"counts,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *TestNestedDto) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Id"] = serializeValue(d.Id)
-	if d.Config != nil { m["Config"] = serializeValue(d.Config) }
-	if d.Tags != nil { m["Tags"] = serializeValue(d.Tags) }
-	if d.Counts != nil { m["Counts"] = serializeValue(d.Counts) }
+	m["id"] = serializeValue(d.Id)
+	if d.Config != nil { m["config"] = serializeValue(d.Config) }
+	if d.Tags != nil { m["tags"] = serializeValue(d.Tags) }
+	if d.Counts != nil { m["counts"] = serializeValue(d.Counts) }
 	return m
 }
 
 // TestDeeplyNestedDto represents TestDeeplyNestedDto.
 type TestDeeplyNestedDto struct {
-	NestedData map[string][]*TestConfigDto `json:"NestedData,omitempty"`
-	MetadataArray []map[string]string `json:"MetadataArray,omitempty"`
+	NestedData map[string][]*TestConfigDto `json:"nestedData,omitempty"`
+	MetadataArray []map[string]string `json:"metadataArray,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *TestDeeplyNestedDto) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.NestedData != nil { m["NestedData"] = serializeValue(d.NestedData) }
-	if d.MetadataArray != nil { m["MetadataArray"] = serializeValue(d.MetadataArray) }
+	if d.NestedData != nil { m["nestedData"] = serializeValue(d.NestedData) }
+	if d.MetadataArray != nil { m["metadataArray"] = serializeValue(d.MetadataArray) }
 	return m
 }
 
@@ -2660,19 +2660,19 @@ func CreateBuilder() (IDistributedApplicationBuilder, error) {
 	registerWrappers(c)
 
 	resolved := map[string]any{}
-	if _, ok := resolved["Args"]; !ok { resolved["Args"] = os.Args[1:] }
-	if projectDirectory, ok := resolved["ProjectDirectory"].(string); !ok || projectDirectory == "" {
+	if _, ok := resolved["args"]; !ok { resolved["args"] = os.Args[1:] }
+	if projectDirectory, ok := resolved["projectDirectory"].(string); !ok || projectDirectory == "" {
 		if projectDirectory := os.Getenv("ASPIRE_PROJECT_DIRECTORY"); projectDirectory != "" {
-			resolved["ProjectDirectory"] = projectDirectory
+			resolved["projectDirectory"] = projectDirectory
 		} else if pwd, err := os.Getwd(); err == nil {
-			resolved["ProjectDirectory"] = pwd
+			resolved["projectDirectory"] = pwd
 		}
 	}
-	if appHostFilePath, ok := resolved["AppHostFilePath"].(string); !ok || appHostFilePath == "" {
-		if appHostFilePath := os.Getenv("ASPIRE_APPHOST_FILEPATH"); appHostFilePath != "" { resolved["AppHostFilePath"] = appHostFilePath }
+	if appHostFilePath, ok := resolved["appHostFilePath"].(string); !ok || appHostFilePath == "" {
+		if appHostFilePath := os.Getenv("ASPIRE_APPHOST_FILEPATH"); appHostFilePath != "" { resolved["appHostFilePath"] = appHostFilePath }
 	}
-	if dashboardApplicationName, ok := resolved["DashboardApplicationName"].(string); ok && dashboardApplicationName == "" {
-		delete(resolved, "DashboardApplicationName")
+	if dashboardApplicationName, ok := resolved["dashboardApplicationName"].(string); ok && dashboardApplicationName == "" {
+		delete(resolved, "dashboardApplicationName")
 	}
 
 	result, err := c.invokeCapability(context.Background(), "Aspire.Hosting/createBuilder", map[string]any{"argsOrOptions": resolved})

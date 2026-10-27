@@ -29,10 +29,10 @@ using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 namespace Aspire.Cli.NuGet;
 
 /// <summary>
-/// Runs the NuGet operations that the <c>aspire-managed nuget</c> helper used to run out of process.
+/// Runs in-process NuGet restore, manifest, search, and exact package-version operations.
 /// </summary>
 /// <remarks>
-/// Each operation mirrors one helper subcommand (<c>restore</c>, <c>manifest</c>, and <c>search</c>) so bundled CLIs
+/// Restore, manifest, and search mirror the former helper subcommands so bundled CLIs
 /// keep the same restore results, search results, and failure text. Failures are reported as
 /// <see cref="NuGetOperationException"/>, whose <see cref="NuGetOperationException.Output"/> is the text the helper
 /// wrote to stderr.
@@ -72,6 +72,11 @@ internal interface INuGetClient
         int take,
         IReadOnlyList<string> explicitSources,
         string? nugetConfigPath,
+        string workingDirectory,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<NuGetVersion>> GetPackageVersionsAsync(
+        string packageId,
         string workingDirectory,
         CancellationToken cancellationToken);
 
@@ -447,6 +452,55 @@ internal sealed class NuGetClient(
                 output.WriteLine(ex.ToString());
             }
 
+            throw new NuGetOperationException(output.Text);
+        }
+    }
+
+    /// <summary>
+    /// Enumerates an exact package's versions across all enabled, mapping-eligible sources.
+    /// </summary>
+    public async Task<IReadOnlyList<NuGetVersion>> GetPackageVersionsAsync(
+        string packageId, string workingDirectory, CancellationToken cancellationToken)
+    {
+        var output = new NuGetOperationOutput(logger);
+        try
+        {
+            var settings = LoadAmbientSettings(workingDirectory, MachineWideSettingsFactory());
+            var sources = LoadPackageSources(settings, explicitSources: []);
+            var mapping = PackageSourceMapping.GetPackageSourceMapping(settings);
+            if (mapping.IsEnabled)
+            {
+                var allowedKeys = mapping.GetConfiguredPackageSources(packageId);
+                // Filter before contacting feeds: mappings govern which servers may receive
+                // this package ID, not just which results we accept.
+                sources = sources.Where(source => allowedKeys.Contains(source.Name, StringComparer.OrdinalIgnoreCase)).ToList();
+            }
+
+            var sensitiveSources = GetSensitiveSourceValues(sources);
+            output = new NuGetOperationOutput(logger, sensitiveSources);
+            using var operation = BeginOperation(sensitiveSources);
+            using var cache = new SourceCacheContext { NoCache = true };
+            var versions = new List<NuGetVersion>();
+            foreach (var source in sources)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var repository = Repository.Factory.GetCoreV3(source);
+                var resource = await repository.GetResourceAsync<FindPackageByIdResource>(cancellationToken).ConfigureAwait(false);
+                if (resource is null)
+                {
+                    throw new InvalidOperationException("The NuGet source does not support exact package version lookup.");
+                }
+                versions.AddRange(await resource.GetAllVersionsAsync(packageId, cache, output, cancellationToken).ConfigureAwait(false));
+            }
+
+            // SearchAsync intentionally retains only one source's entry. Exact resolution must
+            // instead consider every eligible feed, including versions absent from search indexes.
+            return versions.Distinct<NuGetVersion>(VersionComparer.VersionRelease)
+                .OrderByDescending(version => version, VersionComparer.VersionRelease).ToArray();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            output.WriteLine($"Error: {ex.Message}");
             throw new NuGetOperationException(output.Text);
         }
     }

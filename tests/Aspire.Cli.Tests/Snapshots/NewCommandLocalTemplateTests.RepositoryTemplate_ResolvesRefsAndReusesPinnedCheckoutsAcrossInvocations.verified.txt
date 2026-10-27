@@ -1,0 +1,90 @@
+﻿{
+  annotated-tag: {
+    Demo.cs:
+namespace Demo;
+// Hello
+// Mode: api
+// Features: web
+// Id: Guid_1
+// Message included
+,
+    identity.txt: first
+  },
+  branch: {
+    Demo.cs:
+namespace Demo;
+// Hello
+// Mode: api
+// Features: web
+// Id: Guid_2
+// Message included
+,
+    identity.txt: second
+  },
+  branch-with-slash: {
+    Demo.cs:
+namespace Demo;
+// Hello
+// Mode: api
+// Features: web
+// Id: Guid_3
+// Message included
+,
+    identity.txt: first
+  },
+  default: {
+    Demo.cs:
+namespace Demo;
+// Hello
+// Mode: api
+// Features: web
+// Id: Guid_4
+// Message included
+,
+    identity.txt: second
+  },
+  moved-branch: {
+    Demo.cs:
+namespace Demo;
+// Hello
+// Mode: api
+// Features: web
+// Id: Guid_5
+// Message included
+,
+    identity.txt: third
+  },
+  qualified-tag: {
+    Demo.cs:
+namespace Demo;
+// Hello
+// Mode: api
+// Features: web
+// Id: Guid_6
+// Message included
+,
+    identity.txt: first
+  },
+  sha: {
+    Demo.cs:
+namespace Demo;
+// Hello
+// Mode: api
+// Features: web
+// Id: Guid_7
+// Message included
+,
+    identity.txt: first
+  },
+  tag: {
+    Demo.cs:
+namespace Demo;
+// Hello
+// Mode: api
+// Features: web
+// Id: Guid_8
+// Message included
+,
+    identity.txt: first
+  }
+}

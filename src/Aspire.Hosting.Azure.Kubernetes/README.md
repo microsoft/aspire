@@ -41,6 +41,52 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
     .withComputeEnvironment(aks);
 ```
 
+### Node pool configuration
+
+Use callbacks to configure system and user node pools. Both receive an `AksNodePoolConfig` with a VM size of `Standard_D2s_v5` and an autoscaling range of 1-3 nodes. User pools can scale to zero; system pools require at least one node.
+
+**C#**
+
+```csharp
+var aks = builder.AddAzureKubernetesEnvironment("aks")
+    .WithSystemNodePool(pool =>
+    {
+        pool.VmSize = "Standard_D2as_v5";
+        pool.OsSku = "AzureLinux";
+    });
+
+var workers = aks.AddNodePool("workers", pool =>
+{
+    pool.MinCount = 0;
+    pool.MaxCount = 5;
+    pool.OsSku = "AzureLinux";
+});
+```
+
+**TypeScript**
+
+```typescript
+const aks = await builder.addAzureKubernetesEnvironment("aks");
+await aks.withSystemNodePool(async pool => {
+    pool.vmSize = "Standard_D2as_v5";
+    pool.osSku = "AzureLinux";
+});
+
+const workers = await aks.addNodePool("workers", async pool => {
+    pool.minCount = 0;
+    pool.maxCount = 5;
+    pool.osSku = "AzureLinux";
+});
+```
+
+`OsSku` / `osSku` is optional. Leaving it unset omits `osSKU` from the generated Bicep and preserves the AKS default, including for automatically created pools. Values such as `AzureLinux` and `Ubuntu` select the OS SKU, not a specific OS image version; Azure validates availability and compatibility. These APIs configure Linux node pools.
+
+Each `WithSystemNodePool` call replaces the previous system-pool configuration, including its OS SKU. The selected value is part of the app model and is retained when deployment regenerates Bicep. Changing the OS SKU of an existing pool can reimage nodes and disrupt workloads; follow the [AKS OS SKU migration guidance](https://learn.microsoft.com/azure/aks/upgrade-os-version).
+
+The C# callback receives the configuration stored in the app model, not a copy. Extensions can compose further changes through the retained configuration or `workers.Resource.Config` until infrastructure generation. The final values are validated and applied to the generated Bicep at that point; later mutations do not change files already generated.
+
+Existing parameter-based C# calls remain supported. TypeScript calls using scalar options must migrate to callbacks: replace `await aks.withSystemNodePool({ vmSize: "Standard_D2as_v5" })` with the callback above, and replace `await aks.addNodePool("workers", { minCount: 0 })` with `await aks.addNodePool("workers", async pool => { pool.minCount = 0; })`. Polyglot callbacks receive local data whose property changes are written back when the callback returns. Assign properties directly, without remote setters or per-property `await`.
+
 ### Existing container registries
 
 Use an existing Azure Container Registry, including one in another resource group:
