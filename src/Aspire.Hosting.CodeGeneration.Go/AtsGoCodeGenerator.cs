@@ -365,12 +365,25 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             return;
         }
 
-        // Options struct names are resolved above but not reserved, and exported value roots are emitted
-        // verbatim as package-level vars (see GenerateExportedValues). Reserve both here to keep an
-        // accepting interface from colliding with either. This is the last step of BuildNameMaps, so it
-        // cannot change a name chosen earlier.
+        // Options struct names are resolved above but not reserved, exported value roots are emitted
+        // verbatim as package-level vars (see GenerateExportedValues), and enum members are emitted as
+        // package-level consts named after their enum (see GenerateEnumTypes). Reserve all of them here
+        // to keep an accepting interface from colliding with any of them. This is the last step of
+        // BuildNameMaps, so it cannot change a name chosen earlier.
         _reservedNames.UnionWith(_optionsTypeNames.Values);
         _reservedNames.UnionWith(BuildExportedValueTree(context.ExportedValues).Children.Keys);
+        foreach (var enumType in context.EnumTypes)
+        {
+            if (enumType.ClrType is null)
+            {
+                continue;
+            }
+
+            foreach (var member in Enum.GetNames(enumType.ClrType))
+            {
+                _reservedNames.Add(GetEnumMemberConstantName(_enumNames[enumType.TypeId], member));
+            }
+        }
 
         foreach (var typeId in baseTypeIds.OrderBy(id => _interfaceNames[id], StringComparer.Ordinal))
         {
@@ -600,13 +613,15 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             WriteLine("const (");
             foreach (var member in Enum.GetNames(enumType.ClrType))
             {
-                var memberName = $"{enumName}{ToPascalCase(member)}";
+                var memberName = GetEnumMemberConstantName(enumName, member);
                 WriteLine($"\t{memberName} {enumName} = \"{member}\"");
             }
             WriteLine(")");
             WriteLine();
         }
     }
+
+    private static string GetEnumMemberConstantName(string enumName, string member) => $"{enumName}{ToPascalCase(member)}";
 
     // ── DTOs ─────────────────────────────────────────────────────────────────
 

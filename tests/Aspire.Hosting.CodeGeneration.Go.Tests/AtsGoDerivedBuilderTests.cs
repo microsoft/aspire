@@ -109,6 +109,19 @@ public class AtsGoDerivedBuilderTests
     }
 
     [Fact]
+    public void GeneratedCode_AcceptingInterfaceTakesAFreeNameWhenAnEnumMemberConstantUsesItsName()
+    {
+        var generated = _generator.GenerateDistributedApplication(DerivedBuilderFixture.CreateContextWithEnumMember())["aspire.go"];
+
+        // An enum member is emitted as a package-level const named after the enum and the member
+        // (AnyPool + Resource), so the accepting interface takes the next free name.
+        Assert.Single(Regex.Matches(generated, @"^\tAnyPoolResource AnyPool = ""Resource""", RegexOptions.Multiline));
+        Assert.Equal(["AnyAksPoolResource", "AnyPoolResource2", "AnySpotPoolResource"], GetAcceptingInterfaceNames(generated));
+        Assert.Equal(["handleReference", "isPoolResource()"], GetInterfaceMembers(generated, "AnyPoolResource2"));
+        Assert.Contains("WithPool(pool AnyPoolResource2) WorkloadResource", GetMethodSignatures(generated, "workloadResource", "With"));
+    }
+
+    [Fact]
     public void GeneratedCode_ParameterPositionsAcceptDerivedBuilders()
     {
         var generated = GenerateFixtureSdk();
@@ -258,6 +271,28 @@ public class AtsGoDerivedBuilderTests
 
             // The exported value and the accepting interface are package-level declarations in the same
             // package, so a name shared by both is a redeclaration that only the Go compiler reports.
+            var (exitCode, output) = await RunGoAsync(directory, ["build", "."], timeout.Token);
+
+            Assert.True(exitCode == 0, $"go build . failed:{Environment.NewLine}{output}");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedCode_CompilesWhenAnEnumMemberConstantIsNamedLikeAnAcceptingInterface()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        try
+        {
+            await WriteFixtureSdkAsync(DerivedBuilderFixture.CreateContextWithEnumMember(), directory, timeout.Token);
+
+            // An enum member constant and the accepting interface are package-level declarations in the
+            // same package, so a name shared by both is a redeclaration that only the Go compiler reports.
             var (exitCode, output) = await RunGoAsync(directory, ["build", "."], timeout.Token);
 
             Assert.True(exitCode == 0, $"go build . failed:{Environment.NewLine}{output}");
@@ -534,6 +569,29 @@ public class AtsGoDerivedBuilderTests
             };
         }
 
+        // An enum member is emitted as a package-level const named after the enum and the member, so
+        // AnyPool.Resource becomes AnyPoolResource.
+        public static AtsContext CreateContextWithEnumMember()
+        {
+            var context = CreateContext();
+            return new AtsContext
+            {
+                Capabilities = context.Capabilities,
+                HandleTypes = context.HandleTypes,
+                EnumTypes =
+                [
+                    new AtsEnumTypeInfo
+                    {
+                        TypeId = "enum:Tests.Derived.AnyPool",
+                        Name = nameof(AnyPool),
+                        ClrType = typeof(AnyPool),
+                        Values = [nameof(AnyPool.Resource)]
+                    }
+                ],
+                DtoTypes = context.DtoTypes
+            };
+        }
+
         private static AtsTypeRef Handle(string typeId) => new() { TypeId = typeId, Category = AtsTypeCategory.Handle };
 
         private static AtsTypeRef ArrayOf(AtsTypeRef element) => new()
@@ -602,5 +660,10 @@ public class AtsGoDerivedBuilderTests
             Parameters = parameters,
             ReturnType = returnType
         };
+
+        private enum AnyPool
+        {
+            Resource
+        }
     }
 }
