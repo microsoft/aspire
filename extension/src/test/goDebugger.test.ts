@@ -126,6 +126,16 @@ suite('Go AppHost Command Parsing Tests', () => {
             { packagePath: '.', appHostArgs: [] });
     });
 
+    test('accepts the shim extensions a Windows version manager can resolve go to', () => {
+        // The CLI looks go up through PATH/PATHEXT, so the first match can be a .cmd or .bat shim.
+        for (const executable of ['C:\\Users\\dev\\shims\\go.cmd', 'C:\\Users\\dev\\shims\\GO.BAT']) {
+            assert.deepStrictEqual(
+                parseGoAppHostCommand([executable, 'run', '.']),
+                { packagePath: '.', appHostArgs: [] },
+                executable);
+        }
+    });
+
     test('keeps every argument after the package for the AppHost', () => {
         // Anything after the package belongs to the program, including values that look like go flags.
         assert.deepStrictEqual(
@@ -135,6 +145,12 @@ suite('Go AppHost Command Parsing Tests', () => {
 
     test('keeps a package path other than the current directory', () => {
         assert.strictEqual(parseGoAppHostCommand(['go', 'run', './cmd/apphost'])?.packagePath, './cmd/apphost');
+    });
+
+    test('keeps a relative package directory written with either path separator', () => {
+        for (const packagePath of ['.\\cmd\\apphost', '../apphost', '..\\apphost', '..']) {
+            assert.strictEqual(parseGoAppHostCommand(['go', 'run', packagePath])?.packagePath, packagePath, packagePath);
+        }
     });
 
     test('does not re-split arguments that contain spaces', () => {
@@ -151,6 +167,14 @@ suite('Go AppHost Command Parsing Tests', () => {
         assert.strictEqual(parseGoAppHostCommand(['go', 'run', '-race', '.']), null);
     });
 
+    test('returns null when the package is not a relative directory', () => {
+        // The caller resolves the package against the AppHost directory, so an import path would silently
+        // become a directory under it.
+        assert.strictEqual(parseGoAppHostCommand(['go', 'run', 'example.com/apphost']), null);
+        assert.strictEqual(parseGoAppHostCommand(['go', 'run', 'cmd/apphost']), null);
+        assert.strictEqual(parseGoAppHostCommand(['go', 'run', '.hidden']), null);
+    });
+
     test('returns null when the command is not go run', () => {
         assert.strictEqual(parseGoAppHostCommand(['go', 'build', '.']), null);
         assert.strictEqual(parseGoAppHostCommand(['go', 'test', '.']), null);
@@ -160,6 +184,8 @@ suite('Go AppHost Command Parsing Tests', () => {
     test('returns null when the executable is not the go toolchain', () => {
         assert.strictEqual(parseGoAppHostCommand(['dotnet', 'run', '.']), null);
         assert.strictEqual(parseGoAppHostCommand(['gofmt', 'run', '.']), null);
+        // The shim extensions are only forgiven for go itself.
+        assert.strictEqual(parseGoAppHostCommand(['C:\\tools\\air.cmd', 'run', '.']), null);
         // The name is read from the last path segment, not from a directory on the way to the executable.
         assert.strictEqual(parseGoAppHostCommand(['/usr/local/go/bin/air', 'run', '.']), null);
     });
