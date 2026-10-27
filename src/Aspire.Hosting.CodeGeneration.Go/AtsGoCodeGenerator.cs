@@ -365,10 +365,12 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             return;
         }
 
-        // Options struct names are resolved above but not reserved, so reserve them here to keep an
-        // accepting interface from colliding with one. This is the last step of BuildNameMaps, so it
+        // Options struct names are resolved above but not reserved, and exported value roots are emitted
+        // verbatim as package-level vars (see GenerateExportedValues). Reserve both here to keep an
+        // accepting interface from colliding with either. This is the last step of BuildNameMaps, so it
         // cannot change a name chosen earlier.
         _reservedNames.UnionWith(_optionsTypeNames.Values);
+        _reservedNames.UnionWith(BuildExportedValueTree(context.ExportedValues).Children.Keys);
 
         foreach (var typeId in baseTypeIds.OrderBy(id => _interfaceNames[id], StringComparer.Ordinal))
         {

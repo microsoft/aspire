@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 using Aspire.Hosting.RemoteHost;
@@ -25,13 +26,8 @@ public class AtsGoDerivedBuilderTests
     {
         var generated = GenerateFixtureSdk();
 
-        var acceptingInterfaces = Regex.Matches(generated, @"^type (Any\w+) interface ", RegexOptions.Multiline)
-            .Select(match => match.Groups[1].Value)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
         // GpuSpotPoolResource, WorkloadResource, QueueResource and the builder have no derived type.
-        Assert.Equal(["AnyAksPoolResource", "AnyPoolResource", "AnySpotPoolResource"], acceptingInterfaces);
+        Assert.Equal(["AnyAksPoolResource", "AnyPoolResource", "AnySpotPoolResource"], GetAcceptingInterfaceNames(generated));
         Assert.Matches(
             @"// AnyPoolResource [^\r\n]*\r?\n(// [^\r\n]*\r?\n)*type AnyPoolResource interface \{",
             generated);
@@ -97,6 +93,19 @@ public class AtsGoDerivedBuilderTests
         Assert.Equal(["handleReference", "isPoolResource()"], GetInterfaceMembers(generated, "AnyPoolResource"));
         Assert.Equal(["isPoolResource"], GetInterfaceMarkers(generated, "PoolResource"));
         Assert.Contains("poolResource.isPoolResource", GetImplMarkers(generated));
+    }
+
+    [Fact]
+    public void GeneratedCode_AcceptingInterfaceTakesAFreeNameWhenAnExportedValueRootUsesItsName()
+    {
+        var generated = _generator.GenerateDistributedApplication(DerivedBuilderFixture.CreateContextWithExportedValueRoot("AnyPoolResource"))["aspire.go"];
+
+        // An exported value is emitted under its catalog name, so the accepting interface takes the next
+        // free name instead, and the parameter positions that use it follow.
+        Assert.Single(Regex.Matches(generated, @"^var AnyPoolResource = struct \{", RegexOptions.Multiline));
+        Assert.Equal(["AnyAksPoolResource", "AnyPoolResource2", "AnySpotPoolResource"], GetAcceptingInterfaceNames(generated));
+        Assert.Equal(["handleReference", "isPoolResource()"], GetInterfaceMembers(generated, "AnyPoolResource2"));
+        Assert.Contains("WithPool(pool AnyPoolResource2) WorkloadResource", GetMethodSignatures(generated, "workloadResource", "With"));
     }
 
     [Fact]
@@ -184,7 +193,7 @@ public class AtsGoDerivedBuilderTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         try
         {
-            await WriteFixtureSdkAsync(directory, timeout.Token);
+            await WriteFixtureSdkAsync(DerivedBuilderFixture.CreateContext(), directory, timeout.Token);
             await WriteConsumerPackageAsync(directory, "consumer", PositiveConsumer, timeout.Token);
 
             var (exitCode, output) = await RunGoAsync(directory, ["build", "./consumer"], timeout.Token);
@@ -205,7 +214,7 @@ public class AtsGoDerivedBuilderTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         try
         {
-            await WriteFixtureSdkAsync(directory, timeout.Token);
+            await WriteFixtureSdkAsync(DerivedBuilderFixture.CreateContext(), directory, timeout.Token);
             await WriteConsumerPackageAsync(directory, "negative", NegativeConsumer, timeout.Token);
 
             // The SDK itself must compile, so the failure below can only come from the consumer.
@@ -230,6 +239,28 @@ public class AtsGoDerivedBuilderTests
                     Assert.Contains("aspire.AnyPoolResource", error, StringComparison.Ordinal);
                     Assert.Contains("aspire.AnyAksPoolResource", error, StringComparison.Ordinal);
                 });
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedCode_CompilesWhenAnExportedValueRootIsNamedLikeAnAcceptingInterface()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        try
+        {
+            await WriteFixtureSdkAsync(DerivedBuilderFixture.CreateContextWithExportedValueRoot("AnyPoolResource"), directory, timeout.Token);
+
+            // The exported value and the accepting interface are package-level declarations in the same
+            // package, so a name shared by both is a redeclaration that only the Go compiler reports.
+            var (exitCode, output) = await RunGoAsync(directory, ["build", "."], timeout.Token);
+
+            Assert.True(exitCode == 0, $"go build . failed:{Environment.NewLine}{output}");
         }
         finally
         {
@@ -312,9 +343,9 @@ public class AtsGoDerivedBuilderTests
     private string GenerateFixtureSdk() =>
         _generator.GenerateDistributedApplication(DerivedBuilderFixture.CreateContext())["aspire.go"];
 
-    private async Task WriteFixtureSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    private async Task WriteFixtureSdkAsync(AtsContext context, DirectoryInfo directory, CancellationToken cancellationToken)
     {
-        foreach (var (name, content) in _generator.GenerateDistributedApplication(DerivedBuilderFixture.CreateContext()))
+        foreach (var (name, content) in _generator.GenerateDistributedApplication(context))
         {
             await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, cancellationToken);
         }
@@ -358,6 +389,12 @@ public class AtsGoDerivedBuilderTests
             }
         }
     }
+
+    private static string[] GetAcceptingInterfaceNames(string generated) =>
+        Regex.Matches(generated, @"^type (Any\w+) interface ", RegexOptions.Multiline)
+            .Select(match => match.Groups[1].Value)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
 
     private static string[] GetInterfaceMembers(string generated, string interfaceName)
     {
@@ -471,6 +508,29 @@ public class AtsGoDerivedBuilderTests
                 HandleTypes = context.HandleTypes.Where(type => type.AtsTypeId != PoolId).ToList(),
                 EnumTypes = context.EnumTypes,
                 DtoTypes = context.DtoTypes
+            };
+        }
+
+        // An exported value is emitted as a package-level var named after its catalog root.
+        public static AtsContext CreateContextWithExportedValueRoot(string rootName)
+        {
+            var context = CreateContext();
+            return new AtsContext
+            {
+                Capabilities = context.Capabilities,
+                HandleTypes = context.HandleTypes,
+                EnumTypes = context.EnumTypes,
+                DtoTypes = context.DtoTypes,
+                ExportedValues =
+                [
+                    new AtsExportedValueInfo
+                    {
+                        OwningAssemblyName = "Tests.Derived",
+                        PathSegments = [rootName, "Default"],
+                        Value = JsonValue.Create("default"),
+                        Type = s_string
+                    }
+                ]
             };
         }
 
