@@ -611,23 +611,26 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ResolveIsolated_LinkedWorktree_RequiresExplicitIsolation()
+    public void ResolveIsolated_LinkedWorktree_UsesFeatureAndHonorsExplicitOverride()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         TestGitWorktree.WriteLinkedWorktreeMetadata(
             workspace.WorkspaceRoot.FullName,
             Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
+        var appHostFile = CreateAppHostFile(workspace);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
+        var features = new TestFeatures().SetFeature(KnownFeatures.GitWorktreeIsolationEnabled, true);
 
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start")));
-        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated")));
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated false")));
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run")));
-        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated")));
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated false")));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start"), appHostFile, new TestFeatures()));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start"), appHostFile, features));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated"), appHostFile, features));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated false"), appHostFile, features));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run"), appHostFile, features));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated"), appHostFile, features));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated false"), appHostFile, features));
     }
 
     [Theory]
@@ -649,17 +652,19 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".git"));
+        var appHostFile = CreateAppHostFile(workspace);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
+        var features = new TestFeatures().SetFeature(KnownFeatures.GitWorktreeIsolationEnabled, true);
 
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start")));
-        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated")));
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated false")));
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run")));
-        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated")));
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated false")));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start"), appHostFile, features));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated"), appHostFile, features));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated false"), appHostFile, features));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run"), appHostFile, features));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated"), appHostFile, features));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated false"), appHostFile, features));
     }
 
     private static FileInfo CreateAppHostFile(TemporaryWorkspace workspace)

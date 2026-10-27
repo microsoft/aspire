@@ -186,14 +186,16 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     [CaptureWorkspaceOnFailure]
-    public async Task LinkedWorktreeExplicitIsolationAndPrimaryStopLeavesItRunning()
+    public async Task LinkedWorktreeAutomaticIsolationReusesStablePortsAndPrimaryStopLeavesItRunning(bool useTypeScriptAppHost)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var projectSuffix = Guid.NewGuid().ToString("N")[..6];
-        var projectName = $"WorktreeIsolation_{projectSuffix}";
+        var projectName = $"WorktreeIsolation_{(useTypeScriptAppHost ? "Ts" : "Cs")}_{projectSuffix}";
         var linkedWorktreeName = $"{projectName} linked";
         var linkedWorktreeRelativePath = $".worktrees/{linkedWorktreeName}";
 
@@ -204,9 +206,11 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
         var bothInstancesPath = Path.Combine(workspace.WorkspaceRoot.FullName, "both-instances.json");
         var remainingInstancePath = Path.Combine(workspace.WorkspaceRoot.FullName, "remaining-instance.json");
+        var restartedInstancePath = Path.Combine(workspace.WorkspaceRoot.FullName, "restarted-instance.json");
         var stoppedInstancesPath = Path.Combine(workspace.WorkspaceRoot.FullName, "stopped-instances.json");
         var bothInstancesContainerPath = CliE2ETestHelpers.ToContainerPath(bothInstancesPath, workspace);
         var remainingInstanceContainerPath = CliE2ETestHelpers.ToContainerPath(remainingInstancePath, workspace);
+        var restartedInstanceContainerPath = CliE2ETestHelpers.ToContainerPath(restartedInstancePath, workspace);
         var stoppedInstancesContainerPath = CliE2ETestHelpers.ToContainerPath(stoppedInstancesPath, workspace);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
@@ -217,7 +221,14 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
+        if (useTypeScriptAppHost)
+        {
+            await auto.AspireNewTypeScriptEmptyAppHostAsync(projectName, counter);
+        }
+        else
+        {
+            await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
+        }
 
         // Create both checkouts through git inside the container. A host-created worktree would
         // write absolute .git admin paths in the host namespace, which are invalid in this mount.
@@ -233,14 +244,18 @@ public sealed class StartStopTests(ITestOutputHelper output)
         Exception? primaryFailure = null;
         try
         {
-            // Direct CLI launches intentionally remain explicit-only. Isolate the linked checkout
-            // while this single container keeps ~/.aspire/backchannels shared for structured discovery.
             await auto.AspireStartAsync(counter);
             await auto.RunCommandAsync(
                 $"git worktree add {AspireCliShellCommandHelpers.QuoteBashArg(linkedWorktreeRelativePath)} -b linked-worktree",
                 counter);
             await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(linkedCheckout)}", counter);
-            await auto.AspireStartAsync(counter, isolated: true);
+            await auto.RunCommandAsync(
+                "aspire config set features.gitWorktreeIsolationEnabled true --non-interactive",
+                counter);
+            await auto.RunCommandAsync(
+                "aspire config set portAllocation.persistInIsolatedMode true --non-interactive",
+                counter);
+            await auto.AspireStartAsync(counter);
 
             await auto.RunCommandAsync(
                 $"aspire ps --format json > {AspireCliShellCommandHelpers.QuoteBashArg(bothInstancesContainerPath)}",
@@ -273,6 +288,19 @@ public sealed class StartStopTests(ITestOutputHelper output)
             Assert.Equal(linkedInstance.DashboardUri, remainingInstance.DashboardUri);
 
             await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(linkedCheckout)}", counter);
+            await auto.AspireStopAsync(counter);
+            await auto.AspireStartAsync(counter);
+            await auto.RunCommandAsync(
+                $"aspire ps --format json > {AspireCliShellCommandHelpers.QuoteBashArg(restartedInstanceContainerPath)}",
+                counter,
+                TimeSpan.FromMinutes(1));
+
+            var restartedInstance = Assert.Single(ReadRunningAppHosts(restartedInstancePath));
+            Assert.Equal(linkedInstance.AppHostPath, restartedInstance.AppHostPath);
+            Assert.Equal(
+                linkedInstance.DashboardUri.GetLeftPart(UriPartial.Authority),
+                restartedInstance.DashboardUri.GetLeftPart(UriPartial.Authority));
+
             await auto.AspireStopAsync(counter);
             await auto.RunCommandAsync(
                 $"aspire ps --format json > {AspireCliShellCommandHelpers.QuoteBashArg(stoppedInstancesContainerPath)}",

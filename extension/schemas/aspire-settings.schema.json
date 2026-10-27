@@ -125,6 +125,22 @@
           "description": "Enable or disable experimental Rust language support for polyglot Aspire applications",
           "default": false
         },
+        "gitWorktreeIsolationEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Run AppHosts discovered in linked Git worktrees in isolated mode unless --isolated is explicitly specified",
+          "default": false
+        },
         "nugetSignatureVerificationEnabled": {
           "anyOf": [
             {
@@ -234,6 +250,28 @@
       "additionalProperties": {
         "type": "string"
       }
+    },
+    "portAllocation": {
+      "description": "Port allocation configuration.",
+      "type": "object",
+      "properties": {
+        "persistInIsolatedMode": {
+          "description": "Persist generated port allocations when the AppHost runs in isolated mode.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "sdkVersion": {
       "description": "The Aspire SDK version used for this polyglot AppHost project. Determines the version of Aspire.Hosting packages to use.",

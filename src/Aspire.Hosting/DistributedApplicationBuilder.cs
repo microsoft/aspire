@@ -605,6 +605,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // DCP stuff
             _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
             _innerBuilder.Services.AddSingleton<ProxylessEndpointPortAllocator>();
+            _innerBuilder.Services.AddSingleton<AppHostLocalStateStore>();
+            _innerBuilder.Services.AddSingleton<PersistentPortAllocationStore>();
+            _innerBuilder.Services.AddSingleton<PersistentPortAllocator>();
             _innerBuilder.Services.AddSingleton<ContainerNetworkEndpointProvisioner>();
             _innerBuilder.Services.AddSingleton<ExecutableConfigurationResolver>();
             _innerBuilder.Services.AddSingleton<ExecutableLaunchPolicy>();
