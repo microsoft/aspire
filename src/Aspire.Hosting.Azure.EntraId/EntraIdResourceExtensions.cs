@@ -15,8 +15,7 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Provides extension methods for adding Microsoft Entra ID resources to the application model.
 /// </summary>
-[AspireExportIgnore(Reason = "Entra ID resources are not yet ATS-compatible for polyglot AppHosts.")]
-public static class EntraIdResourceExtensions
+public static partial class EntraIdResourceExtensions
 {
     /// <summary>
     /// Adds a Microsoft Entra ID application registration resource to the application model.
@@ -46,6 +45,15 @@ public static class EntraIdResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-returns>The application registration builder.</ats-returns>
+    /// <ats-remarks>
+    /// Provisions an application and service principal through Microsoft Graph Bicep. Requires Azure provisioning
+    /// configuration and permission to create registrations in the subscription's tenant.
+    /// Reference the registration from a workload to inject authentication configuration as environment variables.
+    /// To reference an existing registration without Azure or Graph access, use addExistingEntraApplication.
+    /// Workloads must configure their own authentication library.
+    /// </ats-remarks>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> AddEntraIdApplication(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -357,6 +365,7 @@ public static class EntraIdResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "The addExistingEntraApplication export accepts literal or parameter IDs independently.")]
     public static IResourceBuilder<EntraIdApplicationResource> AddExistingEntraApplication(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -418,6 +427,7 @@ public static class EntraIdResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "The addExistingEntraApplication export accepts literal or parameter IDs independently.")]
     public static IResourceBuilder<EntraIdApplicationResource> AddExistingEntraApplication(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -461,6 +471,7 @@ public static class EntraIdResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "The asExistingApplication export accepts literal or parameter IDs independently.")]
     public static IResourceBuilder<EntraIdApplicationResource> AsExistingApplication(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         IResourceBuilder<ParameterResource> tenantId,
@@ -503,6 +514,7 @@ public static class EntraIdResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "The asExistingApplication export accepts literal or parameter IDs independently.")]
     public static IResourceBuilder<EntraIdApplicationResource> AsExistingApplication(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string tenantId,
@@ -561,6 +573,7 @@ public static class EntraIdResourceExtensions
     /// configuration with <c>SourceType</c> set to <c>"ClientSecret"</c>.
     /// </para>
     /// </remarks>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithClientSecret(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         IResourceBuilder<ParameterResource> clientSecret)
@@ -622,6 +635,7 @@ public static class EntraIdResourceExtensions
     ///     .WithFederatedManagedIdentityCredential("00001111-aaaa-2222-bbbb-3333cccc4444");
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "The withFederatedManagedIdentityCredential export also accepts typed token exchange options.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithFederatedManagedIdentityCredential(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string managedIdentityClientId)
@@ -683,6 +697,7 @@ public static class EntraIdResourceExtensions
     ///     .WithReference(entra);
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "The publishWithFederatedManagedIdentityCredential export selects consumer, compute resource, or explicit identity using a union.")]
     public static IResourceBuilder<EntraIdApplicationResource> PublishWithFederatedManagedIdentityCredential(
         this IResourceBuilder<EntraIdApplicationResource> builder)
     {
@@ -735,6 +750,7 @@ public static class EntraIdResourceExtensions
     /// entra.PublishWithFederatedManagedIdentityCredential(web);
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "The publishWithFederatedManagedIdentityCredential export selects consumer, compute resource, or explicit identity using a union.")]
     public static IResourceBuilder<EntraIdApplicationResource> PublishWithFederatedManagedIdentityCredential<T>(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         IResourceBuilder<T> computeResource)
@@ -787,6 +803,7 @@ public static class EntraIdResourceExtensions
     ///     .WithReference(entra);
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "The publishWithFederatedManagedIdentityCredential export selects consumer, compute resource, or explicit identity using a union.")]
     public static IResourceBuilder<EntraIdApplicationResource> PublishWithFederatedManagedIdentityCredential(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         IResourceBuilder<AzureUserAssignedIdentityResource> identity)
@@ -841,6 +858,7 @@ public static class EntraIdResourceExtensions
     /// <param name="keyVaultUrl">The URL of the Key Vault (e.g., <c>"https://myvault.vault.azure.net"</c>).</param>
     /// <param name="certificateName">The name of the certificate in Key Vault.</param>
     /// <returns>The resource builder for chaining.</returns>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithCertificateFromKeyVault(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string keyVaultUrl,
@@ -866,6 +884,7 @@ public static class EntraIdResourceExtensions
     /// <param name="storePath">The certificate store path (e.g., <c>"CurrentUser/My"</c>).</param>
     /// <param name="thumbprint">The certificate thumbprint.</param>
     /// <returns>The resource builder for chaining.</returns>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithCertificateThumbprint(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string storePath,
@@ -891,6 +910,7 @@ public static class EntraIdResourceExtensions
     /// <param name="storePath">The certificate store path (e.g., <c>"CurrentUser/My"</c>).</param>
     /// <param name="distinguishedName">The certificate distinguished name (e.g., <c>"CN=MyCert"</c>).</param>
     /// <returns>The resource builder for chaining.</returns>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithCertificateDistinguishedName(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string storePath,
@@ -915,6 +935,7 @@ public static class EntraIdResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="credential">A fully configured <see cref="EntraIdClientCredential"/>.</param>
     /// <returns>The resource builder for chaining.</returns>
+    [AspireExportIgnore(Reason = "EntraIdClientCredential is a mutable C# hierarchy. Use the typed credential exports instead.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithCredential(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         EntraIdClientCredential credential)
@@ -938,6 +959,7 @@ public static class EntraIdResourceExtensions
     /// <exception cref="ArgumentException">
     /// Thrown when <paramref name="instance"/> is empty or is not an absolute HTTPS URL without a query string or fragment.
     /// </exception>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithInstance(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string instance)
@@ -985,6 +1007,13 @@ public static class EntraIdResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks>
+    /// The audience must match the registration's supported account types. The default uses the home tenant as TenantId.
+    /// Other audiences use organizations, common, or consumers as TenantId and also emit AppHomeTenantId.
+    /// Validate the tenant ID (tid) claim before allowing access to tenant-specific data.
+    /// See https://learn.microsoft.com/entra/identity-platform/claims-validation.
+    /// </ats-remarks>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithSignInAudience(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         EntraIdSignInAudience signInAudience)
@@ -1018,6 +1047,7 @@ public static class EntraIdResourceExtensions
     ///     .WithRedirectUris("https://localhost:7123/signin-oidc");
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "The withRedirectUris export accepts a literal, parameter, or endpoint with optional callback paths.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithRedirectUris(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         params string[] redirectUris)
@@ -1064,6 +1094,7 @@ public static class EntraIdResourceExtensions
     ///     .WithRedirectUris(signIn, signOut);
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "The withRedirectUris export accepts a literal, parameter, or endpoint with optional callback paths.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithRedirectUris(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         params IResourceBuilder<ParameterResource>[] redirectUris)
@@ -1118,6 +1149,7 @@ public static class EntraIdResourceExtensions
     ///     .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc", "/signout-callback-oidc");
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "The withRedirectUris export accepts a literal, parameter, or endpoint with optional callback paths.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithRedirectUris(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         EndpointReference endpoint,
@@ -1178,6 +1210,7 @@ public static class EntraIdResourceExtensions
     ///     .WithRedirectUris(host, "/signin-oidc", "/signout-callback-oidc");
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "The withRedirectUris export accepts a literal, parameter, or endpoint with optional callback paths.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithRedirectUris(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         IResourceBuilder<ParameterResource> host,
@@ -1235,6 +1268,7 @@ public static class EntraIdResourceExtensions
     ///     .WithApplicationOwners("00000000-0000-0000-0000-000000000001");
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "The withApplicationOwners export accepts literal or parameter owner IDs.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithApplicationOwners(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         params string[] ownerObjectIds)
@@ -1254,6 +1288,7 @@ public static class EntraIdResourceExtensions
     /// <remarks>
     /// See <see cref="WithApplicationOwners(IResourceBuilder{EntraIdApplicationResource}, string[])"/> for permission and append semantics.
     /// </remarks>
+    [AspireExportIgnore(Reason = "The withApplicationOwners export accepts literal or parameter owner IDs.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithApplicationOwners(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         params IResourceBuilder<ParameterResource>[] ownerObjectIds)
@@ -1277,6 +1312,7 @@ public static class EntraIdResourceExtensions
     /// append semantics and permission requirements as <see cref="WithApplicationOwners(IResourceBuilder{EntraIdApplicationResource}, string[])"/>.
     /// This setting only affects registrations created by Aspire.
     /// </remarks>
+    [AspireExportIgnore(Reason = "The withServicePrincipalOwners export accepts literal or parameter owner IDs.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithServicePrincipalOwners(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         params string[] ownerObjectIds)
@@ -1293,6 +1329,7 @@ public static class EntraIdResourceExtensions
     /// <param name="ownerObjectIds">Parameters whose values are the object IDs of the users or service principals to add as owners.</param>
     /// <returns>The resource builder for chaining.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="ownerObjectIds"/> is null.</exception>
+    [AspireExportIgnore(Reason = "The withServicePrincipalOwners export accepts literal or parameter owner IDs.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithServicePrincipalOwners(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         params IResourceBuilder<ParameterResource>[] ownerObjectIds)
@@ -1313,6 +1350,7 @@ public static class EntraIdResourceExtensions
     /// Equivalent to calling <see cref="WithApplicationOwners(IResourceBuilder{EntraIdApplicationResource}, string[])"/> and
     /// <see cref="WithServicePrincipalOwners(IResourceBuilder{EntraIdApplicationResource}, string[])"/> with the same IDs.
     /// </remarks>
+    [AspireExportIgnore(Reason = "The withOwners export accepts literal or parameter owner IDs.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithOwners(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         params string[] ownerObjectIds)
@@ -1326,6 +1364,7 @@ public static class EntraIdResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="ownerObjectIds">Parameters whose values are the object IDs of the users or service principals to add as owners.</param>
     /// <returns>The resource builder for chaining.</returns>
+    [AspireExportIgnore(Reason = "The withOwners export accepts literal or parameter owner IDs.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithOwners(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         params IResourceBuilder<ParameterResource>[] ownerObjectIds)
@@ -1447,6 +1486,12 @@ public static class EntraIdResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks>
+    /// Enables ID-token issuance only, not implicit access-token issuance. Not needed for authorization-code-only flows;
+    /// prefer authorization code flow with PKCE for new production applications.
+    /// Only affects registrations created by Aspire. Existing registrations must be configured separately.
+    /// </ats-remarks>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithIdTokenIssuance(
         this IResourceBuilder<EntraIdApplicationResource> builder)
     {
@@ -1462,6 +1507,7 @@ public static class EntraIdResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="capability">The capability identifier.</param>
     /// <returns>The resource builder for chaining.</returns>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithClientCapability(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string capability)
@@ -1478,6 +1524,7 @@ public static class EntraIdResourceExtensions
     /// </summary>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The resource builder for chaining.</returns>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithAllowWebApiToBeAuthorizedByACL(
         this IResourceBuilder<EntraIdApplicationResource> builder)
     {
@@ -1496,6 +1543,7 @@ public static class EntraIdResourceExtensions
     /// Sending <c>x5c</c> enables certificate rollover without redeploying the application. It only applies
     /// to certificate-based credentials and increases the size of each token request, so it is opt-in.
     /// </remarks>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithSendX5C(
         this IResourceBuilder<EntraIdApplicationResource> builder)
     {
@@ -1512,6 +1560,7 @@ public static class EntraIdResourceExtensions
     /// <param name="key">The query parameter key.</param>
     /// <param name="value">The query parameter value.</param>
     /// <returns>The resource builder for chaining.</returns>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithExtraQueryParameter(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string key,
@@ -1531,6 +1580,7 @@ public static class EntraIdResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="audience">The audience value (e.g., <c>api://&lt;client-id&gt;</c>).</param>
     /// <returns>The resource builder for chaining.</returns>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithAudience(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string audience)
@@ -2097,6 +2147,7 @@ public static class EntraIdResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference dispatcher with an Entra ID application builder.")]
     public static IResourceBuilder<T> WithReference<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<EntraIdApplicationResource> source,

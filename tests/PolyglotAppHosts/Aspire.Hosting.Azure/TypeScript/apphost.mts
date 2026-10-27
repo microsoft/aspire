@@ -1,4 +1,4 @@
-import { createBuilder, DeploymentScope, refExpr } from './.aspire/modules/aspire.mjs';
+import { createBuilder, DeploymentScope, EntraIdSignInAudience, refExpr } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
@@ -114,5 +114,57 @@ await container.withAzureUserAssignedIdentity(identity);
 await executable.withEnvironment("INFRA_URL", infrastructureOutput);
 await executable.withEnvironment("SECRET_FROM_IDENTITY", identityClientId);
 await executable.withAzureUserAssignedIdentity(identity);
+
+const tenantId = await builder.addParameter("entra-tenant");
+const clientId = await builder.addParameter("entra-client");
+const clientSecret = await builder.addParameter("entra-secret", { secret: true });
+const certificatePassword = await builder.addParameter("certificate-password", { secret: true });
+const redirectUris = await builder.addParameter("redirect-uris");
+const redirectHost = await builder.addParameter("redirect-host");
+const ownerId = await builder.addParameter("entra-owner");
+const exampleTenant = "aaaabbbb-0000-cccc-1111-dddd2222eeee";
+const exampleClient = "00001111-aaaa-2222-bbbb-3333cccc4444";
+
+const existingEntra = await builder.addExistingEntraApplication("existing-entra", tenantId, exampleClient);
+await builder.addExistingEntraApplication("existing-entra-literals", exampleTenant, exampleClient);
+await builder.addExistingEntraApplication("existing-entra-parameters", tenantId, clientId);
+await existingEntra.withInstance("https://login.microsoftonline.com/");
+await existingEntra.withSignInAudience(EntraIdSignInAudience.AzureADMultipleOrgs);
+await existingEntra.withAudience("api://example");
+await existingEntra.withClientSecret(clientSecret);
+await existingEntra.withFederatedManagedIdentityCredential(exampleClient, {
+    tokenExchangeUrl: "api://AzureADTokenExchange",
+    tokenExchangeAuthority: "https://login.microsoftonline.com/",
+});
+await existingEntra.withCertificateFromKeyVault("https://vault.vault.azure.net", "certificate");
+await existingEntra.withCertificateThumbprint("CurrentUser/My", "thumbprint");
+await existingEntra.withCertificateDistinguishedName("CurrentUser/My", "CN=certificate");
+await existingEntra.withCertificateFromFile("/certs/client.pfx", { password: certificatePassword });
+await existingEntra.withSignedAssertionFile({ filePath: "/tokens/assertion" });
+await existingEntra.withSignedAssertionFile();
+await existingEntra.withSendX5C();
+await existingEntra.withClientCapability("cp1");
+await existingEntra.withAllowWebApiToBeAuthorizedByACL();
+await existingEntra.withExtraQueryParameter("domain_hint", "contoso.com");
+await container.withReference(existingEntra, { connectionName: "AUTH" });
+await executable.withReference(existingEntra);
+
+const fluentExistingEntra = await builder.addEntraIdApplication("fluent-existing-entra");
+await fluentExistingEntra.asExistingApplication(exampleTenant, clientId);
+
+const createdEntra = await builder.addEntraIdApplication("created-entra");
+await createdEntra.withOwners(exampleClient);
+await createdEntra.withOwners(ownerId);
+await createdEntra.withApplicationOwners(ownerId);
+await createdEntra.withServicePrincipalOwners(exampleClient);
+await createdEntra.withIdTokenIssuance();
+await createdEntra.withRedirectUris("https://localhost/signin");
+await createdEntra.withRedirectUris(redirectUris);
+await createdEntra.withRedirectUris(redirectHost, { callbackPaths: ["/signin", "/signout"] });
+await createdEntra.withRedirectUris(endpoint, { callbackPaths: ["/signin"] });
+await container.withReference(createdEntra);
+await createdEntra.publishWithFederatedManagedIdentityCredential();
+await createdEntra.publishWithFederatedManagedIdentityCredential({ identity: container });
+await createdEntra.publishWithFederatedManagedIdentityCredential({ identity });
 
 await builder.build().run();

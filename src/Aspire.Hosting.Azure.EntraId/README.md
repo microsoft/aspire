@@ -20,11 +20,13 @@ aspire add Aspire.Hosting.Azure.EntraId
 
 ## Usage example
 
-Then, in the AppHost, add an Entra ID application resource and reference it from another resource.
+Then, in a C# or TypeScript AppHost, add an Entra ID application resource and reference it from another resource.
 
 ### Create registrations
 
 `AddEntraIdApplication` creates a registration and its service principal using the Microsoft Graph Bicep extension:
+
+**C#**
 
 ```csharp
 var entraApi = builder.AddEntraIdApplication("entra-api");
@@ -39,6 +41,24 @@ builder.AddProject<Projects.Api>("api")
 builder.AddProject<Projects.Web>("web")
        .WithReference(entraWeb);
 ```
+
+**TypeScript**
+
+```typescript
+import { createBuilder } from './.aspire/modules/aspire.mjs';
+
+const builder = await createBuilder();
+const entraWeb = await builder.addEntraIdApplication("entra-web")
+    .withRedirectUris("https://localhost:7123/signin-oidc");
+
+await builder.addContainer("web", "my-web-image")
+    .withReference(entraWeb, { connectionName: "AUTH" });
+
+await builder.build().run();
+```
+
+The TypeScript example supplies portable `AUTH_*` environment variables. The workload must read them into its
+authentication library's options; adding a reference does not install or configure a language-specific authentication library.
 
 For .NET program resources, `WithReference` injects environment variables in the form `AzureAd__{Key}` — for example `AzureAd__Instance`, `AzureAd__TenantId`, and `AzureAd__ClientId`. .NET's configuration system maps these to the `AzureAd` configuration section, so the referencing resource reads them as ordinary configuration with no glue code.
 
@@ -291,6 +311,66 @@ var entraApi = builder.AddExistingEntraApplication("entra-api", tenantId: tenant
 
 This factory accepts parameters or literal IDs and does not enable Azure provisioning. Other Azure resources in the
 same AppHost still enable their normal provisioning behavior.
+
+In TypeScript, each ID independently accepts a literal or a parameter, so mixed inputs are supported:
+
+```typescript
+const tenantId = await builder.addParameter("entra-tenant");
+const clientSecret = await builder.addParameter("entra-secret", { secret: true });
+
+const entraApi = await builder.addExistingEntraApplication(
+    "entra-api", tenantId, "00001111-aaaa-2222-bbbb-3333cccc4444")
+    .withClientSecret(clientSecret);
+
+await builder.addExecutable("worker", "node", ".", ["worker.mjs"])
+    .withReference(entraApi, { connectionName: "AUTH" });
+```
+
+This top-level factory requires no Azure or Graph access. In contrast,
+`builder.addEntraIdApplication("entra-api").asExistingApplication(tenantId, clientId)` retains the Azure setup
+enabled by `addEntraIdApplication`, just like the C# fluent API.
+
+### TypeScript configuration
+
+The generated SDK supports the same sign-in audiences, consumer settings, credentials, owners, and deferred redirect
+values as the C# API. Optional arguments use an options object. Owner and redirect calls append in order; call them
+repeatedly for multiple values:
+
+```typescript
+import { EntraIdSignInAudience } from './.aspire/modules/aspire.mjs';
+
+const ownerId = await builder.addParameter("entra-owner");
+const redirectUris = await builder.addParameter("redirect-uris");
+const redirectHost = await builder.addParameter("redirect-host");
+const certificatePassword = await builder.addParameter("certificate-password", { secret: true });
+
+await entraWeb.withSignInAudience(EntraIdSignInAudience.AzureADMultipleOrgs)
+    .withOwners(ownerId)
+    .withRedirectUris(redirectUris)
+    .withRedirectUris(redirectHost, { callbackPaths: ["/signin-oidc"] });
+
+const web = await builder.addContainer("frontend", "my-web-image")
+    .withHttpEndpoint({ targetPort: 8080 })
+    .withReference(entraWeb);
+
+await entraWeb.withRedirectUris(await web.getEndpoint("http"), {
+    callbackPaths: ["/signin-oidc", "/signout-callback-oidc"],
+});
+await entraWeb.publishWithFederatedManagedIdentityCredential({ identity: web });
+
+await entraApi.withCertificateFromFile("/certs/client.pfx", { password: certificatePassword });
+await entraApi.withSignedAssertionFile({ filePath: "/tokens/assertion" });
+```
+
+Endpoint redirects remain deferred: local run uses the allocated endpoint URL, while publish/deploy uses the compute
+environment's host. A parameter without callback paths contains comma-separated full URIs; with callback paths it contains
+a host name and produces HTTPS URIs. Certificate and assertion paths refer to files on the consumer, not the AppHost.
+Omit the signed assertion file path to use the consumer's `AZURE_FEDERATED_TOKEN_FILE` setting.
+
+For managed identity federation, omit `identity` to trust each referencing workload's identity, or pass an explicit
+user-assigned identity instead of a compute resource. Publishing federation is only supported for registrations created
+by Aspire and does not apply during local run. For an existing registration with trust configured separately, use
+`entraApi.withFederatedManagedIdentityCredential("00001111-aaaa-2222-bbbb-3333cccc4444", { tokenExchangeUrl: "api://AzureADTokenExchange" })`.
 
 ### Custom environment variable names
 
