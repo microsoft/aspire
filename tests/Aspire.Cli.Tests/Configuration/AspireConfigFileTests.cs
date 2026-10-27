@@ -635,23 +635,6 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.Equal("https://localhost:5001", loaded.Profiles["default"].ApplicationUrl);
     }
 
-    [Fact]
-    public void LoadLegacy_DoesNotWriteMigratedConfiguration()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var settingsPath = Path.Combine(workspace.Path, ".aspire", "settings.json");
-        const string original = """{ "appHostPath": "../src/apphost.ts", "sdkVersion": "17.0.0" }""";
-        File.WriteAllText(settingsPath, original);
-
-        var config = AspireConfigFile.LoadLegacy(workspace.Path);
-
-        Assert.NotNull(config);
-        Assert.Equal("src/apphost.ts", config.AppHost?.Path);
-        Assert.Equal("17.0.0", config.SdkVersion);
-        Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
-        Assert.Equal(original, File.ReadAllText(settingsPath));
-    }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

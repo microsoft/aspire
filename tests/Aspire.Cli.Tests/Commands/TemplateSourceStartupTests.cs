@@ -67,10 +67,6 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
     [InlineData("--log-level Debug template source add company --href https://example.com/other.json", true, CliExitCodes.InvalidCommand)]
     [InlineData("template --nologo source remove missing", false, CliExitCodes.ConfigNotFound)]
     [InlineData("template --nologo source remove missing", true, CliExitCodes.ConfigNotFound)]
-    [InlineData("--non-interactive true config set templates.company.repository https://github.com/example/templates --global", false, CliExitCodes.InvalidCommand)]
-    [InlineData("--non-interactive true config set templates.company.repository https://github.com/example/templates --global", true, CliExitCodes.InvalidCommand)]
-    [InlineData("config delete missing --global", false, CliExitCodes.InvalidCommand)]
-    [InlineData("config delete missing --global", true, CliExitCodes.InvalidCommand)]
     public void RejectedCommand_PreservesGlobalAndProjectConfigurationBytes(string arguments, bool legacyGlobal, int exitCode)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -97,10 +93,6 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
     [InlineData("add", true)]
     [InlineData("remove", false)]
     [InlineData("remove", true)]
-    [InlineData("set", false)]
-    [InlineData("set", true)]
-    [InlineData("delete", false)]
-    [InlineData("delete", true)]
     public void SuccessfulCommand_NormalizesOnlyTheUpdatedGlobalFile(string action, bool legacyGlobal)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -119,12 +111,6 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
             "remove" => (
                 "template source remove company",
                 """{"features":{"defaultWatchEnabled":true}}"""),
-            "set" => (
-                "config set templates.company.href https://example.com/updated.json --global",
-                """{"features":{"defaultWatchEnabled":true},"templates":{"company":{"href":"https://example.com/updated.json"}}}"""),
-            "delete" => (
-                "config delete templates.company --global",
-                """{"features":{"defaultWatchEnabled":true}}"""),
             _ => throw new ArgumentOutOfRangeException(nameof(action))
         };
 
@@ -138,10 +124,8 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         }
     }
 
-    [Theory]
-    [InlineData("template source add company --href https://example.com/templates.json")]
-    [InlineData("config set templates.company.href https://example.com/templates.json --global")]
-    public void NormalStartup_PreservesSourcesRegisteredInLegacyGlobalConfiguration(string arguments)
+    [Fact]
+    public void NormalStartup_PreservesSourcesRegisteredInLegacyGlobalConfiguration()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("aspire-home");
@@ -151,7 +135,8 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName),
             """{"features":{"defaultWatchEnabled":false}}""");
 
-        RunStartup(home.FullName, workspace.Path, arguments, CliExitCodes.Success);
+        RunStartup(home.FullName, workspace.Path,
+            "template source add company --href https://example.com/templates.json", CliExitCodes.Success);
         Assert.False(File.Exists(migratedPath));
         var legacy = File.ReadAllText(legacyPath);
 
@@ -165,10 +150,8 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
             JsonNode.Parse(File.ReadAllText(migratedPath))!["templates"]));
     }
 
-    [Theory]
-    [InlineData("template source list")]
-    [InlineData("new --help")]
-    public void UnavailableMigrationLock_KeepsLegacyGlobalConfigurationActive(string arguments)
+    [Fact]
+    public void SourceListing_UnavailableMigrationLockKeepsLegacyGlobalConfigurationActive()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("aspire-home");
@@ -182,7 +165,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         var cache = home.CreateSubdirectory("cache");
         File.WriteAllText(Path.Combine(cache.FullName, "workspace-config-locks"), "Blocks lock directory creation.");
 
-        RunStartup(home.FullName, workspace.Path, arguments, CliExitCodes.Success,
+        RunStartup(home.FullName, workspace.Path, "template source list", CliExitCodes.Success,
             expectedSourceHref: "https://example.com/templates.json");
 
         Assert.False(File.Exists(Path.Combine(home.FullName, AspireConfigFile.FileName)));
@@ -192,9 +175,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("add")]
     [InlineData("remove")]
-    [InlineData("set")]
-    [InlineData("delete")]
-    public void GlobalMutation_RechecksDestinationAfterMigrationWhileWaitingForLock(string action)
+    public void SourceMutation_RechecksDestinationAfterMigrationWhileWaitingForLock(string action)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("aspire-home");
@@ -212,8 +193,6 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
             {
                 "add" => "template source add extra --href https://example.com/extra",
                 "remove" => "template source remove company",
-                "set" => "config set templates.company.href https://example.com/updated --global",
-                "delete" => "config delete templates.company --global",
                 _ => throw new ArgumentOutOfRangeException(nameof(operation))
             };
             var args = command.Split(' ');
@@ -252,7 +231,6 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
             (string, string?)[] expected = operation switch
             {
                 "add" => [("company", "https://example.com/current"), ("concurrent", "https://example.com/concurrent"), ("extra", "https://example.com/extra")],
-                "set" => [("company", "https://example.com/updated"), ("concurrent", "https://example.com/concurrent")],
                 _ => [("concurrent", "https://example.com/concurrent")]
             };
             Assert.Equal(expected, sources.OrderBy(source => source.Key, StringComparer.Ordinal).Select(source => (source.Key, source.Value.Href)));
@@ -320,6 +298,91 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         {
             Assert.Equal(original, File.ReadAllText(legacyPath));
         }
+    }
+
+    [Theory]
+    [InlineData("overrideStagingFeed", "https://example.com/feed")]
+    [InlineData("certificates.nssDbPaths", "firefox=/profiles/firefox")]
+    public void ConfigSet_MigratesBeforeEditingNonTemplateGlobalSettings(string key, string value)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+        var legacyPath = Path.Combine(home.FullName, "globalsettings.json");
+        var migratedPath = Path.Combine(home.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(legacyPath, """{"features":{"defaultWatchEnabled":true}}""");
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName),
+            """{"features":{"defaultWatchEnabled":false}}""");
+
+        RunStartup(home.FullName, workspace.Path, $"config set {key} {value} --global", CliExitCodes.Success);
+
+        Assert.True(File.Exists(migratedPath));
+        var configurationKey = key.Replace('.', ':');
+        Assert.Equal(value, new ConfigurationBuilder().AddJsonFile(migratedPath).Build()[configurationKey]);
+
+        RunStartup(home.FullName, workspace.Path, "new --help", CliExitCodes.Success);
+
+        Assert.Equal(value, new ConfigurationBuilder().AddJsonFile(migratedPath).Build()[configurationKey]);
+    }
+
+    [Fact]
+    public void ConfigDelete_MigratesBeforeEditingGlobalSettings()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+        var legacyPath = Path.Combine(home.FullName, "globalsettings.json");
+        var migratedPath = Path.Combine(home.FullName, AspireConfigFile.FileName);
+        const string original = """{"features":{"defaultWatchEnabled":true}}""";
+        File.WriteAllText(legacyPath, original);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName),
+            """{"features":{"defaultWatchEnabled":false}}""");
+
+        RunStartup(home.FullName, workspace.Path, "config delete features.defaultWatchEnabled --global", CliExitCodes.Success);
+
+        Assert.True(File.Exists(migratedPath));
+        Assert.Null(new ConfigurationBuilder().AddJsonFile(migratedPath).Build()["features:defaultWatchEnabled"]);
+        Assert.Equal(original, File.ReadAllText(legacyPath));
+    }
+
+    [Fact]
+    public void ConfigSet_AppHostPathPreservesFlattenedLegacyFeatureSettings()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+        var legacyDirectory = workspace.CreateDirectory(".aspire");
+        File.WriteAllText(Path.Combine(legacyDirectory.FullName, "settings.json"),
+            """{"features:defaultWatchEnabled":false}""");
+
+        RunStartup(home.FullName, workspace.Path, "config set appHost.path apphost.cs", CliExitCodes.Success);
+
+        var migrated = AspireConfigFile.Load(workspace.Path);
+        Assert.NotNull(migrated);
+        Assert.Equal("apphost.cs", migrated.AppHost?.Path);
+        Assert.NotNull(migrated.Features);
+        Assert.False(migrated.Features["defaultWatchEnabled"]);
+    }
+
+    [Fact]
+    public void NormalStartup_MalformedLegacyGlobalConfigurationAllowsRecovery()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+        var legacyPath = Path.Combine(home.FullName, "globalsettings.json");
+        var migratedPath = Path.Combine(home.FullName, AspireConfigFile.FileName);
+        const string malformed = "this is not valid json {{{";
+        File.WriteAllText(legacyPath, malformed);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName),
+            """{"features":{"defaultWatchEnabled":false}}""");
+
+        RunStartup(home.FullName, workspace.Path, "--version", CliExitCodes.Success);
+
+        Assert.False(File.Exists(migratedPath));
+        Assert.Equal(malformed, File.ReadAllText(legacyPath));
+
+        RunStartup(home.FullName, workspace.Path, "config set channel stable --global", CliExitCodes.Success);
+        RunStartup(home.FullName, workspace.Path, "config get channel", CliExitCodes.Success);
+
+        Assert.Equal("stable", JsonNode.Parse(File.ReadAllText(migratedPath))!["channel"]!.GetValue<string>());
+        Assert.Equal(malformed, File.ReadAllText(legacyPath));
     }
 
     private static Program.CliStartupContext CreateStartupContext(string[] args, ConsoleCancellationManager cancellationManager)

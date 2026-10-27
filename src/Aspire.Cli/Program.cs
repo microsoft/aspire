@@ -212,8 +212,9 @@ public class Program
             }
         }
 
-        // A failed migration must not hide the still-active legacy configuration.
-        return File.Exists(newPath) || !File.Exists(legacyPath) ? newPath : legacyPath;
+        // If migration fails, preserve the existing recovery path: log the failure
+        // and let a subsequent configuration edit create the modern file.
+        return newPath;
     }
 
     internal static void WarnIfGlobalSettingsContainAppHostPath(FileInfo globalSettingsFile, IStartupErrorWriter errorWriter)
@@ -305,12 +306,10 @@ public class Program
     internal static async Task<IHost> BuildApplicationAsync(string[] args, CliStartupContext startupContext, Dictionary<string, string?>? configurationValues = null)
     {
         var isCompletion = CompletionInvocation.Matches(args);
-        // Configuration commands validate and persist only their target file under its lock.
-        // Startup must not rewrite unrelated files or change anything before a rejected edit.
+        // Source management must not migrate or normalize configuration before a
+        // read-only or rejected operation. Existing config commands retain normal startup.
         var deferSettingsWrites = isCompletion ||
-            Commands.RootCommand.MatchesCommandPath(args, "template", "source") ||
-            Commands.RootCommand.MatchesCommandPath(args, "config", "set") ||
-            Commands.RootCommand.MatchesCommandPath(args, "config", "delete");
+            Commands.RootCommand.MatchesCommandPath(args, "template", "source");
         // Check for --non-interactive flag early
         var nonInteractive = args?.Any(a => a == CommonOptionNames.NonInteractive) ?? false;
 

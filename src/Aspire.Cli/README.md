@@ -146,10 +146,10 @@ that already exists (case-insensitively) fails without overwriting it.
 The `templates` section and source names are matched case-insensitively, preserving
 their existing spelling. Source add/remove fail rather than write without the
 global configuration lock.
-Source management and `config set`/`config delete` defer normalization until a
-validated update under the target file's lock. Rejected edits leave configuration
-bytes unchanged, and global updates do not normalize project settings or migrate
-legacy configuration files at startup.
+Source-management commands defer normalization until a validated update under the
+target file's lock. Rejected source-management operations leave configuration bytes
+unchanged and do not normalize project settings or migrate legacy files at startup.
+Existing `config` commands retain their normal startup migration and normalization.
 
 `source list` displays source names and their configured fields in a table.
 `--format json` writes only a JSON object keyed by source name to stdout, matching
