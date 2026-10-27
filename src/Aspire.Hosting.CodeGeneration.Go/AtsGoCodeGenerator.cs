@@ -109,7 +109,6 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         _writer = stringWriter;
 
         BuildNameMaps(context);
-        BuildDocumentationMaps(context);
 
         var capabilitiesByDirectTarget = GroupCapabilitiesByDirectTarget(context.Capabilities);
         var capabilitiesByConcreteImpl = GroupCapabilitiesByConcreteImpl(context.Capabilities);
@@ -315,6 +314,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
             _optionsTypeNames[capability.CapabilityId] = resolvedName;
         }
+
+        // Every doc render dereferences _docs, and the renderer resolves type names through the maps
+        // built above. Building it here means any caller that builds the name maps also gets a usable
+        // renderer, instead of failing with a NullReferenceException the first time a doc is rendered.
+        BuildDocumentationMaps(context);
     }
 
     private static void CollectHandleTypeIds(HashSet<string> set, AtsTypeRef? typeRef)
