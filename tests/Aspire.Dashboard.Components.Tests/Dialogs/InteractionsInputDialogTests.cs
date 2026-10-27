@@ -89,6 +89,50 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(InputType.Text, false, "fluent-text-input")]
+    [InlineData(InputType.SecretText, false, "fluent-text-input")]
+    [InlineData(InputType.Choice, false, "fluent-dropdown")]
+    [InlineData(InputType.Choice, true, "fluent-dropdown")]
+    [InlineData(InputType.Boolean, false, "fluent-checkbox")]
+    [InlineData(InputType.Number, false, "fluent-text-input")]
+    [InlineData(InputType.File, false, "fluent-button")]
+    public async Task Render_OnlyFirstInputHasAutofocus(InputType inputType, bool allowCustomChoice, string expectedElement)
+    {
+        var getCut = SetUpDialog(out var dialogService);
+        var interaction = new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            InputsDialog = new InteractionInputsDialog()
+        };
+        foreach (var name in new[] { "first", "second" })
+        {
+            interaction.InputsDialog.InputItems.Add(new InteractionInput
+            {
+                Name = name,
+                Label = name,
+                InputType = inputType,
+                AllowCustomChoice = allowCustomChoice
+            });
+        }
+        var viewModel = new InteractionsInputsDialogViewModel
+        {
+            Interaction = interaction,
+            Message = string.Empty,
+            DashboardClient = new TestDashboardClient(),
+            OnSubmitCallback = (_, _) => Task.CompletedTask
+        };
+
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(viewModel, new DialogParameters { Title = "Inputs" });
+        var cut = getCut();
+        var fields = cut.FindComponents<InteractionInputField>();
+
+        var autofocused = Assert.Single(fields[0].FindAll("[autofocus]"));
+        Assert.Equal(expectedElement, autofocused.LocalName);
+        Assert.Empty(fields[1].FindAll("[autofocus]"));
+        Assert.DoesNotContain(JSInterop.Invocations, i => i.Identifier == "Blazor._internal.domWrapper.focus");
+    }
+
+    [Theory]
     [InlineData(InputType.Text, true)]
     [InlineData(InputType.Text, false)]
     [InlineData(InputType.File, true)]

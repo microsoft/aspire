@@ -121,6 +121,7 @@ ignore:
   # Native AOT/socket/generated-SDK/workload smokes run in the independently path-triggered
   # native-hosting-validation.yml lane, not a tests.yml run_* target.
   - .github/workflows/native-hosting-validation.yml
+  - eng/scripts/test-native-hosting.sh
   - playground/NativeIntegrations/TypeScript/**        # executed by the dedicated native hosting workflow
   # Schedule/dispatch-only workflows that regenerate API/ATS surface baselines; no PR-CI path.
   - .github/workflows/generate-api-diffs.yml
@@ -135,30 +136,9 @@ ignore:
 # only. targets may be test: / job: / a GROUP name / ALL.
 path_rules:
   - paths:
-      - eng/scripts/test-native-hosting.sh
-    targets: [test:Infrastructure.Tests]
-    reason: native hosting harness coverage is guarded by infrastructure tests and executed by its dedicated PR workflow
-
-  - paths:
       - Aspire.slnx
     targets: [ALL]
     reason: solution membership can add an existing project without touching that project's files, so run everything
-
-  - paths:
-      - .config/dotnet-tools.json
-      - .mcp.json
-      - src/Aspire.Dashboard/Components/Controls/TerminalView.razor.js
-      - src/Aspire.Dashboard/Components/Controls/TerminalTitle.razor.js
-      - src/Aspire.Dashboard/Components/Layout/TerminalDock.razor.js
-      - src/Aspire.Dashboard/wwwroot/js/app.js
-      - src/Aspire.Dashboard/wwwroot/js/app-terminalwindow.js
-      - src/Aspire.Dashboard/wwwroot/js/app-resourcegraph.js
-      - src/Aspire.Dashboard/package.json
-      - src/Aspire.Dashboard/package-lock.json
-      - src/Aspire.Dashboard/wwwroot/js/hex1b-web-terminal/**
-      - tests/Aspire.Dashboard.Components.Tests/JavaScript/**
-    targets: [test:Infrastructure.Tests]
-    reason: Dashboard JavaScript tests execute scripts and read paired package assets outside the MSBuild graph.
 
   # --- catch-all: build infrastructure & broadly shared code -> ALL --------------------------
 
@@ -223,32 +203,8 @@ path_rules:
     targets: [ALL]
     reason: shared test build inputs and fixtures are consumed across multiple test lanes
 
-  - paths:
-      - src/Aspire.Cli/Aspire.Cli.csproj
-      - src/Aspire.Cli/Resources/*.resx
-      - src/Aspire.Dashboard/Aspire.Dashboard.csproj
-      - src/Aspire.Dashboard/Resources/*.resx
-      - src/Aspire.Hosting/Aspire.Hosting.csproj
-      - src/Aspire.Hosting/Resources/*.resx
-      - src/Aspire.Hosting.Azure/Aspire.Hosting.Azure.csproj
-      - src/Aspire.Hosting.Azure/Resources/*.resx
-      - src/Aspire.Hosting.Browsers/Aspire.Hosting.Browsers.csproj
-      - src/Aspire.Hosting.Browsers/Resources/*.resx
-      - src/Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.csproj
-      - src/Aspire.Hosting.DevTunnels/Resources/*.resx
-      - src/Aspire.Hosting.Testing/Aspire.Hosting.Testing.csproj
-      - src/Aspire.Hosting.Testing/Properties/*.resx
-    targets: [test:Infrastructure.Tests]
-    reason: resource metadata tests read project configuration and resource filenames at runtime
-
   # Local composite actions used by regular PR CI. Route each action to the work it can affect; when
   # the blast radius is not precise enough, keep the conservative full-matrix target.
-  - paths:
-      - .github/actions/check-changed-files/**
-      - .github/actions/create-pull-request/**
-      - .github/actions/select-tests/**
-    targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests validates these composite actions' behavior
   - paths:
       - .github/actions/enumerate-tests/**
     targets: [DOTNET_TESTS]
@@ -379,10 +335,7 @@ path_rules:
       - src/Aspire.Hosting.Dotnet/**
       - src/Aspire.Managed/**
       - .github/scripts/assert-extension-e2e-bridge-vsix.ps1
-      - .github/workflows/tests.yml
       - .github/workflows/extension-e2e-tests.yml
-      - .github/workflows/build-packages.yml
-      - .github/workflows/build-cli-native-archives.yml
     targets: [job:extension-e2e]
     reason: extension e2e inputs, packaging checks, and runtime dependencies; path fallback when Layer 1 is unavailable
   - paths:
@@ -422,7 +375,6 @@ path_rules:
 
   # --- outerloop / e2e test targets: loose paths (production projects in affected_project_rules) --------
   - paths:
-      - tests/Aspire.Dashboard.Playwright.Tests/**
       - tests/Aspire.Dashboard.Tests/Shared/MockDashboardClient.cs
       - tests/Aspire.Dashboard.Tests/Shared/TerminalTestProducer.cs
       - tests/Shared/Playwright/**
@@ -433,7 +385,6 @@ path_rules:
     targets: [test:Aspire.Templates.Tests]
     reason: shared Playwright sources and browser provisioning used by template tests
   - paths:
-      - tests/Aspire.EndToEnd.Tests/**
       - tests/testproject/**
     targets: [test:Aspire.EndToEnd.Tests]
     reason: OUTERLOOP-ONLY today (SkipTests on GH Actions unless RunOuterloopTests); the Hosting production projects it builds against are in affected_project_rules
@@ -482,10 +433,6 @@ path_rules:
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
     reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse the pack script
   - paths:
-      - eng/scripts/pack-cli-npm-package.pointer.README.md
-    targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests/Pipelines/NpmCliPackageTests renders this template and verifies the packaged README
-  - paths:
       - src/Aspire.ProjectTemplates/templates/**
     targets: [test:Aspire.Cli.Tests]
     reason: CLI tests instantiate template sources and verify frontend package inputs.
@@ -496,18 +443,6 @@ path_rules:
       - eng/nix/**
     targets: [test:Infrastructure.Tests, job:nix-package]
     reason: Infrastructure.Tests validates the Nix flake, package derivation, update script, and release asset manifest; the Nix package smoke runs nix flake check, nix build, and the packaged CLI
-  - paths:
-      - eng/scripts/download-native-archives.ps1
-      - eng/scripts/stage-native-cli-tool-packages.ps1
-      - eng/scripts/validate-npm-package-signatures.ps1
-      - eng/scripts/validate-npm-release-aliases.ps1
-    targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests/PowerShellScripts validates these CLI-archive/npm packaging scripts (DownloadNativeArchivesTests, StageNativeCliToolPackagesTests, ValidateNpmPackageSignaturesTests, ValidateNpmReleaseAliasesTests; ReleasePublishNugetPipelineTests reads validate-npm-release-aliases.ps1); the build jobs that run them are unconditional needs, so the unit verifier is the trigger that must fire
-  - paths:
-      - eng/scripts/aspire-skills-bundle.common.ps1
-      - eng/test-retry-patterns.json
-    targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests validates the shared Aspire skills bundle helpers and transient retry-pattern configuration
   - paths:
       - eng/scripts/verify-cli-archive.ps1
     targets: [test:Aspire.Acquisition.Tests]
@@ -566,45 +501,74 @@ path_rules:
     targets: [test:QuarantineTools.Tests]
     reason: QuarantineTools.Tests exercises the quarantine/disable source-rewriting logic
   - paths:
-      - tools/CreateFailingTestIssue/**
-    targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests/CreateFailingTestIssue builds and invokes the tool dynamically, without a ProjectReference edge in the solution graph
+      - eng/Bundle.proj
+      - tools/CreateLayout/**
+      - src/Aspire.Tray/Windows/publish.ps1
+    targets: [CLI_BUNDLE, test:Infrastructure.Tests]
+    reason: native CLI bundle assembly and publishing inputs
+
+  # --- Infrastructure.Tests-only inputs ----------------------------------------------------
+  # Keep inputs grouped by their current coverage so test ownership and obsolete checks are visible.
+  # Other consumers are still routed by the additive rules above.
   - paths:
+      # Repository tools and selector inputs.
+      - tools/CreateFailingTestIssue/**
       - tools/SelectTests/**
       - eng/github-ci/test-trigger-map.yml
       - eng/github-ci/ci-skip-entirely-patterns.txt
       - eng/github-ci/resolve-comparison-base.sh
       - .gitignore
-    targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests validates selector inputs and comparison history
-  - paths:
+      # Workflow, action, and pipeline validation.
+      - .github/actions/check-changed-files/**
+      - .github/actions/create-pull-request/**
+      - .github/actions/select-tests/**
       - .github/workflows/**
       - .github/actionlint.yaml
       - .github/actionlint-version.json
       - eng/pipelines/**
       - eng/Signing.props
       - eng/Publishing.props
-    targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests WorkflowScripts/Pipelines assert on workflow & pipeline files; NpmCliPackageTests reads eng/Signing.props, and Publishing.props is AzDO-publish-only infra grouped with it (no GH-CI build/test path -> not ALL)
-  - paths:
-      - eng/Bundle.proj
-      - tools/CreateLayout/**
-    targets: [CLI_BUNDLE, test:Infrastructure.Tests]
-    reason: assembles and validates native CLI bundle payloads
-  - paths:
-      - src/Aspire.Cli/Aspire.Cli.csproj
-      - src/Aspire.TerminalHost/Aspire.TerminalHost.csproj
-      - src/Aspire.Dashboard/Aspire.Dashboard.csproj
-    targets: [test:Infrastructure.Tests]
-    reason: evaluates terminal pipeline native publish and managed build settings
-  - paths: [src/Aspire.Tray/Windows/publish.ps1]
-    targets: [CLI_BUNDLE, test:Infrastructure.Tests]
-    reason: Windows native publishing and smoke invocation
-  - paths:
+      # Script behavior and packaging fixtures.
+      - eng/scripts/download-native-archives.ps1
+      - eng/scripts/stage-native-cli-tool-packages.ps1
+      - eng/scripts/validate-npm-package-signatures.ps1
+      - eng/scripts/validate-npm-release-aliases.ps1
+      - eng/scripts/aspire-skills-bundle.common.ps1
+      - eng/test-retry-patterns.json
+      - eng/scripts/pack-cli-npm-package.pointer.README.md
       - eng/scripts/generate-template-cgmanifest.ps1
       - src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj
+      # Resource metadata and native-publish configuration checks.
+      - src/Aspire.Cli/Aspire.Cli.csproj
+      - src/Aspire.Cli/Resources/*.resx
+      - src/Aspire.Dashboard/Aspire.Dashboard.csproj
+      - src/Aspire.Dashboard/Resources/*.resx
+      - src/Aspire.Hosting/Aspire.Hosting.csproj
+      - src/Aspire.Hosting/Resources/*.resx
+      - src/Aspire.Hosting.Azure/Aspire.Hosting.Azure.csproj
+      - src/Aspire.Hosting.Azure/Resources/*.resx
+      - src/Aspire.Hosting.Browsers/Aspire.Hosting.Browsers.csproj
+      - src/Aspire.Hosting.Browsers/Resources/*.resx
+      - src/Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.csproj
+      - src/Aspire.Hosting.DevTunnels/Resources/*.resx
+      - src/Aspire.Hosting.Testing/Aspire.Hosting.Testing.csproj
+      - src/Aspire.Hosting.Testing/Properties/*.resx
+      - src/Aspire.TerminalHost/Aspire.TerminalHost.csproj
+      # Dashboard JavaScript behavior and package/tool configuration checks.
+      - .config/dotnet-tools.json
+      - .mcp.json
+      - src/Aspire.Dashboard/Components/Controls/TerminalView.razor.js
+      - src/Aspire.Dashboard/Components/Controls/TerminalTitle.razor.js
+      - src/Aspire.Dashboard/Components/Layout/TerminalDock.razor.js
+      - src/Aspire.Dashboard/wwwroot/js/app.js
+      - src/Aspire.Dashboard/wwwroot/js/app-terminalwindow.js
+      - src/Aspire.Dashboard/wwwroot/js/app-resourcegraph.js
+      - src/Aspire.Dashboard/package.json
+      - src/Aspire.Dashboard/package-lock.json
+      - src/Aspire.Dashboard/wwwroot/js/hex1b-web-terminal/**
+      - tests/Aspire.Dashboard.Components.Tests/JavaScript/**
     targets: [test:Infrastructure.Tests]
-    reason: template manifest wrapper and restore workspace cleanup coverage
+    reason: repository tool, script, configuration, and runtime inputs consumed by Infrastructure.Tests
 
 # Project rules: an affected production/non-test project (Layer 1, matched by project-NAME glob) -> targets.
 # This follows the graph's transitive closure: a change to a project's dependency marks it affected,
@@ -618,18 +582,14 @@ affected_project_rules:
   - projects: [Aspire.Tray.Mac, Aspire.Tray.Windows]
     targets: [test:Aspire.Tray.Tests, test:Infrastructure.Tests]
     reason: native platform changes must retain shared tray contracts and the packaging/signing invariants; tests source-link common code rather than referencing the platform executables
-  - projects: [Aspire.Tray.Mac, Aspire.Tray.Windows]
+  - projects:
+      - Aspire.Tray.Mac
+      - Aspire.Tray.Windows
+      - CreateLayout
+      - Aspire.Hosting.Native.Server
+      - Aspire.TerminalHost
     targets: [CLI_BUNDLE]
-    reason: native tray payloads are embedded in the CLI bundle
-  - projects: [CreateLayout]
-    targets: [CLI_BUNDLE]
-    reason: CreateLayout assembles the CLI bundle consumed by these tests and jobs
-  - projects: [Aspire.Hosting.Native.Server]
-    targets: [CLI_BUNDLE]
-    reason: AppHost Server v2 is embedded in the CLI bundle
-  - projects: [Aspire.TerminalHost]
-    targets: [CLI_BUNDLE]
-    reason: standalone terminal host is a runtime component of the CLI bundle
+    reason: native CLI bundle assembly and embedded payloads
   - projects:
       - Aspire.Cli
       - Aspire.Managed

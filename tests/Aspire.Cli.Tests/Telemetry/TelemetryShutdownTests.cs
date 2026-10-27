@@ -76,10 +76,12 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void Shutdown_FailedDrainLogsWarningAndRestoresFailureBudget()
+    public async Task Shutdown_FailedDrainLogsWarningAndRestoresFailureBudget()
     {
-        using var process = RemoteExecutor.Invoke(static async () =>
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Starting remote telemetry shutdown test.");
+        using (var process = RemoteExecutor.Invoke(static async () =>
         {
+            Console.WriteLine($"[{DateTimeOffset.UtcNow:O}] Telemetry test child PID={Environment.ProcessId} entered.");
             var mode = TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false, isCIEnvironment: false);
             var sink = new TestSink();
             using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new TestLoggerProvider(sink)));
@@ -90,15 +92,35 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
                 loggerFactory.CreateLogger<TelemetryManager>(),
                 (resource, _) => AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource, AspireCliTelemetry.EventLogCategoryName,
                     () => Sdk.CreateTracerProviderBuilder().Build(), provider => provider.AddProcessor(logProcessor)));
+            Console.WriteLine($"[{DateTimeOffset.UtcNow:O}] Initializing telemetry manager.");
             manager.Initialize();
+            Console.WriteLine($"[{DateTimeOffset.UtcNow:O}] Telemetry initialized; requesting failure-budget shutdown.");
 
             Assert.True(await manager.TryShutdownAsync(CliExitCodes.InvalidCommand, mode));
+            Console.WriteLine($"[{DateTimeOffset.UtcNow:O}] Telemetry shutdown returned; validating warning and restored budget.");
 
             var warning = Assert.Single(sink.Writes);
             Assert.Equal(LogLevel.Warning, warning.LogLevel);
             Assert.Equal("Timed out shutting down CLI reported telemetry.", warning.Message);
             Assert.Equal(0, AppContext.GetData("Azure.Monitor.OpenTelemetry.Exporter.ShutdownDrainBudgetMilliseconds"));
-        });
+            Console.WriteLine($"[{DateTimeOffset.UtcNow:O}] Telemetry assertions passed; disposing child services.");
+        }, new RemoteInvokeOptions { StartInfo = { RedirectStandardOutput = true } }))
+        {
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Remote telemetry child PID={process.Process.Id}; waiting for completion and disposal.");
+            // Forward while the remote handle waits, so the last child phase is retained in
+            // this test's TRX output even if remote execution hangs.
+            var output = ForwardOutputAsync(process.Process.StandardOutput);
+            await output.DefaultTimeout();
+        }
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Remote telemetry test completed and disposed.");
+
+        async Task ForwardOutputAsync(StreamReader reader)
+        {
+            while (await reader.ReadLineAsync() is { } line)
+            {
+                outputHelper.WriteLine(line);
+            }
+        }
     }
 
     [Theory]

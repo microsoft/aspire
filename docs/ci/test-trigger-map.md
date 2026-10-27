@@ -113,7 +113,9 @@ explicitly routed to this lane.
 This deliberately includes transitive build dependencies and runtime-only
 generated SDK, CLI, Dashboard, and smoke fixtures without maintaining another
 project dependency list. Its workflow is classified in `ignore`; the general
-workflow rule and the harness's path rule still select infrastructure validation.
+workflow rule still selects infrastructure validation for the workflow file.
+The harness script is classified in `ignore` because the dedicated lane, not
+the infrastructure test suite, executes it.
 
 The lane runs the published Native AOT executable smoke and all six TypeScript
 smoke entry points using fresh generated SDK output, real Docker/DCP workloads,
@@ -330,8 +332,20 @@ intentionally in scope.
 target includes only consumers that run in regular PR CI; quarantined, disabled,
 and outerloop-only scenarios do not justify an edge to that target. Adding or
 removing `QuarantinedTest`, `ActiveIssue`, or `OuterloopTest` on a runtime
-consumer requires auditing the exact map edge and updating focused regression
-coverage when eligibility changes.
+consumer requires auditing the exact map edge. Update the map and focused
+regression coverage when the required target set changes; another eligible
+scenario may still require the same edge.
+
+For example, if the last regular-PR E2E scenario using a package becomes
+quarantined, that package no longer justifies a curated runtime-only edge to the
+job. If another eligible scenario uses it, retain the edge. This audit does not
+change Layer 1 project-reference dependencies.
+
+Do not add project or path entries just because a project contains quarantined
+tests, or to select a quarantine workload. Discovery and scheduling of those
+workloads should be automated separately rather than maintaining a project
+inventory here. Real regular-PR dependencies and inputs to quarantine-runner
+infrastructure are different concerns and retain their actual consumer routes.
 
 This distinction is especially important for class-sharded E2E targets. The
 [issue #19879 audit](https://github.com/microsoft/aspire/issues/19879) found
@@ -343,11 +357,12 @@ four measured runs, plus its Docker image build. Representative CI runs are
 and
 [33414997820](https://github.com/microsoft/aspire/actions/runs/33414997820).
 
-Audit the complete curated consumer and path lists against the consuming
-workflow whenever routing or runtime consumption changes. Do not duplicate the
-whole list in a test: it cannot detect a consumer missing from both copies and
-encourages mechanically accepting over-selection. Tests are regression guards
-for distinct routing boundaries:
+Audit the complete affected consumer lists and corresponding loose-input routes
+against their consuming workflows and execution lanes whenever routing or runtime
+consumption changes. This does not require auditing unrelated map sections.
+Do not duplicate the whole list in a test: it cannot detect a consumer missing
+from both copies and encourages mechanically accepting over-selection. Tests
+are regression guards for distinct routing boundaries:
 
 - add a representative positive for each new or narrowed edge;
 - record deliberately excluded consumers in focused negative cases; and
@@ -393,6 +408,10 @@ boundary, without enumerating every implementation dependency.
 
 ## Maintenance
 
+Agents authoring or reviewing selection changes should first read the scoped
+[test-selection checklist](../../.github/instructions/test-trigger-map.instructions.md).
+This section is the detailed routing contract and maintenance reference.
+
 The map is hand-curated; there is no generator. Do not add a rule only because a
 file changed or a verifier failed. First trace the file to the work that consumes
 it.
@@ -401,9 +420,19 @@ it.
    - If a project in the `Aspire.slnx`-rooted `ProjectGraph` evaluates the file
      and MSBuild expresses the dependency, Layer 1 owns it. Do not add a manual
      rule for a new `ProjectReference`, linked file, or ordinary project input.
+     Verify evaluated items, imports, and consumer edges rather than assuming
+     coverage from a path under `src/` or a directory containing a .NET project.
+     Excluded assets, runtime-read files, and non-.NET inputs can still need
+     curated routes. The selector's project-directory ownership heuristic only
+     suppresses fallback; it does not establish graph attribution.
    - Otherwise it is a Layer 2 blind spot. Common examples are workflow
      implementations, scripts invoked by CI, and configuration read directly by
      a test or job.
+   - Check Layer 2 conventions and overlapping rules before adding explicit
+     paths. A test project's own directory already selects that test by
+     convention. Keep an explicit entry only if it adds consumers or serves
+     another necessary routing purpose, not merely to confirm existing
+     selection. Apply the same check when removing redundant entries.
 2. **Identify the actual consumer.** Follow script invocations, reusable-workflow
    calls, project imports, and job `needs:` edges. Determine whether the consumer
    is a selector-gated PR test/job, an unconditional or dedicated workflow, a
@@ -419,6 +448,16 @@ it.
    - use `affected_project_rules` only when an affected production/non-test project
      implies work beyond the graph-selected tests, and `derived_targets` only
      when selecting one test inherently requires another target;
+   - group related inputs with the same target set in one rule's `paths` or
+     `projects` list, rather than creating a rule per file or dependency.
+     Keep separate rules
+     when consumers or routing constraints differ. A reviewer should be able to
+     scan a logical dependency list and spot incorrect or missing members; use
+     one shared reason and short comments for non-obvious dependencies rather
+     than a separate entry and reason for each member. Reuse an existing target
+     group for the same consumer set; introduce a new group only for a
+     meaningful, reused set. Preserve routing boundaries rather than broadening
+     globs solely to shorten the map;
    - keep `reason` to a short description of what the rule covers or why the
      target consumes the input. Add detail only for a non-obvious relationship
      or constraint. The `targets` field is the source of truth for the target
@@ -431,11 +470,47 @@ it.
    `run_*` output in `tests.yml`, a gate that consumes that output, and a route
    from any reusable workflow that implements the job. Targets outside those PR
    gates must remain advisory rather than appearing as PR-runnable work.
+   `RealWorkflowJobGatesReachProductionSelectorBooleans` discovers `run_*`
+   references in job-level `if:` conditions,
+   checks their job dependencies and setup-output mappings, and runs the
+   production selector against the real map to verify the referenced booleans
+   exist. YAML parsing handles comments and scalar quoting; expression
+   recognition supports whitespace and multiline values, dot access, and
+   static single-quoted bracket access such as
+   `needs['setup_for_tests'].outputs['run_polyglot']`. String literals are not
+   output references. It resolves
+   `fromJSON(steps.<step>.outputs.selection).run_*` mappings using the same
+   normalization. Unsupported `run_*` references and dynamic `needs` output
+   access fail with diagnostics rather than silently disappearing from
+   coverage. Step-level conditions are outside this check's scan scope.
+   This checks wiring consistency, not GitHub expression evaluation or actual
+   workflow execution.
 5. **Add focused regressions for the routing boundary.**
+   - retain broad Layer 1 integration coverage that exercises actual graph
+     attribution and verifies dependent .NET test projects are selected;
    - curated routing changes use the real map with a representative positive
      and focused negatives for deliberate exclusions;
+   - special routes such as CLI-bundle consumers and Polyglot validation need
+     one or two representative inputs per distinct mechanism, not a source-file
+     inventory. Keep graph, path, affected-project, exclusion, and failure-path
+     coverage distinct even when selected targets overlap;
    - intentionally duplicated consumer lists are audited for consistency and
      exercised through each routing mechanism, not compared for equality;
+   - prefer independent consumer-discovery checks when reliable workflow
+     dependencies, evaluated project metadata, or fixture declarations expose
+     the relationship. Compare discovered consumers with production selection
+     so future additions are protected without a copied inventory, and retain
+     existing checks of this kind. Guard against empty or incomplete discovery,
+     document recognized dependency/gate forms, and cover representative
+     formatting and unsupported-reference cases;
+   - representation-only regrouping reuses existing cases that exercise the
+     affected routes. Compare expanded selections before and after cleanup;
+     do not add assertions about rule counts, ordering, group names, or
+     configuration-list equality. Identical targets alone do not justify
+     merging rules with different purposes or routing constraints;
+   - filtering-sensitive inputs exercise the production changed-file prefilter.
+     Selector-only tests establish routing after filtering, not admission
+     through the upstream workflow skip gate; validate that gate separately;
    - selector-engine behavior uses focused synthetic maps in
      `SelectTestsAcceptanceTests.cs`;
    - CLI rendering and side-channel behavior belongs in
@@ -443,6 +518,10 @@ it.
    - action or workflow-gate behavior is validated through actual entry points
      where practical and in the consuming CI workflow, not through assertions
      on workflow source text.
+
+Before removing a case, identify the retained assertion that catches its intended
+regression. Where no equivalent behavioral check exists, state the gap rather
+than claiming that a passing smaller suite proves coverage is unchanged.
 
 After restoring the repository, run the focused selector suite:
 

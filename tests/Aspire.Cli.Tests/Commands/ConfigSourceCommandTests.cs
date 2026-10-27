@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Git;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Interaction;
@@ -55,11 +56,11 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interaction;
             options.CliUpdateNotifierFactory = _ => notifier;
         }).BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         var prompt = new string('x', 70 * 1024) + "Enter passphrase: ";
-        git.Check = (_, _) => timeout
+        git.InspectConfiguration = (_, _) => timeout
             ? throw new ConfigSourceException(ConfigSourceStrings.GitTimeout) { GitOutput = prompt }
-            : Task.FromResult(("commit-2", "version-2"));
+            : Task.FromResult("version-2");
         var service = provider.GetRequiredService<ConfigSourceService>();
         service.CheckForConfigSourceUpdates(workspace.WorkspaceRoot, CancellationToken.None);
         await service.WaitForChecksAsync().DefaultTimeout();
@@ -99,14 +100,14 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
-        git.Check = async (_, token) =>
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        git.InspectConfiguration = async (_, token) =>
         {
             started.SetResult();
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, token);
-                return ("commit-2", "version-2");
+                return "version-2";
             }
             finally
             {
@@ -132,9 +133,9 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string sharedUrl = "https://shared.example.test/llms-full.txt";
         const string localUrl = "https://local.example.test/llms-full.txt";
-        var acquired = new TestConfigSourceGitClient
+        var acquired = new TestConfigSourceRepository
         {
-            Acquire = (_, _) => Task.FromResult(("commit-1", "version-1", new JsonObject
+            ReadConfiguration = (_, _) => Task.FromResult(("version-1", new JsonObject
             {
                 ["docs"] = new JsonObject { ["llmsTxtUrl"] = sharedUrl }
             }))
@@ -157,7 +158,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton<IDocsFetcher>(provider => new DocsFetcher(httpClient,
             provider.GetRequiredService<IDocsCache>(), provider.GetRequiredService<IConfiguration>(), NullLogger<DocsFetcher>.Instance));
         using var provider = services.BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         var root = provider.GetRequiredService<RootCommand>();
         Assert.Equal(0, git.Calls);
 
@@ -177,9 +178,9 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string sharedUrl = "https://shared.example.test/sitemap.xml";
         const string localUrl = "https://local.example.test/sitemap.xml";
-        var acquired = new TestConfigSourceGitClient
+        var acquired = new TestConfigSourceRepository
         {
-            Acquire = (_, _) => Task.FromResult(("commit-1", "version-1", new JsonObject
+            ReadConfiguration = (_, _) => Task.FromResult(("version-1", new JsonObject
             {
                 ["docs"] = new JsonObject { ["api"] = new JsonObject { ["sitemapUrl"] = sharedUrl } }
             }))
@@ -211,7 +212,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton<IApiDocsFetcher>(provider => new ApiDocsFetcher(httpClient,
             provider.GetRequiredService<IApiDocsCache>(), provider.GetRequiredService<IConfiguration>(), NullLogger<ApiDocsFetcher>.Instance));
         using var provider = services.BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         var root = provider.GetRequiredService<RootCommand>();
         Assert.Equal(0, git.Calls);
 
@@ -236,7 +237,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             };
         });
         using var provider = services.BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         var service = provider.GetRequiredService<ConfigSourceService>();
         await service.CheckProjectAsync(workspace.WorkspaceRoot, force: false, CancellationToken.None);
         var command = provider.GetRequiredService<RootCommand>();
@@ -264,9 +265,9 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interaction;
         }).BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         var prompt = outputLength == 0 ? "Enter passphrase: " : new string('x', outputLength - 1) + "?";
-        git.Acquire = (_, _) => throw new ConfigSourceException(timeout ? ConfigSourceStrings.GitTimeout : ConfigSourceStrings.AuthenticationFailed)
+        git.ReadConfiguration = (_, _) => throw new ConfigSourceException(timeout ? ConfigSourceStrings.GitTimeout : ConfigSourceStrings.AuthenticationFailed)
         {
             GitOutput = timeout ? prompt : null
         };
@@ -327,8 +328,8 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interaction;
         }).BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
-        git.Check = (_, _) => throw new ConfigSourceException(ConfigSourceStrings.AuthenticationFailed);
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        git.InspectConfiguration = (_, _) => throw new ConfigSourceException(ConfigSourceStrings.AuthenticationFailed);
 
         var project = await provider.GetRequiredService<IProjectLocator>().UseOrFindAppHostProjectFileAsync(
             projectFile, createSettingsFile: true, CancellationToken.None);
@@ -408,9 +409,9 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interaction;
         }).BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
-        git.Check = (_, _) => Task.FromResult(("commit-2", "version-2"));
-        git.Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", new JsonObject()));
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        git.InspectConfiguration = (_, _) => Task.FromResult("version-2");
+        git.ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject()));
         var requested = selection switch
         {
             "file" => projectFile,
@@ -463,8 +464,8 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         await TestConfigSourceServices.SaveBindingAsync(s_source, globalFile.Directory, CancellationToken.None);
         File.Move(Path.Combine(globalFile.Directory.FullName, AspireConfigFile.FileName), globalFile.FullName);
         var originalGlobalConfiguration = await File.ReadAllTextAsync(globalFile.FullName);
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
-        git.Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", new JsonObject()));
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        git.ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject()));
         var result = provider.GetRequiredService<RootCommand>().Parse(
             $"update --config-source --apphost \"{Path.Combine(workspace.Path, requestedPath)}\" --yes --non-interactive");
         Assert.Empty(result.Errors);
@@ -496,7 +497,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse($"update --config-source --apphost \"{Path.Combine(project.FullName, "apphost.cs")}\" --yes --non-interactive");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal(1, Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>()).Calls);
+        Assert.Equal(1, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
         Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
         Assert.Equal(parentConfiguration, await File.ReadAllTextAsync(parentPath));
         Assert.Equal("version-1", AspireConfigFile.Load(project.FullName)!.ConfigSource!.AppliedVersion);
@@ -518,7 +519,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var notice = Assert.Single(interaction.DisplayedMessages);
         Assert.Equal(ConfigSourceStrings.NoBinding, notice.Message);
         Assert.Equal(ConsoleOutput.Error, notice.ConsoleOverride);
-        Assert.Equal(0, Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>()).Calls);
+        Assert.Equal(0, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
         Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
     }
 
@@ -539,8 +540,8 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         globalFile.Directory!.Create();
         await TestConfigSourceServices.SaveBindingAsync(s_source, globalFile.Directory, CancellationToken.None);
         File.Move(Path.Combine(globalFile.Directory.FullName, AspireConfigFile.FileName), globalFile.FullName);
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
-        git.Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", new JsonObject()));
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        git.ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject()));
         var appHostArgument = explicitAppHost ? $" --apphost \"{Path.Combine(workspace.Path, "apphost.cs")}\"" : "";
         var result = provider.GetRequiredService<RootCommand>().Parse(
             $"update --config-source{appHostArgument} --yes --non-interactive");
@@ -584,12 +585,12 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             };
         });
         using var provider = services.BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
-        git.Acquire = (source, _) =>
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        git.ReadConfiguration = (source, _) =>
         {
             Assert.True(ConfigSource.HasSameIdentity(selectedSource, source) || ConfigSource.HasSameIdentity(s_source, source));
             Assert.Null(source.AppliedVersion);
-            return Task.FromResult(("commit-1", "version-1", new JsonObject()));
+            return Task.FromResult(("version-1", new JsonObject()));
         };
         var result = provider.GetRequiredService<RootCommand>().Parse("update --config-source --yes --non-interactive");
 
@@ -610,9 +611,9 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var inheritedUrl = "https://parent.example/llms.txt";
-        var initial = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: new TestConfigSourceGitClient
+        var initial = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: new TestConfigSourceRepository
         {
-            Acquire = (_, _) => Task.FromResult(("commit-1", "version-1", new JsonObject
+            ReadConfiguration = (_, _) => Task.FromResult(("version-1", new JsonObject
             {
                 ["docs"] = new JsonObject { ["llmsTxtUrl"] = inheritedUrl }
             }))
@@ -625,7 +626,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var projectFile = new FileInfo(Path.Combine(selected.FullName, "apphost.cs"));
         await File.WriteAllTextAsync(projectFile.FullName, "#:sdk Aspire.AppHost.Sdk");
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
 
         var project = await provider.GetRequiredService<IProjectLocator>().UseOrFindAppHostProjectFileAsync(
             projectFile, createSettingsFile: false, CancellationToken.None);
@@ -658,12 +659,12 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         await ConfigurationService.SetConfigurationInFileAsync(
             Path.Combine(workspace.Path, AspireConfigFile.FileName), "appHost.path", "selected/apphost.cs");
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
-        git.Check = (source, _) =>
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        git.InspectConfiguration = (source, _) =>
         {
             Assert.True(ConfigSource.HasSameIdentity(selectedSource, source));
             Assert.Null(source.AppliedVersion);
-            return Task.FromResult(("commit-1", "version-1"));
+            return Task.FromResult("version-1");
         };
         var project = await provider.GetRequiredService<IProjectLocator>().UseOrFindAppHostProjectFileAsync(
             explicitProject ? projectFile : null, createSettingsFile: false, CancellationToken.None);
@@ -714,11 +715,11 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interaction;
         }).BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
-        git.Acquire = (source, _) =>
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        git.ReadConfiguration = (source, _) =>
         {
             Assert.True(ConfigSource.HasSameIdentity(selectedSource, source));
-            return Task.FromResult(("commit-2", "version-2", new JsonObject()));
+            return Task.FromResult(("version-2", new JsonObject()));
         };
         var result = provider.GetRequiredService<RootCommand>().Parse(
             $"update --config-source --apphost \"{requestedDirectory.FullName}\" --yes --non-interactive");
@@ -758,7 +759,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.NotEqual(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
 
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         Assert.Equal(0, git.CheckCalls);
         Assert.Equal(0, git.Calls);
     }
@@ -777,7 +778,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         await result.InvokeAsync().DefaultTimeout();
 
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         Assert.Equal(0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
     }
@@ -794,7 +795,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var result = provider.GetRequiredService<RootCommand>().Parse(commandLine);
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal(0, Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>()).Calls);
+        Assert.Equal(0, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
     }
 
     [Theory]
@@ -828,7 +829,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equivalent(accepted ? s_source : null, AspireConfigFile.Load(output)?.ConfigSource, strict: true);
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(output, AspireConfigFile.FileName)))!;
         Assert.Equal(accepted ? "https://docs.example/llms.txt" : null, configuration["docs"]?["llmsTxtUrl"]?.GetValue<string>());
-        Assert.Equal(accepted ? 1 : 0, Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>()).Calls);
+        Assert.Equal(accepted ? 1 : 0, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
     }
 
@@ -845,7 +846,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName)))!;
         Assert.Equal("https://docs.example/llms.txt", configuration["docs"]!["llmsTxtUrl"]!.GetValue<string>());
         Assert.True(File.Exists(Path.Combine(workspace.Path, "apphost.cs")));
-        Assert.Equal(1, Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>()).Calls);
+        Assert.Equal(1, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
     }
 
     [Fact]
@@ -872,7 +873,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
         Assert.Equal("https://local.example/llms.txt", configuration["docs"]!["llmsTxtUrl"]!.GetValue<string>());
         Assert.Equivalent(s_source, configuration["configSource"]!.Deserialize(JsonSourceGenerationContext.Default.ConfigSource), strict: true);
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         Assert.Equal(0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
     }
@@ -963,12 +964,12 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             }));
         }
         using var provider = services.BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         ConfigSource? checkedSource = null;
-        git.Check = (source, _) =>
+        git.InspectConfiguration = (source, _) =>
         {
             checkedSource = source;
-            return Task.FromResult(("commit-2", "version-2"));
+            return Task.FromResult("version-2");
         };
         var command = existingBinding
             ? "init --language csharp --suppress-agent-init --non-interactive"
@@ -1005,11 +1006,11 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         }
 
         using var refreshProvider = CreateCreationServices(workspace).BuildServiceProvider();
-        var refreshGit = Assert.IsType<TestConfigSourceGitClient>(refreshProvider.GetRequiredService<IConfigSourceGitClient>());
-        refreshGit.Acquire = (source, _) =>
+        var refreshGit = Assert.IsType<TestConfigSourceRepository>(refreshProvider.GetRequiredService<IGitClient>());
+        refreshGit.ReadConfiguration = (source, _) =>
         {
             Assert.True(ConfigSource.HasSameIdentity(s_source, source));
-            return Task.FromResult(("commit-2", "version-2", new JsonObject
+            return Task.FromResult(("version-2", new JsonObject
             {
                 ["docs"] = new JsonObject { ["llmsTxtUrl"] = "https://updated.example/llms.txt" }
             }));
@@ -1041,8 +1042,8 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var output = Path.Combine(workspace.Path, "created-project");
         using var provider = CreateCreationServices(workspace).BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
-        git.Acquire = (_, _) => throw new ConfigSourceException(ConfigSourceStrings.AuthenticationFailed);
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        git.ReadConfiguration = (_, _) => throw new ConfigSourceException(ConfigSourceStrings.AuthenticationFailed);
         var result = provider.GetRequiredService<RootCommand>().Parse(
             $"new {templateOptions} --output \"{output}\" --use-config-source true --non-interactive");
 
@@ -1064,9 +1065,9 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         {
             [CliConfigNames.InitSourceUrl] = s_source.Repository
         }));
-        services.AddSingleton<IConfigSourceGitClient>(new TestConfigSourceGitClient
+        services.AddSingleton<IGitClient>(new TestConfigSourceRepository
         {
-            Acquire = (_, _) => Task.FromResult(("commit-1", "version-1", new JsonObject
+            ReadConfiguration = (_, _) => Task.FromResult(("version-1", new JsonObject
             {
                 ["docs"] = new JsonObject { ["llmsTxtUrl"] = "https://docs.example/llms.txt" },
                 ["sdk"] = new JsonObject { ["version"] = "99.0.0" }

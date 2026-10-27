@@ -8,6 +8,7 @@ using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -32,7 +33,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, await command.InvokeAsync().DefaultTimeout());
 
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         Assert.Equal(0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
     }
