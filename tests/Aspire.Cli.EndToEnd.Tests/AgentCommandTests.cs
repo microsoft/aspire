@@ -223,11 +223,12 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "copilot", "settings.json");
-        var settings = JsonNode.Parse(await File.ReadAllTextAsync(settingsPath));
-        Assert.NotNull(settings);
-        Assert.True(settings["enabledPlugins"]!["aspire@aspire-skills"]!.GetValue<bool>());
-        Assert.Equal("microsoft/aspire-skills", settings["extraKnownMarketplaces"]!["aspire-skills"]!["source"]!["repo"]!.GetValue<string>());
+        // The container creates root-owned private settings, so a non-root host cannot read them.
+        await auto.RunCommandAsync(
+            """test "$(stat -c '%a' "$ASPIRE_E2E_WORKSPACE/.github/copilot/settings.json")" = 600""", counter);
+        await auto.RunCommandAsync(
+            """jq -e '.enabledPlugins["aspire@aspire-skills"] == true and .extraKnownMarketplaces["aspire-skills"].source.repo == "microsoft/aspire-skills"' "$ASPIRE_E2E_WORKSPACE/.github/copilot/settings.json" """,
+            counter);
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
 
         // Verify MCP was not configured, since it was never selected in the prompt above.
