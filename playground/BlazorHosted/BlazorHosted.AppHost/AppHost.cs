@@ -1,10 +1,10 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-var weatherApi = builder.AddProject<Projects.BlazorHosted_WeatherApi>("weatherapi");
+var weatherApi = builder.AddDotnetProject("weatherapi", @"..\BlazorHosted.WeatherApi\BlazorHosted.WeatherApi.csproj");
 
-var timeApi = builder.AddProject<Projects.BlazorHosted_TimeApi>("timeapi");
+var timeApi = builder.AddDotnetProject("timeapi", @"..\BlazorHosted.TimeApi\BlazorHosted.TimeApi.csproj");
 
-builder.AddProject<Projects.BlazorHosted>("blazorapp")
+builder.AddDotnetProject("blazorapp", @"..\BlazorHosted.Server\BlazorHosted.csproj")
     .ProxyBlazorService(weatherApi)
     .ProxyBlazorService(timeApi)
     .ProxyBlazorTelemetry();

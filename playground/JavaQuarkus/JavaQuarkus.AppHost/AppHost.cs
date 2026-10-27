@@ -29,7 +29,7 @@ builder.AddQuarkusApp("inventory", "../inventory")
     .WaitFor(pricing);
 
 #if !SKIP_DASHBOARD_REFERENCE
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

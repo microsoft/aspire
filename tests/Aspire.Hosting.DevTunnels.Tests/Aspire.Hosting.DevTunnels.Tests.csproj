@@ -6,6 +6,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.DevTunnels\Aspire.Hosting.DevTunnels.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Dotnet\Aspire.Hosting.Dotnet.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
   </ItemGroup>
 

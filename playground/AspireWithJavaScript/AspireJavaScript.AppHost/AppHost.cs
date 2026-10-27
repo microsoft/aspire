@@ -1,6 +1,6 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-var weatherApi = builder.AddProject<Projects.AspireJavaScript_MinimalApi>("weatherapi")
+var weatherApi = builder.AddDotnetProject("weatherapi", @"..\AspireJavaScript.MinimalApi\AspireJavaScript.MinimalApi.csproj")
     .WithExternalHttpEndpoints();
 
 builder.AddJavaScriptApp("angular", "../AspireJavaScript.Angular", runScriptName: "start")

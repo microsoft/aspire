@@ -9874,6 +9874,7 @@ export interface DistributedApplicationBuilder {
     /**
      * Adds a .NET project resource
      * @param options Additional options.
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise;
     /**
@@ -10090,6 +10091,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     /**
      * Adds a .NET project resource
      * @param options Additional options.
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise;
     /**
@@ -10570,6 +10572,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a .NET project resource
      * @param options Additional options.
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise {
         let launchProfileOrOptions = options?.launchProfileOrOptions;

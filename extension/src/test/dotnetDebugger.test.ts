@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { createProjectDebuggerExtension, DotNetService, externalBuildProjectDebuggerExtension, projectDebuggerExtension, quoteCommandLineArgument } from '../debugger/languages/dotnet';
 import { AspireExtendedDebugConfiguration, AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import * as io from '../utils/io';
-import { createDebugSessionConfiguration, ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
+import { createDebugSessionConfiguration, getResourceDebuggerExtensions, ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
 import { AppHostParentOutputFilter, AspireDebugSession } from '../debugger/AspireDebugSession';
 import { csharpExtensionId, getSupportedCapabilities } from '../capabilities';
 import * as hotReload from '../debugger/hotReload';
@@ -2350,7 +2350,40 @@ suite('Dotnet Debugger Extension Tests', () => {
         }
     });
 
-    test('advertises the coreclr project debugger and extracts project_path for .csproj and file-based .cs', () => {
+    for (const debug of [false, true]) {
+        test(`disables coreclr's implicit profile when launching a resource in ${debug ? 'Debug' : 'Run'} mode`, async () => {
+            const fixture = createRunnableProjectOutput(`resource-excluded-profile-${debug}`);
+            try {
+                const { extension } = createDebuggerExtension(fixture.outputPath, null, true, true);
+                const parentConfiguration: AspireExtendedDebugConfiguration = {
+                    type: 'aspire',
+                    request: 'launch',
+                    name: 'Aspire',
+                    program: fixture.projectPath,
+                };
+                const launchConfig: ProjectLaunchConfiguration = {
+                    type: 'project',
+                    project_path: fixture.projectPath,
+                    suppress_build: true,
+                    disable_launch_profile: true,
+                };
+                const debugConfiguration = await createDebugSessionConfiguration(
+                    parentConfiguration,
+                    launchConfig,
+                    undefined,
+                    [],
+                    { debug, runId: '1', debugSessionId: '1', isApphost: false, debugSession: { configuration: parentConfiguration } as AspireDebugSession },
+                    extension);
+
+                assert.strictEqual(debugConfiguration.launchSettingsProfile, null);
+                assert.strictEqual(debugConfiguration.noDebug, !debug);
+            } finally {
+                removeDirectorySafely(fixture.tempRoot);
+            }
+        });
+    }
+
+    test('advertises the coreclr debugger for SDK-style C#, F# and VB projects and file-based C# apps', () => {
         sinon.stub(vscode.extensions, 'getExtension').callsFake(extensionId =>
             extensionId === csharpExtensionId ? { id: extensionId } as vscode.Extension<unknown> : undefined);
 
@@ -2358,12 +2391,29 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(externalBuildProjectDebuggerExtension.resourceType, 'project-with-external-build.v1');
         assert.ok(getSupportedCapabilities().includes('project-with-external-build.v1'));
         assert.strictEqual(projectDebuggerExtension.debugAdapter, 'coreclr');
-        assert.deepStrictEqual(projectDebuggerExtension.getSupportedFileTypes(), ['.cs', '.csproj']);
+        assert.deepStrictEqual(projectDebuggerExtension.getSupportedFileTypes(), ['.cs', '.csproj', '.fsproj', '.vbproj']);
+        assert.deepStrictEqual(externalBuildProjectDebuggerExtension.getSupportedFileTypes(), projectDebuggerExtension.getSupportedFileTypes());
 
-        const csprojConfig: ProjectLaunchConfiguration = { type: 'project', project_path: '/tmp/Worker.csproj' };
-        const fileBasedConfig: ProjectLaunchConfiguration = { type: 'project', project_path: '/tmp/app.cs' };
-        assert.strictEqual(projectDebuggerExtension.getProjectFile(csprojConfig), '/tmp/Worker.csproj');
-        assert.strictEqual(projectDebuggerExtension.getProjectFile(fileBasedConfig), '/tmp/app.cs');
+        for (const projectPath of ['Worker.csproj', 'Worker.fsproj', 'Worker.vbproj', 'app.cs']) {
+            for (const extension of [projectDebuggerExtension, externalBuildProjectDebuggerExtension]) {
+                const config: ProjectLaunchConfiguration = { type: extension.resourceType as ProjectLaunchConfiguration['type'], project_path: projectPath };
+                assert.strictEqual(extension.getProjectFile(config), projectPath);
+                assert.strictEqual(extension.getDisplayName(config), `.NET: ${projectPath}`);
+            }
+        }
+    });
+
+    test('does not advertise a .NET project debugger when only the F# language extension is installed', () => {
+        sinon.stub(vscode.extensions, 'getExtension').callsFake(extensionId =>
+            extensionId === 'Ionide.Ionide-fsharp' ? { id: extensionId } as vscode.Extension<unknown> : undefined);
+
+        const projectCapabilities = getSupportedCapabilities().filter(capability =>
+            capability === 'project' || capability === 'project-with-external-build.v1' || capability === csharpExtensionId);
+        const projectDebuggers = getResourceDebuggerExtensions().filter(extension =>
+            extension.resourceType === 'project' || extension.resourceType === 'project-with-external-build.v1');
+
+        assert.deepStrictEqual(projectCapabilities, []);
+        assert.deepStrictEqual(projectDebuggers, []);
     });
 
     test('file-based AppHost follows CLI build ownership', async () => {

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retains migration publishing compatibility for legacy projects.
+
 #pragma warning disable ASPIREDOTNETTOOL, ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;

@@ -30,7 +30,7 @@ basketCache.WithRedisCommander(c =>
             });
 #endif
 
-var catalogDbApp = builder.AddProject<Projects.CatalogDb>("catalogdbapp")
+var catalogDbApp = builder.AddDotnetProject("catalogdbapp", @"..\CatalogDb\CatalogDb.csproj")
                           .WithReference(catalogDb)
                           .WaitFor(catalogDb)
                           .WithHttpHealthCheck("/health");
@@ -53,7 +53,7 @@ if (builder.Environment.IsDevelopment() && builder.ExecutionContext.IsRunMode)
                     });
 }
 
-var catalogService = builder.AddProject<Projects.CatalogService>("catalogservice")
+var catalogService = builder.AddDotnetProject("catalogservice", @"..\CatalogService\CatalogService.csproj")
                             .WithReference(catalogDb)
                             .WaitFor(catalogDb)
                             .WaitFor(catalogDbApp)
@@ -80,13 +80,13 @@ var messaging = builder.AddRabbitMQ("messaging")
                        .WithManagementPlugin()
                        .PublishAsContainer();
 
-var basketService = builder.AddProject("basketservice", @"..\BasketService\BasketService.csproj")
+var basketService = builder.AddDotnetProject("basketservice", @"..\BasketService\BasketService.csproj")
                            .WithReference(basketCache)
                            .WaitFor(basketCache)
                            .WithReference(messaging)
                            .WaitFor(messaging);
 
-var frontend = builder.AddProject<Projects.MyFrontend>("frontend")
+var frontend = builder.AddDotnetProject("frontend", @"..\MyFrontend\MyFrontend.csproj")
     .WithExternalHttpEndpoints()
     .WithReference(basketService)
     .WaitFor(basketService)
@@ -100,7 +100,7 @@ var frontend = builder.AddProject<Projects.MyFrontend>("frontend")
     .WithUrlForEndpoint("https", ep => new() { Url = "/health", DisplayText = "Health", DisplayLocation = UrlDisplayLocation.DetailsOnly })
     .WithHttpHealthCheck("/health");
 
-builder.AddProject<Projects.OrderProcessor>("orderprocessor", launchProfileName: "OrderProcessor")
+builder.AddDotnetProject("orderprocessor", @"..\OrderProcessor\OrderProcessor.csproj", options => options.LaunchProfileName = "OrderProcessor")
     .WithReference(messaging)
     .WaitFor(messaging);
 
@@ -136,7 +136,7 @@ yarp.WithConfiguration(builder =>
 // dashboard launch experience. The opt-out and project reference are defined in
 // playground/Directory.Build.targets. The repo-root Directory.Build.props sets the
 // default dashboard binary path to the Aspire.Dashboard output in the artifacts dir.
-var dashboardBuilder = builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+var dashboardBuilder = builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
 if (builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] is { Length: > 0 } dashboardOtlpEndpoint)
 {
     // The AppHost normally points every project at its own dashboard. Preserve an explicitly configured

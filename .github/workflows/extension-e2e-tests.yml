@@ -454,6 +454,7 @@ jobs:
             archivePattern: aspire-cli-linux-x64*.tar.gz
             cliBinary: aspire
             useXvfb: true
+            installDotnetDebugger: true
           - name: Windows
             shardName: coordinated-build
             spec: out/test-e2e/test-e2e/coordinatedBuild.e2e.test.js
@@ -462,6 +463,7 @@ jobs:
             archivePattern: aspire-cli-win-x64*.zip
             cliBinary: aspire.exe
             useXvfb: false
+            installDotnetDebugger: true
           - name: Linux
             shardName: browser-debugger
             advisoryIssue: https://github.com/microsoft/aspire/issues/20184

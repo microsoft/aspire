@@ -4,10 +4,10 @@ var keycloak = builder.AddKeycloak("keycloak", 8080)
                       .WithDataVolume()
                       .WithRealmImport("../realms");
 
-var apiService = builder.AddProject<Projects.Keycloak_ApiService>("apiservice")
+var apiService = builder.AddDotnetProject("apiservice", @"..\Keycloak.ApiService\Keycloak.ApiService.csproj")
                         .WithReference(keycloak);
 
-builder.AddProject<Projects.Keycloak_Web>("webfrontend")
+builder.AddDotnetProject("webfrontend", @"..\Keycloak.Web\Keycloak.Web.csproj")
     .WithExternalHttpEndpoints()
     .WithReference(keycloak)
     .WithReference(apiService);

@@ -6,7 +6,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 var chat = builder.AddAzureOpenAI("openai")
     .AddDeployment("chat", "gpt-4o", "2024-05-13");
 
-builder.AddProject<Projects.AzureOpenAIEndToEnd_WebStory>("webstory")
+builder.AddDotnetProject("webstory", @"..\AzureOpenAIEndToEnd.WebStory\AzureOpenAIEndToEnd.WebStory.csproj")
        .WithExternalHttpEndpoints()
        .WithReference(chat);
 
@@ -17,7 +17,7 @@ builder.AddProject<Projects.AzureOpenAIEndToEnd_WebStory>("webstory")
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

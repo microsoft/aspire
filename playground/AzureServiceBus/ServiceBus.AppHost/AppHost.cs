@@ -38,7 +38,7 @@ serviceBus.RunAsEmulator(configure => configure.WithConfiguration(document =>
     document["UserConfig"]!["Logging"] = new JsonObject { ["Type"] = "Console" };
 }).WithPersistentLifetime());
 
-builder.AddProject<Projects.ServiceBusWorker>("worker")
+builder.AddDotnetProject("worker", @"..\ServiceBusWorker\ServiceBusWorker.csproj")
     .WithReference(queue).WaitFor(queue)
     .WithReference(subscription).WaitFor(subscription);
 

@@ -33,7 +33,7 @@ aks.AddNodePool("workload", "Standard_D2as_v5", minCount: 1, maxCount: 3);
 var publicLb = aks.AddLoadBalancer("public", publicSubnet);
 var adminLb = aks.AddLoadBalancer("admin", adminSubnet);
 
-var api = builder.AddProject<Projects.AksDemo_ApiService>("api")
+var api = builder.AddDotnetProject("api", @"..\AksDemo.ApiService\AksDemo.ApiService.csproj")
    .WithExternalHttpEndpoints();
 
 // Public gateway: serves /api -> the api service, attached to the public AGC ALB.

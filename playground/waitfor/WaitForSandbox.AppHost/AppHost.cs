@@ -14,17 +14,17 @@ var db = builder.AddAzurePostgresFlexibleServer("pg")
                 })
                 .AddDatabase("db");
 
-var dbsetup = builder.AddProject<Projects.WaitForSandbox_DbSetup>("dbsetup")
+var dbsetup = builder.AddDotnetProject("dbsetup", @"..\WaitForSandbox.DbSetup\WaitForSandbox.DbSetup.csproj")
                      .WithReference(db).WaitFor(db);
 
-var backend = builder.AddProject<Projects.WaitForSandbox_ApiService>("api")
+var backend = builder.AddDotnetProject("api", @"..\WaitForSandbox.ApiService\WaitForSandbox.ApiService.csproj")
                      .WithExternalHttpEndpoints()
                      .WithHttpHealthCheck("/health")
                      .WithReference(db).WaitFor(db)
                      .WaitForCompletion(dbsetup)
                      .WithReplicas(2);
 
-builder.AddProject<Projects.WaitFor_Frontend>("frontend")
+builder.AddDotnetProject("frontend", @"..\WaitFor.Frontend\WaitFor.Frontend.csproj")
        .WithReference(backend).WaitFor(backend);
 
 #if !SKIP_DASHBOARD_REFERENCE
@@ -34,7 +34,7 @@ builder.AddProject<Projects.WaitFor_Frontend>("frontend")
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

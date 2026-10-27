@@ -11,7 +11,7 @@ var entries = db.AddContainer("entries", "/id", "staging-entries");
 var users = db.AddContainer("users", "/id");
 var userToDo = db.AddContainer("user-todo", ["/userId", "/id"], "UserTodo");
 
-builder.AddProject<Projects.CosmosEndToEnd_ApiService>("api")
+builder.AddDotnetProject("api", @"..\CosmosEndToEnd.ApiService\CosmosEndToEnd.ApiService.csproj")
        .WithExternalHttpEndpoints()
        .WithReference(db).WaitFor(db)
        .WithReference(users).WaitFor(users)
@@ -25,7 +25,7 @@ builder.AddProject<Projects.CosmosEndToEnd_ApiService>("api")
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

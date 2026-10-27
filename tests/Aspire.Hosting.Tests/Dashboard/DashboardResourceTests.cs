@@ -788,7 +788,9 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
+#pragma warning disable CS0618 // Retain legacy dashboard project metadata and snapshot classification.
         builder.AddProject<DashboardProject>(KnownResourceNames.AspireDashboard);
+#pragma warning restore CS0618
 
         var app = builder.Build();
 

@@ -43,7 +43,7 @@ public sealed class TerminalCommandTests(ITestOutputHelper output)
             #pragma warning disable ASPIRETERMINAL001
 
             var builder = DistributedApplication.CreateBuilder(args);
-            builder.AddProject("replicated", Path.Combine(builder.AppHostDirectory, "TerminalProbe", "TerminalProbe.csproj"))
+            builder.AddDotnetProject("replicated", Path.Combine(builder.AppHostDirectory, "TerminalProbe", "TerminalProbe.csproj"))
                 .WithEnvironment("PROBE_DIRECTORY", Path.Combine(builder.AppHostDirectory, "received"))
                 .WithReplicas(2)
                 .WithTerminal();
@@ -52,24 +52,19 @@ public sealed class TerminalCommandTests(ITestOutputHelper output)
         File.WriteAllText(Path.Combine(projectDirectory, "TerminalProbe", "Program.cs"), """
             var directory = Environment.GetEnvironmentVariable("PROBE_DIRECTORY")!;
             Directory.CreateDirectory(directory);
-            // DCP reports the "dotnet run" launcher's PID, not this console child's PID.
-            // Linux /proc/self/status has a "PPid:\t123" field; use it to correlate
-            // the actual input recipient with the independently discovered resource.
-            var launcherPid = File.ReadLines("/proc/self/status")
-                .Single(line => line.StartsWith("PPid:", StringComparison.Ordinal))["PPid:".Length..].Trim();
-            var inputPath = Path.Combine(directory, $"{launcherPid}.input");
+            // AddDotnetProject launches the built output directly, so DCP tracks this process.
+            var processId = Environment.ProcessId;
+            var inputPath = Path.Combine(directory, $"{processId}.input");
             File.WriteAllText(inputPath, "");
-            Console.WriteLine($"READY:LAUNCHER:{launcherPid}|PID:{Environment.ProcessId}");
+            Console.WriteLine($"READY:PID:{processId}|");
             while (Console.ReadLine() is { } line)
             {
                 File.AppendAllText(inputPath, line + Environment.NewLine);
-                Console.WriteLine($"ACK:{line}|LAUNCHER:{launcherPid}|PID:{Environment.ProcessId}");
+                Console.WriteLine($"ACK:{line}|PID:{processId}|");
             }
             """);
         File.WriteAllText(Path.Combine(projectDirectory, "probe.tape"), "");
 
-        // Avoid concurrent first builds of the same project from the two "dotnet run" replicas.
-        await auto.RunCommandAsync("dotnet build TerminalProbe/TerminalProbe.csproj", counter);
         await auto.AspireStartAsync(counter, isolated: true);
         const string replicasDiscovered = """
             [.resources[] | select(.displayName == "replicated" and .properties["terminal.replicaIndex"] != null and .properties["executable.pid"] != null)] | length == 2
@@ -91,11 +86,11 @@ public sealed class TerminalCommandTests(ITestOutputHelper output)
         {
             await auto.RunCommandAsync($"aspire wait {instanceId} --status up --timeout 120", counter, TimeSpan.FromMinutes(3));
         }
-        var otherLauncherPid = replicas[0].GetProperty("properties").GetProperty("executable.pid").GetInt32();
-        var selectedLauncherPid = replicas[1].GetProperty("properties").GetProperty("executable.pid").GetInt32();
-        Assert.NotEqual(otherLauncherPid, selectedLauncherPid);
+        var otherProcessId = replicas[0].GetProperty("properties").GetProperty("executable.pid").GetInt32();
+        var selectedProcessId = replicas[1].GetProperty("properties").GetProperty("executable.pid").GetInt32();
+        Assert.NotEqual(otherProcessId, selectedProcessId);
         await auto.RunCommandAsync(
-            $"timeout 120s bash -c 'until test -f received/{otherLauncherPid}.input && test -f received/{selectedLauncherPid}.input; do sleep 1; done'",
+            $"timeout 120s bash -c 'until test -f received/{otherProcessId}.input && test -f received/{selectedProcessId}.input; do sleep 1; done'",
             counter, TimeSpan.FromMinutes(3));
         var availableIds = string.Join(", ", instanceIds.Order(StringComparer.OrdinalIgnoreCase));
 
@@ -118,10 +113,10 @@ public sealed class TerminalCommandTests(ITestOutputHelper output)
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync($"aspire terminal attach {instanceIds[1]}");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync($"READY:LAUNCHER:{selectedLauncherPid}|", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync($"READY:PID:{selectedProcessId}|", timeout: TimeSpan.FromSeconds(30));
         await auto.TypeAsync("attach-probe");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync($"ACK:attach-probe|LAUNCHER:{selectedLauncherPid}|", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync($"ACK:attach-probe|PID:{selectedProcessId}|", timeout: TimeSpan.FromSeconds(30));
         // Match the existing terminal E2E's interactive cadence so the viewer
         // processes the chord prefix before receiving the suffix.
         await auto.Ctrl().KeyAsync(Hex1bKey.B);
@@ -129,8 +124,8 @@ public sealed class TerminalCommandTests(ITestOutputHelper output)
         await auto.KeyAsync(Hex1bKey.D);
         await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromSeconds(30));
 
-        var selectedInput = Path.Combine(projectDirectory, "received", $"{selectedLauncherPid}.input");
-        var otherInput = Path.Combine(projectDirectory, "received", $"{otherLauncherPid}.input");
+        var selectedInput = Path.Combine(projectDirectory, "received", $"{selectedProcessId}.input");
+        var otherInput = Path.Combine(projectDirectory, "received", $"{otherProcessId}.input");
         Assert.Equal(["attach-probe"], File.ReadAllLines(selectedInput));
         Assert.Empty(File.ReadAllLines(otherInput));
 
@@ -139,7 +134,7 @@ public sealed class TerminalCommandTests(ITestOutputHelper output)
             Set WaitTimeout 20s
             Type "tape-probe"
             Enter
-            Wait+Screen /ACK:tape-probe[|]LAUNCHER:{{selectedLauncherPid}}[|]/
+            Wait+Screen /ACK:tape-probe[|]PID:{{selectedProcessId}}[|]/
             """);
         await auto.RunCommandAsync(
             $"aspire terminal tape play {instanceIds[1]} --tape-file probe.tape --timeout 30",

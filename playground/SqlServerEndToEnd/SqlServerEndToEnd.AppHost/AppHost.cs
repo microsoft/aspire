@@ -11,7 +11,7 @@ var db1 = sql1.AddDatabase("db1");
 var sql2 = builder.AddAzureSqlServer("sql2");
 var db2 = sql2.AddDatabase("db2");
 
-var api = builder.AddProject<Projects.SqlServerEndToEnd_ApiService>("api")
+var api = builder.AddDotnetProject("api", @"..\SqlServerEndToEnd.ApiService\SqlServerEndToEnd.ApiService.csproj")
        .WithReference(db1)
        .WithReference(db2)
        .WithExternalHttpEndpoints();
@@ -43,7 +43,7 @@ api
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

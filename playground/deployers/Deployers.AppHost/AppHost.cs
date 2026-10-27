@@ -34,7 +34,7 @@ database.AddContainer("mycontainer", "/id");
 builder.AddRedis("cache")
     .WithComputeEnvironment(aca);
 
-builder.AddProject<Projects.AzureFunctionsEndToEnd_ApiService>("functions-api-service")
+builder.AddDotnetProject("functions-api-service", @"..\..\AzureFunctionsEndToEnd\AzureFunctionsEndToEnd.ApiService\AzureFunctionsEndToEnd.ApiService.csproj")
     .WithExternalHttpEndpoints()
     .WithComputeEnvironment(aas)
     .WithReference(eventHub).WaitFor(eventHub)
@@ -43,7 +43,7 @@ builder.AddProject<Projects.AzureFunctionsEndToEnd_ApiService>("functions-api-se
     .WithReference(queue)
     .WithReference(blob);
 
-builder.AddProject<Projects.Deployers_ApiService>("api-service")
+builder.AddDotnetProject("api-service", @"..\Deployers.ApiService\Deployers.ApiService.csproj")
     .WithExternalHttpEndpoints()
     .WithComputeEnvironment(aas);
 
@@ -76,7 +76,7 @@ builder.AddAzureFunctionsProject<Projects.AzureFunctionsEndToEnd_Functions>("fun
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

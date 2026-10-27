@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable CS0618 // Covers legacy AddProject/AddCSharpApp behavior and compatibility contracts.
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREEXTENSION001
@@ -1015,6 +1015,32 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         var annotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         Assert.Equal("project", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void AddProjectIsObsoleteNotExperimental()
+    {
+        var methods = typeof(ProjectResourceBuilderExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .Where(method => method.Name is nameof(ProjectResourceBuilderExtensions.AddProject)
+                or nameof(ProjectResourceBuilderExtensions.AddProjectForPolyglot))
+            .ToArray();
+
+        Assert.Equal(6, methods.Count(method => method.IsPublic));
+        Assert.Single(methods, method => !method.IsPublic);
+        Assert.All(methods, method =>
+        {
+            var obsolete = method.GetCustomAttribute<ObsoleteAttribute>();
+            Assert.NotNull(obsolete);
+            Assert.False(obsolete.IsError);
+            Assert.Equal(
+                method.IsPublic
+                    ? "Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead."
+                    : "Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.",
+                obsolete.Message);
+            Assert.Null(method.GetCustomAttribute<ExperimentalAttribute>());
+            Assert.Equal(typeof(IResourceBuilder<ProjectResource>), method.ReturnType);
+        });
     }
 
     [Fact]

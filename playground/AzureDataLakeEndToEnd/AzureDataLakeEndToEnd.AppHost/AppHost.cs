@@ -3,7 +3,7 @@
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var api = builder.AddProject<Projects.AzureDataLakeEndToEnd_WebApi>("api");
+var api = builder.AddDotnetProject("api", @"..\AzureDataLakeEndToEnd.WebApi\AzureDataLakeEndToEnd.WebApi.csproj");
 
 builder.AddAzureContainerAppEnvironment("aca-env");
 

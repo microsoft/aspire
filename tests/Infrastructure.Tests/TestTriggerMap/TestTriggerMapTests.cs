@@ -714,6 +714,7 @@ public sealed class TestTriggerMapTests
         Assert.False(result.SelectsAll);
         Assert.Contains("Aspire.Templates.Tests", result.TestProjects);
         Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("Aspire.EndToEnd.Tests", result.TestProjects);
         Assert.Contains("job:extension-e2e", result.Jobs);
         Assert.Contains("job:cli-starter-validation", result.Jobs);
     }

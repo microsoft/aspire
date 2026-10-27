@@ -2365,7 +2365,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         var projectPath = CreateProject(workspace.Path, "Service", "Service.csproj");
-        var metadata = new DotnetProjectMetadata(projectPath, "DebugLocal");
+        var metadata = new DotnetProjectMetadata(projectPath, "DebugLocal", "service");
         var coordinator = DotnetProjectBuildCoordinator.Prepare(builder, metadata);
         var resource = new DotnetProjectResource("service", Path.GetDirectoryName(projectPath)!);
         var resourceBuilder = builder.AddResource(resource).WithAnnotation(metadata);
@@ -2389,14 +2389,14 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         var removedProjectPath = CreateProject(workspace.Path, "Removed", "Removed.csproj");
-        var removedMetadata = new DotnetProjectMetadata(removedProjectPath, "RemovedConfiguration");
+        var removedMetadata = new DotnetProjectMetadata(removedProjectPath, "RemovedConfiguration", "removed");
         var coordinator = DotnetProjectBuildCoordinator.Prepare(builder, removedMetadata);
         var removedResource = new DotnetProjectResource("removed", Path.GetDirectoryName(removedProjectPath)!);
         var removedBuilder = builder.AddResource(removedResource).WithAnnotation(removedMetadata);
         DotnetProjectBuildCoordinator.Configure(removedBuilder, coordinator);
 
         var activeProjectPath = CreateProject(workspace.Path, "Active", "Active.csproj");
-        var activeMetadata = new DotnetProjectMetadata(activeProjectPath, "ActiveConfiguration");
+        var activeMetadata = new DotnetProjectMetadata(activeProjectPath, "ActiveConfiguration", "active");
         coordinator = DotnetProjectBuildCoordinator.Prepare(builder, activeMetadata);
         var activeResource = new DotnetProjectResource("active", Path.GetDirectoryName(activeProjectPath)!);
         var activeBuilder = builder.AddResource(activeResource).WithAnnotation(activeMetadata);
@@ -2699,17 +2699,25 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
+    [InlineData(false, false, ".csproj", ".csproj")]
+    [InlineData(true, false, ".csproj", ".csproj")]
+    [InlineData(false, true, ".csproj", ".csproj")]
+    [InlineData(true, true, ".csproj", ".csproj")]
+    [InlineData(false, false, ".fsproj", ".vbproj")]
+    [InlineData(true, true, ".fsproj", ".vbproj")]
+    [InlineData(false, false, ".vbproj", ".csproj")]
+    [InlineData(true, true, ".vbproj", ".csproj")]
     [RequiresTools(["dotnet"])]
-    public async Task SharedProjectGraphBuildsOnceBeforeServicesRun(bool restoreProjectsIndividually, bool useStaticGraphEvaluation)
+    public async Task SharedProjectGraphBuildsOnceBeforeServicesRun(
+        bool restoreProjectsIndividually,
+        bool useStaticGraphEvaluation,
+        string extension,
+        string workerExtension)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var sharedProject = CreateSharedProject(workspace.Path);
-        var apiProject = CreateConsoleProject(workspace.Path, "Api", sharedProject);
-        var workerProject = CreateConsoleProject(workspace.Path, "Worker", sharedProject);
+        var apiProject = CreateConsoleProject(workspace.Path, "Api", sharedProject, extension);
+        var workerProject = CreateConsoleProject(workspace.Path, "Worker", sharedProject, workerExtension);
         var escapedDirectory = Path.Combine(workspace.Path, "Api's Project 100% (test)");
         Directory.Move(Path.GetDirectoryName(apiProject)!, escapedDirectory);
         apiProject = Path.Combine(escapedDirectory, Path.GetFileName(apiProject));
@@ -3012,6 +3020,8 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("csproj", "--project")]
+    [InlineData("fsproj", "--project")]
+    [InlineData("vbproj", "--project")]
     [InlineData("cs", "--file")]
     public async Task MissingPathInExternalBuildDebugSessionUsesProcessFallback(
         string extension,
@@ -3047,12 +3057,15 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("--no-build", args);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
     [RequiresTools(["dotnet"])]
-    public async Task BuildEnvironmentIsAppliedToContextSpecificBuild()
+    public async Task BuildEnvironmentIsAppliedToContextSpecificBuild(string extension)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectPath = CreateProjectFile(workspace.Path, "EnvironmentBuild", """
+        var projectPath = CreateProjectFile(workspace.Path, "EnvironmentBuild", $$"""
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
@@ -3063,8 +3076,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
                 <OutputPath Condition="'$(BUILD_FLAVOR)' == 'custom&#x2003;flavor;value%'">bin/custom/</OutputPath>
                 <OutputPath Condition="'$(RUNTIME_ONLY)' != ''">bin/wrong/</OutputPath>
               </PropertyGroup>
+              {{DotnetProjectTestHelpers.GetCompileItems(extension)}}
               <Target Name="ValidateBuildEnvironment" BeforeTargets="CoreCompile">
                 <Error Condition="'$(BUILD_FLAVOR)' != 'custom&#x2003;flavor;value%'" Text="BUILD_FLAVOR was not applied to the project build." />
+                <Error Condition="'$(Configuration)' != 'Release'" Text="The build configuration was not applied as a global property." />
+                <WriteLinesToFile File="$(MSBuildProjectDirectory)/build-count.txt" Lines="build" Overwrite="false" />
               </Target>
               <Target Name="CustomizeRunCommand" AfterTargets="ComputeRunArguments">
                 <PropertyGroup>
@@ -3074,24 +3090,17 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
                 </PropertyGroup>
               </Target>
             </Project>
-            """);
+            """, extension);
         var sentinelPath = Path.Combine(workspace.Path, "environment-build-ran.txt");
-        File.WriteAllText(Path.Combine(Path.GetDirectoryName(projectPath)!, "Program.cs"), """
-            if (Environment.GetEnvironmentVariable("BUILD_FLAVOR") is not null)
-            {
-                throw new InvalidOperationException("Build-only environment leaked into the launched process.");
-            }
-
-            File.WriteAllText(
-                Environment.GetEnvironmentVariable("SENTINEL_PATH")!,
-                "started");
-            """);
+        // Rebuild restarts running replicas, so keep each service alive after writing its marker.
+        WriteProgram("started");
 
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper).WithResourceCleanUp(true);
         var project = builder.AddDotnetProject("environment-build", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithBuildEnvironment("BUILD_FLAVOR", "custom\u2003flavor;value%")
+            .WithBuildEnvironment("Configuration", "Release")
             .WithEnvironment("RUNTIME_ONLY", "runtime")
             .WithEnvironment("SENTINEL_PATH", sentinelPath);
         await using var app = builder.Build();
@@ -3101,24 +3110,72 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             await app.StartAsync(startCts.Token);
         }
 
-        using (var completionCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
-        {
-            await app.ResourceNotifications.WaitForResourceAsync(
-                "environment-build",
-                KnownResourceStates.Finished,
-                completionCts.Token);
-        }
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => File.Exists(sentinelPath) && File.ReadAllText(sentinelPath) == "started",
+            "The SDK project should start from the configured build output.",
+            retries: 20);
+        var expectedTargetPath = Path.Combine(Path.GetDirectoryName(projectPath)!, "bin", "custom", "net10.0", "EnvironmentBuild.dll");
+        Assert.True(File.Exists(expectedTargetPath));
+        Assert.Equal(["exec", expectedTargetPath], await ArgumentEvaluator.GetArgumentListAsync(project.Resource, app.Services));
+        var metadata = project.Resource.GetProjectMetadata();
+        Assert.False(metadata.IsFileBasedApp);
+        Assert.True(metadata.SuppressBuild);
+        Assert.Equal("Release", metadata.BuildEnvironment["Configuration"]);
+        Assert.Equal(Path.GetDirectoryName(projectPath), metadata.BuildWorkingDirectory);
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(projectPath)));
 
-        Assert.Equal("started", File.ReadAllText(sentinelPath));
-
+        WriteProgram("rebuilt");
         var rebuildResult = await app.ResourceCommands.ExecuteCommandAsync(
             project.Resource,
             KnownResourceCommands.RebuildCommand,
             TestContext.Current.CancellationToken);
         Assert.True(rebuildResult.Success);
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => File.Exists(sentinelPath) && File.ReadAllText(sentinelPath) == "rebuilt",
+            "The rebuilt SDK project should restart from the edited source.",
+            retries: 20);
+        Assert.Equal(["build", "build"], File.ReadAllLines(GetBuildCountPath(projectPath)));
 
         using var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
         await app.StopAsync(stopCts.Token);
+
+        void WriteProgram(string marker)
+        {
+            DotnetProjectTestHelpers.WriteProgram(
+                projectPath,
+                $$"""
+                if (Environment.GetEnvironmentVariable("BUILD_FLAVOR") is not null)
+                {
+                    throw new InvalidOperationException("Build-only environment leaked into the launched process.");
+                }
+
+                File.WriteAllText(Environment.GetEnvironmentVariable("SENTINEL_PATH")!, "{{marker}}");
+                Thread.Sleep(Timeout.Infinite);
+                """,
+                $$"""
+                open System
+                open System.IO
+
+                [<EntryPoint>]
+                let main _ =
+                    if not (isNull (Environment.GetEnvironmentVariable("BUILD_FLAVOR"))) then
+                        failwith "Build-only environment leaked into the launched process."
+                    File.WriteAllText(Environment.GetEnvironmentVariable("SENTINEL_PATH"), "{{marker}}")
+                    System.Threading.Thread.Sleep(System.Threading.Timeout.Infinite)
+                    0
+                """,
+                $$"""
+                Module Program
+                    Sub Main()
+                        If System.Environment.GetEnvironmentVariable("BUILD_FLAVOR") IsNot Nothing Then
+                            Throw New System.InvalidOperationException("Build-only environment leaked into the launched process.")
+                        End If
+                        System.IO.File.WriteAllText(System.Environment.GetEnvironmentVariable("SENTINEL_PATH"), "{{marker}}")
+                        System.Threading.Thread.Sleep(System.Threading.Timeout.Infinite)
+                    End Sub
+                End Module
+                """);
+        }
     }
 
     [Fact]
@@ -3811,11 +3868,14 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         return projectPath;
     }
 
-    private static string CreateConsoleProject(string root, string name, string sharedProject)
+    private static string CreateConsoleProject(string root, string name, string sharedProject) =>
+        CreateConsoleProject(root, name, sharedProject, ".csproj");
+
+    private static string CreateConsoleProject(string root, string name, string sharedProject, string extension)
     {
         var directory = Directory.CreateDirectory(Path.Combine(root, name));
         var relativeSharedProject = Path.GetRelativePath(directory.FullName, sharedProject);
-        var projectPath = Path.Combine(directory.FullName, $"{name}.csproj");
+        var projectPath = Path.Combine(directory.FullName, $"{name}{extension}");
         File.WriteAllText(projectPath, $$"""
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
@@ -3823,6 +3883,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
                 <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
               </PropertyGroup>
+              {{DotnetProjectTestHelpers.GetCompileItems(extension)}}
               <ItemGroup>
                 <ProjectReference Include="{{relativeSharedProject}}" />
               </ItemGroup>
@@ -3834,12 +3895,25 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
               </Target>
             </Project>
             """);
-        File.WriteAllText(Path.Combine(directory.FullName, "Program.cs"), """
+        DotnetProjectTestHelpers.WriteProgram(projectPath, """
             using Shared;
 
             File.WriteAllText(
                 args[0],
                 SharedValue.Value);
+            """,
+            """
+            [<EntryPoint>]
+            let main args =
+                System.IO.File.WriteAllText(args[0], Shared.SharedValue.Value)
+                0
+            """,
+            """
+            Module Program
+                Sub Main(args As String())
+                    System.IO.File.WriteAllText(args(0), Global.[Shared].SharedValue.Value)
+                End Sub
+            End Module
             """);
         return projectPath;
     }
@@ -3926,10 +4000,13 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         return projectPath;
     }
 
-    private static string CreateProjectFile(string root, string name, string contents)
+    private static string CreateProjectFile(string root, string name, string contents) =>
+        CreateProjectFile(root, name, contents, ".csproj");
+
+    private static string CreateProjectFile(string root, string name, string contents, string extension)
     {
         var directory = Directory.CreateDirectory(Path.Combine(root, name));
-        var projectPath = Path.Combine(directory.FullName, $"{name}.csproj");
+        var projectPath = Path.Combine(directory.FullName, $"{name}{extension}");
         File.WriteAllText(projectPath, contents);
         return projectPath;
     }

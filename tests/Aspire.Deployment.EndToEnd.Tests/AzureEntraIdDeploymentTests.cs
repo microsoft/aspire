@@ -74,7 +74,7 @@ public sealed class AzureEntraIdDeploymentTests(ITestOutputHelper output)
                 .WithRedirectUris("{{RedirectUri}}")
                 .WithRedirectUris(builder.AddParameter("redirecturis"));
 
-            var consumer = builder.AddProject("consumer", "Consumer/Consumer.csproj")
+            var consumer = builder.AddDotnetProject("consumer", @"Consumer\Consumer.csproj")
                 .WithHttpEndpoint(targetPort: 8080)
                 .WithExternalHttpEndpoints()
                 .WithReference(identity);

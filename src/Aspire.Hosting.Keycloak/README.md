@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Keycloak` integration with 
 
 ```bash
 aspire add Aspire.Hosting.Keycloak
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -21,7 +22,7 @@ In the AppHost, add a Keycloak resource and enable service discovery with either
 ```csharp
 var keycloak = builder.AddKeycloak("keycloak", 8080);
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(keycloak);
 ```
 

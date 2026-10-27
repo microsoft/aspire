@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { DebugLaunchSettings, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
+import type { DebugLaunchSettings, EnvVar, ExecutableLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import type { ViewMode } from '../data/AppHostDataRepository';
 import type { CommandInvocationEvent } from '../utils/telemetry';
 import type { AspireTerminalCommandEvent } from '../utils/AspireTerminalProvider';
@@ -279,6 +279,17 @@ export type AspireExtensionE2EControlCommand =
         csharpExtensionVersion?: string | null;
     }
     | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; resourceRequestPath?: string; continueExceptionStops?: boolean; timeoutMs?: number }
+    | {
+        name: 'proveDotnetResourceLaunch';
+        launchConfig: ProjectLaunchConfiguration;
+        sourcePath: string;
+        breakpointLine: number;
+        readyFilePath: string;
+        debug: boolean;
+        args?: readonly string[];
+        env?: readonly EnvVar[];
+        timeoutMs?: number;
+    }
     | { name: 'prepareBlazorWasmDebugger' }
     | {
         name: 'proveBlazorWasmDebugging';

@@ -10,7 +10,7 @@ var appConfig =
         emulator.WithDataBindMount();
     });
 
-builder.AddProject<Projects.AzureAppConfiguration_Web>("web")
+builder.AddDotnetProject("web", @"..\AzureAppConfiguration.Web\AzureAppConfiguration.Web.csproj")
     .WithReference(appConfig);
 
 builder.Build().Run();

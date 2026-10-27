@@ -8,10 +8,10 @@ using Aspire.Hosting.Utils;
 namespace Aspire.Hosting.Dotnet;
 
 /// <summary>
-/// Project metadata for a C# project or file-based app that was added by path.
+/// Project metadata for a .NET project or file-based C# app that was added by path.
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, ProjectPath = {ProjectPath}")]
-internal sealed class DotnetProjectMetadata(string projectPath, string? buildConfiguration) : IProjectMetadata
+internal sealed class DotnetProjectMetadata(string projectPath, string? buildConfiguration, string resourceName) : IProjectMetadata
 {
     private IReadOnlyDictionary<string, string> _buildEnvironment = ReadOnlyDictionary<string, string>.Empty;
     private string? _buildWorkingDirectory;
@@ -19,7 +19,31 @@ internal sealed class DotnetProjectMetadata(string projectPath, string? buildCon
 
     // Resolution is deferred so construction never touches the file system; an unresolvable path is
     // reported as a resource start failure instead.
-    public string ProjectPath => _resolvedProjectPath ??= ProjectPathResolver.ResolveProjectPath(projectPath);
+    public string ProjectPath => _resolvedProjectPath ??=
+        ProjectPathResolver.ResolveProjectPath(projectPath, includeAllDotnetProjectTypes: true);
+
+    public LaunchSettings? LaunchSettings
+    {
+        get
+        {
+            if (!ProjectPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase) || !File.Exists(ProjectPath))
+            {
+                return null;
+            }
+
+            var launchSettingsPath = Path.Combine(Path.GetDirectoryName(ProjectPath)!, "My Project", "launchSettings.json");
+            if (!File.Exists(launchSettingsPath))
+            {
+                return null;
+            }
+
+            // Supply VB's preferred file through metadata so the shared service loader keeps its legacy
+            // Properties fallback and file-app .run.json behavior. A present JSON "null" document must
+            // still take precedence over Properties rather than exposing the lower-priority profiles.
+            return LaunchSettingsReader.ReadLaunchSettingsFile(launchSettingsPath, $"project resource '{resourceName}'")
+                ?? new LaunchSettings();
+        }
+    }
 
     public string? BuildConfiguration { get; } = buildConfiguration;
 

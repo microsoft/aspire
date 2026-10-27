@@ -15,11 +15,11 @@ var orleans = builder.AddOrleans("my-app")
 //                      .WithDevelopmentClustering()
 //                      .WithMemoryGrainStorage("Default");
 
-builder.AddProject<Projects.OrleansServer>("silo")
+builder.AddDotnetProject("silo", @"..\OrleansServer\OrleansServer.csproj")
        .WithReference(orleans)
        .WithReplicas(3);
 
-builder.AddProject<Projects.OrleansClient>("frontend")
+builder.AddDotnetProject("frontend", @"..\OrleansClient\OrleansClient.csproj")
        .WithReference(orleans.AsClient())
        .WithExternalHttpEndpoints()
        .WithReplicas(3);
@@ -31,7 +31,7 @@ builder.AddProject<Projects.OrleansClient>("frontend")
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
 #endif
 
 using var app = builder.Build();

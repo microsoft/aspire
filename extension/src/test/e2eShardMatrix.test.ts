@@ -240,6 +240,23 @@ suite('E2E shard matrix', () => {
         ]);
     });
 
+    test('schedules resource Run/Debug proofs with the .NET debugger on both coordinated-build platforms', () => {
+        const workflow = fs.readFileSync(workflowPath, 'utf8');
+        const rows = matrixRows(workflow).filter(row =>
+            row.spec === 'out/test-e2e/test-e2e/coordinatedBuild.e2e.test.js');
+
+        assert.deepStrictEqual(rows.map(row => ({
+            name: row.name,
+            runner: row.runner,
+            installDotnetDebugger: row.installDotnetDebugger,
+            installAzureFunctions: row.installAzureFunctions,
+            advisoryIssue: row.advisoryIssue,
+        })), [
+            { name: 'Linux', runner: 'ubuntu-latest', installDotnetDebugger: true, installAzureFunctions: undefined, advisoryIssue: undefined },
+            { name: 'Windows', runner: 'windows-latest', installDotnetDebugger: true, installAzureFunctions: undefined, advisoryIssue: undefined },
+        ]);
+    });
+
     test('rejects a spec that has no matrix row', () => {
         const workflow = workflowWithRows(
             '- name: Linux\n  shardName: edge-cases\n  spec: out/test-e2e/test-e2e/edgeCases.e2e.test.js');

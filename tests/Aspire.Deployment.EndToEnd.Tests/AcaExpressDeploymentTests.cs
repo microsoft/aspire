@@ -191,12 +191,12 @@ public sealed class AcaExpressDeploymentTests(ITestOutputHelper output)
             builder.AddAzureContainerAppEnvironment("env").AsExpress();
             var secret = builder.AddParameter("manualsecret", secret: true);
 
-            var api = builder.AddProject("api", "Api/Api.csproj")
+            var api = builder.AddDotnetProject("api", @"Api\Api.csproj")
                 .WithHttpEndpoint(targetPort: 8080)
                 .WithExternalHttpEndpoints()
                 .WithEnvironment("MANUAL_SECRET", secret);
 
-            builder.AddProject("frontend", "Frontend/Frontend.csproj")
+            builder.AddDotnetProject("frontend", @"Frontend\Frontend.csproj")
                 .WithHttpEndpoint(targetPort: 8080)
                 .WithExternalHttpEndpoints()
                 .WithEnvironment("MANUAL_SECRET", secret)

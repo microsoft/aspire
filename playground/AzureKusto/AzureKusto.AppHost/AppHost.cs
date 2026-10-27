@@ -7,7 +7,7 @@ builder.AddAzureContainerAppEnvironment("infra");
 var kusto = builder.AddAzureKustoCluster("kusto").RunAsEmulator();
 var db = kusto.AddReadWriteDatabase("testdb");
 
-builder.AddProject<Projects.AzureKusto_Worker>("worker")
+builder.AddDotnetProject("worker", @"..\AzureKusto.Worker\AzureKusto.Worker.csproj")
     .WithReference(db)
     .WaitFor(db);
 
@@ -46,7 +46,7 @@ db.WithControlCommand(CslCommandGenerator.GenerateDatabaseStreamingIngestionCach
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
 #endif
 
 var app = builder.Build();

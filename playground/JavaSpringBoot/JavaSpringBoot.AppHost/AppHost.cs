@@ -41,7 +41,7 @@ builder.AddJavaApp("worker", "../worker", "target/worker-0.0.1-SNAPSHOT.jar", ["
     .WithJvmArgs("-Xmx128m");
 
 #if !SKIP_DASHBOARD_REFERENCE
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

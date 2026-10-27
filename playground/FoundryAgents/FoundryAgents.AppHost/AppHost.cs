@@ -60,16 +60,16 @@ builder.AddPythonApp("weather-python", "../app", "main.py")
     .WithReference(chat).WaitFor(chat)
     .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
-builder.AddProject<Projects.DotNetHostedAgent>("weather-dotnet")
+builder.AddDotnetProject("weather-dotnet", @"..\DotNetHostedAgent\DotNetHostedAgent.csproj")
     .WithHttpEndpoint(targetPort: 9000)
     .WithReference(chat).WaitFor(chat)
     .WithReference(searchAgent).WaitFor(searchAgent)
     .AsHostedAgent(project);
 
-builder.AddProject<Projects.DotNetInvocationHostedAgent>("echo-invocations-dotnet")
+builder.AddDotnetProject("echo-invocations-dotnet", @"..\DotNetInvocationHostedAgent\DotNetInvocationHostedAgent.csproj")
     .AsHostedAgent(project, HostedAgentProtocol.Invocations, "1.0.0");
 
-builder.AddProject<Projects.PromptAgentChat>("chat-app")
+builder.AddDotnetProject("chat-app", @"..\PromptAgentChat\PromptAgentChat.csproj")
     .WithExternalHttpEndpoints()
     .WithComputeEnvironment(aca)
     // Prompt-agent references provide connection details; the account reference configures identity and access.

@@ -9,8 +9,8 @@ export type Capability =
     | 'build-dotnet-using-cli' // Support building .NET projects using the CLI
     | 'devkit' // Support for .NET DevKit extension (old, used for determining whether to build .NET projects in extension)
     | 'ms-dotnettools.csdevkit' // Older AppHost versions used this extension identifier instead of devkit
-    | 'project' // Support for running C# projects
-    | 'project-with-external-build.v1' // Support for externally built C# projects
+    | 'project' // Support for running SDK-style .NET projects and file-based C# apps
+    | 'project-with-external-build.v1' // Support for externally built SDK-style .NET projects
     | 'ms-dotnettools.csharp' // Older AppHost versions used this extension identifier instead of project
     | 'python' // Support for running Python projects
     | 'ms-python.python' // Older AppHost versions used this extension identifier instead of python
@@ -225,6 +225,8 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
         capabilities.push("ms-dotnettools.csdevkit");
     }
 
+    // coreclr in the C# extension also debugs SDK-style F# and VB projects.
+    // A language extension alone does not supply this adapter.
     if (isCsharpInstalled()) {
         capabilities.push("project");
         capabilities.push("project-with-external-build.v1");

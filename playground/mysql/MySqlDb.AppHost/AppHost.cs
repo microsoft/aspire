@@ -27,7 +27,7 @@ var myTestDb2 = mySql.AddDatabase("myTestDb2").WithCreationScript($"""
     INSERT INTO example_table (name) VALUES ('Example Name 1');
 """);
 
-builder.AddProject<Projects.MySql_ApiService>("apiservice")
+builder.AddDotnetProject("apiservice", @"..\MySql.ApiService\MySql.ApiService.csproj")
     .WithExternalHttpEndpoints()
     .WithReference(catalogDb).WaitFor(catalogDb)
     .WithReference(myTestDb).WaitFor(myTestDb)

@@ -43,7 +43,7 @@ var letsEncrypt = certManager.AddIssuer("letsencrypt-prod")
                              .WithAcmeServer(acmeServer, acmeEmail)
                              .WithHttp01Solver();
 
-var api = builder.AddProject<Projects.CertManagerDemo_ApiService>("api")
+var api = builder.AddDotnetProject("api", @"..\CertManagerDemo.ApiService\CertManagerDemo.ApiService.csproj")
    .WithExternalHttpEndpoints();
 
 // Public gateway: serves /api -> the api service, attached to the public AGC ALB.

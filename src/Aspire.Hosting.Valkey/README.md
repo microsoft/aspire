@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Valkey` integration with th
 
 ```bash
 aspire add Aspire.Hosting.Valkey
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -21,7 +22,7 @@ In the AppHost, add a Valkey resource and reference it from another resource wit
 ```csharp
 var valkey = builder.AddValkey("cache");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(valkey);
 ```
 

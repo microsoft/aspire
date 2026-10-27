@@ -8,7 +8,7 @@ builder.AddJavaApp("swing", "../desktop", "target/swing-desktop-1.0.0.jar")
     .WithMainClass("com.example.swing.SwingLauncher");
 
 #if !SKIP_DASHBOARD_REFERENCE
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

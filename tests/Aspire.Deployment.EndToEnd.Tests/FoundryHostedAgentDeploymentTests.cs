@@ -606,7 +606,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                 var foundryProject = foundry.AddProject("proj-myproject");
                 var chat = foundryProject.AddModelDeployment("chat-model", FoundryModel.OpenAI.Gpt41);
 
-                builder.AddProject<Projects.DotNetHostedAgent>("dotnet-hosted-agent")
+                builder.AddDotnetProject("dotnet-hosted-agent", @"..\DotNetHostedAgent\DotNetHostedAgent.csproj")
                     .WithReference(chat).WaitFor(chat)
                     .AsHostedAgent(foundryProject, HostedAgentProtocol.Responses, "2.0.0");
 

@@ -3,12 +3,12 @@ var builder = DistributedApplication.CreateBuilder(args);
 var nats = builder.AddNats("nats")
     .WithJetStream();
 
-builder.AddProject<Projects.Nats_ApiService>("api")
+builder.AddDotnetProject("api", @"..\Nats.ApiService\Nats.ApiService.csproj")
     .WithExternalHttpEndpoints()
     .WithReference(nats)
     .WaitFor(nats);
 
-builder.AddProject<Projects.Nats_Backend>("backend")
+builder.AddDotnetProject("backend", @"..\Nats.Backend\Nats.Backend.csproj")
     .WithReference(nats)
     .WaitFor(nats);
 

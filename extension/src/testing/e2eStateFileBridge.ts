@@ -31,6 +31,7 @@ import { isEnabledCommand } from '../views/treePresentation';
 import { blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs } from './blazorWasmDebugProofTimeouts';
 import type { BlazorWasmDebuggerStatus } from './blazorWasmDebuggerSetup';
 import { getPsFollowProcessLogPath, type PsFollowProcessEvent } from './psFollowProcessLog';
+import { proveDotnetResourceLaunch } from './dotnetResourceLaunchProof';
 
 let atomicWriteSequence = 0;
 
@@ -895,6 +896,17 @@ export async function executeE2eControlCommand(
     case 'proveAppHostAndResourceDebugging': {
       markStarted();
       return await proveAppHostAndResourceDebugging(command, aspireContext, appHostTreeProvider);
+    }
+    case 'proveDotnetResourceLaunch': {
+      markStarted();
+      return await proveDotnetResourceLaunch({
+        ...command,
+        launchConfig: { ...command.launchConfig, project_path: getE2eWorkspacePath(command.launchConfig.project_path) },
+        sourcePath: getE2eWorkspacePath(command.sourcePath),
+        breakpointLine: getE2eBreakpointLine(command.breakpointLine),
+        readyFilePath: getE2eWorkspacePath(command.readyFilePath),
+        timeoutMs: getE2ePositiveInteger(command.timeoutMs, 120000, 'timeoutMs'),
+      });
     }
     case 'prepareBlazorWasmDebugger': {
       markStarted();

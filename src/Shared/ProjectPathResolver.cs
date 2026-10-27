@@ -13,16 +13,27 @@ internal static class ProjectPathResolver
     /// Ambiguous or missing project files are deliberately passed through rather than throwing, so the
     /// error surfaces later as a resource start failure with a message naming the resource.
     /// </remarks>
-    public static string ResolveProjectPath(string path)
+    public static string ResolveProjectPath(string path) =>
+        ResolveProjectPath(path, includeAllDotnetProjectTypes: false);
+
+    /// <summary>
+    /// Resolves directories using either the legacy C#-only policy or all supported .NET project types.
+    /// </summary>
+    public static string ResolveProjectPath(string path, bool includeAllDotnetProjectTypes)
     {
         if (Directory.Exists(path))
         {
-            var projectFiles = Directory.GetFiles(path, "*.csproj", new EnumerationOptions
-            {
-                MatchCasing = MatchCasing.CaseInsensitive,
-                RecurseSubdirectories = false,
-                IgnoreInaccessible = true
-            });
+            var projectFiles = Directory.EnumerateFiles(path, "*", new EnumerationOptions
+                {
+                    MatchCasing = MatchCasing.CaseInsensitive,
+                    RecurseSubdirectories = false,
+                    IgnoreInaccessible = true
+                })
+                .Where(file => includeAllDotnetProjectTypes
+                    ? IsSupportedDotnetProjectFile(file)
+                    : file.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+                .Take(2)
+                .ToArray();
 
             if (projectFiles.Length != 1)
             {
@@ -34,4 +45,12 @@ internal static class ProjectPathResolver
 
         return path;
     }
+
+    /// <summary>
+    /// Determines whether a path names a supported C#, F#, or Visual Basic project file, not a file-based app.
+    /// </summary>
+    public static bool IsSupportedDotnetProjectFile(string path) =>
+        path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase);
 }

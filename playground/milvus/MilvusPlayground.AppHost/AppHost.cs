@@ -4,7 +4,7 @@ var milvusdb = builder.AddMilvus("milvus")
     .WithDataVolume("milvus-data")
     .WithAttu();
 
-builder.AddProject<Projects.MilvusPlayground_ApiService>("apiservice")
+builder.AddDotnetProject("apiservice", @"..\MilvusPlayground.ApiService\MilvusPlayground.ApiService.csproj")
     .WithReference(milvusdb).WaitFor(milvusdb);
 
 builder.Build().Run();

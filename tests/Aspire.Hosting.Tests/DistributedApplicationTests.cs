@@ -1840,7 +1840,9 @@ public class DistributedApplicationTests
         {
             endpoint.IsProxied = false;
         });
+#pragma warning disable CS0618 // Retain legacy project start, stop, and lifetime compatibility.
         var servicea = builder.AddProject<Projects.ServiceA>($"{testName}-servicea")
+#pragma warning restore CS0618
             .WithReference(redis)
             .WithReference(redisNoPort);
 
@@ -1914,7 +1916,9 @@ public class DistributedApplicationTests
         // Since port is not specified, Aspire will assign the host port before the container is created.
         var redisNoPort = builder.AddRedis($"{testName}-redisNoPort").WithEndpointProxySupport(false);
 
+#pragma warning disable CS0618 // Retain legacy project start, stop, and lifetime compatibility.
         var servicea = builder.AddProject<Projects.ServiceA>($"{testName}-servicea")
+#pragma warning restore CS0618
             .WithReference(redis)
             .WithReference(redisNoPort);
 

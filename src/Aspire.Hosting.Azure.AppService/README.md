@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.AppService` integrati
 
 ```bash
 aspire add Aspire.Hosting.Azure.AppService
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -25,7 +26,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("env");
 
-builder.AddProject<Projects.MyWebApp>("webapp")
+builder.AddDotnetProject("webapp", "../MyWebApp/MyWebApp.csproj")
     .WithExternalHttpEndpoints()
     .PublishAsAzureAppServiceWebsite((infrastructure, website) =>
     {
@@ -57,7 +58,7 @@ Updated Aspire client integrations resolve both forms. Applications using older 
 var database = builder.AddPostgres("postgres")
     .AddDatabase("my-db");
 
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithReference(database, connectionName: "my_db");
 ```
 
@@ -68,7 +69,7 @@ Explicit `ConnectionStringEnvironmentVariable` values are physical names and are
 The `PublishAsAzureAppServiceWebsite` extension method configures a compute resource to be published as an Azure App Service Web App when deploying to Azure. This method allows you to customize the App Service Web App configuration using the Azure Provisioning SDK.
 
 ```csharp
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithHttpEndpoint(targetPort: 8080)
     .WithExternalHttpEndpoints()
     .WithHealthProbe(ProbeType.Liveness, "/health")

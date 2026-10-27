@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { extensionLogOutputChannel } from '../../utils/logging';
-import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, prebuiltProjectOutputMissing, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, resolvedRunCommandDisablesDebugger, failedToGetProjectRunProperties, invalidMsBuildRunCommandResponse, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName, launchProfileHasInvalidProperties, failedToCleanUpMsBuildTemporaryDirectory } from '../../loc/strings';
+import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, prebuiltProjectOutputMissing, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, resolvedRunCommandDisablesDebugger, failedToGetProjectRunProperties, invalidMsBuildRunCommandResponse, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName, launchProfileHasInvalidProperties, failedToCleanUpMsBuildTemporaryDirectory, dotnetDisplayName } from '../../loc/strings';
 import { ChildProcessWithoutNullStreams, execFile, spawn } from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
@@ -1148,8 +1148,8 @@ export function createProjectDebuggerExtension(
         resourceType,
         debugAdapter: 'coreclr',
         extensionId: csharpExtensionId,
-        getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => `C#: ${path.basename((launchConfig as ProjectLaunchConfiguration).project_path)}`,
-        getSupportedFileTypes: () => ['.cs', '.csproj'],
+        getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => dotnetDisplayName(path.basename((launchConfig as ProjectLaunchConfiguration).project_path)),
+        getSupportedFileTypes: () => ['.cs', '.csproj', '.fsproj', '.vbproj'],
         getProjectFile: (launchConfig) => {
             if (isProjectLaunchConfiguration(launchConfig)) {
                 return launchConfig.project_path;
@@ -1175,6 +1175,12 @@ export function createProjectDebuggerExtension(
             // extension-owned builds for file-based resources and older CLIs.
             const shouldBuildProject = !suppressBuild &&
                 (!isFileBasedProject || !launchOptions.isApphost || launchOptions.forceBuild !== false);
+
+            // Aspire selects and applies profiles itself, including VB's My Project location.
+            // Otherwise coreclr independently reapplies the first Properties profile and can leak
+            // its environment into named or explicitly excluded profiles. null disables that pass.
+            // https://code.visualstudio.com/docs/csharp/debugger-settings
+            debugConfiguration.launchSettingsProfile = null;
 
             extensionLogOutputChannel.info(`Reading launch settings for: ${projectPath}`);
 
