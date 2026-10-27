@@ -237,11 +237,9 @@ suite('debugger install hints', () => {
         const dataChanges = new vscode.EventEmitter<void>();
         const service = new DebuggerInstallHintService(createMemento());
         const observation = service.watchForMissingDebuggers({
-            workspaceAppHostCandidatePaths: ['/workspace/apphost.cs'],
             workspaceResources: [createResource('go')],
             appHosts: [],
             onDidChangeData: dataChanges.event,
-            keepDataActive: sinon.stub().returns({ dispose: sinon.stub() }),
         });
 
         try {
@@ -318,11 +316,9 @@ suite('debugger install hints', () => {
         const dataChanges = new vscode.EventEmitter<void>();
         const service = new DebuggerInstallHintService(createMemento());
         const observation = service.watchForMissingDebuggers({
-            workspaceAppHostCandidatePaths: ['/workspace/apphost.cs'],
             workspaceResources: [createResource('java')],
             appHosts: [],
             onDidChangeData: dataChanges.event,
-            keepDataActive: sinon.stub().returns({ dispose: sinon.stub() }),
         });
 
         try {
@@ -569,56 +565,49 @@ suite('debugger install hints', () => {
             'The extensions required for Java debugging are installed. Restart the AppHost to enable debugging.');
     });
 
-    test('starts background observation only after discovering an AppHost candidate', () => {
+    test('observes debugger data without holding a polling lease for discovered AppHosts', () => {
         const dataChanges = new vscode.EventEmitter<void>();
-        const candidatePaths: string[] = [];
         const keepDataActive = sinon.stub().returns({ dispose: sinon.stub() });
         const service = new DebuggerInstallHintService(createMemento());
-        const observation = service.watchForMissingDebuggers({
-            get workspaceAppHostCandidatePaths() {
-                return candidatePaths;
-            },
+        const notify = sinon.stub(service, 'notifyMissingDebuggers').resolves();
+        const source = {
+            workspaceAppHostCandidatePaths: ['/workspace/AppHost.csproj'],
             workspaceResources: [],
             appHosts: [],
             onDidChangeData: dataChanges.event,
             keepDataActive,
-        });
+        };
+        const observation = service.watchForMissingDebuggers(source);
 
         try {
             assert.strictEqual(keepDataActive.callCount, 0);
 
-            candidatePaths.push('/workspace/AppHost.csproj');
             dataChanges.fire();
 
-            assert.strictEqual(keepDataActive.callCount, 1);
+            assert.strictEqual(keepDataActive.callCount, 0);
+            assert.strictEqual(notify.callCount, 2);
         } finally {
             observation.dispose();
             dataChanges.dispose();
         }
     });
 
-    test('stops background observation after the last AppHost candidate is removed', () => {
+    test('disposal stops observing resource data', () => {
         const dataChanges = new vscode.EventEmitter<void>();
-        const candidatePaths = ['/workspace/AppHost.csproj'];
-        const dataLease = { dispose: sinon.stub() };
         const service = new DebuggerInstallHintService(createMemento());
+        const notify = sinon.stub(service, 'notifyMissingDebuggers').resolves();
         const observation = service.watchForMissingDebuggers({
-            get workspaceAppHostCandidatePaths() {
-                return candidatePaths;
-            },
             workspaceResources: [],
             appHosts: [],
             onDidChangeData: dataChanges.event,
-            keepDataActive: sinon.stub().returns(dataLease),
         });
 
         try {
-            assert.strictEqual(dataLease.dispose.callCount, 0);
-
-            candidatePaths.splice(0);
+            assert.strictEqual(notify.callCount, 1);
+            observation.dispose();
             dataChanges.fire();
 
-            assert.strictEqual(dataLease.dispose.callCount, 1);
+            assert.strictEqual(notify.callCount, 1);
         } finally {
             observation.dispose();
             dataChanges.dispose();
