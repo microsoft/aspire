@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@flojon"
+  ],
+  "description": "Opening an interaction dialog whose first input is a choice dropdown no longer crashes the dashboard circuit.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udfaf",
+  "firstMergedAt": "2026-10-27T06:39:39Z",
+  "lastMergedAt": "2026-10-27T06:39:39Z",
+  "name": "Interaction dialog choice input no longer crashes dashboard",
+  "owner": "JamesNK",
+  "prs": [
+    21321
+  ]
+}

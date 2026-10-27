@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal refactoring of CLI Git handling and test diagnostics",
+  "mergedAt": "2026-10-27T11:41:13Z",
+  "number": 21318,
+  "runDate": "2026-10-27T12:05:00Z",
+  "status": "excluded",
+  "title": "Share CLI Git acquisition and improve process diagnostics"
+}

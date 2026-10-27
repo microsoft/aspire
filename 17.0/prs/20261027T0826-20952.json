@@ -1,0 +1,9 @@
+{
+  "author": "chansharp",
+  "comment": "Internal allocation reduction with no clear user-facing impact",
+  "mergedAt": "2026-10-27T08:26:12Z",
+  "number": 20952,
+  "runDate": "2026-10-27T12:05:00Z",
+  "status": "excluded",
+  "title": "Reduce allocations in resource dependency discovery"
+}

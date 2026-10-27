@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "TypeScript AppHosts can configure terminal dimensions",
+  "mergedAt": "2026-10-27T08:29:27Z",
+  "number": 21116,
+  "runDate": "2026-10-27T12:05:00Z",
+  "status": "included",
+  "title": "Enable terminal configuration callbacks in TypeScript AppHosts"
+}

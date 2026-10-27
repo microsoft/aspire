@@ -1,0 +1,9 @@
+{
+  "author": "flojon",
+  "comment": "Fixes dashboard circuit crash for Choice inputs in interaction dialog",
+  "mergedAt": "2026-10-27T06:39:39Z",
+  "number": 21321,
+  "runDate": "2026-10-27T12:05:00Z",
+  "status": "included",
+  "title": "Autofocus the interaction dialog's first input to avoid a circuit crash"
+}
