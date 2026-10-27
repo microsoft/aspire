@@ -4,16 +4,183 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Git;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Configuration;
 
-public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
+public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisposable
 {
+    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddXunit(outputHelper));
+
+    public void Dispose() => _loggerFactory.Dispose();
+
+    private GitCommandRunner CreateRunner(ICliHostEnvironment hostEnvironment) =>
+        new(hostEnvironment, _loggerFactory.CreateLogger<GitCommandRunner>());
+
+    private IGitClient CreateClient(ICliHostEnvironment hostEnvironment) =>
+        new GitClient(CreateRunner(hostEnvironment));
+
+    [Theory]
+    [InlineData(nameof(GitFailure.Unavailable), false)]
+    [InlineData(nameof(GitFailure.Unavailable), true)]
+    [InlineData(nameof(GitFailure.AuthenticationFailed), false)]
+    [InlineData(nameof(GitFailure.AuthenticationFailed), true)]
+    [InlineData(nameof(GitFailure.CommandFailed), false)]
+    [InlineData(nameof(GitFailure.CommandFailed), true)]
+    [InlineData(nameof(GitFailure.RepositoryUnavailable), false)]
+    [InlineData(nameof(GitFailure.RepositoryUnavailable), true)]
+    public async Task SharedGitFailures_PreserveConfigurationSourceMessages(string failure, bool check)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var kind = Enum.Parse<GitFailure>(failure);
+        var commands = new TestGitCommandRunner
+        {
+            RunCallback = (_, _) => throw new GitCommandException(kind, 128)
+        };
+        var client = new GitClient(commands);
+        var source = new ConfigSource { Repository = workspace.Path, Path = AspireConfigFile.FileName };
+
+        var expected = kind switch
+        {
+            GitFailure.Unavailable => ConfigSourceStrings.GitNotFound,
+            GitFailure.AuthenticationFailed => ConfigSourceStrings.AuthenticationFailed,
+            _ => ConfigSourceStrings.RepositoryUnavailable
+        };
+        if (check)
+        {
+            var interaction = await CheckFailureAsync(workspace, client, source, TimeProvider.System, TestContext.Current.CancellationToken);
+            Assert.Equal(string.Format(ConfigSourceStrings.CheckFailed, expected), Assert.Single(interaction.DisplayedMessages).Message);
+            Assert.Empty(interaction.DisplayedRawText);
+        }
+        else
+        {
+            var error = await Assert.ThrowsAsync<ConfigSourceException>(() => client.AcquireAsync(source, workspace.Path, TestContext.Current.CancellationToken));
+            Assert.Equal(expected, error.Message);
+            Assert.Null(error.InnerException);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SharedGitTimeout_BudgetCoversAllCommands(bool check)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var time = new FakeTimeProvider();
+        var commands = new TestGitCommandRunner
+        {
+            RunCallback = (command, token) =>
+            {
+                time.Advance(TimeSpan.FromSeconds(10));
+                token.ThrowIfCancellationRequested();
+                return Task.FromResult(command.Arguments[0] == "ls-remote"
+                    ? $"{TestGitCommandRunner.DefaultCommitSha}\tHEAD\n"
+                    : TestGitCommandRunner.DefaultCommitSha);
+            }
+        };
+        var client = new GitClient(commands);
+        var source = new ConfigSource { Repository = workspace.Path, Path = AspireConfigFile.FileName };
+
+        if (check)
+        {
+            var interaction = await CheckFailureAsync(workspace, client, source, time, TestContext.Current.CancellationToken);
+            Assert.Equal(string.Format(ConfigSourceStrings.CheckFailed, ConfigSourceStrings.GitTimeout), Assert.Single(interaction.DisplayedMessages).Message);
+            Assert.Empty(interaction.DisplayedRawText);
+        }
+        else
+        {
+            var error = await Assert.ThrowsAsync<ConfigSourceException>(() => client.AcquireAsync(source, workspace.Path, TestContext.Current.CancellationToken, time));
+            Assert.Equal(ConfigSourceStrings.GitTimeout, error.Message);
+            Assert.Null(error.GitOutput);
+        }
+        Assert.Equal(3, commands.Commands.Count);
+    }
+
+    [Theory]
+    [InlineData(false, false, "fetch")]
+    [InlineData(false, true, "fetch")]
+    [InlineData(true, false, "fetch")]
+    [InlineData(true, true, "fetch")]
+    [InlineData(false, false, "ls-remote")]
+    [InlineData(false, true, "ls-remote")]
+    [InlineData(true, false, "ls-remote")]
+    [InlineData(true, true, "ls-remote")]
+    public async Task SharedGitCancellation_DisplaysPartialOutputOnlyForTimeout(bool check, bool userCancellation, string cancelledCommand)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var time = new FakeTimeProvider();
+        var commands = new TestGitCommandRunner
+        {
+            RunCallback = (command, token) =>
+            {
+                if (command.Arguments[0] == cancelledCommand || command.Arguments[1] == cancelledCommand)
+                {
+                    if (userCancellation)
+                    {
+                        cancellation.Cancel();
+                    }
+                    else
+                    {
+                        time.Advance(TimeSpan.FromSeconds(30));
+                    }
+                    throw new GitProcessCanceledException("partial-private-remote-diagnostic", token);
+                }
+                return Task.FromResult(command.Arguments[0] == "ls-remote"
+                    ? $"{TestGitCommandRunner.DefaultCommitSha}\tHEAD\n"
+                    : string.Empty);
+            }
+        };
+        var client = new GitClient(commands);
+        var source = new ConfigSource { Repository = workspace.Path, Path = AspireConfigFile.FileName };
+        Task RunAsync() => check
+            ? CheckFailureAsync(workspace, client, source, time, cancellation.Token)
+            : client.AcquireAsync(source, workspace.Path, cancellation.Token, time);
+
+        if (userCancellation)
+        {
+            var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(RunAsync);
+            Assert.Equal(new OperationCanceledException(cancellation.Token).Message, error.Message);
+        }
+        else if (check)
+        {
+            var interaction = await CheckFailureAsync(workspace, client, source, time, cancellation.Token);
+            Assert.Equal(string.Format(ConfigSourceStrings.CheckFailed, ConfigSourceStrings.GitTimeout), Assert.Single(interaction.DisplayedMessages).Message);
+            Assert.Equal("partial-private-remote-diagnostic", Assert.Single(interaction.DisplayedRawText).Text);
+        }
+        else
+        {
+            var error = await Assert.ThrowsAsync<ConfigSourceException>(RunAsync);
+            Assert.Equal(ConfigSourceStrings.GitTimeout, error.Message);
+            Assert.Equal("partial-private-remote-diagnostic", error.GitOutput);
+        }
+    }
+
+    private static async Task<TestInteractionService> CheckFailureAsync(
+        TemporaryWorkspace workspace, IGitClient git, ConfigSource source, TimeProvider clock, CancellationToken token)
+    {
+        await TestConfigSourceServices.SaveBindingAsync(new ConfigSource
+        {
+            Repository = source.Repository,
+            Path = source.Path,
+            Ref = source.Ref,
+            AppliedVersion = "previous-version"
+        }, workspace.WorkspaceRoot, token);
+        var interaction = new TestInteractionService();
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, clock: clock, interaction: interaction);
+        await service.CheckProjectAsync(workspace.WorkspaceRoot, force: false, token);
+        service.NotifyIfUpdateAvailable();
+        return interaction;
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
@@ -50,27 +217,37 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
             startInfo.ArgumentList.Add("test-parent");
             startInfo.ArgumentList.Add(pidFile);
         }
-        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        cancellation.CancelAfter(TimeSpan.FromSeconds(30));
-        var run = ConfigSourceGitClient.RunProcessAsync(startInfo, captureTimeoutOutput, cancellation.Token);
+        using var timeoutSource = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(milliseconds: 30_000);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken, timeoutSource.Token);
+        var stopwatch = Stopwatch.StartNew();
+        void Log(string message) => outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] [{stopwatch.Elapsed}] {message}");
+        Log($"Starting captured process '{startInfo.FileName}'; parentExits={parentExits}, captureTimeoutOutput={captureTimeoutOutput}.");
+        var run = CreateRunner(TestHelpers.CreateNonInteractiveHostEnvironment()).RunProcessAsync(
+            startInfo, captureTimeoutOutput, GitCommandMode.Unattended, cancellation.Token);
+        Log($"Captured process launched; task status={run.Status}. Waiting for descendant PID in '{pidFile}'.");
         Process? child = null;
         try
         {
             var pid = await ProcessTestHelpers.WaitForProcessIdAsync(pidFile, cancellation.Token);
             child = Process.GetProcessById(pid);
+            Log($"Descendant PID={pid}; waiting for {(parentExits ? "post-exit pipe drain" : "cancellation")}.");
 
             if (parentExits)
             {
-                var error = await Assert.ThrowsAsync<ConfigSourceException>(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
-                Assert.Equal(ConfigSourceStrings.RepositoryUnavailable, error.Message);
+                var error = await Assert.ThrowsAsync<GitCommandException>(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
+                Assert.Equal(GitFailure.RepositoryUnavailable, error.Failure);
+                Log("Post-exit pipe drain returned the expected failure.");
             }
             else
             {
+                Log("Requesting cancellation.");
                 cancellation.Cancel();
+                Log("Cancellation requested; waiting for captured process to return.");
                 var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
+                Log($"Captured process returned {error.GetType().Name}; waiting for descendant {pid} to exit.");
                 if (captureTimeoutOutput)
                 {
-                    var interrupted = Assert.IsType<ConfigSourceGitClient.GitProcessCanceledException>(error);
+                    var interrupted = Assert.IsType<GitProcessCanceledException>(error);
                     const string prompt = "Enter passphrase: ";
                     Assert.InRange(interrupted.Output.Length, 64 * 1024 + prompt.Length + 1, 1048576 + prompt.Length);
                     Assert.Equal(new string('x', interrupted.Output.Length - prompt.Length) + prompt, interrupted.Output);
@@ -78,21 +255,28 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
                 }
                 await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
                 Assert.True(child.HasExited);
+                Log($"Descendant {pid} exited.");
             }
         }
         finally
         {
+            Log($"Starting cleanup; captured task status={run.Status}.");
             cancellation.Cancel();
+            Log("Cleanup cancellation completed.");
             if (child is not null)
             {
                 if (!child.HasExited)
                 {
+                    Log($"Killing descendant tree {child.Id}.");
                     child.Kill(entireProcessTree: true);
+                    Log($"Kill returned for descendant {child.Id}; waiting for exit.");
                     await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                    Log($"Descendant {child.Id} cleanup completed.");
                 }
                 child.Dispose();
             }
-            await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
+            var cleanupError = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
+            Log($"Cleanup finished; captured task status={run.Status}, capture exception={cleanupError?.GetType().Name ?? "none"}.");
         }
     }
 
@@ -100,9 +284,9 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
     public void CreateStartInfo_AdvisoryFetchNeverOwnsTerminal()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var client = new ConfigSourceGitClient(TestHelpers.CreateInteractiveHostEnvironment());
+        var client = CreateRunner(TestHelpers.CreateInteractiveHostEnvironment());
 
-        var startInfo = client.CreateStartInfo(workspace.Path, ["fetch"], allowInteractive: false);
+        var startInfo = client.CreateStartInfo(workspace.Path, ["fetch"], GitCommandMode.Unattended);
 
         Assert.Equal("0", startInfo.Environment["GIT_TERMINAL_PROMPT"]);
         Assert.Equal("never", startInfo.Environment["GCM_INTERACTIVE"]);
@@ -125,9 +309,9 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
         configuration["ASPIRE_NON_INTERACTIVE"] = configuredNonInteractive;
         configuration["CI"] = ci;
         var hostEnvironment = new CliHostEnvironment(configuration, nonInteractive, isOutputRedirected: true);
-        var client = new ConfigSourceGitClient(hostEnvironment);
+        var client = CreateRunner(hostEnvironment);
 
-        var startInfo = client.CreateStartInfo(workspace.Path, ["fetch", "--depth", "1", "--", "https://example.com/configuration", "HEAD"]);
+        var startInfo = client.CreateStartInfo(workspace.Path, ["fetch", "--depth", "1", "--", "https://example.com/configuration", "HEAD"], GitCommandMode.Interactive);
 
         Assert.Equal(expectedInteractive ? "1" : "0", startInfo.Environment["GIT_TERMINAL_PROMPT"]);
         Assert.Equal(!expectedInteractive, startInfo.CreateNoWindow);
@@ -143,6 +327,25 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CreateStartInfo_ReferenceResolutionCapturesRefsWithoutHidingInteractivePrompts(bool interactive)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var runner = CreateRunner(interactive
+            ? TestHelpers.CreateInteractiveHostEnvironment()
+            : TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var startInfo = runner.CreateStartInfo(workspace.Path, ["ls-remote", "--", "repository", "HEAD"], GitCommandMode.Interactive);
+
+        Assert.False(startInfo.RedirectStandardInput);
+        Assert.True(startInfo.RedirectStandardOutput);
+        Assert.Equal(!interactive, startInfo.RedirectStandardError);
+        Assert.Equal(!interactive, startInfo.StandardErrorEncoding is not null);
+        Assert.Equal(interactive ? "1" : "0", startInfo.Environment["GIT_TERMINAL_PROMPT"]);
+    }
+
+    [Theory]
     [InlineData("init")]
     [InlineData("rev-parse")]
     [InlineData("ls-tree")]
@@ -150,9 +353,9 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
     public void CreateStartInfo_LocalQueriesRemainCapturedWhenInteractive(string command)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var client = new ConfigSourceGitClient(TestHelpers.CreateInteractiveHostEnvironment());
+        var client = CreateRunner(TestHelpers.CreateInteractiveHostEnvironment());
 
-        var startInfo = client.CreateStartInfo(workspace.Path, [command]);
+        var startInfo = client.CreateStartInfo(workspace.Path, [command], GitCommandMode.Interactive);
 
         Assert.False(startInfo.RedirectStandardInput);
         Assert.True(startInfo.RedirectStandardOutput);
@@ -174,7 +377,7 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
             {"DOCS":{"llmsTxtUrl":"https://example.com/llms.txt","API":{"custom":"preserved"}},"docs:api:sitemapUrl":"https://example.com/sitemap.xml",
             """ + "\"features\":{\"test\":true},\"custom\":\"" + custom + "\"}");
         var cache = workspace.CreateDirectory("cache");
-        var client = new ConfigSourceGitClient(interactive
+        var client = CreateClient(interactive
             ? TestHelpers.CreateInteractiveHostEnvironment()
             : TestHelpers.CreateNonInteractiveHostEnvironment());
 
@@ -205,7 +408,7 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
         var source = new ConfigSource { Repository = repository.FullName, Path = path };
         var project = workspace.CreateDirectory("project");
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
-            git: new ConfigSourceGitClient(TestHelpers.CreateNonInteractiveHostEnvironment()));
+            git: CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment()));
 
         await service.MaterializeAsync(source, project, TestContext.Current.CancellationToken);
 
@@ -233,7 +436,7 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
         var source = new ConfigSource { Repository = workspace.Path, Path = AspireConfigFile.FileName };
         var project = workspace.CreateDirectory("project");
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
-            git: new ConfigSourceGitClient(TestHelpers.CreateNonInteractiveHostEnvironment()));
+            git: CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment()));
 
         await service.MaterializeAsync(source, project, TestContext.Current.CancellationToken);
 
@@ -259,7 +462,7 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
             }
             """;
         await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, content);
-        var client = new ConfigSourceGitClient(TestHelpers.CreateNonInteractiveHostEnvironment());
+        var client = CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment());
 
         var (_, _, configuration) = await client.AcquireAsync(
             new() { Repository = workspace.Path, Path = AspireConfigFile.FileName },
@@ -292,7 +495,7 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, content);
 
-        await Assert.ThrowsAsync<ConfigSourceException>(() => new ConfigSourceGitClient(TestHelpers.CreateNonInteractiveHostEnvironment()).AcquireAsync(
+        await Assert.ThrowsAsync<ConfigSourceException>(() => CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment()).AcquireAsync(
             new() { Repository = workspace.Path, Path = AspireConfigFile.FileName }, workspace.CreateDirectory("cache").FullName, TestContext.Current.CancellationToken));
     }
 
@@ -302,7 +505,7 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateRepositoryAsync(workspace, "other.json", "{}");
 
-        var error = await Assert.ThrowsAsync<ConfigSourceException>(() => new ConfigSourceGitClient(TestHelpers.CreateNonInteractiveHostEnvironment()).AcquireAsync(
+        var error = await Assert.ThrowsAsync<ConfigSourceException>(() => CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment()).AcquireAsync(
             new() { Repository = workspace.Path, Path = AspireConfigFile.FileName }, workspace.CreateDirectory("cache").FullName, TestContext.Current.CancellationToken));
 
         Assert.Equal(ConfigSourceStrings.MissingFile, error.Message);
@@ -315,7 +518,7 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, "{}".PadRight(bytes));
-        var client = new ConfigSourceGitClient(TestHelpers.CreateNonInteractiveHostEnvironment());
+        var client = CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment());
         var cache = workspace.CreateDirectory("cache");
         var source = new ConfigSource { Repository = workspace.Path, Path = AspireConfigFile.FileName };
 
@@ -345,7 +548,7 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-am", "Preview configuration");
         var expectedCommit = (await RunGitOutputAsync(workspace.Path, ["rev-parse", "HEAD"])).Trim();
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "checkout", originalBranch);
-        var client = new ConfigSourceGitClient(TestHelpers.CreateNonInteractiveHostEnvironment());
+        var client = CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment());
 
         var (commit, _, configuration) = await client.AcquireAsync(
             new() { Repository = workspace.Path, Path = AspireConfigFile.FileName, Ref = reference },
@@ -363,7 +566,7 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
         var expectedCommit = (await RunGitOutputAsync(workspace.Path, ["rev-parse", "HEAD"])).Trim();
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName), """{"custom":"latest"}""");
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-am", "New configuration");
-        var client = new ConfigSourceGitClient(TestHelpers.CreateNonInteractiveHostEnvironment());
+        var client = CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment());
 
         var (commit, _, configuration) = await client.AcquireAsync(
             new() { Repository = workspace.Path, Path = AspireConfigFile.FileName, Ref = expectedCommit },
@@ -379,7 +582,12 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, "{}");
         var source = new ConfigSource { Repository = workspace.Path, Path = AspireConfigFile.FileName };
-        var client = new ConfigSourceGitClient(TestHelpers.CreateNonInteractiveHostEnvironment());
+        var runner = CreateRunner(TestHelpers.CreateNonInteractiveHostEnvironment());
+        var commands = new TestGitCommandRunner
+        {
+            RunCallback = (command, token) => runner.RunAsync(command.WorkingDirectory, command.Arguments, command.Mode, token)
+        };
+        var client = new GitClient(commands);
         var original = await client.CheckAsync(source, workspace.CreateDirectory("first-check").FullName, TestContext.Current.CancellationToken);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "unrelated.txt"), "Unrelated change");
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "add", "unrelated.txt");
@@ -389,7 +597,7 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
 
         Assert.NotEqual(original.Commit, unchanged.Commit);
         Assert.Equal(original.Version, unchanged.Version);
-        await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName), """{"custom":"changed"}""");
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName), "invalid JSON is not read during a version check");
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-am", "Change configuration");
         var directory = workspace.CreateDirectory("changed-check");
         var changed = await client.CheckAsync(source, directory.FullName, TestContext.Current.CancellationToken);
@@ -398,7 +606,11 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
 
         Assert.NotEqual(original.Version, changed.Version);
         Assert.Equal(original, pinned);
-        Assert.Equal(["repository.git"], directory.EnumerateFileSystemInfos().Select(p => p.Name));
+        Assert.Equal(
+            Enumerable.Repeat(new[] { "ls-remote", "init", "fetch", "rev-parse", "ls-tree" }, 3).SelectMany(sequence => sequence)
+                .Concat(["init", "fetch", "rev-parse", "ls-tree"]),
+            commands.Commands.Select(command => command.Arguments[0].StartsWith("--git-dir=", StringComparison.Ordinal)
+                ? command.Arguments[1] : command.Arguments[0]));
     }
 
     [Theory]
@@ -410,7 +622,7 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, "{}");
-        var client = new ConfigSourceGitClient(interactive
+        var client = CreateClient(interactive
             ? TestHelpers.CreateInteractiveHostEnvironment()
             : TestHelpers.CreateNonInteractiveHostEnvironment());
 
@@ -435,15 +647,84 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "update-index", "--cacheinfo", $"120000,{objectId},{AspireConfigFile.FileName}");
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-m", "Add symlink configuration");
 
-        var error = await Assert.ThrowsAsync<ConfigSourceException>(() => new ConfigSourceGitClient(TestHelpers.CreateNonInteractiveHostEnvironment()).AcquireAsync(
+        var error = await Assert.ThrowsAsync<ConfigSourceException>(() => CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment()).AcquireAsync(
             new() { Repository = workspace.Path, Path = AspireConfigFile.FileName }, workspace.CreateDirectory("cache").FullName, TestContext.Current.CancellationToken));
         Assert.Equal(ConfigSourceStrings.MissingFile, error.Message);
     }
 
-    private async Task CreateRepositoryAsync(TemporaryWorkspace workspace, string path, string json)
+    [Theory]
+    [InlineData("sha1", "default", false)]
+    [InlineData("sha1", "branch", false)]
+    [InlineData("sha1", "commit", false)]
+    [InlineData("sha256", "default", false)]
+    [InlineData("sha256", "branch", false)]
+    [InlineData("sha256", "commit", false)]
+    [InlineData("sha1", "branch", true)]
+    [InlineData("sha256", "default", true)]
+    public async Task AcquireAndCheck_MatchRepositoryObjectFormat(string objectFormat, string selector, bool interactive)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, """{"custom":"original"}""", objectFormat);
+        var originalCommit = (await RunGitOutputAsync(workspace.Path, ["rev-parse", "HEAD"])).Trim();
+        var originalVersion = (await RunGitOutputAsync(workspace.Path, ["rev-parse", $"HEAD:{AspireConfigFile.FileName}"])).Trim();
+        var branch = (await RunGitOutputAsync(workspace.Path, ["branch", "--show-current"])).Trim();
+        var source = new ConfigSource
+        {
+            Repository = workspace.Path,
+            Path = AspireConfigFile.FileName,
+            Ref = selector switch
+            {
+                "branch" => branch,
+                "commit" => originalCommit,
+                _ => null
+            }
+        };
+        var runner = CreateRunner(interactive
+            ? TestHelpers.CreateInteractiveHostEnvironment()
+            : TestHelpers.CreateNonInteractiveHostEnvironment());
+        var commands = new TestGitCommandRunner
+        {
+            RunCallback = (command, cancellationToken) => runner.RunAsync(command.WorkingDirectory, command.Arguments, command.Mode, cancellationToken)
+        };
+        var client = new GitClient(commands);
+        // SHA-256 object names are longer; keep this fixture's cache below Windows MAX_PATH.
+        using var service = TestConfigSourceServices.Create(
+            workspace.CreateExecutionContext(aspireHomeDirectory: workspace.CreateDirectory("h")), git: client);
+        var token = TestContext.Current.CancellationToken;
+
+        var acquired = await service.AcquireAsync(source, force: true, token);
+        var checkedVersion = await client.CheckAsync(source, workspace.CreateDirectory("first-check").FullName, token);
+
+        Assert.Equal(originalCommit, acquired.Metadata.Commit);
+        Assert.Equal(originalVersion, acquired.Metadata.Version);
+        Assert.Equal("original", acquired.Configuration["custom"]!.GetValue<string>());
+        Assert.Equal((originalCommit, originalVersion), checkedVersion);
+        Assert.Equal(objectFormat == "sha256" ? 64 : 40, acquired.Metadata.Version.Length);
+
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName), """{"custom":"updated"}""", token);
+        await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-am", "Update configuration");
+        var expectedCommit = selector == "commit" ? originalCommit : (await RunGitOutputAsync(workspace.Path, ["rev-parse", "HEAD"])).Trim();
+        var expectedVersion = selector == "commit" ? originalVersion : (await RunGitOutputAsync(workspace.Path, ["rev-parse", $"HEAD:{AspireConfigFile.FileName}"])).Trim();
+
+        var refreshed = await service.AcquireAsync(source, force: true, token);
+        var updatedCheck = await client.CheckAsync(source, workspace.CreateDirectory("updated-check").FullName, token);
+
+        Assert.Equal(expectedCommit, refreshed.Metadata.Commit);
+        Assert.Equal(expectedVersion, refreshed.Metadata.Version);
+        Assert.Equal(selector == "commit" ? "original" : "updated", refreshed.Configuration["custom"]!.GetValue<string>());
+        Assert.Equal((expectedCommit, expectedVersion), updatedCheck);
+        Assert.Equal(Enumerable.Repeat($"--object-format={objectFormat}", 4),
+            commands.Commands.Where(command => command.Arguments[0] == "init").Select(command => command.Arguments[2]));
+        GitCommandMode[] expectedResolutionModes = selector == "commit" ? []
+            : [GitCommandMode.Interactive, GitCommandMode.Unattended, GitCommandMode.Interactive, GitCommandMode.Unattended];
+        Assert.Equal(expectedResolutionModes,
+            commands.Commands.Where(command => command.Arguments[0] == "ls-remote").Select(command => command.Mode));
+    }
+
+    private async Task CreateRepositoryAsync(TemporaryWorkspace workspace, string path, string json, string objectFormat = "sha1")
     {
         await GitTestHelper.EnsureGitAvailableAsync(outputHelper);
-        await workspace.InitializeGitAsync();
+        await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "init", $"--object-format={objectFormat}");
         await GitTestHelper.ConfigureGitIdentityAsync(workspace.Path, outputHelper);
         var configPath = Path.Combine(workspace.Path, path.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);

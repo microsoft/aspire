@@ -19,8 +19,42 @@ The dashboard then renders a Hex1b web terminal per replica, and the CLI
 exposes the same session as `aspire terminal attach agent-abc123`, using the
 exact resource instance ID.
 
-All terminal APIs share the experimental diagnostic `ASPIRETERMINAL001`,
-including `WithTerminal()`, AppHost-owned terminals, and terminal interactions.
+Initial dimensions default to 132 columns and 50 rows. C# AppHosts can customize
+them with the `WithTerminal` options callback. TypeScript AppHosts use the same
+callback pattern:
+
+```typescript
+builder.addExecutable("agent", "my-agent", ".", [])
+    .withTerminal({
+        configure: async options => {
+            options.columns = 200;
+            options.rows = 60;
+        }
+    });
+```
+
+Both `columns` and `rows` must be greater than zero. Leaving either property
+unchanged retains its default; `withTerminal()` retains both defaults.
+Callback changes are applied to the server-side options before terminal configuration
+completes. The same options are available through the other polyglot SDKs.
+The TypeScript SDK groups the optional `configure` callback into its generated
+options argument.
+
+TypeScript and Python callbacks write back only assigned dimension properties.
+A no-op callback retains automatic dashboard fitting, just like omitting the
+callback. Explicitly assigning either dimension, even to its default value,
+selects the producer's grid instead.
+
+Python callbacks mutate the `columns` and `rows` dictionary keys. Go and Java
+callbacks use their generated `TerminalOptions` fields and setters. Rust requires
+a callback on `with_terminal(...)`; the callback returns the mutated DTO under
+the positional `p0` key, or `serde_json::Value::Null` to retain the defaults.
+This intentionally changes the Rust preview API rather than adding a separate
+compatibility method.
+
+`WithTerminal()` and `TerminalOptions` are not experimental. AppHost-owned
+terminal APIs, including `TerminalService`, and terminal interactions retain the
+experimental diagnostic `ASPIRETERMINAL001`.
 
 Per-replica terminal host resources are hidden by default. Use **Show hidden
 resources** in the dashboard to inspect their state and console logs. They

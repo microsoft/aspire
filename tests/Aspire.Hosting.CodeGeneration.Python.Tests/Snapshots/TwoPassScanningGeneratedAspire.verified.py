@@ -11,6 +11,7 @@ import os
 import base64
 import sys
 import json
+import copy
 import logging
 import secrets
 import signal
@@ -533,6 +534,38 @@ class _AspireJSONEncoder(json.JSONEncoder):
         return super().default(o)
 
 
+class _CallbackDto(dict[str, typing.Any]):
+    def __init__(self, value: dict[str, typing.Any]) -> None:
+        super().__init__(value)
+        self._original = copy.deepcopy(value)
+        self._assigned: set[str] = set()
+
+    def __setitem__(self, key: str, value: typing.Any) -> None:
+        super().__setitem__(key, value)
+        self._assigned.add(key)
+
+    def update(self, *args, **kwargs) -> None:
+        for key, value in dict(*args, **kwargs).items():
+            self[key] = value
+
+    def setdefault(self, key: str, default: typing.Any = None) -> typing.Any:
+        if key not in self:
+            self[key] = default
+        return self[key]
+
+    def __ior__(self, other):
+        self.update(other)
+        return self
+
+    def changes(self) -> dict[str, typing.Any]:
+        # Preserve nested dictionary/list mutations as well as explicit top-level
+        # assignments. Equality alone loses assignments equal to the original value.
+        return {
+            key: value for key, value in self.items()
+            if key in self._assigned or key not in self._original or value != self._original[key]
+        }
+
+
 class AspireClient:
     '''Client for connecting to the Aspire AppHost via socket/named pipe (synchronous with threads).'''
 
@@ -1052,19 +1085,26 @@ class AspireClient:
                             if parameter_type_ids is not None and i < len(parameter_type_ids)
                             else None
                         )
-                        arg_array.append(
-                            _wrap_if_handle(args[key], client, fallback_type_id=fallback_type_id)
-                        )
+                        value = _wrap_if_handle(args[key], client, fallback_type_id=fallback_type_id)
+                        if dto_writeback and isinstance(value, dict):
+                            value = _CallbackDto(value)
+                        arg_array.append(value)
                         i += 1
                     else:
                         break
 
                 if arg_array:
                     result = callback(*arg_array)
-                    # Void DTO callbacks return mutated positional arguments, for example
-                    # {"p0": {"minCount": 2, "osSku": "AzureLinux"}}, rather than Python's None.
+                    # A no-op returns {"p0": {}}, while assigning even a default
+                    # value returns {"p0": {"columns": 132}}. Unchanged setters
+                    # must not run on the host just because the DTO was round-tripped.
                     # Opt in only for these callbacks so nullable callback results stay null.
-                    return args if dto_writeback else result
+                    if dto_writeback:
+                        return {
+                            f"p{index}": value.changes() if isinstance(value, _CallbackDto) else args[f"p{index}"]
+                            for index, value in enumerate(arg_array)
+                        }
+                    return result
 
             # No args or null
             if args is None:
@@ -2070,6 +2110,10 @@ class ResourceUrlAnnotation(typing.TypedDict, total=False):
 
 class RunConfiguration(typing.TypedDict, total=False):
     watchEnabled: bool
+
+class TerminalOptions(typing.TypedDict, total=False):
+    columns: int
+    rows: int
 
 class TestConfigDto(typing.TypedDict, total=False):
     name: str
@@ -7628,8 +7672,8 @@ class AbstractResource(abc.ABC):
         """Hides the resource from default resource lists after successful completion"""
 
     @abc.abstractmethod
-    def with_terminal(self) -> typing.Self:
-        """Adds an interactive terminal session to a resource using the default terminal options."""
+    def with_terminal(self, *, configure: typing.Callable[[TerminalOptions], None] | None = None) -> typing.Self:
+        """Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions."""
 
     @abc.abstractmethod
     def with_pipeline_step_factory(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None = None, required_by: typing.Iterable[str] | None = None, tags: typing.Iterable[str] | None = None, description: str | None = None) -> typing.Self:
@@ -8036,7 +8080,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     exclude_from_mcp: typing.Literal[True]
     hidden: typing.Literal[True]
     hidden_on_completion: HiddenOnCompletionParameters | typing.Literal[True]
-    terminal: typing.Literal[True]
+    terminal: typing.Callable[[TerminalOptions], None] | typing.Literal[True]
     pipeline_step_factory: tuple[str, typing.Callable[[PipelineStepContext], None]] | PipelineStepFactoryParameters
     pipeline_config: typing.Callable[[PipelineConfigurationContext], None]
     on_before_resource_started: typing.Callable[[BeforeResourceStartedEvent], None]
@@ -8403,9 +8447,11 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_terminal(self) -> typing.Self:
-        """Adds an interactive terminal session to a resource using the default terminal options."""
+    def with_terminal(self, *, configure: typing.Callable[[TerminalOptions], None] | None = None) -> typing.Self:
+        """Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        if configure is not None:
+            rpc_args['configure'] = self._client.register_callback(configure, dto_writeback=True)
         result = self._client.invoke_capability(
             'Aspire.Hosting/withTerminal',
             rpc_args,
@@ -8961,12 +9007,16 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHiddenOnCompletion', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'hidden_on_completion'. Expected: HiddenOnCompletionParameters or Literal[True]")
-        if _terminal := kwargs.pop("terminal", None):
-            if _terminal is True:
+        if (_terminal := kwargs.pop("terminal", None)) is not None and _terminal is not False:
+            if _validate_type(_terminal, typing.Callable[[TerminalOptions], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["configure"] = client.register_callback(typing.cast(typing.Callable[[TerminalOptions], None], _terminal), dto_writeback=True)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTerminal', rpc_args))
+            elif _terminal is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTerminal', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'terminal'. Expected: Literal[True]")
+                raise TypeError("Invalid type for option 'terminal'. Expected: Callable[[TerminalOptions], None] or Literal[True]")
         if (_pipeline_step_factory := kwargs.pop("pipeline_step_factory", None)) is not None:
             if _validate_tuple_types(_pipeline_step_factory, (str, typing.Callable[[PipelineStepContext], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

@@ -79,6 +79,12 @@ The map stays small by keeping each dependency in the layer that can prove it:
 - docs and other no-CI files are dropped up front by `prefilter`, reading the
   CI skip-gate patterns file.
 
+`THIRD-PARTY-NOTICES.TXT` is prefiltered like README files: it is packaged as
+license text, not compiled or read by tests. A Layer 2 `ignore` entry would not
+be sufficient because Layer 1 sees it as a packed `None` item in every packable
+project. Notice-only changes skip main CI; accompanying source and build changes
+still select their normal validation.
+
 ## Target vocabulary
 
 | Target | Maps to |

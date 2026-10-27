@@ -1055,6 +1055,20 @@ func (d *ResourceUrlAnnotation) ToMap() map[string]any {
 	return m
 }
 
+// TerminalOptions represents TerminalOptions.
+type TerminalOptions struct {
+	Columns float64 `json:"columns,omitempty"`
+	Rows float64 `json:"rows,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *TerminalOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	m["columns"] = serializeValue(d.Columns)
+	m["rows"] = serializeValue(d.Rows)
+	return m
+}
+
 // TestConfigDto represents TestConfigDto.
 type TestConfigDto struct {
 	Name string `json:"name,omitempty"`
@@ -1554,7 +1568,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithSerializedAnnotation(annotationId string, json string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithTerminal() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithTerminal(options ...*WithTerminalOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUrl(url any, options ...*WithUrlOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -3423,12 +3437,30 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithStatus(sta
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal(options ...*WithTerminalOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -3846,7 +3878,7 @@ type CSharpAppResource interface {
 	WithSerializedAnnotation(annotationId string, json string) CSharpAppResource
 	WithSessionLifetime() CSharpAppResource
 	WithStatus(status TestResourceStatus) CSharpAppResource
-	WithTerminal() CSharpAppResource
+	WithTerminal(options ...*WithTerminalOptions) CSharpAppResource
 	WithUnionDependency(dependency any) CSharpAppResource
 	WithUrl(url any, options ...*WithUrlOptions) CSharpAppResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) CSharpAppResource
@@ -5448,12 +5480,30 @@ func (s *cSharpAppResource) WithStatus(status TestResourceStatus) CSharpAppResou
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *cSharpAppResource) WithTerminal() CSharpAppResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *cSharpAppResource) WithTerminal(options ...*WithTerminalOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -6793,7 +6843,7 @@ type ContainerRegistryResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ContainerRegistryResource
 	WithSessionLifetime() ContainerRegistryResource
 	WithStatus(status TestResourceStatus) ContainerRegistryResource
-	WithTerminal() ContainerRegistryResource
+	WithTerminal(options ...*WithTerminalOptions) ContainerRegistryResource
 	WithUnionDependency(dependency any) ContainerRegistryResource
 	WithUrl(url any, options ...*WithUrlOptions) ContainerRegistryResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerRegistryResource
@@ -7671,12 +7721,30 @@ func (s *containerRegistryResource) WithStatus(status TestResourceStatus) Contai
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *containerRegistryResource) WithTerminal() ContainerRegistryResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *containerRegistryResource) WithTerminal(options ...*WithTerminalOptions) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -7902,7 +7970,7 @@ type ContainerResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ContainerResource
 	WithSessionLifetime() ContainerResource
 	WithStatus(status TestResourceStatus) ContainerResource
-	WithTerminal() ContainerResource
+	WithTerminal(options ...*WithTerminalOptions) ContainerResource
 	WithUnionDependency(dependency any) ContainerResource
 	WithUrl(url any, options ...*WithUrlOptions) ContainerResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerResource
@@ -9770,12 +9838,30 @@ func (s *containerResource) WithStatus(status TestResourceStatus) ContainerResou
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *containerResource) WithTerminal() ContainerResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *containerResource) WithTerminal(options ...*WithTerminalOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -11633,7 +11719,7 @@ type DotnetToolResource interface {
 	WithSerializedAnnotation(annotationId string, json string) DotnetToolResource
 	WithSessionLifetime() DotnetToolResource
 	WithStatus(status TestResourceStatus) DotnetToolResource
-	WithTerminal() DotnetToolResource
+	WithTerminal(options ...*WithTerminalOptions) DotnetToolResource
 	WithToolIgnoreExistingFeeds() DotnetToolResource
 	WithToolIgnoreFailedSources() DotnetToolResource
 	WithToolPackage(packageId string) DotnetToolResource
@@ -13218,12 +13304,30 @@ func (s *dotnetToolResource) WithStatus(status TestResourceStatus) DotnetToolRes
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *dotnetToolResource) WithTerminal() DotnetToolResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *dotnetToolResource) WithTerminal(options ...*WithTerminalOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -14559,7 +14663,7 @@ type ExecutableResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ExecutableResource
 	WithSessionLifetime() ExecutableResource
 	WithStatus(status TestResourceStatus) ExecutableResource
-	WithTerminal() ExecutableResource
+	WithTerminal(options ...*WithTerminalOptions) ExecutableResource
 	WithUnionDependency(dependency any) ExecutableResource
 	WithUrl(url any, options ...*WithUrlOptions) ExecutableResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExecutableResource
@@ -16138,12 +16242,30 @@ func (s *executableResource) WithStatus(status TestResourceStatus) ExecutableRes
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *executableResource) WithTerminal() ExecutableResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *executableResource) WithTerminal(options ...*WithTerminalOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -16625,7 +16747,7 @@ type ExternalServiceResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ExternalServiceResource
 	WithSessionLifetime() ExternalServiceResource
 	WithStatus(status TestResourceStatus) ExternalServiceResource
-	WithTerminal() ExternalServiceResource
+	WithTerminal(options ...*WithTerminalOptions) ExternalServiceResource
 	WithUnionDependency(dependency any) ExternalServiceResource
 	WithUrl(url any, options ...*WithUrlOptions) ExternalServiceResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExternalServiceResource
@@ -17521,12 +17643,30 @@ func (s *externalServiceResource) WithStatus(status TestResourceStatus) External
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *externalServiceResource) WithTerminal() ExternalServiceResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *externalServiceResource) WithTerminal(options ...*WithTerminalOptions) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -19363,7 +19503,7 @@ type ParameterResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ParameterResource
 	WithSessionLifetime() ParameterResource
 	WithStatus(status TestResourceStatus) ParameterResource
-	WithTerminal() ParameterResource
+	WithTerminal(options ...*WithTerminalOptions) ParameterResource
 	WithUnionDependency(dependency any) ParameterResource
 	WithUrl(url any, options ...*WithUrlOptions) ParameterResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ParameterResource
@@ -20340,12 +20480,30 @@ func (s *parameterResource) WithStatus(status TestResourceStatus) ParameterResou
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *parameterResource) WithTerminal() ParameterResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *parameterResource) WithTerminal(options ...*WithTerminalOptions) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -21253,7 +21411,7 @@ type ProjectResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ProjectResource
 	WithSessionLifetime() ProjectResource
 	WithStatus(status TestResourceStatus) ProjectResource
-	WithTerminal() ProjectResource
+	WithTerminal(options ...*WithTerminalOptions) ProjectResource
 	WithUnionDependency(dependency any) ProjectResource
 	WithUrl(url any, options ...*WithUrlOptions) ProjectResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ProjectResource
@@ -22855,12 +23013,30 @@ func (s *projectResource) WithStatus(status TestResourceStatus) ProjectResource 
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *projectResource) WithTerminal() ProjectResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *projectResource) WithTerminal(options ...*WithTerminalOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -24742,7 +24918,7 @@ type TestDatabaseResource interface {
 	WithSerializedAnnotation(annotationId string, json string) TestDatabaseResource
 	WithSessionLifetime() TestDatabaseResource
 	WithStatus(status TestResourceStatus) TestDatabaseResource
-	WithTerminal() TestDatabaseResource
+	WithTerminal(options ...*WithTerminalOptions) TestDatabaseResource
 	WithUnionDependency(dependency any) TestDatabaseResource
 	WithUrl(url any, options ...*WithUrlOptions) TestDatabaseResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestDatabaseResource
@@ -26610,12 +26786,30 @@ func (s *testDatabaseResource) WithStatus(status TestResourceStatus) TestDatabas
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *testDatabaseResource) WithTerminal() TestDatabaseResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *testDatabaseResource) WithTerminal(options ...*WithTerminalOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -27097,7 +27291,7 @@ type TestRedisResource interface {
 	WithSerializedAnnotation(annotationId string, json string) TestRedisResource
 	WithSessionLifetime() TestRedisResource
 	WithStatus(status TestResourceStatus) TestRedisResource
-	WithTerminal() TestRedisResource
+	WithTerminal(options ...*WithTerminalOptions) TestRedisResource
 	WithUnionDependency(dependency any) TestRedisResource
 	WithUrl(url any, options ...*WithUrlOptions) TestRedisResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestRedisResource
@@ -29276,12 +29470,30 @@ func (s *testRedisResource) WithStatus(status TestResourceStatus) TestRedisResou
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *testRedisResource) WithTerminal() TestRedisResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *testRedisResource) WithTerminal(options ...*WithTerminalOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -30529,6 +30741,17 @@ func (o *WithHiddenOnCompletionOptions) ToMap() map[string]any {
 	if o == nil { return m }
 	if o.ExitCode != nil { m["exitCode"] = serializeValue(o.ExitCode) }
 	if o.ExitCodes != nil { m["exitCodes"] = serializeValue(o.ExitCodes) }
+	return m
+}
+
+// WithTerminalOptions carries optional parameters for WithTerminal.
+type WithTerminalOptions struct {
+	Configure func(obj *TerminalOptions) `json:"-"`
+}
+
+func (o *WithTerminalOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
 	return m
 }
 

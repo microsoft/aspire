@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 
@@ -354,6 +355,136 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
         Assert.NotNull(config?.Features);
         Assert.True(config.Features["polyglotSupportEnabled"]);
         Assert.False(config.Features["showAllTemplates"]);
+    }
+
+    [Theory]
+    [InlineData("{\r\n  \"a\": 1\r\n}", "\n", "{\n  \"a\": 1\n}\n")]
+    [InlineData("{\r\n  \"a\": 1\r\n}\r\n", "\n", "{\n  \"a\": 1\n}\n")]
+    [InlineData("{\n  \"a\": 1\n}", "\n", "{\n  \"a\": 1\n}\n")]
+    [InlineData("{\n  \"a\": 1\n}\n\n\n", "\n", "{\n  \"a\": 1\n}\n")]
+    [InlineData("{\r\n  \"a\": 1\r\n}\r\n\r\n", "\n", "{\n  \"a\": 1\n}\n")]
+    [InlineData("{}", "\n", "{}\n")]
+    [InlineData("{\n  \"a\": 1\n}", "\r\n", "{\r\n  \"a\": 1\r\n}\r\n")]
+    [InlineData("{\n  \"a\": 1\n}\n", "\r\n", "{\r\n  \"a\": 1\r\n}\r\n")]
+    [InlineData("{\r\n  \"a\": 1\r\n}", "\r\n", "{\r\n  \"a\": 1\r\n}\r\n")]
+    [InlineData("{\r\n  \"a\": 1\r\n}\r\n\r\n", "\r\n", "{\r\n  \"a\": 1\r\n}\r\n")]
+    [InlineData("{\n  \"a\": 1,\r\n  \"b\": 2\n}", "\r\n", "{\r\n  \"a\": 1,\r\n  \"b\": 2\r\n}\r\n")]
+    [InlineData("{}", "\r\n", "{}\r\n")]
+    // Only CRLF and LF are rewritten: U+0085, U+2028 and U+2029 stay as they are, unlike with string.ReplaceLineEndings.
+    [InlineData("{\n  \"a\": \"x\u0085y\u2028z\u2029w\"\n}", "\r\n", "{\r\n  \"a\": \"x\u0085y\u2028z\u2029w\"\r\n}\r\n")]
+    public void NormalizeJsonFileContent_UsesNewLineAndSingleFinalNewline(string json, string newLine, string expected)
+    {
+        var normalized = ConfigurationHelper.NormalizeJsonFileContent(json, newLine);
+
+        Assert.Equal(expected, normalized);
+        Assert.Equal(expected, ConfigurationHelper.NormalizeJsonFileContent(normalized, newLine));
+    }
+
+    [Fact]
+    public void EnsureFinalNewline_AddsOneOsNewLineToSerializedJson()
+    {
+        var settings = new JsonObject
+        {
+            ["appHost"] = new JsonObject { ["path"] = "MyApp.csproj" },
+            ["channel"] = "daily"
+        };
+
+        // Serialized text is not normalized: System.Text.Json indents with the OS line break on its own and
+        // only lacks the final newline, so that is all that is added.
+        var json = JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject);
+
+        LineEndingAssert.UsesOsLineBreaksAndSingleFinalNewline(ConfigurationHelper.EnsureFinalNewline(json));
+    }
+
+    // Both line breaks are covered on every OS, so a second newline is never added after an existing final one.
+    [Theory]
+    [InlineData("{}\n")]
+    [InlineData("{}\r\n")]
+    public void EnsureFinalNewline_KeepsExistingFinalNewline(string json)
+    {
+        Assert.Equal(json, ConfigurationHelper.EnsureFinalNewline(json));
+    }
+
+    [Fact]
+    public void NormalizeJsonFileContent_ConvertsNonOsLineBreaksToOsLineBreaks()
+    {
+        var json = "{" + LineEndingAssert.NonOsNewLine + "  \"a\": 1" + LineEndingAssert.NonOsNewLine + "}";
+
+        LineEndingAssert.UsesOsLineBreaksAndSingleFinalNewline(ConfigurationHelper.NormalizeJsonFileContent(json));
+    }
+
+    [Fact]
+    public void WriteSettingsFile_WritesOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nested", AspireConfigFile.FileName);
+        var settings = new JsonObject
+        {
+            ["appHost"] = new JsonObject { ["path"] = "MyApp.csproj" },
+            ["channel"] = "daily"
+        };
+
+        ConfigurationHelper.WriteSettingsFile(settingsPath, settings);
+
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(settingsPath);
+        Assert.Equal("daily", JsonNode.Parse(File.ReadAllText(settingsPath))!["channel"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task WriteSettingsFileAsync_WritesOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nested", AspireConfigFile.FileName);
+        var settings = new JsonObject
+        {
+            ["appHost"] = new JsonObject { ["path"] = "MyApp.csproj" },
+            ["channel"] = "daily"
+        };
+
+        await ConfigurationHelper.WriteSettingsFileAsync(settingsPath, settings);
+
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(settingsPath);
+        Assert.Equal("daily", JsonNode.Parse(File.ReadAllText(settingsPath))!["channel"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WriteSettingsFileAtomically_WritesOsLineBreaksAndSingleFinalNewline(bool existing)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        if (existing)
+        {
+            File.WriteAllText(settingsPath, "{" + LineEndingAssert.NonOsNewLine + "  \"channel\": \"stable\"" + LineEndingAssert.NonOsNewLine + "}");
+        }
+        var settings = new JsonObject
+        {
+            ["appHost"] = new JsonObject { ["path"] = "MyApp.csproj" },
+            ["channel"] = "daily"
+        };
+
+        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(settingsPath, settings, CancellationToken.None);
+
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(settingsPath);
+        Assert.Equal("daily", JsonNode.Parse(File.ReadAllText(settingsPath))!["channel"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void TryNormalizeSettingsFile_RewritesNonOsLineBreaksWithOsLineBreaks()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(settingsPath, "{" + LineEndingAssert.NonOsNewLine + "  \"features:showAllTemplates\": true" + LineEndingAssert.NonOsNewLine + "}");
+
+        var normalized = ConfigurationHelper.TryNormalizeSettingsFile(settingsPath);
+
+        Assert.True(normalized);
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(settingsPath);
     }
 
     [Theory]

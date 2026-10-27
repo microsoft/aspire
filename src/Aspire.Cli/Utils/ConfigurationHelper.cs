@@ -254,11 +254,56 @@ internal static class ConfigurationHelper
     }
 
     /// <summary>
+    /// Returns JSON that <see cref="JsonSerializer"/> produced with the final newline it does not write.
+    /// </summary>
+    internal static string EnsureFinalNewline(string json)
+    {
+        // System.Text.Json already indents with Environment.NewLine, so serialized text needs no line break
+        // normalization and only lacks the trailing newline. Text that was not serialized, such as a file copied
+        // from the embedded templates, goes through NormalizeJsonFileContent instead.
+        //
+        // An existing final line break (LF or CRLF) is kept as is, so the result never ends with a second one.
+        if (json.EndsWith('\n'))
+        {
+            return json;
+        }
+
+        return json + Environment.NewLine;
+    }
+
+    /// <summary>
+    /// Returns JSON that was not serialized by the CLI, such as a template file copied from the embedded
+    /// resources, with the OS line break and exactly one trailing newline.
+    /// </summary>
+    internal static string NormalizeJsonFileContent(string json) => NormalizeJsonFileContent(json, Environment.NewLine);
+
+    /// <summary>
+    /// Returns JSON with <paramref name="newLine"/> as every line break and exactly one trailing
+    /// <paramref name="newLine"/>.
+    /// </summary>
+    internal static string NormalizeJsonFileContent(string json, string newLine)
+    {
+        // Config files get the OS line break, so they match what an editor on that OS produces and git
+        // (core.autocrlf, .gitattributes) can normalize them like any other text file. A file copied from the
+        // embedded templates keeps the line breaks of the checkout that built the CLI (CRLF from a Windows
+        // checkout with core.autocrlf, LF otherwise), and some templates have no trailing newline, so it is
+        // rewritten to match the files the CLI serializes.
+        //
+        // Only CRLF and LF are rewritten, not everything string.ReplaceLineEndings treats as a line break:
+        // JSON forbids raw control characters inside strings, so a raw CRLF or LF can only be whitespace
+        // between tokens and replacing it cannot change a value, whereas U+0085, U+2028 and U+2029 are legal
+        // raw inside a string.
+        var lf = json.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n') + "\n";
+
+        return newLine == "\n" ? lf : lf.Replace("\n", newLine, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Serializes a JsonObject and writes it to a settings file, creating the directory if needed.
     /// </summary>
     internal static async Task WriteSettingsFileAsync(string filePath, JsonObject settings, CancellationToken cancellationToken = default)
     {
-        var jsonContent = JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject);
+        var jsonContent = EnsureFinalNewline(JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject));
 
         EnsureDirectoryExists(filePath);
         await File.WriteAllTextAsync(filePath, jsonContent, cancellationToken);
@@ -303,7 +348,10 @@ internal static class ConfigurationHelper
                 : new FileStream(temporaryPath, options))
             {
                 created = true;
-                await JsonSerializer.SerializeAsync(stream, settings, JsonSourceGenerationContext.Default.JsonObject, cancellationToken);
+                // Serialize to text rather than to the stream so the final newline is added the same way as in the
+                // other settings writers. Encoding.UTF8.GetBytes writes no byte order mark, like File.WriteAllText.
+                var jsonContent = EnsureFinalNewline(JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject));
+                await stream.WriteAsync(Encoding.UTF8.GetBytes(jsonContent), cancellationToken);
             }
             if (!OperatingSystem.IsWindows() && destinationMode is { } mode)
             {
@@ -334,7 +382,7 @@ internal static class ConfigurationHelper
     /// </summary>
     internal static void WriteSettingsFile(string filePath, JsonObject settings)
     {
-        var jsonContent = JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject);
+        var jsonContent = EnsureFinalNewline(JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject));
 
         EnsureDirectoryExists(filePath);
         File.WriteAllText(filePath, jsonContent);
