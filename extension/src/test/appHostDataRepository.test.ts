@@ -12,7 +12,7 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import * as cliModule from '../utils/process/cliProcess';
 import * as configInfoProvider from '../utils/configInfoProvider';
-import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
+import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability, psFollowReconciliationCapability } from '../types/configInfo';
 import { errorFetchingAppHosts, errorStoppingAppHostWatcher } from '../loc/strings';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { createAppHostOperationTarget } from '../utils/appHostOperationTarget';
@@ -95,8 +95,8 @@ suite('AppHostDataRepository', () => {
         getCliPathStub = sinon.stub(terminalProvider, 'getAspireCliExecutablePath').resolves('aspire');
         spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
         spawnStub.callsFake(() => new TestChildProcess());
-        // Default to a current CLI so common-path tests use streamed discovery and include disabled
-        // commands in describe output. Compatibility tests override this response explicitly.
+        // Advertise streamed discovery and disabled-command support, but retain extension-side
+        // reconciliation unless a test explicitly opts into the self-reconciling follow stream.
         getConfigInfoStub = sinon.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
             capabilities: [describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
         } as any);
@@ -7137,7 +7137,165 @@ setInterval(() => {}, 1000);
         repository.dispose();
     });
 
-    test('ps follow periodically reconciles a missed AppHost delta', async () => {
+    for (const support of ['supported', 'unsupported', 'unavailable'] as const) {
+        test(`ps follow reconciliation capability ${support} selects the correct periodic query behavior`, async () => {
+            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+            getConfigInfoStub.resolves(support === 'unavailable'
+                ? null
+                : { capabilities: support === 'supported' ? [psFollowReconciliationCapability] : [] });
+            spawnStub.callsFake((_terminalProvider, _command, args: string[], options: cliModule.SpawnProcessOptions) => {
+                const child = new TestChildProcess();
+                if (args[0] === 'ps' && !args.includes('--follow')) {
+                    options.stdoutCallback?.('[]');
+                    options.exitCallback?.(0);
+                    child.markExited();
+                }
+                return child;
+            });
+            const repository = new AppHostDataRepository(terminalProvider);
+            const psCalls = () => spawnStub.getCalls().filter(call => call.args[2][0] === 'ps');
+            const snapshotCalls = () => psCalls().filter(call => !call.args[2].includes('--follow'));
+
+            try {
+                repository.activate();
+                repository.setViewMode('global');
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                assert.strictEqual(psCalls().length, 1);
+                assert.strictEqual(repository.isLoading, false);
+                assert.ok(getConfigInfoStub.calledWithMatch({
+                    cliPath: 'aspire',
+                    target: windowCliPathTarget,
+                }));
+
+                await clock.tickAsync(90000);
+                const expectedSnapshots = support === 'supported' ? 0 : 3;
+                assert.strictEqual(snapshotCalls().length, expectedSnapshots);
+                assert.strictEqual(psCalls().filter(call => call.args[2].includes('--follow')).length, 1);
+
+                repository.refreshRuntimeState();
+                await waitForMicrotasks();
+                assert.strictEqual(snapshotCalls().length, expectedSnapshots + 1, 'Explicit refresh must still request an authoritative snapshot.');
+            } finally {
+                repository.dispose();
+                clock.restore();
+            }
+        });
+    }
+
+    for (const failure of ['clean exit', 'error exit', 'spawn error'] as const) {
+        test(`self-reconciling ps follow resumes interval polling after ${failure}`, async () => {
+            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+            getConfigInfoStub.resolves({ capabilities: [psFollowReconciliationCapability] });
+            spawnStub.callsFake((_terminalProvider, _command, args: string[], options: cliModule.SpawnProcessOptions) => {
+                const child = new TestChildProcess();
+                if (args[0] === 'ps' && !args.includes('--follow')) {
+                    options.stdoutCallback?.('[]');
+                    options.exitCallback?.(0);
+                    child.markExited();
+                }
+                return child;
+            });
+            const repository = new AppHostDataRepository(terminalProvider);
+
+            try {
+                repository.activate();
+                repository.setViewMode('global');
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                const follow = spawnStub.firstCall;
+                assert.deepStrictEqual(follow.args[2], ['ps', '--follow', '--format', 'json', '--nologo']);
+
+                if (failure === 'spawn error') {
+                    follow.args[3].errorCallback(new Error('spawn ENOENT'));
+                } else {
+                    follow.returnValue.markExited(failure === 'clean exit' ? 0 : 1);
+                    follow.args[3].exitCallback(failure === 'clean exit' ? 0 : 1);
+                }
+                await waitForMicrotasks();
+                assert.strictEqual(spawnStub.callCount, 2);
+
+                await clock.tickAsync(30000);
+                assert.deepStrictEqual(spawnStub.getCalls().map(call => call.args[2]), [
+                    ['ps', '--follow', '--format', 'json', '--nologo'],
+                    ['ps', '--format', 'json', '--nologo'],
+                    ['ps', '--format', 'json', '--nologo'],
+                ]);
+            } finally {
+                repository.dispose();
+                clock.restore();
+            }
+        });
+    }
+
+    test('hiding the panel while follow capability detection is pending does not start a stale watcher', async () => {
+        const configInfo = createDeferred<{ capabilities: string[] }>();
+        getConfigInfoStub.returns(configInfo.promise);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            assert.strictEqual(getConfigInfoStub.calledOnce, true);
+
+            repository.setPanelVisible(false);
+            configInfo.resolve({ capabilities: [psFollowReconciliationCapability] });
+            await waitForMicrotasks();
+            assert.strictEqual(spawnStub.called, false);
+        } finally {
+            configInfo.resolve({ capabilities: [] });
+            repository.dispose();
+        }
+    });
+
+    test('ps follow reconciliation capability is checked for the executable used by each watcher', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        getCliPathStub.resolves('/current/aspire');
+        getConfigInfoStub.callsFake(async (options: configInfoProvider.ConfigInfoOptions) => ({
+            capabilities: options.cliPath === '/current/aspire' ? [psFollowReconciliationCapability] : [],
+        }));
+        spawnStub.callsFake((_terminalProvider, _command, args: string[], options: cliModule.SpawnProcessOptions) => {
+            const child = new TestChildProcess();
+            if (args[0] === 'ps' && !args.includes('--follow')) {
+                options.stdoutCallback?.('[]');
+                options.exitCallback?.(0);
+                child.markExited();
+            }
+            return child;
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            await clock.tickAsync(30000);
+            assert.strictEqual(spawnStub.callCount, 1);
+            assert.strictEqual(spawnStub.firstCall.args[1], '/current/aspire');
+
+            repository.setPanelVisible(false);
+            await waitForMicrotasks();
+            getCliPathStub.resolves('/older/aspire');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            assert.strictEqual(spawnStub.secondCall.args[1], '/older/aspire');
+
+            await clock.tickAsync(30000);
+            assert.deepStrictEqual(spawnStub.getCalls().map(call => [call.args[1], call.args[2]]), [
+                ['/current/aspire', ['ps', '--follow', '--format', 'json', '--nologo']],
+                ['/older/aspire', ['ps', '--follow', '--format', 'json', '--nologo']],
+                ['/older/aspire', ['ps', '--format', 'json', '--nologo']],
+            ]);
+        } finally {
+            repository.dispose();
+            clock.restore();
+        }
+    });
+
+    test('older ps follow periodically reconciles a missed AppHost delta', async () => {
         const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const inspect = sinon.stub();
         inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 1000 });

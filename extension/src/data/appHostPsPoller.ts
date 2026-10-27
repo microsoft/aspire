@@ -7,6 +7,8 @@ import { errorFetchingAppHosts, errorStoppingAppHostWatcher } from '../loc/strin
 import { AppHostCliRunner, LimitedOutputBuffer, oneShotOutputBufferLimit } from './appHostCliRunner';
 import { windowCliPathTarget } from '../utils/cliPathVariables';
 import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
+import { ConfigInfoProvider } from '../utils/configInfoProvider';
+import { psFollowReconciliationCapability } from '../types/configInfo';
 
 export interface PsOutput {
     readonly stdout: string;
@@ -68,6 +70,7 @@ export class AppHostPsPoller implements vscode.Disposable {
     constructor(
         private readonly _terminalProvider: AspireTerminalProvider,
         private readonly _cliRunner: AppHostCliRunner,
+        private readonly _configInfoProvider: ConfigInfoProvider,
         private readonly _isDataActive: () => boolean,
         private readonly _clearPostStopRefreshTimers: () => void) {
     }
@@ -110,7 +113,6 @@ export class AppHostPsPoller implements vscode.Disposable {
 
         if (this._supportsPsFollow) {
             this._startPsFollow();
-            this._startPsFollowReconciliation();
             return;
         }
 
@@ -129,7 +131,7 @@ export class AppHostPsPoller implements vscode.Disposable {
             clearInterval(this._pollingInterval);
         }
 
-        // The long-lived stream is the fast path, but an AppHost can start while the CLI is
+        // Older CLIs need a safety net: an AppHost can start while the CLI is
         // transitioning from its initial scan to the follow subscription. Periodic authoritative
         // snapshots close that missed-delta window without restarting the stream.
         this._pollingInterval = setInterval(() => {
@@ -253,8 +255,15 @@ export class AppHostPsPoller implements vscode.Disposable {
     private async _startPsFollow(): Promise<void> {
         const fetchVersion = ++this._psFetchVersion;
         let cliPath: string;
+        let reconcilesInCli: boolean;
         try {
             cliPath = await this._terminalProvider.getAspireCliExecutablePath(windowCliPathTarget);
+            const configInfo = await this._configInfoProvider.getConfigInfo({
+                suppressErrors: true,
+                cliPath,
+                target: windowCliPathTarget,
+            });
+            reconcilesInCli = configInfo?.capabilities?.includes(psFollowReconciliationCapability) ?? false;
         } catch (error) {
             if (this._isCurrentPsFetch(fetchVersion)) {
                 const errorMessage = errorFetchingAppHosts(String(error));
@@ -359,6 +368,9 @@ export class AppHostPsPoller implements vscode.Disposable {
             return;
         }
 
+        if (!callbackInvoked && !reconcilesInCli) {
+            this._startPsFollowReconciliation();
+        }
         this._onDidStartPsFollow.fire();
     }
 

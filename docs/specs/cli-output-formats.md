@@ -140,6 +140,10 @@ the existing table, JSON array, and follow-mode delta output described below.
 {"appHostPath":"/path/to/MyApp.AppHost/MyApp.AppHost.csproj","appHostPid":12345,"status":"stopped"}
 ```
 
+The default follow stream rescans running AppHosts and collects orphaned AppHosts every 30 seconds in the same CLI process, recovering missed filesystem notifications without creating additional diagnostic files. Changed AppHost metadata is emitted even when the connection remains the same; unchanged records are suppressed. Discovery failures end the stream with a nonzero exit code so consumers can recover rather than trust stale state.
+
+CLIs advertising `ps-follow-reconciliation.v1` in `aspire config info --json` provide this reconciliation guarantee. Consumers of older CLIs should retain their own periodic authoritative `ps --format json` queries. The experimental snapshot protocol below remains a separate read-only contract.
+
 Unchanged backchannel-connection notifications do not refetch AppHost metadata or
 dashboard URLs. A genuinely changed connection set is enriched again, including
 a replacement connection for the same AppHost path and PID. Identical serialized

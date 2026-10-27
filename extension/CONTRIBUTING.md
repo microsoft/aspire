@@ -58,6 +58,8 @@ Running-AppHost status and resource watchers are active while the Aspire panel o
 
 Debugger-install hints observe the available resource data without holding a permanent data lease merely because an AppHost was discovered. With no active session or explicit consumer, hiding all Aspire UI stops the status/resource watchers and periodic reconciliation; reopening it resumes them and refreshes retained state. Workspace discovery can still run independently when files or configuration change. CLI diagnostic files, their locations, and explicit `--log-file` behavior are unchanged.
 
+When `aspire config info --json` advertises `ps-follow-reconciliation.v1`, the long-running `ps --follow` process performs its own periodic authoritative scans and orphan cleanup. The extension does not launch separate periodic `ps` queries while that stream is healthy, so routine monitoring reuses the process's persistent diagnostic log. Older CLIs and unavailable capability information retain extension-side reconciliation at the configured polling interval. Explicit refreshes and stop/resume reconciliation can still issue one-shot status queries; a failed or completed follow stream falls back to interval polling.
+
 ## Building the full repository (extension + CLI)
 
 Run `build.ps1` (Windows) or `build.sh` (Mac/Linux) from the repository root to compile the CLI, install extension dependencies, and localize. Use this when debugging the extension and CLI together. See [docs/contributing.md](/docs/contributing.md) and [docs/machine-requirements.md](/docs/machine-requirements.md) for the .NET prerequisites.

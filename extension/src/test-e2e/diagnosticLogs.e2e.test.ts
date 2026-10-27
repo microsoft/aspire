@@ -30,7 +30,7 @@ suite('CLI diagnostic log actions E2E', function () {
         ], 'CLI diagnostic log actions E2E teardown failed.');
     });
 
-    test('background AppHost tabs and debugger hints do not keep polling or creating logs after Aspire UI is hidden', async function () {
+    test('healthy status watching reuses persistent logs and stops when Aspire UI is hidden', async function () {
         if (process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true') {
             this.skip();
         }
@@ -49,11 +49,25 @@ suite('CLI diagnostic log actions E2E', function () {
             line => line.includes('Spawning Aspire CLI process:') && /\sps\s/.test(line)).length;
 
         try {
+            const previousFiles = new Set(logFiles());
             writeWorkspaceSetting(pollingSetting, 1000);
             await executeE2eControlCommand({ name: 'openFile', filePath: getPrimaryAppHostProjectPath() });
             await waitForExtensionState(() => getPsFollowProcesses().some(process => !process.exited), 'status follower to start');
+            // Native launchers can own a separate managed CLI process. Identify its log by
+            // "[INFO] [Cli] Command: aspire ps --follow --format json --nologo", not the launcher PID.
+            await waitForExtensionState(() => logFiles().some(file =>
+                !previousFiles.has(file)
+                && fs.readFileSync(path.join(logsDirectory, file), 'utf8').includes('Command: aspire ps --follow --format json')),
+            'the status follower to persist its normal CLI diagnostic log');
+            await waitForRepositoryIdle();
             const activeFiles = logFiles();
-            await waitForExtensionState(() => logFiles().length > activeFiles.length, 'active polling to retain normal CLI log files');
+            const activeSpawns = statusSpawns();
+            for (let interval = 0; interval < 4; interval++) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                assert.deepStrictEqual(logFiles(), activeFiles, 'A healthy follow stream must reuse its existing diagnostic log.');
+                assert.strictEqual(statusSpawns(), activeSpawns, 'A self-reconciling CLI must not need periodic status processes.');
+                assert.strictEqual(getPsFollowProcesses().filter(process => !process.exited).length, 1);
+            }
 
             await hideAspireView();
             assert.ok(getPsFollowProcesses().some(process => !process.exited), 'The visible AppHost editor still needs live data.');
