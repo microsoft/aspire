@@ -419,10 +419,12 @@ public class EntraIdApplicationResource : AzureProvisioningResource
         {
             application.Owners = CreateOwnerList(infrastructure, resource.ApplicationOwners, "applicationOwner");
         }
-        EntraIdApiProvisioning.ConfigureRequiredResourceAccess(resource, infrastructure, application);
+        // Names for the API access settings are allocated against everything that the template already declares.
+        var symbolNames = new EntraIdSymbolNames(infrastructure);
+        EntraIdApiProvisioning.ConfigureRequiredResourceAccess(resource, infrastructure, symbolNames, application);
         infrastructure.Add(application);
 
-        var applicationIdUri = EntraIdApiProvisioning.ConfigureExposedApi(resource, infrastructure, application, registrationName);
+        var applicationIdUri = EntraIdApiProvisioning.ConfigureExposedApi(resource, infrastructure, symbolNames, application, registrationName);
 
         var servicePrincipal = new MicrosoftGraphServicePrincipal("servicePrincipal")
         {
@@ -435,7 +437,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource
         }
         infrastructure.Add(servicePrincipal);
 
-        EntraIdApiProvisioning.ConfigureGrants(resource, infrastructure, servicePrincipal);
+        EntraIdApiProvisioning.ConfigureGrants(resource, infrastructure, symbolNames, servicePrincipal);
 
         // A symbol name must not collide with another symbol in the template, such as a user-supplied redirect URI
         // parameter named "web-identity-principalId" and an identity named "web-identity". Parameters and resources share

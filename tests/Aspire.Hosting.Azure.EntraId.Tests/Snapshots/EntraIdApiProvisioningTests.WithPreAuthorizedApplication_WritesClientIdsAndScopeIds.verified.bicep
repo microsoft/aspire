@@ -2,7 +2,7 @@
 
 param tenantResourceSuffix string = ''
 
-param entraWebClientId string
+param entra_webClientId string
 
 resource application 'Microsoft.Graph/applications@v1.0' = {
   displayName: (tenantResourceSuffix == '') ? 'entra-api' : 'entra-api-${tenantResourceSuffix}'
@@ -50,7 +50,7 @@ resource applicationIdentity 'Microsoft.Graph/applications@v1.0' = {
     ]
     preAuthorizedApplications: [
       {
-        appId: entraWebClientId
+        appId: entra_webClientId
         delegatedPermissionIds: [
           'e3062f1b-9e6d-8ffe-ad1a-47062669c708'
           '6adca8e9-0075-8da6-9179-7bd4383f7303'

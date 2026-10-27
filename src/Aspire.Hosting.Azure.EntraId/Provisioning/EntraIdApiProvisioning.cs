@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
@@ -11,7 +10,7 @@ namespace Aspire.Hosting.Azure.EntraId.Provisioning;
 /// <summary>
 /// Writes the Microsoft Graph resources that expose an application as an API and that give it access to other APIs.
 /// </summary>
-internal static partial class EntraIdApiProvisioning
+internal static class EntraIdApiProvisioning
 {
     private const string DelegatedAccessType = "Scope";
     private const string ApplicationAccessType = "Role";
@@ -26,13 +25,14 @@ internal static partial class EntraIdApiProvisioning
     public static void ConfigureRequiredResourceAccess(
         EntraIdApplicationResource resource,
         AzureResourceInfrastructure infrastructure,
+        EntraIdSymbolNames symbolNames,
         MicrosoftGraphApplication application)
     {
         foreach (var access in resource.ApiAccess.Where(a => a.Declared.Count > 0))
         {
             var required = new MicrosoftGraphRequiredResourceAccess
             {
-                ResourceAppId = GetApiApplicationId(access, infrastructure)
+                ResourceAppId = GetApiApplicationId(access, infrastructure, symbolNames)
             };
 
             foreach (var permission in access.Declared)
@@ -54,6 +54,7 @@ internal static partial class EntraIdApiProvisioning
     public static BicepValue<string>? ConfigureExposedApi(
         EntraIdApplicationResource resource,
         AzureResourceInfrastructure infrastructure,
+        EntraIdSymbolNames symbolNames,
         MicrosoftGraphApplication application,
         BicepValue<string> registrationName)
     {
@@ -104,7 +105,7 @@ internal static partial class EntraIdApiProvisioning
         {
             var preAuthorization = new MicrosoftGraphPreAuthorizedApplication
             {
-                AppId = GetClientId(preAuthorized.Client, infrastructure, $"{ToIdentifier(preAuthorized.Client.Name)}ClientId")
+                AppId = GetClientId(preAuthorized.Client, infrastructure, symbolNames)
             };
 
             foreach (var scope in preAuthorized.Scopes)
@@ -143,18 +144,18 @@ internal static partial class EntraIdApiProvisioning
     public static void ConfigureGrants(
         EntraIdApplicationResource resource,
         AzureResourceInfrastructure infrastructure,
+        EntraIdSymbolNames symbolNames,
         MicrosoftGraphServicePrincipal servicePrincipal)
     {
         foreach (var access in resource.ApiAccess.Where(a => a.Consented.Count > 0))
         {
-            var key = ToIdentifier(access.DisplayName);
-            var apiServicePrincipalId = GetApiServicePrincipalId(access, infrastructure, key);
+            var apiServicePrincipalId = GetApiServicePrincipalId(access, infrastructure, symbolNames);
 
             var delegated = access.Consented.Where(p => p.Type == EntraIdPermissionType.Delegated).ToArray();
             if (delegated.Length > 0)
             {
                 // Graph stores the granted scopes as one space-separated string of scope names.
-                infrastructure.Add(new MicrosoftGraphOAuth2PermissionGrant($"{key}DelegatedGrant")
+                infrastructure.Add(new MicrosoftGraphOAuth2PermissionGrant(symbolNames.DelegatedGrant(access))
                 {
                     ClientId = servicePrincipal.Id,
                     ConsentType = "AllPrincipals",
@@ -165,7 +166,7 @@ internal static partial class EntraIdApiProvisioning
 
             foreach (var role in access.Consented.Where(p => p.Type == EntraIdPermissionType.Application))
             {
-                infrastructure.Add(new MicrosoftGraphAppRoleAssignedTo(ToIdentifier(key, role.Name, "RoleAssignment"))
+                infrastructure.Add(new MicrosoftGraphAppRoleAssignedTo(symbolNames.RoleAssignment(access, role))
                 {
                     AppRoleId = role.Id.ToString("D"),
                     PrincipalId = servicePrincipal.Id,
@@ -175,46 +176,34 @@ internal static partial class EntraIdApiProvisioning
         }
     }
 
-    private static BicepValue<string> GetApiApplicationId(EntraIdApiAccess access, AzureResourceInfrastructure infrastructure) => access switch
+    private static BicepValue<string> GetApiApplicationId(EntraIdApiAccess access, AzureResourceInfrastructure infrastructure, EntraIdSymbolNames symbolNames) => access switch
     {
         { Api: { } api } => api.ApplicationId,
-        { Application: { } application } => GetClientId(application, infrastructure, $"{ToIdentifier(application.Name)}ClientId"),
+        { Application: { } application } => GetClientId(application, infrastructure, symbolNames),
         _ => throw new InvalidOperationException("The API is not configured.")
     };
 
-    private static BicepValue<string> GetApiServicePrincipalId(EntraIdApiAccess access, AzureResourceInfrastructure infrastructure, string key)
+    private static BicepValue<string> GetApiServicePrincipalId(EntraIdApiAccess access, AzureResourceInfrastructure infrastructure, EntraIdSymbolNames symbolNames)
     {
         // The service principal of an API created by Aspire is a deployment output, which is available as soon as the API is deployed.
         if (access.Application is { IsExistingApplication: false } created)
         {
-            return created.ServicePrincipalIdOutputReference.AsProvisioningParameter(infrastructure, $"{key}ServicePrincipalId");
+            return created.ServicePrincipalIdOutputReference.AsProvisioningParameter(infrastructure, symbolNames.ServicePrincipalId(access));
         }
 
         // First-party APIs and registrations that already exist have a service principal in the tenant that is found by the application ID.
-        var existing = MicrosoftGraphServicePrincipal.FromExisting($"{key}ServicePrincipal");
-        existing.Name = GetApiApplicationId(access, infrastructure);
+        var existing = MicrosoftGraphServicePrincipal.FromExisting(symbolNames.ExistingServicePrincipal(access));
+        existing.Name = GetApiApplicationId(access, infrastructure, symbolNames);
         infrastructure.Add(existing);
         return existing.Id;
     }
 
-    private static BicepValue<string> GetClientId(EntraIdApplicationResource application, AzureResourceInfrastructure infrastructure, string parameterName) => application.ClientIdValue switch
+    // A name is only allocated when the ID needs a parameter, so a literal ID leaves the template's names untouched.
+    private static BicepValue<string> GetClientId(EntraIdApplicationResource application, AzureResourceInfrastructure infrastructure, EntraIdSymbolNames symbolNames) => application.ClientIdValue switch
     {
-        BicepOutputReference output => output.AsProvisioningParameter(infrastructure, parameterName),
-        ParameterResource parameter => parameter.AsProvisioningParameter(infrastructure, parameterName),
+        BicepOutputReference output => output.AsProvisioningParameter(infrastructure, symbolNames.ClientId(application)),
+        ParameterResource parameter => parameter.AsProvisioningParameter(infrastructure, symbolNames.ClientId(application)),
         string clientId => clientId,
         _ => throw new InvalidOperationException($"The client ID of '{application.Name}' is not configured. Call AddExistingEntraApplication with the registration's tenant ID and client ID.")
     };
-
-    // Builds a camelCase Bicep identifier from names such as "Microsoft Graph", "entra-api" or "User.Read.All".
-    private static string ToIdentifier(params string[] names)
-    {
-        var words = names
-            .SelectMany(static name => NonAlphanumeric().Split(name))
-            .Where(static word => word.Length > 0);
-        return string.Concat(words.Select(static (word, index) =>
-            (index == 0 ? char.ToLowerInvariant(word[0]) : char.ToUpperInvariant(word[0])) + word[1..]));
-    }
-
-    [GeneratedRegex("[^A-Za-z0-9]+")]
-    private static partial Regex NonAlphanumeric();
 }

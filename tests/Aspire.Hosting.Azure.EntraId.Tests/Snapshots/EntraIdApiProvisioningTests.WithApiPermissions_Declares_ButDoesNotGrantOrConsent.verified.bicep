@@ -2,7 +2,7 @@
 
 param tenantResourceSuffix string = ''
 
-param entraApiClientId string
+param entra_apiClientId string
 
 resource application 'Microsoft.Graph/applications@v1.0' = {
   displayName: (tenantResourceSuffix == '') ? 'entra-web' : 'entra-web-${tenantResourceSuffix}'
@@ -19,7 +19,7 @@ resource application 'Microsoft.Graph/applications@v1.0' = {
   }
   requiredResourceAccess: [
     {
-      resourceAppId: entraApiClientId
+      resourceAppId: entra_apiClientId
       resourceAccess: [
         {
           id: 'e3062f1b-9e6d-8ffe-ad1a-47062669c708'

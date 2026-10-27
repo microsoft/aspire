@@ -1081,4 +1081,141 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    [Fact]
+    public async Task Symbols_ApisWhoseNamesDifferOnlyByHyphenOrCaseKeepSeparateParameters()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var hyphenated = builder.AddEntraIdApplication("orders-api").WithScope("read", "Read");
+        var camel = builder.AddEntraIdApplication("ordersApi").WithScope("read", "Read");
+        var web = builder.AddEntraIdApplication("web")
+            .WithApiPermissions(hyphenated, "read")
+            .WithApiPermissions(camel, "read")
+            .WithAdminConsent(hyphenated, "read")
+            .WithAdminConsent(camel, "read");
+
+        var bicep = web.Resource.GetBicepTemplateString();
+
+        // Both used to be named ordersApiClientId, which bound the parameter twice and wired both requirements to the last API.
+        Assert.Equal("orders-api", ((BicepOutputReference)web.Resource.Parameters["orders_apiClientId"]!).Resource.Name);
+        Assert.Equal("ordersApi", ((BicepOutputReference)web.Resource.Parameters["ordersApiClientId"]!).Resource.Name);
+        Assert.Equal("orders-api", ((BicepOutputReference)web.Resource.Parameters["orders_apiServicePrincipalId"]!).Resource.Name);
+        Assert.Equal("ordersApi", ((BicepOutputReference)web.Resource.Parameters["ordersApiServicePrincipalId"]!).Resource.Name);
+        AssertSymbolsAreUniqueValidIdentifiers(bicep);
+        Assert.Equal(bicep, web.Resource.GetBicepTemplateString());
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task Symbols_CustomApisWithTheSameDisplayNameKeepSeparateSymbols()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var one = EntraIdApi.FromApplicationId("Contoso API", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://one");
+        var two = EntraIdApi.FromApplicationId("Contoso API", "11110000-aaaa-7777-bbbb-6666cccc5555", "api://two");
+        var read = EntraIdApiPermission.Delegated("Read", Guid.Parse("33334444-aaaa-5555-bbbb-6666cccc7777"));
+        var web = builder.AddEntraIdApplication("web")
+            .WithApiPermissions(one, read)
+            .WithApiPermissions(two, read)
+            .WithAdminConsent(one, read)
+            .WithAdminConsent(two, read);
+
+        var bicep = web.Resource.GetBicepTemplateString();
+
+        // Two grants and two service principal lookups with the same symbol would not compile.
+        AssertSymbolsAreUniqueValidIdentifiers(bicep);
+        Assert.Contains("contosoAPIDelegatedGrant ", bicep);
+        Assert.Contains("contosoAPIDelegatedGrant_2 ", bicep);
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public void Symbols_RoleAssignmentsWhoseNamesWouldRunTogetherStayDistinct()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var a = EntraIdApi.FromApplicationId("a", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://a");
+        var aB = EntraIdApi.FromApplicationId("aB", "11110000-aaaa-7777-bbbb-6666cccc5555", "api://ab");
+        var bc = EntraIdApiPermission.Application("BC", Guid.Parse("33334444-aaaa-5555-bbbb-6666cccc7777"));
+        var c = EntraIdApiPermission.Application("C", Guid.Parse("44445555-aaaa-5555-bbbb-6666cccc7777"));
+        var web = builder.AddEntraIdApplication("web")
+            .WithApiPermissions(a, bc)
+            .WithApiPermissions(aB, c)
+            .WithAdminConsent(a, bc)
+            .WithAdminConsent(aB, c);
+
+        var bicep = web.Resource.GetBicepTemplateString();
+
+        // "a" + "BC" and "aB" + "C" both read aBCRoleAssignment.
+        AssertSymbolsAreUniqueValidIdentifiers(bicep);
+        Assert.Contains("aBCRoleAssignment ", bicep);
+        Assert.Contains("aBCRoleAssignment_2 ", bicep);
+    }
+
+    [Fact]
+    public void Symbols_AreValidWhenADisplayNameDoesNotStartWithALetter()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var digits = EntraIdApi.FromApplicationId("2FA API", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://2fa");
+        var punctuation = EntraIdApi.FromApplicationId("---", "11110000-aaaa-7777-bbbb-6666cccc5555", "api://dashes");
+        var read = EntraIdApiPermission.Delegated("Read", Guid.Parse("33334444-aaaa-5555-bbbb-6666cccc7777"));
+        var web = builder.AddEntraIdApplication("web")
+            .WithApiPermissions(digits, read)
+            .WithApiPermissions(punctuation, read)
+            .WithAdminConsent(digits, read)
+            .WithAdminConsent(punctuation, read);
+
+        var bicep = web.Resource.GetBicepTemplateString();
+
+        AssertSymbolsAreUniqueValidIdentifiers(bicep);
+        Assert.Contains("api2FAAPIDelegatedGrant ", bicep);
+    }
+
+    [Fact]
+    public void Symbols_DoNotCollideWithParametersFromTheAppHost()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var api = builder.AddEntraIdApplication("orders-api").WithScope("read", "Read");
+
+        // A redirect URI parameter whose symbol is exactly the one that the API's client ID would take: a resource name can't contain
+        // an underscore, so "orders-apiClientId" is the spelling that normalizes to "orders_apiClientId".
+        var web = builder.AddEntraIdApplication("web")
+            .WithRedirectUris(builder.AddParameter("orders-apiClientId"))
+            .WithApiPermissions(api, "read");
+
+        var bicep = web.Resource.GetBicepTemplateString();
+
+        AssertSymbolsAreUniqueValidIdentifiers(bicep);
+        Assert.IsType<ParameterResource>(web.Resource.Parameters["orders_apiClientId"]);
+        Assert.Equal("orders-api", ((BicepOutputReference)web.Resource.Parameters["orders_apiClientId_2"]!).Resource.Name);
+    }
+
+    [Fact]
+    public void Symbols_SameRegistrationAsApiAndPreAuthorizedClientSharesOneParameter()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var shared = builder.AddExistingEntraApplication("shared", builder.AddParameter("shared-tenant-id"), builder.AddParameter("shared-client-id"))
+            .WithApplicationIdUri("api://shared")
+            .WithScope("read", "Read", scope => scope.Id = Guid.NewGuid());
+        var registration = builder.AddEntraIdApplication("registration")
+            .WithScope("read", "Read")
+            .WithPreAuthorizedApplication(shared, "read")
+            .WithApiPermissions(shared, "read");
+
+        var bicep = registration.Resource.GetBicepTemplateString();
+
+        // The registration needs the same client ID as an API it calls and as a client it pre-authorizes: one parameter, one binding.
+        Assert.Single(bicep.Split('\n'), line => line.StartsWith("param shared", StringComparison.Ordinal));
+        Assert.Single(registration.Resource.Parameters, p => p.Key.StartsWith("shared", StringComparison.Ordinal));
+        AssertSymbolsAreUniqueValidIdentifiers(bicep);
+    }
+    private static void AssertSymbolsAreUniqueValidIdentifiers(string bicep)
+    {
+        // Parameters and resources share one case-insensitive namespace in a template.
+        var symbols = System.Text.RegularExpressions.Regex.Matches(bicep, @"^(?:param|resource) (\S+)", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(m => m.Groups[1].Value)
+            .ToArray();
+
+        Assert.NotEmpty(symbols);
+        Assert.Equal(symbols.Length, symbols.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(symbols, symbol => Assert.Matches("^[A-Za-z_][A-Za-z0-9_]*$", symbol));
+    }
 }

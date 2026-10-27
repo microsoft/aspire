@@ -18,7 +18,7 @@ module entra_api 'entra-api/entra-api.bicep' = {
   scope: rg
   params: {
     tenantResourceSuffix: tenantResourceSuffix
-    entraDaemonClientId: entra_daemon.outputs.clientId
+    entra_daemonClientId: entra_daemon.outputs.clientId
   }
 }
 
@@ -27,8 +27,8 @@ module entra_web 'entra-web/entra-web.bicep' = {
   scope: rg
   params: {
     tenantResourceSuffix: tenantResourceSuffix
-    entraApiClientId: entra_api.outputs.clientId
-    entraApiServicePrincipalId: entra_api.outputs.servicePrincipalId
+    entra_apiClientId: entra_api.outputs.clientId
+    entra_apiServicePrincipalId: entra_api.outputs.servicePrincipalId
   }
 }
 

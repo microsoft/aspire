@@ -2,7 +2,7 @@
 
 param tenantResourceSuffix string = ''
 
-param existingApiClientId string
+param existing_apiClientId string
 
 resource application 'Microsoft.Graph/applications@v1.0' = {
   displayName: (tenantResourceSuffix == '') ? 'entra-web' : 'entra-web-${tenantResourceSuffix}'
@@ -19,7 +19,7 @@ resource application 'Microsoft.Graph/applications@v1.0' = {
   }
   requiredResourceAccess: [
     {
-      resourceAppId: existingApiClientId
+      resourceAppId: existing_apiClientId
       resourceAccess: [
         {
           id: '11112222-aaaa-3333-bbbb-4444cccc5555'
@@ -46,14 +46,14 @@ resource servicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' = {
   ]
 }
 
-resource existingApiServicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' existing = {
-  appId: existingApiClientId
+resource existing_apiServicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' existing = {
+  appId: existing_apiClientId
 }
 
-resource existingApiDelegatedGrant 'Microsoft.Graph/oauth2PermissionGrants@v1.0' = {
+resource existing_apiDelegatedGrant 'Microsoft.Graph/oauth2PermissionGrants@v1.0' = {
   clientId: servicePrincipal.id
   consentType: 'AllPrincipals'
-  resourceId: existingApiServicePrincipal.id
+  resourceId: existing_apiServicePrincipal.id
   scope: 'orders.read'
 }
 

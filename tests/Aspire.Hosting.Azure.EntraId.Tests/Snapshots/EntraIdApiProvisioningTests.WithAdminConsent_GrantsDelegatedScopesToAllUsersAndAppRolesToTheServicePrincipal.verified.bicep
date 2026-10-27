@@ -2,9 +2,9 @@
 
 param tenantResourceSuffix string = ''
 
-param entraApiClientId string
+param entra_apiClientId string
 
-param entraApiServicePrincipalId string
+param entra_apiServicePrincipalId string
 
 resource application 'Microsoft.Graph/applications@v1.0' = {
   displayName: (tenantResourceSuffix == '') ? 'entra-web' : 'entra-web-${tenantResourceSuffix}'
@@ -21,7 +21,7 @@ resource application 'Microsoft.Graph/applications@v1.0' = {
   }
   requiredResourceAccess: [
     {
-      resourceAppId: entraApiClientId
+      resourceAppId: entra_apiClientId
       resourceAccess: [
         {
           id: 'e3062f1b-9e6d-8ffe-ad1a-47062669c708'
@@ -64,10 +64,10 @@ resource servicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' = {
   ]
 }
 
-resource entraApiDelegatedGrant 'Microsoft.Graph/oauth2PermissionGrants@v1.0' = {
+resource entra_apiDelegatedGrant 'Microsoft.Graph/oauth2PermissionGrants@v1.0' = {
   clientId: servicePrincipal.id
   consentType: 'AllPrincipals'
-  resourceId: entraApiServicePrincipalId
+  resourceId: entra_apiServicePrincipalId
   scope: 'access_as_user'
 }
 
