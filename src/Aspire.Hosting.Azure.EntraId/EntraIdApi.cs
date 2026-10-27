@@ -151,22 +151,35 @@ public sealed class EntraIdApi
     /// <summary>
     /// Identifies another API, whose service principal must exist in the tenant, by its application ID.
     /// </summary>
-    /// <param name="displayName">A name for the API used in diagnostics.</param>
+    /// <param name="displayName">A name for the API used in diagnostics and as the name of its <c>DownstreamApis</c> entry (its letters and digits).</param>
     /// <param name="applicationId">The API's application (client) ID, as a GUID.</param>
+    /// <param name="resourceUri">
+    /// The API's application ID URI, the prefix of its scopes in token requests, such as <c>api://contoso-orders</c> or
+    /// <c>https://contoso.onmicrosoft.com/orders</c>. It is shown as "Application ID URI" on the API's registration. It is
+    /// not derived from <paramref name="applicationId"/> because an API can use any URI.
+    /// </param>
     /// <returns>The API. Its permissions must be requested with explicit IDs.</returns>
-    /// <exception cref="ArgumentException"><paramref name="applicationId"/> is not a GUID.</exception>
-    public static EntraIdApi FromApplicationId(string displayName, string applicationId)
+    /// <exception cref="ArgumentException">
+    /// <paramref name="applicationId"/> is not a GUID, or <paramref name="resourceUri"/> is not a valid application ID URI.
+    /// </exception>
+    public static EntraIdApi FromApplicationId(string displayName, string applicationId, string resourceUri)
     {
         ArgumentException.ThrowIfNullOrEmpty(displayName);
         ArgumentException.ThrowIfNullOrEmpty(applicationId);
+        ArgumentException.ThrowIfNullOrEmpty(resourceUri);
 
         if (EntraIdValidation.ValidateClientId(applicationId) is { } error)
         {
             throw new ArgumentException($"'{applicationId}' is not a valid application ID. {error}", nameof(applicationId));
         }
 
-        var normalizedId = Guid.Parse(applicationId).ToString("D");
-        return new(displayName, normalizedId, $"api://{normalizedId}", null, s_noPermissions, s_noPermissions, hasCatalog: false);
+        if (EntraIdValidation.ValidateApplicationIdUri(resourceUri) is { } uriError)
+        {
+            throw new ArgumentException($"'{resourceUri}' is not a valid application ID URI. {uriError}", nameof(resourceUri));
+        }
+
+        // A scope is requested as "{resourceUri}/{scope}", so a trailing slash would produce "//".
+        return new(displayName, Guid.Parse(applicationId).ToString("D"), resourceUri.TrimEnd('/'), null, s_noPermissions, s_noPermissions, hasCatalog: false);
     }
 
     internal EntraIdResolvedPermission Resolve(EntraIdApiPermission permission)

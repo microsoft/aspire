@@ -1897,6 +1897,7 @@ public static class EntraIdResourceExtensions
         {
             access = create();
             caller.ApiAccess.Add(access);
+            caller.EnsureApiAccessValidation();
         }
 
         return access;
@@ -2138,16 +2139,10 @@ public static class EntraIdResourceExtensions
             // The APIs that this registration declares permissions to, as Microsoft.Identity.Web DownstreamApis entries.
             // That section is a sibling of AzureAd, not part of it, so a .NET program's entries ignore the connection name.
             var downstreamPrefix = isDotnetProgram ? $"{downstreamApisConfigKey}__" : $"{keyPrefix}{downstreamApisConfigKey}_";
-            var downstreamNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // The startup pipeline validates this too, but a consumer's environment can be resolved without it, such as in tests.
+            entra.ValidateApiAccess();
             foreach (var downstreamApi in entra.ApiAccess.SelectMany(static a => a.GetDownstreamApis()))
             {
-                // Two entries with one name would overwrite each other's scopes, and a caller would then request the wrong API's token.
-                if (!downstreamNames.Add(downstreamApi.Name))
-                {
-                    throw new InvalidOperationException(
-                        $"'{entra.Name}' declares permissions to more than one API that maps to the downstream API name '{downstreamApi.Name}'. Give the APIs different names: for registrations in the AppHost, the names of the resources that reference them, and for other APIs, the display name passed to EntraIdApi.FromApplicationId.");
-                }
-
                 var apiPrefix = $"{downstreamPrefix}{downstreamApi.Name}{separator}";
                 for (var i = 0; i < downstreamApi.Scopes.Count; i++)
                 {

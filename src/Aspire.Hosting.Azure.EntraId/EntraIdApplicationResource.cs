@@ -80,6 +80,31 @@ public class EntraIdApplicationResource : AzureProvisioningResource
         _provisioningAnnotations = [.. Annotations.Where(annotation => annotation is PipelineStepAnnotation or PipelineConfigurationAnnotation)];
     }
 
+    private bool _hasApiAccessValidation;
+
+    // Consumers and API permissions are only complete once the model is built, so the check runs before anything starts. The step is added
+    // with the first declaration, not up front, so a registration that declares nothing keeps no pipeline steps, as an existing one must.
+    internal void EnsureApiAccessValidation()
+    {
+        if (_hasApiAccessValidation)
+        {
+            return;
+        }
+
+        _hasApiAccessValidation = true;
+        Annotations.Add(new PipelineStepAnnotation(_ => new PipelineStep
+        {
+            Name = $"validate-{Name}-api-access",
+            Description = $"Validates the API permissions that Entra ID application {Name} declares.",
+            Action = _ =>
+            {
+                ValidateApiAccess();
+                return Task.CompletedTask;
+            },
+            RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+        }));
+    }
+
     internal bool IsExistingApplication { get; private set; }
 
     internal void SetExistingApplication()
@@ -180,6 +205,45 @@ public class EntraIdApplicationResource : AzureProvisioningResource
 
     // Consumers are recorded as they reference the registration so that each one's own identity can be trusted.
     internal List<IResource> Consumers { get; } = [];
+
+    // Checks that the DownstreamApis entries that the registration's consumers receive can be built and are distinct. Only the
+    // resources that reference this registration get entries, and an entry is named after a resource that references the API, so
+    // this can only be checked once the whole model exists. Both the startup pipeline and the consumers' environment run it.
+    internal void ValidateApiAccess()
+    {
+        if (Consumers.Count == 0)
+        {
+            return;
+        }
+
+        var entries = new Dictionary<string, EntraIdApiAccess>(StringComparer.OrdinalIgnoreCase);
+        foreach (var access in ApiAccess)
+        {
+            if (access.Application is { IsExistingApplication: true, ApplicationIdUri: null } existingApi)
+            {
+                throw new InvalidOperationException(
+                    $"'{Name}' declares permissions to the existing registration '{existingApi.Name}', but its application ID URI is not configured, " +
+                    $"so the scope names to request can't be built. Call WithApplicationIdUri on '{existingApi.Name}' with the URI that it defines.");
+            }
+
+            foreach (var entry in access.GetDownstreamApis())
+            {
+                if (entries.TryAdd(entry.Name, access))
+                {
+                    continue;
+                }
+
+                var other = entries[entry.Name];
+                throw new InvalidOperationException(access.Application is not null && other.Application is not null
+                    ? $"'{Name}' declares permissions to the registrations '{other.DisplayName}' and '{access.DisplayName}', and both would be configured as the " +
+                      $"DownstreamApis entry '{entry.Name}', the name of a resource that references both. An entry holds the scopes of one API, so the consumer " +
+                      $"couldn't tell them apart, and one token request can't cover both. Reference '{other.DisplayName}' and '{access.DisplayName}' from different resources."
+                    : $"'{Name}' declares permissions to '{other.DisplayName}' and '{access.DisplayName}', which would both be configured as the DownstreamApis entry " +
+                      $"'{entry.Name}'. An entry is named after a resource that references the API's registration, or after the display name of an API created with " +
+                      $"EntraIdApi.FromApplicationId. Rename the resource, or give the API a different display name.");
+            }
+        }
+    }
 
     internal void ValidateComputeTargets()
     {
@@ -667,29 +731,22 @@ public class EntraIdApplicationResource : AzureProvisioningResource
             throw new ArgumentException($"'{Name}' does not expose a scope named '{scopeName}'. Add it with WithScope first.", nameof(scopeName));
         }
 
-        return ApplicationIdUriValue switch
-        {
-            string uri => ReferenceExpression.Create($"{uri}/{scopeName}"),
-            BicepOutputReference output => ReferenceExpression.Create($"{output}/{scopeName}"),
-            _ => throw new InvalidOperationException($"The application ID URI of '{Name}' is not configured. Call WithApplicationIdUri with the registration's URI.")
-        };
+        return CreateScopeValue(scopeName);
     }
 
     internal void AddScope(EntraIdScope scope) => _scopes.Add(scope);
 
-    // The scope's full name, as a client requests it in a token request. An existing registration without a configured URI is
-    // assumed to use the default api://{clientId}.
+    // The scope's full name, as a client requests it in a token request. An existing registration can use any application ID URI,
+    // so one that isn't configured can't be guessed: a made-up URI would only fail later, as a token error.
     internal ReferenceExpression CreateScopeValue(string scope) => ApplicationIdUriValue switch
     {
         string uri => ReferenceExpression.Create($"{uri}/{scope}"),
         BicepOutputReference output => ReferenceExpression.Create($"{output}/{scope}"),
-        _ => ClientIdValue switch
-        {
-            ParameterResource clientIdParameter => ReferenceExpression.Create($"api://{clientIdParameter}/{scope}"),
-            string clientId => ReferenceExpression.Create($"api://{clientId}/{scope}"),
-            _ => throw new InvalidOperationException($"The application ID URI of '{Name}' is not configured. Call WithApplicationIdUri with the registration's URI.")
-        }
+        _ => throw CreateMissingApplicationIdUriException()
     };
+
+    internal InvalidOperationException CreateMissingApplicationIdUriException() =>
+        new($"The application ID URI of '{Name}' is not configured. Call WithApplicationIdUri with the URI that the registration defines.");
 
     // Scope IDs must not change between deployments, and Graph rejects a request that drops an enabled scope, so a
     // random ID is not an option. Deriving the ID from the registration and scope names also gives every tenant the same IDs.

@@ -4,7 +4,9 @@
 #pragma warning disable ASPIREAZURE001 // Azure environment resources are experimental.
 #pragma warning disable ASPIREAZURE003 // Tenant-scoped resource annotations are experimental.
 
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Tests.Utils;
@@ -18,6 +20,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
 {
     private const string TenantId = "aaaabbbb-0000-cccc-1111-dddd2222eeee";
     private const string ClientId = "00001111-aaaa-2222-bbbb-3333cccc4444";
+    private const string ApiUri = "api://apiservice-entra";
     private const string ScopeDescription = "Allows the app to call the API on behalf of the signed-in user.";
 
     [Fact]
@@ -348,10 +351,10 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         var web = builder.AddEntraIdApplication("entra-web")
             .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Application("Mail.Send", mailSend))
             .WithApiPermissions(
-                EntraIdApi.FromApplicationId("Contoso API", "99998888-aaaa-7777-bbbb-6666cccc5555"),
+                EntraIdApi.FromApplicationId("Contoso API", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://contoso"),
                 EntraIdApiPermission.Delegated("Contoso.Read", Guid.Parse("33334444-aaaa-5555-bbbb-6666cccc7777")))
             .WithAdminConsent(
-                EntraIdApi.FromApplicationId("Contoso API", "99998888-aaaa-7777-bbbb-6666cccc5555"),
+                EntraIdApi.FromApplicationId("Contoso API", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://contoso"),
                 EntraIdApiPermission.Delegated("Contoso.Read", Guid.Parse("33334444-aaaa-5555-bbbb-6666cccc7777")));
 
         await Verify(web.Resource.GetBicepTemplateString(), "bicep");
@@ -360,10 +363,10 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     [Fact]
     public void EntraIdApi_FromApplicationId_RequiresIdsAndAGuid()
     {
-        var custom = EntraIdApi.FromApplicationId("Contoso API", "99998888-AAAA-7777-bbbb-6666cccc5555");
+        var custom = EntraIdApi.FromApplicationId("Contoso API", "99998888-AAAA-7777-bbbb-6666cccc5555", "api://contoso");
 
         Assert.Equal("99998888-aaaa-7777-bbbb-6666cccc5555", custom.ApplicationId);
-        Assert.Throws<ArgumentException>(() => EntraIdApi.FromApplicationId("Contoso API", "not-a-guid"));
+        Assert.Throws<ArgumentException>(() => EntraIdApi.FromApplicationId("Contoso API", "not-a-guid", "api://contoso"));
 
         using var builder = TestDistributedApplicationBuilder.Create();
         var web = builder.AddEntraIdApplication("entra-web");
@@ -589,31 +592,162 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task WithReference_FlowsScopesOfExistingApisWithAndWithoutAnApplicationIdUri()
+    public async Task WithReference_FlowsScopesOfExistingApisUsingTheirConfiguredApplicationIdUri()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var withUri = builder.AddExistingEntraApplication("with-uri", TenantId, ClientId)
+        var orders = builder.AddExistingEntraApplication("orders-entra", TenantId, ClientId)
             .WithApplicationIdUri("api://contoso-orders")
             .WithScope("orders.read", "Read orders.", scope => scope.Id = Guid.NewGuid());
-        var withoutUri = builder.AddExistingEntraApplication("without-uri", TenantId, ClientId)
+        var items = builder.AddExistingEntraApplication("items-entra", TenantId, ClientId)
+            .WithApplicationIdUri("https://contoso.onmicrosoft.com/items")
             .WithScope("items.read", "Read items.", scope => scope.Id = Guid.NewGuid());
         var web = builder.AddEntraIdApplication("entra-web")
-            .WithApiPermissions(withUri, "orders.read")
-            .WithApiPermissions(withoutUri, "items.read");
+            .WithApiPermissions(orders, "orders.read")
+            .WithApiPermissions(items, "items.read");
         web.Resource.Outputs["tenantId"] = TenantId;
         web.Resource.Outputs["clientId"] = ClientId;
         web.Resource.ProvisioningTaskCompletionSource!.SetResult();
-        builder.AddResource(new ProjectResource("orders-svc")).WithReference(withUri);
-        builder.AddResource(new ProjectResource("items-svc")).WithReference(withoutUri);
+        builder.AddResource(new ProjectResource("orders-svc")).WithReference(orders);
+        builder.AddResource(new ProjectResource("items-svc")).WithReference(items);
         var project = builder.AddResource(new ProjectResource("web")).WithReference(web);
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
         // The consumer's name is used as is, like the resource name in service discovery.
         Assert.Equal("api://contoso-orders/orders.read", env["DownstreamApis__orders-svc__Scopes__0"]);
-        Assert.Equal($"api://{ClientId}/items.read", env["DownstreamApis__items-svc__Scopes__0"]);
+        Assert.Equal("https://contoso.onmicrosoft.com/items/items.read", env["DownstreamApis__items-svc__Scopes__0"]);
     }
 
+    [Fact]
+    public async Task WithReference_RejectsAnExistingApiWithoutAnApplicationIdUri()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var existingApi = builder.AddExistingEntraApplication("without-uri", TenantId, ClientId)
+            .WithScope("items.read", "Read items.", scope => scope.Id = Guid.NewGuid());
+        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
+            .WithApiPermissions(existingApi, "items.read");
+
+        // An existing registration can use any URI, so a made-up api://{clientId} would only fail later, as a token error.
+        // Nothing references the client yet, so there is nothing to configure and nothing to reject.
+        web.Resource.ValidateApiAccess();
+
+        var project = builder.AddResource(new ProjectResource("web")).WithReference(web);
+
+        var validation = Assert.Throws<InvalidOperationException>(web.Resource.ValidateApiAccess);
+        Assert.Contains("'entra-web'", validation.Message);
+        Assert.Contains("WithApplicationIdUri on 'without-uri'", validation.Message);
+        var environment = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance));
+        Assert.Equal(validation.Message, environment.Message);
+
+        // Setting the URI, in any order, resolves it.
+        existingApi.WithApplicationIdUri("api://contoso-items");
+        web.Resource.ValidateApiAccess();
+    }
+
+    [Fact]
+    public async Task ValidateApiAccess_RunsBeforeStartForCreatedAndExistingRegistrationsThatDeclarePermissions()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var api = builder.AddEntraIdApplication("api-entra").WithScope("access_as_user", ScopeDescription);
+        var created = builder.AddEntraIdApplication("created-web");
+        var existing = builder.AddExistingEntraApplication("existing-web", TenantId, ClientId);
+        var existingWithoutDeclarations = builder.AddExistingEntraApplication("existing-other", TenantId, ClientId);
+
+        // A registration that declares nothing has nothing to validate, and an existing one keeps no pipeline steps.
+        Assert.Empty(existing.Resource.Annotations.OfType<PipelineStepAnnotation>());
+        Assert.Empty(existingWithoutDeclarations.Resource.Annotations.OfType<PipelineStepAnnotation>());
+
+        created.WithApiPermissions(api, "access_as_user");
+        existing.WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read"));
+        existing.WithApiPermissions(EntraIdApi.AzureStorage, EntraIdApiPermission.Delegated("user_impersonation"));
+
+        foreach (var resource in new[] { created.Resource, existing.Resource })
+        {
+            var annotation = Assert.Single(resource.Annotations.OfType<PipelineStepAnnotation>(), IsApiAccessValidation);
+            var step = Assert.Single(await annotation.CreateStepsAsync(new PipelineStepFactoryContext { PipelineContext = null!, Resource = resource }));
+            Assert.Equal([WellKnownPipelineSteps.BeforeStart], step.RequiredBySteps);
+
+            bool IsApiAccessValidation(PipelineStepAnnotation a) =>
+                a.CreateStepsAsync(new PipelineStepFactoryContext { PipelineContext = null!, Resource = resource }).GetAwaiter().GetResult()
+                    .Any(s => s.Name == $"validate-{resource.Name}-api-access");
+        }
+    }
+    [Fact]
+    public void ValidateApiAccess_RejectsTwoApiRegistrationsReferencedByTheSameResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var orders = builder.AddEntraIdApplication("orders-entra").WithScope("orders.read", "Read orders.");
+        var items = builder.AddEntraIdApplication("items-entra").WithScope("items.read", "Read items.");
+
+        // One project validates tokens for both registrations.
+        builder.AddResource(new ProjectResource("gateway"))
+            .WithReference(orders, connectionName: "Orders")
+            .WithReference(items, connectionName: "Items");
+
+        var web = builder.AddEntraIdApplication("web-entra")
+            .WithApiPermissions(orders, "orders.read")
+            .WithApiPermissions(items, "items.read");
+
+        // Nothing references the client yet, so there are no entries to collide.
+        web.Resource.ValidateApiAccess();
+
+        builder.AddResource(new ProjectResource("web")).WithReference(web);
+
+        var exception = Assert.Throws<InvalidOperationException>(web.Resource.ValidateApiAccess);
+        Assert.Equal(
+            "'web-entra' declares permissions to the registrations 'orders-entra' and 'items-entra', and both would be configured as the " +
+            "DownstreamApis entry 'gateway', the name of a resource that references both. An entry holds the scopes of one API, so the consumer " +
+            "couldn't tell them apart, and one token request can't cover both. Reference 'orders-entra' and 'items-entra' from different resources.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task ValidateApiAccess_ReferencingTheApisFromDifferentResourcesIsAllowed()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var orders = builder.AddExistingEntraApplication("orders-entra", TenantId, ClientId)
+            .WithApplicationIdUri("api://orders").WithScope("orders.read", "Read orders.", s => s.Id = Guid.NewGuid());
+        var items = builder.AddExistingEntraApplication("items-entra", TenantId, ClientId)
+            .WithApplicationIdUri("api://items").WithScope("items.read", "Read items.", s => s.Id = Guid.NewGuid());
+        builder.AddResource(new ProjectResource("orders-svc")).WithReference(orders);
+        builder.AddResource(new ProjectResource("items-svc")).WithReference(items);
+        var web = builder.AddExistingEntraApplication("web-entra", TenantId, ClientId)
+            .WithApiPermissions(orders, "orders.read")
+            .WithApiPermissions(items, "items.read");
+        var project = builder.AddResource(new ProjectResource("web")).WithReference(web);
+
+        web.Resource.ValidateApiAccess();
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("api://orders/orders.read", env["DownstreamApis__orders-svc__Scopes__0"]);
+        Assert.Equal("api://items/items.read", env["DownstreamApis__items-svc__Scopes__0"]);
+    }
+
+    [Theory]
+    [InlineData("not a uri")]
+    [InlineData("relative/path")]
+    [InlineData("api://contoso?x=1")]
+    public void EntraIdApi_FromApplicationId_RejectsInvalidResourceUris(string uri)
+    {
+        Assert.Throws<ArgumentException>(() => EntraIdApi.FromApplicationId("Contoso API", "99998888-aaaa-7777-bbbb-6666cccc5555", uri));
+    }
+
+    [Fact]
+    public async Task WithReference_FirstPartyApiScopesUseTheConfiguredResourceUriNotTheApplicationId()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var contoso = EntraIdApi.FromApplicationId("Contoso API", "99998888-aaaa-7777-bbbb-6666cccc5555", "https://contoso.onmicrosoft.com/orders");
+        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
+            .WithApiPermissions(contoso, EntraIdApiPermission.Delegated("Orders.Read", Guid.NewGuid()), EntraIdApiPermission.Application("Orders.Sync", Guid.NewGuid()));
+        var project = builder.AddResource(new ProjectResource("web")).WithReference(web);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("https://contoso.onmicrosoft.com/orders/Orders.Read", env["DownstreamApis__ContosoAPI__Scopes__0"]);
+        Assert.Equal("https://contoso.onmicrosoft.com/orders/.default", env["DownstreamApis__ContosoAPIAppOnly__Scopes__0"]);
+        Assert.DoesNotContain(env.Values, v => v.Contains("99998888", StringComparison.Ordinal));
+    }
     [Fact]
     public async Task WithReference_FlowsOnlyEnabledExposedScopesToTheApi()
     {
@@ -649,8 +783,8 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task WithReference_RejectsApisThatShareADownstreamName()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var first = EntraIdApi.FromApplicationId("My API", "99998888-aaaa-7777-bbbb-6666cccc5555");
-        var second = EntraIdApi.FromApplicationId("MyAPI", "11110000-aaaa-7777-bbbb-6666cccc5555");
+        var first = EntraIdApi.FromApplicationId("My API", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://my-api");
+        var second = EntraIdApi.FromApplicationId("MyAPI", "11110000-aaaa-7777-bbbb-6666cccc5555", "api://my-api-2");
         var permission = EntraIdApiPermission.Delegated("Read", Guid.NewGuid());
         var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
             .WithApiPermissions(first, permission)
@@ -666,8 +800,8 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     public async Task WithReference_FirstPartyApisWithDifferentDisplayNamesGetSeparateEntries()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var first = EntraIdApi.FromApplicationId("My API", "99998888-aaaa-7777-bbbb-6666cccc5555");
-        var second = EntraIdApi.FromApplicationId("Other API", "11110000-aaaa-7777-bbbb-6666cccc5555");
+        var first = EntraIdApi.FromApplicationId("My API", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://my-api");
+        var second = EntraIdApi.FromApplicationId("Other API", "11110000-aaaa-7777-bbbb-6666cccc5555", "https://contoso.onmicrosoft.com/other/");
         var permission = EntraIdApiPermission.Delegated("Read", Guid.NewGuid());
         var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
             .WithApiPermissions(first, permission)
@@ -676,14 +810,16 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
-        Assert.Equal($"api://{first.ApplicationId}/Read", env["DownstreamApis__MyAPI__Scopes__0"]);
-        Assert.Equal($"api://{second.ApplicationId}/Read", env["DownstreamApis__OtherAPI__Scopes__0"]);
+        Assert.Equal("api://my-api/Read", env["DownstreamApis__MyAPI__Scopes__0"]);
+        // A trailing slash on the URI would otherwise produce "//" in the scope.
+        Assert.Equal("https://contoso.onmicrosoft.com/other/Read", env["DownstreamApis__OtherAPI__Scopes__0"]);
     }
     [Fact]
     public async Task WithReference_NamesDownstreamApisAfterTheResourcesThatReferenceTheApi()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var apiEntra = builder.AddExistingEntraApplication("apiservice-entra", TenantId, ClientId)
+            .WithApplicationIdUri(ApiUri)
             .WithScope("access_as_user", ScopeDescription, scope => scope.Id = Guid.NewGuid());
         var webEntra = builder.AddExistingEntraApplication("webfrontend-entra", TenantId, ClientId)
             .WithApiPermissions(apiEntra, "access_as_user");
@@ -705,6 +841,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var apiEntra = builder.AddExistingEntraApplication("apiservice-entra", TenantId, ClientId)
+            .WithApplicationIdUri(ApiUri)
             .WithScope("access_as_user", ScopeDescription, scope => scope.Id = Guid.NewGuid());
         var webEntra = builder.AddExistingEntraApplication("webfrontend-entra", TenantId, ClientId)
             .WithApiPermissions(apiEntra, "access_as_user");
@@ -712,7 +849,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(webFrontend.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
-        Assert.Equal($"api://{ClientId}/access_as_user", env["DownstreamApis__apiservice_entra__Scopes__0"]);
+        Assert.Equal($"{ApiUri}/access_as_user", env["DownstreamApis__apiservice_entra__Scopes__0"]);
     }
 
     [Theory]
@@ -722,6 +859,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var apiEntra = builder.AddExistingEntraApplication("apiservice-entra", TenantId, ClientId)
+            .WithApplicationIdUri(ApiUri)
             .WithScope("access_as_user", ScopeDescription, scope => scope.Id = Guid.NewGuid());
         var webEntra = builder.AddExistingEntraApplication("webfrontend-entra", TenantId, ClientId)
             .WithApiPermissions(apiEntra, "access_as_user");
@@ -731,7 +869,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(webFrontend.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
-        Assert.Equal($"api://{ClientId}/access_as_user", env[expected]);
+        Assert.Equal($"{ApiUri}/access_as_user", env[expected]);
         Assert.Single(env.Keys, k => k.Contains("Apis", StringComparison.Ordinal));
         Assert.Equal("AzureAd__ClientId", Assert.Single(env.Keys, k => k.EndsWith("ClientId", StringComparison.Ordinal)));
     }
@@ -741,6 +879,7 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var apiEntra = builder.AddExistingEntraApplication("apiservice-entra", TenantId, ClientId)
+            .WithApplicationIdUri(ApiUri)
             .WithScope("access_as_user", ScopeDescription, scope => scope.Id = Guid.NewGuid());
         var webEntra = builder.AddExistingEntraApplication("webfrontend-entra", TenantId, ClientId)
             .WithApiPermissions(apiEntra, "access_as_user");
@@ -751,8 +890,8 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(worker.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
         var defaultEnv = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(defaultWorker.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
-        Assert.Equal($"api://{ClientId}/access_as_user", env["ENTRA_MY_APIS_API_CONTAINER_SCOPES_0"]);
-        Assert.Equal($"api://{ClientId}/access_as_user", defaultEnv["ENTRA_DOWNSTREAM_APIS_API_CONTAINER_SCOPES_0"]);
+        Assert.Equal($"{ApiUri}/access_as_user", env["ENTRA_MY_APIS_API_CONTAINER_SCOPES_0"]);
+        Assert.Equal($"{ApiUri}/access_as_user", defaultEnv["ENTRA_DOWNSTREAM_APIS_API_CONTAINER_SCOPES_0"]);
     }
 
     [Fact]
@@ -765,4 +904,62 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         Assert.Throws<ArgumentException>(() => project.WithReference(webEntra, connectionName: null, downstreamApisConfigKey: ""));
         Assert.Throws<ArgumentException>(() => project.WithReference(webEntra, connectionName: null, downstreamApisConfigKey: " "));
     }
+
+    [Fact]
+    public async Task BeforeStart_FailsWhenTwoApiRegistrationsAreReferencedByTheSameResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var orders = builder.AddExistingEntraApplication("orders-entra", TenantId, ClientId)
+            .WithApplicationIdUri("api://orders").WithScope("orders.read", "Read orders.", s => s.Id = Guid.NewGuid());
+        var items = builder.AddExistingEntraApplication("items-entra", TenantId, ClientId)
+            .WithApplicationIdUri("api://items").WithScope("items.read", "Read items.", s => s.Id = Guid.NewGuid());
+        builder.AddResource(new ProjectResource("gateway")).WithReference(orders, "Orders").WithReference(items, "Items");
+        var web = builder.AddExistingEntraApplication("web-entra", TenantId, ClientId)
+            .WithApiPermissions(orders, "orders.read")
+            .WithApiPermissions(items, "items.read");
+        builder.AddResource(new ProjectResource("web")).WithReference(web);
+
+        using var app = builder.Build();
+
+        // The model is rejected before any resource starts, not when a consumer later resolves its environment.
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() => ExecuteBeforeStartHooksAsync(app, default));
+        Assert.Contains("validate-web-entra-api-access", exception.ToString());
+        Assert.Contains("DownstreamApis entry 'gateway'", exception.ToString());
+    }
+
+    [Fact]
+    public async Task BeforeStart_FailsWhenAnExistingApiHasNoApplicationIdUri()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var api = builder.AddExistingEntraApplication("items-entra", TenantId, ClientId)
+            .WithScope("items.read", "Read items.", s => s.Id = Guid.NewGuid());
+        var web = builder.AddExistingEntraApplication("web-entra", TenantId, ClientId)
+            .WithApiPermissions(api, "items.read");
+        builder.AddResource(new ProjectResource("web")).WithReference(web);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() => ExecuteBeforeStartHooksAsync(app, default));
+        Assert.Contains("WithApplicationIdUri on 'items-entra'", exception.ToString());
+    }
+
+    [Fact]
+    public async Task BeforeStart_SucceedsWhenTheDeclaredApisAreValid()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var api = builder.AddExistingEntraApplication("items-entra", TenantId, ClientId)
+            .WithApplicationIdUri("api://items").WithScope("items.read", "Read items.", s => s.Id = Guid.NewGuid());
+        builder.AddResource(new ProjectResource("items-svc")).WithReference(api);
+        var web = builder.AddExistingEntraApplication("web-entra", TenantId, ClientId)
+            .WithApiPermissions(api, "items.read")
+            .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read"));
+        builder.AddResource(new ProjectResource("web")).WithReference(web);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 }
