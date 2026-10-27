@@ -1218,4 +1218,112 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         Assert.Equal(symbols.Length, symbols.Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.All(symbols, symbol => Assert.Matches("^[A-Za-z_][A-Za-z0-9_]*$", symbol));
     }
+
+    private static (IResourceBuilder<EntraIdApplicationResource> First, IResourceBuilder<EntraIdApplicationResource> Second) AddTwoClientsOfOneApi(IDistributedApplicationBuilder builder)
+    {
+        var api = builder.AddExistingEntraApplication("apiservice-entra", TenantId, ClientId)
+            .WithApplicationIdUri(ApiUri)
+            .WithScope("read", "Read", scope => scope.Id = Guid.NewGuid())
+            .WithScope("write", "Write", scope => scope.Id = Guid.NewGuid());
+        builder.AddResource(new ProjectResource("apiservice")).WithReference(api);
+
+        var first = builder.AddExistingEntraApplication("web-a", TenantId, ClientId).WithApiPermissions(api, "read", "write");
+        var second = builder.AddExistingEntraApplication("web-b", TenantId, ClientId).WithApiPermissions(api, "read");
+        return (first, second);
+    }
+
+    [Fact]
+    public async Task WithReference_RejectsTwoRegistrationsThatWriteTheSameDownstreamApisKeys()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var (first, second) = AddTwoClientsOfOneApi(builder);
+
+        // For a .NET program the DownstreamApis section doesn't depend on the connection name, so both would write
+        // DownstreamApis__apiservice__Scopes__0, and web-a's Scopes__1 would survive in web-b's configuration.
+        var frontend = builder.AddResource(new ProjectResource("frontend"))
+            .WithReference(first, "AzureAdA")
+            .WithReference(second, "AzureAdB");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(frontend.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance));
+
+        Assert.Equal(
+            "'frontend' references the Entra ID applications 'web-a' and 'web-b', and both declare permissions to an API that is configured as " +
+            "the DownstreamApis entry 'apiservice' under 'DownstreamApis', so their scopes would be mixed. Pass a different downstreamApisConfigKey to WithReference for one of them.",
+            exception.Message);
+        Assert.Equal(exception.Message, Assert.Throws<InvalidOperationException>(first.Resource.ValidateApiAccess).Message);
+    }
+
+    [Fact]
+    public async Task WithReference_ADifferentDownstreamApisConfigKeyKeepsTheTwoRegistrationsApart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var (first, second) = AddTwoClientsOfOneApi(builder);
+        var frontend = builder.AddResource(new ProjectResource("frontend"))
+            .WithReference(first, "AzureAdA")
+            .WithReference(second, "AzureAdB", downstreamApisConfigKey: "DownstreamApisB");
+
+        first.Resource.ValidateApiAccess();
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(frontend.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal($"{ApiUri}/read", env["DownstreamApis__apiservice__Scopes__0"]);
+        Assert.Equal($"{ApiUri}/write", env["DownstreamApis__apiservice__Scopes__1"]);
+        Assert.Equal($"{ApiUri}/read", env["DownstreamApisB__apiservice__Scopes__0"]);
+        Assert.DoesNotContain("DownstreamApisB__apiservice__Scopes__1", env.Keys);
+    }
+
+    [Fact]
+    public async Task WithReference_RegistrationsOnANonDotnetResourceUseTheirOwnKeys()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var (first, second) = AddTwoClientsOfOneApi(builder);
+
+        // Other languages prefix the entries with the connection name, so each reference has its own keys.
+        var worker = builder.AddContainer("worker", "myimage").WithReference(first, "A").WithReference(second, "B");
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(worker.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal($"{ApiUri}/write", env["A_DOWNSTREAM_APIS_APISERVICE_SCOPES_1"]);
+        Assert.DoesNotContain("B_DOWNSTREAM_APIS_APISERVICE_SCOPES_1", env.Keys);
+    }
+
+    [Fact]
+    public async Task WithReference_RegistrationsOnANonDotnetResourceWithTheSameConnectionNameClash()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var (first, second) = AddTwoClientsOfOneApi(builder);
+
+        // The same connection name for both makes the keys the same again.
+        var worker = builder.AddContainer("worker", "myimage").WithReference(first, "A").WithReference(second, "A");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(worker.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance));
+    }
+    [Fact]
+    public async Task WithReference_ReferencingOneRegistrationTwiceIsNotAClash()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var (first, _) = AddTwoClientsOfOneApi(builder);
+        var frontend = builder.AddResource(new ProjectResource("frontend"))
+            .WithReference(first)
+            .WithReference(first, "AzureAdAgain");
+
+        first.Resource.ValidateApiAccess();
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(frontend.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal($"{ApiUri}/write", env["DownstreamApis__apiservice__Scopes__1"]);
+    }
+
+    [Fact]
+    public async Task BeforeStart_FailsWhenAResourceReferencesTwoRegistrationsThatShareDownstreamApisKeys()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var (first, second) = AddTwoClientsOfOneApi(builder);
+        builder.AddResource(new ProjectResource("frontend")).WithReference(first, "AzureAdA").WithReference(second, "AzureAdB");
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() => ExecuteBeforeStartHooksAsync(app, default));
+        Assert.Contains("downstreamApisConfigKey", exception.ToString());
+    }
 }

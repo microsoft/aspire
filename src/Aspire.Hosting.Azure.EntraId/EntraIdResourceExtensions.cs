@@ -1986,7 +1986,9 @@ public static class EntraIdResourceExtensions
     /// <param name="downstreamApisConfigKey">
     /// The root configuration key of the <c>DownstreamApis</c> entries for the APIs that the application declared permissions to
     /// (see <c>WithApiPermissions</c>). When <see langword="null"/>, uses <c>"DownstreamApis"</c>.
-    /// For .NET program resources, <c>:</c> in the key is replaced by <c>__</c>.
+    /// For .NET program resources, <c>:</c> in the key is replaced by <c>__</c>. A .NET program's <c>DownstreamApis</c> section doesn't depend on
+    /// <paramref name="connectionName"/>, so when a resource references several registrations that declare permissions to the same API,
+    /// give all but one of them their own key, or the model is rejected.
     /// </param>
     /// <returns>The resource builder for chaining.</returns>
     /// <remarks>
@@ -2066,6 +2068,10 @@ public static class EntraIdResourceExtensions
         // Create a reference relationship so the dashboard shows the connection
         builder.WithReferenceRelationship(entra);
         entra.Consumers.Add(builder.Resource);
+
+        // That section is a sibling of AzureAd, not part of it, so a .NET program's entries ignore the connection name.
+        var downstreamPrefix = isDotnetProgram ? $"{downstreamApisConfigKey}__" : $"{keyPrefix}{downstreamApisConfigKey}_";
+        builder.Resource.Annotations.Add(new EntraIdReferenceAnnotation(entra, downstreamApisConfigKey, downstreamPrefix));
 
         if (entra.ClientCredentials.OfType<EntraIdFederatedIdentityCredential>().Any(c => c.UsesConsumerIdentity))
         {
@@ -2151,10 +2157,9 @@ public static class EntraIdResourceExtensions
             }
 
             // The APIs that this registration declares permissions to, as Microsoft.Identity.Web DownstreamApis entries.
-            // That section is a sibling of AzureAd, not part of it, so a .NET program's entries ignore the connection name.
-            var downstreamPrefix = isDotnetProgram ? $"{downstreamApisConfigKey}__" : $"{keyPrefix}{downstreamApisConfigKey}_";
             // The startup pipeline validates this too, but a consumer's environment can be resolved without it, such as in tests.
             entra.ValidateApiAccess();
+            EntraIdApplicationResource.ValidateConsumerReferences(builder.Resource);
             foreach (var downstreamApi in entra.ApiAccess.SelectMany(static a => a.GetDownstreamApis()))
             {
                 var apiPrefix = $"{downstreamPrefix}{downstreamApi.Name}{separator}";

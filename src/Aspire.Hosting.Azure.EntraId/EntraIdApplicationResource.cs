@@ -243,6 +243,35 @@ public class EntraIdApplicationResource : AzureProvisioningResource
                       $"EntraIdApi.FromApplicationId. Rename the resource, or give the API a different display name.");
             }
         }
+
+        foreach (var consumer in Consumers)
+        {
+            ValidateConsumerReferences(consumer);
+        }
+    }
+
+    // A resource can reference several registrations. Entries that different registrations write to the same configuration key
+    // would overwrite each other's scopes one by one, and leave behind the higher indexes of the longer list, mixing the permissions
+    // of two identities. Only a .NET program can clash, since its DownstreamApis section is the same whatever the connection name.
+    internal static void ValidateConsumerReferences(IResource consumer)
+    {
+        var owners = new Dictionary<string, (EntraIdApplicationResource Source, string Entry, string ConfigKey)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var reference in consumer.Annotations.OfType<EntraIdReferenceAnnotation>())
+        {
+            foreach (var entry in reference.Source.ApiAccess.SelectMany(static a => a.GetDownstreamApis()))
+            {
+                var key = $"{reference.DownstreamApisPrefix}{entry.Name}";
+                if (owners.TryGetValue(key, out var other) && !ReferenceEquals(other.Source, reference.Source))
+                {
+                    throw new InvalidOperationException(
+                        $"'{consumer.Name}' references the Entra ID applications '{other.Source.Name}' and '{reference.Source.Name}', and both declare permissions to an API that is configured as " +
+                        $"the DownstreamApis entry '{entry.Name}' under '{reference.DownstreamApisConfigKey}', so their scopes would be mixed. Pass a different downstreamApisConfigKey " +
+                        $"to WithReference for one of them.");
+                }
+
+                owners[key] = (reference.Source, entry.Name, reference.DownstreamApisConfigKey);
+            }
+        }
     }
 
     internal void ValidateComputeTargets()
