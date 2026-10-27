@@ -509,27 +509,100 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("--version", "1.0.0")]
     [InlineData("--channel", "stable")]
     [InlineData("--language", "csharp")]
-    public async Task ConfiguredSources_RejectsUnsupportedGenerationOptions(string option, string value)
+    public async Task ConfiguredSources_ExplicitBuiltInOptionsDoNotOfferConfiguredTemplates(string option, string value)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateSearchTemplateAsync(workspace, "template", "sample", "Sample", "Found");
         var interaction = new TestInteractionService();
+        using var cancellation = new CancellationTokenSource();
         var selectionCount = 0;
         interaction.PromptForSelectionCallback = (_, choices, _, _) =>
         {
             var options = choices.Cast<object>().ToArray();
-            return ++selectionCount == 1 ? options[^1] : options[0];
+            Assert.NotEmpty(options);
+            Assert.All(options, choice => Assert.IsAssignableFrom<ITemplate>(choice));
+            selectionCount++;
+            cancellation.Cancel();
+            throw new OperationCanceledException(cancellation.Token);
         };
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new() { ["company"] = Path.Combine(workspace.Path, "template") });
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
             .Parse(["new", "--name", "Demo", "--output", "out", "--suppress-agent-init", option, value])
-            .InvokeAsync().DefaultTimeout();
+            .InvokeAsync(cancellationToken: cancellation.Token).DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
-        Assert.Equal([NewCommandStrings.ConfiguredTemplateConflictingOptions], interaction.DisplayedErrors);
+        Assert.Equal(CliExitCodes.Cancelled, exitCode);
+        Assert.Equal(1, selectionCount);
+        Assert.Empty(interaction.DisplayedErrors);
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
+    }
+
+    [Fact]
+    public async Task ConfiguredSources_UnsupportedLanguageFailsWithoutOpeningUnusablePicker()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        interaction.PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("No usable choices.");
+        using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
+        await WriteConfiguredSourcesAsync(provider, new() { ["catalog"] = new { href = "https://example.test/index" } });
+
+        var result = await provider.GetRequiredService<RootCommand>().Parse("new --language unknown").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, result);
+        Assert.Equal(["No templates are available for the current environment."], interaction.DisplayedErrors);
+        Assert.Empty(interaction.StringPromptCalls);
+    }
+
+    [Fact]
+    public async Task ConfiguredSources_DuplicateNamesWithinSourceHaveUniquePickerLabels()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateSearchTemplateAsync(workspace, "templates/first", "same", "Same template", "First");
+        await CreateSearchTemplateAsync(workspace, "templates/second", "same", "Same template", "Second");
+        var interaction = new TestInteractionService();
+        interaction.SetupStringPromptResponse("");
+        using var cancellation = new CancellationTokenSource();
+        var selections = 0;
+        interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
+        {
+            var options = choices.Cast<object>().ToArray();
+            if (++selections == 1)
+            {
+                return options[^1];
+            }
+            var labels = options.Select(formatter).ToArray();
+            Assert.Equal(
+                ["Same template (same) - company", "Same template (same) - company [[2]]",
+                    NewCommandStrings.SearchTemplatesAgain, NewCommandStrings.BackToDefaultTemplates], labels);
+            Assert.Equal(labels.Length, labels.ToDictionary(label => label).Count);
+            cancellation.Cancel();
+            throw new OperationCanceledException(cancellation.Token);
+        };
+        using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
+        await WriteConfiguredSourcesAsync(provider, new() { ["company"] = Path.Combine(workspace.Path, "templates") });
+
+        var result = await provider.GetRequiredService<RootCommand>().Parse("new")
+            .InvokeAsync(cancellationToken: cancellation.Token).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Cancelled, result);
+        Assert.Equal(2, selections);
+        Assert.Empty(interaction.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task ConfiguredSources_RepeatedQueriesReuseTemplateEngineSession()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateSearchTemplateAsync(workspace, "template", "sample", "Sample template", "Found");
+        using var provider = CreateServices(workspace, new TestInteractionService(), interactive: true).BuildServiceProvider();
+        await WriteConfiguredSourcesAsync(provider, new() { ["company"] = Path.Combine(workspace.Path, "template") });
+        var search = provider.GetRequiredService<ConfiguredTemplateSourceService>();
+
+        var first = Assert.Single(await search.SearchAsync("sample", default));
+        var second = Assert.Single(await search.SearchAsync("", default));
+
+        Assert.Same(first.Template, second.Template);
     }
 
     private static Task WriteConfiguredSourcesAsync(IServiceProvider provider, Dictionary<string, object> sources) =>

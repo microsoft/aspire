@@ -130,7 +130,7 @@ public partial class NewCommandLocalTemplateTests
         var search = provider.GetRequiredService<ConfiguredTemplateSourceService>();
 
         var selected = Assert.Single(await search.SearchAsync("sample", default));
-        Assert.Single(await search.SearchAsync("sample", default));
+        Assert.Same(selected.Template, Assert.Single(await search.SearchAsync("sample", default)).Template);
         Assert.Single(git.CloneCalls);
         currentCommit = changedCommit;
         Assert.Single(await search.SearchAsync("sample", default));

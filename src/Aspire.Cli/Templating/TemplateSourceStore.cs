@@ -31,7 +31,8 @@ internal sealed class TemplateSourceStore(
 
         var path = configurationService.GetSettingsFilePath(isGlobal: true);
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
-            executionContext, new FileInfo(path), logger, cancellationToken);
+            executionContext, new FileInfo(path), logger, cancellationToken)
+            ?? throw new IOException("Could not acquire the global template source configuration lock.");
         var settings = await ReadAsync(path, cancellationToken);
         var sources = GetSources(settings);
         // IConfiguration keys are case-insensitive even though JSON properties are not.
@@ -49,7 +50,8 @@ internal sealed class TemplateSourceStore(
         TemplateSourceConfiguration.ValidateName(name);
         var path = configurationService.GetSettingsFilePath(isGlobal: true);
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
-            executionContext, new FileInfo(path), logger, cancellationToken);
+            executionContext, new FileInfo(path), logger, cancellationToken)
+            ?? throw new IOException("Could not acquire the global template source configuration lock.");
         var settings = await ReadAsync(path, cancellationToken);
         var sources = GetSources(settings);
         var existing = sources.Select(entry => entry.Key).FirstOrDefault(key => key.Equals(name, StringComparison.OrdinalIgnoreCase));
@@ -60,7 +62,7 @@ internal sealed class TemplateSourceStore(
         sources.Remove(existing);
         if (sources.Count == 0)
         {
-            settings.Remove("templates");
+            settings.Remove(TemplateSourceConfiguration.GetPropertyName(settings, "templates"));
         }
         await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, settings, cancellationToken);
         return true;
@@ -68,7 +70,8 @@ internal sealed class TemplateSourceStore(
 
     private static JsonObject GetSources(JsonObject settings)
     {
-        if (settings.TryGetPropertyValue("templates", out var value))
+        var key = TemplateSourceConfiguration.GetPropertyName(settings, "templates");
+        if (settings.TryGetPropertyValue(key, out var value))
         {
             return value as JsonObject
                 ?? throw new TemplateSourceConfigurationException("templates", NewCommandStrings.TemplateSourcesMustBeObject);

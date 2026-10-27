@@ -351,7 +351,9 @@ internal sealed class NewCommand : BaseCommand
         }
 
         var templatesForPrompt = GetTemplatesForPrompt(availableTemplates, parseResult);
-        if ((await _configuredTemplateSources.GetSourcesAsync(cancellationToken)).Count == 0)
+        var configuredTemplatesAllowed = !new[] { s_sourceOption, s_versionOption, _channelOption, _languageOption }
+            .Any(option => parseResult.GetResult(option) is { Implicit: false });
+        if (!configuredTemplatesAllowed || (await _configuredTemplateSources.GetSourcesAsync(cancellationToken)).Count == 0)
         {
             if (templatesForPrompt.Length == 0)
             {
@@ -390,9 +392,21 @@ internal sealed class NewCommand : BaseCommand
                 InteractionService.DisplayMessage(KnownEmojis.Information, NewCommandStrings.NoMatchingConfiguredTemplates);
             }
 
-            var choices = templates.Select(result => new TemplateSearchChoice(
-                $"{result.Template.Description} ({result.Template.Name}) - {result.SourceName}",
-                result.Template, TemplateSearchAction.Select)).ToList();
+            List<TemplateSearchChoice> choices = [];
+            HashSet<string> labels = [NewCommandStrings.SearchTemplatesAgain, NewCommandStrings.BackToDefaultTemplates];
+            foreach (var result in templates)
+            {
+                var baseLabel = $"{result.Template.Description} ({result.Template.Name}) - {result.SourceName}";
+                var label = baseLabel;
+                var suffix = 2;
+                // Extension pickers use formatted labels as dictionary keys, so even distinct
+                // template identities with the same names must have unique display labels.
+                while (!labels.Add(label))
+                {
+                    label = string.Create(CultureInfo.InvariantCulture, $"{baseLabel} [{suffix++}]");
+                }
+                choices.Add(new(label, result.Template, TemplateSearchAction.Select));
+            }
             choices.Add(new(NewCommandStrings.SearchTemplatesAgain, null, TemplateSearchAction.Search));
             choices.Add(new(NewCommandStrings.BackToDefaultTemplates, null, TemplateSearchAction.Back));
             var choice = await InteractionService.PromptForSelectionAsync(

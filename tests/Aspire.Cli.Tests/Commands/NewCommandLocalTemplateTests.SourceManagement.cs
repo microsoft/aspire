@@ -146,6 +146,81 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Fact]
+    public async Task TemplateSourceCommands_CaseInsensitiveRootAndSourceNamesPreserveExistingSpelling()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
+        var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
+        var original = new JsonObject { ["Templates"] = new JsonObject { ["Company"] = new JsonObject { ["path"] = workspace.Path } } }.ToJsonString();
+        await File.WriteAllTextAsync(path, original);
+        var root = provider.GetRequiredService<RootCommand>();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, await root.Parse("template source add COMPANY --href https://example.test/duplicate").InvokeAsync().DefaultTimeout());
+        Assert.Equal(original, await File.ReadAllTextAsync(path));
+        Assert.Equal(CliExitCodes.Success, await root.Parse("config set templates.company.path templates/api --global").InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.Success, await root.Parse("config set TEMPLATES.COMPANY.repository https://example.test/repo --global").InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.Success, await root.Parse("config set templates.company.ref main --global").InvokeAsync().DefaultTimeout());
+        Assert.True(await provider.GetRequiredService<IConfigurationService>().DeleteConfigurationAsync("TEMPLATES.COMPANY.ref", isGlobal: true));
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        Assert.Equal(["Templates"], settings.Select(entry => entry.Key));
+        Assert.Equal(["Company"], settings["Templates"]!.AsObject().Select(entry => entry.Key));
+        var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
+        Assert.Equal("Company", source.Key);
+        Assert.Equal(new TemplateSource("templates/api", "https://example.test/repo", null), source.Value.Template);
+        Assert.Equal("Company", Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(default)).Key);
+
+        Assert.Equal(CliExitCodes.Success, await root.Parse("template source add other --href https://example.test/catalog").InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.Success, await root.Parse("template source remove company").InvokeAsync().DefaultTimeout());
+        Assert.Equal(["other"], JsonNode.Parse(await File.ReadAllTextAsync(path))!["Templates"]!.AsObject().Select(entry => entry.Key));
+        Assert.Equal(CliExitCodes.Success, await root.Parse("template source remove OTHER").InvokeAsync().DefaultTimeout());
+        Assert.Empty(JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject());
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"templates":{"company":{"ref":"main"}}}""")]
+    [InlineData("""{"Templates":{"Company":{"ref":"main"}}}""")]
+    public async Task TemplateSourceConfig_IncompleteSourceRejectsEscapingPathWithoutWriting(string original)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
+        var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
+        await File.WriteAllTextAsync(path, original);
+
+        var result = await provider.GetRequiredService<RootCommand>()
+            .Parse("config set templates.company.path ../escape --global").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, result);
+        Assert.Equal(original, await File.ReadAllTextAsync(path));
+        Assert.Single(interaction.DisplayedErrors);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TemplateSourceCommands_UnavailableLockDoesNotWrite(bool remove)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
+        var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
+        const string original = """{"templates":{"company":{"href":"https://example.test/index"}}}""";
+        await File.WriteAllTextAsync(path, original);
+        var cache = provider.GetRequiredService<CliExecutionContext>().CacheDirectory;
+        cache.Create();
+        await File.WriteAllTextAsync(Path.Combine(cache.FullName, "workspace-config-locks"), "Blocks lock directory creation.");
+
+        var command = remove ? "template source remove company" : "template source add other --href https://example.test/other";
+        var result = await provider.GetRequiredService<RootCommand>().Parse(command).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, result);
+        Assert.Equal(original, await File.ReadAllTextAsync(path));
+        Assert.Single(interaction.DisplayedErrors);
+    }
+
+    [Fact]
     public async Task TemplateSourceConfig_PartialGitObjectCanBeCompletedWithoutOtherBrokenSourceBlocking()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

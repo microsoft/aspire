@@ -112,7 +112,7 @@ internal static class ConfigurationHelper
         {
             // Preserve the existing best-effort workspace bookkeeping when the cache
             // cannot host a lock. Reads use the same policy as workspace-default writes.
-            logger.LogDebug(ex, "Proceeding without the workspace config lock at {LockPath}.", lockPath);
+            logger.LogDebug(ex, "Could not acquire the workspace config lock at {LockPath}.", lockPath);
             return null;
         }
     }
@@ -368,8 +368,8 @@ internal static class ConfigurationHelper
             var node = JsonNode.Parse(content, documentOptions: ParseOptions);
             if (!persistNormalization && node is JsonObject settings)
             {
-                // Completion must resolve the same flat/nested key collisions without
-                // rewriting user files merely because the shell requested suggestions.
+                // Read-only commands must resolve the same flat/nested key collisions
+                // without rewriting configuration as a side effect of startup.
                 NormalizeSettings(settings);
             }
 

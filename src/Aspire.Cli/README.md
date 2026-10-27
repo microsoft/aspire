@@ -143,6 +143,9 @@ Project-level `templates` settings are not used.
 All sources must use objects; path and URL string shorthands are not accepted.
 Source names cannot contain dots, colons, or control characters. Adding a name
 that already exists (case-insensitively) fails without overwriting it.
+The `templates` section and source names are matched case-insensitively, preserving
+their existing spelling. Source add/remove fail rather than write without the
+global configuration lock.
 
 `source list` displays source names and their configured fields in a table.
 `--format json` writes only a JSON object keyed by source name to stdout, matching
@@ -165,7 +168,8 @@ Listing sorts sources by name, preserves configured fields without adding defaul
 and includes incomplete source objects so they can be inspected while editing.
 No configured sources produces `{}` in JSON mode. Invalid/unreadable global
 configuration fails with a nonzero exit code and diagnostics on stderr, not an
-empty success result. Listing does not scan directories, contact catalogs, resolve
+empty success result. Startup normalization and legacy-config migration also leave
+configuration files untouched when listing. Listing does not scan directories, contact catalogs, resolve
 Git refs, or clone repositories.
 
 The `repository` value must be an HTTPS or SSH URL, for example
@@ -186,7 +190,8 @@ only `repository`, `ref`, and `path` are accepted for Git sources; supplied valu
 be nonempty strings. A catalog uses `href` alone and cannot include these Git/local fields.
 Invalid combinations and unknown fields are rejected before saving. For stepwise
 editing with `aspire config set templates.<name>.<field> <value> --global`, incomplete
-Git objects are allowed until discovery; `source add` always requires a complete source.
+Git objects are allowed until discovery, but supplied paths are still validated;
+`source add` always requires a complete source.
 
 Each search resolves the selected ref to a commit and reuses a cached checkout of
 that commit, cloning only when it is not already cached. Multiple paths and refs
@@ -197,16 +202,20 @@ selected checkout even if the remote subsequently changes. The existing explicit
 Run `aspire new` interactively and select **Search for more templates** beneath the
 default templates. Enter text to search template names and descriptions, or leave
 it empty to list everything. Matching is case-insensitive, and results show the
-source name to distinguish templates with identical names. Select a result to
+source name to distinguish templates with identical names. Duplicate labels within
+one source receive numeric suffixes. Select a result to
 create a project with the normal local-template parameter prompts.
 Configured templates cannot be combined with `--source`, `--version`, `--channel`,
-or `--language`; package/version choices are owned by the template.
+or `--language`; package/version choices are owned by the template. Supplying any
+of these options therefore keeps the picker restricted to built-in templates.
 
 Directories are scanned and repositories are acquired only when searching, not when
 displaying help or the default picker. Repository resolution and cloning show progress.
 A source that cannot be read, resolved, authenticated, or cloned produces a warning
 without blocking other sources. Cancellation stops the search. You can search again
 or return to the default templates without creating project files.
+Repeated queries reuse template-engine sessions for local directories and unchanged
+Git checkouts, keeping selected template callbacks alive through generation.
 
 ### HTTPS template catalogs
 

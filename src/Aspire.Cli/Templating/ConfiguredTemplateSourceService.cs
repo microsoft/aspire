@@ -33,7 +33,9 @@ internal sealed class ConfiguredTemplateSourceService(
                 Warn(settingsPath, NewCommandStrings.TemplateSourcesMustBeObject);
                 return [];
             }
-            if (!settings.RootElement.TryGetProperty("templates", out var templates))
+            var templates = settings.RootElement.EnumerateObject()
+                .FirstOrDefault(property => property.Name.Equals("templates", StringComparison.OrdinalIgnoreCase)).Value;
+            if (templates.ValueKind is JsonValueKind.Undefined)
             {
                 return [];
             }

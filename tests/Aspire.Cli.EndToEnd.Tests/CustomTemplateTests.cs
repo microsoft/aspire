@@ -114,9 +114,25 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
             await auto.KeyAsync(Hex1bKey.End);
             await auto.EnterAsync();
             await auto.WaitUntilTextAsync("Search templates (leave empty to list all)", timeout: TimeSpan.FromSeconds(30));
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("custom-template-fixture", timeout: TimeSpan.FromSeconds(30));
+            await auto.WaitUntilTextAsync("Search again", timeout: TimeSpan.FromSeconds(30));
+            await auto.DownAsync();
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("Search templates (leave empty to list all)", timeout: TimeSpan.FromSeconds(30));
+            await auto.TypeAsync("no-matching-template");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("Back to default templates", timeout: TimeSpan.FromSeconds(30));
+            await auto.KeyAsync(Hex1bKey.End);
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("Search for more templates", timeout: TimeSpan.FromSeconds(30));
+            await auto.KeyAsync(Hex1bKey.End);
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("Search templates (leave empty to list all)", timeout: TimeSpan.FromSeconds(30));
             await auto.TypeAsync("CUSTOM");
             await auto.EnterAsync();
             await auto.WaitUntilTextAsync("custom-template-fixture", timeout: TimeSpan.FromSeconds(30));
+            await auto.WaitUntilTextAsync("company", timeout: TimeSpan.FromSeconds(30));
             await auto.EnterAsync();
         }
 

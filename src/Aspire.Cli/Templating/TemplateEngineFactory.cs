@@ -36,6 +36,7 @@ internal sealed partial class TemplateEngineFactory(
     ILogger<TemplateEngineFactory> logger) : ITemplateFactory, IDisposable
 {
     private readonly List<IDisposable> _resources = [];
+    private readonly Dictionary<string, ITemplate[]> _discoveredTemplates = new(StringComparer.Ordinal);
     private bool _disposed;
 
     public IEnumerable<ITemplate> GetTemplates() => [];
@@ -55,6 +56,34 @@ internal sealed partial class TemplateEngineFactory(
         var fullPath = source.Repository is null
             ? Path.GetFullPath(source.Path, executionContext.WorkingDirectory.FullName)
             : await GetRepositoryTemplateAsync(source.Repository, source.Path, source.RepositoryRef, cancellationToken);
+        if (_discoveredTemplates.TryGetValue(fullPath, out var cached))
+        {
+            return cached;
+        }
+
+        // Reuse engine sessions for unchanged directories and immutable Git checkouts.
+        // A ref can advance between searches; previously returned callbacks remain pinned.
+        var resourceCount = _resources.Count;
+        try
+        {
+            var templates = await DiscoverTemplatesAsync(fullPath, cancellationToken);
+            _discoveredTemplates.Add(fullPath, templates);
+            return templates;
+        }
+        catch
+        {
+            // Failed or cancelled installations have no callbacks that need their mounts.
+            for (var index = _resources.Count - 1; index >= resourceCount; index--)
+            {
+                _resources[index].Dispose();
+                _resources.RemoveAt(index);
+            }
+            throw;
+        }
+    }
+
+    private async Task<ITemplate[]> DiscoverTemplatesAsync(string fullPath, CancellationToken cancellationToken)
+    {
         if (!Directory.Exists(fullPath))
         {
             throw new TemplateDiscoveryException(CliExitCodes.InvalidCommand,
@@ -248,6 +277,7 @@ internal sealed partial class TemplateEngineFactory(
         }
 
         _resources.Clear();
+        _discoveredTemplates.Clear();
     }
 
     private async Task<TemplateResult> ApplyAsync(IEngineEnvironmentSettings settings, TemplateCreator creator, ITemplateInfo template, TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)

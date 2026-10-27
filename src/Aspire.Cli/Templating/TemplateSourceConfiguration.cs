@@ -48,13 +48,14 @@ internal static class TemplateSourceConfiguration
 
         if (!value.TryGetProperty("repository", out var repositoryElement))
         {
-            if (value.TryGetProperty("path", out var localPath) && !value.TryGetProperty("ref", out _))
+            if (value.TryGetProperty("path", out var localPath))
             {
                 var directory = ReadString(localPath, $"{settingPath}.path");
-                if (Path.IsPathFullyQualified(directory))
+                if (!value.TryGetProperty("ref", out _) && Path.IsPathFullyQualified(directory))
                 {
                     return new(new TemplateSource(directory, null, null), null);
                 }
+                ValidateRepositoryPath(directory, $"{settingPath}.path");
             }
             if (requireComplete)
             {
@@ -115,12 +116,32 @@ internal static class TemplateSourceConfiguration
         }
     }
 
-    public static void ValidateEditKey(JsonObject settings, string key)
+    public static string GetPropertyName(JsonObject settings, string key) =>
+        settings.Select(property => property.Key).FirstOrDefault(name => name.Equals(key, StringComparison.OrdinalIgnoreCase)) ?? key;
+
+    public static string ResolveEditKey(JsonObject settings, string key)
     {
         var parts = key.Replace(':', '.').Split('.');
-        if (parts[0] != "templates")
+        if (!parts[0].Equals("templates", StringComparison.OrdinalIgnoreCase))
         {
-            return;
+            return key;
+        }
+        parts[0] = GetPropertyName(settings, "templates");
+        if (parts.Length > 1 && settings[parts[0]] is JsonObject sources)
+        {
+            parts[1] = GetPropertyName(sources, parts[1]);
+        }
+
+        return string.Join('.', parts);
+    }
+
+    public static string ValidateEditKey(JsonObject settings, string key)
+    {
+        key = ResolveEditKey(settings, key);
+        var parts = key.Replace(':', '.').Split('.');
+        if (!parts[0].Equals("templates", StringComparison.OrdinalIgnoreCase))
+        {
+            return key;
         }
         if (parts.Length < 2)
         {
@@ -131,25 +152,27 @@ internal static class TemplateSourceConfiguration
         {
             throw new TemplateSourceConfigurationException(key.Replace(':', '.'), NewCommandStrings.TemplateSourceUnknownField);
         }
-        if (settings["templates"] is { } templates && templates is not JsonObject)
+        if (settings[parts[0]] is { } templates && templates is not JsonObject)
         {
             throw new TemplateSourceConfigurationException("templates", NewCommandStrings.TemplateSourcesMustBeObject);
         }
-        if (parts.Length == 3 && settings["templates"]?[parts[1]] is JsonValue)
+        if (parts.Length == 3 && settings[parts[0]]?[parts[1]] is JsonValue)
         {
             // The general config setter replaces scalar parents with objects. Do not silently
             // discard an existing directory/repository string when adding source fields.
             throw new TemplateSourceConfigurationException($"templates.{parts[1]}",
                 string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceCannotExtendString, $"templates.{parts[1]}"));
         }
+
+        return key;
     }
 
     public static void ValidateEditedSource(JsonObject settings, string key)
     {
         var parts = key.Replace(':', '.').Split('.');
-        if (parts[0] == "templates")
+        if (parts[0].Equals("templates", StringComparison.OrdinalIgnoreCase))
         {
-            using var document = JsonDocument.Parse(settings["templates"]![parts[1]]!.ToJsonString());
+            using var document = JsonDocument.Parse(settings[parts[0]]![parts[1]]!.ToJsonString());
             Parse(document.RootElement, $"templates.{parts[1]}", requireComplete: false);
         }
     }

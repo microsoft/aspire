@@ -46,7 +46,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             settings = new JsonObject();
         }
 
-        TemplateSourceConfiguration.ValidateEditKey(settings, key);
+        key = TemplateSourceConfiguration.ValidateEditKey(settings, key);
 
         // Validate the candidate under the config lock, before writing. A rejected edit must
         // preserve the original file, including comments and unrelated settings.
@@ -85,7 +85,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             }
 
             // Delete using dot notation support and return whether deletion occurred
-            var deleted = DeleteNestedValue(settings, key);
+            var deleted = DeleteNestedValue(settings, TemplateSourceConfiguration.ResolveEditKey(settings, key));
 
             if (deleted)
             {
