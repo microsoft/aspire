@@ -120,6 +120,10 @@ namespace Aspire.Cli.Resources {
 
         internal static string TemplateCatalogDownloadFailed => ResourceManager.GetString("TemplateCatalogDownloadFailed", resourceCulture);
 
+        internal static string TemplateCatalogInvalidContinuation => ResourceManager.GetString("TemplateCatalogInvalidContinuation", resourceCulture);
+
+        internal static string TemplateCatalogPageLimit => ResourceManager.GetString("TemplateCatalogPageLimit", resourceCulture);
+
         internal static string TemplateCommandDescription => ResourceManager.GetString("TemplateCommandDescription", resourceCulture);
 
         internal static string TemplateSourceCommandDescription => ResourceManager.GetString("TemplateSourceCommandDescription", resourceCulture);

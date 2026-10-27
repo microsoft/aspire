@@ -317,7 +317,13 @@
     <value>The template catalog request timed out.</value>
   </data>
   <data name="TemplateCatalogDownloadFailed" xml:space="preserve">
-    <value>Could not download the template catalog. Check the endpoint, HTTPS connectivity, and the 4 MiB response limit.</value>
+    <value>Could not download the template catalog. Check the endpoint, HTTPS connectivity, and the 4 MiB total response limit.</value>
+  </data>
+  <data name="TemplateCatalogInvalidContinuation" xml:space="preserve">
+    <value>The template catalog returned an invalid or repeated 'nextLink'. Continuation links must use the same HTTPS origin without credentials or fragments.</value>
+  </data>
+  <data name="TemplateCatalogPageLimit" xml:space="preserve">
+    <value>The template catalog exceeded the limit of {0} pages.</value>
   </data>
   <data name="TemplateCommandDescription" xml:space="preserve">
     <value>Manage project templates.</value>

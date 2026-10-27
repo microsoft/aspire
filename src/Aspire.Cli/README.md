@@ -236,13 +236,24 @@ Static JSON files and searchable endpoints return the same envelope:
       "ref": "release/17.0",
       "path": "templates/api"
     }
-  ]
+  ],
+  "nextLink": "https://example.com/templates?continuation=opaque-token"
 }
 ```
 
 Each result requires nonempty `name`, `description`, `repository`, `ref`, and `path`
 strings. Its repository-relative path must identify exactly one .NET template.
 Invalid entries produce warnings without hiding valid entries. Additional metadata is ignored.
+
+`nextLink` is optional; omit it or return `null` on the final page. The CLI
+automatically follows absolute or relative links, resolving relative links against
+the current page without reconstructing the query or substituting placeholders.
+Links must retain the original HTTPS host and port, without credentials or fragments.
+Repeated links are rejected. Empty pages still follow their continuation.
+Each catalog search is limited to 10 pages, 30 seconds overall, and 4 MiB of
+response bodies in total. Invalid continuations, exceeded limits, and failed pages
+reject that catalog with a warning instead of showing an incomplete result set;
+other configured sources remain available.
 
 Optional `{search}` and `{cliVersion}` placeholders are supported in the URL query
 only. Values are URL-escaped; the CLI always filters names and descriptions locally,
@@ -252,7 +263,7 @@ even when the server also filters. An empty query lists the entire returned cata
 Catalog discovery does not resolve or clone Git repositories. Selecting a result
 acquires only its repository/ref and then uses the actual template's parameter prompts.
 HTTPS endpoints cannot contain credentials or fragments; redirects and cookies are
-disabled. Downloads have a 30-second timeout and a 4 MiB limit. Search text is sent
+disabled. Search text is sent
 to every configured catalog, so configure only trusted endpoints. Error diagnostics
 do not include request URLs, search text, or response bodies.
 

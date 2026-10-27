@@ -203,8 +203,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TemplateCatalogDownloadFailed">
-        <source>Could not download the template catalog. Check the endpoint, HTTPS connectivity, and the 4 MiB response limit.</source>
-        <target state="new">Could not download the template catalog. Check the endpoint, HTTPS connectivity, and the 4 MiB response limit.</target>
+        <source>Could not download the template catalog. Check the endpoint, HTTPS connectivity, and the 4 MiB total response limit.</source>
+        <target state="new">Could not download the template catalog. Check the endpoint, HTTPS connectivity, and the 4 MiB total response limit.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateCatalogEntryMustBeObject">
@@ -217,9 +217,19 @@
         <target state="new">The template catalog returned HTTP {0}.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TemplateCatalogInvalidContinuation">
+        <source>The template catalog returned an invalid or repeated 'nextLink'. Continuation links must use the same HTTPS origin without credentials or fragments.</source>
+        <target state="new">The template catalog returned an invalid or repeated 'nextLink'. Continuation links must use the same HTTPS origin without credentials or fragments.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TemplateCatalogInvalidResponse">
         <source>The template catalog must return a JSON object with a 'templates' array.</source>
         <target state="new">The template catalog must return a JSON object with a 'templates' array.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateCatalogPageLimit">
+        <source>The template catalog exceeded the limit of {0} pages.</source>
+        <target state="new">The template catalog exceeded the limit of {0} pages.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateCatalogRequiresSingleTemplate">

@@ -3,6 +3,8 @@
 
 using System.Globalization;
 using System.Net;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Git;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
@@ -47,6 +49,132 @@ public partial class NewCommandLocalTemplateTests
         Assert.Empty(git.ResolveCalls);
         Assert.Empty(git.CloneCalls);
         Assert.Empty(interaction.DisplayedMessages);
+    }
+
+    [Fact]
+    public async Task TemplateCatalog_FollowsEmptyPagesAndPreservesOpaqueContinuationQueries()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var requests = new List<string>();
+        using var handler = new MockHttpMessageHandler(request =>
+        {
+            requests.Add(request.RequestUri!.AbsoluteUri);
+            return new(HttpStatusCode.OK)
+            {
+                Content = new StringContent(requests.Count switch
+                {
+                    1 => """{"templates":[],"nextLink":"?cursor=a%2Bb%26c%3D"}""",
+                    2 => """{"templates":[],"nextLink":"https://example.test/last?cursor=%7Bsearch%7D"}""",
+                    _ => CatalogJson
+                })
+            };
+        });
+        var services = CreateServices(workspace, interaction, interactive: true);
+        services.AddSingleton<IHttpClientFactory>(new MockHttpClientFactory(handler));
+        using var provider = services.BuildServiceProvider();
+
+        var results = await provider.GetRequiredService<TemplateCatalogService>()
+            .SearchAsync("https://example.test/index?q={search}", "templates.catalog", "CONTOSO", default);
+
+        Assert.Equal("Contoso API", Assert.Single(results).Name);
+        Assert.Equal(
+            ["https://example.test/index?q=CONTOSO", "https://example.test/index?cursor=a%2Bb%26c%3D", "https://example.test/last?cursor=%7Bsearch%7D"],
+            requests);
+        Assert.Empty(interaction.DisplayedMessages);
+    }
+
+    [Theory]
+    [InlineData("\"http://example.test/next\"")]
+    [InlineData("\"https://other.test/next\"")]
+    [InlineData("\"https://example.test:444/next\"")]
+    [InlineData("\"https://user:password@example.test/next\"")]
+    [InlineData("\"/next#fragment\"")]
+    [InlineData("\"https://example.test/index\"")]
+    [InlineData("\"\"")]
+    [InlineData("\"   \"")]
+    [InlineData("false")]
+    [InlineData("{}")]
+    public async Task TemplateCatalog_RejectsInvalidContinuationsBeforeFetchingThem(string nextLink)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var requests = 0;
+        using var handler = new MockHttpMessageHandler(_ =>
+        {
+            requests++;
+            return new(HttpStatusCode.OK) { Content = new StringContent($$"""{"templates":[],"nextLink":{{nextLink}}}""") };
+        });
+        var services = CreateServices(workspace, new TestInteractionService(), interactive: true);
+        services.AddSingleton<IHttpClientFactory>(new MockHttpClientFactory(handler));
+        using var provider = services.BuildServiceProvider();
+
+        var exception = await Assert.ThrowsAsync<TemplateDiscoveryException>(() => provider.GetRequiredService<TemplateCatalogService>()
+            .SearchAsync("https://example.test/index", "templates.catalog", "", default));
+
+        Assert.Equal(NewCommandStrings.TemplateCatalogInvalidContinuation, exception.Message);
+        Assert.Equal(1, requests);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TemplateCatalog_EnforcesExactPageLimit(bool finalPageHasContinuation)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var requests = 0;
+        using var handler = new MockHttpMessageHandler(_ =>
+        {
+            requests++;
+            var nextLink = requests < TemplateCatalogService.MaximumPages || finalPageHasContinuation ? $"/index?page={requests + 1}" : null;
+            return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new { templates = Array.Empty<object>(), nextLink })) };
+        });
+        var services = CreateServices(workspace, new TestInteractionService(), interactive: true);
+        services.AddSingleton<IHttpClientFactory>(new MockHttpClientFactory(handler));
+        using var provider = services.BuildServiceProvider();
+        var catalog = provider.GetRequiredService<TemplateCatalogService>();
+
+        if (finalPageHasContinuation)
+        {
+            var exception = await Assert.ThrowsAsync<TemplateDiscoveryException>(() =>
+                catalog.SearchAsync("https://example.test/index", "templates.catalog", "", default));
+            Assert.Equal(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateCatalogPageLimit, TemplateCatalogService.MaximumPages), exception.Message);
+        }
+        else
+        {
+            Assert.Empty(await catalog.SearchAsync("https://example.test/index", "templates.catalog", "", default));
+        }
+        Assert.Equal(TemplateCatalogService.MaximumPages, requests);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task TemplateCatalog_ResponseByteBudgetIsSharedAcrossPages(int excess)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var requests = 0;
+        using var handler = new MockHttpMessageHandler(_ =>
+        {
+            var json = ++requests == 1 ? """{"templates":[],"nextLink":"/next"}""" : """{"templates":[],"nextLink":null}""";
+            var length = TemplateCatalogService.MaximumResponseBytes / 2 + (requests == 1 ? excess : 0);
+            return new(HttpStatusCode.OK) { Content = new StringContent(json.PadRight(length)) };
+        });
+        var services = CreateServices(workspace, new TestInteractionService(), interactive: true);
+        services.AddSingleton<IHttpClientFactory>(new MockHttpClientFactory(handler));
+        using var provider = services.BuildServiceProvider();
+        var catalog = provider.GetRequiredService<TemplateCatalogService>();
+
+        if (excess == 0)
+        {
+            Assert.Empty(await catalog.SearchAsync("https://example.test/index", "templates.catalog", "", default));
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAsync<TemplateDiscoveryException>(() =>
+                catalog.SearchAsync("https://example.test/index", "templates.catalog", "", default));
+            Assert.Equal(NewCommandStrings.TemplateCatalogDownloadFailed, exception.Message);
+        }
+        Assert.Equal(2, requests);
     }
 
     [Fact]
@@ -177,17 +305,25 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Theory]
-    [InlineData("{")]
-    [InlineData("[]")]
-    [InlineData("{}")]
-    [InlineData("""{"templates":{}}""")]
-    [InlineData("""{"templates":null}""")]
-    public async Task TemplateCatalog_InvalidResponseDoesNotHideLocalResults(string json)
+    [InlineData("{", false)]
+    [InlineData("[]", false)]
+    [InlineData("{}", false)]
+    [InlineData("""{"templates":{}}""", false)]
+    [InlineData("""{"templates":null}""", false)]
+    [InlineData("{", true)]
+    [InlineData("""{"templates":{}}""", true)]
+    public async Task TemplateCatalog_InvalidResponseDoesNotHideLocalResults(string json, bool failOnSecondPage)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateSearchTemplateAsync(workspace, "local", "sample", "Sample", "Local");
         var interaction = new TestInteractionService();
-        using var handler = new MockHttpMessageHandler(_ => new(HttpStatusCode.OK) { Content = new StringContent(json) });
+        var firstPage = JsonNode.Parse(CatalogJson)!.AsObject();
+        firstPage["nextLink"] = "/next";
+        var requests = 0;
+        using var handler = new MockHttpMessageHandler(_ => new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(++requests == 1 && failOnSecondPage ? firstPage.ToJsonString() : json)
+        });
         var services = CreateServices(workspace, interaction, interactive: true);
         services.AddSingleton<IHttpClientFactory>(new MockHttpClientFactory(handler));
         using var provider = services.BuildServiceProvider();
@@ -200,6 +336,7 @@ public partial class NewCommandLocalTemplateTests
         var result = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().SearchAsync("", default));
 
         Assert.Equal("local", result.SourceName);
+        Assert.Equal(failOnSecondPage ? 2 : 1, requests);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed,
             "catalog", NewCommandStrings.TemplateCatalogInvalidResponse), Assert.Single(interaction.DisplayedMessages).Message);
     }
