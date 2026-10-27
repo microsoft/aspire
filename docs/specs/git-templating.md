@@ -157,9 +157,10 @@ available. Git's terminal credential prompts are always disabled with
 `GIT_TERMINAL_PROMPT=0`, including when Aspire itself is interactive.
 Authentication must be configured before invocation.
 
-Git processes run through `IProcessExecutionFactory`, with `LC_ALL=C` and
-`--literal-pathspecs`. Repository-routing environment variables are filtered
-case-insensitively:
+`GitCommandRunner` executes Git processes through `ProcessCaptureRunner`, which
+handles process-tree cancellation and bounded output draining. Git runs with
+`LC_ALL=C` and `--literal-pathspecs`. Repository-routing environment variables
+are filtered case-insensitively:
 
 ```text
 GIT_DIR
