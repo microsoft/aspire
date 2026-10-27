@@ -33,6 +33,7 @@
                                 *@
                                 <FluentTextInput @ref="@_elementRefs[input.ViewModel]"
                                                  Id="@input.ViewModel.ElementId"
+                                                 autofocus="@IsFirstInput(input.ViewModel)"
                                                  Class="aspire-input"
                                                  @bind-Value="input.ViewModel.Value"
                                                  Placeholder="@input.ViewModel.Input.Placeholder"
@@ -56,6 +57,7 @@
                                 *@
                                 <FluentTextInput @ref="@_elementRefs[input.ViewModel]"
                                                  Id="@input.ViewModel.ElementId"
+                                                 autofocus="@IsFirstInput(input.ViewModel)"
                                                  Class="aspire-input"
                                                  @bind-Value="input.ViewModel.Value"
                                                  Placeholder="@input.ViewModel.Input.Placeholder"
@@ -95,6 +97,7 @@
                                 {
                                     <FluentSelect @key="input.ViewModel.InputKey"
                                                   Id="@input.ViewModel.ElementId"
+                                                  autofocus="@IsFirstInput(input.ViewModel)"
                                                   TOption="SelectViewModel<string>" TValue="string"
                                                   Class="aspire-input"
                                                   @ref="@_elementRefs[input.ViewModel]"
@@ -122,6 +125,7 @@
                                         <CascadingValue Name="HideFluentField" Value="@true" IsFixed="true">
                                             <FluentCombobox @key="input.ViewModel.InputKey"
                                                             Id="@input.ViewModel.ElementId"
+                                                            autofocus="@IsFirstInput(input.ViewModel)"
                                                             TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
                                                             Class="aspire-input"
                                                             @ref="@_elementRefs[input.ViewModel]"
@@ -161,6 +165,7 @@
                                                    Context="input">
                                 <FluentCheckbox @ref="@_elementRefs[input.ViewModel]"
                                                 Id="@input.ViewModel.ElementId"
+                                                autofocus="@IsFirstInput(input.ViewModel)"
                                                 Class="aspire-checkbox"
                                                 @bind-Value="input.ViewModel.IsChecked"
                                                 Label="@input.ViewModel.Input.Label"
@@ -177,6 +182,7 @@
                                                    Context="input">
                                 <FluentNumberInput TValue="int?"
                                                    Id="@input.ViewModel.ElementId"
+                                                   autofocus="@IsFirstInput(input.ViewModel)"
                                                    @ref="@_elementRefs[input.ViewModel]"
                                                    Class="aspire-input"
                                                    @bind-Value="input.ViewModel.NumberValue"
@@ -220,6 +226,7 @@
                                     else
                                     {
                                         <FluentButton Id="@inputId" Appearance="ButtonAppearance.Primary" Class="aspire-button"
+                                                      AutoFocus="@IsFirstInput(input.ViewModel)"
                                                       IconStart="@(new Icons.Regular.Size16.FolderOpen())"
                                                       Disabled="input.ViewModel.InputDisabled"
                                                       aria-label="@input.ViewModel.Input.Label"

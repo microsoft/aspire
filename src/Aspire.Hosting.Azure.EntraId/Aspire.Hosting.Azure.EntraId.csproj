@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="Shared" />
   </ItemGroup>
 
 </Project>

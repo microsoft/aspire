@@ -112,6 +112,57 @@
   <data name="NameArgumentDescription" xml:space="preserve">
     <value>The name of the project to create</value>
   </data>
+  <data name="TemplatePathOptionDescription" xml:space="preserve">
+    <value>Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</value>
+  </data>
+  <data name="TemplatePathConflictingOptions" xml:space="preserve">
+    <value>--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</value>
+  </data>
+  <data name="TemplateRepositoryOptionDescription" xml:space="preserve">
+    <value>Clone a Git repository containing templates; --template-path is relative to its root</value>
+  </data>
+  <data name="CloningTemplateRepository" xml:space="preserve">
+    <value>Cloning template repository...</value>
+  </data>
+  <data name="TemplateRepositoryRefOptionDescription" xml:space="preserve">
+    <value>Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</value>
+  </data>
+  <data name="TemplateRepositoryRefRequiresRepository" xml:space="preserve">
+    <value>--template-repository-ref requires --template-repository and a non-empty ref value.</value>
+  </data>
+  <data name="ResolvingTemplateRepository" xml:space="preserve">
+    <value>Resolving template repository ref...</value>
+  </data>
+  <data name="TemplateRepositoryRefNotFound" xml:space="preserve">
+    <value>Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</value>
+  </data>
+  <data name="TemplateRepositoryGitFailed" xml:space="preserve">
+    <value>Could not access the template repository: {0}</value>
+  </data>
+  <data name="TemplateRepositoryGitExited" xml:space="preserve">
+    <value>Git failed with exit code {0}: {1}</value>
+  </data>
+  <data name="TemplateRepositoryGitUnavailable" xml:space="preserve">
+    <value>Git could not be started. Install Git and ensure it is on PATH.</value>
+  </data>
+  <data name="TemplateRepositoryPathInvalid" xml:space="preserve">
+    <value>When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</value>
+  </data>
+  <data name="TemplateDirectoryNotFound" xml:space="preserve">
+    <value>The template directory '{0}' does not exist.</value>
+  </data>
+  <data name="NoLocalTemplatesFound" xml:space="preserve">
+    <value>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</value>
+  </data>
+  <data name="LocalTemplateLoadFailed" xml:space="preserve">
+    <value>Could not load the local template: {0}</value>
+  </data>
+  <data name="LocalTemplateCreationFailed" xml:space="preserve">
+    <value>Could not create the local template ({0}): {1}</value>
+  </data>
+  <data name="LocalTemplateSelectionRequiresInteraction" xml:space="preserve">
+    <value>The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</value>
+  </data>
   <data name="OutputArgumentDescription" xml:space="preserve">
     <value>The output path for the project</value>
   </data>

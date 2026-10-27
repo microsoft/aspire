@@ -125,8 +125,9 @@ that pins it to `https://localhost:7251`, whichever profile the AppHost runs wit
 forwards to the app. The Node front end uses `https://localhost:7252` for the same reason; Aspire supplies its HTTPS
 certificate and private key.
 
-Use a non-isolated run in either mode. `--isolated` randomizes endpoint ports, so it requires updating the callbacks in the
-existing registration or the creation-mode `WithRedirectUris` call to match the actual URLs.
+Use a non-isolated run in existing mode. `--isolated` randomizes endpoint ports, so it requires updating the callbacks in the
+existing registration. In creation mode the AppHost derives the callback hosts and ports from each front end's endpoint, so
+isolated runs register the actual URLs; the callback paths remain fixed in the AppHost's `WithRedirectUris` calls.
 
 From this directory, run `aspire run`, or `dotnet run --project EntraId.AppHost`. In the dashboard, open
 `webfrontend` at `https://localhost:7251`, select **Sign in with Microsoft Entra ID**, and view your signed-in identity.

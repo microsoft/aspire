@@ -1,0 +1,19 @@
+﻿{
+  aspire.config.json: { "sdk": { "version": "17.0.0-preview.1" } },
+  nuget.config:
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="aspire-apphost-source" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
+  </packageSources>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="default">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="aspire-apphost-source">
+      <package pattern="Aspire*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>
+}

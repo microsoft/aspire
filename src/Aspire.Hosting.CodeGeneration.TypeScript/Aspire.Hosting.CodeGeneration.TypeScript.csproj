@@ -16,6 +16,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Native.CodeGeneration" />
+    <InternalsVisibleTo Include="aspire-managed" />
     <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.TypeScript.Tests" />
   </ItemGroup>
 

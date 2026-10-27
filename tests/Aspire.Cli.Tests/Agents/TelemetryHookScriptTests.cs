@@ -47,24 +47,25 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--session-id", "11111111-2222-3333-4444-555555555555");
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(null)]
+    [InlineData("1")]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
-    public async Task Bash_SkillInvocation_CopilotAppMarker_DoesNotProvideDistinctAttribution()
+    public async Task Bash_SkillInvocation_CopilotAppMarker_ForwardsAppClient(string? copilotCli)
     {
         var run = await RunBashHookAsync(
             """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
             new()
             {
                 ["AI_AGENT"] = "github_copilot_app_agent",
-                ["COPILOT_CLI"] = "1",
+                ["COPILOT_CLI"] = copilotCli,
             });
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "skill_invocation");
-        // Keep this limitation explicit until https://github.com/microsoft/aspire-skills/issues/71 ships.
-        AssertArg(args, "--client-name", "copilot-cli");
+        AssertArg(args, "--client-name", "copilot-app");
         AssertArg(args, "--skill-name", "aspire");
     }
 
@@ -301,23 +302,24 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--session-id", "11111111-2222-3333-4444-555555555555");
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(null)]
+    [InlineData("1")]
     [RequiresTools(["pwsh"])]
-    public async Task Pwsh_SkillInvocation_CopilotAppMarker_DoesNotProvideDistinctAttribution()
+    public async Task Pwsh_SkillInvocation_CopilotAppMarker_ForwardsAppClient(string? copilotCli)
     {
         var run = await RunPwshHookAsync(
             """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
             new()
             {
                 ["AI_AGENT"] = "github_copilot_app_agent",
-                ["COPILOT_CLI"] = "1",
+                ["COPILOT_CLI"] = copilotCli,
             });
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "skill_invocation");
-        // Keep this limitation explicit until https://github.com/microsoft/aspire-skills/issues/71 ships.
-        AssertArg(args, "--client-name", "copilot-cli");
+        AssertArg(args, "--client-name", "copilot-app");
         AssertArg(args, "--skill-name", "aspire");
     }
 
@@ -538,7 +540,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     {
         var nativeEnvironment = new TestEnvironment(environment);
         var nativeArgs = nativeEnvironment.IsFlagEnabled(AspireCliTelemetry.TelemetryOptOutConfigKey)
-            ? null : AgentTelemetryHook.Classify(payload, nativeEnvironment.IsFlagEnabled("COPILOT_CLI"), AgentTelemetryHook.DefaultMaxPayloadCharacters);
+            ? null : AgentTelemetryHook.Classify(payload, nativeEnvironment, AgentTelemetryHook.DefaultMaxPayloadCharacters);
         if (scriptArgs is null)
         {
             Assert.Null(nativeArgs);

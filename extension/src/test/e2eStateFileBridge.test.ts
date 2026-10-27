@@ -284,6 +284,33 @@ suite('E2E state file bridge', () => {
         assert.strictEqual(isBrowserDebugSessionType('coreclr'), false);
     });
 
+    test('waits for the browser command to be enabled before starting the managed proof', async () => {
+        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+        const harness = createBlazorProofHarness(sandbox);
+        harness.setBrowserCommandState('Disabled');
+        const pending = dispatchControlCommand(
+            harness.command, harness.repository, harness.launchService, harness.provider, harness.terminalProvider);
+        await clock.tickAsync(100);
+        assert.deepStrictEqual(harness.executedResourceCommands, []);
+
+        harness.setBrowserCommandState('Enabled');
+        await clock.tickAsync(500);
+        await pending;
+        assert.deepStrictEqual(harness.executedResourceCommands, ['debug-in-browser', 'stop-browser-debug']);
+    });
+
+    test('reports an unavailable browser command instead of waiting for a nonexistent session', async () => {
+        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+        const harness = createBlazorProofHarness(sandbox);
+        harness.setBrowserCommandState('Disabled');
+        const pending = captureError(() => dispatchControlCommand(
+            harness.command, harness.repository, harness.launchService, harness.provider, harness.terminalProvider));
+        await clock.tickAsync(1100);
+
+        assert.match((await pending).message, /enabled 'debug-in-browser' command/);
+        assert.deepStrictEqual(harness.executedResourceCommands, []);
+    });
+
     test('isolates consecutive Blazor proofs from a profile lock left by the previous browser', async () => {
         const profiles: string[] = [];
         const harness = createBlazorProofHarness(sandbox, {

@@ -2,11 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Aspire.Hosting.ApplicationModel;
-
-#pragma warning disable ASPIRETERMINAL001 // Internal annotation backing the experimental terminal configuration API.
 
 /// <summary>
 /// Tracks terminal configuration and per-replica terminal hosts for a resource.
@@ -88,12 +85,10 @@ internal sealed class TerminalAnnotation : IResourceAnnotation
     }
 }
 
-#pragma warning restore ASPIRETERMINAL001
-
 /// <summary>
 /// Options for configuring a terminal session.
 /// </summary>
-[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
+[AspireDto]
 public sealed class TerminalOptions
 {
     private int _columns = 132;

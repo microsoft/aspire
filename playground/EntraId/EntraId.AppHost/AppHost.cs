@@ -21,22 +21,16 @@ if (useExistingApplication)
 }
 else
 {
-    entraWeb = builder.AddEntraIdApplication("entra-web");
-    // Callback ports are fixed below and in EntraId.Web's launch profile; endpoint discovery is not automatic.
-    entraWeb.WithRedirectUris(
-        "https://localhost:7251/signin-oidc",
-        "https://localhost:7251/signout-callback-oidc",
-        "https://localhost:7252/auth/redirect",
-        "https://localhost:7252/auth/signout-callback");
-    entraWeb.WithIdTokenIssuance();
+    entraWeb = builder.AddEntraIdApplication("entra-web")
+        .WithIdTokenIssuance();
 }
 
-builder.AddProject<Projects.EntraId_Web>("webfrontend")
+var webFrontend = builder.AddProject<Projects.EntraId_Web>("webfrontend")
     .WithExternalHttpEndpoints()
     .WithReference(entraWeb);
 
 // This independent Node front end shares the web registration, but doesn't call the .NET front end.
-// Keep its public HTTPS port stable so its callback matches the registered redirect URI.
+// Keep its public HTTPS port stable so its callback matches an existing registration's redirect URI.
 #pragma warning disable ASPIRECERTIFICATES001
 var nodeWeb = builder.AddNodeApp("nodefrontend", "../EntraId.NodeWeb", "server.mjs")
     .WithHttpsEndpoint(port: 7252, env: "PORT")
@@ -52,6 +46,13 @@ var nodeWeb = builder.AddNodeApp("nodefrontend", "../EntraId.NodeWeb", "server.m
 #pragma warning restore ASPIRECERTIFICATES001
 
 nodeWeb.WithEnvironment("NODE_WEB_BASE_URL", nodeWeb.GetEndpoint("https"));
+
+// The callback paths are configured by each front end, so they are declared here; the host and port follow the endpoints.
+if (!useExistingApplication)
+{
+    entraWeb.WithRedirectUris(webFrontend.GetEndpoint("https"), "/signin-oidc", "/signout-callback-oidc");
+    entraWeb.WithRedirectUris(nodeWeb.GetEndpoint("https"), "/auth/redirect", "/auth/signout-callback");
+}
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging

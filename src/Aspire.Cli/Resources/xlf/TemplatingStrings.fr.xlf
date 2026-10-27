@@ -62,6 +62,11 @@
         <target state="translated">Au moins une fabrique de modèles doit être fournie.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ComputedTemplateParameterCondition">
+        <source>Parameter '{0}' uses a NuGet-computed value in a prompting condition. Computed values are resolved after prompting and cannot control parameter conditions.</source>
+        <target state="new">Parameter '{0}' uses a NuGet-computed value in a prompting condition. Computed values are resolved after prompting and cannot control parameter conditions.</target>
+        <note>{0} is the template parameter name.</note>
+      </trans-unit>
       <trans-unit id="CreateNugetConfigConfirmation">
         <source>Create NuGet.config for selected channels?</source>
         <target state="translated">Voulez-vous créer un fichier NuGet.config pour les canaux sélectionnés ?</target>
@@ -91,6 +96,21 @@
         <source>Integration tests</source>
         <target state="translated">Tests d'intégration</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InvalidTemplateHostConfiguration">
+        <source>Could not load template host configuration '{0}': {1}</source>
+        <target state="new">Could not load template host configuration '{0}': {1}</target>
+        <note>{0} is the host configuration path; {1} is the validation error.</note>
+      </trans-unit>
+      <trans-unit id="InvalidTemplateHostConfigurationFormat">
+        <source>Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</source>
+        <target state="new">Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidTemplateValueSource">
+        <source>Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.</source>
+        <target state="new">Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.</target>
+        <note>{0} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="No">
         <source>No</source>
@@ -167,6 +187,11 @@
         <target state="translated">Recherche des versions de modèles de projet disponibles...</target>
         <note />
       </trans-unit>
+      <trans-unit id="Skip">
+        <source>Skip</source>
+        <target state="new">Skip</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SourceOverrideNotPersistedWarning">
         <source>[yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/]</source>
         <target state="new">[yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/]</target>
@@ -176,6 +201,31 @@
         <source>The template installation failed with exit code {0}.</source>
         <target state="new">The template installation failed with exit code {0}.</target>
         <note>{0} is a number</note>
+      </trans-unit>
+      <trans-unit id="TemplateNuGetConfigurationChanged">
+        <source>A computed value changed the generated NuGet configuration. NuGet-computed values must not control configuration contents, locations, or whether configuration files are generated.</source>
+        <target state="new">A computed value changed the generated NuGet configuration. NuGet-computed values must not control configuration contents, locations, or whether configuration files are generated.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplatePackageVersionLookupFailed">
+        <source>Could not query the effective NuGet sources for package '{0}' to compute parameter '{1}'. Check the NuGet configuration, connectivity, and credentials.</source>
+        <target state="new">Could not query the effective NuGet sources for package '{0}' to compute parameter '{1}'. Check the NuGet configuration, connectivity, and credentials.</target>
+        <note>{0} is the package ID; {1} is the template parameter name.</note>
+      </trans-unit>
+      <trans-unit id="TemplatePackageVersionNotFound">
+        <source>No version of package '{0}' matches range '{1}' with allowPrerelease={2} in the effective NuGet sources for parameter '{3}'.</source>
+        <target state="new">No version of package '{0}' matches range '{1}' with allowPrerelease={2} in the effective NuGet sources for parameter '{3}'.</target>
+        <note>{0} is the package ID; {1} is the version range; {2} is the prerelease Boolean; {3} is the template parameter name.</note>
+      </trans-unit>
+      <trans-unit id="TemplateStagingLinkNotSupported">
+        <source>Templates with NuGet-computed values cannot generate symbolic links.</source>
+        <target state="new">Templates with NuGet-computed values cannot generate symbolic links.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateValueSourceWorkingDirectoryInvalid">
+        <source>The computed value working directory '{0}' must name an existing directory within the generated output.</source>
+        <target state="new">The computed value working directory '{0}' must name an existing directory within the generated output.</target>
+        <note>{0} is the relative working directory.</note>
       </trans-unit>
       <trans-unit id="TemplateVersionNotFound">
         <source>Template version '{0}' was not found.</source>
