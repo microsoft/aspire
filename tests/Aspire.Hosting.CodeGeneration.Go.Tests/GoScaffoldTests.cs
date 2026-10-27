@@ -62,7 +62,8 @@ public class GoScaffoldTests(ITestOutputHelper outputHelper)
 
         // .aspire/modules holds the regenerated SDK, which is large and must stay out of source control.
         // Nothing broader may be listed, or the AppHost's own sources could be hidden from git.
-        Assert.Equal(".aspire/", files[".gitignore"].Trim());
+        // A fresh `aspire init` writes this file as it is, so it has to end with a newline itself.
+        Assert.Equal(".aspire/\n", files[".gitignore"]);
     }
 
     [Fact]

@@ -75,9 +75,11 @@ internal sealed class GoLanguageSupport : ILanguageSupport
             """;
 
         // .aspire/modules holds the generated SDK. It is regenerated from the AppHost's integrations
-        // and is large, so it should not be committed.
+        // and is large, so it should not be committed. As with apphost.go, the blank line before the closing
+        // quotes is intentional: the file should end with a newline, like go-starter/.gitignore does.
         files[".gitignore"] = """
             .aspire/
+
             """;
 
         // Create go.mod with require and replace directives for local modules
@@ -114,7 +116,8 @@ internal sealed class GoLanguageSupport : ILanguageSupport
             """;
 
         // The literals above take the line endings of this source file (CRLF in a Windows checkout), and gofmt requires LF.
-        return files.ToDictionary(file => file.Key, file => file.Value.ReplaceLineEndings("\n"));
+        // Only CRLF is replaced, not every line ending: see AtsGoCodeGenerator.GenerateDistributedApplication for why.
+        return files.ToDictionary(file => file.Key, file => file.Value.Replace("\r\n", "\n"));
     }
 
     /// <inheritdoc />
