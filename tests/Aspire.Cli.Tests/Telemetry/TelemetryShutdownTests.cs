@@ -79,7 +79,6 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
     public async Task Shutdown_FailedDrainLogsWarningAndRestoresFailureBudget()
     {
         outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Starting remote telemetry shutdown test.");
-        Task output;
         using (var process = RemoteExecutor.Invoke(static async () =>
         {
             Console.WriteLine($"[{DateTimeOffset.UtcNow:O}] Telemetry test child PID={Environment.ProcessId} entered.");
@@ -110,9 +109,9 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
             outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Remote telemetry child PID={process.Process.Id}; waiting for completion and disposal.");
             // Forward while the remote handle waits, so the last child phase is retained in
             // this test's TRX output even if remote execution hangs.
-            output = ForwardOutputAsync(process.Process.StandardOutput);
+            var output = ForwardOutputAsync(process.Process.StandardOutput);
+            await output.DefaultTimeout();
         }
-        await output.DefaultTimeout();
         outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Remote telemetry test completed and disposed.");
 
         async Task ForwardOutputAsync(StreamReader reader)
