@@ -636,6 +636,53 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void LoadLegacy_DoesNotWriteMigratedConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var settingsPath = Path.Combine(workspace.Path, ".aspire", "settings.json");
+        const string original = """{ "appHostPath": "../src/apphost.ts", "sdkVersion": "17.0.0" }""";
+        File.WriteAllText(settingsPath, original);
+
+        var config = AspireConfigFile.LoadLegacy(workspace.Path);
+
+        Assert.NotNull(config);
+        Assert.Equal("src/apphost.ts", config.AppHost?.Path);
+        Assert.Equal("17.0.0", config.SdkVersion);
+        Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+        Assert.Equal(original, File.ReadAllText(settingsPath));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LegacyMigration_PreservesRawTemplateDefinitionsThroughLoadAndSave(bool mixedCase)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var section = mixedCase ? "Templates" : "templates";
+        var settingsPath = Path.Combine(workspace.Path, ".aspire", "settings.json");
+        var original = $$"""
+            {
+                "{{section}}": {
+                    "git": { "repository": "https://github.com/example/templates" },
+                    "catalog": { "href": "https://example.com/templates?q={search}&cliVersion={cliVersion}" },
+                    "partial": { "ref": "release/17.0", "path": "templates" },
+                    "invalid": false
+                }
+            }
+            """;
+        File.WriteAllText(settingsPath, original);
+
+        AspireConfigFile.LoadOrCreate(workspace.Path);
+        var config = AspireConfigFile.Load(workspace.Path);
+        Assert.NotNull(config);
+        config.Channel = "daily";
+        config.Save(workspace.Path);
+
+        await Verify(File.ReadAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName)), "json").UseParameters(mixedCase);
+        Assert.Equal(original, File.ReadAllText(settingsPath));
+    }
+
+    [Fact]
     public void LoadOrCreate_MigratesLegacy_AdjustsRelativePathFromAspireDir()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

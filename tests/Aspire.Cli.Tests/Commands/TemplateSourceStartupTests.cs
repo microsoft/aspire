@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
@@ -134,12 +135,39 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         }
     }
 
-    private static void RunStartup(string home, string workingDirectory, string arguments, int? expectedExitCode = null)
+    [Theory]
+    [InlineData("template source add company --href https://example.com/templates.json")]
+    [InlineData("config set templates.company.href https://example.com/templates.json --global")]
+    public void NormalStartup_PreservesSourcesRegisteredInLegacyGlobalConfiguration(string arguments)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+        var legacyPath = Path.Combine(home.FullName, "globalsettings.json");
+        var migratedPath = Path.Combine(home.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(legacyPath, """{"features":{"defaultWatchEnabled":true}}""");
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName),
+            """{"features":{"defaultWatchEnabled":false}}""");
+
+        RunStartup(home.FullName, workspace.Path, arguments, CliExitCodes.Success);
+        Assert.False(File.Exists(migratedPath));
+        var legacy = File.ReadAllText(legacyPath);
+
+        RunStartup(home.FullName, workspace.Path, "new --help", CliExitCodes.Success,
+            expectedSourceHref: "https://example.com/templates.json");
+
+        Assert.True(File.Exists(migratedPath));
+        Assert.Equal(legacy, File.ReadAllText(legacyPath));
+        Assert.True(JsonNode.DeepEquals(
+            JsonNode.Parse(legacy)!["templates"],
+            JsonNode.Parse(File.ReadAllText(migratedPath))!["templates"]));
+    }
+
+    private static void RunStartup(string home, string workingDirectory, string arguments, int? expectedExitCode = null, string? expectedSourceHref = null)
     {
         var options = new RemoteInvokeOptions();
         options.StartInfo.WorkingDirectory = workingDirectory;
 
-        using (RemoteExecutor.Invoke(static async (homePath, commandLine, exitCode) =>
+        using (RemoteExecutor.Invoke(static async (homePath, commandLine, exitCode, sourceHref) =>
         {
             Environment.SetEnvironmentVariable("ASPIRE_HOME", homePath);
             Environment.SetEnvironmentVariable("ASPIRE_EXTENSION_ENDPOINT", null);
@@ -166,7 +194,14 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
             {
                 Assert.Equal(int.Parse(exitCode, CultureInfo.InvariantCulture), await parseResult.InvokeAsync().DefaultTimeout());
             }
-        }, home, arguments, expectedExitCode?.ToString(CultureInfo.InvariantCulture) ?? "", options))
+            if (sourceHref.Length > 0)
+            {
+                var sources = await host.Services.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(CancellationToken.None);
+                var source = Assert.Single(sources);
+                Assert.Equal("company", source.Key);
+                Assert.Equal(sourceHref, source.Value.Href);
+            }
+        }, home, arguments, expectedExitCode?.ToString(CultureInfo.InvariantCulture) ?? "", expectedSourceHref ?? "", options))
         {
         }
     }

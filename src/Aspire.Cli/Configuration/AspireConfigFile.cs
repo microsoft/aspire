@@ -164,6 +164,10 @@ internal sealed class AspireConfigFile
     [Description("Package references for the AppHost. Value is either a string (NuGet, short form — empty = SDK version, otherwise explicit version) or an object with a required \"source\" discriminator (\"nuget\", \"project\", or \"npm\") and per-source fields (version for nuget, path for project/npm).")]
     public Dictionary<string, PackageEntry>? Packages { get; set; }
 
+    // Global template sources and other unmodeled settings must survive typed load/save cycles.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+
     /// <summary>
     /// Loads aspire.config.json from the specified directory.
     /// </summary>
@@ -224,26 +228,9 @@ internal sealed class AspireConfigFile
         // TODO: Remove legacy .aspire/settings.json + apphost.run.json fallback once confident
         // most users have migrated. Tracked by https://github.com/microsoft/aspire/issues/15239
         // Fall back to .aspire/settings.json + apphost.run.json → migrate
-        var legacyConfig = AspireJsonConfiguration.Load(directory);
-        if (legacyConfig is not null)
+        config = LoadLegacy(directory);
+        if (config is not null)
         {
-            var profiles = ReadApphostRunProfiles(Path.Combine(directory, "apphost.run.json"));
-            config = FromLegacy(legacyConfig, profiles);
-
-            // Legacy .aspire/settings.json stores appHostPath relative to the .aspire/ directory,
-            // but aspire.config.json stores it relative to the config file's own directory (the parent
-            // of .aspire/). Re-base the path so it resolves correctly from the new location.
-            // Paths are always stored with '/' separators regardless of platform, but we normalize
-            // to the OS separator for Path operations and back to '/' for storage.
-            if (config.AppHost?.Path is { Length: > 0 } migratedPath && !Path.IsPathRooted(migratedPath))
-            {
-                var legacySettingsDir = Path.Combine(directory, AspireJsonConfiguration.SettingsFolder);
-                var absolutePath = PathNormalizer.NormalizePathForCurrentPlatform(
-                    Path.Combine(legacySettingsDir, migratedPath));
-                config.AppHost.Path = PathNormalizer.NormalizePathForStorage(
-                    Path.GetRelativePath(directory, absolutePath));
-            }
-
             // Persist the migrated config (legacy files are kept for older CLI versions)
             config.Save(directory);
         }
@@ -255,6 +242,29 @@ internal sealed class AspireConfigFile
         if (defaultSdkVersion is not null)
         {
             config.SdkVersion ??= defaultSdkVersion;
+        }
+
+        return config;
+    }
+
+    internal static AspireConfigFile? LoadLegacy(string directory)
+    {
+        var legacyConfig = AspireJsonConfiguration.Load(directory);
+        if (legacyConfig is null)
+        {
+            return null;
+        }
+
+        var profiles = ReadApphostRunProfiles(Path.Combine(directory, "apphost.run.json"));
+        var config = FromLegacy(legacyConfig, profiles);
+
+        // Legacy paths are relative to .aspire/settings.json, not the new config's directory.
+        // Normalize platform separators before rebasing, then store portable '/' separators.
+        if (config.AppHost?.Path is { Length: > 0 } migratedPath && !Path.IsPathRooted(migratedPath))
+        {
+            var legacySettingsDir = Path.Combine(directory, AspireJsonConfiguration.SettingsFolder);
+            var absolutePath = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(legacySettingsDir, migratedPath));
+            config.AppHost.Path = PathNormalizer.NormalizePathForStorage(Path.GetRelativePath(directory, absolutePath));
         }
 
         return config;
@@ -455,6 +465,17 @@ internal sealed class AspireConfigFile
 
             config.Channel = settings.Channel;
             config.Features = settings.Features;
+
+            // Source-management commands can edit the legacy global file before normal startup
+            // migrates it. Retain raw definitions, including incomplete entries and their casing.
+            foreach (var (name, value) in settings.ExtensionData ?? [])
+            {
+                if (name.Equals("templates", StringComparison.OrdinalIgnoreCase))
+                {
+                    config.ExtensionData ??= [];
+                    config.ExtensionData[name] = value.Clone();
+                }
+            }
 
             // Legacy settings.json stored packages as Dictionary<string,string> with an
             // ad-hoc ".csproj" suffix for project references. Translate to strong entries.

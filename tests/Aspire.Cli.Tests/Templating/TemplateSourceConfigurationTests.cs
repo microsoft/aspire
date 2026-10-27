@@ -3,11 +3,55 @@
 
 using System.Text.Json;
 using Aspire.Cli.Templating;
+using Microsoft.DotNet.RemoteExecutor;
 
 namespace Aspire.Cli.Tests.Templating;
 
-public class TemplateSourceConfigurationTests
+public class TemplateSourceConfigurationTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(true, "../escape")]
+    [InlineData(false, "../project/templates")]
+    public void ValidateRepositoryPathRejectsLogicalEscapeRegardlessOfWorkingDirectory(bool volumeRoot, string path)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.WorkingDirectory = volumeRoot
+            ? Path.GetPathRoot(workspace.Path)!
+            : workspace.CreateDirectory("project").FullName;
+
+        using (RemoteExecutor.Invoke(static repositoryPath =>
+        {
+            Assert.Throws<TemplateSourceConfigurationException>(() =>
+                TemplateSourceConfiguration.ValidateRepositoryPath(repositoryPath, "templates.example.path"));
+        }, path, options))
+        {
+        }
+    }
+
+    [Theory]
+    [InlineData(".", ".")]
+    [InlineData("./templates", "templates")]
+    [InlineData("templates/../api", "api")]
+    [InlineData("templates/sub/../..", ".")]
+    public void RepositoryRelativePathAllowsNormalizationWithinRoot(string path, string expected)
+    {
+        var root = Path.GetPathRoot(Path.GetFullPath("."))!;
+
+        Assert.Equal(expected, TemplateSource.GetRepositoryRelativePath(path, root));
+    }
+
+    [Theory]
+    [InlineData("../escape")]
+    [InlineData("templates/../../escape")]
+    [InlineData("./../escape")]
+    public void RepositoryRelativePathRejectsLogicalEscapeAtVolumeRoot(string path)
+    {
+        var root = Path.GetPathRoot(Path.GetFullPath("."))!;
+
+        Assert.Throws<TemplateDiscoveryException>(() => TemplateSource.GetRepositoryRelativePath(path, root));
+    }
+
     [Theory]
     [InlineData("\"/absolute/path\"", "templates.example")]
     [InlineData("\"https://example.test/templates\"", "templates.example")]

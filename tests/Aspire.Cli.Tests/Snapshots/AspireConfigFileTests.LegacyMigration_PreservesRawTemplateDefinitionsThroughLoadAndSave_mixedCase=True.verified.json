@@ -1,0 +1,17 @@
+﻿{
+  "appHost": {},
+  "channel": "daily",
+  "Templates": {
+    "git": {
+      "repository": "https://github.com/example/templates"
+    },
+    "catalog": {
+      "href": "https://example.com/templates?q={search}&cliVersion={cliVersion}"
+    },
+    "partial": {
+      "ref": "release/17.0",
+      "path": "templates"
+    },
+    "invalid": false
+  }
+}

@@ -39,6 +39,91 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("appHost.path")]
+    [InlineData("appHost:path")]
+    public async Task SetConfigurationAsync_UnavailableLockDoesNotMigrateLegacySettings(string key)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, destination) = CreateService(workspace);
+        var legacyPath = Path.Combine(workspace.Path, ".aspire", "settings.json");
+        const string original = """{ /* unchanged */ "appHostPath": "../AppHost.csproj", }""";
+        await File.WriteAllTextAsync(legacyPath, original);
+        var cache = workspace.CreateExecutionContext().CacheDirectory;
+        cache.Create();
+        await File.WriteAllTextAsync(Path.Combine(cache.FullName, "workspace-config-locks"), "Blocks lock directory creation.");
+
+        await Assert.ThrowsAsync<IOException>(() => service.SetConfigurationAsync(key, "NewAppHost.csproj"));
+
+        Assert.False(File.Exists(destination));
+        Assert.Equal(original, await File.ReadAllTextAsync(legacyPath));
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_MigratesLegacySettingsAndProfilesWithRequestedEdit()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, destination) = CreateService(workspace);
+        var legacyPath = Path.Combine(workspace.Path, ".aspire", "settings.json");
+        const string original = """
+            {
+                "appHostPath": "../original/AppHost.csproj",
+                "language": "csharp",
+                "sdkVersion": "17.0.0",
+                "features": { "defaultWatchEnabled": false }
+            }
+            """;
+        const string profiles = """
+            {
+                "profiles": {
+                    "default": {
+                        "applicationUrl": "https://localhost:5001",
+                        "environmentVariables": { "EXAMPLE": "value" }
+                    }
+                }
+            }
+            """;
+        var profilesPath = Path.Combine(workspace.Path, "apphost.run.json");
+        await File.WriteAllTextAsync(legacyPath, original);
+        await File.WriteAllTextAsync(profilesPath, profiles);
+
+        await service.SetConfigurationAsync("appHost.path", "updated/AppHost.csproj");
+
+        await Verify(await File.ReadAllTextAsync(destination), "json");
+        Assert.Equal(original, await File.ReadAllTextAsync(legacyPath));
+        Assert.Equal(profiles, await File.ReadAllTextAsync(profilesPath));
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_LegacyMigrationRechecksDestinationAfterAcquiringLock()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, destination) = CreateService(workspace);
+        var legacyPath = Path.Combine(workspace.Path, ".aspire", "settings.json");
+        const string original = """{ "appHostPath": "../original/AppHost.csproj" }""";
+        await File.WriteAllTextAsync(legacyPath, original);
+        Task mutation;
+        using (var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
+            workspace.CreateExecutionContext(), new FileInfo(destination), NullLogger.Instance, CancellationToken.None))
+        {
+            Assert.NotNull(configLock);
+            mutation = service.SetConfigurationAsync("appHost.path", "updated/AppHost.csproj");
+            await Assert.ThrowsAsync<TimeoutException>(() => mutation.WaitAsync(TimeSpan.FromSeconds(1)));
+            Assert.False(File.Exists(destination));
+
+            await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(destination,
+                JsonNode.Parse("""{"appHost":{"path":"other/AppHost.csproj"},"channel":"daily"}""")!.AsObject(),
+                CancellationToken.None);
+        }
+        await mutation.DefaultTimeout();
+
+        var migrated = AspireConfigFile.Load(workspace.Path);
+        Assert.NotNull(migrated);
+        Assert.Equal("updated/AppHost.csproj", migrated.AppHost?.Path);
+        Assert.Equal("daily", migrated.Channel);
+        Assert.Equal(original, await File.ReadAllTextAsync(legacyPath));
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]

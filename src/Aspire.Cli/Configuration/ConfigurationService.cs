@@ -18,15 +18,30 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     public async Task SetConfigurationAsync(string key, string value, bool isGlobal = false, CancellationToken cancellationToken = default)
     {
         var settingsFilePath = GetSettingsFilePath(isGlobal);
-        if (!isGlobal && AppHostPathConfigurationPolicy.IsHierarchicalAppHostPathKey(key))
+        var legacyRoot = !isGlobal && AppHostPathConfigurationPolicy.IsHierarchicalAppHostPathKey(key)
+            ? ConfigurationHelper.GetLegacySettingsRootDirectory(new FileInfo(settingsFilePath))
+            : null;
+        if (legacyRoot is not null)
         {
-            settingsFilePath = EnsureAspireConfigFileForAppHostPathSettings(settingsFilePath);
+            settingsFilePath = Path.Combine(legacyRoot.FullName, AspireConfigFile.FileName);
         }
 
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
             executionContext, new FileInfo(settingsFilePath), logger, cancellationToken)
             ?? throw new IOException("Could not acquire the configuration lock.");
-        await SetConfigurationInFileAsync(settingsFilePath, key, value, cancellationToken);
+        if (legacyRoot is not null && !File.Exists(settingsFilePath))
+        {
+            logger.LogInformation("Migrating legacy settings from {LegacyDir} to {ConfigFile}", legacyRoot.FullName, settingsFilePath);
+            // Build the migration in memory under the destination lock. Publish it together
+            // with the validated edit so a failed operation never leaves a migrated file behind.
+            var migrated = AspireConfigFile.LoadLegacy(legacyRoot.FullName) ?? new AspireConfigFile();
+            var settings = JsonSerializer.SerializeToNode(migrated, JsonSourceGenerationContext.Default.AspireConfigFile)!.AsObject();
+            await WriteConfigurationAsync(settingsFilePath, settings, key, value, cancellationToken);
+        }
+        else
+        {
+            await SetConfigurationInFileAsync(settingsFilePath, key, value, cancellationToken);
+        }
     }
 
     internal static async Task SetConfigurationInFileAsync(string settingsFilePath, string key, string value, CancellationToken cancellationToken = default)
@@ -47,6 +62,11 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             settings = new JsonObject();
         }
 
+        await WriteConfigurationAsync(settingsFilePath, settings, key, value, cancellationToken);
+    }
+
+    private static async Task WriteConfigurationAsync(string settingsFilePath, JsonObject settings, string key, string value, CancellationToken cancellationToken)
+    {
         ConfigurationHelper.NormalizeSettings(settings);
         key = TemplateSourceConfiguration.ValidateEditKey(settings, key);
 
@@ -148,25 +168,6 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         var defaultPath = Path.Combine(executionContext.WorkingDirectory.FullName, AspireConfigFile.FileName);
         logger.LogDebug("No existing settings file found, defaulting to {Path}", defaultPath);
         return defaultPath;
-    }
-
-    private string EnsureAspireConfigFileForAppHostPathSettings(string settingsFilePath)
-    {
-        var settingsFile = new FileInfo(settingsFilePath);
-        var legacySettingsRootDirectory = ConfigurationHelper.GetLegacySettingsRootDirectory(settingsFile);
-        if (legacySettingsRootDirectory is null)
-        {
-            return settingsFilePath;
-        }
-
-        var aspireConfigPath = Path.Combine(legacySettingsRootDirectory.FullName, AspireConfigFile.FileName);
-        if (!File.Exists(aspireConfigPath))
-        {
-            logger.LogInformation("Migrating legacy settings from {LegacyDir} to {ConfigFile}", legacySettingsRootDirectory.FullName, aspireConfigPath);
-            _ = AspireConfigFile.LoadOrCreate(legacySettingsRootDirectory.FullName);
-        }
-
-        return aspireConfigPath;
     }
 
     public async Task<Dictionary<string, string>> GetAllConfigurationAsync(CancellationToken cancellationToken = default)
