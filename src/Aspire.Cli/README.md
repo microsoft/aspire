@@ -168,6 +168,9 @@ the global `templates` object (without the surrounding `templates` property):
 }
 ```
 
+Global migration and edits share a configuration lock. In-flight edits follow the
+preferred global file if another CLI invocation migrates legacy settings.
+
 Listing sorts sources by name, preserves configured fields without adding defaults,
 and includes incomplete source objects so they can be inspected while editing.
 No configured sources produces `{}` in JSON mode. Invalid/unreadable global

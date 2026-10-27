@@ -167,7 +167,7 @@ public class Program
         return null;
     }
 
-    private static string GetGlobalSettingsPath(ILogger logger, bool migrate)
+    private static async Task<string> GetGlobalSettingsPathAsync(ILogger logger, bool migrate, CancellationToken cancellationToken)
     {
         var usersAspirePath = GetUsersAspirePath();
         var newPath = Path.Combine(usersAspirePath, Configuration.AspireConfigFile.FileName);
@@ -187,24 +187,33 @@ public class Program
         {
             try
             {
-                var legacyJson = File.ReadAllText(legacyPath);
-                var legacyConfig = JsonSerializer.Deserialize(legacyJson, JsonSourceGenerationContext.Default.AspireJsonConfiguration);
-                var config = AspireConfigFile.FromLegacy(legacyConfig, profiles: null);
-                // Drop the legacy global identity-channel field — the CLI's channel is now
-                // baked into the binary (AspireCliChannel assembly metadata) and never read
-                // from global config. The per-project channel migration in AspireConfigFile.FromLegacy
-                // remains for project-local aspire.config.json files.
-                config.Channel = null;
-                config.Save(usersAspirePath);
+                // Legacy and modern global writers share the modern destination's lock.
+                // Recheck both files after waiting so migration reads the latest completed edit.
+                using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
+                    GetCacheDirectory(), new FileInfo(newPath), logger, cancellationToken)
+                    ?? throw new IOException("Could not acquire the global configuration lock.");
+                if (!File.Exists(newPath) && File.Exists(legacyPath))
+                {
+                    var legacyJson = await File.ReadAllTextAsync(legacyPath, cancellationToken);
+                    var legacyConfig = JsonSerializer.Deserialize(legacyJson, JsonSourceGenerationContext.Default.AspireJsonConfiguration);
+                    var config = AspireConfigFile.FromLegacy(legacyConfig, profiles: null);
+                    // Drop the legacy global identity-channel field — the CLI's channel is now
+                    // baked into the binary (AspireCliChannel assembly metadata) and never read
+                    // from global config. The per-project channel migration in AspireConfigFile.FromLegacy
+                    // remains for project-local aspire.config.json files.
+                    config.Channel = null;
+                    var settings = JsonSerializer.SerializeToNode(config, JsonSourceGenerationContext.Default.AspireConfigFile)!.AsObject();
+                    await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(newPath, settings, cancellationToken);
+                }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // If migration fails, newPath will be created on first write.
                 logger.LogError(ex, "Failed to migrate legacy globalsettings.json to {NewPath}.", newPath);
             }
         }
 
-        return newPath;
+        // A failed migration must not hide the still-active legacy configuration.
+        return File.Exists(newPath) || !File.Exists(legacyPath) ? newPath : legacyPath;
     }
 
     internal static void WarnIfGlobalSettingsContainAppHostPath(FileInfo globalSettingsFile, IStartupErrorWriter errorWriter)
@@ -319,7 +328,8 @@ public class Program
         var builder = Host.CreateEmptyApplicationBuilder(settings);
 
         // Set up settings with appropriate paths.
-        var globalSettingsFilePath = GetGlobalSettingsPath(startupContext.Logger, migrate: !deferSettingsWrites);
+        var globalSettingsFilePath = await GetGlobalSettingsPathAsync(
+            startupContext.Logger, migrate: !deferSettingsWrites, startupContext.CancellationManager.Token);
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
         ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !deferSettingsWrites);

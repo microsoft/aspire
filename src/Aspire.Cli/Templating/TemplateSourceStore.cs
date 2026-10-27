@@ -31,8 +31,10 @@ internal sealed class TemplateSourceStore(
 
         var path = configurationService.GetSettingsFilePath(isGlobal: true);
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
-            executionContext, new FileInfo(path), logger, cancellationToken)
+            executionContext, ConfigurationHelper.GetCanonicalGlobalSettingsFile(new FileInfo(path)), logger, cancellationToken)
             ?? throw new IOException("Could not acquire the global template source configuration lock.");
+        // Startup may have captured the legacy path before another invocation migrated it.
+        path = configurationService.GetSettingsFilePath(isGlobal: true);
         var settings = await ReadAsync(path, cancellationToken);
         var sources = GetSources(settings);
         // IConfiguration keys are case-insensitive even though JSON properties are not.
@@ -50,8 +52,9 @@ internal sealed class TemplateSourceStore(
         TemplateSourceConfiguration.ValidateName(name);
         var path = configurationService.GetSettingsFilePath(isGlobal: true);
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
-            executionContext, new FileInfo(path), logger, cancellationToken)
+            executionContext, ConfigurationHelper.GetCanonicalGlobalSettingsFile(new FileInfo(path)), logger, cancellationToken)
             ?? throw new IOException("Could not acquire the global template source configuration lock.");
+        path = configurationService.GetSettingsFilePath(isGlobal: true);
         var settings = await ReadAsync(path, cancellationToken);
         var sources = GetSources(settings);
         var existing = sources.Select(entry => entry.Key).FirstOrDefault(key => key.Equals(name, StringComparison.OrdinalIgnoreCase));

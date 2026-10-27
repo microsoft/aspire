@@ -27,8 +27,12 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         }
 
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
-            executionContext, new FileInfo(settingsFilePath), logger, cancellationToken)
+            executionContext, isGlobal ? ConfigurationHelper.GetCanonicalGlobalSettingsFile(globalSettingsFile) : new FileInfo(settingsFilePath), logger, cancellationToken)
             ?? throw new IOException("Could not acquire the configuration lock.");
+        if (isGlobal)
+        {
+            settingsFilePath = GetSettingsFilePath(isGlobal: true);
+        }
         if (legacyRoot is not null && !File.Exists(settingsFilePath))
         {
             logger.LogInformation("Migrating legacy settings from {LegacyDir} to {ConfigFile}", legacyRoot.FullName, settingsFilePath);
@@ -82,8 +86,12 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     {
         var settingsFilePath = GetSettingsFilePath(isGlobal);
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
-            executionContext, new FileInfo(settingsFilePath), logger, cancellationToken)
+            executionContext, isGlobal ? ConfigurationHelper.GetCanonicalGlobalSettingsFile(globalSettingsFile) : new FileInfo(settingsFilePath), logger, cancellationToken)
             ?? throw new IOException("Could not acquire the configuration lock.");
+        if (isGlobal)
+        {
+            settingsFilePath = GetSettingsFilePath(isGlobal: true);
+        }
 
         if (!File.Exists(settingsFilePath))
         {
@@ -128,7 +136,8 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     {
         if (isGlobal)
         {
-            return globalSettingsFile.FullName;
+            var preferredFile = ConfigurationHelper.GetCanonicalGlobalSettingsFile(globalSettingsFile);
+            return File.Exists(preferredFile.FullName) ? preferredFile.FullName : globalSettingsFile.FullName;
         }
         else
         {
@@ -176,7 +185,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
 
         var nearestSettingFilePath = FindNearestSettingsFile();
         await LoadConfigurationFromFileAsync(nearestSettingFilePath, allConfig, cancellationToken);
-        await LoadConfigurationFromFileAsync(globalSettingsFile.FullName, allConfig, cancellationToken);
+        await LoadConfigurationFromFileAsync(GetSettingsFilePath(isGlobal: true), allConfig, cancellationToken);
 
         return allConfig;
     }
@@ -192,7 +201,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     public async Task<Dictionary<string, string>> GetGlobalConfigurationAsync(CancellationToken cancellationToken = default)
     {
         var globalConfig = new Dictionary<string, string>();
-        await LoadConfigurationFromFileAsync(globalSettingsFile.FullName, globalConfig, cancellationToken);
+        await LoadConfigurationFromFileAsync(GetSettingsFilePath(isGlobal: true), globalConfig, cancellationToken);
         return globalConfig;
     }
 
@@ -425,9 +434,10 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // `aspire config set -g channel <x>` continues to get their preference honored by
         // `aspire update` until that workflow is removed in a follow-up. New per-project flows
         // (`aspire add`, `aspire init`) do not consult global config and must not start to.
-        if (File.Exists(globalSettingsFile.FullName))
+        var globalSettingsFilePath = GetSettingsFilePath(isGlobal: true);
+        if (File.Exists(globalSettingsFilePath))
         {
-            var globalConfig = LoadSettingsFileForReading(globalSettingsFile.FullName);
+            var globalConfig = LoadSettingsFileForReading(globalSettingsFilePath);
             var globalValue = globalConfig[configKey];
             if (!string.IsNullOrWhiteSpace(globalValue))
             {
