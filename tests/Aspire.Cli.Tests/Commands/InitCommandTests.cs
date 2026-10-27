@@ -633,7 +633,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(offeredLanguages);
-        Assert.Contains(KnownLanguageId.GoDisplayName, offeredLanguages);
+        Assert.Equal([KnownLanguageId.CSharpDisplayName, "TypeScript (Node.js)", KnownLanguageId.GoDisplayName], offeredLanguages);
         Assert.Equal(KnownLanguageId.Go, scaffoldedLanguageId);
     }
 
