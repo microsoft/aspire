@@ -464,10 +464,13 @@ internal static class Hex1bTestHelpers
                 break;
 
             case AspireTemplate.GoEmptyAppHost:
+                var goLanguageSelected = new CellPatternSearcher()
+                    .Find("> Go");
                 builder.Type("Empty AppHost")
                     .Enter()
                     .WaitUntil(s => waitingForAppHostLanguagePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
                     .Type("Go")
+                    .WaitUntil(s => goLanguageSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
                     .Enter();
                 break;
         }

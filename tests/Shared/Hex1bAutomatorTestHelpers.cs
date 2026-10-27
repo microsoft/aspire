@@ -640,6 +640,10 @@ internal static class Hex1bAutomatorTestHelpers
                     timeout: TimeSpan.FromSeconds(10),
                     description: "AppHost language prompt");
                 await auto.TypeAsync("Go");
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("> Go").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(5),
+                    description: "Go AppHost language selected");
                 await auto.EnterAsync();
                 break;
 

@@ -47,15 +47,8 @@ public sealed class GoSecretAppHostTests(ITestOutputHelper output)
         // Get and list are checked with grep because the secret keys and values also appear in the earlier
         // `secret set` command lines that are still on screen, so waiting for that text would pass without
         // any output. The numbered prompt reports grep's exit status, which is what validates the output.
-        await auto.TypeAsync("aspire secret get MyConfig:ApiKey --apphost apphost.go | grep -qx 'test-key-123' && echo E2E_GO_SECRET_GET_OK");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("E2E_GO_SECRET_GET_OK", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("aspire secret list --apphost apphost.go | grep 'ConnectionStrings:Db' | grep 'Server=localhost' >/dev/null && echo E2E_GO_SECRET_LIST_OK");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("E2E_GO_SECRET_LIST_OK", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.RunCommandAsync("aspire secret get MyConfig:ApiKey --apphost apphost.go | grep -qx 'test-key-123'", counter, TimeSpan.FromSeconds(30));
+        await auto.RunCommandAsync("aspire secret list --apphost apphost.go | grep 'ConnectionStrings:Db' | grep 'Server=localhost' >/dev/null", counter, TimeSpan.FromSeconds(30));
 
         // Delete
         await auto.TypeAsync("aspire secret delete MyConfig:ApiKey --apphost apphost.go");
@@ -80,24 +73,9 @@ public sealed class GoSecretAppHostTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("set successfully", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.TypeAsync("aspire secret get MyConfig:ApiKey --environment Staging --apphost apphost.go | grep -qx 'staging-go-secret' && echo E2E_GO_STAGING_SECRET_GET_OK");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("E2E_GO_STAGING_SECRET_GET_OK", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("aspire secret get MyConfig:ApiKey --environment Production --apphost apphost.go | grep -qx 'production-go-secret' && echo E2E_GO_PRODUCTION_SECRET_GET_OK");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("E2E_GO_PRODUCTION_SECRET_GET_OK", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("aspire secret list --all --apphost apphost.go | grep 'staging-go-secret' | grep 'Staging' >/dev/null && echo E2E_GO_SECRET_LIST_STAGING_OK");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("E2E_GO_SECRET_LIST_STAGING_OK", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("aspire secret list --all --apphost apphost.go | grep 'production-go-secret' | grep 'Production' >/dev/null && echo E2E_GO_SECRET_LIST_PRODUCTION_OK");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("E2E_GO_SECRET_LIST_PRODUCTION_OK", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.RunCommandAsync("aspire secret get MyConfig:ApiKey --environment Staging --apphost apphost.go | grep -qx 'staging-go-secret'", counter, TimeSpan.FromSeconds(30));
+        await auto.RunCommandAsync("aspire secret get MyConfig:ApiKey --environment Production --apphost apphost.go | grep -qx 'production-go-secret'", counter, TimeSpan.FromSeconds(30));
+        await auto.RunCommandAsync("aspire secret list --all --apphost apphost.go | grep 'staging-go-secret' | grep 'Staging' >/dev/null", counter, TimeSpan.FromSeconds(30));
+        await auto.RunCommandAsync("aspire secret list --all --apphost apphost.go | grep 'production-go-secret' | grep 'Production' >/dev/null", counter, TimeSpan.FromSeconds(30));
     }
 }
