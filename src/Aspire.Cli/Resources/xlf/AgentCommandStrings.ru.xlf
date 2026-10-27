@@ -1,85 +1,85 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ru" original="../AgentCommandStrings.resx">
     <body>
       <trans-unit id="AgentTelemetryCommand_ClientNameDescription">
         <source>The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</source>
-        <target state="new">The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</target>
+        <target state="translated">Клиент агента ИИ, создавший событие (например, copilot-cli, claude-code или vscode)</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_Description">
         <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
-        <target state="new">Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</target>
+        <target state="translated">Запись телеметрии использования навыков и инструментов агента ИИ. Вызывается скриптами телеметрии агента Aspire и не предназначено для прямого запуска.</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
         <source>The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</source>
-        <target state="new">The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</target>
+        <target state="translated">Тип события телеметрии (skill_invocation, tool_invocation или reference_file_read)</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_FileReferenceDescription">
         <source>The Aspire skills-relative reference file path for a reference_file_read event</source>
-        <target state="new">The Aspire skills-relative reference file path for a reference_file_read event</target>
+        <target state="translated">Путь к файлу ссылки, связанный с навыками Aspire, для события reference_file_read</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
         <source>The opaque AI agent session identifier</source>
-        <target state="new">The opaque AI agent session identifier</target>
+        <target state="translated">Непрозрачный идентификатор сеанса ИИ-агента</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SkillNameDescription">
         <source>The Aspire skill name for a skill_invocation event</source>
-        <target state="new">The Aspire skill name for a skill_invocation event</target>
+        <target state="translated">Имя навыка Aspire для события skill_invocation</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_TimestampDescription">
         <source>The timestamp recorded for the event</source>
-        <target state="new">The timestamp recorded for the event</target>
+        <target state="translated">Метка времени, записанная для события</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_ToolNameDescription">
         <source>The Aspire MCP tool name for a tool_invocation event</source>
-        <target state="new">The Aspire MCP tool name for a tool_invocation event</target>
+        <target state="translated">Имя инструмента Aspire MCP для события tool_invocation</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
         <source>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</source>
-        <target state="new">Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</target>
+        <target state="translated">Внедренный архив навыков Aspire не прошел проверку SHA-512. Ожидалось '{0}', получено '{1}'.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_GitHubUnavailable">
         <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</source>
-        <target state="new">Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</target>
+        <target state="translated">Не удалось загрузить навыки Aspire из проверенного ресурса выпуска GitHub, а допустимый кэшированный или встроенный пакет отсутствует.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InvalidMetadata">
         <source>Embedded Aspire skills bundle metadata is invalid: {0}</source>
-        <target state="new">Embedded Aspire skills bundle metadata is invalid: {0}</target>
+        <target state="translated">Метаданные встроенного пакета навыков Aspire недействительны: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MetadataRepositoryMismatch">
         <source>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</source>
-        <target state="new">Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</target>
+        <target state="translated">Репозиторий метаданных встроенных навыков Aspire "{0}" не соответствует ожидаемому репозиторию "{1}".</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataAssetName">
         <source>Embedded Aspire skills metadata must specify a release asset name.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a release asset name.</target>
+        <target state="translated">Во встроенных метаданных навыков Aspire необходимо указать имя ресурса выпуска.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataSha512">
         <source>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</source>
-        <target state="new">Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</target>
+        <target state="translated">Во встроенных метаданных навыков Aspire должен быть указан хэш SHA-512 ресурса выпуска.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataTag">
         <source>Embedded Aspire skills metadata must specify a GitHub release tag.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a GitHub release tag.</target>
+        <target state="translated">Во встроенных метаданных навыков Aspire должен быть указан тег выпуска GitHub.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataVersion">
         <source>Embedded Aspire skills metadata must specify a version.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a version.</target>
+        <target state="translated">Во встроенных метаданных навыков Aspire необходимо указать версию.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">
@@ -109,22 +109,22 @@
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage AI agent environment configuration</source>
-        <target state="needs-review-translation">Управляйте интеграциями агентов ИИ.</target>
+        <target state="translated">Управление конфигурацией среды ИИ-агента</target>
         <note />
       </trans-unit>
       <trans-unit id="Environment_ClaudeCode">
         <source>Claude Code</source>
-        <target state="new">Claude Code</target>
+        <target state="translated">Код Claude</target>
         <note />
       </trans-unit>
       <trans-unit id="Environment_Copilot">
         <source>GitHub Copilot</source>
-        <target state="new">GitHub Copilot</target>
+        <target state="translated">GitHub Copilot</target>
         <note />
       </trans-unit>
       <trans-unit id="Environment_OpenCode">
         <source>OpenCode</source>
-        <target state="new">OpenCode</target>
+        <target state="translated">OpenCode</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
@@ -149,12 +149,12 @@
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
-        <target state="new">Install Aspire MCP server</target>
+        <target state="translated">Установить сервер Aspire MCP</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServerPrompt">
         <source>Configure the Aspire MCP server for selected agent environments?</source>
-        <target state="new">Configure the Aspire MCP server for selected agent environments?</target>
+        <target state="translated">Настроить сервер Aspire MCP для выбранных сред агентов?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfiguredTargets">
@@ -166,7 +166,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
-        <target state="needs-review-translation">Инициализировать конфигурацию среды агента для обнаруженных агентов.</target>
+        <target state="translated">Инициализировать конфигурацию и навыки для выбранных клиентов агентов</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EmbeddedSkillsChoice">
@@ -176,12 +176,12 @@
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentLocationDescription">
         <source>{0}: {1}</source>
-        <target state="new">{0}: {1}</target>
+        <target state="translated">{0}: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentsOptionDescription">
         <source>Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</source>
-        <target state="new">Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</target>
+        <target state="translated">Разделенные запятыми идентификаторы агентов ({0}), '{1}' или '{2}'. По умолчанию используется обнаруженные агенты или Copilot, если агенты не обнаружены</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ExistingConfigurationConflict">
@@ -198,37 +198,37 @@
       </trans-unit>
       <trans-unit id="InitCommand_FailedToInstallSkill">
         <source>Failed to install {0} skill at {1}: {2}</source>
-        <target state="new">Failed to install {0} skill at {1}: {2}</target>
+        <target state="translated">Не удалось установить {0} навык в {1}: {2}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_GlobalScope">
         <source>Global (Install in your home directory; available across all projects)</source>
-        <target state="new">Global (Install in your home directory; available across all projects)</target>
+        <target state="translated">Глобально (установить в домашний каталог; доступно во всех проектах)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallationLocations">
         <source>Installation locations:</source>
-        <target state="new">Installation locations:</target>
+        <target state="translated">Расположения установки:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledPlaywrightCli">
         <source>Installed Playwright CLI.</source>
-        <target state="new">Installed Playwright CLI.</target>
+        <target state="translated">Playwright CLI установлен.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummary">
         <source>Installed Aspire agent skills:</source>
-        <target state="new">Installed Aspire agent skills:</target>
+        <target state="translated">Установленные навыки агента Aspire:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
         <source>Locations: {0}</source>
-        <target state="new">Locations: {0}</target>
+        <target state="translated">Расположений: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummarySkills">
         <source>Skills: {0}</source>
-        <target state="new">Skills: {0}</target>
+        <target state="translated">Навыки: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InvalidAspireSource">
@@ -238,12 +238,12 @@
       </trans-unit>
       <trans-unit id="InitCommand_InvalidEnvironments">
         <source>Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
-        <target state="new">Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <target state="translated">Недопустимый выбор агента {0}. Используйте {1}, {2} или {3}.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InvalidScope">
         <source>Invalid scope '{0}'. Use 'project' or 'global'.</source>
-        <target state="new">Invalid scope '{0}'. Use 'project' or 'global'.</target>
+        <target state="translated">Недопустимая область {0}. Используйте «project» или «global».</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InvalidSkills">
@@ -260,27 +260,27 @@
       </trans-unit>
       <trans-unit id="InitCommand_McpConfigurationDescription">
         <source>Configure Aspire MCP for {0} at {1}</source>
-        <target state="new">Configure Aspire MCP for {0} at {1}</target>
+        <target state="translated">Настройте MCP Aspire для {0} в {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_McpLocationHint">
         <source>MCP: {0}</source>
-        <target state="new">MCP: {0}</target>
+        <target state="translated">MCP: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_McpOptionDescription">
         <source>Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</source>
-        <target state="new">Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</target>
+        <target state="translated">Настроить сервер Aspire MCP для выбранных сред агентов. Если опустить, MCP останется ненастроенным. Передайте "--mcp", чтобы включить, или "--mcp=false", чтобы явно отключить</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_NoConfigurationSelected">
         <source>No agent configuration selected. Existing configuration was left unchanged.</source>
-        <target state="new">No agent configuration selected. Existing configuration was left unchanged.</target>
+        <target state="translated">Конфигурация агента не выбрана. Существующая конфигурация осталась без изменений.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
         <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
-        <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
+        <target state="translated">Для Playwright CLI требуется npm, но npm не найден в PATH. Пропуск установки.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PluginRiskWarning">
@@ -296,7 +296,7 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>
-        <target state="new">Project (Install in your workspace root; committed with your project)</target>
+        <target state="translated">Проект (установить в корень рабочей области; изменения фиксируются вместе с проектом)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_RemoteSkillsChoice">
@@ -311,32 +311,32 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
         <source>Configuration and skill scope: project or global (default: project)</source>
-        <target state="new">Configuration and skill scope: project or global (default: project)</target>
+        <target state="translated">Область действия конфигурации и навыков: проектная или глобальная (по умолчанию — проектная)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectAgentsPrompt">
         <source>Which agents do you use?</source>
-        <target state="new">Which agents do you use?</target>
+        <target state="translated">Какие агенты вы используете?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectScopePrompt">
         <source>Installation scope</source>
-        <target state="new">Installation scope</target>
+        <target state="translated">Область установки</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocation">
         <source>{0} (shared: {1})</source>
-        <target state="new">{0} (shared: {1})</target>
+        <target state="translated">{0} (общий доступ: {1})</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocationNotice">
         <source>Shared files may be discovered by agents that aren't selected.</source>
-        <target state="new">Shared files may be discovered by agents that aren't selected.</target>
+        <target state="translated">Общие файлы могут быть обнаружены невыбранными агентами.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>
-        <target state="new">Skills: {0}</target>
+        <target state="translated">Навыки: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
@@ -346,37 +346,37 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
         <source>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</target>
+        <target state="translated">Перехватчик телеметрии для {0} пропущен, так как его файл конфигурации содержит некорректный JSON.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedUnexpectedShape">
         <source>Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</target>
+        <target state="translated">Телеметрический обработчик для {0} пропущен, так как не удалось записать его конфигурацию.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookWriteFailed">
         <source>Skipped the telemetry hook for {0} because its configuration could not be written.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration could not be written.</target>
+        <target state="translated">Телеметрический обработчик для {0} пропущен, так как не удалось записать его конфигурацию.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
         <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
+        <target state="translated">Телеметрические обработчики агента Aspire установлены для: {0}. Записывается только потребление навыка Aspire, инструмента MCP и справочных файлов. Отказаться можно в любое время, задав ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
-        <target state="new">Path to the workspace root directory</target>
+        <target state="translated">Путь к корневому каталогу рабочей области</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InstallingStatus">
         <source>Installing Aspire skills...</source>
-        <target state="new">Installing Aspire skills...</target>
+        <target state="translated">Установка навыков Aspire…</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InvalidBundle">
         <source>The Aspire skills bundle is invalid: {0}</source>
-        <target state="new">The Aspire skills bundle is invalid: {0}</target>
+        <target state="translated">Пакет навыков Aspire недействителен: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalSkills_ReadFailed">
@@ -386,82 +386,82 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
       </trans-unit>
       <trans-unit id="McpServerContainerMustBeJsonObject">
         <source>The MCP server container '{0}' in '{1}' must be a JSON object.</source>
-        <target state="new">The MCP server container '{0}' in '{1}' must be a JSON object.</target>
+        <target state="translated">Контейнер сервера MCP, '{0}' в '{1}', должен быть объектом JSON.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToDownload">
         <source>Failed to download {0}.</source>
-        <target state="new">Failed to download {0}.</target>
+        <target state="translated">Не удалось скачать {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToGenerateSkillFiles">
         <source>Failed to generate Playwright CLI skill files.</source>
-        <target state="new">Failed to generate Playwright CLI skill files.</target>
+        <target state="translated">Не удалось создать файлы навыков Playwright CLI.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToInstallGlobally">
         <source>Failed to install {0} globally via npm.</source>
-        <target state="new">Failed to install {0} globally via npm.</target>
+        <target state="translated">Не удалось установить {0} глобально через npm.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToMirrorSkillFiles">
         <source>Failed to copy Playwright CLI skill files to the selected locations.</source>
-        <target state="new">Failed to copy Playwright CLI skill files to the selected locations.</target>
+        <target state="translated">Не удалось скопировать файлы навыка CLI Playwright в выбранные расположения.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToResolvePackage">
         <source>Failed to resolve {0} from the npm registry.</source>
-        <target state="new">Failed to resolve {0} from the npm registry.</target>
+        <target state="translated">Не удалось разрешить {0} из реестра npm.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_InstalledWithMirrorWarnings">
         <source>Installed Playwright CLI (some locations failed to mirror).</source>
-        <target state="new">Installed Playwright CLI (some locations failed to mirror).</target>
+        <target state="translated">Playwright CLI установлен (не удалось синхронизировать некоторые расположения).</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_InstallingStatus">
         <source>Installing Playwright CLI...</source>
-        <target state="new">Installing Playwright CLI...</target>
+        <target state="translated">Установка Playwright CLI...</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_IntegrityVerificationFailed">
         <source>Integrity verification failed for {0}. The downloaded package may have been tampered with.</source>
-        <target state="new">Integrity verification failed for {0}. The downloaded package may have been tampered with.</target>
+        <target state="translated">Сбой проверки целостности для {0}. Скачанный пакет, возможно, подделан.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_InvalidVersionOverride">
         <source>The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</source>
-        <target state="new">The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</target>
+        <target state="translated">Значение параметра конфигурации '{0}' ('{1}') не является допустимой версией SemVer 2.0.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_ProvenanceVerificationFailed">
         <source>Provenance verification failed for {0}: {1}</source>
-        <target state="new">Provenance verification failed for {0}: {1}</target>
+        <target state="translated">Не удалось проверить происхождение для {0}: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_Aspire">
         <source>Aspire CLI commands and workflows for distributed apps</source>
-        <target state="new">Aspire CLI commands and workflows for distributed apps</target>
+        <target state="translated">Команды и рабочие процессы Aspire CLI для распределенных приложений</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_AspireDeployment">
         <source>Aspire deployment target selection, preflight, publish, and deploy workflows</source>
-        <target state="new">Aspire deployment target selection, preflight, publish, and deploy workflows</target>
+        <target state="translated">Рабочие процессы выбора целевого объекта развертывания, предварительной проверки, публикации и развертывания Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_Aspireify">
         <source>One-time setup: wire up AppHost with discovered projects</source>
-        <target state="new">One-time setup: wire up AppHost with discovered projects</target>
+        <target state="translated">Одноразовая настройка: подключите AppHost к обнаруженным проектам</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_DotnetInspect">
         <source>Query .NET API surfaces across NuGet packages and platform libraries</source>
-        <target state="new">Query .NET API surfaces across NuGet packages and platform libraries</target>
+        <target state="translated">Запрос к поверхностям API .NET в пакетах NuGet и библиотеках платформ</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_PlaywrightCli">
         <source>Browser automation and functional testing</source>
-        <target state="new">Browser automation and functional testing</target>
+        <target state="translated">Автоматизация браузера и функциональное тестирование</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectSkills">
@@ -476,12 +476,12 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
       </trans-unit>
       <trans-unit id="McpCommand_Description">
         <source>Start the MCP (Model Context Protocol) server</source>
-        <target state="needs-review-translation">Запуск сервера MCP (протокол контекста модели).</target>
+        <target state="translated">Запустить сервер MCP (протокола контекста модели)</target>
         <note />
       </trans-unit>
       <trans-unit id="SkipNoneDescription">
         <source>None — skip</source>
-        <target state="new">None — skip</target>
+        <target state="translated">Ничего нет, пропустить</target>
         <note />
       </trans-unit>
       <trans-unit id="SkippedMalformedConfigFile">
