@@ -3465,10 +3465,24 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
     public CSharpAppResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public CSharpAppResource withTerminal(AspireAction1<TerminalOptions> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -5860,10 +5874,24 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
     public ContainerRegistryResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public ContainerRegistryResource withTerminal(AspireAction1<TerminalOptions> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -7820,10 +7848,24 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
     public ContainerResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public ContainerResource withTerminal(AspireAction1<TerminalOptions> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -10609,10 +10651,24 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
     public DotnetToolResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public DotnetToolResource withTerminal(AspireAction1<TerminalOptions> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -13081,10 +13137,24 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
     public ExecutableResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public ExecutableResource withTerminal(AspireAction1<TerminalOptions> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -14216,10 +14286,24 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
     public ExternalServiceResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public ExternalServiceResource withTerminal(AspireAction1<TerminalOptions> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -19075,10 +19159,24 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
     public ParameterResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public ParameterResource withTerminal(AspireAction1<TerminalOptions> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -21470,10 +21568,24 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
     public ProjectResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public ProjectResource withTerminal(AspireAction1<TerminalOptions> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -23346,6 +23458,43 @@ public final class SetValueAsyncOptions {
 
 }
 
+// ===== aspire/TerminalOptions.java =====
+// TerminalOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** TerminalOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class TerminalOptions implements JsonSerializable {
+    private double columns;
+    private double rows;
+
+    public double getColumns() { return columns; }
+    public void setColumns(double value) { this.columns = value; }
+    public double getRows() { return rows; }
+    public void setRows(double value) { this.rows = value; }
+
+    @SuppressWarnings("unchecked")
+    public static TerminalOptions fromMap(Map<String, Object> map) {
+        var value = new TerminalOptions();
+        var columnsValue = map.get("columns");
+        value.setColumns(((Number) columnsValue).doubleValue());
+        var rowsValue = map.get("rows");
+        value.setRows(((Number) rowsValue).doubleValue());
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("columns", AspireClient.serializeValue(columns));
+        map.put("rows", AspireClient.serializeValue(rows));
+        return map;
+    }
+}
+
 // ===== aspire/TestCallbackContext.java =====
 // TestCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
@@ -24997,10 +25146,24 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
     public TestDatabaseResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public TestDatabaseResource withTerminal(AspireAction1<TerminalOptions> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -27292,10 +27455,24 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
     public TestRedisResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public TestRedisResource withTerminal(AspireAction1<TerminalOptions> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -29771,10 +29948,24 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
     public TestVaultResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public TestVaultResource withTerminal(AspireAction1<TerminalOptions> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -31434,6 +31625,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/ResourceUrlsEditor.java
 .aspire/modules/aspire/RunConfiguration.java
 .aspire/modules/aspire/SetValueAsyncOptions.java
+.aspire/modules/aspire/TerminalOptions.java
 .aspire/modules/aspire/TestCallbackContext.java
 .aspire/modules/aspire/TestCollectionContext.java
 .aspire/modules/aspire/TestConfigDto.java

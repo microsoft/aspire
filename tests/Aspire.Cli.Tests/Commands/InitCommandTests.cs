@@ -108,6 +108,37 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")));
     }
 
+    [Fact]
+    public async Task InitCommand_WhenSolutionExists_InstallsProjectSkillsInWorkspaceWithoutCheckingWorkspaceSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Test.sln"), "Fake solution file");
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            ConfigureImplicitTemplateChannel(options);
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "init --language csharp --non-interactive --use-config-source false --agents copilot --scope project --skills aspire");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+
+        Assert.True(Directory.Exists(Path.Combine(workspace.Path, "Test.AppHost")));
+        Assert.True(File.Exists(Path.Combine(workspace.Path, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md")));
+        Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        Assert.Equal(0, git.Calls);
+        Assert.Equal(0, git.CheckCalls);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData(" --file-based false")]
@@ -2144,11 +2175,6 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
-        var content = File.ReadAllText(nugetConfigPath);
-
-        Assert.Contains(SourceForChannel("daily"), content);
-        Assert.DoesNotContain(SourceForChannel("stable"), content);
-        Assert.DoesNotContain(SourceForChannel("staging"), content);
         AssertNuGetConfigHasChannelShape(nugetConfigPath, "daily");
     }
 

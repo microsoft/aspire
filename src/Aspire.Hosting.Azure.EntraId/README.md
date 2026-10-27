@@ -243,17 +243,50 @@ The parameter must be created with `secret: true`.
 
 ### Federated identity credential with managed identity
 
-For deployed applications, use a federated identity credential so that no secret is stored:
+For deployed applications, use a federated managed identity credential so that no secret is stored. Aspire creates the registration, and the registration trusts the managed identity of each workload that references it:
+
+```csharp
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .PublishWithFederatedManagedIdentityCredential();
+
+builder.AddProject<Projects.Web>("web")
+       .WithReference(entraWeb);
+```
+
+Referencing the registration makes the workload need a user-assigned managed identity when published, the same way referencing an Azure resource does. The workload uses the identity it already has (for example from `WithAzureUserAssignedIdentity`), or the Azure environment creates one. The federated credential uses the tenant's v2.0 issuer, the identity's **object (principal) ID** as the subject, and the token-exchange audience of the application's cloud (Azure public, US Government and China are supported; other clouds fail with an error). The workload receives the identity's **client ID** as `ManagedIdentityClientId`. Deployment order is identity, then registration, then workload.
+
+To trust only specific workloads, or a specific identity, pass them. A workload passed this way must also reference the registration, and only it receives the credential:
+
+```csharp
+var entraWeb = builder.AddEntraIdApplication("entra-web");
+var web = builder.AddProject<Projects.Web>("web").WithReference(entraWeb);
+
+entraWeb.PublishWithFederatedManagedIdentityCredential(web);
+```
+
+```csharp
+var identity = builder.AddAzureUserAssignedIdentity("web-identity");
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .PublishWithFederatedManagedIdentityCredential(identity);
+
+builder.AddProject<Projects.Web>("web")
+       .WithAzureUserAssignedIdentity(identity)
+       .WithReference(entraWeb);
+```
+The federated credential only changes how the app authenticates as itself. Interactive user sign-in still needs a redirect URI registered on the app registration. Derive it from the web app's endpoint with `WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc")`, which uses the compute environment's host when deployed, so it does not make the registration depend on the web app.
+
+Managed identities exist only in Azure, so `PublishWithFederatedManagedIdentityCredential` is not used when running locally; add another credential, such as a client secret, for local development.
+
+#### Existing registrations
+
+Aspire never modifies an existing registration, so `PublishWithFederatedManagedIdentityCredential` throws for `AddExistingEntraApplication`. Create the trust yourself, then use `WithFederatedManagedIdentityCredential` with the managed identity's client ID. It only configures the app, and applies when running locally as well as when publishing:
 
 ```csharp
 var entraWeb = builder.AddExistingEntraApplication("entra-web", tenantId: tenantId, clientId: webClientId)
-                      .WithFicMsi("00001111-aaaa-2222-bbbb-3333cccc4444");
+                      .WithFederatedManagedIdentityCredential("00001111-aaaa-2222-bbbb-3333cccc4444");
 ```
 
-Pass the **Client ID of a user-assigned managed identity**, not its object (principal) ID or Azure resource ID. The identity must be assigned to the workload and belong to the same tenant as the registration. Entra's managed-identity federation scenario supports user-assigned identities only; a system-assigned identity is not a supported replacement.
-
-`WithFicMsi` configures Microsoft.Identity.Web; it does **not** create the managed identity, assign it to the workload, or add a federated credential to the registration. Configure that trust first, using the identity's **object (principal) ID** as the subject, the tenant's v2 issuer, and the token-exchange audience for the cloud. See [Configure an application to trust a managed identity](https://learn.microsoft.com/entra/workload-id/workload-identity-federation-config-app-trust-managed-identity).
-
+Add a federated credential to the registration with the tenant's v2.0 issuer (`https://login.microsoftonline.com/<tenant-id>/v2.0` in the Azure public cloud), the identity's **principal (object) ID** as the subject, and `api://AzureADTokenExchange` as the audience. Pass the identity's **client ID**, not its principal ID, to `WithFederatedManagedIdentityCredential`. See [Configure an application to trust a managed identity](https://learn.microsoft.com/entra/workload-id/workload-identity-federation-config-app-trust-managed-identity).
 Federation authenticates as the app registration using a managed identity assertion. It is different from acquiring a token directly as the managed identity. It also does not enable mTLS proof-of-possession: that requires downstream API `ProtocolScheme = "MTLS_POP"` and the transport/certificate support described in Microsoft's [bound-credentials guidance](https://github.com/AzureAD/microsoft-identity-web/tree/master/.github/skills/boundcredentials).
 
 ### Certificate from Azure Key Vault

@@ -61,6 +61,51 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Git could not be started. Install Git and ensure it is on PATH..
+        /// </summary>
+        internal static string GitUnavailable {
+            get {
+                return ResourceManager.GetString("GitUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled..
+        /// </summary>
+        internal static string GitAuthenticationFailed {
+            get {
+                return ResourceManager.GetString("GitAuthenticationFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Git repository could not be accessed. Check its address, network connectivity, and your access permissions..
+        /// </summary>
+        internal static string GitRepositoryUnavailable {
+            get {
+                return ResourceManager.GetString("GitRepositoryUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Git command failed. Check the repository and selected reference..
+        /// </summary>
+        internal static string GitCommandFailed {
+            get {
+                return ResourceManager.GetString("GitCommandFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Git operation timed out after two minutes..
+        /// </summary>
+        internal static string GitTimedOut {
+            get {
+                return ResourceManager.GetString("GitTimedOut", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Already connected to AppHost backchannel..
         /// </summary>
         internal static string AlreadyConnectedToBackchannel {

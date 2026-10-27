@@ -260,7 +260,7 @@ public class DotNetTemplateFactoryTests
         var factory = CreateTemplateFactory(features);
 
         // Act
-        var templates = (await factory.GetTemplatesAsync()).ToList();
+        var templates = (await factory.GetTemplatesAsync(null)).ToList();
 
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
@@ -279,7 +279,7 @@ public class DotNetTemplateFactoryTests
         var factory = CreateTemplateFactory(features);
 
         // Act
-        var templates = (await factory.GetTemplatesAsync()).ToList();
+        var templates = (await factory.GetTemplatesAsync(null)).ToList();
 
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
@@ -298,7 +298,7 @@ public class DotNetTemplateFactoryTests
         var factory = CreateTemplateFactory(features);
 
         // Act
-        var templates = (await factory.GetTemplatesAsync()).ToList();
+        var templates = (await factory.GetTemplatesAsync(null)).ToList();
 
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
@@ -333,7 +333,7 @@ public class DotNetTemplateFactoryTests
         var factory = CreateTemplateFactory(features, sdkInstaller: sdkInstaller);
 
         // Act
-        var templates = await factory.GetTemplatesAsync();
+        var templates = await factory.GetTemplatesAsync(null);
 
         // Assert
         Assert.Empty(templates);

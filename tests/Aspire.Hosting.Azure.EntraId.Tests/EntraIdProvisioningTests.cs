@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE001 // Azure environment resources are experimental.
-#pragma warning disable ASPIREAZURE003 // Tenant-scoped resource annotations are experimental.
+#pragma warning disable ASPIREAZURE003 // Tenant-scoped resource and managed identity annotations are experimental.
 #pragma warning disable ASPIREPIPELINES001 // Verifies provisioning annotations on existing resources.
 #pragma warning disable ASPIREPIPELINES003 // Exercises the deployment pipeline for existing registrations.
 
@@ -83,6 +83,317 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         var entra = builder.AddEntraIdApplication("entra-web");
 
         Assert.DoesNotContain("owners", entra.Resource.GetBicepTemplateString());
+    }
+
+    [Fact]
+    public async Task WithFederatedManagedIdentityCredential_Identity_GeneratesFederatedCredential()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var identity = builder.AddAzureUserAssignedIdentity("web-identity");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .PublishWithFederatedManagedIdentityCredential(identity);
+
+        await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
+    }
+
+    [Fact]
+    public async Task WithFederatedManagedIdentityCredential_ConsumerIdentity_GeneratesCredentialPerConsumer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var webIdentity = builder.AddAzureUserAssignedIdentity("web-identity");
+        var apiIdentity = builder.AddAzureUserAssignedIdentity("api-identity");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .PublishWithFederatedManagedIdentityCredential();
+        builder.AddResource(new ProjectResource("web")).WithAzureUserAssignedIdentity(webIdentity).WithReference(entra);
+        builder.AddResource(new ProjectResource("api")).WithAzureUserAssignedIdentity(apiIdentity).WithReference(entra);
+
+        await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
+    }
+
+    [Fact]
+    public async Task WithFederatedManagedIdentityCredential_ConsumerIdentity_EmitsClientIdOutputInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var identity = builder.AddAzureUserAssignedIdentity("web-identity");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .PublishWithFederatedManagedIdentityCredential();
+        var web = builder.AddResource(new ProjectResource("web")).WithAzureUserAssignedIdentity(identity).WithReference(entra);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            web.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
+
+        Assert.Equal("{web-identity.outputs.clientId}", env["AzureAd__ClientCredentials__0__ManagedIdentityClientId"]);
+        Assert.Equal("SignedAssertionFromManagedIdentity", env["AzureAd__ClientCredentials__0__SourceType"]);
+    }
+
+    [Fact]
+    public void ValidateManagedIdentities_RejectsResourceWithoutIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var identity = builder.AddAzureUserAssignedIdentity("web-identity");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .PublishWithFederatedManagedIdentityCredential(identity);
+        builder.AddResource(new ProjectResource("web")).WithReference(entra);
+
+        var exception = Assert.Throws<InvalidOperationException>(entra.Resource.ValidateManagedIdentities);
+        Assert.Contains("no user-assigned managed identity", exception.Message);
+    }
+
+    [Fact]
+    public async Task ValidateManagedIdentities_RejectsResourceUsingAnotherIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var trusted = builder.AddAzureUserAssignedIdentity("trusted-identity");
+        var other = builder.AddAzureUserAssignedIdentity("other-identity");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .PublishWithFederatedManagedIdentityCredential(trusted);
+        var web = builder.AddResource(new ProjectResource("web")).WithAzureUserAssignedIdentity(other).WithReference(entra);
+
+        Assert.Contains("WithAzureUserAssignedIdentity", Assert.Throws<InvalidOperationException>(entra.Resource.ValidateManagedIdentities).Message);
+        // The identity that was passed in is used as the value without looking the consumer up.
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            web.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
+        Assert.Equal("{trusted-identity.outputs.clientId}", env["AzureAd__ClientCredentials__0__ManagedIdentityClientId"]);
+    }
+
+    [Fact]
+    public async Task PublishWithFederatedManagedIdentityCredential_EnvironmentCallbackRunBeforeIdentityExists_StillResolvesIt()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .PublishWithFederatedManagedIdentityCredential();
+        var web = builder.AddResource(new ProjectResource("web")).WithReference(entra);
+
+        // The Azure resource preparer runs the environment callbacks to discover dependencies before it attaches
+        // identities, and a callback's result is cached, so the value must not need the identity at that point.
+        var dependencies = await web.Resource.GetResourceDependenciesAsync(builder.ExecutionContext, ResourceDependencyDiscoveryMode.DirectOnly);
+        Assert.Contains(entra.Resource, dependencies);
+
+        var identity = builder.AddAzureUserAssignedIdentity("web-identity");
+        web.WithAnnotation(new AppIdentityAnnotation(identity.Resource));
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            web.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
+        Assert.Equal("{web-identity.outputs.clientId}", env["AzureAd__ClientCredentials__0__ManagedIdentityClientId"]);
+    }
+    [Fact]
+    public async Task BeforeStart_ComputeEnvironmentWithIdentities_TrustsTheIdentityTheAzurePreparerCreated()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .PublishWithFederatedManagedIdentityCredential();
+        builder.AddContainer("web", "image").WithReference(entra);
+
+        using var app = builder.Build();
+        // Pipeline resolution reads the template before the Azure resource preparer attaches the identities.
+        Assert.DoesNotContain("web_identity_principalId", entra.Resource.GetBicepTemplateString());
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var identity = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>());
+        Assert.Equal("web-identity", identity.Name);
+        Assert.Same(identity, Assert.Single(entra.Resource.GetFederatedIdentities()));
+        Assert.Contains("web_identity_principalId", entra.Resource.GetBicepTemplateString());
+    }
+
+    [Fact]
+    public async Task BeforeStart_ComputeEnvironmentWithoutIdentities_FailsWithTheResourceName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .PublishWithFederatedManagedIdentityCredential();
+        builder.AddContainer("web", "image").WithReference(entra);
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() => ExecuteBeforeStartHooksAsync(app, default));
+        Assert.Contains("Resource 'web'", exception.ToString());
+        Assert.Contains("no user-assigned managed identity", exception.ToString());
+    }
+    [Fact]
+    public void PublishWithFederatedManagedIdentityCredential_Identity_DoesNothingWhenRunning()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var identity = builder.AddAzureUserAssignedIdentity("web-identity");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .PublishWithFederatedManagedIdentityCredential(identity);
+
+        // Managed identities exist only in Azure, and when running the identity is not part of the model. A federated
+        // credential would make the registration's Bicep reference an identity that is never provisioned.
+        Assert.Empty(entra.Resource.ClientCredentials);
+        var bicep = entra.Resource.GetBicepTemplateString();
+        Assert.DoesNotContain("federatedIdentityCredentials", bicep);
+        Assert.DoesNotContain("principalId", bicep);
+    }
+
+    [Fact]
+    public void WithCredential_ConsumerIdentityCredential_GeneratesNoTrustWhenRunning()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithCredential(new EntraIdFederatedIdentityCredential(ClientId));
+        var web = builder.AddResource(new ProjectResource("web")).WithReference(entra);
+
+        // A raw credential cannot name an identity resource, so the registration's Bicep cannot reference an identity
+        // that is not provisioned when running.
+        var bicep = entra.Resource.GetBicepTemplateString();
+        Assert.DoesNotContain("federatedIdentityCredentials", bicep);
+        Assert.DoesNotContain("principalId", bicep);
+        Assert.Empty(entra.Resource.GetFederatedIdentities());
+    }
+
+    [Fact]
+    public void PublishWithFederatedManagedIdentityCredential_Identity_AddsTheCredentialWhenPublishing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var identity = builder.AddAzureUserAssignedIdentity("web-identity");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .PublishWithFederatedManagedIdentityCredential(identity);
+        var web = builder.AddResource(new ProjectResource("web"));
+
+        var credential = Assert.Single(entra.Resource.ClientCredentials);
+        var envVars = new Dictionary<string, object>();
+        Assert.True(credential.EmitEnvironmentVariables(envVars, "AzureAd__ClientCredentials__0", "__", entra.Resource, web.Resource, builder.ExecutionContext));
+        Assert.NotEmpty(envVars);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(64)]
+    public void FederatedCredentialName_IsPrefixedSoItFitsGraphsLengthLimits(int identityNameLength)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var identityName = new string('i', identityNameLength);
+        var identity = builder.AddAzureUserAssignedIdentity(identityName);
+        var entra = builder.AddEntraIdApplication(new string('e', 64))
+            .PublishWithFederatedManagedIdentityCredential(identity);
+
+        // Microsoft Graph requires a federated credential's name to be 3-120 characters. Prefixing the registration's name
+        // gives 129 characters for two valid 64-character names, and an unprefixed one- or two-character identity name is too short.
+        var credentialName = $"aspire-{identityName}";
+        Assert.InRange(credentialName.Length, 3, 120);
+        var bicep = entra.Resource.GetBicepTemplateString();
+        Assert.Contains($"/{credentialName}'", bicep);
+        Assert.DoesNotContain($"{new string('e', 64)}-{identityName}", bicep);
+    }
+
+    [Theory]
+    [InlineData("https://login.microsoftonline.com/", "https://login.microsoftonline.com")]
+    [InlineData("https://LOGIN.MICROSOFTONLINE.COM/", "https://login.microsoftonline.com")]
+    [InlineData("https://login.microsoftonline.com:443/", "https://login.microsoftonline.com")]
+    [InlineData("https://Login.MicrosoftOnline.US:443", "https://login.microsoftonline.us")]
+    [InlineData("https://login.contoso.example:8443/", "https://login.contoso.example:8443")]
+    public void GetIssuerPrefix_NormalizesTheHostAndDropsTheDefaultPort(string instance, string expected)
+    {
+        Assert.Equal(expected, EntraIdFederation.GetIssuerPrefix(instance));
+    }
+
+    [Fact]
+    public void FederatedCredentialIssuer_UsesTheNormalizedInstance()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var identity = builder.AddAzureUserAssignedIdentity("web-identity");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithInstance("https://LOGIN.MICROSOFTONLINE.COM:443/")
+            .PublishWithFederatedManagedIdentityCredential(identity);
+
+        // The issuer must equal the token's iss claim exactly.
+        Assert.Contains("issuer: 'https://login.microsoftonline.com/${tenant().tenantId}/v2.0'", entra.Resource.GetBicepTemplateString());
+    }
+
+    [Fact]
+    public void FederatedCredentialPrincipalIdParameter_DoesNotCollideWithOtherParameters()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var redirectUris = builder.AddParameter("web-identity-principalId");
+        var webIdentity = builder.AddAzureUserAssignedIdentity("web-identity");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithRedirectUris(redirectUris)
+            .PublishWithFederatedManagedIdentityCredential(webIdentity);
+
+        var bicep = entra.Resource.GetBicepTemplateString();
+
+        // The redirect URI parameter keeps its value, and the identity gets its own parameter.
+        Assert.Same(redirectUris.Resource, entra.Resource.Parameters["web_identity_principalId"]);
+        Assert.Same(webIdentity.Resource, Assert.IsType<BicepOutputReference>(entra.Resource.Parameters["web_identity_principalId_2"]).Resource);
+        Assert.Contains("subject: web_identity_principalId_2", bicep);
+
+        // Generating the template again must give the same names.
+        Assert.Equal(bicep, entra.Resource.GetBicepTemplateString());
+    }
+
+    [Fact]
+    public void FederatedCredentialPrincipalIdParameter_DoesNotCollideWithParametersThatDifferOnlyInCasing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        // Bicep rejects parameters that differ only in casing (BCP353).
+        var redirectUris = builder.AddParameter("WEB-identity-principalId");
+        var webIdentity = builder.AddAzureUserAssignedIdentity("web-identity");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithRedirectUris(redirectUris)
+            .PublishWithFederatedManagedIdentityCredential(webIdentity);
+
+        var bicep = entra.Resource.GetBicepTemplateString();
+
+        Assert.Same(redirectUris.Resource, entra.Resource.Parameters["WEB_identity_principalId"]);
+        Assert.Same(webIdentity.Resource, Assert.IsType<BicepOutputReference>(entra.Resource.Parameters["web_identity_principalId_2"]).Resource);
+        Assert.Contains("subject: web_identity_principalId_2", bicep);
+    }
+
+    [Fact]
+    public void FederatedCredentialResourceIdentifier_DoesNotCollideWithParameters()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        // Parameters and resources share one namespace, and this parameter normalizes to the credential's resource identifier.
+        var redirectUris = builder.AddParameter("federatedCredential-web-identity");
+        var webIdentity = builder.AddAzureUserAssignedIdentity("web-identity");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithRedirectUris(redirectUris)
+            .PublishWithFederatedManagedIdentityCredential(webIdentity);
+
+        var bicep = entra.Resource.GetBicepTemplateString();
+
+        Assert.Contains("param federatedCredential_web_identity string", bicep);
+        Assert.Contains("resource federatedCredential_web_identity_2 ", bicep);
+    }
+
+    [Fact]
+    public void ValidateManagedIdentities_IgnoresResourcesExcludedFromTheManifest()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var identity = builder.AddAzureUserAssignedIdentity("web-identity");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .PublishWithFederatedManagedIdentityCredential();
+        var published = builder.AddResource(new ProjectResource("web")).WithAzureUserAssignedIdentity(identity).WithReference(entra);
+        builder.AddResource(new ProjectResource("local-only")).ExcludeFromManifest().WithReference(entra);
+
+        // The excluded resource is not deployed, so the Azure resource preparer never gives it an identity.
+        entra.Resource.ValidateManagedIdentities();
+        Assert.Same(identity.Resource, Assert.Single(entra.Resource.GetFederatedIdentities()));
+        Assert.NotNull(published.Resource);
+    }
+    [Theory]
+    [InlineData("https://login.microsoftonline.com/", "api://AzureADTokenExchange")]
+    [InlineData("https://login.microsoftonline.us/", "api://AzureADTokenExchangeUSGov")]
+    [InlineData("https://login.partner.microsoftonline.cn/", "api://AzureADTokenExchangeChina")]
+    [InlineData("https://login.chinacloudapi.cn/", "api://AzureADTokenExchangeChina")]
+    [InlineData("https://LOGIN.CHINACLOUDAPI.CN:443/", "api://AzureADTokenExchangeChina")]
+    public void GetTokenExchangeAudience_MapsSupportedClouds(string instance, string expected)
+    {
+        Assert.Equal(expected, EntraIdFederation.GetTokenExchangeAudience(instance));
+    }
+
+    [Fact]
+    public void WithFederatedManagedIdentityCredential_Identity_RejectsUnsupportedCloud()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var identity = builder.AddAzureUserAssignedIdentity("web-identity");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .PublishWithFederatedManagedIdentityCredential(identity);
+        entra.Resource.Instance = "https://login.contoso.example/";
+
+        var exception = Assert.Throws<InvalidOperationException>(entra.Resource.GetBicepTemplateString);
+        Assert.Contains("no known managed identity token exchange audience", exception.Message);
     }
 
     [Fact]
@@ -287,6 +598,36 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
 
         await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "main.bicep")), "bicep")
             .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "entra-web", "entra-web.bicep")), "bicep");
+    }
+
+    [Fact]
+    public async Task Publish_FederatedManagedIdentityCredential_PublishesConsumerIdentityClientId()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper, workspace.Path);
+        builder.AddAzureContainerAppEnvironment("env");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .PublishWithFederatedManagedIdentityCredential();
+        builder.AddContainer("web", "image")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .WithReference(entra);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var environment = model.Resources.OfType<AzureEnvironmentResource>().Single();
+        await using var step = await new TestPipelineActivityReporter(outputHelper).CreateStepAsync("Publishing federated credential");
+        var context = new AzurePublishingContext(
+            workspace.Path,
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>().Value,
+            app.Services,
+            NullLogger<AzurePublishingContext>.Instance,
+            step);
+
+        await context.WriteModelAsync(model, environment);
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "web", "web.bicep")), "bicep");
     }
 
     [Fact]
@@ -800,7 +1141,8 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
 
         Assert.Single(builder.Resources.OfType<AzureEnvironmentResource>());
         var created = Assert.Single(builder.Resources.OfType<EntraIdApplicationResource>(), resource => resource.Name == "created");
-        Assert.Single(created.Annotations.OfType<PipelineStepAnnotation>());
+        // The provisioning step and the managed identity validation step.
+        Assert.Equal(2, created.Annotations.OfType<PipelineStepAnnotation>().Count());
         Assert.NotNull(created.ProvisioningTaskCompletionSource);
     }
 

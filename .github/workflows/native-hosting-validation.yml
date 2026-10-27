@@ -1,0 +1,127 @@
+# Native.Core.Tests builds AotSmoke but does not execute it. This independent lane
+# executes the published binaries and generated SDK against real Docker, DCP and Chromium.
+name: Native hosting validation
+
+on:
+  pull_request:
+    paths:
+      # Broad source/build coverage intentionally includes transitive MSBuild dependencies,
+      # linked files and runtime-only CLI/Dashboard/codegen inputs without a second project graph.
+      - 'src/**'
+      - 'playground/NativeIntegrations/**'
+      - 'eng/**'
+      - 'tests/Aspire.Hosting.Native.Core.Tests/**'
+      - 'tests/PolyglotAppHosts/Aspire.Hosting/TypeScript/package.json'
+      - 'tests/PolyglotAppHosts/Aspire.Hosting.Docker/TypeScript/apphost.mts'
+      - 'tests/Directory.Build.*'
+      - 'tests/Shared/**'
+      - 'Directory.*'
+      - '*.props'
+      - '*.targets'
+      - '.editorconfig'
+      - '.config/**'
+      - 'global.json'
+      - 'NuGet.config'
+      - 'Aspire.slnx'
+      - 'restore.sh'
+      - 'build.sh'
+      - '.github/workflows/native-hosting-validation.yml'
+  push:
+    branches: [main, 'release/**']
+    paths:
+      - 'src/**'
+      - 'playground/NativeIntegrations/**'
+      - 'eng/**'
+      - 'tests/Aspire.Hosting.Native.Core.Tests/**'
+      - 'tests/PolyglotAppHosts/Aspire.Hosting/TypeScript/package.json'
+      - 'tests/PolyglotAppHosts/Aspire.Hosting.Docker/TypeScript/apphost.mts'
+      - 'tests/Directory.Build.*'
+      - 'tests/Shared/**'
+      - 'Directory.*'
+      - '*.props'
+      - '*.targets'
+      - '.editorconfig'
+      - '.config/**'
+      - 'global.json'
+      - 'NuGet.config'
+      - 'Aspire.slnx'
+      - 'restore.sh'
+      - 'build.sh'
+      - '.github/workflows/native-hosting-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-hosting-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows_rpc:
+    name: Windows v2 CLI and named-pipe RPC
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Execute Windows product and transport tests
+        shell: pwsh
+        run: |
+          ./restore.cmd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:DOTNET_ROOT = "$env:GITHUB_WORKSPACE/.dotnet"
+          $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
+          $env:MSBUILDTERMINALLOGGER = 'false'
+          dotnet build src/Aspire.Cli/Aspire.Cli.csproj -c Debug
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet publish src/Aspire.Hosting.Native.Server/Aspire.Hosting.Native.Server.csproj -c Release -r win-x64 -o artifacts/native-hosting/windows/server
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $cli = dotnet msbuild src/Aspire.Cli/Aspire.Cli.csproj -nologo -getProperty:TargetPath
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:ASPIRE_NATIVE_PRODUCT_CLI = Join-Path (Split-Path $cli) 'aspire.exe'
+          $env:ASPIRE_NATIVE_CSHARP_TEST_SERVER = "$env:GITHUB_WORKSPACE/artifacts/native-hosting/windows/server/Aspire.Hosting.Native.Server.exe"
+          dotnet test --project tests/Aspire.Hosting.Native.Core.Tests/Aspire.Hosting.Native.Core.Tests.csproj --no-launch-profile -- --filter-class '*.NativeNamedPipeTests' --filter-class '*.NativeProductCliTests' --filter-class '*.NativeCliProtocolTests' --filter-class '*.NativeAuxiliaryBackchannelTests' --filter-class '*.NativeSocketIsolationTests' --filter-class '*.SocketConnectionListenerTests' --filter-class '*.DcpEnvironmentTests' --filter-class '*.NativeServerOptionsTests' --filter-not-trait 'quarantined=true' --filter-not-trait 'outerloop=true' --report-trx --report-trx-filename native-windows.trx --results-directory artifacts/TestResults/native-windows
+          exit $LASTEXITCODE
+      - name: Upload Windows test evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-hosting-windows
+          path: artifacts/TestResults/
+          if-no-files-found: warn
+          retention-days: 7
+
+  native_hosting:
+    name: Native AOT, generated SDK, Docker, DCP, CLI and Dashboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Execute native hosting validation
+        run: bash eng/scripts/test-native-hosting.sh linux-x64
+      - name: Upload native hosting evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-hosting-linux-x64
+          path: |
+            artifacts/native-hosting/ci/logs/
+            artifacts/native-hosting/native-dashboard.png
+            artifacts/native-hosting/ci/cli-apphost/*proof.json
+            artifacts/native-hosting/ci/compose-apphosts/**/proof.json
+            artifacts/native-hosting/ci/compose-apphosts/**/*.log
+            artifacts/native-hosting/ci/compose-apphosts/**/published/compose.yaml
+          if-no-files-found: warn
+          retention-days: 7

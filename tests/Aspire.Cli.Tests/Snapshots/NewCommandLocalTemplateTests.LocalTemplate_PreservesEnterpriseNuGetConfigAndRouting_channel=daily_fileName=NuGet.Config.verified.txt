@@ -1,0 +1,36 @@
+﻿{
+  aspire.config.json: { "sdk": { "version": "17.0.0" } },
+  NuGet.Config:
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="template-nuget" value="https://api.nuget.org/v3/index.json" />
+    <!--#if (separateAspireSource) -->
+    <add key="template-aspire" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
+    <!--#endif -->
+    <add key="enterprise" value="https://enterprise.example/v3/index.json" />
+  </packageSources>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="template-nuget">
+      <package pattern="*" />
+    </packageSource>
+    <!--#if (separateAspireSource) -->
+    <packageSource key="template-aspire">
+      <package pattern="Aspire*" />
+    </packageSource>
+    <!--#endif -->
+    <packageSource key="enterprise">
+      <package pattern="Aspire.Hosting.Enterprise.Deployment" />
+      <package pattern="Aspire.Provisioning.Enterprise.Deployment" />
+      <package pattern="Aspire.Hosting.Enterprise.Defaults" />
+      <package pattern="Azure.Provisioning.Enterprise.Defaults" />
+      <package pattern="Aspire.Hosting.Azure.EnterpriseGateway" />
+    </packageSource>
+  </packageSourceMapping>
+  <config>
+    <add key="globalPackagesFolder" value=".enterprise-packages" />
+  </config>
+</configuration>
+}

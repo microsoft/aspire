@@ -160,8 +160,23 @@ public sealed class AzureEntraIdDeploymentTests(ITestOutputHelper output)
 
     private static Task DeployAsync(Hex1bTerminalAutomator auto, SequenceCounter counter)
     {
+        // Graph can reject service-principal creation immediately after creating its backing app
+        // in the same tenant. Retry only this observed consistency failure, preserving other errors.
+        // https://github.com/microsoftgraph/msgraph-bicep-types/issues/275
+        // The deployment error contains: "Authorization_RequestDenied: When using this permission,
+        // the backing application of the service principal being created must in the local tenant".
+        const string command =
+            "( log=$(mktemp) || exit; trap 'rm -f \"$log\"' EXIT; " +
+            "for attempt in 1 2 3; do " +
+            "aspire deploy --clear-cache --non-interactive 2>&1 | tee \"$log\"; status=${PIPESTATUS[0]}; " +
+            "if (( status == 0 )); then exit 0; fi; " +
+            "if (( attempt == 3 )) || ! grep -Fq 'the backing application of the service principal being created must in the' \"$log\"; " +
+            "then exit \"$status\"; fi; " +
+            "echo 'Retrying deployment after Graph could not resolve the newly created backing application in its tenant (30s).'; " +
+            "sleep 30; done )";
+
         // Match this command's exit prompt, not a previous deployment's success banner.
-        return auto.RunCommandAsync("aspire deploy --clear-cache --non-interactive", counter, TimeSpan.FromMinutes(25));
+        return auto.RunCommandAsync(command, counter, TimeSpan.FromMinutes(25));
     }
 
     private static void WriteApplication(string projectDirectory)
@@ -212,12 +227,12 @@ public sealed class AzureEntraIdDeploymentTests(ITestOutputHelper output)
             $"https://graph.microsoft.com/v1.0/applications(uniqueName='{registrationName}')",
             resource =>
             {
-                // The last URI is derived from the consumer's endpoint; its host name is verified below.
+                // Graph can reorder redirect URIs. The endpoint-derived URI's host name is verified below.
                 var registered = resource.GetProperty("web").GetProperty("redirectUris").EnumerateArray()
                     .Select(uri => uri.GetString()).ToArray();
                 return registered.Length == redirectUris.Length + 1
-                    && registered.Take(redirectUris.Length).SequenceEqual(redirectUris)
-                    && registered[^1] is { } derived && derived.StartsWith("https://", StringComparison.Ordinal) && derived.EndsWith(EndpointCallbackPath, StringComparison.Ordinal);
+                    && redirectUris.All(uri => registered.Contains(uri, StringComparer.Ordinal))
+                    && registered.Any(uri => uri is not null && uri.StartsWith("https://", StringComparison.Ordinal) && uri.EndsWith(EndpointCallbackPath, StringComparison.Ordinal));
             },
             cancellationToken);
         Assert.Equal(registrationName, application.GetProperty("displayName").GetString());
@@ -226,7 +241,10 @@ public sealed class AzureEntraIdDeploymentTests(ITestOutputHelper output)
         var clientId = application.GetProperty("appId").GetGuid();
         var principal = await WaitForResourceAsync(client, credential,
             $"https://graph.microsoft.com/v1.0/servicePrincipals(appId='{clientId:D}')",
-            resource => resource.GetProperty("appId").GetGuid() == clientId, cancellationToken);
+            resource => resource.GetProperty("appId").GetGuid() == clientId
+                && resource.GetProperty("tags").EnumerateArray()
+                    .Any(tag => tag.GetString() == "WindowsAzureActiveDirectoryIntegratedApp"),
+            cancellationToken);
 
         using var consumer = await ReadResourceAsync(client, credential,
             $"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.App/containerApps/consumer?api-version=2026-03-02-preview",
@@ -245,7 +263,9 @@ public sealed class AzureEntraIdDeploymentTests(ITestOutputHelper output)
         var hostname = ingress.GetProperty("fqdn").GetString();
         Assert.Equal(UriHostNameType.Dns, Uri.CheckHostName(hostname));
         var registeredUris = application.GetProperty("web").GetProperty("redirectUris").EnumerateArray().Select(uri => uri.GetString()).ToArray();
-        Assert.Equal($"https://{hostname}{EndpointCallbackPath}", registeredUris[^1]);
+        Assert.Equal(
+            redirectUris.Append($"https://{hostname}{EndpointCallbackPath}").Order(StringComparer.Ordinal),
+            registeredUris.Order(StringComparer.Ordinal));
         var url = $"https://{hostname}";
         await DotnetProjectDeploymentHelpers.VerifyResponseAsync(url, $"{tenantId:D}/{clientId:D}", cancellationToken);
         deploymentUrls["Consumer"] = url;
@@ -283,14 +303,11 @@ public sealed class AzureEntraIdDeploymentTests(ITestOutputHelper output)
         var clientId = application.RootElement.GetProperty("appId").GetGuid();
         var objectId = application.RootElement.GetProperty("id").GetGuid();
         var principalUrl = $"https://graph.microsoft.com/v1.0/servicePrincipals(appId='{clientId:D}')";
-        using var principal = await ReadResourceAsync(client, credential, principalUrl, cleanup.Token);
-        // Attempt both deletes even if one fails, rather than relying on application's deletion cascade.
-        var deletePrincipal = principal is null
-            ? Task.CompletedTask
-            : DeleteResourceAsync(client, credential,
-                $"https://graph.microsoft.com/v1.0/servicePrincipals/{principal.RootElement.GetProperty("id").GetGuid():D}", cleanup.Token);
-        await Task.WhenAll(deletePrincipal,
-            DeleteResourceAsync(client, credential, $"https://graph.microsoft.com/v1.0/applications/{objectId:D}", cleanup.Token));
+        // Application deletion cascades to its service principal. Deleting the principal first
+        // can make the cascade fail with DirectoryObjectNotFound while replicas still reference it.
+        // Verify both objects disappear rather than issuing competing deletes.
+        // https://learn.microsoft.com/graph/api/application-delete
+        await DeleteResourceAsync(client, credential, $"https://graph.microsoft.com/v1.0/applications/{objectId:D}", cleanup.Token);
         await Task.WhenAll(
             WaitForDeletionAsync(client, credential, applicationUrl, cleanup.Token),
             WaitForDeletionAsync(client, credential, principalUrl, cleanup.Token));

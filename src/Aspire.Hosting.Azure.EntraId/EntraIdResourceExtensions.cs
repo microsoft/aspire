@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // The managed identity annotation is experimental.
+
 using System.Collections.Immutable;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
@@ -581,12 +583,13 @@ public static class EntraIdResourceExtensions
     }
 
     /// <summary>
-    /// Adds a federated identity credential (FIC) with managed identity to this Entra ID application.
+    /// Configures the app to authenticate as this Entra ID application using a managed identity that you specify by client ID,
+    /// without a client secret or certificate.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
     /// <param name="managedIdentityClientId">
-    /// The client ID of the user-assigned managed identity attached to the consuming workload.
-    /// This is not the identity's object (principal) ID.
+    /// The client ID of the user-assigned managed identity that the consuming app runs as. This is not the identity's
+    /// object (principal) ID or its Azure resource ID.
     /// </param>
     /// <returns>The resource builder for chaining.</returns>
     /// <exception cref="ArgumentException">
@@ -594,24 +597,33 @@ public static class EntraIdResourceExtensions
     /// </exception>
     /// <remarks>
     /// <para>
-    /// This adds an entry to the <c>ClientCredentials</c> array in the Microsoft.Identity.Web
-    /// configuration with <c>SourceType</c> set to <c>"SignedAssertionFromManagedIdentity"</c>.
-    /// It does not create or assign the managed identity, or provision the federated identity credential.
+    /// This only configures the consuming app: it adds a <c>SignedAssertionFromManagedIdentity</c> entry to the
+    /// <c>ClientCredentials</c> array of the Microsoft.Identity.Web configuration. Aspire does not create or assign the
+    /// managed identity, and does not add a federated identity credential to the registration. It applies in run mode
+    /// as well as when publishing.
     /// </para>
     /// <para>
-    /// The registration must already trust a user-assigned managed identity in the same tenant.
-    /// The credential's subject is the identity's object (principal) ID, while this method takes its client ID.
-    /// Microsoft Entra's managed-identity federation scenario does not support system-assigned managed identities.
+    /// Use this method for an existing registration (<c>AddExistingEntraApplication</c>), which Aspire never modifies,
+    /// or for a managed identity that Aspire does not manage. Before the app can get a token, the registration must
+    /// already trust the identity: add a federated identity credential to it whose issuer is the tenant's v2.0 endpoint
+    /// (<c>https://login.microsoftonline.com/{tenant}/v2.0</c> in the Azure public cloud), whose subject is the identity's
+    /// object (principal) ID, and whose audience is the token exchange audience of the cloud
+    /// (<c>api://AzureADTokenExchange</c> in the Azure public cloud). Otherwise, token requests fail with AADSTS700213.
+    /// </para>
+    /// <para>
+    /// For a registration that Aspire creates, use
+    /// <see cref="PublishWithFederatedManagedIdentityCredential(IResourceBuilder{EntraIdApplicationResource})"/>
+    /// instead, which also creates the trust. Only user-assigned managed identities are supported.
     /// See <see href="https://learn.microsoft.com/entra/workload-id/workload-identity-federation-config-app-trust-managed-identity"/>.
     /// </para>
     /// </remarks>
     /// <example>
     /// <code lang="csharp">
     /// var entraWeb = builder.AddExistingEntraApplication("entra-web", tenantId, clientId)
-    ///     .WithFicMsi("00001111-aaaa-2222-bbbb-3333cccc4444");
+    ///     .WithFederatedManagedIdentityCredential("00001111-aaaa-2222-bbbb-3333cccc4444");
     /// </code>
     /// </example>
-    public static IResourceBuilder<EntraIdApplicationResource> WithFicMsi(
+    public static IResourceBuilder<EntraIdApplicationResource> WithFederatedManagedIdentityCredential(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string managedIdentityClientId)
     {
@@ -623,12 +635,204 @@ public static class EntraIdResourceExtensions
             throw new ArgumentException(error, nameof(managedIdentityClientId));
         }
 
+        builder.Resource.ClientCredentials.Add(new EntraIdFederatedIdentityCredential(managedIdentityClientId));
+
+        return builder;
+    }
+
+    /// <summary>
+    /// When published, authenticates this Entra ID application as each referencing resource's own user-assigned managed
+    /// identity, without a client secret or certificate.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// A single call covers every resource that references this application, including resources that reference it after
+    /// this call, and the application trusts each resource's own identity. Use
+    /// <see cref="PublishWithFederatedManagedIdentityCredential{T}(IResourceBuilder{EntraIdApplicationResource}, IResourceBuilder{T})"/>
+    /// to trust a single resource instead. The method adds one credential entry to the application's configuration, and
+    /// Aspire creates one federated identity credential on the registration for each trusted identity.
+    /// </para>
+    /// <para>
+    /// Every resource that references this application with <c>WithReference</c> is given a managed identity when published,
+    /// and the application trusts it. The identity is the one the resource already has, for example from
+    /// <c>WithAzureUserAssignedIdentity</c> or because it references other Azure resources; otherwise the Azure environment
+    /// creates one. For an application that Aspire creates, Aspire adds a federated identity credential to the registration
+    /// for each identity: the issuer is the tenant's v2.0 endpoint, the subject is the identity's object (principal) ID, and
+    /// the audience is the token exchange audience of the application's cloud. The resource receives the identity's client ID
+    /// as <c>ManagedIdentityClientId</c>.
+    /// </para>
+    /// <para>
+    /// This is only for registrations that Aspire creates. For an existing registration (<c>AddExistingEntraApplication</c>),
+    /// which Aspire never modifies, this method throws; use
+    /// <see cref="WithFederatedManagedIdentityCredential(IResourceBuilder{EntraIdApplicationResource}, string)"/> instead.
+    /// </para>
+    /// <para>
+    /// Managed identities exist only in Azure, so the credential is not used when running locally. Add another
+    /// credential, such as a client secret, for local development.
+    /// Supported clouds are Azure public, Azure US Government and Azure China. Only user-assigned managed identities are supported.
+    /// See <see href="https://learn.microsoft.com/entra/workload-id/workload-identity-federation-config-app-trust-managed-identity"/>.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var entra = builder.AddEntraIdApplication("entra-web")
+    ///     .PublishWithFederatedManagedIdentityCredential();
+    ///
+    /// builder.AddProject&lt;Projects.Web&gt;("web")
+    ///     .WithReference(entra);
+    /// </code>
+    /// </example>
+    public static IResourceBuilder<EntraIdApplicationResource> PublishWithFederatedManagedIdentityCredential(
+        this IResourceBuilder<EntraIdApplicationResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ThrowIfExistingApplication(builder);
+
+        // Managed identities exist only in Azure, and the identity may not be part of the model when running, so the trust is
+        // a publish-time concern. Adding it when running would make the registration's Bicep reference an identity that
+        // is never provisioned.
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return builder;
+        }
+
+        builder.Resource.ClientCredentials.Add(new EntraIdFederatedIdentityCredential());
+
+        foreach (var consumer in builder.Resource.Consumers)
+        {
+            EnsureManagedIdentityRequired(consumer);
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// When published, authenticates this Entra ID application as a compute resource's user-assigned managed identity,
+    /// without a client secret or certificate.
+    /// </summary>
+    /// <typeparam name="T">The type of the compute resource.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="computeResource">
+    /// The compute resource to trust. It must reference this application with <c>WithReference</c>.
+    /// Only this resource receives the managed identity credential.
+    /// </param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when <paramref name="computeResource"/> does not reference this application.
+    /// </exception>
+    /// <remarks>
+    /// Only <paramref name="computeResource"/>'s identity is trusted, and only it receives the managed identity credential.
+    /// The resource's identity is resolved after the Azure environment has prepared it, as described in
+    /// <see cref="PublishWithFederatedManagedIdentityCredential(IResourceBuilder{EntraIdApplicationResource})"/>.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var entra = builder.AddEntraIdApplication("entra-web");
+    /// var web = builder.AddProject&lt;Projects.Web&gt;("web")
+    ///     .WithReference(entra);
+    ///
+    /// entra.PublishWithFederatedManagedIdentityCredential(web);
+    /// </code>
+    /// </example>
+    public static IResourceBuilder<EntraIdApplicationResource> PublishWithFederatedManagedIdentityCredential<T>(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<T> computeResource)
+        where T : IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(computeResource);
+        ThrowIfExistingApplication(builder);
+
+        // Managed identities exist only in Azure, and the identity may not be part of the model when running, so the trust is
+        // a publish-time concern. Adding it when running would make the registration's Bicep reference an identity that
+        // is never provisioned.
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return builder;
+        }
+
         builder.Resource.ClientCredentials.Add(new EntraIdFederatedIdentityCredential
         {
-            ManagedIdentityClientId = managedIdentityClientId
+            ComputeTarget = computeResource.Resource
+        });
+        EnsureManagedIdentityRequired(computeResource.Resource);
+
+        return builder;
+    }
+
+    /// <summary>
+    /// When published, authenticates this Entra ID application as a specific user-assigned managed identity,
+    /// without a client secret or certificate.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="identity">
+    /// The user-assigned managed identity to trust. Every resource that references this application must use it,
+    /// for example with <c>WithAzureUserAssignedIdentity</c>.
+    /// </param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <remarks>
+    /// The federated identity credential uses the identity's principal ID as the subject and consumers receive its client ID.
+    /// Throws for an existing registration, which Aspire never modifies.
+    /// The credential is not used when running locally.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var identity = builder.AddAzureUserAssignedIdentity("web-identity");
+    /// var entra = builder.AddEntraIdApplication("entra-web")
+    ///     .PublishWithFederatedManagedIdentityCredential(identity);
+    ///
+    /// builder.AddProject&lt;Projects.Web&gt;("web")
+    ///     .WithAzureUserAssignedIdentity(identity)
+    ///     .WithReference(entra);
+    /// </code>
+    /// </example>
+    public static IResourceBuilder<EntraIdApplicationResource> PublishWithFederatedManagedIdentityCredential(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<AzureUserAssignedIdentityResource> identity)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(identity);
+        ThrowIfExistingApplication(builder);
+
+        // Managed identities exist only in Azure, and the identity may not be part of the model when running, so the trust is
+        // a publish-time concern. Adding it when running would make the registration's Bicep reference an identity that
+        // is never provisioned.
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return builder;
+        }
+
+        builder.Resource.ClientCredentials.Add(new EntraIdFederatedIdentityCredential
+        {
+            ManagedIdentity = identity.Resource
         });
 
         return builder;
+    }
+
+    // Aspire never modifies an existing registration, so it cannot create the federated credential that makes the
+    // registration trust a managed identity. Fail here rather than let the app deploy and then fail to get a token.
+    private static void ThrowIfExistingApplication(IResourceBuilder<EntraIdApplicationResource> builder)
+    {
+        if (builder.Resource.IsExistingApplication)
+        {
+            throw new InvalidOperationException(
+                $"Entra ID application '{builder.Resource.Name}' is an existing registration, and Aspire does not modify existing registrations, " +
+                "so it cannot add the federated credential that makes the registration trust a managed identity. " +
+                "Add that credential to the registration yourself, then call WithFederatedManagedIdentityCredential with the identity's client ID.");
+        }
+    }
+
+    // Referencing the application needs an identity the way referencing an Azure resource needs a role assignment,
+    // so ask the Azure resource preparer to give the resource one even though it has no role assignments.
+    private static void EnsureManagedIdentityRequired(IResource consumer)
+    {
+        if (!consumer.HasAnnotationOfType<ManagedIdentityRequiredAnnotation>())
+        {
+            consumer.Annotations.Add(new ManagedIdentityRequiredAnnotation());
+        }
     }
 
     /// <summary>
@@ -1353,6 +1557,12 @@ public static class EntraIdResourceExtensions
 
         // Create a reference relationship so the dashboard shows the connection
         builder.WithReferenceRelationship(entra);
+        entra.Consumers.Add(builder.Resource);
+
+        if (entra.ClientCredentials.OfType<EntraIdFederatedIdentityCredential>().Any(c => c.UsesConsumerIdentity))
+        {
+            EnsureManagedIdentityRequired(builder.Resource);
+        }
 
         builder.WithEnvironment(context =>
         {
@@ -1395,10 +1605,15 @@ public static class EntraIdResourceExtensions
             }
 
             // Client credentials — each type emits its own env vars
-            for (var i = 0; i < entra.ClientCredentials.Count; i++)
+            // A credential that does not apply to this resource emits nothing and does not take an index, so the array has no gaps.
+            var credentialIndex = 0;
+            foreach (var credential in entra.ClientCredentials)
             {
-                var credPrefix = $"{keyPrefix}ClientCredentials{separator}{i}";
-                entra.ClientCredentials[i].EmitEnvironmentVariables(environmentVariables, credPrefix, separator);
+                var credPrefix = $"{keyPrefix}ClientCredentials{separator}{credentialIndex}";
+                if (credential.EmitEnvironmentVariables(environmentVariables, credPrefix, separator, entra, builder.Resource, context.ExecutionContext))
+                {
+                    credentialIndex++;
+                }
             }
 
             // Client capabilities (e.g., "cp1" for CAE)

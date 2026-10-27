@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS telemetry_metric_points (
     point_type INTEGER NOT NULL,
     start_time_unix_nano INTEGER NOT NULL,
     end_time_unix_nano INTEGER NOT NULL,
+    end_time_bucket INTEGER NOT NULL,
     repeat_count INTEGER NOT NULL,
     integer_value INTEGER NULL,
     double_value REAL NULL,
@@ -84,10 +85,9 @@ CREATE INDEX IF NOT EXISTS ix_telemetry_metric_dimensions_hash
     ON telemetry_metric_dimensions(instrument_id, attribute_hash);
 CREATE INDEX IF NOT EXISTS ix_telemetry_metric_points_dimension_order
     ON telemetry_metric_points(dimension_id, point_id);
+-- A persisted time bucket avoids re-keying repeats until their exact end time crosses a bucket boundary.
 CREATE INDEX IF NOT EXISTS ix_telemetry_metric_points_time
-    ON telemetry_metric_points(dimension_id, start_time_unix_nano, end_time_unix_nano);
-CREATE INDEX IF NOT EXISTS ix_telemetry_metric_points_end_time
-    ON telemetry_metric_points(dimension_id, end_time_unix_nano, start_time_unix_nano, point_id);
+    ON telemetry_metric_points(dimension_id, end_time_bucket, start_time_unix_nano, point_id);
 CREATE UNIQUE INDEX IF NOT EXISTS ix_telemetry_metric_points_histogram_identity
     ON telemetry_metric_points(dimension_id, start_time_unix_nano, histogram_aggregation_id)
     WHERE point_type = 3;

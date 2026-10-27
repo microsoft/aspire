@@ -2218,6 +2218,7 @@ function getApprovedFallbackPackageSources() {
     { key: 'dotnet-eng', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json' },
     { key: 'dotnet9', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json' },
     { key: 'dotnet10', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet10/nuget/v3/index.json' },
+    { key: 'dotnet11', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet11/nuget/v3/index.json' },
     { key: 'dotnet-libraries', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-libraries/nuget/v3/index.json' },
   ];
 }
