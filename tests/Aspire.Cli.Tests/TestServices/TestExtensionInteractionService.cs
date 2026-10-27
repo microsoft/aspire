@@ -209,6 +209,12 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
 
     public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
     {
+        var (wasProvided, value, _) = PromptBinding.Resolve(binding);
+        if (wasProvided)
+        {
+            return Task.FromResult(value);
+        }
+
         var defaultValue = binding?.DefaultValue ?? false;
         return Task.FromResult(ConfirmCallback?.Invoke(promptText, defaultValue) ?? true);
     }

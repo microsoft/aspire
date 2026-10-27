@@ -62,7 +62,13 @@
     padding-inline-start: 0;
 }
 
+::deep tr.resource-row-hidden:not(.selected-row):not(:hover),
+::deep tr.resource-row-hidden:not(.selected-row):not(:hover) > td {
+    background-color: var(--resource-hidden-background);
+}
+
 ::deep .resources-summary-layout {
+    --resource-hidden-background: color-mix(in srgb, var(--colorNeutralBackground3) 50%, var(--aspire-page-background));
     display: grid;
     grid-template-rows: 1fr auto;
     height: 100%;
@@ -251,9 +257,32 @@
     stroke-linejoin: round;
 }
 
+::deep .resource-group-hidden .resource-name {
+    fill: var(--colorNeutralForeground3);
+}
+
 ::deep .resource-node {
     stroke: var(--aspire-page-background);
     fill: var(--aspire-page-background);
+}
+
+::deep .resource-group-hidden .resource-node {
+    fill: var(--resource-hidden-background);
+}
+
+::deep .resource-hidden-icon {
+    fill: var(--colorNeutralForeground3);
+}
+
+::deep .resource-name-hitbox,
+::deep .resource-hidden-icon-hitbox {
+    fill: transparent;
+    stroke: none;
+    pointer-events: all;
+}
+
+::deep .resource-hidden-icon > path {
+    pointer-events: none;
 }
 
 ::deep .resource-group-hover .resource-node {

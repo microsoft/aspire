@@ -28,6 +28,7 @@ var adminLb = aks.AddLoadBalancer("admin", adminSubnet);
 // it can be supplied per-environment (`aspire deploy -p acme-email=...`) without burning
 // it into source.
 var acmeEmail = builder.AddParameter("acme-email");
+var acmeServer = builder.AddParameter("acme-server", "https://acme-v02.api.letsencrypt.org/directory");
 
 // Install cert-manager via the typed API. This is the only difference from AksDemo:
 // AksDemo wires the chart in by hand and pairs it with a manual cluster-issuer annotation,
@@ -39,7 +40,7 @@ var certManager = aks.AddCertManager("cert-manager");
 // the same hostname being validated, which works for any AGC-assigned FQDN because port
 // 80 is publicly reachable.
 var letsEncrypt = certManager.AddIssuer("letsencrypt-prod")
-                             .WithLetsEncryptProduction(acmeEmail)
+                             .WithAcmeServer(acmeServer, acmeEmail)
                              .WithHttp01Solver();
 
 var api = builder.AddProject<Projects.CertManagerDemo_ApiService>("api")

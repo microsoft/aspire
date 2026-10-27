@@ -87,6 +87,151 @@
         <target state="translated">Tiempo de ejecución del contenedor</target>
         <note />
       </trans-unit>
+      <trans-unit id="ContainerRuntimeActiveSuffix">
+        <source> ← active</source>
+        <target state="new"> ← active</target>
+        <note>Suffix marking the automatically selected runtime. Preserve the leading space and arrow.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeCheckFailedMessage">
+        <source>Failed to check container runtime</source>
+        <target state="new">Failed to check container runtime</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeClientVersionWarningFormat">
+        <source>{0} client version {1} is below minimum required {2}</source>
+        <target state="new">{0} client version {1} is below minimum required {2}</target>
+        <note>{0} is the runtime name, {1} the detected version, {2} the minimum version.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeExplicitSelectionSuffix">
+        <source> ← explicitly selected</source>
+        <target state="new"> ← explicitly selected</target>
+        <note>Suffix marking a configured runtime. Preserve the leading space and arrow.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeInstallDockerFix">
+        <source>Install Docker Desktop: https://www.docker.com/products/docker-desktop</source>
+        <target state="new">Install Docker Desktop: https://www.docker.com/products/docker-desktop</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeInstallFix">
+        <source>Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation</source>
+        <target state="new">Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeInstallGenericFixFormat">
+        <source>Install {0}</source>
+        <target state="new">Install {0}</target>
+        <note>{0} is the runtime name.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeInstallPodmanFix">
+        <source>Install Podman: https://podman.io/getting-started/installation</source>
+        <target state="new">Install Podman: https://podman.io/getting-started/installation</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeInstallWindowsFix">
+        <source>Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation or WSLc: https://aka.ms/aspire/containers</source>
+        <target state="new">Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation or WSLc: https://aka.ms/aspire/containers</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeInstallWslcFix">
+        <source>Install WSLc on Windows: https://aka.ms/aspire/containers</source>
+        <target state="new">Install WSLc on Windows: https://aka.ms/aspire/containers</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeNotDetectedMessage">
+        <source>No container runtime detected</source>
+        <target state="new">No container runtime detected</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeNotFoundMessageFormat">
+        <source>{0}: not found (configured via ASPIRE_CONTAINER_RUNTIME={1}){2}</source>
+        <target state="new">{0}: not found (configured via ASPIRE_CONTAINER_RUNTIME={1}){2}</target>
+        <note>{0} is the runtime name, {1} the configuration value, {2} the selection suffix. Do not translate ASPIRE_CONTAINER_RUNTIME.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeRunningMessageFormat">
+        <source>{0}{1}: running{2}</source>
+        <target state="new">{0}{1}: running{2}</target>
+        <note>{0} is the runtime name, {1} the optional version suffix, {2} the selection suffix.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeSelectAlternativeFix">
+        <source>Set ASPIRE_CONTAINER_RUNTIME to docker or podman.</source>
+        <target state="new">Set ASPIRE_CONTAINER_RUNTIME to docker or podman.</target>
+        <note>ASPIRE_CONTAINER_RUNTIME, docker and podman are configuration identifiers. Do not translate them.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeServerVersionWarningFormat">
+        <source>{0} server version {1} is below minimum required {2}</source>
+        <target state="new">{0} server version {1} is below minimum required {2}</target>
+        <note>{0} is the runtime name, {1} the detected version, {2} the minimum version.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeStartDaemonFixFormat">
+        <source>Start {0} daemon</source>
+        <target state="new">Start {0} daemon</target>
+        <note>{0} is the runtime name.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeStartDockerDesktopFix">
+        <source>Start Docker Desktop</source>
+        <target state="new">Start Docker Desktop</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeStartPodmanFix">
+        <source>Start Podman service: sudo systemctl start podman</source>
+        <target state="new">Start Podman service: sudo systemctl start podman</target>
+        <note>Do not translate the command sudo systemctl start podman.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeStartWslcFix">
+        <source>Ensure the WSLc session manager is running. Check its status with: wslc info --format json</source>
+        <target state="new">Ensure the WSLc session manager is running. Check its status with: wslc info --format json</target>
+        <note>Do not translate the command wslc info --format json.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeStoppedMessageFormat">
+        <source>{0}: installed but not running{1}</source>
+        <target state="new">{0}: installed but not running{1}</target>
+        <note>{0} is the runtime name, {1} the selection suffix.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeUpgradeFixFormat">
+        <source>Upgrade {0} to version {1} or later from: {2}</source>
+        <target state="new">Upgrade {0} to version {1} or later from: {2}</target>
+        <note>{0} is the runtime name, {1} the minimum version, {2} the installation URL.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeUpgradeGenericFixFormat">
+        <source>Upgrade {0} to a newer version</source>
+        <target state="new">Upgrade {0} to a newer version</target>
+        <note>{0} is the runtime name.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeUpgradeWslcFixFormat">
+        <source>Upgrade WSLc to version {0} or later. See: https://aka.ms/aspire/containers</source>
+        <target state="new">Upgrade WSLc to version {0} or later. See: https://aka.ms/aspire/containers</target>
+        <note>{0} is the minimum version.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeVersionSuffixFormat">
+        <source> v{0}</source>
+        <target state="new"> v{0}</target>
+        <note>{0} is the runtime version. Preserve the leading space.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeVersionUnavailableMessageFormat">
+        <source>{0}: required version metadata could not be validated</source>
+        <target state="new">{0}: required version metadata could not be validated</target>
+        <note>{0} is the runtime name.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeWindowsModeDetails">
+        <source>Aspire requires Linux containers. Windows containers are not supported.</source>
+        <target state="new">Aspire requires Linux containers. Windows containers are not supported.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeWindowsModeFix">
+        <source>Switch Docker Desktop to Linux containers mode (right-click Docker tray icon → 'Switch to Linux containers...')</source>
+        <target state="new">Switch Docker Desktop to Linux containers mode (right-click Docker tray icon → 'Switch to Linux containers...')</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeWindowsModeMessageFormat">
+        <source>{0} is running in Windows container mode</source>
+        <target state="new">{0} is running in Windows container mode</target>
+        <note>{0} is Docker or Docker Desktop.</note>
+      </trans-unit>
+      <trans-unit id="ContainerRuntimeWslcUnsupportedHostMessage">
+        <source>WSLc is only supported on Windows</source>
+        <target state="new">WSLc is only supported on Windows</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DcpApiServerReturnedHttpStatusMessageFormat">
         <source>Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</source>
         <target state="new">Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</target>

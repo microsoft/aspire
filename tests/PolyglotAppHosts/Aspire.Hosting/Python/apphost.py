@@ -4,6 +4,7 @@
 from aspire_app import (
     AfterPublishEvent,
     AfterResourcesCreatedEvent,
+    AksNodePoolConfig,
     AksNodeVmSizes,
     AzureResourceInfrastructure,
     AzureServiceTags,
@@ -160,9 +161,9 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
 
     def custom_health_check() -> HealthCheckResult:
         return {
-            "Status": "Healthy",
-            "Description": "custom health check",
-            "Data": {"custom": "value"},
+            "status": "Healthy",
+            "description": "custom health check",
+            "data": {"custom": "value"},
         }
 
     builder.add_health_check("custom_check", custom_health_check)
@@ -175,13 +176,32 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     # addParameterFromConfiguration
     config_param = builder.add_parameter_from_config("parameter", "Config:Key")
     secret_param = builder.add_parameter_from_config("parameter", "Config:Key")
+    optional_param = builder.add_parameter("optional-parameter").with_optional()
+    optional_param.with_required()
+    optional_param.with_required(required=False)
+    optional_value: str | None = optional_param.try_get_current_value()
+    assert optional_value is None
+    optional_param.set_value(value="configured")
+    assert optional_param.try_get_current_value() == "configured"
+    optional_param.set_value(value="")
+    assert optional_param.try_get_current_value() is None
+    optional_param.set_value(value="replacement")
+    optional_param.set_value()
+    assert optional_param.try_get_current_value() is None
+    container.with_env("OPTIONAL_PARAMETER", optional_param)
+
+    # False is a scalar value for required, unlike the opt-in optional flag.
+    constructor_optional_param = builder.add_parameter("constructor-optional", required=False, description="")
+    constructor_optional_param.set_value()
+    assert constructor_optional_param.try_get_current_value() is None
+    builder.add_parameter("constructor-optional-flag", optional=True)
     custom_input_param = builder.add_parameter("custom-input")
     custom_input_param.with_custom_input(
         {
-            "InputType": "Number",
-            "Label": "Worker Count",
-            "Placeholder": "Enter number (1-10)",
-            "Options": {
+            "inputType": "Number",
+            "label": "Worker Count",
+            "placeholder": "Enter number (1-10)",
+            "options": {
                 "one": "One",
                 "two": "Two",
             },
@@ -194,9 +214,9 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         "/usr/lib/aspire/container-files",
         ".",
         options={
-            "DefaultOwner": 1000,
-            "DefaultGroup": 1000,
-            "Umask": 0o022,
+            "defaultOwner": 1000,
+            "defaultGroup": 1000,
+            "umask": 0o022,
         },
     )
 
@@ -219,9 +239,9 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         "/usr/lib/aspire/container-files",
         container_files_callback,
         options={
-            "DefaultOwner": 1000,
-            "DefaultGroup": 1000,
-            "Umask": 0o022,
+            "defaultOwner": 1000,
+            "defaultGroup": 1000,
+            "umask": 0o022,
         },
     )
     # withImageRegistry
@@ -254,7 +274,15 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
 
     aks = builder.add_azure_kubernetes_env("aks")
     aks.configure_infrastructure(configure_aks)
-    aks.add_node_pool("system", vm_size=AksNodeVmSizes.StandardDSv5.StandardD2sV5)
+    def configure_system_pool(pool: AksNodePoolConfig) -> None:
+        pool["osSku"] = "AzureLinux"
+
+    def configure_worker_pool(pool: AksNodePoolConfig) -> None:
+        pool["vmSize"] = AksNodeVmSizes.StandardDSv5.StandardD2sV5
+        pool["osSku"] = "AzureLinux"
+
+    aks.with_system_node_pool(configure_system_pool)
+    aks.add_node_pool("workers", configure_worker_pool)
     # builder-level pipeline APIs
     pipeline = builder.pipeline
 
@@ -452,21 +480,21 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     ) -> CertificateTrustExecutionConfigurationContext:
         _requested_trust_scope = requested_trust_scope
         return {
-            "CertificateBundlePath": ReferenceExpression.format_string("/etc/ssl/certs/custom-bundle.pem"),
-            "CertificateDirectoriesPath": ReferenceExpression.format_string("/etc/ssl/certs/custom"),
-            "RootCertificatesPath": "/etc/ssl/certs",
-            "IsContainer": True,
+            "certificateBundlePath": ReferenceExpression.format_string("/etc/ssl/certs/custom-bundle.pem"),
+            "certificateDirectoriesPath": ReferenceExpression.format_string("/etc/ssl/certs/custom"),
+            "rootCertificatesPath": "/etc/ssl/certs",
+            "isContainer": True,
         }
 
     def configure_https_certificate(
         certificate_info: HttpsCertificateInfo,
     ) -> HttpsCertificateExecutionConfigurationContext:
-        _certificate_subject = certificate_info.get("Subject")
-        _certificate_thumbprint = certificate_info.get("Thumbprint")
+        _certificate_subject = certificate_info.get("subject")
+        _certificate_thumbprint = certificate_info.get("thumbprint")
         return {
-            "CertificatePath": ReferenceExpression.format_string("/certificates/tls.crt"),
-            "KeyPath": ReferenceExpression.format_string("/certificates/tls.key"),
-            "PfxPath": ReferenceExpression.format_string("/certificates/tls.pfx"),
+            "certificatePath": ReferenceExpression.format_string("/certificates/tls.crt"),
+            "keyPath": ReferenceExpression.format_string("/certificates/tls.key"),
+            "pfxPath": ReferenceExpression.format_string("/certificates/tls.pfx"),
         }
 
     execution_config_builder = container.create_execution_config()
@@ -563,7 +591,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         update_state_logger_factory = update_state_services.get_logger_factory()
         update_state_logger = update_state_logger_factory.create_logger("ValidationAppHost.UpdateCommandState")
         update_state_logger.log_information("UpdateCommandState services")
-        return "Enabled" if snapshot.get("HealthStatus") == "Healthy" else "Disabled"
+        return "Enabled" if snapshot.get("healthStatus") == "Healthy" else "Disabled"
 
     def echo_command(ctx: ExecuteCommandContext) -> ExecuteCommandResult:
         message = ctx.arguments.value("message")
@@ -571,7 +599,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         echo_logger_factory = echo_services.get_logger_factory()
         echo_logger = echo_logger_factory.create_logger("ValidationAppHost.EchoCommand")
         echo_logger.log_information("Echo command services")
-        return {"Success": message == "hello"}
+        return {"success": message == "hello"}
 
     def validate_command_arguments(ctx: InputsDialogValidationContext):
         validation_services = ctx.services
@@ -581,13 +609,13 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         return None
 
     def noop_command(_ctx: ExecuteCommandContext) -> ExecuteCommandResult:
-        return {"Success": True}
+        return {"success": True}
 
     container.with_command(
         "noop",
         "Noop",
         noop_command,
-        command_options={"UpdateState": update_command_state}
+        command_options={"updateState": update_command_state}
     )
 
     def restart_command(_ctx: ExecuteCommandContext) -> ExecuteCommandResult:
@@ -597,7 +625,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         "echo",
         "Echo",
         echo_command,
-        command_options={"Arguments": [{"Name": "message", "InputType": "Text", "Required": True}], "ValidateArguments": validate_command_arguments}
+        command_options={"arguments": [{"name": "message", "inputType": "Text", "required": True}], "validateArguments": validate_command_arguments}
     )
     container.with_command("restart", "Restart", restart_command)
 
@@ -647,19 +675,19 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     def pick_zone_command(ctx: ExecuteCommandContext) -> ExecuteCommandResult:
         interaction_service = ctx.services.get_interaction_service()
         if not interaction_service.is_available():
-            return {"Success": True, "Message": "Interaction service is not available."}
+            return {"success": True, "message": "Interaction service is not available."}
 
         region_input = interaction_service.create_choice_input(
             "region",
-            choices=[{"Value": "us", "Label": "United States"}, {"Value": "eu", "Label": "Europe"}]
+            choices=[{"value": "us", "label": "United States"}, {"value": "eu", "label": "Europe"}]
         )
 
         def load_zones(load_context: InteractionInputLoadContext):
             region = load_context.inputs.value("region")
             zones: list[InteractionChoiceOption] = (
-                [{"Value": "eu-west", "Label": "EU West"}, {"Value": "eu-north", "Label": "EU North"}]
+                [{"value": "eu-west", "label": "EU West"}, {"value": "eu-north", "label": "EU North"}]
                 if region == "eu"
-                else [{"Value": "us-east", "Label": "US East"}, {"Value": "us-west", "Label": "US West"}]
+                else [{"value": "us-east", "label": "US East"}, {"value": "us-west", "label": "US West"}]
             )
             load_context.input().set_choice_options(zones)
 
@@ -671,7 +699,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
             [region_input, zone_input]
         )
         canceled = result.canceled
-        return {"Success": not canceled, "Canceled": canceled}
+        return {"success": not canceled, "canceled": canceled}
 
     container.with_command("pick-zone", "Pick Zone", pick_zone_command)
     # Exhaustive coverage of the remaining IInteractionService surface so every newly added member is
@@ -680,35 +708,35 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     def interaction_showcase_command(ctx: ExecuteCommandContext) -> ExecuteCommandResult:
         interaction_service = ctx.services.get_interaction_service()
         if not interaction_service.is_available():
-            return {"Success": True, "Message": "Interaction service is not available."}
+            return {"success": True, "message": "Interaction service is not available."}
 
         confirmation = interaction_service.prompt_confirmation(
             "Confirm",
             "Proceed?",
             options={
-                "PrimaryButtonText": "Yes",
-                "SecondaryButtonText": "No",
-                "ShowSecondaryButton": True,
-                "ShowDismiss": True,
-                "EnableMessageMarkdown": True,
-                "Intent": "Confirmation",
+                "primaryButtonText": "Yes",
+                "secondaryButtonText": "No",
+                "showSecondaryButton": True,
+                "showDismiss": True,
+                "enableMessageMarkdown": True,
+                "intent": "Confirmation",
             }
         )
 
         message_box = interaction_service.prompt_message_box(
             "Notice",
             "Read this.",
-            options={"PrimaryButtonText": "OK", "Intent": "Information"}
+            options={"primaryButtonText": "OK", "intent": "Information"}
         )
 
         notification = interaction_service.prompt_notification(
             "Heads up",
             "Something happened.",
             options={
-                "Intent": "Warning",
-                "LinkText": "Learn more",
-                "LinkUrl": "https://aspire.dev",
-                "ShowDismiss": True,
+                "intent": "Warning",
+                "linkText": "Learn more",
+                "linkUrl": "https://aspire.dev",
+                "showDismiss": True,
             }
         )
 
@@ -718,51 +746,51 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         progress = interaction_service.prompt_progress(
             "Completing **work**...",
             options={
-                "Title": "Progress",
-                "PrimaryButtonText": "Cancel",
-                "EnableMessageMarkdown": True,
-                "Work": complete_progress_work,
+                "title": "Progress",
+                "primaryButtonText": "Cancel",
+                "enableMessageMarkdown": True,
+                "work": complete_progress_work,
             },
         )
 
         text_input = interaction_service.create_text_input(
             "name",
             options={
-                "Label": "Name",
-                "Description": "Your **name**",
-                "EnableDescriptionMarkdown": True,
-                "Required": True,
-                "Placeholder": "Jane Doe",
-                "Value": "Jane",
-                "MaxLength": 64,
-                "Disabled": False,
+                "label": "Name",
+                "description": "Your **name**",
+                "enableDescriptionMarkdown": True,
+                "required": True,
+                "placeholder": "Jane Doe",
+                "value": "Jane",
+                "maxLength": 64,
+                "disabled": False,
             }
         )
-        secret_input = interaction_service.create_secret_input("password", options={"Required": True})
-        boolean_input = interaction_service.create_boolean_input("enabled", options={"Value": "true"})
-        number_input = interaction_service.create_number_input("count", options={"Value": "1"})
+        secret_input = interaction_service.create_secret_input("password", options={"required": True})
+        boolean_input = interaction_service.create_boolean_input("enabled", options={"value": "true"})
+        number_input = interaction_service.create_number_input("count", options={"value": "1"})
         choice_input = interaction_service.create_choice_input(
             "color",
-            choices=[{"Value": "r", "Label": "Red"}, {"Value": "g", "Label": "Green"}],
-            options={"AllowCustomChoice": True}
+            choices=[{"value": "r", "label": "Red"}, {"value": "g", "label": "Green"}],
+            options={"allowCustomChoice": True}
         )
         preset_input = interaction_service.create_text_input("greeting").with_value("hello")
-        size_input = interaction_service.create_choice_input("size").with_choice_options([{"Value": "s", "Label": "Small"}, {"Value": "l", "Label": "Large"}])
+        size_input = interaction_service.create_choice_input("size").with_choice_options([{"value": "s", "label": "Small"}, {"value": "l", "label": "Large"}])
 
         def load_shade(load_context: InteractionInputLoadContext):
             input = load_context.input()
             input_name = input.get_name()
             color = load_context.inputs.value("color")
             input.set_choice_options(
-                [{"Value": "crimson", "Label": "Crimson"}, {"Value": "scarlet", "Label": "Scarlet"}]
+                [{"value": "crimson", "label": "Crimson"}, {"value": "scarlet", "label": "Scarlet"}]
                 if color == "r"
-                else [{"Value": "lime", "Label": "Lime"}, {"Value": "forest", "Label": "Forest"}]
+                else [{"value": "lime", "label": "Lime"}, {"value": "forest", "label": "Forest"}]
             )
             input.set_value(input_name)
 
         dependent_input = interaction_service.create_choice_input("shade").with_dynamic_loading(
             load_shade,
-            options={"AlwaysLoadOnStart": True, "DependsOnInputs": ["color"]}
+            options={"alwaysLoadOnStart": True, "dependsOnInputs": ["color"]}
         )
 
         def validate_solo(validation_context: InputsDialogValidationContext):
@@ -773,7 +801,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
             "Single input",
             "Enter a value.",
             interaction_service.create_text_input("solo"),
-            options={"PrimaryButtonText": "Save", "ValidationCallback": validate_solo},
+            options={"primaryButtonText": "Save", "validationCallback": validate_solo},
         )
 
         def validate_form(validation_context: InputsDialogValidationContext):
@@ -784,30 +812,30 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
             "Multiple inputs",
             "Fill out the form.",
             [text_input, secret_input, boolean_input, number_input, choice_input, preset_input, size_input, dependent_input],
-            options={"PrimaryButtonText": "Submit", "EnableMessageMarkdown": True, "ValidationCallback": validate_form},
+            options={"primaryButtonText": "Submit", "enableMessageMarkdown": True, "validationCallback": validate_form},
         )
 
         selected_color = multi.inputs.value("color")
-        solo_value = (single.get("Input") or {}).get("Value")
+        solo_value = (single.get("input") or {}).get("value")
 
         multi_canceled = multi.canceled
-        success = (not confirmation.get("Canceled", False)
-                   and confirmation.get("Value", False)
-                   and not message_box.get("Canceled", False)
-                   and not notification.get("Canceled", False)
-                   and not progress.get("Canceled", False)
-                   and not single.get("Canceled", False)
+        success = (not confirmation.get("canceled", False)
+                   and confirmation.get("value", False)
+                   and not message_box.get("canceled", False)
+                   and not notification.get("canceled", False)
+                   and not progress.get("canceled", False)
+                   and not single.get("canceled", False)
                    and not multi_canceled)
 
         return {
-            "Success": bool(success),
-            "Canceled": multi_canceled,
-            "Message": f"color={selected_color or ''} solo={solo_value or ''}",
+            "success": bool(success),
+            "canceled": multi_canceled,
+            "message": f"color={selected_color or ''} solo={solo_value or ''}",
         }
 
     container.with_command("interaction-showcase", "Interaction Showcase", interaction_showcase_command)
     # withHttpCommand
     container.with_http_command("/health", "Health Check")
-    container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})
+    container.with_http_command("/api/reset", "Reset", options={"methodName": "POST", "confirmationMessage": "Are you sure?"})
     app = builder.build()
     builder.run()

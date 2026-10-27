@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsShipping>false</IsShipping>
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <IsAotCompatible>true</IsAotCompatible>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Native.Server" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Native.CodeGeneration" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Native.Core.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Native.Core.AotSmoke" />
+  </ItemGroup>
+</Project>

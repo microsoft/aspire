@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -312,8 +313,8 @@ public class AspireCliTelemetryTests
 
         var tags = await fixture.Telemetry.GetDefaultTagsAsync();
 
-        var expectedOsName = AspireCliTelemetry.GetOsName();
-        var expectedOsType = AspireCliTelemetry.GetOsType();
+        var expectedOsName = OperatingSystemTelemetry.GetOsName();
+        var expectedOsType = OperatingSystemTelemetry.GetOsType();
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsName && (string?)t.Value == expectedOsName);
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsVersion && t.Value is string s && s == Environment.OSVersion.Version.ToString());
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsType && (string?)t.Value == expectedOsType);

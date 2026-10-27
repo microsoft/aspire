@@ -85,7 +85,41 @@ internal sealed class PlaywrightCliInstaller(
     /// This must match the directory that the playwright-cli binary actually writes to.
     /// See: https://github.com/microsoft/playwright-cli/issues/294
     /// </summary>
-    internal static readonly string s_primarySkillBaseDirectory = Path.Combine(".claude", "skills");
+    internal static readonly string s_primarySkillBaseDirectory = AgentClient.ClaudeCode.ProjectSkillsDirectory;
+
+    // These are upstream-generated paths to clean up in staging, not installation targets.
+    private static readonly string[] s_generatedSkillBaseDirectories =
+    [
+        .. AgentClient.All.Select(static client => client.ProjectSkillsDirectory).Distinct(StringComparer.OrdinalIgnoreCase),
+        // Legacy output from the upstream generator; never offered as installation destinations.
+        Path.Combine(".github", "skills"),
+        Path.Combine(".opencode", "skill")
+    ];
+
+    /// <summary>
+    /// Generates skills in isolation before copying them to the selected absolute destinations.
+    /// </summary>
+    public async Task<(PlaywrightInstallStatus Status, string? Message)> InstallSelectedAsync(IReadOnlySet<string> selectedSkillDirectories, CancellationToken cancellationToken)
+    {
+        // The upstream generator chooses its own output directories. Generate in isolation,
+        // then copy only to destinations belonging to the selected agents and scope.
+        var stagingDirectory = Directory.CreateTempSubdirectory("aspire-playwright-skills-");
+        try
+        {
+            return await InstallAsync(stagingDirectory.FullName, selectedSkillDirectories, cancellationToken);
+        }
+        finally
+        {
+            try
+            {
+                stagingDirectory.Delete(recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogDebug(ex, "Failed to clean up generated Playwright skills at {Path}.", stagingDirectory.FullName);
+            }
+        }
+    }
 
     /// <summary>
     /// Configuration key that disables package validation when set to "true".
@@ -262,7 +296,7 @@ internal sealed class PlaywrightCliInstaller(
                     Directory.Delete(tempDir, recursive: true);
                 }
             }
-            catch (IOException ex)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 logger.LogDebug(ex, "Failed to clean up temporary directory: {TempDir}", tempDir);
             }
@@ -287,17 +321,7 @@ internal sealed class PlaywrightCliInstaller(
             return (PlaywrightInstallStatus.Failed, AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles);
         }
 
-        try
-        {
-            MirrorSkillFiles(repoRoot, selectedSkillDirectories, preExisting);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogWarning(ex, "Failed to mirror Playwright CLI skill files to some locations.");
-            return (PlaywrightInstallStatus.InstalledWithWarnings, AgentCommandStrings.PlaywrightCliInstaller_InstalledWithMirrorWarnings);
-        }
-
-        return (PlaywrightInstallStatus.Installed, null);
+        return MirrorSkillFiles(repoRoot, selectedSkillDirectories, preExisting);
     }
 
     /// <summary>
@@ -307,12 +331,12 @@ internal sealed class PlaywrightCliInstaller(
     private static HashSet<string> SnapshotPlaywrightSkillDirs(string repoRoot)
     {
         var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var location in SkillLocation.All)
+        foreach (var skillBaseDirectory in s_generatedSkillBaseDirectories)
         {
-            var dir = Path.Combine(repoRoot, location.RelativeSkillDirectory, PlaywrightCliSkillName);
+            var dir = Path.Combine(repoRoot, skillBaseDirectory, PlaywrightCliSkillName);
             if (Directory.Exists(dir))
             {
-                existing.Add(location.RelativeSkillDirectory);
+                existing.Add(skillBaseDirectory);
             }
         }
         return existing;
@@ -323,16 +347,17 @@ internal sealed class PlaywrightCliInstaller(
     /// user-selected skill directories, then cleans up any directories that
     /// playwright-cli created in unselected locations during this run.
     /// </summary>
-    private void MirrorSkillFiles(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, HashSet<string> preExistingLocations)
+    private (PlaywrightInstallStatus Status, string? Message) MirrorSkillFiles(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, HashSet<string> preExistingLocations)
     {
         var primarySkillDir = Path.Combine(repoRoot, s_primarySkillBaseDirectory, PlaywrightCliSkillName);
 
         if (!Directory.Exists(primarySkillDir))
         {
-            logger.LogDebug("Primary skill directory does not exist: {PrimarySkillDir}", primarySkillDir);
-            return;
+            logger.LogWarning("Primary skill directory does not exist: {PrimarySkillDir}", primarySkillDir);
+            return (PlaywrightInstallStatus.Failed, AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles);
         }
 
+        var mirrorFailures = 0;
         // Mirror to each user-selected location (skip the primary — it's the source).
         foreach (var skillBaseDir in selectedSkillDirectories)
         {
@@ -351,25 +376,26 @@ internal sealed class PlaywrightCliInstaller(
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 logger.LogWarning(ex, "Failed to mirror playwright-cli skills to {TargetDir}.", targetSkillDir);
+                mirrorFailures++;
             }
         }
 
         // Clean up playwright-cli directories that were created during this run
         // in locations the user didn't select. We only remove directories that
         // didn't exist before install — pre-existing content is never touched.
-        foreach (var location in SkillLocation.All)
+        foreach (var skillBaseDirectory in s_generatedSkillBaseDirectories)
         {
-            if (selectedSkillDirectories.Contains(location.RelativeSkillDirectory))
+            if (selectedSkillDirectories.Contains(skillBaseDirectory))
             {
                 continue; // User selected this location — keep it
             }
 
-            if (preExistingLocations.Contains(location.RelativeSkillDirectory))
+            if (preExistingLocations.Contains(skillBaseDirectory))
             {
                 continue; // Was already there before this run — leave it alone
             }
 
-            var skillDir = Path.Combine(repoRoot, location.RelativeSkillDirectory, PlaywrightCliSkillName);
+            var skillDir = Path.Combine(repoRoot, skillBaseDirectory, PlaywrightCliSkillName);
             if (!Directory.Exists(skillDir))
             {
                 continue;
@@ -380,13 +406,22 @@ internal sealed class PlaywrightCliInstaller(
                 Directory.Delete(skillDir, recursive: true);
                 logger.LogDebug("Removed playwright-cli skills from unselected location: {SkillDir}", skillDir);
 
-                RemoveEmptyParentDirectories(skillDir, repoRoot, location.RelativeSkillDirectory, logger);
+                RemoveEmptyParentDirectories(skillDir, repoRoot, skillBaseDirectory, logger);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 logger.LogDebug(ex, "Failed to remove playwright-cli skills from {SkillDir}.", skillDir);
             }
         }
+
+        if (mirrorFailures == 0)
+        {
+            return (PlaywrightInstallStatus.Installed, null);
+        }
+
+        return mirrorFailures == selectedSkillDirectories.Count
+            ? (PlaywrightInstallStatus.Failed, AgentCommandStrings.PlaywrightCliInstaller_FailedToMirrorSkillFiles)
+            : (PlaywrightInstallStatus.InstalledWithWarnings, AgentCommandStrings.PlaywrightCliInstaller_InstalledWithMirrorWarnings);
     }
 
     /// <summary>

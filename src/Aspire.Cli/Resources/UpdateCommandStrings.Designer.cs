@@ -196,6 +196,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Cannot determine active conditional Aspire.AppHost.Sdk declarations for &apos;{0}&apos; without successful MSBuild evaluation; update the conditional SDK version explicitly.
+        /// </summary>
+        internal static string ConditionalSdkEvaluationRequiredFormat {
+            get {
+                return ResourceManager.GetString("ConditionalSdkEvaluationRequiredFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Cannot safely update conditional Aspire.AppHost.Sdk declarations for &apos;{0}&apos;; update the conditional SDK version explicitly.
+        /// </summary>
+        internal static string ConditionalSdkExplicitEditRequiredFormat {
+            get {
+                return ResourceManager.GetString("ConditionalSdkExplicitEditRequiredFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Update integrations and repository Aspire CLI references.
         /// </summary>
         internal static string Description {
@@ -273,6 +291,15 @@ namespace Aspire.Cli.Resources {
         internal static string FailedResolveNpmToolFormat {
             get {
                 return ResourceManager.GetString("FailedResolveNpmToolFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Update failed regenerating the SDK code for project {0}. Configuration changes were not persisted..
+        /// </summary>
+        internal static string FailedToRegenerateSdkAfterUpdateFormat {
+            get {
+                return ResourceManager.GetString("FailedToRegenerateSdkAfterUpdateFormat", resourceCulture);
             }
         }
 
@@ -759,6 +786,48 @@ namespace Aspire.Cli.Resources {
         internal static string YesOptionDescription {
             get {
                 return ResourceManager.GetString("YesOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string ChannelUpdateRequiresAmbientNuGetConfigurationFormat {
+            get {
+                return ResourceManager.GetString("ChannelUpdateRequiresAmbientNuGetConfigurationFormat", resourceCulture);
+            }
+        }
+
+        internal static string NuGetConfigOutsideHierarchyFormat {
+            get {
+                return ResourceManager.GetString("NuGetConfigOutsideHierarchyFormat", resourceCulture);
+            }
+        }
+
+        internal static string PreparingSdkForUpdateStatus {
+            get {
+                return ResourceManager.GetString("PreparingSdkForUpdateStatus", resourceCulture);
+            }
+        }
+
+        internal static string UpdateCandidateFileChangedFormat {
+            get {
+                return ResourceManager.GetString("UpdateCandidateFileChangedFormat", resourceCulture);
+            }
+        }
+
+        internal static string UpdateCandidatePolicyChangedFormat {
+            get {
+                return ResourceManager.GetString("UpdateCandidatePolicyChangedFormat", resourceCulture);
+            }
+        }
+
+        internal static string UpdateCandidateRollbackFailed {
+            get {
+                return ResourceManager.GetString("UpdateCandidateRollbackFailed", resourceCulture);
+            }
+        }
+
+        internal static string UpdateCandidateRollbackFileChangedFormat {
+            get {
+                return ResourceManager.GetString("UpdateCandidateRollbackFileChangedFormat", resourceCulture);
             }
         }
     }

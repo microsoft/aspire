@@ -2,9 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.IO.Hashing;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Cli.Configuration;
@@ -146,13 +144,13 @@ internal sealed class ProjectLocator(
     IDotNetSdkInstaller sdkInstaller,
     IAppHostCandidateFinder appHostCandidateFinder,
     AspireCliTelemetry telemetry,
-    IConfiguration configuration) : IProjectLocator
+    IConfiguration configuration,
+    ConfigSourceService configSources) : IProjectLocator
 {
     private const string AspireConfigAppHostPathKey = "appHost.path";
     private const string LegacySettingsAppHostPathKey = "appHostPath";
     private const string ExplicitLaunchConfigurationSelectionOrigin = "explicit-launch-configuration";
     private const string ExplicitCliSelectionOrigin = "explicit-cli";
-    private static readonly TimeSpan s_workspaceConfigLockTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Finds all candidate AppHost projects in the specified search directory with language metadata.
@@ -880,6 +878,16 @@ internal sealed class ProjectLocator(
 
     public async Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, bool displayProgress, CancellationToken cancellationToken = default)
     {
+        var result = await UseOrFindAppHostProjectFileCoreAsync(projectFile, multipleAppHostProjectsFoundBehavior, createSettingsFile, displayProgress, cancellationToken);
+        if (result.SelectedProjectFile?.Directory is { } directory)
+        {
+            configSources.CheckForConfigSourceUpdates(directory, cancellationToken);
+        }
+        return result;
+    }
+
+    private async Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileCoreAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, bool displayProgress, CancellationToken cancellationToken)
+    {
         logger.LogDebug("Finding project file in {CurrentDirectory}", executionContext.WorkingDirectory);
         var explicitSelectionWasPrompted = false;
 
@@ -1226,6 +1234,7 @@ internal sealed class ProjectLocator(
 
     private async Task CreateSettingsFileAsync(FileInfo projectFile, bool preserveExistingDefault, CancellationToken cancellationToken)
     {
+        configSources.CheckForConfigSourceUpdates(projectFile.Directory!, cancellationToken);
         var configuredSelectionOrigin = configuration[KnownConfigNames.CliAppHostSelectionOrigin];
         var isExplicitLaunchConfigurationSelection = string.Equals(
             configuredSelectionOrigin,
@@ -1368,40 +1377,15 @@ internal sealed class ProjectLocator(
 
     private async Task<FileLock?> TryAcquireWorkspaceConfigLockAsync(FileInfo settingsFile, CancellationToken cancellationToken)
     {
-        var lockPath = GetWorkspaceConfigLockPath(settingsFile);
-
-        try
-        {
-            return await FileLock.AcquireAsync(lockPath, cancellationToken, s_workspaceConfigLockTimeout);
-        }
-        catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
-        {
-            // Persisting the workspace default is bookkeeping around the requested command. Preserve
-            // the previous best-effort behavior if the cache directory cannot host the lock.
-            logger.LogDebug(ex, "Proceeding without the workspace config lock at {LockPath}.", lockPath);
-            return null;
-        }
-    }
-
-    private string GetWorkspaceConfigLockPath(FileInfo settingsFile)
-    {
-        // Lock files live in the cache so read-only workspaces remain usable. Canonicalizing and
-        // folding the config path makes aliases on symlinked or case-insensitive volumes contend;
-        // on a case-sensitive volume this can only serialize two otherwise independent writes.
-        var normalizedSettingsPath = PathNormalizer.ResolveSymlinks(settingsFile.FullName)
-            .Normalize(NormalizationForm.FormC)
-            .ToUpperInvariant();
-        var lockFileName = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(normalizedSettingsPath))).ToLowerInvariant();
-
-        return Path.Combine(executionContext.CacheDirectory.FullName, "workspace-config-locks", $"{lockFileName}.lock");
+        return await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(executionContext, settingsFile, logger, cancellationToken);
     }
 
     private string? GetNuGetPackagesCachePath()
     {
-        var envPath = environment.GetEnvironmentVariable("NUGET_PACKAGES");
-        if (!string.IsNullOrEmpty(envPath))
+        var envPath = CliPathHelper.GetNuGetPackagesEnvironmentPath(environment);
+        if (envPath is not null)
         {
-            return Path.GetFullPath(envPath);
+            return envPath;
         }
 
         var userProfile = executionContext.HomeDirectory.FullName;

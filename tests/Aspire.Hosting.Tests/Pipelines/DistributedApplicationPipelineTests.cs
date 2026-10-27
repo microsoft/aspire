@@ -24,6 +24,36 @@ namespace Aspire.Hosting.Tests.Pipelines;
 [Trait("Partition", "4")]
 public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SelectedSteps_ContainsOnlyTargetAndDependenciesBeforeActionsExecute(bool sequential)
+    {
+        using var builder = CreatePipelineTestBuilder(step: "target");
+        var pipeline = new DistributedApplicationPipeline();
+        pipeline.AddStep("dependency", context =>
+        {
+            Assert.Equal(["dependency", "target"], context.PipelineContext.SelectedSteps.Select(step => step.Name));
+            return Task.CompletedTask;
+        });
+        pipeline.AddStep("target", _ => Task.CompletedTask, dependsOn: "dependency");
+        pipeline.AddStep("unselected", _ => throw new InvalidOperationException("Unselected step executed."));
+        using var app = builder.Build();
+        var context = CreateDeployingContext(app);
+        Assert.Empty(context.SelectedSteps);
+
+        if (sequential)
+        {
+            await pipeline.ExecuteStepSequentiallyAsync("target", context).DefaultTimeout();
+        }
+        else
+        {
+            await pipeline.ExecuteAsync(context).DefaultTimeout();
+        }
+
+        Assert.Equal(["dependency", "target"], context.SelectedSteps.Select(step => step.Name));
+    }
+
     [Fact]
     public async Task ExecuteAsync_WithNoSteps_CompletesSuccessfully()
     {

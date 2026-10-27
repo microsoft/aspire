@@ -331,7 +331,8 @@ fluent-dialog-body.ai-agents-dialog-body .markdown-container h4 {
     line-height: 26px;
 }
 
-fluent-dialog-body.ai-agents-dialog-body .ai-agents-dialog-title {
+fluent-dialog-body.ai-agents-dialog-body .ai-agents-dialog-title,
+fluent-dialog-body.telemetry-help-dialog-body .telemetry-help-dialog-title {
     display: flex;
     align-items: center;
     gap: var(--spacingHorizontalS);

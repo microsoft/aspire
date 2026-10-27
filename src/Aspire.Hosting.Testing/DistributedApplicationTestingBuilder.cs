@@ -527,6 +527,8 @@ public static class DistributedApplicationTestingBuilder
 
             public IDistributedApplicationPipeline Pipeline => innerBuilder.Pipeline;
 
+            public IFileSystemService FileSystemService => innerBuilder.FileSystemService;
+
             public IUserSecretsManager UserSecretsManager => innerBuilder.UserSecretsManager;
 
             public IResourceBuilder<T> AddResource<T>(T resource) where T : IResource => innerBuilder.AddResource(resource);
@@ -689,6 +691,8 @@ public static class DistributedApplicationTestingBuilder
         public IDistributedApplicationEventing Eventing => _innerBuilder.Eventing;
 
         public IDistributedApplicationPipeline Pipeline => _innerBuilder.Pipeline;
+
+        public IFileSystemService FileSystemService => _innerBuilder.FileSystemService;
 
         public IUserSecretsManager UserSecretsManager => _innerBuilder.UserSecretsManager;
 

@@ -8,7 +8,7 @@ import { isNoLogoUnsupportedOutput, noLogoOption } from './cliCompatibility';
 import { EnvironmentVariables } from './environment';
 import { extensionLogOutputChannel } from './logging';
 import { getAppHostDiscoveryTimeoutMs } from './settings';
-import { classifyAppHostPath, summarizeAppHostLanguages } from './appHostLanguage';
+import { summarizeAppHostLanguages } from './appHostLanguage';
 import { sendTelemetryEvent } from './telemetry';
 import { isExcludedDiscoveryCandidate, isExcludedDiscoveryUri } from './workspaceFileSearch';
 import { ConfigInfoProvider } from './configInfoProvider';
@@ -39,6 +39,12 @@ interface AppHostDiscoveryResult {
     candidates: CandidateAppHostDisplayInfo[];
 }
 
+export interface AppHostDiscoveryStateChange {
+    readonly workspaceFolder: vscode.WorkspaceFolder;
+    readonly status: 'pending' | 'success' | 'error';
+    readonly candidates: readonly CandidateAppHostDisplayInfo[];
+}
+
 interface CachedAppHostDiscovery {
     promise: Promise<CandidateAppHostDisplayInfo[]>;
     reportedCandidates: CandidateAppHostDisplayInfo[];
@@ -60,6 +66,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private static readonly _streamingDiscoveryMaxRuntimeMs = 5 * 60 * 1000;
 
     private readonly _onDidChangeCandidates = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+    private readonly _onDidChangeDiscoveryState = new vscode.EventEmitter<AppHostDiscoveryStateChange>();
     private readonly _cache = new Map<string, CachedAppHostDiscovery>();
     private readonly _activeDiscoveries = new Set<CachedAppHostDiscovery>();
     private readonly _watchers = new Map<string, vscode.Disposable[]>();
@@ -69,6 +76,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private readonly _configInfoProvider: ConfigInfoProvider;
     private _disposed = false;
     readonly onDidChangeCandidates = this._onDidChangeCandidates.event;
+    readonly onDidChangeDiscoveryState = this._onDidChangeDiscoveryState.event;
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider, configInfoProvider?: ConfigInfoProvider) {
         this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
@@ -153,7 +161,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 .then(async discovery => {
                     let candidates = discovery.candidates;
                     try {
-                        candidates = await this._includeConfiguredAppHostCandidate(workspaceFolder, candidates);
+                        candidates = await this._selectConfiguredAppHostCandidate(workspaceFolder, candidates);
                         candidates = sortCandidatesByPath(this._filterExcludedCandidates(workspaceFolder, candidates));
                         emitAppHostDiscoveryTelemetry(discovery.source, 'success', candidates, startTime);
                     }
@@ -174,7 +182,11 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         const discoveryPromise = startAfter
             ? startAfter.then(() => startDiscovery(), () => startDiscovery())
             : startDiscovery();
-        cachedDiscovery.promise = discoveryPromise.catch(error => {
+        cachedDiscovery.promise = discoveryPromise.then(candidates => {
+            this._publishDiscoveryState(workspaceFolder, key, cachedDiscovery, 'success', candidates);
+            return candidates;
+        }).catch(error => {
+            this._publishDiscoveryState(workspaceFolder, key, cachedDiscovery, 'error', []);
             if (this._cache.get(key) === cachedDiscovery) {
                 this._cache.delete(key);
             }
@@ -190,8 +202,29 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         });
         this._activeDiscoveries.add(cachedDiscovery);
         this._cache.set(key, cachedDiscovery);
+        this._publishDiscoveryState(workspaceFolder, key, cachedDiscovery, 'pending', []);
 
         return cachedDiscovery;
+    }
+
+    private _publishDiscoveryState(
+        workspaceFolder: vscode.WorkspaceFolder,
+        key: string,
+        discovery: CachedAppHostDiscovery,
+        status: AppHostDiscoveryStateChange['status'],
+        candidates: readonly CandidateAppHostDisplayInfo[]): void {
+        // Replaced, invalidated, or retired scans can still finish for existing callers,
+        // but their results must not replace the current workspace telemetry context.
+        if (this._disposed || discovery.stale || discovery.cancellationSource.token.isCancellationRequested
+            || this._cache.get(key) !== discovery) {
+            return;
+        }
+
+        this._onDidChangeDiscoveryState.fire({
+            workspaceFolder,
+            status,
+            candidates: candidates.map(candidate => ({ ...candidate })),
+        });
     }
 
     async resolveDebugTarget(filePath: string, workspaceFolder?: vscode.WorkspaceFolder): Promise<string> {
@@ -273,6 +306,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._cancelActiveCliProcesses.clear();
         this._activeCliProcesses.clear();
         this._onDidChangeCandidates.dispose();
+        this._onDidChangeDiscoveryState.dispose();
     }
 
     private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder, reportCandidateProgress: IncrementalCandidateCallback, cancellationToken: vscode.CancellationToken, forceRefresh: boolean): Promise<AppHostDiscoveryResult> {
@@ -330,7 +364,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 const appHosts = await discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder);
                 throwIfCancellationRequested(cancellationToken);
                 if (appHosts.length > 0) {
-                    extensionLogOutputChannel.warn(`CLI AppHost discovery failed; using ${appHosts.length} AppHost project candidate(s) found in the workspace.`);
+                    extensionLogOutputChannel.warn(`CLI AppHost discovery failed; using ${appHosts.length} AppHost project candidate(s) found by file discovery.`);
                     return { source: 'workspace-files', candidates: appHosts };
                 }
             }
@@ -515,36 +549,23 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         }
     }
 
-    private async _includeConfiguredAppHostCandidate(workspaceFolder: vscode.WorkspaceFolder, candidates: CandidateAppHostDisplayInfo[]): Promise<CandidateAppHostDisplayInfo[]> {
+    private async _selectConfiguredAppHostCandidate(
+        workspaceFolder: vscode.WorkspaceFolder,
+        candidates: CandidateAppHostDisplayInfo[]): Promise<CandidateAppHostDisplayInfo[]> {
         if (candidates.some(candidate => candidate.selected)) {
             return candidates;
         }
 
         const configuredPaths = await findConfiguredAppHostPaths(workspaceFolder);
-        const configuredPath = configuredPaths.find(configuredPath => candidates.some(candidate => isSameFileSystemEntry(candidate.path, configuredPath)))
-            ?? configuredPaths[0];
+        const configuredPath = configuredPaths.find(configuredPath => candidates.some(candidate => isSameFileSystemEntry(candidate.path, configuredPath)));
         if (!configuredPath) {
             return candidates;
         }
 
-        const matchingCandidate = candidates.find(candidate => isSameFileSystemEntry(candidate.path, configuredPath));
-        if (matchingCandidate) {
-            return candidates.map(candidate => ({
-                ...candidate,
-                selected: isSameFileSystemEntry(candidate.path, configuredPath),
-            }));
-        }
-
-        const configuredLanguage = classifyAppHostPath(configuredPath);
-        return [
-            ...candidates,
-            {
-                path: configuredPath,
-                language: configuredLanguage === 'unknown' ? null : configuredLanguage,
-                status: 'buildable',
-                selected: true,
-            },
-        ];
+        return candidates.map(candidate => ({
+            ...candidate,
+            selected: isSameFileSystemEntry(candidate.path, configuredPath),
+        }));
     }
 
     private _filterExcludedCandidates(workspaceFolder: vscode.WorkspaceFolder, candidates: CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo[] {

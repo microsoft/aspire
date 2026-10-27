@@ -6,5 +6,7 @@ secrets:
     OPTIONS: ""
     password: ""
 config:
+  env_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
   myapp:
     user: "alice"

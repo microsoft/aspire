@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)DashboardTelemetryFixture.cs" Link="shared/DashboardTelemetryFixture.cs" />
+    <Compile Include="$(TestsSharedDir)Telemetry\TestTelemetryMetadataProviders.cs" LinkBase="shared/Telemetry" />
     <Compile Include="$(TestsSharedDir)TestStringLocalizer.cs" Link="shared/TestStringLocalizer.cs" />
     <Compile Include="$(TestsSharedDir)TestDashboardClient.cs" Link="shared/TestDashboardClient.cs" />
     <Compile Include="$(TestsSharedDir)TestDialogService.cs" Link="shared/TestDialogService.cs" />

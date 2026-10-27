@@ -66,9 +66,8 @@ public sealed class TypeScriptLegacyAppHostTests(ITestOutputHelper output)
 
         // Step 3: Restore triggers the explicit code-generation step. For a legacy
         // apphost.ts (apphost.mts absent), generated files MUST land in `.modules/`
-        // rather than `.aspire/modules/`. RestoreCommand calls BuildAndGenerateSdkAsync
-        // with appHostFile: null, so ShouldEmitLegacyTypeScriptGeneratedFiles takes the
-        // disk-scan branch and selects the legacy layout.
+        // rather than `.aspire/modules/`. RestoreCommand passes the resolved apphost.ts
+        // through code generation so the selected entry point controls the output layout.
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));

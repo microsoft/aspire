@@ -1,0 +1,118 @@
+﻿{
+  "name": "comparison-project",
+  "services": {
+    "cache": {
+      "image": "redis:7.4-alpine",
+      "labels": {
+        "aspire.resource": "cache"
+      },
+      "entrypoint": [
+        "/bin/sh"
+      ],
+      "command": [
+        "-c",
+        "exec redis-server --requirepass \u0022$$REDIS_PASSWORD\u0022 --appendonly yes --appendfsync always --dir /data"
+      ],
+      "environment": {
+        "REDIS_PASSWORD": "${ASPIRE_PARAMETER_CACHE_PASSWORD:?Required deployment input ASPIRE_PARAMETER_CACHE_PASSWORD}"
+      },
+      "expose": [
+        "6379/tcp"
+      ],
+      "volumes": [
+        {
+          "type": "volume",
+          "source": "cache-data",
+          "target": "/data",
+          "read_only": false
+        }
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "REDISCLI_AUTH=\u0022$$REDIS_PASSWORD\u0022 redis-cli ping | grep -q PONG"
+        ],
+        "interval": "1s",
+        "timeout": "3s",
+        "retries": 30
+      }
+    },
+    "helper": {
+      "image": "alpine:3.22",
+      "labels": {
+        "aspire.resource": "helper",
+        "literal": "$$HOME"
+      },
+      "restart": "unless-stopped",
+      "volumes": [
+        {
+          "type": "volume",
+          "source": "helper-data",
+          "target": "/helper",
+          "read_only": false
+        }
+      ]
+    },
+    "web": {
+      "image": "aspire-v2-compose-csharp-test:local",
+      "labels": {
+        "aspire.resource": "web"
+      },
+      "build": {
+        "context": "/app/web",
+        "dockerfile": "/app/web/Dockerfile"
+      },
+      "command": [
+        "server.mts"
+      ],
+      "environment": {
+        "ConnectionStrings__cache": "redis://:${ASPIRE_COMPOSE_EXPR_0001:?Required deployment input ASPIRE_COMPOSE_EXPR_0001}@cache:6379"
+      },
+      "expose": [
+        "8080/tcp"
+      ],
+      "ports": [
+        {
+          "target": 8080,
+          "host_ip": "127.0.0.1",
+          "protocol": "tcp"
+        }
+      ],
+      "depends_on": {
+        "cache": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch(\u0027http://127.0.0.1:8080/health\u0027).then(r=\u003Eprocess.exit(r.ok?0:1)).catch(()=\u003Eprocess.exit(1))"
+        ],
+        "interval": "1s",
+        "timeout": "3s",
+        "retries": 30
+      },
+      "pull_policy": "missing"
+    }
+  },
+  "volumes": {
+    "cache-data": {},
+    "helper-data": {
+      "labels": {
+        "owned": "comparison"
+      }
+    }
+  },
+  "configs": {
+    "settings": {
+      "content": "$$LITERAL"
+    }
+  },
+  "secrets": {
+    "external-secret": {
+      "external": true
+    }
+  }
+}

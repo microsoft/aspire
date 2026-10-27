@@ -11,6 +11,7 @@ internal sealed class DashboardStartupTelemetry
 {
     private readonly DashboardTelemetryService _telemetry;
     private readonly string _launchContext;
+    private readonly string _persistenceMode;
     private readonly long _startTimestamp;
     private int _recorded;
 
@@ -18,6 +19,16 @@ internal sealed class DashboardStartupTelemetry
     {
         _telemetry = telemetry;
         _startTimestamp = startTimestamp;
+        // Failed startup can supply unvalidated options. Parse errors leave the enum at its
+        // previous value, so check the error before mapping the enum to a bounded telemetry value.
+        _persistenceMode = options.Data switch
+        {
+            { PersistenceModeParseError: not null } => "unknown",
+            { PersistenceMode: DashboardPersistenceMode.None } => "none",
+            { PersistenceMode: DashboardPersistenceMode.Run } => "run",
+            { PersistenceMode: DashboardPersistenceMode.Resume } => "resume",
+            _ => "unknown"
+        };
         _launchContext = options.LaunchContext?.Trim().ToLowerInvariant() switch
         {
             KnownDashboardLaunchContexts.AppHost => KnownDashboardLaunchContexts.AppHost,
@@ -42,6 +53,7 @@ internal sealed class DashboardStartupTelemetry
         {
             [TelemetryPropertyKeys.StartupSuccess] = new(success),
             [TelemetryPropertyKeys.StartupLaunchContext] = new(_launchContext),
+            [TelemetryPropertyKeys.StartupPersistenceMode] = new(_persistenceMode),
             [TelemetryPropertyKeys.StartupDurationMilliseconds] = new(
                 Stopwatch.GetElapsedTime(_startTimestamp).TotalMilliseconds,
                 AspireTelemetryPropertyType.Metric)

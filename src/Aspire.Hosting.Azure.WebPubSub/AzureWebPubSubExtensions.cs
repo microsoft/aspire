@@ -3,8 +3,10 @@
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
+using Aspire.Hosting.Azure.WebPubSub;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.WebPubSub;
@@ -123,10 +125,12 @@ public static class AzureWebPubSubExtensions
                     var urlExpression = url;
 
                     BicepValue<string> urlParameter;
-                    if (urlExpression.ManifestExpressions.Count == 0)
+                    // A conditional expression has no manifest expressions but is not a literal.
+                    if (!urlExpression.IsConditional && urlExpression.ManifestExpressions.Count == 0)
                     {
-                        // when urlExpression is literal string, simply add
-                        urlParameter = urlExpression.Format;
+                        // when urlExpression is literal string, simply add. Format escapes braces for string.Format
+                        // ({{event}}); ValueExpression is the URL template as written ({event}).
+                        urlParameter = urlExpression.ValueExpression;
                     }
                     else
                     {
@@ -152,6 +156,103 @@ public static class AzureWebPubSubExtensions
             .WithIconName("MailMultiple")
             .WithDefaultRoleAssignments(WebPubSubBuiltInRole.GetBuiltInRoleName,
                 WebPubSubBuiltInRole.WebPubSubServiceOwner);
+    }
+
+    /// <summary>
+    /// Configures Azure Web PubSub to run locally using the emulator container.
+    /// </summary>
+    /// <param name="builder">The Azure Web PubSub resource builder.</param>
+    /// <param name="configureContainer">An optional callback to configure the emulator container.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureWebPubSubResource}"/>.</returns>
+    /// <remarks>
+    /// This method has no effect when publishing. Hub event handlers are configured in the emulator,
+    /// but event handler authentication is not supported.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var webPubSub = builder.AddAzureWebPubSub("webpubsub")
+    ///     .RunAsEmulator();
+    /// var chat = webPubSub.AddHub("chat");
+    /// builder.AddProject&lt;Projects.Api&gt;("api").WithReference(chat);
+    /// </code>
+    /// </example>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<AzureWebPubSubResource> RunAsEmulator(
+        this IResourceBuilder<AzureWebPubSubResource> builder,
+        Action<IResourceBuilder<AzureWebPubSubEmulatorResource>>? configureContainer = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return builder;
+        }
+
+        builder.WithAnnotation(new EmulatorResourceAnnotation())
+            .WithEndpoint(name: "emulator", targetPort: 8080, scheme: "http")
+            .WithAnnotation(new ContainerImageAnnotation
+            {
+                Registry = WebPubSubEmulatorContainerImageTags.Registry,
+                Image = WebPubSubEmulatorContainerImageTags.Image,
+                Tag = WebPubSubEmulatorContainerImageTags.Tag
+            });
+
+        var surrogate = new AzureWebPubSubEmulatorResource(builder.Resource);
+        var surrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(surrogate);
+        surrogateBuilder.WithEnvironment("WebPubSub__AccessKey", AzureWebPubSubResource.EmulatorAccessKey)
+            .WithEnvironment(context =>
+            {
+                // File callbacks are opaque to dependency discovery. Expose the URL expressions so
+                // Aspire allocates the callback endpoints on the container network before creating files.
+                var index = 0;
+                foreach (var hub in builder.Resource.Hubs.Values)
+                {
+                    foreach (var handler in hub.EventHandlers)
+                    {
+                        context.EnvironmentVariables[$"WEBPUBSUB_EVENT_HANDLER_URL_{index++}"] = handler.url;
+                    }
+                }
+            })
+            .WithContainerFiles("/app", async (_, cancellationToken) =>
+            {
+                // JSON preserves hub names containing '__', which environment configuration treats as separators.
+                // Read settings at startup so AddHub/AddEventHandler can follow RunAsEmulator.
+                var hubs = new JsonObject();
+                var valueContext = new ValueProviderContext
+                {
+                    Caller = builder.Resource,
+                    ExecutionContext = builder.ApplicationBuilder.ExecutionContext
+                };
+                foreach (var hub in builder.Resource.Hubs.Values)
+                {
+                    var handlers = new JsonArray();
+                    foreach (var (url, userEvents, systemEvents, auth) in hub.EventHandlers)
+                    {
+                        if (auth is not null)
+                        {
+                            throw new NotSupportedException($"The Web PubSub emulator does not support event handler authentication for hub '{hub.HubName}'.");
+                        }
+
+                        handlers.Add(new JsonObject
+                        {
+                            ["UrlTemplate"] = await url.GetValueAsync(valueContext, cancellationToken).ConfigureAwait(false),
+                            ["EventPattern"] = userEvents,
+                            ["SystemEvents"] = new JsonArray((systemEvents ?? []).Select(e => (JsonNode?)JsonValue.Create(e)).ToArray())
+                        });
+                    }
+                    hubs[hub.HubName] = new JsonObject { ["EventHandlers"] = handlers };
+                }
+
+                var config = new JsonObject { ["WebPubSub"] = new JsonObject { ["Hubs"] = hubs } };
+                return [new ContainerFile { Name = "appsettings.json", Contents = config.ToJsonString() }];
+            });
+
+        if (configureContainer is not null)
+        {
+            configureContainer(surrogateBuilder);
+        }
+
+        return builder.WithHttpHealthCheck("/api/health", endpointName: "emulator");
     }
 
     /// <summary>

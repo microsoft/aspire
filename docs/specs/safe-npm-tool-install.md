@@ -94,9 +94,9 @@ Our verification chain relies on these trust anchors:
 
 ### Step 6: Generate and mirror skill files
 
-**Action:** Run `playwright-cli install --skills` to generate agent skill files in the primary skill directory (`.claude/skills/playwright-cli/`), then mirror the skill directory to all other detected agent environment skill directories (e.g., `.github/skills/playwright-cli/`, `.opencode/skill/playwright-cli/`). The mirror is a full sync — files are created, updated, and stale files are removed so all environments have identical skill content.
+**Action:** Run `playwright-cli install --skills` in an isolated temporary directory, then copy the generated `.claude/skills/playwright-cli/` directory only to the selected clients' skill destinations in the selected project or global scope. Copilot and OpenCode share `.agents/skills/playwright-cli/`; Claude Code uses `.claude/skills/playwright-cli/`. Shared destinations are written once. The mirror is a full sync — files are created, updated, and stale files are removed in selected destinations. Unselected clients, the other scope, and legacy skill locations remain untouched.
 
-**What this establishes:** The Playwright CLI skill files are available for all configured agent environments.
+**What this establishes:** The Playwright CLI skill files are available for the selected clients and scope. Copy failures are reported as warnings when some destinations succeed, or as a failure when none succeed.
 
 ## Verification Chain Summary
 

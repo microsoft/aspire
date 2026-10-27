@@ -104,12 +104,12 @@ internal interface IAzureProvisioningOptionsManager
 /// <summary>
 /// Azure provisioning option values supplied by a command.
 /// </summary>
-internal sealed record AzureProvisioningOptionsUpdate(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId);
+internal sealed record AzureProvisioningOptionsUpdate(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId, string? TenantResourceSuffix);
 
 /// <summary>
 /// The currently persisted Azure provisioning options.
 /// </summary>
-internal sealed record AzureProvisioningOptionsState(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId);
+internal sealed record AzureProvisioningOptionsState(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId, string? TenantResourceSuffix);
 
 /// <summary>
 /// No-op implementation used in publish mode where interactive provisioning options management is not needed.
@@ -118,10 +118,10 @@ internal sealed class NoOpAzureProvisioningOptionsManager : IAzureProvisioningOp
 {
     public Task<bool> EnsureProvisioningOptionsAsync(bool forcePrompt, CancellationToken cancellationToken = default) => Task.FromResult(false);
     public Task<AzureProvisioningOptionsState> GetProvisioningOptionsAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult(new AzureProvisioningOptionsState(null, null, null, null));
+        => Task.FromResult(new AzureProvisioningOptionsState(null, null, null, null, null));
     public Task PersistProvisioningOptionsAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task<AzureProvisioningOptionsState> ApplyProvisioningOptionsAsync(AzureProvisioningOptionsUpdate options, CancellationToken cancellationToken = default)
-        => Task.FromResult(new AzureProvisioningOptionsState(options.SubscriptionId, options.ResourceGroup, options.Location, options.TenantId));
+        => Task.FromResult(new AzureProvisioningOptionsState(options.SubscriptionId, options.ResourceGroup, options.Location, options.TenantId, options.TenantResourceSuffix));
 }
 
 /// <summary>

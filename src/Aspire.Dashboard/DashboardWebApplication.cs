@@ -436,6 +436,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         builder.Services.AddScoped<DimensionManager>();
         builder.Services.AddScoped<DashboardDialogService>();
+        builder.Services.AddSingleton(new OtlpEndpointInfo(
+            () => _otlpServiceGrpcEndPointAccessor?.Invoke(),
+            () => _otlpServiceHttpEndPointAccessor?.Invoke()));
         builder.Services.AddScoped<DashboardMessageBarService>();
         builder.Services.AddScoped<ResourceMenuBuilder>();
         builder.Services.AddScoped<StructuredLogMenuBuilder>();
@@ -648,9 +651,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         var otlpGrpcAddress = _otlpServiceGrpcEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);
         var otlpHttpAddress = _otlpServiceHttpEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);
 
-        // DOTNET_RUNNING_IN_CONTAINER is a well-known environment variable added by official .NET images.
-        // https://learn.microsoft.com/dotnet/core/tools/dotnet-environment-variables#dotnet_running_in_container-and-dotnet_running_in_containers
-        var isContainer = _app.Configuration.GetBool("DOTNET_RUNNING_IN_CONTAINER") ?? false;
+        var isContainer = _app.Configuration.GetBool(KnownConfigNames.DotnetRunningInContainer) ?? false;
 
         LoggingHelpers.WriteDashboardSummary(
             _logger,

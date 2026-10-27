@@ -75,7 +75,7 @@ public sealed class KubernetesDeployWithProjectPersistentVolumeTests(ITestOutput
                     .WithCapacity("256Mi")
                     .WithAccessMode(PersistentVolumeAccessMode.ReadWriteOnce);
 
-                builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+                builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                     .WithPersistentVolume(scratch, "/srv/data", env: "DATA_PATH")
                     .WithExternalHttpEndpoints();
 

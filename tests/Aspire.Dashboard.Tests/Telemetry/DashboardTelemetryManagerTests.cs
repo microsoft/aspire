@@ -25,7 +25,7 @@ public class DashboardTelemetryManagerTests
     {
         var sink = new TestSink();
         using var factory = LoggerFactory.Create(builder => builder.AddProvider(new TestLoggerProvider(sink)));
-        using var telemetry = new DashboardTelemetryService(factory.CreateLogger<DashboardTelemetryService>(),
+        using var telemetry = DashboardTelemetryFixture.CreateTelemetryService(factory,
             new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = true });
         var exporter = new TestDashboardTelemetryLogExporter();
         var configured = 0;
@@ -185,7 +185,7 @@ public class DashboardTelemetryManagerTests
     {
         var sink = new TestSink();
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new TestLoggerProvider(sink)));
-        using var telemetry = new DashboardTelemetryService(loggerFactory.CreateLogger<DashboardTelemetryService>(),
+        using var telemetry = DashboardTelemetryFixture.CreateTelemetryService(loggerFactory,
             new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = true });
         var calls = new System.Collections.Concurrent.ConcurrentQueue<(string Signal, int Timeout)>();
         bool Shutdown(string signal, int timeout)
@@ -321,7 +321,8 @@ public class DashboardTelemetryManagerTests
     {
         services.AddSingleton(new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = enabled });
         services.AddLogging();
-        services.AddSingleton<DashboardTelemetryService>();
+        services.AddSingleton(services => DashboardTelemetryFixture.CreateTelemetryService(
+            services.GetRequiredService<ILoggerFactory>(), services.GetRequiredService<DashboardTelemetryConfiguration>()));
         services.AddSingleton<DashboardTelemetryManager>();
         services.AddHostedService(services => services.GetRequiredService<DashboardTelemetryManager>());
 

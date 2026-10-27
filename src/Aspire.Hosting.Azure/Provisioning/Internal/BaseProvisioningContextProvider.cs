@@ -30,6 +30,7 @@ internal abstract partial class BaseProvisioningContextProvider(
     internal const string SubscriptionIdName = "SubscriptionId";
     internal const string ResourceGroupName = "ResourceGroup";
     internal const string TenantName = "Tenant";
+    internal const string TenantResourceSuffixName = "TenantResourceSuffix";
 
     protected readonly IInteractionService _interactionService = interactionService;
     protected readonly AzureProvisionerOptions _options = options.Value;
@@ -44,7 +45,8 @@ internal abstract partial class BaseProvisioningContextProvider(
         Location = options.Value.Location,
         SubscriptionId = options.Value.SubscriptionId,
         ResourceGroup = options.Value.ResourceGroup,
-        TenantId = options.Value.TenantId
+        TenantId = options.Value.TenantId,
+        TenantResourceSuffix = options.Value.TenantResourceSuffix
     };
     protected readonly IHostEnvironment _environment = environment;
     protected readonly ILogger _logger = logger;
@@ -108,6 +110,13 @@ internal abstract partial class BaseProvisioningContextProvider(
         {
             throw new MissingConfigurationException("An azure location/region is required. Set the Azure:Location configuration value.");
         }
+
+        // Principal lookup can require a different audience from ARM. Resolve it before
+        // creating the resource group, while a short-lived federated assertion is usable.
+        // Use the configured principal provider rather than assuming its token scope.
+        var principal = _distributedApplicationExecutionContext.IsPublishMode
+            ? await _azurePrincipalProvider.GetPrincipalAsync(cancellationToken).ConfigureAwait(false)
+            : null;
 
         // Acquire Azure state section for reading/writing configuration
         var azureStateSection = await _deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken).ConfigureAwait(false);
@@ -178,7 +187,7 @@ internal abstract partial class BaseProvisioningContextProvider(
             _logger.LogInformation("Resource group {rgName} created.", resourceGroup.Name);
         }
 
-        var principal = await _azurePrincipalProvider.GetPrincipalAsync(cancellationToken).ConfigureAwait(false);
+        principal ??= await _azurePrincipalProvider.GetPrincipalAsync(cancellationToken).ConfigureAwait(false);
 
         await SaveProvisioningOptionsAsync(
             resourceGroupName,
@@ -217,6 +226,11 @@ internal abstract partial class BaseProvisioningContextProvider(
         azureSection["Location"] = _options.Location;
         azureSection["SubscriptionId"] = _options.SubscriptionId;
         azureSection["ResourceGroup"] = resourceGroupName;
+        if (_options.TenantResourceSuffix is { } tenantResourceSuffix)
+        {
+            // Persist an empty suffix too, so clearing the dialog field overrides a configured default.
+            azureSection["TenantResourceSuffix"] = tenantResourceSuffix;
+        }
 
         if (!string.IsNullOrEmpty(tenantId))
         {

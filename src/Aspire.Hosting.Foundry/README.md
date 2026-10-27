@@ -193,11 +193,13 @@ builder.AddPythonApp("agent", "./app", "main:app")
 
 In run mode, the agent runs locally with health check endpoints and OpenTelemetry instrumentation. In publish mode, the agent is deployed as a hosted agent in Microsoft Foundry.
 
+The preview `HostedAgentConfiguration.Tools` property has been removed. Configure hosted-agent
+tools in the agent application, not in the AppHost.
+
 ## Toolbox usage
 
-Toolboxes bundle reusable Foundry tools behind a single MCP endpoint. Aspire creates the first
-immutable Toolbox version and promotes new versions only when the configured tools, description,
-or metadata change.
+Toolboxes bundle reusable Foundry tools behind a single MCP endpoint. Aspire reuses unchanged
+versions and creates a new default version when the configuration or hosting integration changes.
 
 **C#**
 

@@ -40,6 +40,7 @@ class ResourceGraph {
 
         // Static icon (SVG path + tooltip) shared by every node's context-menu affordance (cog).
         this.menuIcon = graphIcons ? graphIcons.menu : null;
+        this.hiddenIcon = graphIcons ? graphIcons.hidden : null;
 
         this.nodes = [];
         this.links = [];
@@ -201,6 +202,9 @@ class ResourceGraph {
         if (r1.displayName !== r2.displayName) {
             return false;
         }
+        if (r1.isHidden !== r2.isHidden) {
+            return false;
+        }
         if (!this.iconEqual(r1.resourceIcon, r2.resourceIcon)) {
             return false;
         }
@@ -275,6 +279,7 @@ class ResourceGraph {
                     endpointText: resource.endpointText,
                     resourceIcon: createIcon(resource.resourceIcon),
                     stateIcon: createIcon(resource.stateIcon),
+                    isHidden: resource.isHidden,
                     degree: degree
                 });
             } else {
@@ -286,6 +291,7 @@ class ResourceGraph {
                     endpointText: resource.endpointText,
                     resourceIcon: createIcon(resource.resourceIcon),
                     stateIcon: createIcon(resource.stateIcon),
+                    isHidden: resource.isHidden,
                     degree: degree
                 });
             }
@@ -350,13 +356,14 @@ class ResourceGraph {
             .attr("resource-name", n => n.id)
             .call(this.dragDrop);
 
+        // Enter/leave keeps hover stable while moving between a node's child shapes.
         var newNodesContainer = newNodes
             .append("g")
             .attr("class", "resource-scale")
             .on('click', this.selectNode)
             .on('contextmenu', this.nodeContextMenu)
-            .on('mouseover', this.hoverNode)
-            .on('mouseout', this.unHoverNode);
+            .on('mouseenter', this.hoverNode)
+            .on('mouseleave', this.unHoverNode);
         newNodesContainer
             .append("circle")
             .attr("r", 56)
@@ -426,11 +433,32 @@ class ResourceGraph {
             .attr("transform", "translate(0,71)")
             .attr("class", "resource-name");
         resourceNameGroup
+            .append("rect")
+            .attr("class", "resource-name-hitbox");
+        resourceNameGroup
             .append("text")
             .text(n => trimText(n.label, 30));
         resourceNameGroup
             .append("title")
             .text(n => n.label);
+
+        if (this.hiddenIcon) {
+            var hiddenIconGroup = resourceNameGroup
+                .append("g")
+                .attr("class", "resource-hidden-icon")
+                .style("display", n => n.isHidden ? null : "none");
+            hiddenIconGroup
+                .append("rect")
+                .attr("class", "resource-hidden-icon-hitbox")
+                .attr("x", -4)
+                .attr("width", 20);
+            hiddenIconGroup
+                .append("path")
+                .attr("d", this.hiddenIcon.path);
+            hiddenIconGroup
+                .append("title")
+                .text(this.hiddenIcon.tooltip);
+        }
 
         // Context menu affordance. A cog positioned on the circle rim directly below the status badge.
         // The status badge sits at the top-right via "scale(1.6) translate(14,-34)" (center ~(35,-42)),
@@ -482,8 +510,33 @@ class ResourceGraph {
             .attr("opacity", 1);
 
         this.nodeElements = newNodes.merge(this.nodeElements);
+        this.nodeElements.classed('resource-group-hidden', n => n.isHidden);
 
         // Set resource values that change.
+        this.nodeElementsG
+            .selectAll(".resource-group")
+            .select(".resource-name")
+            .each(function (n) {
+                const nameGroup = d3.select(this);
+                const bounds = nameGroup.select("text").node().getBBox();
+                const hitboxHeight = Math.max(bounds.height, 16);
+                nameGroup.select(".resource-name-hitbox")
+                    .attr("x", bounds.x)
+                    .attr("y", bounds.y + (bounds.height - hitboxHeight) / 2)
+                    .attr("width", bounds.width)
+                    .attr("height", hitboxHeight);
+                const hiddenIconGroup = nameGroup
+                    .select(".resource-hidden-icon")
+                    .style("display", n.isHidden ? null : "none");
+                if (n.isHidden && !hiddenIconGroup.empty()) {
+                    // Join the icon's hitbox to the measured label, including the gap between them.
+                    hiddenIconGroup.attr("transform",
+                        `translate(${bounds.x + bounds.width + 4},${bounds.y + (bounds.height - 16) / 2})`);
+                    hiddenIconGroup.select(".resource-hidden-icon-hitbox")
+                        .attr("y", (16 - hitboxHeight) / 2)
+                        .attr("height", hitboxHeight);
+                }
+            });
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-menu-cog")
@@ -702,7 +755,7 @@ class ResourceGraph {
     }
 
     hoverNode = (event) => {
-        var mouseoverNode = event.target.__data__;
+        var mouseoverNode = event.currentTarget.__data__;
 
         this.updateNodeHighlights(mouseoverNode);
     }
@@ -726,6 +779,9 @@ class ResourceGraph {
         // we modify the styles to highlight selected nodes
         this.nodeElements.attr('class', (node) => {
             var classNames = ['resource-group'];
+            if (node.isHidden) {
+                classNames.push('resource-group-hidden');
+            }
             if (this.nodeEquals(node, mouseoverNode)) {
                 classNames.push('resource-group-hover');
             }

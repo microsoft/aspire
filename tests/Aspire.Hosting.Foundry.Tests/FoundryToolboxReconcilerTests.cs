@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Hashing;
+using System.Reflection;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Foundry.Tests;
@@ -324,6 +327,68 @@ public class FoundryToolboxReconcilerTests
             });
 
         Assert.Equal(first.ConfigurationHash, second.ConfigurationHash);
+    }
+
+    [Fact]
+    public async Task Create_IncludesFullHostingInformationalVersion()
+    {
+        var definition = await CreateDefinitionAsync();
+        var version = typeof(FoundryToolboxDeploymentDefinition).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+
+        Assert.Equal(
+            FoundryToolboxDeploymentDefinition.ComputeConfigurationHash(
+                definition.Description, definition.Tools, definition.Metadata, version),
+            definition.ConfigurationHash);
+    }
+
+    [Theory]
+    [InlineData("17.0.0-preview.1+abc", "17.0.0-preview.2+abc")]
+    [InlineData("17.0.0-preview.1+abc", "17.0.0-preview.1+def")]
+    public async Task ComputeConfigurationHash_IncludesPrereleaseAndBuildSuffixes(
+        string firstVersion, string secondVersion)
+    {
+        var definition = await CreateDefinitionAsync();
+
+        Assert.NotEqual(
+            FoundryToolboxDeploymentDefinition.ComputeConfigurationHash(
+                definition.Description, definition.Tools, definition.Metadata, firstVersion),
+            FoundryToolboxDeploymentDefinition.ComputeConfigurationHash(
+                definition.Description, definition.Tools, definition.Metadata, secondVersion));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("16.0.0-preview.1+old-build")]
+    public async Task ReconcileAsync_ReplacesOlderFingerprintThenReusesVersion(string? olderHostingVersion)
+    {
+        var definition = await CreateDefinitionAsync();
+        // Before version-aware fingerprints, the hash represented only the intended configuration,
+        // even when the SDK dropped fields from the actual HTTP request.
+        const string legacyConfiguration =
+            """{"description":"Description","metadata":{},"tools":[{"type":"web_search","name":"web-search"}]}""";
+        var oldHash = olderHostingVersion is null
+            ? Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(legacyConfiguration))).ToLowerInvariant()
+            : FoundryToolboxDeploymentDefinition.ComputeConfigurationHash(
+                definition.Description, definition.Tools, definition.Metadata, olderHostingVersion);
+        var administration = new RecordingToolboxAdministration
+        {
+            Existing = new FoundryToolboxState("1", [CreateVersionState("1", oldHash)]),
+            VersionToCreate = "2"
+        };
+        var reconciler = new FoundryToolboxReconciler(administration);
+
+        var upgraded = await reconciler.ReconcileAsync(definition, CancellationToken.None);
+        var unchanged = await reconciler.ReconcileAsync(await CreateDefinitionAsync(), CancellationToken.None);
+
+        Assert.Equal(FoundryToolboxReconcileAction.CreatedAndPromoted, upgraded.Action);
+        Assert.Equal(FoundryToolboxReconcileAction.Reused, unchanged.Action);
+        Assert.Equal("2", upgraded.Version);
+        Assert.Equal(upgraded.Version, unchanged.Version);
+        Assert.Same(definition, Assert.Single(administration.CreatedDefinitions));
+        Assert.Equal(("field-tools", "2"), Assert.Single(administration.Promotions));
+        Assert.Equal("2", administration.Existing!.DefaultVersion);
+        Assert.Equal(2, administration.Existing.Versions.Count);
     }
 
     [Fact]

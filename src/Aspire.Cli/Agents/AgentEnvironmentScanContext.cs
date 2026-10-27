@@ -4,14 +4,10 @@
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Context passed to agent environment scanners to collect detected applicators.
+/// The directories searched by agent environment scanners.
 /// </summary>
-internal sealed class AgentEnvironmentScanContext
+internal sealed record AgentEnvironmentScanContext
 {
-    private readonly List<AgentEnvironmentApplicator> _applicators = [];
-    private readonly HashSet<string> _skillBaseDirectories = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<AgentClientKind> _detectedClients = [];
-
     /// <summary>
     /// Gets the working directory being scanned.
     /// </summary>
@@ -24,55 +20,33 @@ internal sealed class AgentEnvironmentScanContext
     /// </summary>
     public required DirectoryInfo RepositoryRoot { get; init; }
 
-    /// <summary>
-    /// Gets or sets a value indicating whether a Playwright CLI applicator has been added.
-    /// This is used to ensure only one applicator for Playwright is added across all scanners.
-    /// </summary>
-    public bool PlaywrightApplicatorAdded { get; set; }
-
-    /// <summary>
-    /// Adds an applicator to the collection of detected agent environments.
-    /// </summary>
-    /// <param name="applicator">The applicator to add.</param>
-    public void AddApplicator(AgentEnvironmentApplicator applicator)
+    public DirectoryInfo? FindProjectDirectory(string directoryName, DirectoryInfo homeDirectory)
     {
-        ArgumentNullException.ThrowIfNull(applicator);
-        _applicators.Add(applicator);
+        var relativePath = Path.GetRelativePath(RepositoryRoot.FullName, WorkingDirectory.FullName);
+        // An explicitly selected workspace need not contain the invocation directory.
+        var currentDirectory = Path.IsPathRooted(relativePath) ||
+            relativePath == ".." || relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                ? RepositoryRoot
+                : WorkingDirectory;
+        while (currentDirectory is not null)
+        {
+            // Home-level agent settings do not establish use in this project, and
+            // project discovery must not walk above the selected repository root.
+            var path = Path.Combine(currentDirectory.FullName, directoryName);
+            if (Directory.Exists(path) &&
+                !string.Equals(currentDirectory.FullName, homeDirectory.FullName, StringComparison.OrdinalIgnoreCase))
+            {
+                return new DirectoryInfo(path);
+            }
+
+            if (Path.GetRelativePath(RepositoryRoot.FullName, currentDirectory.FullName) == ".")
+            {
+                break;
+            }
+
+            currentDirectory = currentDirectory.Parent;
+        }
+
+        return null;
     }
-
-    /// <summary>
-    /// Gets the collection of detected applicators.
-    /// </summary>
-    public IReadOnlyList<AgentEnvironmentApplicator> Applicators => _applicators;
-
-    /// <summary>
-    /// Registers a skill base directory for an agent environment (e.g., ".claude/skills", ".github/skills").
-    /// These directories are used to mirror skill files across all detected agent environments.
-    /// </summary>
-    /// <param name="relativeSkillBaseDir">The relative path to the skill base directory from the repository root.</param>
-    public void AddSkillBaseDirectory(string relativeSkillBaseDir)
-    {
-        _skillBaseDirectories.Add(relativeSkillBaseDir);
-    }
-
-    /// <summary>
-    /// Gets the registered skill base directories for all detected agent environments.
-    /// </summary>
-    public IReadOnlyCollection<string> SkillBaseDirectories => _skillBaseDirectories;
-
-    /// <summary>
-    /// Records that an agent client was detected as present in the environment. Used to scope
-    /// telemetry hook registration to the clients the user actually has, independent of whether the
-    /// Aspire MCP server still needs configuring.
-    /// </summary>
-    /// <param name="client">The detected agent client.</param>
-    public void AddDetectedClient(AgentClientKind client)
-    {
-        _detectedClients.Add(client);
-    }
-
-    /// <summary>
-    /// Gets the set of agent clients detected as present in the environment.
-    /// </summary>
-    public IReadOnlyCollection<AgentClientKind> DetectedClients => _detectedClients;
 }

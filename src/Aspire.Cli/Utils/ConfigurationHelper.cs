@@ -2,17 +2,24 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.IO.Hashing;
+using System.Security.AccessControl;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Resources;
+using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils;
 
 internal static class ConfigurationHelper
 {
     internal const string IntegrationCacheFolderName = "integrations";
+    private static readonly TimeSpan s_workspaceConfigLockTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Standard options for parsing JSON that may contain non-spec features like comments and trailing commas.
@@ -83,6 +90,30 @@ internal static class ConfigurationHelper
         if (localSettingsFile is not null)
         {
             AddSettingsFile(configuration, localSettingsFile.FullName, persistNormalization);
+        }
+    }
+
+    internal static async Task<FileLock?> TryAcquireWorkspaceConfigLockAsync(
+        CliExecutionContext executionContext, FileInfo settingsFile, ILogger logger, CancellationToken cancellationToken)
+    {
+        // Lock files live in the cache so read-only workspaces remain usable. Canonicalizing and
+        // folding the config path makes aliases on symlinked or case-insensitive volumes contend;
+        // on a case-sensitive volume this can only serialize two otherwise independent writes.
+        var normalizedSettingsPath = PathNormalizer.ResolveSymlinks(settingsFile.FullName)
+            .Normalize(NormalizationForm.FormC)
+            .ToUpperInvariant();
+        var lockFileName = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(normalizedSettingsPath))).ToLowerInvariant();
+        var lockPath = Path.Combine(executionContext.CacheDirectory.FullName, "workspace-config-locks", $"{lockFileName}.lock");
+        try
+        {
+            return await FileLock.AcquireAsync(lockPath, cancellationToken, s_workspaceConfigLockTimeout);
+        }
+        catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
+        {
+            // Preserve the existing best-effort workspace bookkeeping when the cache
+            // cannot host a lock. Reads use the same policy as workspace-default writes.
+            logger.LogDebug(ex, "Proceeding without the workspace config lock at {LockPath}.", lockPath);
+            return null;
         }
     }
 
@@ -223,14 +254,127 @@ internal static class ConfigurationHelper
     }
 
     /// <summary>
+    /// Returns JSON that <see cref="JsonSerializer"/> produced with the final newline it does not write.
+    /// </summary>
+    internal static string EnsureFinalNewline(string json)
+    {
+        // System.Text.Json already indents with Environment.NewLine, so serialized text needs no line break
+        // normalization and only lacks the trailing newline. Text that was not serialized, such as a file copied
+        // from the embedded templates, goes through NormalizeJsonFileContent instead.
+        //
+        // An existing final line break (LF or CRLF) is kept as is, so the result never ends with a second one.
+        if (json.EndsWith('\n'))
+        {
+            return json;
+        }
+
+        return json + Environment.NewLine;
+    }
+
+    /// <summary>
+    /// Returns JSON that was not serialized by the CLI, such as a template file copied from the embedded
+    /// resources, with the OS line break and exactly one trailing newline.
+    /// </summary>
+    internal static string NormalizeJsonFileContent(string json) => NormalizeJsonFileContent(json, Environment.NewLine);
+
+    /// <summary>
+    /// Returns JSON with <paramref name="newLine"/> as every line break and exactly one trailing
+    /// <paramref name="newLine"/>.
+    /// </summary>
+    internal static string NormalizeJsonFileContent(string json, string newLine)
+    {
+        // Config files get the OS line break, so they match what an editor on that OS produces and git
+        // (core.autocrlf, .gitattributes) can normalize them like any other text file. A file copied from the
+        // embedded templates keeps the line breaks of the checkout that built the CLI (CRLF from a Windows
+        // checkout with core.autocrlf, LF otherwise), and some templates have no trailing newline, so it is
+        // rewritten to match the files the CLI serializes.
+        //
+        // Only CRLF and LF are rewritten, not everything string.ReplaceLineEndings treats as a line break:
+        // JSON forbids raw control characters inside strings, so a raw CRLF or LF can only be whitespace
+        // between tokens and replacing it cannot change a value, whereas U+0085, U+2028 and U+2029 are legal
+        // raw inside a string.
+        var lf = json.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n') + "\n";
+
+        return newLine == "\n" ? lf : lf.Replace("\n", newLine, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Serializes a JsonObject and writes it to a settings file, creating the directory if needed.
     /// </summary>
     internal static async Task WriteSettingsFileAsync(string filePath, JsonObject settings, CancellationToken cancellationToken = default)
     {
-        var jsonContent = JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject);
+        var jsonContent = EnsureFinalNewline(JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject));
 
         EnsureDirectoryExists(filePath);
         await File.WriteAllTextAsync(filePath, jsonContent, cancellationToken);
+    }
+
+    internal static async Task WriteSettingsFileAtomicallyAsync(string filePath, JsonObject settings, CancellationToken cancellationToken)
+    {
+        // Resolve before choosing the sibling so replacement updates the target, not the link.
+        // This does not prevent filesystem races if links change during the write;
+        // concurrent link changes are not expected during normal CLI usage.
+        if (!PathNormalizer.TryResolveSymlinks(filePath, out var resolvedPath))
+        {
+            throw new IOException($"Unable to resolve symbolic links for settings file '{filePath}'.");
+        }
+        filePath = resolvedPath;
+
+        EnsureDirectoryExists(filePath);
+        // A sibling is required for atomic replacement even when the workspace and
+        // system temp directory are on different volumes. CreateNew rejects existing links/files.
+        var temporaryPath = $"{filePath}.{Guid.NewGuid():N}.tmp";
+        var created = false;
+        try
+        {
+            var destinationExists = File.Exists(filePath);
+            var options = new FileStreamOptions
+            {
+                Mode = FileMode.CreateNew,
+                Access = FileAccess.Write,
+                Share = FileShare.None,
+                Options = FileOptions.Asynchronous
+            };
+            UnixFileMode? destinationMode = null;
+            if (!OperatingSystem.IsWindows())
+            {
+                // Protect the temporary contents from creation, even in a shared directory.
+                options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+                destinationMode = destinationExists ? File.GetUnixFileMode(filePath) : null;
+            }
+            await using (var stream = OperatingSystem.IsWindows() && destinationExists
+                ? new FileInfo(temporaryPath).Create(FileMode.CreateNew, FileSystemRights.Write, FileShare.None,
+                    4096, FileOptions.Asynchronous, new FileInfo(filePath).GetAccessControl(AccessControlSections.Access))
+                : new FileStream(temporaryPath, options))
+            {
+                created = true;
+                // Serialize to text rather than to the stream so the final newline is added the same way as in the
+                // other settings writers. Encoding.UTF8.GetBytes writes no byte order mark, like File.WriteAllText.
+                var jsonContent = EnsureFinalNewline(JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject));
+                await stream.WriteAsync(Encoding.UTF8.GetBytes(jsonContent), cancellationToken);
+            }
+            if (!OperatingSystem.IsWindows() && destinationMode is { } mode)
+            {
+                File.SetUnixFileMode(temporaryPath, mode);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            if (OperatingSystem.IsWindows() && destinationExists)
+            {
+                // Replace preserves the destination DACL and other Windows file metadata.
+                File.Replace(temporaryPath, filePath, destinationBackupFileName: null);
+            }
+            else
+            {
+                File.Move(temporaryPath, filePath, overwrite: true);
+            }
+        }
+        finally
+        {
+            if (created)
+            {
+                File.Delete(temporaryPath);
+            }
+        }
     }
 
     /// <summary>
@@ -238,7 +382,7 @@ internal static class ConfigurationHelper
     /// </summary>
     internal static void WriteSettingsFile(string filePath, JsonObject settings)
     {
-        var jsonContent = JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject);
+        var jsonContent = EnsureFinalNewline(JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject));
 
         EnsureDirectoryExists(filePath);
         File.WriteAllText(filePath, jsonContent);
@@ -253,7 +397,7 @@ internal static class ConfigurationHelper
         }
     }
 
-    private static void AddSettingsFile(IConfigurationBuilder configuration, string filePath, bool persistNormalization)
+    private static JsonObject? AddSettingsFile(IConfigurationBuilder configuration, string filePath, bool persistNormalization)
     {
         // Proactively normalize the settings file to prevent duplicate key errors.
         // This handles files corrupted by mixing colon and dot notation
@@ -282,7 +426,7 @@ internal static class ConfigurationHelper
                 var cleanJson = node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
                 var bytes = System.Text.Encoding.UTF8.GetBytes(cleanJson);
                 configuration.AddJsonStream(new MemoryStream(bytes));
-                return;
+                return node as JsonObject;
             }
         }
         catch (JsonException ex)
@@ -293,6 +437,7 @@ internal static class ConfigurationHelper
         }
 
         configuration.AddJsonFile(filePath, optional: true);
+        return null;
     }
 
     /// <summary>
@@ -326,77 +471,118 @@ internal static class ConfigurationHelper
         }
     }
 
-    private static bool NormalizeSettings(JsonObject settings)
+    internal static bool NormalizeSettings(JsonObject settings)
     {
-        // Find all colon-separated keys at root level
-        var colonKeys = new List<(string key, JsonNode? value)>();
-
-        foreach (var kvp in settings)
-        {
-            if (kvp.Key.Contains(':'))
-            {
-                // DeepClone preserves the original JSON type (boolean, number, etc.)
-                // instead of converting to string via ToString().
-                colonKeys.Add((kvp.Key, kvp.Value?.DeepClone()));
-            }
-        }
-
-        if (colonKeys.Count == 0)
+        // Only root keys use legacy flat notation. Nested keys such as
+        // {"environmentVariables":{"Logging:LogLevel:Default":"Debug"}} can be literal names.
+        var colonKeys = settings
+            .Where(static property => property.Key.Contains(':'))
+            .Select(static property => (property.Key, Value: property.Value?.DeepClone()))
+            .ToArray();
+        if (colonKeys.Length == 0)
         {
             return false;
         }
 
-        // Remove colon keys and re-add them as nested structure
+        // Rebuild once: removing flat keys individually shifts JsonObject's ordered storage.
+        // Keep the original non-flat nodes and their order.
+        var retainedProperties = settings.Where(static property => !property.Key.Contains(':')).ToArray();
+        settings.Clear();
+        foreach (var property in retainedProperties)
+        {
+            settings.Add(property.Key, property.Value);
+        }
+
+        var keyLookups = new Dictionary<JsonObject, Dictionary<string, string>>(ReferenceEqualityComparer.Instance);
+        string GetKey(JsonObject obj, string key)
+        {
+            if (!keyLookups.TryGetValue(obj, out var keys))
+            {
+                keys = new Dictionary<string, string>(obj.Count, StringComparer.OrdinalIgnoreCase);
+                foreach (var property in obj)
+                {
+                    // Preserve the first matching spelling if case-equivalent keys already exist.
+                    keys.TryAdd(property.Key, property.Key);
+                }
+                keyLookups.Add(obj, keys);
+            }
+
+            if (keys.TryGetValue(key, out var existing))
+            {
+                return existing;
+            }
+            keys.Add(key, key);
+
+            return key;
+        }
+
+        // For {"DOCS":{"custom":"local"},"docs":{"api":{"sitemapUrl":"nested"}}},
+        // the complete docs:api:sitemapUrl path belongs to the second section.
+        var propertiesByPath = new Dictionary<string, SettingsProperty>(StringComparer.OrdinalIgnoreCase);
+        void IndexProperties(JsonObject obj, string? prefix)
+        {
+            foreach (var property in obj)
+            {
+                var path = prefix is null ? property.Key : $"{prefix}:{property.Key}";
+                if (!propertiesByPath.TryGetValue(path, out var existing)
+                    || (existing.Parent[existing.Key] is null && property.Value is not null))
+                {
+                    propertiesByPath[path] = new SettingsProperty(obj, property.Key);
+                }
+                if (property.Value is JsonObject section)
+                {
+                    IndexProperties(section, path);
+                }
+            }
+        }
+        SettingsProperty? ResolveProperty(string path)
+        {
+            if (propertiesByPath.TryGetValue(path, out var existing))
+            {
+                return existing;
+            }
+
+            // Keep the first matching segment when creating a previously absent path.
+            var parts = path.Split(':');
+            var parent = settings;
+            for (var i = 0; i < parts.Length - 1; i++)
+            {
+                var key = GetKey(parent, parts[i]);
+                var child = parent[key];
+                if (child is null)
+                {
+                    child = new JsonObject();
+                    parent[key] = child;
+                }
+                if (child is not JsonObject section)
+                {
+                    return null;
+                }
+                parent = section;
+            }
+
+            return new SettingsProperty(parent, GetKey(parent, parts[^1]));
+        }
+
+        IndexProperties(settings, prefix: null);
         foreach (var (key, value) in colonKeys)
         {
-            settings.Remove(key);
-
-            // Convert "a:b:c" to nested {"a": {"b": {"c": value}}}
-            var parts = key.Split(':');
-            var currentObject = settings;
-            var pathConflict = false;
-
-            // Walk all but the last segment, creating objects as needed.
-            for (int i = 0; i < parts.Length - 1; i++)
-            {
-                var part = parts[i];
-
-                if (!currentObject.ContainsKey(part) || currentObject[part] is null)
-                {
-                    currentObject[part] = new JsonObject();
-                }
-                else if (currentObject[part] is JsonObject)
-                {
-                    currentObject = currentObject[part]!.AsObject();
-                    continue;
-                }
-                else
-                {
-                    // Existing non-object value conflicts with the desired nested structure.
-                    // Prefer the existing nested value and drop the flat key.
-                    pathConflict = true;
-                    break;
-                }
-
-                currentObject = currentObject[part]!.AsObject();
-            }
-
-            if (pathConflict)
+            if (ResolveProperty(key) is not { } property || property.Parent[property.Key] is not null)
             {
                 continue;
             }
 
-            var finalKey = parts[parts.Length - 1];
-
-            // If the final key already exists, keep its value and drop the flat key.
-            if (currentObject.ContainsKey(finalKey) && currentObject[finalKey] is not null)
+            property.Parent[property.Key] = value;
+            propertiesByPath[key] = property;
+            if (value is JsonObject section)
             {
-                continue;
+                // Later flat keys must also respect nested values introduced by this object.
+                IndexProperties(section, key);
             }
-
-            currentObject[finalKey] = value;
         }
 
         return true;
     }
+
+    private readonly record struct SettingsProperty(JsonObject Parent, string Key);
 }

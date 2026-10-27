@@ -532,6 +532,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
 
         var (stepsToExecute, stepsByName) = FilterStepsForExecution(allSteps, context);
+        context.SelectedSteps = stepsToExecute.AsReadOnly();
 
         // Build dependency graph and execute with readiness-based scheduler
         await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
@@ -564,6 +565,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
 
         var stepsToExecute = ComputeTransitiveDependencies(targetStep, allStepsByName);
+        context.SelectedSteps = stepsToExecute.AsReadOnly();
 
         await ExecuteStepsSequentially(stepsToExecute, context).ConfigureAwait(false);
     }

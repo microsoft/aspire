@@ -53,7 +53,7 @@ public sealed class KubernetesDeployWithFileKeyRefTests(ITestOutputHelper output
                 var builder = DistributedApplication.CreateBuilder(args);
                 var registry = builder.AddContainerRegistry("registry", builder.AddParameter("registryendpoint"));
 
-                builder.AddProject<Projects.{{ProjectName}}_ApiService>("{{serverName}}")
+                builder.AddDotnetProject("{{serverName}}", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                     .WithRemoteImageName("{{imageName}}")
                     .WithRemoteImageTag("filekeyref")
                     .WithExternalHttpEndpoints()

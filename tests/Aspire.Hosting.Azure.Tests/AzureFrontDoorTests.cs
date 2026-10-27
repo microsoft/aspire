@@ -141,6 +141,21 @@ public class AzureFrontDoorTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("api_endpointUrl", endpointUrl.Name);
     }
 
+    [Theory]
+    [InlineData("api", "api_endpointId")]
+    [InlineData("web", "web_endpointId")]
+    [InlineData("my-api", "my_api_endpointId")]
+    public void EndpointIdOutputReferenceIsAvailable(string originResourceName, string outputName)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor");
+
+        var endpointId = frontDoor.Resource.GetEndpointId(originResourceName);
+        Assert.Equal(outputName, endpointId.Name);
+        Assert.Equal($"{{frontdoor.outputs.{outputName}}}", endpointId.ValueExpression);
+    }
+
     [Fact]
     public void AddAzureFrontDoorThrowsOnNullName()
     {

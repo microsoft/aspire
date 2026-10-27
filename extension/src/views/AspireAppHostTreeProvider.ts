@@ -42,7 +42,7 @@ import { executeResourceCommand as executeResourceCommandWithUi, getErrorMessage
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { isSameFileSystemEntry } from '../utils/appHostDiscovery';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { pipelineInteractionCapability, pipelineStepListJsonCapability } from '../types/configInfo';
+import { pipelineInteractionCapability, pipelineStepListJsonCapability, terminalInstanceSelectionCapability } from '../types/configInfo';
 import { isAppHostSourceFile, isProjectFile } from '../utils/paths/comparison';
 import { isCommandCancellation } from '../utils/telemetry';
 import { isWebDashboardUrl } from '../debugger/session/dashboardLauncher';
@@ -1503,18 +1503,19 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     async openResourceTerminal(element: ResourceItem): Promise<void> {
         const command: Array<string | ShellArg> = ['terminal', 'attach', shellArg(element.resource.name)];
         const appHostPath = this._getAppHostPathForResource(element);
+        const target = appHostPath
+            ? getCliPathTargetForUri(vscode.Uri.file(appHostPath))
+            : windowCliPathTarget;
         if (appHostPath) {
             command.push('--apphost', shellArg(appHostPath));
         }
 
         const replicaIndex = getTerminalReplicaIndex(element.resource);
-        if (replicaIndex) {
+        // Older CLIs discard instance identity during discovery and still require a replica index.
+        if (replicaIndex && !await this._configInfoProvider.hasCapability(terminalInstanceSelectionCapability, { target })) {
             command.push('--replica', shellArg(replicaIndex));
         }
 
-        const target = appHostPath
-            ? getCliPathTargetForUri(vscode.Uri.file(appHostPath))
-            : windowCliPathTarget;
         await this._terminalProvider.sendAspireCommandToAspireTerminal(command, true, undefined, { terminalTarget: 'editor', target });
     }
 

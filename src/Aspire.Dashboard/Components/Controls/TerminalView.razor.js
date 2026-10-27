@@ -140,9 +140,11 @@ function updateAppearance(state) {
     state.viewElement.style.setProperty("--terminal-background", palette.background);
     state.viewElement.style.setProperty("--terminal-foreground", palette.foreground);
     state.client?.setColorMode(state.colorMode);
+    state.retainedClient?.client.setColorMode(state.colorMode);
     state.scrollbar = scrollbarConfiguration(state);
     // setScrollbar replaces, rather than merges, the configuration.
     state.client?.setScrollbar(state.scrollbar);
+    state.retainedClient?.client.setScrollbar(state.scrollbar);
     notifyToolbar(state);
 }
 
@@ -236,8 +238,16 @@ function cancelReconnect(state) {
     }
 }
 
-function releaseClient(state) {
-    state.inspectionObserver?.disconnect();
+function releaseRetainedClient(state) {
+    const retained = state.retainedClient;
+    state.retainedClient = null;
+    retained?.inspectionObserver?.disconnect();
+    retained?.controller?.abort();
+    retained?.client.dispose();
+}
+
+function releaseClient(state, preserve = false) {
+    const inspectionObserver = state.inspectionObserver;
     state.inspectionObserver = null;
     if (state.client?.element.contains(document.activeElement)) {
         requestFocus(state);
@@ -246,6 +256,17 @@ function releaseClient(state) {
     const client = state.client;
     state.controller = null;
     state.client = null;
+    if (preserve && client && !client.connected) {
+        releaseRetainedClient(state);
+        // Keep the real GPU-backed view above replacement mounts until their first frame.
+        // Aborting its mount signal would dispose it and discard retained graphics.
+        client.element.style.position = "absolute";
+        client.element.style.inset = "0";
+        client.element.style.zIndex = "1";
+        state.retainedClient = { client, controller, inspectionObserver };
+        return;
+    }
+    inspectionObserver?.disconnect();
     controller?.abort();
     client?.dispose();
 }
@@ -265,6 +286,8 @@ function configureTerminalChrome(client) {
     style.textContent = `
         .return-live { display: none !important; }
         .inspection-message[data-aspire-history-position] { display: none !important; }
+        .inspection-message[data-aspire-history-unavailable] { display: none !important; }
+        .inspection-message[data-aspire-disconnected-status] { display: none !important; }
         :host([data-aspire-pointer-input="true"]) .scrollbar-accessibility:focus-visible { outline: none; }
         .viewport {
             background-color: color-mix(in srgb, var(--terminal-background) 92%, black);
@@ -295,6 +318,15 @@ function configureTerminalChrome(client) {
         // feedback and navigation errors and must not be suppressed.
         status.toggleAttribute("data-aspire-history-position",
             status.dataset.level !== "error" && /^\d+ rows above live$/.test(status.textContent));
+        // Unavailable history is expected for terminal views without text history,
+        // not an actionable error. Preserve unrelated navigation and clipboard errors.
+        status.toggleAttribute("data-aspire-history-unavailable",
+            status.textContent === "Text history is not available for this terminal view");
+        // Hex1b can report "Terminal view is not connected" directly or with an
+        // action prefix, e.g. "Scrollbar: Terminal view is not connected".
+        // Aspire's recovery banner owns this state; keep unrelated errors visible.
+        status.toggleAttribute("data-aspire-disconnected-status", !client.connected &&
+            /^(?:(?:Input action failed|Copy failed|Scrollbar(?: tooltip)?): )?Terminal view is not connected$/.test(status.textContent));
     };
     const observer = new MutationObserver(update);
     observer.observe(status, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["data-level"] });
@@ -307,7 +339,8 @@ function scheduleReconnect(state, generation) {
         return;
     }
     if (state.attempts >= MAX_RECONNECT_ATTEMPTS) {
-        state.error = "disconnected";
+        state.retriesExhausted = true;
+        state.connectionError ??= "disconnected";
         notifyToolbar(state);
         return;
     }
@@ -320,7 +353,7 @@ function scheduleReconnect(state, generation) {
     }, delay);
 }
 
-function connectionFailed(state, generation, error) {
+function connectionFailed(state, generation, error, preserve) {
     if (!isCurrent(state, generation) || state.ended || state.failurePending) {
         return;
     }
@@ -329,8 +362,10 @@ function connectionFailed(state, generation, error) {
     state.peer = { id: null, primaryId: null, isPrimary: false };
     state.pendingSizing = null;
     console.warn("Dashboard terminal connection failed.", error);
-    state.error = "mount-failed";
-    releaseClient(state);
+    releaseClient(state, preserve);
+    if (!state.retainedClient) {
+        state.connectionError = "mount-failed";
+    }
     scheduleReconnect(state, generation);
     notifyToolbar(state);
 }
@@ -339,18 +374,27 @@ function connectionClosed(state, generation, details) {
     if (!isCurrent(state, generation) || state.ended) {
         return;
     }
+    state.disconnected = true;
     if (details.code !== TERMINAL_ENDED_CLOSE_CODE) {
         // Normal closure (1000), missing close frames (1006), reasons and wasClean
         // describe transport state, never whether the producer has completed.
-        connectionFailed(state, generation, new Error(`Terminal WebSocket closed (${details.code}).`));
+        const fail = () => connectionFailed(state, generation, new Error(`Terminal WebSocket closed (${details.code}).`), true);
+        if (!state.client && state.controller) {
+            // The first-frame promise can be fulfilled before its continuation adopts
+            // the renderer. Let that queued continuation run before cleanup can abort it.
+            queueMicrotask(fail);
+        } else {
+            fail();
+        }
         return;
     }
     state.ended = true;
+    state.retriesExhausted = false;
     state.connected = false;
     state.pendingSizing = null;
     state.autoFitPending = false;
     state.waitingForVisibility = false;
-    state.error = null;
+    state.connectionError = null;
     cancelReconnect(state);
     state.client?.setReadOnly(true);
     // Keep an already mounted projection until the user dismisses the view.
@@ -560,10 +604,12 @@ function connectClient(state) {
     }
     cancelReconnect(state);
     state.failurePending = false;
+    state.retriesExhausted = false;
     const generation = ++state.generation;
     releaseClient(state);
     state.peer = { id: null, primaryId: null, isPrimary: false };
-    state.geometry = null;
+    // The disabled size picker describes the retained screen until a new frame arrives.
+    state.geometry = state.retainedClient?.client.geometry ?? null;
     state.connected = false;
     state.pendingSizing = null;
     state.autoFitPending = state.autoFit;
@@ -589,6 +635,7 @@ async function mountClient(state, generation, controller) {
             label: state.options.label,
             sizing: state.sizing,
             readOnly: state.readOnly,
+            preserveOnDisconnect: true,
             colorMode: state.colorMode,
             lightModePalette: lightPalette,
             darkModePalette: darkPalette,
@@ -652,16 +699,44 @@ async function mountClient(state, generation, controller) {
             // https://github.com/mitchdenny/hex1b/pull/491
             renderer: /\bFirefox\//.test(navigator.userAgent) ? "webgl2" : "auto",
             onStatus(message, level) {
-                if (!current() || state.ended || level !== "error") {
+                const retained = !state.disposed && state.retainedClient?.controller === controller;
+                const completed = !state.disposed && state.ended && state.controller === controller && state.client !== null;
+                if (level !== "error" || (!retained && !completed && (!current() || state.ended))) {
                     return;
                 }
-                if (state.client?.connected) {
-                    // Local action/inspection failures do not break the connection.
-                    // Fatal renderer and transport failures disconnect before reporting status.
-                    console.log("Dashboard terminal status error.", message);
-                } else {
-                    connectionFailed(state, generation, message);
+                // The worker emits this status after onClose, including for preserved
+                // views: "View disconnected (1001: Going away). Attach another view to reconnect."
+                // It describes the closed transport, not a failed renderer.
+                if (state.disconnected && /^View disconnected \([\s\S]*\)\. Attach another view to reconnect\.$/.test(message)) {
+                    return;
                 }
+                // Hex1b 0.173.0 prefixes nonfatal inspection/action errors, e.g.
+                // "Scrollbar: Terminal disconnected before the marker operation completed."
+                // These can arrive after onClose; only unprefixed renderer/worker errors
+                // imply that a disconnected projection is unusable.
+                if (/^(?:Scrollbar(?: tooltip)?|Link detection|Selection UI failed): /.test(message) ||
+                    (!retained && state.client?.connected)) {
+                    console.log("Dashboard terminal status error.", message);
+                    return;
+                }
+                if (retained) {
+                    // Retained renderers outlive their connection generation. A fatal
+                    // error must release that renderer, not cancel its pending replacement.
+                    console.warn("Dashboard retained terminal renderer failed.", message);
+                    releaseRetainedClient(state);
+                    state.connectionError = state.ended ? "renderer-failed" : "mount-failed";
+                    notifyToolbar(state);
+                    return;
+                }
+                if (completed) {
+                    console.warn("Dashboard completed terminal renderer failed.", message);
+                    releaseClient(state);
+                    state.connectionError = "renderer-failed";
+                    notifyToolbar(state);
+                    return;
+                }
+                // Fatal renderer and transport failures disconnect before reporting status.
+                connectionFailed(state, generation, message, false);
             },
             onGeometry(geometry) {
                 if (current()) {
@@ -703,15 +778,19 @@ async function mountClient(state, generation, controller) {
         clearInvalidatedSelection(state);
         // Policy can change while mount is waiting for its first frame.
         client.setReadOnly(state.readOnly || state.ended);
+        // Mount resolves after a replacement frame arrives, even if completion was
+        // reported in the same turn. The old projection must not obscure that frame.
+        releaseRetainedClient(state);
+        state.connectionError = null;
         if (state.ended) {
             notifyToolbar(state);
             return;
         }
         state.connected = client.connected;
+        state.disconnected = !client.connected;
         state.peer = client.peer;
         state.geometry = client.geometry;
         state.sizing = client.sizing;
-        state.error = null;
         state.attempts = 0;
         applyPendingFocus(state);
         applyAutoFit(state);
@@ -719,7 +798,7 @@ async function mountClient(state, generation, controller) {
         notifyToolbar(state);
     } catch (error) {
         if (current()) {
-            connectionFailed(state, generation, error);
+            connectionFailed(state, generation, error, false);
         }
     }
 }
@@ -780,11 +859,14 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         readOnly: !!options.readOnly,
         autoFit: !!options.autoFit,
         client: null,
+        retainedClient: null,
         inspectionObserver: null,
         controller: null,
         disposed: false,
         ended: false,
         connected: false,
+        disconnected: false,
+        retriesExhausted: false,
         title: "",
         workingDirectory: null,
         workingDirectoryUri: null,
@@ -795,6 +877,7 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         pendingSizing: null,
         autoFitPending: false,
         error: null,
+        connectionError: null,
         generation: 0,
         attempts: 0,
         reconnectTimer: null,
@@ -868,12 +951,32 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
     return id;
 }
 
-export function reconnectTerminal(id, wsUrl) {
+export function restartTerminal(id) {
+    const state = terminals.get(id);
+    if (!state || state.client?.connected) {
+        return;
+    }
+    // Only an explicit successful resource restart can reopen an ended endpoint.
+    // Preserve its final projection while waiting for the restarted producer.
+    releaseClient(state, true);
+    state.ended = false;
+    reconnectTerminal(id, state.wsUrl);
+}
+
+export function reconnectTerminal(id, wsUrl, autoFit) {
     const state = terminals.get(id);
     if (!state || (state.ended && state.wsUrl === wsUrl)) {
         return state?.generation ?? 0;
     }
+    // Apply the new resource's sizing policy before mounting its connection; a
+    // later interop update could otherwise resize an explicitly configured grid.
+    if (autoFit !== undefined) {
+        state.autoFit = autoFit;
+    }
     if (state.wsUrl !== wsUrl) {
+        releaseRetainedClient(state);
+        state.connectionError = null;
+        state.disconnected = false;
         state.title = "";
         state.workingDirectory = null;
         state.workingDirectoryUri = null;
@@ -883,6 +986,9 @@ export function reconnectTerminal(id, wsUrl) {
     state.ended = false;
     state.attempts = 0;
     state.error = null;
+    if (state.connectionError === "renderer-failed") {
+        state.connectionError = "mount-failed";
+    }
     requestFocus(state);
     connectClient(state);
     return state.generation;
@@ -904,6 +1010,7 @@ export function disposeTerminal(id) {
     state.footerObserver.disconnect();
     state.listeners.abort();
     releaseClient(state);
+    releaseRetainedClient(state);
     state.dotNetRef = null;
     terminals.delete(id);
 }
@@ -1015,7 +1122,7 @@ export function getToolbarState(id) {
         terminalId: id,
         generation: state.generation,
         status: !connected ? "connecting" : isPrimary ? "primary" : state.peer.primaryId === null ? "no-primary" : "viewer",
-        connected, isPrimary, canTakeControl,
+        connected, disconnected: state.disconnected, retriesExhausted: state.retriesExhausted, isPrimary, canTakeControl,
         title: state.title,
         workingDirectory: state.workingDirectory,
         workingDirectoryUri: state.workingDirectoryUri,
@@ -1034,7 +1141,8 @@ export function getToolbarState(id) {
         fitEnabled: !state.readOnly && (isPrimary || canTakeControl) && !(isPrimary && state.sizing.mode === "auto"),
         cols: state.geometry?.columns ?? 0,
         rows: state.geometry?.rows ?? 0,
-        error: state.error,
+        error: state.error ?? state.connectionError,
+        connectionError: state.connectionError,
     };
 }
 
@@ -1047,9 +1155,9 @@ export function getTerminalSnapshot(element) {
                 ...getToolbarState(state.id),
                 readOnly: state.readOnly || state.ended,
                 ended: state.ended,
-                screenText: state.client?.screenText ?? "",
-                selection: state.client?.selection ?? null,
-                viewport: state.client?.viewport ?? null,
+                screenText: (state.client ?? state.retainedClient?.client)?.screenText ?? "",
+                selection: (state.client ?? state.retainedClient?.client)?.selection ?? null,
+                viewport: (state.client ?? state.retainedClient?.client)?.viewport ?? null,
             };
         }
     }

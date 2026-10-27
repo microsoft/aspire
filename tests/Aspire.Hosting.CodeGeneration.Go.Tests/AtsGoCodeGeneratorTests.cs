@@ -52,6 +52,79 @@ public class AtsGoCodeGeneratorTests
 
     [Fact]
     [RequiresTools(["go"])]
+    public async Task GeneratedTerminalDto_RoundTripsCallbackWireNames()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "terminal_test.go"), """
+                package aspire
+
+                import (
+                    "encoding/json"
+                    "reflect"
+                    "testing"
+                )
+
+                func TestTerminalDto(t *testing.T) {
+                    var payload map[string]any
+                    if err := json.Unmarshal([]byte(`{"p0":{"columns":132,"rows":50}}`), &payload); err != nil {
+                        t.Fatal(err)
+                    }
+                    options := callbackArg[*TerminalOptions]([]any{payload["p0"]}, 0)
+                    if options == nil || options.Columns != 132 || options.Rows != 50 {
+                        t.Fatalf("unexpected callback argument: %#v", options)
+                    }
+                    options.Columns = 200
+                    result := map[string]any{"p0": serializeValue(options)}
+                    expected := map[string]any{"p0": map[string]any{"columns": float64(200), "rows": float64(50)}}
+                    if !reflect.DeepEqual(expected, result) {
+                        t.Fatalf("expected %#v, got %#v", expected, result)
+                    }
+                }
+                """, timeout.Token);
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo("go")
+                {
+                    WorkingDirectory = directory.FullName,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    ArgumentList = { "test", "-timeout", "30s", "-run", "^TestTerminalDto$", "." }
+                }
+            };
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go terminal callback test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
     public async Task GeneratedTransport_SupportsDuplexCommunication()
     {
         var directory = Directory.CreateTempSubdirectory();
@@ -499,9 +572,9 @@ public class AtsGoCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireGo = files["aspire.go"];
 
-        Assert.Contains("if appHostFilePath, ok := resolved[\"AppHostFilePath\"].(string); !ok || appHostFilePath == \"\"", aspireGo);
+        Assert.Contains("if appHostFilePath, ok := resolved[\"appHostFilePath\"].(string); !ok || appHostFilePath == \"\"", aspireGo);
         Assert.Contains("os.Getenv(\"ASPIRE_APPHOST_FILEPATH\")", aspireGo);
-        Assert.Contains("resolved[\"AppHostFilePath\"] = appHostFilePath", aspireGo);
+        Assert.Contains("resolved[\"appHostFilePath\"] = appHostFilePath", aspireGo);
     }
 
     [Fact]
@@ -512,8 +585,8 @@ public class AtsGoCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireGo = files["aspire.go"];
 
-        Assert.Contains("if dashboardApplicationName, ok := resolved[\"DashboardApplicationName\"].(string); ok && dashboardApplicationName == \"\"", aspireGo);
-        Assert.Contains("delete(resolved, \"DashboardApplicationName\")", aspireGo);
+        Assert.Contains("if dashboardApplicationName, ok := resolved[\"dashboardApplicationName\"].(string); ok && dashboardApplicationName == \"\"", aspireGo);
+        Assert.Contains("delete(resolved, \"dashboardApplicationName\")", aspireGo);
     }
 
     [Fact]

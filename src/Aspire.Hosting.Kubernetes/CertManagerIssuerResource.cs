@@ -52,13 +52,13 @@ public sealed class CertManagerIssuerResource : Resource, IResourceWithParent<Ce
     /// Gets or sets the issuer specification (ACME, self-signed, CA, ...).
     /// </summary>
     /// <remarks>
-    /// Set indirectly via <see cref="CertManagerExtensions.WithLetsEncryptProduction(IResourceBuilder{CertManagerIssuerResource}, string)"/>,
-    /// <see cref="CertManagerExtensions.WithLetsEncryptStaging(IResourceBuilder{CertManagerIssuerResource}, string)"/>,
-    /// or <see cref="CertManagerExtensions.WithAcmeServer(IResourceBuilder{CertManagerIssuerResource}, string, string)"/>.
+    /// Set indirectly via <see cref="CertManagerExtensions.WithAcmeServer(IResourceBuilder{CertManagerIssuerResource}, string, string)"/>.
     /// Only one issuer kind may be configured per resource; the most recent <c>WithXxx</c>
     /// call wins and replaces any prior spec.
     /// </remarks>
     internal CertManagerIssuerSpec? Spec { get; set; }
+
+    internal CertManagerExternalAccountBinding? ExternalAccountBinding { get; set; }
 
     /// <summary>
     /// Gets the configured ACME challenge solvers in the order they were added via
@@ -85,6 +85,11 @@ internal abstract record CertManagerIssuerSpec;
 internal sealed record CertManagerAcmeIssuerSpec(
     ReferenceExpression ServerUrl,
     ReferenceExpression Email) : CertManagerIssuerSpec;
+
+/// <summary>
+/// Provider credentials used to bind a new ACME account to an external account.
+/// </summary>
+internal sealed record CertManagerExternalAccountBinding(ReferenceExpression KeyId, ParameterResource HmacKey);
 
 /// <summary>
 /// Base type for an ACME challenge solver configuration.

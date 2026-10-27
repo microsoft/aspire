@@ -4,6 +4,7 @@ import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './
 import { extensionLogOutputChannel } from './logging';
 import { projectContentsReferencesRunnableAspireAppHost } from './appHostLanguage';
 import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob } from './workspaceFileSearch';
+import { FileSystemEntryDescriptorIndex, getFileSystemEntryDescriptor } from './paths/fileSystemIdentity';
 import type { CandidateAppHostDisplayInfo } from './appHostCandidateTypes';
 
 export async function findConfiguredAppHostPaths(workspaceFolder: vscode.WorkspaceFolder, cancellationToken?: vscode.CancellationToken): Promise<string[]> {
@@ -47,13 +48,40 @@ export async function discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder:
     // This is the final fallback after both CLI discovery paths fail. Do not cap the
     // project scan here: VS Code returns only the first maxResults matches, which can
     // hide the only AppHost in a large workspace.
-    const projectUris = (await Promise.all([
-        vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.csproj'), getAppHostDiscoveryExcludeGlob()),
-        vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.fsproj'), getAppHostDiscoveryExcludeGlob()),
-        vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.vbproj'), getAppHostDiscoveryExcludeGlob()),
-    ])).flat();
+    const [projectUriLists, configuredPaths] = await Promise.all([
+        Promise.all([
+            vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.csproj'), getAppHostDiscoveryExcludeGlob()),
+            vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.fsproj'), getAppHostDiscoveryExcludeGlob()),
+            vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.vbproj'), getAppHostDiscoveryExcludeGlob()),
+        ]),
+        findConfiguredAppHostPaths(workspaceFolder),
+    ]);
+    const projectUris = projectUriLists.flat().sort((left, right) => left.fsPath.localeCompare(right.fsPath));
+    // Only identical paths can skip a read: case-only Windows paths can have
+    // different native identities. Candidate aliases are deduplicated below.
+    const projectPaths = new Set(projectUris.map(uri => path.resolve(uri.fsPath)));
+    const configuredProjectPaths = new Set<string>();
+
+    // Configured projects can live outside the workspace, but must pass the same
+    // content check as scanned projects before becoming candidates.
+    for (const configuredPath of configuredPaths) {
+        if (!['.csproj', '.fsproj', '.vbproj'].includes(path.extname(configuredPath).toLowerCase())) {
+            extensionLogOutputChannel.warn(`Workspace file fallback cannot validate configured AppHost ${configuredPath}: only .NET project files are supported.`);
+            continue;
+        }
+
+        const uri = vscode.Uri.file(configuredPath);
+        const key = path.resolve(uri.fsPath);
+        configuredProjectPaths.add(key);
+        if (!projectPaths.has(key)) {
+            projectUris.push(uri);
+            projectPaths.add(key);
+        }
+    }
+
     const candidates: CandidateAppHostDisplayInfo[] = [];
-    for (const uri of projectUris.sort((left, right) => left.fsPath.localeCompare(right.fsPath))) {
+    const candidateDescriptors = new FileSystemEntryDescriptorIndex();
+    for (const uri of projectUris) {
         let projectContents: string;
         try {
             projectContents = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
@@ -64,11 +92,20 @@ export async function discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder:
         }
 
         if (isAppHostProject(projectContents)) {
+            const descriptor = getFileSystemEntryDescriptor(uri.fsPath);
+            if (candidateDescriptors.find(descriptor) !== undefined) {
+                continue;
+            }
+
             candidates.push({
                 path: uri.fsPath,
                 language: getProjectLanguage(uri.fsPath),
                 status: 'buildable',
             });
+            candidateDescriptors.add(descriptor);
+        }
+        else if (configuredProjectPaths.has(path.resolve(uri.fsPath))) {
+            extensionLogOutputChannel.warn(`Ignoring configured project that does not reference a runnable Aspire AppHost: ${uri.fsPath}`);
         }
     }
 

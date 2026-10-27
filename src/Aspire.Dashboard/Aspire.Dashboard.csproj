@@ -6,6 +6,7 @@
     <ResxCodeGenerator>PublicResXFileCodeGenerator</ResxCodeGenerator>
     <ApplicationIcon>$(MSBuildThisFileDirectory)..\Shared\Aspire.ico</ApplicationIcon>
     <PublishAot>true</PublishAot>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
     <!-- .NET 11 persistent services serialize framework-owned state with the internal
          JsonSerializerOptionsProvider instead of CircuitOptions.JsonTypeInfoResolvers.
          Remove the reflection fallback when https://github.com/dotnet/aspnetcore/issues/69325 is fixed. -->
@@ -90,9 +91,6 @@
   </Target>
 
   <ItemGroup>
-    <!-- Workaround for https://github.com/dotnet/aspnetcore/issues/69432. -->
-    <RdXmlFile Include="rd.xml" />
-
     <!-- Build service and client types. Integration tests use the client types to call OTLP services. -->
     <Protobuf Include="Otlp\**\*.proto">
       <ProtoRoot>Otlp</ProtoRoot>
@@ -135,6 +133,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Dashboard.Playwright.Tests" />
     <InternalsVisibleTo Include="Aspire.Dashboard.Tests" />
     <InternalsVisibleTo Include="Aspire.Dashboard.Components.Tests" />
     <InternalsVisibleTo Include="Aspire.Dashboard.Benchmarks" />
@@ -149,6 +148,12 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="Utils\AssemblyVersionHelper.cs" />
     <Compile Include="$(SharedDir)Telemetry\*.cs" LinkBase="Telemetry\Shared" />
+    <Compile Include="$(SharedDir)FlexibleBooleanConverter.cs" Link="Utils\FlexibleBooleanConverter.cs" />
+    <Compile Include="$(SharedDir)IChildProcess.cs" Link="Utils\IChildProcess.cs" />
+    <Compile Include="$(SharedDir)ChildProcess.cs" Link="Utils\ChildProcess.cs" />
+    <Compile Include="$(SharedDir)ChildProcessOptions.cs" Link="Utils\ChildProcessOptions.cs" />
+    <Compile Include="$(SharedDir)ProcessSupervisor*.cs" LinkBase="Utils" />
+    <Compile Include="$(SharedDir)ProcessSignaler.cs" Link="Utils\ProcessSignaler.cs" />
     <Compile Include="$(SharedDir)AspireHomeDirectory.cs" Link="Utils\AspireHomeDirectory.cs" />
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="Extensions\ChannelExtensions.cs" />
     <Compile Include="$(SharedDir)ColorGenerator.cs" Link="Utils\ColorGenerator.cs" />

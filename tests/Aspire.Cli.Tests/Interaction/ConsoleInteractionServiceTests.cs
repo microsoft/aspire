@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.AspNetCore.InternalTesting;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
@@ -1956,6 +1957,24 @@ public class ConsoleInteractionServiceTests
         var result = await interactionService.PromptForSelectionsAsync("Select:", choices, x => x, binding: binding, cancellationToken: CancellationToken.None);
 
         Assert.Equal(2, result.Count);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionsAsync_AgentDefaults_MatchIdsWithLocalizedLabels()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var option = new Option<string?>("--agents");
+        var command = new RootCommand { option };
+        var binding = PromptBinding.Create(command.Parse(""), option, "copilot,claude,opencode");
+
+        var result = await interactionService.PromptForSelectionsAsync(
+            AgentCommandStrings.InitCommand_SelectAgentsPrompt, AgentClient.All,
+            static client => client.DisplayName, binding: binding, cancellationToken: CancellationToken.None);
+
+        Assert.Equal([AgentClient.Copilot, AgentClient.ClaudeCode, AgentClient.OpenCode], result);
         Assert.Empty(output.ToString());
     }
 

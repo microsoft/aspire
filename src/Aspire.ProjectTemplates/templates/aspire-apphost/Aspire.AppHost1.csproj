@@ -1,4 +1,4 @@
-<Project Sdk="Aspire.AppHost.Sdk/!!REPLACE_WITH_LATEST_VERSION!!">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -8,5 +8,10 @@
     <AspireUseCliBundle>true</AspireUseCliBundle>
     <UserSecretsId>98048c9c-bf28-46ba-a98e-63767ee5e3a8</UserSecretsId>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="!!REPLACE_WITH_LATEST_VERSION!!" />
+    <PackageReference Include="Aspire.Hosting.Dotnet" Version="!!REPLACE_WITH_LATEST_VERSION!!" />
+  </ItemGroup>
 
 </Project>

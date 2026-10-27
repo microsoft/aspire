@@ -1,0 +1,28 @@
+.telemetry-empty-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacingVerticalXXL);
+}
+
+.telemetry-help-message {
+    margin: 0;
+    color: var(--colorNeutralForeground3);
+    font-size: 13px;
+    font-weight: var(--fontWeightRegular);
+    line-height: var(--lineHeightBase300);
+    text-align: center;
+}
+
+/* Flex discards template whitespace; bottom alignment matches the surrounding text's line box. */
+.telemetry-empty-content ::deep .telemetry-help-button {
+    display: inline-flex;
+    height: auto;
+    min-height: 0;
+    min-width: 0;
+    border: 0;
+    font-size: inherit;
+    line-height: inherit;
+    vertical-align: bottom;
+    text-decoration: underline;
+}

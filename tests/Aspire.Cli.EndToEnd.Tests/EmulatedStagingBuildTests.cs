@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
@@ -85,11 +84,11 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
         // the stable-vs-staging behavioral difference the identity sidecar must preserve.
         AssertNuGetConfigPinsStagingFeed(projectDir, staging.ShortCommit);
 
-        // The exact-version match against the emulated identity pins the AppHost SDK to that version.
+        // The exact-version match against the emulated identity pins the AppHost to that version.
         var appHostCsproj = Path.Combine(projectDir.FullName, $"{projectName}.AppHost", $"{projectName}.AppHost.csproj");
-        var sdkVersion = GetAppHostSdkVersionFromCsproj(appHostCsproj);
-        output.WriteLine($"Generated AppHost SDK version: {sdkVersion}");
-        Assert.Equal(staging.Version, sdkVersion);
+        var appHostVersion = CliE2ETestHelpers.GetAppHostVersion(File.ReadAllText(appHostCsproj));
+        output.WriteLine($"Generated AppHost version: {appHostVersion}");
+        Assert.Equal(staging.Version, appHostVersion);
 
         // `aspire add` must resolve and restore from the pinned darc feed and complete successfully,
         // proving the dropped feed pin is functional (not just well-formed).
@@ -260,43 +259,29 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
         var doc = XDocument.Load(configPath);
         var feedFragment = $"darc-pub-microsoft-aspire-{shortCommit}";
 
-        // <packageSources><add key="<url>" value="<url>" /></packageSources>
+        // <packageSources><add key="<source-key>" value="<feed-url>" /></packageSources>
         var stagingSourceKey = doc
             .Descendants("packageSources")
             .Elements("add")
-            .Select(e => (string?)e.Attribute("value") ?? (string?)e.Attribute("key"))
-            .FirstOrDefault(v => v is not null && v.Contains(feedFragment, StringComparison.OrdinalIgnoreCase));
+            .Where(e => ((string?)e.Attribute("value"))?.Contains(feedFragment, StringComparison.OrdinalIgnoreCase) == true)
+            .Select(e => (string?)e.Attribute("key"))
+            .FirstOrDefault();
 
         Assert.True(
             stagingSourceKey is not null,
             $"Dropped NuGet.config ({configPath}) does not contain a package source for the staging feed '{feedFragment}'. Content:\n{File.ReadAllText(configPath)}");
 
-        // <packageSourceMapping><packageSource key="<feed>"><package pattern="Aspire*" /></packageSource>
+        // <packageSourceMapping><packageSource key="<source-key>"><package pattern="Aspire*" /></packageSource>
         var aspireMappedToStagingFeed = doc
             .Descendants("packageSourceMapping")
             .Elements("packageSource")
-            .Where(ps => ((string?)ps.Attribute("key"))?.Contains(feedFragment, StringComparison.OrdinalIgnoreCase) == true)
+            .Where(ps => string.Equals((string?)ps.Attribute("key"), stagingSourceKey, StringComparison.OrdinalIgnoreCase))
             .SelectMany(ps => ps.Elements("package"))
             .Any(p => string.Equals((string?)p.Attribute("pattern"), "Aspire*", StringComparison.OrdinalIgnoreCase));
 
         Assert.True(
             aspireMappedToStagingFeed,
             $"Dropped NuGet.config ({configPath}) does not map the 'Aspire*' pattern to the staging feed '{feedFragment}'. Content:\n{File.ReadAllText(configPath)}");
-    }
-
-    private static string GetAppHostSdkVersionFromCsproj(string csprojPath)
-    {
-        if (!File.Exists(csprojPath))
-        {
-            throw new FileNotFoundException($"Expected AppHost project to exist: {csprojPath}", csprojPath);
-        }
-
-        // The generated AppHost csproj opens with: <Project Sdk="Aspire.AppHost.Sdk/13.4.4">
-        var content = File.ReadAllText(csprojPath);
-        var match = Regex.Match(content, "Sdk=\"Aspire\\.AppHost\\.Sdk/(?<version>[^\"]+)\"");
-        return match.Success
-            ? match.Groups["version"].Value
-            : throw new InvalidOperationException($"Could not find an Aspire.AppHost.Sdk reference in {csprojPath}.");
     }
 
     /// <summary>

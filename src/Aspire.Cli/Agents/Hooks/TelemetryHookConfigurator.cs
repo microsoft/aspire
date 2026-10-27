@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
 using Microsoft.Extensions.Logging;
 
@@ -25,7 +26,6 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
     private const string CopilotHooksDirectoryName = "hooks";
     private const string CopilotHookFileName = "aspire-telemetry.json";
 
-    private const string ClaudeFolderName = ".claude";
     private const string ClaudeSettingsFileName = "settings.json";
     private const string ClaudePostToolUseKey = "PostToolUse";
 
@@ -54,12 +54,10 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
     /// <inheritdoc />
     public async Task<TelemetryHookConfigurationResult> ConfigureAsync(
-        IReadOnlyCollection<AgentClientKind> detectedClients,
+        AgentEnvironment detectedEnvironments,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(detectedClients);
-
-        var configured = new List<AgentClientKind>();
+        var configured = AgentEnvironment.None;
         var skipped = new List<TelemetryHookSkip>();
 
         // VS Code and OpenCode hook schemas are not yet verified, so they are intentionally not
@@ -67,22 +65,16 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
         // same ~/.copilot hook location, so prefer the App display name when both are detected.
         // This identifies the configuration target, not the hook event's client-name: the canonical
         // scripts currently report App events as copilot-cli. See https://github.com/microsoft/aspire-skills/issues/71.
-        var supported = new List<AgentClientKind>();
-        if (detectedClients.Contains(AgentClientKind.CopilotApp))
+        var copilotEnvironment = detectedEnvironments & (
+            AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli);
+
+        if (copilotEnvironment.HasFlag(AgentEnvironment.CopilotApp))
         {
-            supported.Add(AgentClientKind.CopilotApp);
-        }
-        else if (detectedClients.Contains(AgentClientKind.CopilotCli))
-        {
-            supported.Add(AgentClientKind.CopilotCli);
+            copilotEnvironment = AgentEnvironment.CopilotApp;
         }
 
-        if (detectedClients.Contains(AgentClientKind.ClaudeCode))
-        {
-            supported.Add(AgentClientKind.ClaudeCode);
-        }
-
-        if (supported.Count == 0)
+        var configureClaude = detectedEnvironments.HasFlag(AgentEnvironment.ClaudeCode);
+        if (copilotEnvironment == AgentEnvironment.None && !configureClaude)
         {
             return new TelemetryHookConfigurationResult(configured, skipped);
         }
@@ -90,33 +82,28 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
         // Keep compatibility scripts current for existing registrations and older clients.
         await _installer.EnsureInstalledAsync(cancellationToken);
 
-        foreach (var client in supported)
+        if (copilotEnvironment != AgentEnvironment.None)
         {
-            switch (client)
+            if (await TryConfigureCopilotAsync(cancellationToken))
             {
-                case AgentClientKind.CopilotApp:
-                case AgentClientKind.CopilotCli:
-                    if (await TryConfigureCopilotAsync(cancellationToken))
-                    {
-                        configured.Add(client);
-                    }
-                    else
-                    {
-                        skipped.Add(new TelemetryHookSkip(client, TelemetryHookSkipReason.WriteFailed));
-                    }
-                    break;
+                configured |= copilotEnvironment;
+            }
+            else
+            {
+                skipped.Add(new TelemetryHookSkip(copilotEnvironment, TelemetryHookSkipReason.WriteFailed));
+            }
+        }
 
-                case AgentClientKind.ClaudeCode:
-                    var claudeSkipReason = await ConfigureClaudeAsync(cancellationToken);
-                    if (claudeSkipReason is { } reason)
-                    {
-                        skipped.Add(new TelemetryHookSkip(client, reason));
-                    }
-                    else
-                    {
-                        configured.Add(client);
-                    }
-                    break;
+        if (configureClaude)
+        {
+            var claudeSkipReason = await ConfigureClaudeAsync(cancellationToken);
+            if (claudeSkipReason is { } reason)
+            {
+                skipped.Add(new TelemetryHookSkip(AgentEnvironment.ClaudeCode, reason));
+            }
+            else
+            {
+                configured |= AgentEnvironment.ClaudeCode;
             }
         }
 
@@ -163,7 +150,7 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
     private async Task<TelemetryHookSkipReason?> ConfigureClaudeAsync(CancellationToken cancellationToken)
     {
-        var claudeDirectory = Path.Combine(_executionContext.HomeDirectory.FullName, ClaudeFolderName);
+        var claudeDirectory = ClaudeCodePaths.GetConfigDirectory(_executionContext, _environment);
         var settingsPath = Path.Combine(claudeDirectory, ClaudeSettingsFileName);
 
         JsonObject settings;

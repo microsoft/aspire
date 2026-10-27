@@ -32,22 +32,26 @@ internal static class KubernetesDeployTestHelpers
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
-        await auto.TypeAsync("mkdir -p ~/.local/bin");
+        await auto.TypeAsync("mkdir -p ~/.local/bin && " +
+            "case \"$(uname -m)\" in " +
+            "aarch64|arm64) K8S_TOOL_ARCH=arm64 ;; " +
+            "x86_64) K8S_TOOL_ARCH=amd64 ;; " +
+            "*) echo 'Unsupported Kubernetes tool architecture' >&2; false ;; esac");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Download KinD if not already installed — GitHub CDN can transiently return HTML instead of a binary.
-        await auto.TypeAsync($"command -v kind >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kind; for i in 1 2 3; do curl -sSLo ~/.local/bin/kind \"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-amd64\" && chmod +x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1 && break; echo \"Retry $i: KinD download failed, retrying in 5s...\"; rm -f ~/.local/bin/kind; sleep 5; done; test -x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1; }}");
+        await auto.TypeAsync($"command -v kind >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kind; for i in 1 2 3; do curl -sSLo ~/.local/bin/kind \"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-$K8S_TOOL_ARCH\" && chmod +x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1 && break; echo \"Retry $i: KinD download failed, retrying in 5s...\"; rm -f ~/.local/bin/kind; sleep 5; done; test -x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1; }}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
         // Download Helm if not already installed
-        await auto.TypeAsync($"command -v helm >/dev/null 2>&1 || {{ for i in 1 2 3; do curl -sSL https://get.helm.sh/helm-{HelmVersion}-linux-amd64.tar.gz | tar xz -C /tmp && test -f /tmp/linux-amd64/helm && break; echo \"Retry $i: Helm download failed, retrying in 5s...\"; sleep 5; done && mv /tmp/linux-amd64/helm ~/.local/bin/helm && rm -rf /tmp/linux-amd64; }}");
+        await auto.TypeAsync($"command -v helm >/dev/null 2>&1 || {{ for i in 1 2 3; do curl -sSL https://get.helm.sh/helm-{HelmVersion}-linux-$K8S_TOOL_ARCH.tar.gz | tar xz -C /tmp && test -f /tmp/linux-$K8S_TOOL_ARCH/helm && break; echo \"Retry $i: Helm download failed, retrying in 5s...\"; sleep 5; done && mv /tmp/linux-$K8S_TOOL_ARCH/helm ~/.local/bin/helm && rm -rf /tmp/linux-$K8S_TOOL_ARCH; }}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
         // Download kubectl if not already installed
-        await auto.TypeAsync($"command -v kubectl >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kubectl; for i in 1 2 3; do curl -sSLo ~/.local/bin/kubectl \"https://dl.k8s.io/release/{KubectlVersion}/bin/linux/amd64/kubectl\" && chmod +x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1 && break; echo \"Retry $i: kubectl download failed, retrying in 5s...\"; rm -f ~/.local/bin/kubectl; sleep 5; done; test -x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1; }}");
+        await auto.TypeAsync($"command -v kubectl >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kubectl; for i in 1 2 3; do curl -sSLo ~/.local/bin/kubectl \"https://dl.k8s.io/release/{KubectlVersion}/bin/linux/$K8S_TOOL_ARCH/kubectl\" && chmod +x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1 && break; echo \"Retry $i: kubectl download failed, retrying in 5s...\"; rm -f ~/.local/bin/kubectl; sleep 5; done; test -x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1; }}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
@@ -252,7 +256,8 @@ internal static class KubernetesDeployTestHelpers
         string[] apiClientPackages,
         string appHostCode,
         string apiProgramCode,
-        ITestOutputHelper output)
+        ITestOutputHelper output,
+        bool useLegacyProjectResources = false)
     {
         // Step 1: Run aspire new inline (rather than AspireNewAsync) so we can assert on
         // the "Using project templates version:" message that appears during execution.
@@ -360,6 +365,25 @@ internal static class KubernetesDeployTestHelpers
         Assert.True(File.Exists(Path.Combine(appHostDir, "AppHost.cs")));
         Assert.True(File.Exists(Path.Combine(apiDir, $"{projectName}.ApiService.csproj")));
         Assert.True(File.Exists(Path.Combine(apiDir, "Properties", "launchSettings.json")));
+        if (useLegacyProjectResources)
+        {
+            // The new default is package-only. Legacy AddProject coverage must explicitly
+            // retain the SDK that generates Projects.* metadata from ProjectReference items.
+            var projectFile = Path.Combine(appHostDir, $"{projectName}.AppHost.csproj");
+            var project = System.Xml.Linq.XDocument.Load(projectFile, System.Xml.Linq.LoadOptions.PreserveWhitespace);
+            var version = CliE2ETestHelpers.GetAppHostVersion(File.ReadAllText(projectFile));
+            project.Root!.SetAttributeValue("Sdk", $"Aspire.AppHost.Sdk/{version}");
+            var references = new System.Xml.Linq.XElement("ItemGroup");
+            foreach (var resourceProject in new[] { $"{projectName}.ApiService", $"{projectName}.Web" })
+            {
+                var resourceProjectPath = Path.Combine(projectDir, resourceProject, $"{resourceProject}.csproj");
+                Assert.True(File.Exists(resourceProjectPath), $"Expected legacy resource project: {resourceProjectPath}");
+                references.Add(new System.Xml.Linq.XElement("ProjectReference",
+                    new System.Xml.Linq.XAttribute("Include", $"../{resourceProject}/{resourceProject}.csproj")));
+            }
+            project.Root.Add(references);
+            project.Save(projectFile);
+        }
         output.WriteLine($"Writing AppHost.cs to: {Path.Combine(appHostDir, "AppHost.cs")}");
         File.WriteAllText(Path.Combine(appHostDir, "AppHost.cs"), appHostCode);
         File.WriteAllText(Path.Combine(apiDir, "Program.cs"), apiProgramCode);

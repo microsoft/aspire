@@ -8,10 +8,6 @@
     <NoWarn>$(NoWarn);CS8002</NoWarn>
     <WarningsNotAsErrors>$(WarningsNotAsErrors);ASPDEPR004;ASPDEPR008;SYSLIB0057</WarningsNotAsErrors>
 
-    <InstallBrowsersForPlaywright Condition="'$(InstallBrowsersForPlaywright)' == '' and '$(CODESPACES)' == 'true'">true</InstallBrowsersForPlaywright>
-    <InstallBrowsersForPlaywright Condition="'$(InstallBrowsersForPlaywright)' == '' and '$(ContinuousIntegrationBuild)' == 'true'">true</InstallBrowsersForPlaywright>
-    <InstallBrowsersForPlaywright Condition="'$(InstallBrowsersForPlaywright)' == '' and '$(OS)' == 'Windows_NT' and '$(ContinuousIntegrationBuild)' != 'true'">true</InstallBrowsersForPlaywright>
-
     <!-- Do not run tests in Helix at all -->
     <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>
     <RunOnAzdoHelixLinux>false</RunOnAzdoHelixLinux>
@@ -22,8 +18,6 @@
     <PackageReference Include="Verify.XunitV3" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" PrivateAssets="all" NoWarn="NU3018;NU3027;NU3042" Condition="'$(MicrosoftFluentUIAspNetCoreComponentsIsPreview)' == 'true'" />
-    <!-- axe-core accessibility scanning for the Playwright integration tests (AccessibilityTests). -->
-    <PackageReference Include="Deque.AxeCore.Playwright" />
   </ItemGroup>
 
   <ItemGroup>
@@ -54,6 +48,4 @@
     <!-- Keep the explicit test usings used throughout this project. -->
     <Using Remove="Xunit;VerifyXunit;VerifyXunit.Verifier" />
   </ItemGroup>
-
-  <Import Project="..\Shared\Playwright\Playwright.targets" />
 </Project>

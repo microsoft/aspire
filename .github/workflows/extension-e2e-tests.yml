@@ -2,10 +2,16 @@ name: VS Code extension E2E tests
 
 on:
   workflow_call:
+    inputs:
+      extensionVersionOverride:
+        required: false
+        type: string
+        default: ''
 
 jobs:
-  verify_extester_feed:
-    name: Verify ExTester internal feed availability
+  verify_prerequisites:
+    if: ${{ github.repository == 'microsoft/aspire' }}
+    name: Verify extension E2E prerequisites
     runs-on: ubuntu-latest
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
@@ -71,9 +77,52 @@ jobs:
         working-directory: extension
         run: node scripts/run-e2e.js --verify-extester-feed
 
+      # This job owns the VSIX installed by the matrix, so fan-out starts only
+      # after the package has been built, validated, and uploaded successfully.
+      - name: Override extension version for PR builds
+        if: ${{ inputs.extensionVersionOverride != '' }}
+        working-directory: extension
+        env:
+          EXTENSION_VERSION_OVERRIDE: ${{ inputs.extensionVersionOverride }}
+        run: corepack yarn version --new-version "$EXTENSION_VERSION_OVERRIDE" --no-git-tag-version
+
+      - name: Package VSIX
+        working-directory: extension
+        env:
+          ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: "true"
+        run: |
+          # vsce opens the output file directly without creating its parent directory.
+          mkdir -p out
+          corepack yarn run vsce package --pre-release -o out/aspire-extension.vsix
+
+      - name: Assert E2E VSIX contains bridge
+        working-directory: extension
+        shell: pwsh
+        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension.vsix -Expected Present
+
+      # Packaged separately because the E2E VSIX intentionally contains the bridge.
+      # No env override here reproduces the shipping build, where webpack stubs the
+      # bridge in production mode and step-scoped env values do not leak.
+      - name: Package production VSIX
+        working-directory: extension
+        run: corepack yarn run vsce package --pre-release -o out/aspire-extension-production.vsix
+
+      - name: Assert production VSIX excludes bridge
+        working-directory: extension
+        shell: pwsh
+        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension-production.vsix -Expected Absent
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aspire-extension
+          path: extension/out/aspire-extension.vsix
+          if-no-files-found: error
+
   extension_e2e:
+    if: ${{ github.repository == 'microsoft/aspire' }}
     name: VS Code extension E2E (${{ matrix.name }}, ${{ matrix.shardName }})
-    needs: verify_extester_feed
+    needs: verify_prerequisites
     runs-on: ${{ matrix.runner }}
     # The Java AppHost shard imports a multi-project Gradle build and then runs the whole
     # application under a debugger, so it needs more than the shared budget.
@@ -426,7 +475,6 @@ jobs:
             installDotnetDebugger: true
           - name: Windows
             shardName: browser-debugger
-            advisoryIssue: https://github.com/microsoft/aspire/issues/20117
             spec: out/test-e2e/test-e2e/browserDebugger.e2e.test.js
             runner: windows-latest
             rid: win-x64
@@ -445,6 +493,18 @@ jobs:
             cliBinary: aspire
             useXvfb: true
             installAzureFunctions: true
+          - name: Linux
+            shardName: azure-functions-node
+            spec: out/test-e2e/test-e2e/azureFunctionsNode.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            # The Node worker attaches through pwa-node directly. Installing vscode-azurefunctions
+            # would also register its Function Host Exceptions Debugger in the AppHost session.
+            installDotnetDebugger: true
+            installAzureFunctionsCoreTools: true
           - name: Linux
             shardName: deno-debugger
             spec: out/test-e2e/test-e2e/denoDebugger.e2e.test.js
@@ -617,7 +677,7 @@ jobs:
           ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Azure Functions E2E prerequisites
-        if: ${{ matrix.installAzureFunctions }}
+        if: ${{ matrix.installAzureFunctions || matrix.installAzureFunctionsCoreTools }}
         shell: bash
         run: |
           set -euo pipefail
@@ -636,24 +696,30 @@ jobs:
           export PATH="$core_tools_directory:$PATH"
           func --version
 
-          azure_resource_groups_vsix="$RUNNER_TEMP/vscode-azureresourcegroups-0.12.7.vsix"
-          curl --fail --location --compressed --retry 3 --retry-all-errors \
-            --output "$azure_resource_groups_vsix" \
-            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-azuretools/vsextensions/vscode-azureresourcegroups/0.12.7/vspackage'
-          echo 'e4a2e7ab012de3777e1ac1781e2c25d65f150ad6f3770e8cfcc5a3d3658df35a  '"$azure_resource_groups_vsix" | sha256sum --check -
-
-          azure_functions_vsix="$RUNNER_TEMP/vscode-azurefunctions-1.22.0.vsix"
-          curl --fail --location --compressed --retry 3 --retry-all-errors \
-            --output "$azure_functions_vsix" \
-            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-azuretools/vsextensions/vscode-azurefunctions/1.22.0/vspackage'
-          echo '146aede06f941b07a55c5aebd28c5e3df684d57b07cf6f9ebf90d7bb8ecd41a2  '"$azure_functions_vsix" | sha256sum --check -
-
           {
             echo 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true'
-            echo "ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX=$azure_resource_groups_vsix"
-            echo "ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX=$azure_functions_vsix"
             echo 'FUNCTIONS_CORE_TOOLS_TELEMETRY_OPTOUT=1'
           } >> "$GITHUB_ENV"
+
+          if [ '${{ matrix.installAzureFunctions }}' = 'true' ]; then
+            azure_resource_groups_vsix="$RUNNER_TEMP/vscode-azureresourcegroups-0.12.7.vsix"
+            curl --fail --location --compressed --retry 3 --retry-all-errors \
+              --output "$azure_resource_groups_vsix" \
+              'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-azuretools/vsextensions/vscode-azureresourcegroups/0.12.7/vspackage'
+            echo 'e4a2e7ab012de3777e1ac1781e2c25d65f150ad6f3770e8cfcc5a3d3658df35a  '"$azure_resource_groups_vsix" | sha256sum --check -
+
+            azure_functions_vsix="$RUNNER_TEMP/vscode-azurefunctions-1.22.0.vsix"
+            curl --fail --location --compressed --retry 3 --retry-all-errors \
+              --output "$azure_functions_vsix" \
+              'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-azuretools/vsextensions/vscode-azurefunctions/1.22.0/vspackage'
+            echo '146aede06f941b07a55c5aebd28c5e3df684d57b07cf6f9ebf90d7bb8ecd41a2  '"$azure_functions_vsix" | sha256sum --check -
+
+            {
+              echo 'ASPIRE_EXTENSION_E2E_INSTALL_AZURE_FUNCTIONS_VSIX=true'
+              echo "ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX=$azure_resource_groups_vsix"
+              echo "ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX=$azure_functions_vsix"
+            } >> "$GITHUB_ENV"
+          fi
 
       - name: Install WinUI E2E debugger prerequisites
         if: ${{ matrix.installWinUI }}

@@ -2679,10 +2679,10 @@ public class AtsJavaCodeGeneratorTests
         Assert.Contains($"public String get{expectedAccessorSuffix}() {{ return {expectedField}; }}", generated);
         Assert.Contains($"public void set{expectedAccessorSuffix}(String value) {{ this.{expectedField} = value; }}", generated);
 
-        // The transport key stays the original property name: escaping is a Java source concern and
-        // must not change the shape of the wire payload the .NET host reads and writes.
-        Assert.Contains($"map.get(\"{propertyName}\")", generated);
-        Assert.Contains($"map.put(\"{propertyName}\", AspireClient.serializeValue({expectedField}))", generated);
+        // Java keyword escaping must not leak into the host's camel-case JSON property names.
+        var wireName = System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(propertyName);
+        Assert.Contains($"map.get(\"{wireName}\")", generated);
+        Assert.Contains($"map.put(\"{wireName}\", AspireClient.serializeValue({expectedField}))", generated);
     }
 
     [Fact]
@@ -2743,7 +2743,7 @@ public class AtsJavaCodeGeneratorTests
             public class TypedArrayProbe {
                 public static void main(String[] args) {
                     var value = KeywordProbe.fromMap(Map.of(
-                        "Matrix",
+                        "matrix",
                         List.of(List.of("one", "two"), List.of("three"))));
                     String[][] matrix = value.getMatrix();
 
@@ -2880,6 +2880,8 @@ public class AtsJavaCodeGeneratorTests
     [Fact]
     public async Task GeneratedCapabilities_NullablePrimitiveResultsReturnNull()
     {
+        var parameterValue = Assert.Single(ScanCapabilitiesFromHostingAssembly(),
+            c => c.CapabilityId == "Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue");
         var resourceType = new AtsTypeRef
         {
             TypeId = "Tests/ProbeResource",
@@ -2894,7 +2896,8 @@ public class AtsJavaCodeGeneratorTests
             CreateProbeCapability(
                 resourceType,
                 "nullableNumber",
-                new AtsTypeRef { TypeId = AtsConstants.Number, Category = AtsTypeCategory.Primitive, IsNullable = true }));
+                new AtsTypeRef { TypeId = AtsConstants.Number, Category = AtsTypeCategory.Primitive, IsNullable = true }),
+            CreateProbeCapability(resourceType, "nullableString", parameterValue.ReturnType));
 
         using var workspace = await CreateJavaProbeWorkspaceAsync(context, "aspire/ProbeResource.java");
         workspace.WriteSource(
@@ -2935,6 +2938,13 @@ public class AtsJavaCodeGeneratorTests
                     Number number = numberCall.get(2, TimeUnit.SECONDS);
                     if (number != null) {
                         throw new IllegalStateException("nullable Number was not null");
+                    }
+
+                    var stringCall = CompletableFuture.supplyAsync(resource::nullableString);
+                    writeNullResponse(serverOutput, extractId(readMessage(serverInput)));
+                    String value = stringCall.get(2, TimeUnit.SECONDS);
+                    if (value != null) {
+                        throw new IllegalStateException("nullable String was not null");
                     }
 
                     System.out.println("OK");
@@ -3157,8 +3167,8 @@ public class AtsJavaCodeGeneratorTests
                     callbackCall.get(2, TimeUnit.SECONDS);
 
                     Map<String, Object> dtoMap = new HashMap<>();
-                    dtoMap.put("Numbers", Arrays.asList(1.0, null, 2.5));
-                    dtoMap.put("Flags", List.of(Arrays.asList(true, null), List.of(false)));
+                    dtoMap.put("numbers", Arrays.asList(1.0, null, 2.5));
+                    dtoMap.put("flags", List.of(Arrays.asList(true, null), List.of(false)));
                     var dto = ArrayDto.fromMap(dtoMap);
                     assertNumbers(dto.getNumbers());
                     assertFlags(dto.getFlags());
@@ -3266,6 +3276,40 @@ public class AtsJavaCodeGeneratorTests
     }
 
     [Fact]
+    public async Task GeneratedTerminalDto_RoundTripsCallbackWireNames()
+    {
+        using var workspace = await CreateJavaProbeWorkspaceAsync(
+            CreateContextFromBothAssemblies(),
+            "aspire/TerminalOptions.java");
+        workspace.WriteSource(
+            "aspire/TerminalOptionsProbe.java",
+            """
+            package aspire;
+
+            import java.util.Map;
+
+            public class TerminalOptionsProbe {
+                public static void main(String[] args) {
+                    var options = TerminalOptions.fromMap(Map.of("columns", 132, "rows", 50));
+                    if (options.getColumns() != 132 || options.getRows() != 50) {
+                        throw new IllegalStateException("unexpected default dimensions");
+                    }
+                    options.setColumns(200);
+                    var result = Map.of("p0", options.toMap());
+                    if (!result.equals(Map.of("p0", Map.of("columns", 200.0, "rows", 50.0)))) {
+                        throw new IllegalStateException("unexpected callback result: " + result);
+                    }
+                    System.out.println("OK");
+                }
+            }
+            """);
+        await workspace.CompileAsync();
+        var run = await workspace.RunClassAsync("aspire.TerminalOptionsProbe", TimeSpan.FromSeconds(6));
+        Assert.False(run.TimedOut);
+        Assert.True(run.ExitCode == 0, $"Java terminal DTO probe failed:{Environment.NewLine}{run.StdOut}{run.StdErr}");
+    }
+
+    [Fact]
     public async Task GeneratedDtoCallbacks_VoidCallbackReturnsMutatedPositionalArguments()
     {
         var contextType = new AtsTypeRef { TypeId = "Tests/MutableContext", Category = AtsTypeCategory.Dto };
@@ -3333,11 +3377,11 @@ public class AtsJavaCodeGeneratorTests
                     var options = new CallbackOptions();
                     options.setCallback(context -> context.setValue("after"));
 
-                    var callback = (Function<Object, Object>) options.toMap().get("Callback");
-                    var result = (Map<String, Object>) callback.apply(Map.of("Value", "before"));
+                    var callback = (Function<Object, Object>) options.toMap().get("callback");
+                    var result = (Map<String, Object>) callback.apply(Map.of("value", "before"));
                     var serializedResult = (Map<String, Object>) AspireClient.serializeValue(result);
                     var context = (Map<String, Object>) serializedResult.get("p0");
-                    if (serializedResult.size() != 1 || !"after".equals(context.get("Value"))) {
+                    if (serializedResult.size() != 1 || !"after".equals(context.get("value"))) {
                         throw new IllegalStateException("unexpected callback result: " + serializedResult);
                     }
 
@@ -3446,11 +3490,11 @@ public class AtsJavaCodeGeneratorTests
                     writeMessage(serverOutput,
                         "{\"jsonrpc\":\"2.0\",\"id\":9001,\"method\":\"invokeCallback\","
                             + "\"params\":{\"callbackId\":\"" + callbackId + "\","
-                            + "\"args\":{\"p0\":{\"Value\":\"before\"}}}}" );
+                            + "\"args\":{\"p0\":{\"value\":\"before\"}}}}" );
 
                     String callbackResponse = readMessage(serverInput);
                     if (!callbackResponse.contains("\"id\":9001")
-                        || !callbackResponse.contains("\"result\":{\"p0\":{\"Value\":\"after\"}}") ) {
+                        || !callbackResponse.contains("\"result\":{\"p0\":{\"value\":\"after\"}}") ) {
                         throw new IllegalStateException("callback did not return mutated arguments: " + callbackResponse);
                     }
 

@@ -66,7 +66,7 @@
                                           OnClick="@(() => OnSelectRowClicked(context.ResourceRow))" />
                             @if (context.ResourceRow.Resource is not null)
                             {
-                                <ResourceNameDisplay Resource="context.ResourceRow.Resource" FilterText="" FormatName="GetResourceName" />
+                                <ResourceNameDisplay Resource="context.ResourceRow.Resource" FilterText="" FormatName="GetResourceName" ShowHiddenIndicator="false" />
                             }
                             else if (context.ResourceRow.OtlpResource is not null)
                             {
@@ -125,7 +125,10 @@
             </TemplateColumn>
         </ChildContent>
         <EmptyContent>
-            <FluentIcon Icon="Icons.Regular.Size24.AppGeneric" Color="Color.Primary" />&nbsp;@Loc[nameof(Dialogs.ManageDataNoResources)]
+            <div class="aspire-empty-message">
+                <FluentIcon Icon="Icons.Regular.Size24.AppGeneric" Color="Color.Primary" />
+                @Loc[nameof(Dialogs.ManageDataNoResources)]
+            </div>
         </EmptyContent>
     </AspireFluentDataGrid>
 </div>

@@ -167,7 +167,7 @@
                                                             </FluentButton>
                                                         }
                                                     </span>
-                                                    <ResourceNameDisplay Resource="context.Resource" FilterText="@PageViewModel.TextFilter" FormatName="GetResourceName" />
+                                                    <ResourceNameDisplay Resource="context.Resource" FilterText="@PageViewModel.TextFilter" FormatName="GetResourceName" ShowHiddenIndicator="true" />
                                                 </span>
                                             </AspireTemplateColumn>
                                             <AspireTemplateColumn ColumnId="@StateColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]" Sortable="true" SortBy="@_stateSort" Tooltip="true" TooltipText="@(c => ResourceStateViewModel.GetResourceStateTooltip(c.Resource, ColumnsLoc, _resourceByName.Values))">
@@ -229,7 +229,10 @@
                                             </AspireTemplateColumn>
                                         </ChildContent>
                                         <EmptyContent>
-                                            <FluentIcon Value="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? (Icon)new Icons.Regular.Size24.Key() : new Icons.Regular.Size24.AppGeneric())" Color="Color.Primary" />&nbsp;@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNoParameters)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)])
+                                            <div class="aspire-empty-message">
+                                                <FluentIcon Value="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? (Icon)new Icons.Regular.Size24.Key() : new Icons.Regular.Size24.AppGeneric())" Color="Color.Primary" />
+                                                @(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNoParameters)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)])
+                                            </div>
                                         </EmptyContent>
                                     </AspireFluentDataGrid>
                                 </GridColumnManager>

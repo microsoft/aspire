@@ -52,10 +52,10 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
 
         // Run aspire new with the Starter template, going through all prompts manually
         // so we can ACCEPT the agent init prompt instead of declining it.
-        // Pass --skill-locations and --skills as CLI flags so the test does not depend on
+        // Pass client, scope, and skill flags so the test does not depend on
         // the position or count of entries in the interactive skill-selection menus, which
         // change whenever the bundle ships a new skill.
-        await auto.TypeAsync("aspire new --skill-locations claudecode --skills playwright-cli");
+        await auto.TypeAsync("aspire new --agents claude --scope project --skills playwright-cli");
         await auto.EnterAsync();
 
         // Template selection: accept default Starter App
@@ -110,7 +110,7 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         await auto.TypeAsync("y");
 
         // Wait for agent init to complete (downloads @playwright/cli from npm).
-        // Skill location and skill selection are provided via --skill-locations/--skills flags
+        // Client, scope, and skill selections are provided via flags
         // on the aspire new invocation above, so no interactive navigation is needed here.
         // Fail the test immediately if a provenance verification error appears.
         await auto.WaitUntilAsync(s =>

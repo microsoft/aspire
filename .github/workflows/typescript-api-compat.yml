@@ -9,7 +9,7 @@ permissions:
 jobs:
   typescript_api_compat:
     name: TypeScript API Compatibility
-    if: ${{ github.event_name == 'pull_request' }}
+    if: ${{ github.repository == 'microsoft/aspire' && github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -113,6 +113,14 @@ jobs:
             proj_name=$(basename "$proj")
             csproj="$proj/$proj_name.csproj"
             if [ -f "$csproj" ]; then
+              # Native server bindings have their own ATS contract, not a managed
+              # Hosting integration surface that sdk dump can load.
+              polyglot_compatible=$(./dotnet.sh msbuild "$csproj" -nologo -getProperty:IsAspirePolyglotCompatible | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+              if [ "$polyglot_compatible" = "false" ]; then
+                echo "Skipping non-integration project $proj_name"
+                continue
+              fi
+
               disable_package_baseline_validation=$(./dotnet.sh msbuild "$csproj" -nologo -getProperty:DisablePackageBaselineValidation | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
               if [ "$disable_package_baseline_validation" = "true" ]; then
                 echo "$proj_name" >> "$EXCLUDED_PACKAGES_FILE"

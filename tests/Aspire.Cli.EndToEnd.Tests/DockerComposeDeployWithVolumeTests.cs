@@ -128,7 +128,8 @@ public sealed class DockerComposeDeployWithVolumeTests(ITestOutputHelper output)
             apiClientPackages: [],
             appHostCode: appHostCode,
             apiProgramCode: apiProgramCode,
-            output: output);
+            output: output,
+            useLegacyProjectResources: !useProjectV2);
 
         LocalDeploymentTestHelpers.WriteReferencingWebProgram(projectDir, ProjectName, serverName);
 

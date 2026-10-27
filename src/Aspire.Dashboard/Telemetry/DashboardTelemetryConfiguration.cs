@@ -27,7 +27,7 @@ public sealed record DashboardTelemetryConfiguration
 
         return new()
         {
-            ReportedTelemetryEnabled = !configuration.GetBool(DashboardTelemetryService.TelemetryOptOutConfigKey, defaultValue: false) &&
+            ReportedTelemetryEnabled = !configuration.GetBool(KnownConfigNames.DashboardTelemetryOptOut, defaultValue: false) &&
                 forwardedOptOut is not true
         };
     }

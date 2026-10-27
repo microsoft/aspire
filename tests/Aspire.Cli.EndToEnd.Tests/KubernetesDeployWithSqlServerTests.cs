@@ -55,7 +55,7 @@ public sealed class KubernetesDeployWithSqlServerTests(ITestOutputHelper output)
 
                 var sql = builder.AddSqlServer("sql");
 
-                var api = builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+                var api = builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                     .WithReference(sql)
                     .WaitFor(sql)
                     .WithExternalHttpEndpoints();

@@ -152,6 +152,16 @@
         <target state="new">Azure resources deleted and provisioning state reset.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DeleteAzureResourcesRemainingResourcesFormat">
+        <source>Resource-group deletion completed. These resources were not deleted: {0}.</source>
+        <target state="new">Resource-group deletion completed. These resources were not deleted: {0}.</target>
+        <note>{0} is a list of resource names, provider types, and object IDs.</note>
+      </trans-unit>
+      <trans-unit id="DeleteAzureResourcesRemainingResourcesWarning">
+        <source>The listed resources were not deleted because they exist outside the resource group. Delete them separately using their service's portal or API.</source>
+        <target state="new">The listed resources were not deleted because they exist outside the resource group. Delete them separately using their service's portal or API.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeploymentOperationCanceledResourcesFormat">
         <source>Canceled Azure resources: {0}</source>
         <target state="new">Canceled Azure resources: {0}</target>
@@ -654,6 +664,21 @@ Para saber mais, veja a [documentação de provisionamento do Azure](https://aka
       <trans-unit id="TenantPlaceholder">
         <source>Select tenant ID</source>
         <target state="translated">Selecionar a ID do locatário</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TenantResourceSuffixDescription">
+        <source>Optional. Appended to the names of tenant-wide resources created by this AppHost. Leave empty to use the names from AppHost code unchanged. Changing the suffix targets different resources; previous resources are not renamed or deleted.</source>
+        <target state="new">Optional. Appended to the names of tenant-wide resources created by this AppHost. Leave empty to use the names from AppHost code unchanged. Changing the suffix targets different resources; previous resources are not renamed or deleted.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TenantResourceSuffixLabel">
+        <source>Tenant-scoped resource suffix</source>
+        <target state="new">Tenant-scoped resource suffix</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TenantResourceSuffixSelectionMessage">
+        <source>Add a suffix to tenant-wide resources created by this AppHost (optional).</source>
+        <target state="new">Add a suffix to tenant-wide resources created by this AppHost (optional).</target>
         <note />
       </trans-unit>
       <trans-unit id="TenantSelectionMessage">

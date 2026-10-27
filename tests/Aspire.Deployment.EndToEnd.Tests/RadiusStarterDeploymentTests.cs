@@ -341,44 +341,36 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
 
             output.WriteLine($"Step 16: Modifying AppHost.cs at: {appHostFilePath}");
             var content = File.ReadAllText(appHostFilePath);
-            const string apiServiceDeclarationPattern = "var apiService = builder.AddProject";
+            const string apiServiceDeclarationPattern = "var apiService = builder.AddDotnetProject";
             const string apiServiceReferencePattern = "    .WithReference(apiService)";
-            if (!content.Contains(apiServiceDeclarationPattern, StringComparison.Ordinal) ||
-                !content.Contains(apiServiceReferencePattern, StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException("Could not find the API service or its web frontend reference in the generated AppHost.");
-            }
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
+                apiServiceDeclarationPattern,
+                $$"""
+                var deploymentTest = builder.AddConnectionString("{{TestConnectionStringName}}", expression => expression.AppendLiteral("{{TestConnectionStringValue}}"));
 
-            content = content
-                .Replace(
-                    apiServiceDeclarationPattern,
-                    $$"""
-                    var deploymentTest = builder.AddConnectionString("{{TestConnectionStringName}}", expression => expression.AppendLiteral("{{TestConnectionStringValue}}"));
-
-                    {{apiServiceDeclarationPattern}}
-                    """,
-                    StringComparison.Ordinal)
-                .Replace(
-                    apiServiceReferencePattern,
-                    $"""
-                        .WithReference(deploymentTest)
-                    {apiServiceReferencePattern}
-                    """,
-                    StringComparison.Ordinal);
+                {{apiServiceDeclarationPattern}}
+                """);
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
+                apiServiceReferencePattern,
+                $"""
+                    .WithReference(deploymentTest)
+                {apiServiceReferencePattern}
+                """);
 
             // Attach the pushed ACR image to each project resource. The Radius publisher fails
             // publish for project resources without an image annotation (no <name>:latest
             // fallback) - see WithContainerImage / issue 16844. Inserting WithContainerImage
-            // immediately after the resource name keeps the existing fluent chain valid.
-            content = content.Replace(
-                "(\"apiservice\")",
-                $"(\"apiservice\")\n    .WithContainerImage(\"{apiServiceImage}\")");
-            content = content.Replace(
-                "(\"webfrontend\")",
-                $"(\"webfrontend\")\n    .WithContainerImage(\"{webFrontendImage}\")");
+            // immediately after AddDotnetProject keeps the existing fluent chain valid.
+            foreach (var (suffix, resource, image) in new[] { ("ApiService", "apiservice", apiServiceImage), ("Web", "webfrontend", webFrontendImage) })
+            {
+                var declaration = $"builder.AddDotnetProject(\"{resource}\", \"../{projectName}.{suffix}/{projectName}.{suffix}.csproj\")";
+                content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
+                    declaration,
+                    $"{declaration}\n    .WithContainerImage(\"{image}\")");
+            }
 
             // Register the Radius compute environment before Build().
-            content = content.Replace(
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
                 "builder.Build().Run();",
                 $"builder.AddRadiusEnvironment(\"radius\").WithNamespace(\"{appNamespace}\");\n\nbuilder.Build().Run();");
 

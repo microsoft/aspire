@@ -55,7 +55,7 @@ public sealed class KubernetesDeployWithPostgresTests(ITestOutputHelper output)
 
                 var postgres = builder.AddPostgres("pg");
 
-                var api = builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+                var api = builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                     .WithReference(postgres)
                     .WaitFor(postgres)
                     .WithExternalHttpEndpoints();

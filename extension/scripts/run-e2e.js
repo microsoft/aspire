@@ -136,10 +136,12 @@ const POSIX_SHELL_INERT_PATH_PATTERN = /^[A-Za-z0-9._/+,=:@%-]+$/;
 const WINDOWS_COMMAND_INERT_PATH_PATTERN = /^[A-Za-z0-9._\\/:+@~-]+$/;
 const isWindows = process.platform === 'win32';
 const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
+const installAzureFunctionsVsix = process.env.ASPIRE_EXTENSION_E2E_INSTALL_AZURE_FUNCTIONS_VSIX === 'true';
 const enableWinUiE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_WINUI === 'true';
 const enableBrowserDebuggerE2E = shardName === 'browser-debugger';
+const enableNodeFunctionsE2E = shardName === 'azure-functions-node';
 const browserDebuggerTargetFramework = 'net11.0';
-const enableDebuggerExtensions = enableAzureFunctionsE2E || enableBrowserDebuggerE2E || enableWinUiE2E;
+const enableDebuggerExtensions = installAzureFunctionsVsix || enableBrowserDebuggerE2E || enableNodeFunctionsE2E || enableWinUiE2E;
 const e2eBrowser = process.platform === 'win32' ? 'msedge' : 'chrome';
 const COMMAND_INERT_PATH_PATTERN = isWindows ? WINDOWS_COMMAND_INERT_PATH_PATTERN : POSIX_SHELL_INERT_PATH_PATTERN;
 const COMMAND_INTERPRETER_NAME = isWindows ? 'cmd.exe' : '/bin/sh';
@@ -657,6 +659,7 @@ async function main() {
     const cliPath = enableJavaE2E ? bundledCliPath : isolateCliPath(bundledCliPath);
     cliPathForCleanup = cliPath;
     validateCliPath(cliPath);
+    prepareCliBundle(cliPath);
     const appHostSdkVersion = resolveAppHostSdkVersion(cliPath);
     prepareWorkspaceFixture(cliPath, appHostSdkVersion);
     prepareJavaWorkspace(bundledCliPath, appHostSdkVersion);
@@ -901,14 +904,43 @@ function validateCliPath(resolvedCliPath) {
   }
 }
 
+function prepareCliBundle(resolvedCliPath) {
+  // Each run has a fresh ASPIRE_HOME; direct dotnet fixture builds need its native bundle.
+  const result = spawnSync(resolvedCliPath, ['setup', '--install-path', getAspireCliEnvironment().ASPIRE_HOME], {
+    cwd: extensionRoot,
+    env: getAspireCliEnvironment(),
+    shell: false,
+    encoding: 'utf8',
+    timeout: 120000,
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error(`Aspire CLI bundle setup failed for ${resolvedCliPath}: ${result.error?.message ?? `exit ${result.status ?? `signal ${result.signal}`}`}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  }
+  const home = getAspireCliEnvironment().ASPIRE_HOME;
+  const versionsDirectory = path.join(home, 'versions');
+  const executableSuffix = process.platform === 'win32' ? '.exe' : '';
+  const completeBundle = fs.existsSync(versionsDirectory)
+    && fs.readdirSync(versionsDirectory, { withFileTypes: true }).some(entry => entry.isDirectory()
+      && [
+        path.join('dcp', `dcp${executableSuffix}`),
+        path.join('managed', `aspire-managed${executableSuffix}`),
+        path.join('dashboard', `Aspire.Dashboard${executableSuffix}`),
+      ].every(relativePath => fs.existsSync(path.join(versionsDirectory, entry.name, relativePath))));
+  if (!completeBundle && (process.env.CI || fs.existsSync(path.join(home, '.aspire-bundle-version')))) {
+    throw new Error(`Aspire CLI setup did not provide a complete native bundle in ${home}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  }
+}
+
 function resolveDebuggerVsixPaths() {
   if (!enableDebuggerExtensions) {
     return [];
   }
 
-  // .NET resource shards need the C# extension and its .NET runtime dependency. Azure Functions
-  // additionally needs the Azure Resource Groups and Functions extensions before Aspire advertises
-  // that launch capability. All dependencies must be explicit because the E2E instance runs offline.
+  // AppHost debugging needs the C# extension and its .NET runtime dependency. The .NET Functions
+  // shard additionally needs the Azure Resource Groups and Functions extensions before Aspire
+  // advertises that launch capability. The Node Functions shard attaches through pwa-node and must
+  // not install that extension because its Function Host Exceptions Debugger intercepts AppHost
+  // exception stops. All dependencies must be explicit because the E2E instance runs offline.
   const vsixPaths = [
     {
       displayName: '.NET Install Tool',
@@ -919,7 +951,7 @@ function resolveDebuggerVsixPaths() {
       path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX'),
     },
   ];
-  if (enableAzureFunctionsE2E) {
+  if (installAzureFunctionsVsix) {
     vsixPaths.push({
       displayName: 'Azure Resource Groups',
       path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX'),
@@ -2186,6 +2218,7 @@ function getApprovedFallbackPackageSources() {
     { key: 'dotnet-eng', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json' },
     { key: 'dotnet9', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json' },
     { key: 'dotnet10', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet10/nuget/v3/index.json' },
+    { key: 'dotnet11', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet11/nuget/v3/index.json' },
     { key: 'dotnet-libraries', value: 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-libraries/nuget/v3/index.json' },
   ];
 }

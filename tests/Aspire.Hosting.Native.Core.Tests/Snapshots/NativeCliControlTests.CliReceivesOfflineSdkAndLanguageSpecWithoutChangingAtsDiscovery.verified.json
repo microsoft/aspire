@@ -1,0 +1,68 @@
+﻿{
+  "runtimeSpec": {
+    "language": "typescript/nodejs",
+    "displayName": "TypeScript (Node.js)",
+    "codeGenLanguage": "TypeScript",
+    "detectionPatterns": [
+      "apphost.mts",
+      "apphost.ts"
+    ],
+    "initialize": null,
+    "installDependencies": {
+      "command": "npm",
+      "args": [
+        "install"
+      ],
+      "environmentVariables": null,
+      "upToDateCheck": null
+    },
+    "preExecute": [
+      {
+        "command": "npx",
+        "args": [
+          "--no-install",
+          "tsc",
+          "--noEmit",
+          "-p",
+          "tsconfig.apphost.json"
+        ],
+        "environmentVariables": null,
+        "upToDateCheck": null
+      }
+    ],
+    "execute": {
+      "command": "npx",
+      "args": [
+        "--no-install",
+        "tsx",
+        "--tsconfig",
+        "tsconfig.apphost.json",
+        "{appHostFile}"
+      ],
+      "environmentVariables": null,
+      "upToDateCheck": null
+    },
+    "publishExecute": null,
+    "extensionLaunchCapability": "node",
+    "certificateBundleEnvironmentVariable": "NODE_EXTRA_CA_CERTS",
+    "migrationFiles": {
+      "tsconfig.apphost.json": "{\n  \u0022compilerOptions\u0022: {\n    \u0022target\u0022: \u0022ES2022\u0022,\n    \u0022module\u0022: \u0022NodeNext\u0022,\n    \u0022moduleResolution\u0022: \u0022NodeNext\u0022,\n    \u0022esModuleInterop\u0022: true,\n    \u0022forceConsistentCasingInFileNames\u0022: true,\n    \u0022strict\u0022: true,\n    \u0022skipLibCheck\u0022: true,\n    \u0022outDir\u0022: \u0022./dist/apphost\u0022,\n    \u0022rootDir\u0022: \u0022.\u0022\n  },\n  \u0022include\u0022: [\n    \u0022apphost.mts\u0022,\n    \u0022.aspire/modules/aspire.mts\u0022,\n    \u0022.aspire/modules/base.mts\u0022,\n    \u0022.aspire/modules/transport.mts\u0022\n  ],\n  \u0022exclude\u0022: [\u0022node_modules\u0022]\n}\n"
+    }
+  },
+  "sdkFiles": [
+    "apphost-server.json",
+    "aspire.mts",
+    "base.mts",
+    "integration-host.mts",
+    "native-builder.mts",
+    "native-client.mts",
+    "native-pipeline.mts",
+    "native-types.mts",
+    "transport.mts"
+  ],
+  "identity": {
+    "generation": 2,
+    "contractId": "contract-id",
+    "version": "server-version"
+  }
+}

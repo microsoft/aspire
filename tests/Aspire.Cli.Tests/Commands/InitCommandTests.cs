@@ -2,14 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
-using System.Xml.Linq;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Git;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -108,6 +107,37 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("Test.AppHost", capturedName);
         Assert.Contains("Test.AppHost", capturedOutputPath);
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")));
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenSolutionExists_InstallsProjectSkillsInWorkspaceWithoutCheckingWorkspaceSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Test.sln"), "Fake solution file");
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            ConfigureImplicitTemplateChannel(options);
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "init --language csharp --non-interactive --use-config-source false --agents copilot --scope project --skills aspire");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+
+        Assert.True(Directory.Exists(Path.Combine(workspace.Path, "Test.AppHost")));
+        Assert.True(File.Exists(Path.Combine(workspace.Path, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md")));
+        Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        Assert.Equal(0, git.Calls);
+        Assert.Equal(0, git.CheckCalls);
     }
 
     [Theory]
@@ -268,6 +298,23 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var appHost = config["appHost"]!.AsObject();
         Assert.Equal("apphost.cs", appHost["path"]!.GetValue<string>());
         Assert.Null(appHost["language"]);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenNoSolutionExists_WritesConfigFilesWithOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"));
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json"));
     }
 
     [Fact]
@@ -656,24 +703,15 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             ConfirmCallback = (_, _) => true
         };
-        var mcpConfigured = false;
-        var mcpApplicator = new AgentEnvironmentApplicator(
-            AgentCommandStrings.InitCommand_ConfigureMcpServer,
-            _ =>
-            {
-                mcpConfigured = true;
-                return Task.CompletedTask;
-            });
-
         var subtleMessages = new List<string>();
         interactionService.DisplaySubtleMessageCallback = subtleMessages.Add;
         interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
         {
             var items = choices.Cast<object>().ToList();
 
-            if (items.FirstOrDefault() is SkillLocation)
+            if (items.FirstOrDefault() is AgentClient)
             {
-                return [SkillLocation.Standard, SkillLocation.ClaudeCode, SkillLocation.OpenCode];
+                return [AgentClient.Copilot, AgentClient.ClaudeCode, AgentClient.OpenCode];
             }
 
             Assert.All(items, static item => Assert.IsType<SkillDefinition>(item));
@@ -689,7 +727,6 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
             options.CliHostEnvironmentFactory = _ => global::Aspire.Cli.Tests.TestHelpers.CreateInteractiveHostEnvironment();
             options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector(mcpApplicator);
         });
 
         using var serviceProvider = services.BuildServiceProvider();
@@ -700,10 +737,10 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(interactionService.DisplayedMessages, m => m.Message == "Aspire AppHost created! To complete setup, run one of:");
-        Assert.DoesNotContain(subtleMessages, m => m.Contains("copilot", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains("  claude \"run the aspireify skill\"", subtleMessages);
-        Assert.Contains("  opencode --prompt \"run the aspireify skill\"", subtleMessages);
-        Assert.False(mcpConfigured);
+        Assert.Equal(
+            ["  claude \"run the aspireify skill\"", "  opencode --prompt \"run the aspireify skill\""],
+            subtleMessages.Where(static message => message.StartsWith("  ", StringComparison.Ordinal)));
+        Assert.Empty(Directory.GetFiles(workspace.WorkspaceRoot.FullName, "*mcp*.json*", SearchOption.AllDirectories));
     }
 
     [Fact]
@@ -722,9 +759,9 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             var items = choices.Cast<object>().ToList();
 
-            if (items.FirstOrDefault() is SkillLocation)
+            if (items.FirstOrDefault() is AgentClient)
             {
-                return [SkillLocation.Standard];
+                return [AgentClient.Copilot];
             }
 
             return items
@@ -775,7 +812,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_NonInteractive_WithSkillLocationsNone_DoesNotInstallAgentSkills()
+    public async Task InitCommand_NonInteractive_WithAgentNone_DoesNotInstallAgentSkills()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -783,19 +820,21 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var parseResult = command.Parse("init --non-interactive --skill-locations none");
+        var parseResult = command.Parse("init --non-interactive --agents none");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
 
-        // With --skill-locations none, no skill files should be installed regardless of skill selection.
+        // With --agents none, no skill files should be installed regardless of skill selection.
         var agentsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills");
         Assert.False(Directory.Exists(agentsDir), $"Expected no agents/skills directory but found {agentsDir}");
     }
 
-    [Fact]
-    public async Task InitCommand_NonInteractive_WithSkillLocationsAndSkills_InstallsOnlySpecifiedSkills()
+    [Theory]
+    [InlineData("project")]
+    [InlineData("global")]
+    public async Task InitCommand_NonInteractive_WithClientScopeAndSkills_InstallsOnlySpecifiedSkills(string scope)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -803,22 +842,27 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var parseResult = command.Parse($"init --non-interactive --skill-locations standard --skills {CommonAgentApplicators.AspireSkillName}");
+        var parseResult = command.Parse($"init --non-interactive --agents copilot --scope {scope} --skills {CommonAgentApplicators.AspireSkillName}");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
 
-        var aspireSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
+        var homeDirectory = serviceProvider.GetRequiredService<CliExecutionContext>().HomeDirectory;
+        var selectedRoot = scope == "project" ? workspace.WorkspaceRoot : homeDirectory;
+        var unselectedRoot = scope == "project" ? homeDirectory : workspace.WorkspaceRoot;
+        var aspireSkillPath = Path.Combine(selectedRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
         Assert.True(File.Exists(aspireSkillPath), $"Expected aspire skill file at {aspireSkillPath}");
+        Assert.False(Directory.Exists(Path.Combine(unselectedRoot.FullName, ".agents", "skills")));
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json")));
 
         // aspireify was not requested, so it should not be installed.
-        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
+        var aspireifySkillPath = Path.Combine(selectedRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
         Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
     }
 
     [Fact]
-    public async Task InitCommand_WhenNoSolutionExists_SingleFileSkeletonPinsSdkVersion()
+    public async Task InitCommand_WhenNoSolutionExists_SingleFileSkeletonPinsPackageVersions()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -834,12 +878,10 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
         var appHostContent = await File.ReadAllTextAsync(appHostPath);
 
-        // The single-file skeleton must pin the SDK version with @<version> so downstream
-        // CLI operations (ProjectUpdater / FallbackProjectParser) can locate and update
-        // the directive.
         var firstLine = appHostContent.Split('\n')[0].TrimEnd('\r');
-        Assert.StartsWith("#:sdk Aspire.AppHost.Sdk@", firstLine, StringComparison.Ordinal);
-        Assert.NotEqual("#:sdk Aspire.AppHost.Sdk@", firstLine);
+        var version = serviceProvider.GetRequiredService<CliExecutionContext>().IdentitySdkVersion;
+        Assert.Equal($"#:package Aspire.Hosting.AppHost@{version}", firstLine);
+        Assert.Contains($"#:package Aspire.Hosting.Dotnet@{version}", appHostContent);
         Assert.Contains("#:property AspireUseCliBundle=true", appHostContent);
     }
 
@@ -871,6 +913,26 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         // Pre-existing properties must be preserved.
         Assert.Equal("stable", merged["channel"]!.GetValue<string>());
         Assert.True(merged["features"]!.AsObject()["polyglotSupportEnabled"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenAspireConfigHasNonOsLineBreaks_RewritesItWithOsLineBreaks()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, "{\n  \"channel\": \"stable\"\n}\n".ReplaceLineEndings(LineEndingAssert.NonOsNewLine));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(configPath);
+        Assert.Equal("stable", JsonNode.Parse(await File.ReadAllTextAsync(configPath))!["channel"]!.GetValue<string>());
     }
 
     [Fact]
@@ -963,7 +1025,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         // is that nugetConfigFile stays null on the implicit channel.
 
         // The fix must also leave the solution-directory NuGet.config alone on the implicit
-        // channel — TemplateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync
+        // channel — TemplateNuGetConfigService.ConfigureDotNetAppHostNuGetConfigAsync
         // short-circuits when the matched channel is not Explicit. A regression that dropped
         // the channel-type guard would silently create a workspace NuGet.config here.
         Assert.False(
@@ -1210,11 +1272,11 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// workspace <c>nuget.config</c> to the channel baked into the running CLI binary
     /// (exposed as <see cref="CliExecutionContext.IdentityChannel"/>). One named explicit channel is
     /// registered per theory row with a uniquely-sourced feed; the assertion reads the
-    /// workspace <c>nuget.config</c> emitted by <c>NuGetConfigMerger</c> and verifies it
+    /// workspace <c>nuget.config</c> emitted by the .NET configuration merger and verifies it
     /// carries the matching feed URL — proving the resolver picked the binary's identity
     /// channel rather than skipping the merge or selecting a different registered channel.
-    /// The <c>stable</c> channel is intentionally excluded: its packages live on nuget.org
-    /// (the ambient default source), so it drops no <c>nuget.config</c>; that case is covered
+    /// The <c>stable</c> channel is intentionally excluded: it uses ambient NuGet configuration,
+    /// so it drops no <c>nuget.config</c>; that case is covered
     /// by <see cref="InitCommand_SingleFileMode_StableIdentity_DoesNotCreateNuGetConfig"/>.
     /// </summary>
     [Theory]
@@ -1249,8 +1311,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// <summary>
     /// Inverse of <see cref="InitCommand_SingleFileMode_NoChannelOverride_WiresNuGetConfigToCliExecutionContextChannel"/>
     /// for the <c>stable</c> channel: a stable-identity single-file <c>aspire init</c> must NOT
-    /// drop a workspace <c>nuget.config</c>. The stable channel's packages live on nuget.org —
-    /// the ambient default source — so a <c>&lt;clear/&gt;</c>-based config would be redundant
+    /// drop a workspace <c>nuget.config</c>. Stable package resolution uses ambient NuGet
+    /// configuration, so a <c>&lt;clear/&gt;</c>-based config would be redundant
     /// and would wipe any additional feeds the user already relies on. The packaging service
     /// still registers a <c>stable</c> channel with a (test) feed source, proving the skip is
     /// driven by the channel name rather than an absence of mappings.
@@ -1276,7 +1338,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
 
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
-        Assert.False(File.Exists(nugetConfigPath), "stable-identity init must not drop a nuget.config (stable packages resolve from ambient nuget.org).");
+        Assert.False(File.Exists(nugetConfigPath), "stable-identity init must not drop a nuget.config (stable packages resolve from ambient NuGet configuration).");
     }
 
     /// <summary>
@@ -1907,7 +1969,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
-        Assert.False(File.Exists(nugetConfigPath), "stable-identity init must not drop a nuget.config (stable packages resolve from ambient nuget.org).");
+        Assert.False(File.Exists(nugetConfigPath), "stable-identity init must not drop a nuget.config (stable packages resolve from ambient NuGet configuration).");
     }
 
     /// <summary>
@@ -1998,7 +2060,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// <c>SolutionLocator</c> still finds it (it searches with <c>SearchOption.AllDirectories</c>),
     /// and the workspace NuGet.config must be written next to the solution — not at the
     /// working directory root. A mutation that passed <c>workingDirectory.FullName</c> instead
-    /// of <c>solutionDir.FullName</c> to <c>CreateOrUpdateNuGetConfigWithoutPromptAsync</c>
+    /// of <c>solutionDir.FullName</c> to <c>ConfigureDotNetAppHostNuGetConfigAsync</c>
     /// would put the file in the wrong place and the AppHost wouldn't resolve.
     /// </summary>
     [Fact]
@@ -2047,7 +2109,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// <summary>
     /// When a NuGet.config already exists in the solution directory with the user's own
     /// package source, <c>aspire init</c> must merge the channel feed in (via
-    /// <c>NuGetConfigMerger.UpdateExistingNuGetConfigAsync</c>) instead of clobbering the
+    /// <c>DotNetAppHostNuGetConfigTestHelper.UpdateExistingNuGetConfigAsync</c>) instead of clobbering the
     /// file. The merger has its own unit tests; this test guards the InitCommand-level
     /// integration so a regression in how the helper is invoked from the command path
     /// (wrong arg, missing call, accidental overwrite) doesn't slip through.
@@ -2151,11 +2213,6 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
-        var content = File.ReadAllText(nugetConfigPath);
-
-        Assert.Contains(SourceForChannel("daily"), content);
-        Assert.DoesNotContain(SourceForChannel("stable"), content);
-        Assert.DoesNotContain(SourceForChannel("staging"), content);
         AssertNuGetConfigHasChannelShape(nugetConfigPath, "daily");
     }
 
@@ -2330,30 +2387,14 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         => $"https://feeds.test.invalid/{channelName}-fallback/v3/index.json";
 
     /// <summary>
-    /// Asserts that the workspace NuGet.config written by
-    /// <c>TemplateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync</c>
-    /// carries the structural elements the fix depends on: the channel feed URL is registered
-    /// as a package source, a <c>&lt;clear/&gt;</c> element neutralizes any inherited
-    /// parent-directory NuGet config (without which a user-level config disabling our hive
-    /// would shadow the mapping), and the <c>Aspire*</c> pattern routes to the channel
-    /// feed via <c>&lt;packageSourceMapping&gt;</c>.
+    /// Asserts that native NuGet evaluation routes Aspire packages exclusively to the selected channel.
     /// </summary>
     private static void AssertNuGetConfigHasChannelShape(string nugetConfigPath, string channelName)
     {
         var channelSource = SourceForChannel(channelName);
-        var root = XDocument.Load(nugetConfigPath).Root ?? throw new InvalidOperationException("Empty NuGet.config.");
-
-        var packageSources = root.Element("packageSources");
-        Assert.NotNull(packageSources);
-        Assert.NotNull(packageSources!.Element("clear"));
-        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == channelSource);
-
-        var packageSourceMapping = root.Element("packageSourceMapping");
-        Assert.NotNull(packageSourceMapping);
-        var aspirePatternSource = packageSourceMapping!.Elements("packageSource")
-            .FirstOrDefault(ps => ps.Elements("package").Any(p => (string?)p.Attribute("pattern") == "Aspire*"));
-        Assert.NotNull(aspirePatternSource);
-        Assert.Equal(channelSource, (string?)aspirePatternSource!.Attribute("key"));
+        var workingDirectory = Path.GetDirectoryName(nugetConfigPath)!;
+        Assert.Equal([channelSource], NuGetTestHelper.GetEligiblePackageSources(workingDirectory, "Aspire.AppHost.Sdk"));
+        Assert.Equal([channelSource], NuGetTestHelper.GetEligiblePackageSources(workingDirectory, "Aspire.Hosting.Redis"));
     }
 
     private sealed class TestScaffoldingService : IScaffoldingService

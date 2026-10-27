@@ -187,9 +187,6 @@ suite('Aspire extension edge case E2E', function () {
         writeFileWithRetry(
             appHostPath,
             appHostSource
-                // This scenario validates the Hosting and extension changes together. The local CLI
-                // bundle can predate the repo-built packages, which would omit the debugger metadata.
-                .replace('#:property AspireUseCliBundle=true', '#:property AspireUseCliBundle=false')
                 .replace(
                     'builder.Build().Run();',
                     `#pragma warning disable ASPIREEXTENSION001

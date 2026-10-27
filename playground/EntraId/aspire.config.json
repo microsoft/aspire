@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "EntraId.AppHost/EntraId.AppHost.csproj"
+  }
+}

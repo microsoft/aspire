@@ -224,5 +224,11 @@ internal sealed class FakePlaywrightCliRunner : IPlaywrightCliRunner
         => Task.FromResult<SemVersion?>(null);
 
     public Task<bool> InstallSkillsAsync(string workingDirectory, CancellationToken cancellationToken)
-        => Task.FromResult(true);
+    {
+        var skillDirectory = Path.Combine(workingDirectory, PlaywrightCliInstaller.s_primarySkillBaseDirectory, PlaywrightCliInstaller.PlaywrightCliSkillName);
+        Directory.CreateDirectory(skillDirectory);
+        File.WriteAllText(Path.Combine(skillDirectory, "SKILL.md"), "# Playwright CLI Skill");
+
+        return Task.FromResult(true);
+    }
 }

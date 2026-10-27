@@ -16,8 +16,11 @@ spec:
         app.kubernetes.io/instance: "{{ .Release.Name }}"
     spec:
       containers:
-        - image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:13.6"
+        - image: "mcr.microsoft.com/aspire/nightly/dashboard:17.0"
           name: "env1-dashboard"
+          envFrom:
+            - configMapRef:
+                name: "env1-dashboard-config"
           ports:
             - name: "http"
               protocol: "TCP"

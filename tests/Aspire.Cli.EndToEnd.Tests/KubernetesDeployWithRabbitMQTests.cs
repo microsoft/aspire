@@ -55,7 +55,7 @@ public sealed class KubernetesDeployWithRabbitMQTests(ITestOutputHelper output)
 
                 var messaging = builder.AddRabbitMQ("messaging");
 
-                var api = builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+                var api = builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                     .WithReference(messaging)
                     .WaitFor(messaging)
                     .WithExternalHttpEndpoints();

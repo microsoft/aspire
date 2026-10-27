@@ -3,6 +3,7 @@
 
 using System.Net.Sockets;
 using Aspire.Hosting.Dcp;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
@@ -36,10 +37,10 @@ public sealed class DcpSocketTests
             }
 
             listener.Listen();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var timeout = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
             using var client = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            await client.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), timeout.Token);
-            using var accepted = await listener.AcceptAsync(timeout.Token);
+            await client.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), timeout.Token).DefaultTimeout();
+            using var accepted = await listener.AcceptAsync(timeout.Token).DefaultTimeout();
             Assert.True(accepted.Connected);
         }
         finally

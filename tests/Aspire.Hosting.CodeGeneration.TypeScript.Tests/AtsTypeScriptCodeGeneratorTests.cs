@@ -30,6 +30,14 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public async Task GenerateDistributedApplication_WithoutManagedBootstrap()
+    {
+        var context = new AtsContext { Capabilities = [], HandleTypes = [], DtoTypes = [], EnumTypes = [] };
+        var files = _generator.GenerateDistributedApplication(context, includeManagedBootstrap: false);
+        await Verify(files["aspire.mts"].TrimEnd(), extension: "ts").UseFileName("AtsWithoutManagedBootstrap");
+    }
+
+    [Fact]
     public void EmbeddedResource_PackageJson_IsAvailableWithExpectedStructure()
     {
         // The package.json under Resources/ is the single source of truth for
@@ -640,6 +648,60 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Scanner_HostingAssembly_ParameterResourceValueManagementCapabilities()
+    {
+        var capabilities = ScanCapabilitiesFromHostingAssembly();
+
+        var setValue = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync");
+        Assert.Equal(AtsCapabilityKind.InstanceMethod, setValue.CapabilityKind);
+        Assert.Equal("setValueAsync", setValue.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource", setValue.TargetTypeId);
+        Assert.Equal(AtsConstants.Void, setValue.ReturnType.TypeId);
+        Assert.NotEqual(true, setValue.ReturnType.IsNullable);
+
+        var valueParameter = Assert.Single(setValue.Parameters, p => p.Name == "value");
+        Assert.True(valueParameter.IsOptional);
+        // Reference-type parameter nullability is not surfaced in the ATS model. This parameter
+        // is still omittable because it has a C# default (= null), which IsOptional captures above.
+        Assert.False(valueParameter.IsNullable);
+        Assert.NotNull(valueParameter.Type);
+        Assert.Equal("string", valueParameter.Type.TypeId);
+        // AtsTypeRef.IsNullable is bool? and is left unset (null) for non-nullable types; assert it is not true.
+        Assert.NotEqual(true, valueParameter.Type.IsNullable);
+
+        var tryGetCurrentValue = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue");
+        Assert.Equal(AtsCapabilityKind.InstanceMethod, tryGetCurrentValue.CapabilityKind);
+        Assert.Equal("tryGetCurrentValue", tryGetCurrentValue.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource", tryGetCurrentValue.TargetTypeId);
+        Assert.DoesNotContain(tryGetCurrentValue.Parameters, p => p.Name != "context");
+        Assert.NotNull(tryGetCurrentValue.ReturnType);
+        Assert.Equal("string", tryGetCurrentValue.ReturnType.TypeId);
+        Assert.True(tryGetCurrentValue.ReturnType.IsNullable);
+    }
+
+    [Theory]
+    [InlineData("getNullableString", "string", true)]
+    [InlineData("getNullableStringTaskAsync", "string", true)]
+    [InlineData("getNullableStringValueTaskAsync", "string", true)]
+    [InlineData("getString", "string", false)]
+    [InlineData("getStringTaskAsync", "string", false)]
+    [InlineData("getStringValueTaskAsync", "string", false)]
+    [InlineData("getNullableInt", "number", true)]
+    [InlineData("getNullableIntTaskAsync", "number", true)]
+    [InlineData("getNullableIntValueTaskAsync", "number", true)]
+    [InlineData("getInt", "number", false)]
+    [InlineData("getIntTaskAsync", "number", false)]
+    [InlineData("getIntValueTaskAsync", "number", false)]
+    [InlineData("getStaticNullableStringAsync", "string", true)]
+    public void Scanner_MethodReturnTypes_PreserveNullability(string methodName, string typeId, bool nullable)
+    {
+        var capability = Assert.Single(ScanCapabilitiesFromTestAssembly(), c => c.MethodName == methodName);
+
+        Assert.Equal(typeId, capability.ReturnType.TypeId);
+        Assert.Equal(nullable, capability.ReturnType.IsNullable == true);
+    }
+
+    [Fact]
     public void Scanner_BrowsersAssembly_WithBrowserLogsCapability()
     {
         var capabilities = ScanCapabilitiesFromBrowsersAssembly();
@@ -1199,6 +1261,40 @@ public class AtsTypeScriptCodeGeneratorTests
 
         Assert.NotNull(withCommand);
         Assert.Equal("builder", withCommand.TargetParameterName);
+    }
+
+    [Fact]
+    public async Task Generate_AksNodePools_ExposeConfigurationCallbacks()
+    {
+        const string packageName = "Aspire.Hosting.Azure.Kubernetes";
+        var scanResult = AtsCapabilityScanner.ScanAssemblies(
+        [
+            typeof(DistributedApplication).Assembly,
+            typeof(global::Aspire.Hosting.Kubernetes.KubernetesNodePoolResource).Assembly,
+            typeof(global::Aspire.Hosting.Azure.Kubernetes.AksNodePoolConfig).Assembly
+        ]);
+
+        var addNodePool = Assert.Single(scanResult.Capabilities, c => c.CapabilityId == $"{packageName}/addNodePool");
+        var withSystemNodePool = Assert.Single(scanResult.Capabilities, c => c.CapabilityId == $"{packageName}/withSystemNodePool");
+        Assert.True(addNodePool.Parameters[^1].IsCallback);
+        Assert.True(withSystemNodePool.Parameters[^1].IsCallback);
+        Assert.True(addNodePool.RunSyncOnBackgroundThread);
+        Assert.True(withSystemNodePool.RunSyncOnBackgroundThread);
+        Assert.Single(scanResult.DtoTypes, dto => dto.ClrType == typeof(global::Aspire.Hosting.Azure.Kubernetes.AksNodePoolConfig));
+        Assert.Equal(AtsTypeCategory.Dto, addNodePool.Parameters[^1].CallbackParameters![0].Type.Category);
+        Assert.Equal(AtsTypeCategory.Dto, withSystemNodePool.Parameters[^1].CallbackParameters![0].Type.Category);
+
+        var context = scanResult.ToAtsContext();
+        var model = ProjectApi(context, packageName);
+        var members = model.Modules.SelectMany(module => module.Items).SelectMany(item => item.Members);
+        var config = Assert.Single(model.Declarations, declaration => declaration.Content.StartsWith("export interface AksNodePoolConfig {", StringComparison.Ordinal));
+
+        await Verify(new
+        {
+            Config = config.Content,
+            AddNodePool = members.Where(member => member.CapabilityId == addNodePool.CapabilityId).Select(member => member.Declaration).Distinct().ToArray(),
+            WithSystemNodePool = members.Where(member => member.CapabilityId == withSystemNodePool.CapabilityId).Select(member => member.Declaration).Distinct().ToArray()
+        });
     }
 
     [Fact]

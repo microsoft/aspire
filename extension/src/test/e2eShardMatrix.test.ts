@@ -21,7 +21,6 @@ suite('E2E shard matrix', () => {
         ['Linux|apphost-tree|out/test-e2e/test-e2e/appHostTree.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
         ['Linux|azure-functions|out/test-e2e/test-e2e/azureFunctions.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19639'],
         ['Linux|browser-debugger|out/test-e2e/test-e2e/browserDebugger.e2e.test.js', 'https://github.com/microsoft/aspire/issues/20184'],
-        ['Windows|browser-debugger|out/test-e2e/test-e2e/browserDebugger.e2e.test.js', 'https://github.com/microsoft/aspire/issues/20117'],
         ['Windows|discovery-configuration|out/test-e2e/test-e2e/discoveryConfiguration.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
         ['Windows|debug-dashboard|out/test-e2e/test-e2e/debugDashboard.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
     ]);
@@ -68,6 +67,7 @@ suite('E2E shard matrix', () => {
                 browser: optionalString(row, 'browser', index),
                 installDotnetDebugger: optionalBoolean(row, 'installDotnetDebugger', index),
                 installAzureFunctions: optionalBoolean(row, 'installAzureFunctions', index),
+                installAzureFunctionsCoreTools: optionalBoolean(row, 'installAzureFunctionsCoreTools', index),
             };
         });
     }
@@ -189,6 +189,21 @@ suite('E2E shard matrix', () => {
         assertAdvisoryRowsAreTracked(workflow, expectedAdvisoryRows);
     });
 
+    test('schedules the Node Functions proof independently with Functions prerequisites', () => {
+        const workflow = fs.readFileSync(workflowPath, 'utf8');
+        const rows = matrixRows(workflow).filter(row => row.shardName === 'azure-functions-node');
+
+        assert.strictEqual(rows.length, 1);
+        assert.strictEqual(rows[0].name, 'Linux');
+        assert.strictEqual(rows[0].runner, 'ubuntu-latest');
+        assert.strictEqual(rows[0].spec, 'out/test-e2e/test-e2e/azureFunctionsNode.e2e.test.js');
+        assert.strictEqual(rows[0].installDotnetDebugger, true);
+        assert.strictEqual(rows[0].installAzureFunctionsCoreTools, true);
+        assert.strictEqual(rows[0].installAzureFunctions, undefined);
+        assert.strictEqual(rows[0].advisoryIssue, undefined);
+        assert.ok(!fs.readFileSync(path.join(specDirectory, 'azureFunctions.e2e.test.ts'), 'utf8').includes('azureFunctionsNode.e2e.test'));
+    });
+
     test('schedules browser debugger proofs on Chrome and Edge with debugger prerequisites', () => {
         const workflow = fs.readFileSync(workflowPath, 'utf8');
         const browserDebuggerRows = matrixRows(workflow)
@@ -220,7 +235,7 @@ suite('E2E shard matrix', () => {
                 browser: 'msedge',
                 installDotnetDebugger: true,
                 installAzureFunctions: undefined,
-                advisoryIssue: 'https://github.com/microsoft/aspire/issues/20117',
+                advisoryIssue: undefined,
             },
         ]);
     });
@@ -402,4 +417,5 @@ interface MatrixRow {
     browser?: string;
     installDotnetDebugger?: boolean;
     installAzureFunctions?: boolean;
+    installAzureFunctionsCoreTools?: boolean;
 }

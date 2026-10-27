@@ -236,7 +236,7 @@ public class Program
             ((args[0] == "mcp" && args[1] == "start") || (args[0] == "agent" && args[1] == "mcp"));
 
         // Create file logger provider from pre-computed path info
-        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, errorWriter);
+        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter);
 
         var factory = LoggerFactory.Create(builder =>
         {
@@ -317,6 +317,7 @@ public class Program
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
         ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !isCompletion);
+        builder.Services.AddSingleton<ConfigSourceService>();
 
         if (configurationValues is not null)
         {
@@ -567,6 +568,8 @@ public class Program
 
         // Git repository operations.
         builder.Services.AddSingleton<IGitRepository, GitRepository>();
+        builder.Services.AddSingleton<IGitCommandRunner, GitCommandRunner>();
+        builder.Services.AddSingleton<IGitClient, GitClient>();
 
         // OpenCode CLI operations.
         builder.Services.AddSingleton<IOpenCodeCliRunner, OpenCodeCliRunner>();
@@ -627,7 +630,6 @@ public class Program
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, CopilotAgentEnvironmentScanner>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, OpenCodeAgentEnvironmentScanner>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, ClaudeCodeAgentEnvironmentScanner>());
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, DeprecatedMcpCommandScanner>());
 
         // Agent telemetry hook installation/configuration.
         builder.Services.AddSingleton<Aspire.Cli.Agents.Hooks.ITelemetryHookInstaller, Aspire.Cli.Agents.Hooks.TelemetryHookInstaller>();
@@ -638,6 +640,7 @@ public class Program
         builder.Services.AddSingleton<ITemplateProvider, TemplateProvider>();
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, DotNetTemplateFactory>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, CliTemplateFactory>());
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, TemplateEngineFactory>());
 
         // Language discovery for polyglot support.
         builder.Services.AddSingleton<ILanguageDiscovery, DefaultLanguageDiscovery>();
@@ -746,7 +749,7 @@ public class Program
         builder.Services.AddTransient<SecretListCommand>();
         builder.Services.AddTransient<SecretPathCommand>();
         builder.Services.AddTransient<SecretDeleteCommand>();
-        builder.Services.AddTransient<SecretStoreResolver>();
+        builder.Services.AddTransient<AspireSecretsStoreResolver>();
         builder.Services.AddTransient<SdkCommand>();
         builder.Services.AddTransient<SdkGenerateCommand>();
         builder.Services.AddTransient<SdkDumpCommand>();
@@ -1262,8 +1265,8 @@ public class Program
                     profileCaptureSession = await app.Services.GetRequiredService<ProfileCaptureService>().StartAsync(profileCaptureOptions, cancellationManager.Token).ConfigureAwait(false);
                 }
 
-                // Log command invocation details for debugging. Anything forwarded to the AppHost
-                // can contain secrets, so it is redacted.
+                // Log command invocation details for debugging. Credential-bearing HTTP values and
+                // anything forwarded to the AppHost can contain secrets, so they are redacted.
                 var loggableArgs = ParseResultHelper.GetLoggableArguments(parseResult);
                 var commandLine = loggableArgs.Length > 0 ? $"aspire {loggableArgs}" : "aspire";
                 logger.LogInformation("Command: {CommandLine}", commandLine);

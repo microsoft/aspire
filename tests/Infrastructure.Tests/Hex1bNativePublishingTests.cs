@@ -196,6 +196,17 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             }
         }
 
+        var serverPublish = Path.Combine(artifacts, "bin", "Aspire.Hosting.Native.Server", "Release", "net11.0", rid, "publish");
+        var serverFiles = new[]
+        {
+            rid.StartsWith("win-", StringComparison.Ordinal) ? "Aspire.Hosting.Native.Server.exe" : "Aspire.Hosting.Native.Server",
+            "ats-contract.json"
+        };
+        foreach (var file in serverFiles)
+        {
+            WriteFile(Path.Combine(serverPublish, file), file);
+        }
+
         var terminalPublish = Path.Combine(artifacts, "bin", "Aspire.TerminalHost", "Release", "net11.0", rid, "publish");
         var terminalFiles = Aspire.Shared.TerminalHostPayload.GetRequiredFiles(rid);
         foreach (var file in terminalFiles)
@@ -292,6 +303,15 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             Assert.Equal(File.ReadAllBytes(Path.Combine(terminalPublish, file)), File.ReadAllBytes(Path.Combine(terminal, file)));
         }
 
+        var server = Path.Combine(layout, "apphost-server");
+        foreach (var file in serverFiles)
+        {
+            var bundledFile = file.StartsWith("Aspire.Hosting.Native.Server", StringComparison.Ordinal)
+                ? rid.StartsWith("win-", StringComparison.Ordinal) ? "aspire-apphost-server.exe" : "aspire-apphost-server"
+                : file;
+            Assert.Equal(File.ReadAllBytes(Path.Combine(serverPublish, file)), File.ReadAllBytes(Path.Combine(server, bundledFile)));
+        }
+
         var dashboard = Path.Combine(layout, "dashboard");
         Assert.Equal(dashboardFiles.Order(StringComparer.Ordinal), Directory.GetFiles(dashboard, "*", SearchOption.AllDirectories)
             .Select(path => Path.GetRelativePath(dashboard, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
@@ -332,67 +352,6 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         Assert.Contains($"'{rid}'", result.Output);
         Assert.Contains("win-x64", result.Output);
         Assert.Contains("win-arm64", result.Output);
-    }
-
-    [Fact]
-    public void SharedTargetsAreImportedAndShippedForHostingConsumers()
-    {
-        var repositoryTargets = XDocument.Load(Path.Combine(RepoRoot.Path, "Directory.Build.targets"));
-        Assert.Contains(repositoryTargets.Descendants("Import"), import =>
-            (string?)import.Attribute("Project") == "$(MSBuildThisFileDirectory)src/Aspire.Hosting/buildTransitive/Aspire.Hosting.Hex1b.targets");
-        var hostingTargets = XDocument.Load(Path.Combine(RepoRoot.Path, "src", "Aspire.Hosting", "buildTransitive", "Aspire.Hosting.targets"));
-        Assert.Contains(hostingTargets.Descendants("Import"), import => (string?)import.Attribute("Project") == "Aspire.Hosting.Hex1b.targets");
-        var hostingProject = XDocument.Load(Path.Combine(RepoRoot.Path, "src", "Aspire.Hosting", "Aspire.Hosting.csproj"));
-        Assert.Contains(hostingProject.Descendants("None"), item =>
-            (string?)item.Attribute("Include") == @"buildTransitive\Aspire.Hosting.Hex1b.targets" &&
-            (string?)item.Attribute("Pack") == "true" &&
-            (string?)item.Attribute("PackagePath") == @"buildTransitive\$(DefaultTargetFramework)");
-    }
-
-    [Fact]
-    public void WindowsTerminalSigningIncludesPtyHelperAndPreservesMicrosoftSidecars()
-    {
-        var signingProps = XDocument.Load(Path.Combine(RepoRoot.Path, "eng", "Signing.props"));
-        var helperCertificate = Assert.Single(signingProps.Descendants("FileSignInfo"),
-            item => (string?)item.Attribute("Include") == "hex1bpty.exe");
-        Assert.Equal("3PartySHA2", (string?)helperCertificate.Attribute("CertificateName"));
-
-        var windowsManagedFiles = signingProps.Descendants("ItemsToSign")
-            .Where(item => (string?)item.Attribute("Condition") == "$([System.OperatingSystem]::IsWindows())")
-            .Select(item => (string?)item.Attribute("Include"))
-            .Where(path => path?.StartsWith("$(ArtifactsBinDir)Aspire.TerminalHost", StringComparison.Ordinal) is true)
-            .Order(StringComparer.Ordinal);
-
-        Assert.Equal(
-            [
-                @"$(ArtifactsBinDir)Aspire.TerminalHost\**\publish\Aspire.TerminalHost.exe",
-                @"$(ArtifactsBinDir)Aspire.TerminalHost\**\publish\hex1bpty.exe"
-            ],
-            windowsManagedFiles);
-    }
-
-    [Fact]
-    public async Task MacOSNativeBundleDebugSymbolsAreRemovedBeforeSigning()
-    {
-        var pipeline = await File.ReadAllTextAsync(Path.Combine(
-            RepoRoot.Path, "eng", "pipelines", "templates", "build_sign_native.yml"));
-
-        var prepareDashboardIndex = pipeline.IndexOf("displayName: 🟣Prepare Native AOT Dashboard", StringComparison.Ordinal);
-        var removeSymbolsIndex = pipeline.IndexOf("displayName: 🟣Remove Native AOT bundle debug symbols", StringComparison.Ordinal);
-        var signManagedIndex = pipeline.IndexOf("displayName: 🟣Sign bundle components", StringComparison.Ordinal);
-        var buildNativeIndex = pipeline.IndexOf("displayName: 🟣Build native packages", StringComparison.Ordinal);
-
-        Assert.True(prepareDashboardIndex >= 0);
-        Assert.True(prepareDashboardIndex < removeSymbolsIndex);
-        Assert.True(removeSymbolsIndex < signManagedIndex);
-        Assert.True(signManagedIndex < buildNativeIndex);
-        var cleanupStart = pipeline.LastIndexOf("          - ${{ if ", removeSymbolsIndex, StringComparison.Ordinal);
-        Assert.True(cleanupStart >= 0);
-        var cleanup = pipeline[cleanupStart..removeSymbolsIndex];
-        Assert.Contains("Aspire.Dashboard.dSYM", cleanup);
-        Assert.Contains("Aspire.TerminalHost.dSYM", cleanup);
-        Assert.Contains("Remove-Item", cleanup);
-        Assert.Contains("eq(parameters.agentOs, 'macos')", cleanup);
     }
 
     private string CreatePublishProject(string rid, bool singleFile, bool duplicateUnrelatedAsset)

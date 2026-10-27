@@ -95,9 +95,9 @@ with create_builder() as builder:
     perimeter = builder.add_network_security_perimeter("data-boundary")
     perimeter.configure_infrastructure(configure_perimeter)
     perimeter.with_access_rule({
-        "Name": "allow-corp-network",
-        "Direction": "Inbound",
-        "AddressPrefixes": ["203.0.113.0/24"],
+        "name": "allow-corp-network",
+        "direction": "Inbound",
+        "addressPrefixes": ["203.0.113.0/24"],
     })
 
     builder.run()

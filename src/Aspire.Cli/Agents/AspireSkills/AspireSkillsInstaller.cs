@@ -10,6 +10,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -30,7 +31,7 @@ internal sealed class AspireSkillsInstaller(
     AspireCliTelemetry telemetry,
     ILogger<AspireSkillsInstaller> logger) : IAspireSkillsInstaller
 {
-    internal const string Version = "0.0.3";
+    internal const string Version = "0.0.4";
     internal const string GitHubRepository = "microsoft/aspire-skills";
     internal const string ExpectedSourceRepository = $"https://github.com/{GitHubRepository}";
     internal const string ExpectedWorkflowPath = ".github/workflows/publish.yml";

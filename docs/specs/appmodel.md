@@ -1,6 +1,7 @@
 # Aspire Resource Model: Concepts, Design, and Authoring Guidance
 > **Audience** – Aspire integrators, advanced users, and contributors who are defining custom resource types, implementing publishers, or working across both runtime and publish workflows.  
 > This documentation's focus is on hosting integrations *NOT* client integrations.
+> For the ATS-native model being explored in the native hosting proof of concept, see [App Model v2](appmodelv2.md). That document describes proposed contracts, not supported APIs.
 > *Just getting started? Jump straight to [Quick Start](#quick-start) and come back later for the deep‑dive.*
 
 ---

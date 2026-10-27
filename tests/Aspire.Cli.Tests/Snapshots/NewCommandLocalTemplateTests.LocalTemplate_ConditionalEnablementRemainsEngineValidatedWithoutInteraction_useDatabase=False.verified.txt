@@ -1,0 +1,8 @@
+﻿{
+  Files: {
+    settings.txt:
+Database enabled: False
+Connection: ConnectionStringValue
+
+  }
+}

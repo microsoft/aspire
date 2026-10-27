@@ -5,24 +5,80 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
 
 /// <summary>
 /// Provides fallback parsing capabilities when MSBuild evaluation fails.
-/// Supports both .csproj XML files and .cs single-file apphost files.
+/// Supports MSBuild project files and .cs single-file apphost files.
 /// Used primarily for AppHost projects with unresolvable SDK versions.
 /// </summary>
 internal sealed partial class FallbackProjectParser
 {
     private readonly ILogger<FallbackProjectParser> _logger;
 
-    [GeneratedRegex(@"#:sdk\s+Aspire\.AppHost\.Sdk@([\d\.\-a-zA-Z]+|\*)")]
-    private static partial Regex SdkDirectiveRegex();
+    [GeneratedRegex(@"^[\t ]*#:sdk[\t ]+Aspire\.AppHost\.Sdk(?:@([\d\.\-+a-zA-Z]+|\*))?[\t ]*\r?$", RegexOptions.Multiline)]
+    internal static partial Regex SdkDirectiveRegex();
 
-    [GeneratedRegex(@"#:package\s+([a-zA-Z0-9\._]+)@([\d\.\-a-zA-Z]+|\*)")]
+    [GeneratedRegex(@"^[\t ]*#:package[\t ]+([a-zA-Z0-9\._]+)@([\d\.\-+a-zA-Z]+|\*)[\t ]*\r?$", RegexOptions.Multiline)]
     private static partial Regex PackageDirectiveRegex();
+
+    internal static bool HasAppHostPackageDirective(string content)
+        => PackageDirectiveRegex().Matches(GetDirectivePreamble(content)).Any(match =>
+            string.Equals(match.Groups[1].Value, "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase));
+
+    internal static bool HasAppHostSdkDirective(string content)
+        => SdkDirectiveRegex().IsMatch(GetDirectivePreamble(content));
+
+    internal static string GetDirectivePreamble(string content)
+    {
+        // File-based app directives precede C# tokens. Ignore leading comments and stop at
+        // code so examples inside block comments, verbatim strings or raw strings are not directives.
+        var preamble = new System.Text.StringBuilder();
+        var inBlockComment = false;
+        foreach (var line in content.Split('\n'))
+        {
+            var remaining = line.AsSpan().TrimStart('\uFEFF').TrimStart();
+            while (!remaining.IsEmpty)
+            {
+                if (inBlockComment)
+                {
+                    var end = remaining.IndexOf("*/");
+                    if (end < 0)
+                    {
+                        remaining = [];
+                        break;
+                    }
+                    inBlockComment = false;
+                    remaining = remaining[(end + 2)..].TrimStart();
+                }
+                else if (remaining.StartsWith("/*"))
+                {
+                    inBlockComment = true;
+                    remaining = remaining[2..];
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            if (remaining.IsEmpty || remaining.StartsWith("//"))
+            {
+                preamble.Append(' ', line.Length).Append('\n');
+                continue;
+            }
+            if (!remaining.StartsWith("#"))
+            {
+                break;
+            }
+            // Keep offsets into the original source for safe directive-only rewrites.
+            preamble.Append(' ', line.Length - remaining.Length).Append(remaining).Append('\n');
+        }
+        return preamble.ToString();
+    }
 
     public FallbackProjectParser(ILogger<FallbackProjectParser> logger)
     {
@@ -32,7 +88,7 @@ internal sealed partial class FallbackProjectParser
     /// <summary>
     /// Parses a project file using direct parsing to extract basic project information.
     /// Returns a synthetic JsonDocument that mimics MSBuild's GetProjectItemsAndProperties output.
-    /// Supports both .csproj XML files and .cs single-file apphost files.
+    /// Supports MSBuild project files and .cs single-file apphost files.
     /// </summary>
     public JsonDocument ParseProject(FileInfo projectFile)
     {
@@ -41,7 +97,7 @@ internal sealed partial class FallbackProjectParser
             _logger.LogDebug("Parsing project file '{ProjectFile}' using fallback parser", projectFile.FullName);
 
             // Detect file type and route to appropriate parser
-            if (string.Equals(projectFile.Extension, ".csproj", StringComparison.OrdinalIgnoreCase))
+            if (ProjectFileExtensions.Supported.Contains(projectFile.Extension, StringComparer.OrdinalIgnoreCase))
             {
                 return ParseCsprojProjectFile(projectFile);
             }
@@ -51,7 +107,7 @@ internal sealed partial class FallbackProjectParser
             }
             else
             {
-                throw new ProjectUpdaterException($"Unsupported project file type: {projectFile.Extension}. Expected .csproj or .cs file.");
+                throw new ProjectUpdaterException($"Unsupported project file type: {projectFile.Extension}. Expected .csproj, .fsproj, .vbproj or .cs file.");
             }
         }
         catch (ProjectUpdaterException)
@@ -88,7 +144,14 @@ internal sealed partial class FallbackProjectParser
         // Extract project references
         var projectReferences = ExtractProjectReferences(root, projectFile);
 
-        return BuildJsonDocument(aspireHostingSdkVersion, packageReferences, projectReferences);
+        var usesAppHostSdk = DotNetAppHostProject.ContainsAspireAppHostSdk(root.Attribute("Sdk")?.Value ?? string.Empty)
+            || root.Descendants().Any(e =>
+                (e.Name.LocalName.Equals("Sdk", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(e.Attribute("Name")?.Value, "Aspire.AppHost.Sdk", StringComparison.OrdinalIgnoreCase))
+                || (e.Name.LocalName.Equals("Import", StringComparison.OrdinalIgnoreCase)
+                    && DotNetAppHostProject.ContainsAspireAppHostSdk(e.Attribute("Sdk")?.Value ?? string.Empty)));
+
+        return BuildJsonDocument(aspireHostingSdkVersion, packageReferences, projectReferences, usesAppHostSdk);
     }
 
     /// <summary>
@@ -96,7 +159,7 @@ internal sealed partial class FallbackProjectParser
     /// </summary>
     private static JsonDocument ParseCsAppHostFile(FileInfo projectFile)
     {
-        var fileContent = File.ReadAllText(projectFile.FullName);
+        var fileContent = GetDirectivePreamble(File.ReadAllText(projectFile.FullName));
 
         // Extract SDK version from #:sdk directive
         var aspireHostingSdkVersion = ExtractSdkVersionFromDirective(fileContent);
@@ -107,7 +170,7 @@ internal sealed partial class FallbackProjectParser
         // Single-file apphost projects don't have project references
         var projectReferences = Array.Empty<ProjectReferenceInfo>();
 
-        return BuildJsonDocument(aspireHostingSdkVersion, packageReferences, projectReferences);
+        return BuildJsonDocument(aspireHostingSdkVersion, packageReferences, projectReferences, SdkDirectiveRegex().IsMatch(fileContent));
     }
 
     /// <summary>
@@ -116,7 +179,8 @@ internal sealed partial class FallbackProjectParser
     private static JsonDocument BuildJsonDocument(
         string? aspireHostingSdkVersion,
         PackageReferenceInfo[] packageReferences,
-        ProjectReferenceInfo[] projectReferences)
+        ProjectReferenceInfo[] projectReferences,
+        bool usesAppHostSdk)
     {
         var rootObject = new JsonObject();
 
@@ -150,6 +214,7 @@ internal sealed partial class FallbackProjectParser
         // Properties section
         var propertiesObject = new JsonObject();
         propertiesObject["AspireHostingSDKVersion"] = JsonValue.Create(aspireHostingSdkVersion);
+        propertiesObject["_UsingAspireAppHostSdk"] = JsonValue.Create(usesAppHostSdk ? "true" : "false");
         rootObject["Properties"] = propertiesObject;
 
         // Fallback flag
@@ -219,11 +284,11 @@ internal sealed partial class FallbackProjectParser
         // Find all PackageReference elements
         var packageRefElements = projectRoot
             .Descendants("PackageReference")
-            .Where(e => !string.IsNullOrEmpty(e.Attribute("Include")?.Value) || !string.IsNullOrEmpty(e.Attribute("Update")?.Value));
+            .Where(e => !string.IsNullOrEmpty(e.Attribute("Include")?.Value));
 
         foreach (var element in packageRefElements)
         {
-            var identity = element.Attribute("Include")?.Value ?? element.Attribute("Update")?.Value;
+            var identity = element.Attribute("Include")?.Value;
             if (string.IsNullOrEmpty(identity))
             {
                 continue;
@@ -262,10 +327,8 @@ internal sealed partial class FallbackProjectParser
                 continue;
             }
 
-            // Convert relative path to absolute path
-            var fullPath = Path.IsPathRooted(include)
-                ? include
-                : Path.GetFullPath(Path.Combine(projectFile.DirectoryName!, include));
+            // MSBuild accepts either separator, such as "..\Web\Web.csproj", on every platform.
+            var fullPath = Path.GetFullPath(PathNormalizer.NormalizePathForStorage(include), projectFile.DirectoryName!);
 
             var projectRef = new ProjectReferenceInfo
             {
@@ -290,7 +353,7 @@ internal sealed partial class FallbackProjectParser
 
         if (match.Success)
         {
-            return match.Groups[1].Value;
+            return match.Groups[1].Success ? match.Groups[1].Value : null;
         }
 
         return null;

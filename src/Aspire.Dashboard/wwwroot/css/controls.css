@@ -1061,6 +1061,16 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
     font-weight: 600;
 }
 
+.aspire-empty-message {
+    display: flex;
+    align-items: center;
+    gap: var(--spacingHorizontalS);
+}
+
+.aspire-empty-message > svg {
+    flex-shrink: 0;
+}
+
 .fluent-data-grid > thead > tr > th,
 .fluent-data-grid > thead > tr > th > fluent-button,
 .fluent-data-grid > thead > tr > th [col-title-text] {
@@ -1219,6 +1229,11 @@ fluent-badge.property-details-accordion-badge {
 }
 
 .persistent-container-icon {
+    vertical-align: text-bottom;
+    margin-inline-start: var(--inline-icon-margin);
+}
+
+.resource-hidden-icon {
     vertical-align: text-bottom;
     margin-inline-start: var(--inline-icon-margin);
 }

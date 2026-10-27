@@ -69,30 +69,30 @@ resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@202
   parent: env
 }
 
-resource env_storageVolume 'Microsoft.Storage/storageAccounts@2024-01-01' = {
+resource env_storageVolume 'Microsoft.Storage/storageAccounts@2026-06-01' = {
   name: 'vol${resourceToken}'
-  kind: 'StorageV2'
+  tags: tags
   location: location
-  sku: {
-    name: 'Standard_LRS'
-  }
   properties: {
     largeFileSharesState: 'Enabled'
     minimumTlsVersion: 'TLS1_2'
   }
-  tags: tags
+  sku: {
+    name: 'Standard_LRS'
+  }
+  kind: 'StorageV2'
 }
 
-resource storageVolumeFileService 'Microsoft.Storage/storageAccounts/fileServices@2024-01-01' = {
+resource storageVolumeFileService 'Microsoft.Storage/storageAccounts/fileServices@2026-06-01' = {
   name: 'default'
   parent: env_storageVolume
 }
 
-resource shares_volumes_cache_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2024-01-01' = {
+resource shares_volumes_cache_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2026-06-01' = {
   name: take('${toLower('cache')}-${toLower('Appdata')}', 60)
   properties: {
-    enabledProtocols: 'SMB'
     shareQuota: 1024
+    enabledProtocols: 'SMB'
   }
   parent: storageVolumeFileService
 }

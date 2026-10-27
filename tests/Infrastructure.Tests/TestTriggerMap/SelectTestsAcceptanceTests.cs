@@ -824,6 +824,58 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
 
     // --- H. Real-map invariant smoke (computed from the filesystem; no hardcoded names) ------
 
+    [Fact]
+    public void RealMapSkillAndThirdPartyNoticeChangesSelectNoTests()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var map = TriggerMap.Load(mapPath);
+        var filter = ChangedFileFilter.Create(RepoRoot.Path, map.Prefilter);
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories(), EnumerateAllTestProjects());
+        string[] changedFiles =
+        [
+            ".agents/skills/create-video/SKILL.md",
+            ".agents/skills/create-video/scripts/recorder/Scene.cs",
+            ".agents/skills/create-video/scripts/Directory.Packages.props",
+            ".agents/skills/create-video/scripts/tts/package-lock.json",
+            ".agents/skills/create-video/cgmanifest.json",
+            ".github/dependabot.yml",
+            "AGENTS.md",
+            "THIRD-PARTY-NOTICES.TXT",
+        ];
+
+        var filtered = changedFiles.Where(path => !filter.IsExcluded(path)).ToArray();
+        Assert.Empty(filtered);
+
+        var result = selector.Select(filtered, [], new SelectorOptions());
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.TestProjects);
+        Assert.Empty(result.Jobs);
+        Assert.Empty(result.UnmatchedFiles);
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.Hosting.Redis/RedisResource.cs", "Aspire.Hosting.Redis")]
+    [InlineData("global.json", null)]
+    public void RealMapThirdPartyNoticeDoesNotChangeSelectionForOtherInputs(string path, string? affectedProject)
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var map = TriggerMap.Load(mapPath);
+        var filter = ChangedFileFilter.Create(RepoRoot.Path, map.Prefilter);
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories(), EnumerateAllTestProjects());
+        string[] affectedProjects = affectedProject is null ? [] : [affectedProject];
+        var expected = selector.Select([path], affectedProjects, new SelectorOptions());
+        var filtered = new[] { "THIRD-PARTY-NOTICES.TXT", path }.Where(file => !filter.IsExcluded(file)).ToArray();
+
+        Assert.Equal([path], filtered);
+
+        var actual = selector.Select(filtered, affectedProjects, new SelectorOptions());
+        Assert.NotEmpty(expected.TestProjects);
+        Assert.Equal(expected.SelectsAll, actual.SelectsAll);
+        Assert.Equal(expected.TestProjects.Order(), actual.TestProjects.Order());
+        Assert.Equal(expected.Jobs.Order(), actual.Jobs.Order());
+        Assert.Empty(actual.UnmatchedFiles);
+    }
+
     // The prefilter reads eng/github-ci/ci-skip-entirely-patterns.txt at runtime and matches it with the
     // SAME glob->regex the check-changed-files action uses (ported in ChangedFileFilter). This pins that
     // port (docs/.slnf/scripts get dropped) and the keep_routed carve-outs (selector-routed files are NOT
@@ -853,15 +905,18 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.True(filter.IsExcluded("pyrightconfig.json"));
 
         // Dev/AzDO-only inputs with no regular GitHub PR CI consumer.
-        Assert.True(filter.IsExcluded(".config/dotnet-tools.json"));
         Assert.True(filter.IsExcluded("eng/Version.Details.xml"));
+
+        // Terminal package-pairing checks consume these manifests at runtime.
+        Assert.False(filter.IsExcluded(".config/dotnet-tools.json"));
+        Assert.False(filter.IsExcluded(".mcp.json"));
 
         // Generated API/ATS baselines under src/*/api/: no PR CI is needed when these are the only
         // changed files.
         Assert.True(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.cs"));
         Assert.True(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.ats.txt"));
         Assert.True(filter.IsExcluded("src/Aspire.Hosting.Redis/api/Aspire.Hosting.Redis.cs"));
-        Assert.True(filter.IsExcluded("src/Components/Aspire.Azure.AI.Inference/api/Aspire.Azure.AI.Inference.cs"));
+        Assert.True(filter.IsExcluded("src/Components/Aspire.OpenAI/api/Aspire.OpenAI.cs"));
         Assert.False(filter.IsExcluded("src/Aspire.Hosting/api/Helper.cs"));
         Assert.False(filter.IsExcluded("src/Aspire.Dashboard/api/ApiAuthenticationHandler.cs"));
         Assert.False(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.tscompat.suppression.txt"));

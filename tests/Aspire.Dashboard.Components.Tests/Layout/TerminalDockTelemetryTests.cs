@@ -117,9 +117,9 @@ public partial class TerminalDockTests
     {
         (string, string)[] expected =
         [
-            ("Aspire.Dashboard.ComponentId", "TerminalDock"),
-            ("Aspire.Dashboard.ComponentType", "Control"),
-            ("Aspire.Dashboard.TerminalDock.Trigger", trigger)
+            ("aspire.dashboard.component.id", "TerminalDock"),
+            ("aspire.dashboard.component.type", "Control"),
+            ("aspire.dashboard.terminal_dock.trigger", trigger)
         ];
         Assert.Equal(expected, context.Properties.OrderBy(p => p.Key)
             .Select(p => (p.Key, Assert.IsType<string>(p.Value.Value))));

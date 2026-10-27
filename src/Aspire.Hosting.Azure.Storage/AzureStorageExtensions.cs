@@ -78,7 +78,7 @@ public static class AzureStorageExtensions
                         },
                         // Set the minimum TLS version to 1.2 to ensure resources provisioned are compliant
                         // with the pending deprecation of TLS 1.0 and 1.1.
-                        MinimumTlsVersion = StorageMinimumTlsVersion.Tls1_2,
+                        MinimumTlsVersion = StorageMinimumTlsVersion.Tls12,
                         // Disable shared key access to the storage account as managed identity is configured
                         // to access the storage account by default.
                         AllowSharedKeyAccess = false,
@@ -94,43 +94,46 @@ public static class AzureStorageExtensions
                     return storageAccount;
                 });
 
-            if (azureResource.BlobContainers.Count > 0 || azureResource.DataLakeFileSystems.Count > 0)
+            var cdkBlobContainers = azureResource.BlobContainers.Select(c => c.ToProvisioningEntity())
+                .Concat(azureResource.DataLakeFileSystems.Select(fs => fs.ToProvisioningEntity()))
+                .ToList();
+            var cdkQueues = azureResource.Queues.Select(q => q.ToProvisioningEntity()).ToList();
+
+            // Bicep identifiers must be unique within the module. The child resource identifiers come from
+            // the Aspire resource names, so a container, file system, queue or storage account named "blobs" or
+            // "queues" would otherwise collide with the identifier of the corresponding service.
+            var usedIdentifiers = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { storageAccount.BicepIdentifier };
+            usedIdentifiers.UnionWith(cdkBlobContainers.Select(c => c.BicepIdentifier));
+            usedIdentifiers.UnionWith(cdkQueues.Select(q => q.BicepIdentifier));
+
+            if (cdkBlobContainers.Count > 0)
             {
                 // The provisioned resource uses "blobs" as the name for backward compatibility.
-                var blobService = new BlobService("blobs")
+                var blobService = new BlobService(GetUniqueBicepIdentifier("blobs", usedIdentifiers))
                 {
                     Parent = storageAccount
                 };
 
                 infrastructure.Add(blobService);
 
-                foreach (var blobContainer in azureResource.BlobContainers)
+                foreach (var cdkBlobContainer in cdkBlobContainers)
                 {
-                    var cdkBlobContainer = blobContainer.ToProvisioningEntity();
-                    cdkBlobContainer.Parent = blobService;
-                    infrastructure.Add(cdkBlobContainer);
-                }
-
-                foreach (var dataLakeFileSystem in azureResource.DataLakeFileSystems)
-                {
-                    var cdkBlobContainer = dataLakeFileSystem.ToProvisioningEntity();
                     cdkBlobContainer.Parent = blobService;
                     infrastructure.Add(cdkBlobContainer);
                 }
             }
 
-            if (azureResource.Queues.Count > 0)
+            if (cdkQueues.Count > 0)
             {
-                var queueService = new QueueService("queues")
+                var queueService = new QueueService(GetUniqueBicepIdentifier("queues", usedIdentifiers))
                 {
                     Parent = storageAccount
                 };
 
                 infrastructure.Add(queueService);
 
-                foreach (var queue in azureResource.Queues)
+                foreach (var cdkQueue in cdkQueues)
                 {
-                    var cdkQueue = queue.ToProvisioningEntity();
                     cdkQueue.Parent = queueService;
                     infrastructure.Add(cdkQueue);
                 }
@@ -791,6 +794,17 @@ public static class AzureStorageExtensions
         }
 
         return builder.WithRoleAssignments(target, builtInRoles);
+    }
+
+    private static string GetUniqueBicepIdentifier(string identifier, HashSet<string> usedIdentifiers)
+    {
+        var candidate = identifier;
+        for (var i = 1; !usedIdentifiers.Add(candidate); i++)
+        {
+            candidate = $"{identifier}{i}";
+        }
+
+        return candidate;
     }
 
     private static IResourceBuilder<AzureBlobStorageResource> CreateBlobService(IResourceBuilder<AzureStorageResource> builder, string name)

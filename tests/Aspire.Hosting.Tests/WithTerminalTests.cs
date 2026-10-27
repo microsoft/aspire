@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Lifecycle;
@@ -28,7 +29,6 @@ public class WithTerminalTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData(typeof(TerminalOptions))]
     [InlineData(typeof(TerminalService))]
     [InlineData(typeof(AspireTerminal))]
     [InlineData(typeof(AspireTerminalKey))]
@@ -46,7 +46,6 @@ public class WithTerminalTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData(typeof(TerminalResourceBuilderExtensions), nameof(TerminalResourceBuilderExtensions.WithTerminal))]
     [InlineData(typeof(IInteractionService), nameof(IInteractionService.PromptTerminalAsync))]
     public void TerminalMethodsUseSharedExperimentalDiagnostic(Type declaringType, string methodName)
     {
@@ -59,6 +58,20 @@ public class WithTerminalTests : IAsyncLifetime
 
             Assert.Equal("ASPIRETERMINAL001", attribute.DiagnosticId);
             Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+        }
+    }
+
+    [Fact]
+    public void WithTerminalApiIsNotExperimental()
+    {
+        Assert.Empty(typeof(TerminalOptions).GetCustomAttributes<ExperimentalAttribute>());
+        Assert.Empty(typeof(TerminalResourceBuilderExtensions).GetCustomAttributes<ExperimentalAttribute>());
+        var methods = typeof(TerminalResourceBuilderExtensions).GetMethods()
+            .Where(method => method.Name == nameof(TerminalResourceBuilderExtensions.WithTerminal)).ToArray();
+        Assert.NotEmpty(methods);
+        foreach (var method in methods)
+        {
+            Assert.Empty(method.GetCustomAttributes<ExperimentalAttribute>());
         }
     }
 
@@ -85,6 +98,46 @@ public class WithTerminalTests : IAsyncLifetime
 
         Assert.True(annotation.IsInitialized);
         Assert.Single(annotation.TerminalHosts);
+    }
+
+    [Fact]
+    public void WithTerminalSizingPreferenceFlowsToResourceSnapshot()
+    {
+        using var builder = CreateBuilder();
+        var resource = builder.AddExecutable("myapp", "myapp", ".").WithTerminal();
+
+        var properties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource.Resource, resource.Resource.Name, []);
+        var autoFit = Assert.Single(properties, p => p.Name == KnownProperties.Terminal.AutoFit);
+        Assert.Equal("true", autoFit.Value);
+        Assert.False(autoFit.IsSensitive);
+    }
+
+    [Theory]
+    [InlineData(null, null, true)]
+    [InlineData(132, null, false)]
+    [InlineData(null, 50, false)]
+    [InlineData(200, null, false)]
+    [InlineData(null, 40, false)]
+    [InlineData(200, 40, false)]
+    public void WithTerminalConfiguredSizingPreferenceFlowsToResourceSnapshot(int? columns, int? rows, bool expectedAutoFit)
+    {
+        using var builder = CreateBuilder();
+        var resource = builder.AddExecutable("myapp", "myapp", ".").WithTerminal(options =>
+        {
+            if (columns is { } configuredColumns)
+            {
+                options.Columns = configuredColumns;
+            }
+            if (rows is { } configuredRows)
+            {
+                options.Rows = configuredRows;
+            }
+        });
+
+        var properties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource.Resource, resource.Resource.Name, []);
+        var autoFit = Assert.Single(properties, p => p.Name == KnownProperties.Terminal.AutoFit);
+        Assert.Equal(expectedAutoFit ? "true" : "false", autoFit.Value);
+        Assert.False(autoFit.IsSensitive);
     }
 
     [Fact]
@@ -149,6 +202,7 @@ public class WithTerminalTests : IAsyncLifetime
 
         Assert.Throws<ArgumentOutOfRangeException>(() => options.Columns = 0);
         Assert.Throws<ArgumentOutOfRangeException>(() => options.Rows = -5);
+        Assert.False(options.HasExplicitDimensions);
 
         // A valid assignment still succeeds, and the boundary value 1 is accepted.
         options.Columns = 1;

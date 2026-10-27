@@ -280,317 +280,317 @@ const (
 
 // InteractionInput represents InteractionInput.
 type InteractionInput struct {
-	Name string `json:"Name,omitempty"`
-	Label *string `json:"Label,omitempty"`
-	Description *string `json:"Description,omitempty"`
-	EnableDescriptionMarkdown *bool `json:"EnableDescriptionMarkdown,omitempty"`
-	InputType InputType `json:"InputType,omitempty"`
-	Required *bool `json:"Required,omitempty"`
-	Options []any `json:"Options,omitempty"`
-	Value *string `json:"Value,omitempty"`
-	Placeholder *string `json:"Placeholder,omitempty"`
-	AllowCustomChoice *bool `json:"AllowCustomChoice,omitempty"`
-	Disabled bool `json:"Disabled,omitempty"`
-	MaxLength *float64 `json:"MaxLength,omitempty"`
-	AllowMultipleFiles *bool `json:"AllowMultipleFiles,omitempty"`
-	FileFilter *string `json:"FileFilter,omitempty"`
-	MaxFileSize *float64 `json:"MaxFileSize,omitempty"`
+	Name string `json:"name,omitempty"`
+	Label *string `json:"label,omitempty"`
+	Description *string `json:"description,omitempty"`
+	EnableDescriptionMarkdown *bool `json:"enableDescriptionMarkdown,omitempty"`
+	InputType InputType `json:"inputType,omitempty"`
+	Required *bool `json:"required,omitempty"`
+	Options []any `json:"options,omitempty"`
+	Value *string `json:"value,omitempty"`
+	Placeholder *string `json:"placeholder,omitempty"`
+	AllowCustomChoice *bool `json:"allowCustomChoice,omitempty"`
+	Disabled bool `json:"disabled,omitempty"`
+	MaxLength *float64 `json:"maxLength,omitempty"`
+	AllowMultipleFiles *bool `json:"allowMultipleFiles,omitempty"`
+	FileFilter *string `json:"fileFilter,omitempty"`
+	MaxFileSize *float64 `json:"maxFileSize,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *InteractionInput) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Name"] = serializeValue(d.Name)
-	if d.Label != nil { m["Label"] = serializeValue(d.Label) }
-	if d.Description != nil { m["Description"] = serializeValue(d.Description) }
-	if d.EnableDescriptionMarkdown != nil { m["EnableDescriptionMarkdown"] = serializeValue(d.EnableDescriptionMarkdown) }
-	m["InputType"] = serializeValue(d.InputType)
-	if d.Required != nil { m["Required"] = serializeValue(d.Required) }
-	if d.Options != nil { m["Options"] = serializeValue(d.Options) }
-	if d.Value != nil { m["Value"] = serializeValue(d.Value) }
-	if d.Placeholder != nil { m["Placeholder"] = serializeValue(d.Placeholder) }
-	if d.AllowCustomChoice != nil { m["AllowCustomChoice"] = serializeValue(d.AllowCustomChoice) }
-	m["Disabled"] = serializeValue(d.Disabled)
-	if d.MaxLength != nil { m["MaxLength"] = serializeValue(d.MaxLength) }
-	if d.AllowMultipleFiles != nil { m["AllowMultipleFiles"] = serializeValue(d.AllowMultipleFiles) }
-	if d.FileFilter != nil { m["FileFilter"] = serializeValue(d.FileFilter) }
-	if d.MaxFileSize != nil { m["MaxFileSize"] = serializeValue(d.MaxFileSize) }
+	m["name"] = serializeValue(d.Name)
+	if d.Label != nil { m["label"] = serializeValue(d.Label) }
+	if d.Description != nil { m["description"] = serializeValue(d.Description) }
+	if d.EnableDescriptionMarkdown != nil { m["enableDescriptionMarkdown"] = serializeValue(d.EnableDescriptionMarkdown) }
+	m["inputType"] = serializeValue(d.InputType)
+	if d.Required != nil { m["required"] = serializeValue(d.Required) }
+	if d.Options != nil { m["options"] = serializeValue(d.Options) }
+	if d.Value != nil { m["value"] = serializeValue(d.Value) }
+	if d.Placeholder != nil { m["placeholder"] = serializeValue(d.Placeholder) }
+	if d.AllowCustomChoice != nil { m["allowCustomChoice"] = serializeValue(d.AllowCustomChoice) }
+	m["disabled"] = serializeValue(d.Disabled)
+	if d.MaxLength != nil { m["maxLength"] = serializeValue(d.MaxLength) }
+	if d.AllowMultipleFiles != nil { m["allowMultipleFiles"] = serializeValue(d.AllowMultipleFiles) }
+	if d.FileFilter != nil { m["fileFilter"] = serializeValue(d.FileFilter) }
+	if d.MaxFileSize != nil { m["maxFileSize"] = serializeValue(d.MaxFileSize) }
 	return m
 }
 
 // RunConfiguration represents RunConfiguration.
 type RunConfiguration struct {
-	WatchEnabled *bool `json:"WatchEnabled,omitempty"`
+	WatchEnabled *bool `json:"watchEnabled,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *RunConfiguration) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.WatchEnabled != nil { m["WatchEnabled"] = serializeValue(d.WatchEnabled) }
+	if d.WatchEnabled != nil { m["watchEnabled"] = serializeValue(d.WatchEnabled) }
 	return m
 }
 
 // AddContainerOptions represents AddContainerOptions.
 type AddContainerOptions struct {
-	Image string `json:"Image,omitempty"`
-	Tag *string `json:"Tag,omitempty"`
+	Image string `json:"image,omitempty"`
+	Tag *string `json:"tag,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *AddContainerOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Image"] = serializeValue(d.Image)
-	if d.Tag != nil { m["Tag"] = serializeValue(d.Tag) }
+	m["image"] = serializeValue(d.Image)
+	if d.Tag != nil { m["tag"] = serializeValue(d.Tag) }
 	return m
 }
 
 // ContainerFilesOptions represents ContainerFilesOptions.
 type ContainerFilesOptions struct {
-	DefaultOwner *float64 `json:"DefaultOwner,omitempty"`
-	DefaultGroup *float64 `json:"DefaultGroup,omitempty"`
-	Umask *float64 `json:"Umask,omitempty"`
+	DefaultOwner *float64 `json:"defaultOwner,omitempty"`
+	DefaultGroup *float64 `json:"defaultGroup,omitempty"`
+	Umask *float64 `json:"umask,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *ContainerFilesOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.DefaultOwner != nil { m["DefaultOwner"] = serializeValue(d.DefaultOwner) }
-	if d.DefaultGroup != nil { m["DefaultGroup"] = serializeValue(d.DefaultGroup) }
-	if d.Umask != nil { m["Umask"] = serializeValue(d.Umask) }
+	if d.DefaultOwner != nil { m["defaultOwner"] = serializeValue(d.DefaultOwner) }
+	if d.DefaultGroup != nil { m["defaultGroup"] = serializeValue(d.DefaultGroup) }
+	if d.Umask != nil { m["umask"] = serializeValue(d.Umask) }
 	return m
 }
 
 // CreateBuilderOptions represents CreateBuilderOptions.
 type CreateBuilderOptions struct {
-	Args []string `json:"Args,omitempty"`
-	ProjectDirectory *string `json:"ProjectDirectory,omitempty"`
-	AppHostFilePath *string `json:"AppHostFilePath,omitempty"`
-	ContainerRegistryOverride *string `json:"ContainerRegistryOverride,omitempty"`
-	DisableDashboard bool `json:"DisableDashboard,omitempty"`
-	DashboardApplicationName *string `json:"DashboardApplicationName,omitempty"`
-	AllowUnsecuredTransport bool `json:"AllowUnsecuredTransport,omitempty"`
-	EnableResourceLogging bool `json:"EnableResourceLogging,omitempty"`
+	Args []string `json:"args,omitempty"`
+	ProjectDirectory *string `json:"projectDirectory,omitempty"`
+	AppHostFilePath *string `json:"appHostFilePath,omitempty"`
+	ContainerRegistryOverride *string `json:"containerRegistryOverride,omitempty"`
+	DisableDashboard bool `json:"disableDashboard,omitempty"`
+	DashboardApplicationName *string `json:"dashboardApplicationName,omitempty"`
+	AllowUnsecuredTransport bool `json:"allowUnsecuredTransport,omitempty"`
+	EnableResourceLogging bool `json:"enableResourceLogging,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *CreateBuilderOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.Args != nil { m["Args"] = serializeValue(d.Args) }
-	if d.ProjectDirectory != nil { m["ProjectDirectory"] = serializeValue(d.ProjectDirectory) }
-	if d.AppHostFilePath != nil { m["AppHostFilePath"] = serializeValue(d.AppHostFilePath) }
-	if d.ContainerRegistryOverride != nil { m["ContainerRegistryOverride"] = serializeValue(d.ContainerRegistryOverride) }
-	m["DisableDashboard"] = serializeValue(d.DisableDashboard)
-	if d.DashboardApplicationName != nil { m["DashboardApplicationName"] = serializeValue(d.DashboardApplicationName) }
-	m["AllowUnsecuredTransport"] = serializeValue(d.AllowUnsecuredTransport)
-	m["EnableResourceLogging"] = serializeValue(d.EnableResourceLogging)
+	if d.Args != nil { m["args"] = serializeValue(d.Args) }
+	if d.ProjectDirectory != nil { m["projectDirectory"] = serializeValue(d.ProjectDirectory) }
+	if d.AppHostFilePath != nil { m["appHostFilePath"] = serializeValue(d.AppHostFilePath) }
+	if d.ContainerRegistryOverride != nil { m["containerRegistryOverride"] = serializeValue(d.ContainerRegistryOverride) }
+	m["disableDashboard"] = serializeValue(d.DisableDashboard)
+	if d.DashboardApplicationName != nil { m["dashboardApplicationName"] = serializeValue(d.DashboardApplicationName) }
+	m["allowUnsecuredTransport"] = serializeValue(d.AllowUnsecuredTransport)
+	m["enableResourceLogging"] = serializeValue(d.EnableResourceLogging)
 	return m
 }
 
 // HttpsCertificateInfo represents HttpsCertificateInfo.
 type HttpsCertificateInfo struct {
-	Subject string `json:"Subject,omitempty"`
-	Issuer string `json:"Issuer,omitempty"`
-	Thumbprint *string `json:"Thumbprint,omitempty"`
+	Subject string `json:"subject,omitempty"`
+	Issuer string `json:"issuer,omitempty"`
+	Thumbprint *string `json:"thumbprint,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *HttpsCertificateInfo) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Subject"] = serializeValue(d.Subject)
-	m["Issuer"] = serializeValue(d.Issuer)
-	if d.Thumbprint != nil { m["Thumbprint"] = serializeValue(d.Thumbprint) }
+	m["subject"] = serializeValue(d.Subject)
+	m["issuer"] = serializeValue(d.Issuer)
+	if d.Thumbprint != nil { m["thumbprint"] = serializeValue(d.Thumbprint) }
 	return m
 }
 
 // CertificateTrustExecutionConfigurationExportData represents CertificateTrustExecutionConfigurationExportData.
 type CertificateTrustExecutionConfigurationExportData struct {
-	Scope CertificateTrustScope `json:"Scope,omitempty"`
-	CertificateSubjects []string `json:"CertificateSubjects,omitempty"`
-	CustomBundlePaths []string `json:"CustomBundlePaths,omitempty"`
+	Scope CertificateTrustScope `json:"scope,omitempty"`
+	CertificateSubjects []string `json:"certificateSubjects,omitempty"`
+	CustomBundlePaths []string `json:"customBundlePaths,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *CertificateTrustExecutionConfigurationExportData) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Scope"] = serializeValue(d.Scope)
-	if d.CertificateSubjects != nil { m["CertificateSubjects"] = serializeValue(d.CertificateSubjects) }
-	if d.CustomBundlePaths != nil { m["CustomBundlePaths"] = serializeValue(d.CustomBundlePaths) }
+	m["scope"] = serializeValue(d.Scope)
+	if d.CertificateSubjects != nil { m["certificateSubjects"] = serializeValue(d.CertificateSubjects) }
+	if d.CustomBundlePaths != nil { m["customBundlePaths"] = serializeValue(d.CustomBundlePaths) }
 	return m
 }
 
 // HttpsCertificateExecutionConfigurationExportData represents HttpsCertificateExecutionConfigurationExportData.
 type HttpsCertificateExecutionConfigurationExportData struct {
-	Subject string `json:"Subject,omitempty"`
-	Thumbprint *string `json:"Thumbprint,omitempty"`
-	KeyPathExpression string `json:"KeyPathExpression,omitempty"`
-	PfxPathExpression string `json:"PfxPathExpression,omitempty"`
-	IsKeyPathReferenced bool `json:"IsKeyPathReferenced,omitempty"`
-	IsCertificateWithKeyPathReferenced bool `json:"IsCertificateWithKeyPathReferenced,omitempty"`
-	IsPfxPathReferenced bool `json:"IsPfxPathReferenced,omitempty"`
-	Password *string `json:"Password,omitempty"`
+	Subject string `json:"subject,omitempty"`
+	Thumbprint *string `json:"thumbprint,omitempty"`
+	KeyPathExpression string `json:"keyPathExpression,omitempty"`
+	PfxPathExpression string `json:"pfxPathExpression,omitempty"`
+	IsKeyPathReferenced bool `json:"isKeyPathReferenced,omitempty"`
+	IsCertificateWithKeyPathReferenced bool `json:"isCertificateWithKeyPathReferenced,omitempty"`
+	IsPfxPathReferenced bool `json:"isPfxPathReferenced,omitempty"`
+	Password *string `json:"password,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *HttpsCertificateExecutionConfigurationExportData) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Subject"] = serializeValue(d.Subject)
-	if d.Thumbprint != nil { m["Thumbprint"] = serializeValue(d.Thumbprint) }
-	m["KeyPathExpression"] = serializeValue(d.KeyPathExpression)
-	m["PfxPathExpression"] = serializeValue(d.PfxPathExpression)
-	m["IsKeyPathReferenced"] = serializeValue(d.IsKeyPathReferenced)
-	m["IsCertificateWithKeyPathReferenced"] = serializeValue(d.IsCertificateWithKeyPathReferenced)
-	m["IsPfxPathReferenced"] = serializeValue(d.IsPfxPathReferenced)
-	if d.Password != nil { m["Password"] = serializeValue(d.Password) }
+	m["subject"] = serializeValue(d.Subject)
+	if d.Thumbprint != nil { m["thumbprint"] = serializeValue(d.Thumbprint) }
+	m["keyPathExpression"] = serializeValue(d.KeyPathExpression)
+	m["pfxPathExpression"] = serializeValue(d.PfxPathExpression)
+	m["isKeyPathReferenced"] = serializeValue(d.IsKeyPathReferenced)
+	m["isCertificateWithKeyPathReferenced"] = serializeValue(d.IsCertificateWithKeyPathReferenced)
+	m["isPfxPathReferenced"] = serializeValue(d.IsPfxPathReferenced)
+	if d.Password != nil { m["password"] = serializeValue(d.Password) }
 	return m
 }
 
 // HealthCheckResult represents HealthCheckResult.
 type HealthCheckResult struct {
-	Status HealthStatus `json:"Status,omitempty"`
-	Description *string `json:"Description,omitempty"`
-	Data map[string]string `json:"Data,omitempty"`
+	Status HealthStatus `json:"status,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Data map[string]string `json:"data,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *HealthCheckResult) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Status"] = serializeValue(d.Status)
-	if d.Description != nil { m["Description"] = serializeValue(d.Description) }
-	if d.Data != nil { m["Data"] = serializeValue(d.Data) }
+	m["status"] = serializeValue(d.Status)
+	if d.Description != nil { m["description"] = serializeValue(d.Description) }
+	if d.Data != nil { m["data"] = serializeValue(d.Data) }
 	return m
 }
 
 // InteractionChoiceOption represents InteractionChoiceOption.
 type InteractionChoiceOption struct {
-	Value string `json:"Value,omitempty"`
-	Label string `json:"Label,omitempty"`
+	Value string `json:"value,omitempty"`
+	Label string `json:"label,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *InteractionChoiceOption) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Value"] = serializeValue(d.Value)
-	m["Label"] = serializeValue(d.Label)
+	m["value"] = serializeValue(d.Value)
+	m["label"] = serializeValue(d.Label)
 	return m
 }
 
 // CreateInteractionInputOptions represents CreateInteractionInputOptions.
 type CreateInteractionInputOptions struct {
-	Label *string `json:"Label,omitempty"`
-	Description *string `json:"Description,omitempty"`
-	EnableDescriptionMarkdown *bool `json:"EnableDescriptionMarkdown,omitempty"`
-	Required *bool `json:"Required,omitempty"`
-	Placeholder *string `json:"Placeholder,omitempty"`
-	Value *string `json:"Value,omitempty"`
-	AllowCustomChoice *bool `json:"AllowCustomChoice,omitempty"`
-	Disabled *bool `json:"Disabled,omitempty"`
-	MaxLength *float64 `json:"MaxLength,omitempty"`
-	MaxFileSize *float64 `json:"MaxFileSize,omitempty"`
-	AllowMultipleFiles *bool `json:"AllowMultipleFiles,omitempty"`
-	FileFilter *string `json:"FileFilter,omitempty"`
+	Label *string `json:"label,omitempty"`
+	Description *string `json:"description,omitempty"`
+	EnableDescriptionMarkdown *bool `json:"enableDescriptionMarkdown,omitempty"`
+	Required *bool `json:"required,omitempty"`
+	Placeholder *string `json:"placeholder,omitempty"`
+	Value *string `json:"value,omitempty"`
+	AllowCustomChoice *bool `json:"allowCustomChoice,omitempty"`
+	Disabled *bool `json:"disabled,omitempty"`
+	MaxLength *float64 `json:"maxLength,omitempty"`
+	MaxFileSize *float64 `json:"maxFileSize,omitempty"`
+	AllowMultipleFiles *bool `json:"allowMultipleFiles,omitempty"`
+	FileFilter *string `json:"fileFilter,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *CreateInteractionInputOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.Label != nil { m["Label"] = serializeValue(d.Label) }
-	if d.Description != nil { m["Description"] = serializeValue(d.Description) }
-	if d.EnableDescriptionMarkdown != nil { m["EnableDescriptionMarkdown"] = serializeValue(d.EnableDescriptionMarkdown) }
-	if d.Required != nil { m["Required"] = serializeValue(d.Required) }
-	if d.Placeholder != nil { m["Placeholder"] = serializeValue(d.Placeholder) }
-	if d.Value != nil { m["Value"] = serializeValue(d.Value) }
-	if d.AllowCustomChoice != nil { m["AllowCustomChoice"] = serializeValue(d.AllowCustomChoice) }
-	if d.Disabled != nil { m["Disabled"] = serializeValue(d.Disabled) }
-	if d.MaxLength != nil { m["MaxLength"] = serializeValue(d.MaxLength) }
-	if d.MaxFileSize != nil { m["MaxFileSize"] = serializeValue(d.MaxFileSize) }
-	if d.AllowMultipleFiles != nil { m["AllowMultipleFiles"] = serializeValue(d.AllowMultipleFiles) }
-	if d.FileFilter != nil { m["FileFilter"] = serializeValue(d.FileFilter) }
+	if d.Label != nil { m["label"] = serializeValue(d.Label) }
+	if d.Description != nil { m["description"] = serializeValue(d.Description) }
+	if d.EnableDescriptionMarkdown != nil { m["enableDescriptionMarkdown"] = serializeValue(d.EnableDescriptionMarkdown) }
+	if d.Required != nil { m["required"] = serializeValue(d.Required) }
+	if d.Placeholder != nil { m["placeholder"] = serializeValue(d.Placeholder) }
+	if d.Value != nil { m["value"] = serializeValue(d.Value) }
+	if d.AllowCustomChoice != nil { m["allowCustomChoice"] = serializeValue(d.AllowCustomChoice) }
+	if d.Disabled != nil { m["disabled"] = serializeValue(d.Disabled) }
+	if d.MaxLength != nil { m["maxLength"] = serializeValue(d.MaxLength) }
+	if d.MaxFileSize != nil { m["maxFileSize"] = serializeValue(d.MaxFileSize) }
+	if d.AllowMultipleFiles != nil { m["allowMultipleFiles"] = serializeValue(d.AllowMultipleFiles) }
+	if d.FileFilter != nil { m["fileFilter"] = serializeValue(d.FileFilter) }
 	return m
 }
 
 // DynamicLoadingOptions represents DynamicLoadingOptions.
 type DynamicLoadingOptions struct {
-	AlwaysLoadOnStart *bool `json:"AlwaysLoadOnStart,omitempty"`
-	DependsOnInputs []string `json:"DependsOnInputs,omitempty"`
+	AlwaysLoadOnStart *bool `json:"alwaysLoadOnStart,omitempty"`
+	DependsOnInputs []string `json:"dependsOnInputs,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *DynamicLoadingOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.AlwaysLoadOnStart != nil { m["AlwaysLoadOnStart"] = serializeValue(d.AlwaysLoadOnStart) }
-	if d.DependsOnInputs != nil { m["DependsOnInputs"] = serializeValue(d.DependsOnInputs) }
+	if d.AlwaysLoadOnStart != nil { m["alwaysLoadOnStart"] = serializeValue(d.AlwaysLoadOnStart) }
+	if d.DependsOnInputs != nil { m["dependsOnInputs"] = serializeValue(d.DependsOnInputs) }
 	return m
 }
 
 // InteractionMessageBoxOptions represents InteractionMessageBoxOptions.
 type InteractionMessageBoxOptions struct {
-	PrimaryButtonText *string `json:"PrimaryButtonText,omitempty"`
-	SecondaryButtonText *string `json:"SecondaryButtonText,omitempty"`
-	ShowSecondaryButton *bool `json:"ShowSecondaryButton,omitempty"`
-	ShowDismiss *bool `json:"ShowDismiss,omitempty"`
-	EnableMessageMarkdown *bool `json:"EnableMessageMarkdown,omitempty"`
-	Intent *MessageIntent `json:"Intent,omitempty"`
+	PrimaryButtonText *string `json:"primaryButtonText,omitempty"`
+	SecondaryButtonText *string `json:"secondaryButtonText,omitempty"`
+	ShowSecondaryButton *bool `json:"showSecondaryButton,omitempty"`
+	ShowDismiss *bool `json:"showDismiss,omitempty"`
+	EnableMessageMarkdown *bool `json:"enableMessageMarkdown,omitempty"`
+	Intent *MessageIntent `json:"intent,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *InteractionMessageBoxOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.PrimaryButtonText != nil { m["PrimaryButtonText"] = serializeValue(d.PrimaryButtonText) }
-	if d.SecondaryButtonText != nil { m["SecondaryButtonText"] = serializeValue(d.SecondaryButtonText) }
-	if d.ShowSecondaryButton != nil { m["ShowSecondaryButton"] = serializeValue(d.ShowSecondaryButton) }
-	if d.ShowDismiss != nil { m["ShowDismiss"] = serializeValue(d.ShowDismiss) }
-	if d.EnableMessageMarkdown != nil { m["EnableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
-	if d.Intent != nil { m["Intent"] = serializeValue(d.Intent) }
+	if d.PrimaryButtonText != nil { m["primaryButtonText"] = serializeValue(d.PrimaryButtonText) }
+	if d.SecondaryButtonText != nil { m["secondaryButtonText"] = serializeValue(d.SecondaryButtonText) }
+	if d.ShowSecondaryButton != nil { m["showSecondaryButton"] = serializeValue(d.ShowSecondaryButton) }
+	if d.ShowDismiss != nil { m["showDismiss"] = serializeValue(d.ShowDismiss) }
+	if d.EnableMessageMarkdown != nil { m["enableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
+	if d.Intent != nil { m["intent"] = serializeValue(d.Intent) }
 	return m
 }
 
 // InteractionNotificationOptions represents InteractionNotificationOptions.
 type InteractionNotificationOptions struct {
-	PrimaryButtonText *string `json:"PrimaryButtonText,omitempty"`
-	SecondaryButtonText *string `json:"SecondaryButtonText,omitempty"`
-	ShowSecondaryButton *bool `json:"ShowSecondaryButton,omitempty"`
-	ShowDismiss *bool `json:"ShowDismiss,omitempty"`
-	EnableMessageMarkdown *bool `json:"EnableMessageMarkdown,omitempty"`
-	Intent *MessageIntent `json:"Intent,omitempty"`
-	LinkText *string `json:"LinkText,omitempty"`
-	LinkUrl *string `json:"LinkUrl,omitempty"`
+	PrimaryButtonText *string `json:"primaryButtonText,omitempty"`
+	SecondaryButtonText *string `json:"secondaryButtonText,omitempty"`
+	ShowSecondaryButton *bool `json:"showSecondaryButton,omitempty"`
+	ShowDismiss *bool `json:"showDismiss,omitempty"`
+	EnableMessageMarkdown *bool `json:"enableMessageMarkdown,omitempty"`
+	Intent *MessageIntent `json:"intent,omitempty"`
+	LinkText *string `json:"linkText,omitempty"`
+	LinkUrl *string `json:"linkUrl,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *InteractionNotificationOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.PrimaryButtonText != nil { m["PrimaryButtonText"] = serializeValue(d.PrimaryButtonText) }
-	if d.SecondaryButtonText != nil { m["SecondaryButtonText"] = serializeValue(d.SecondaryButtonText) }
-	if d.ShowSecondaryButton != nil { m["ShowSecondaryButton"] = serializeValue(d.ShowSecondaryButton) }
-	if d.ShowDismiss != nil { m["ShowDismiss"] = serializeValue(d.ShowDismiss) }
-	if d.EnableMessageMarkdown != nil { m["EnableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
-	if d.Intent != nil { m["Intent"] = serializeValue(d.Intent) }
-	if d.LinkText != nil { m["LinkText"] = serializeValue(d.LinkText) }
-	if d.LinkUrl != nil { m["LinkUrl"] = serializeValue(d.LinkUrl) }
+	if d.PrimaryButtonText != nil { m["primaryButtonText"] = serializeValue(d.PrimaryButtonText) }
+	if d.SecondaryButtonText != nil { m["secondaryButtonText"] = serializeValue(d.SecondaryButtonText) }
+	if d.ShowSecondaryButton != nil { m["showSecondaryButton"] = serializeValue(d.ShowSecondaryButton) }
+	if d.ShowDismiss != nil { m["showDismiss"] = serializeValue(d.ShowDismiss) }
+	if d.EnableMessageMarkdown != nil { m["enableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
+	if d.Intent != nil { m["intent"] = serializeValue(d.Intent) }
+	if d.LinkText != nil { m["linkText"] = serializeValue(d.LinkText) }
+	if d.LinkUrl != nil { m["linkUrl"] = serializeValue(d.LinkUrl) }
 	return m
 }
 
 // InteractionInputsDialogOptions represents InteractionInputsDialogOptions.
 type InteractionInputsDialogOptions struct {
-	PrimaryButtonText *string `json:"PrimaryButtonText,omitempty"`
-	SecondaryButtonText *string `json:"SecondaryButtonText,omitempty"`
-	ShowSecondaryButton *bool `json:"ShowSecondaryButton,omitempty"`
-	ShowDismiss *bool `json:"ShowDismiss,omitempty"`
-	EnableMessageMarkdown *bool `json:"EnableMessageMarkdown,omitempty"`
-	ValidationCallback func(arg InputsDialogValidationContext) `json:"ValidationCallback,omitempty"`
+	PrimaryButtonText *string `json:"primaryButtonText,omitempty"`
+	SecondaryButtonText *string `json:"secondaryButtonText,omitempty"`
+	ShowSecondaryButton *bool `json:"showSecondaryButton,omitempty"`
+	ShowDismiss *bool `json:"showDismiss,omitempty"`
+	EnableMessageMarkdown *bool `json:"enableMessageMarkdown,omitempty"`
+	ValidationCallback func(arg InputsDialogValidationContext) `json:"validationCallback,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *InteractionInputsDialogOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.PrimaryButtonText != nil { m["PrimaryButtonText"] = serializeValue(d.PrimaryButtonText) }
-	if d.SecondaryButtonText != nil { m["SecondaryButtonText"] = serializeValue(d.SecondaryButtonText) }
-	if d.ShowSecondaryButton != nil { m["ShowSecondaryButton"] = serializeValue(d.ShowSecondaryButton) }
-	if d.ShowDismiss != nil { m["ShowDismiss"] = serializeValue(d.ShowDismiss) }
-	if d.EnableMessageMarkdown != nil { m["EnableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
+	if d.PrimaryButtonText != nil { m["primaryButtonText"] = serializeValue(d.PrimaryButtonText) }
+	if d.SecondaryButtonText != nil { m["secondaryButtonText"] = serializeValue(d.SecondaryButtonText) }
+	if d.ShowSecondaryButton != nil { m["showSecondaryButton"] = serializeValue(d.ShowSecondaryButton) }
+	if d.ShowDismiss != nil { m["showDismiss"] = serializeValue(d.ShowDismiss) }
+	if d.EnableMessageMarkdown != nil { m["enableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
 	if d.ValidationCallback != nil {
 		cb := d.ValidationCallback
-		m["ValidationCallback"] = func(args ...any) any {
+		m["validationCallback"] = func(args ...any) any {
 			cb(callbackArg[InputsDialogValidationContext](args, 0))
 			return nil
 		}
@@ -600,21 +600,21 @@ func (d *InteractionInputsDialogOptions) ToMap() map[string]any {
 
 // InteractionProgressOptions represents InteractionProgressOptions.
 type InteractionProgressOptions struct {
-	Title *string `json:"Title,omitempty"`
-	PrimaryButtonText *string `json:"PrimaryButtonText,omitempty"`
-	EnableMessageMarkdown *bool `json:"EnableMessageMarkdown,omitempty"`
-	Work func(arg ProgressContext) `json:"Work,omitempty"`
+	Title *string `json:"title,omitempty"`
+	PrimaryButtonText *string `json:"primaryButtonText,omitempty"`
+	EnableMessageMarkdown *bool `json:"enableMessageMarkdown,omitempty"`
+	Work func(arg ProgressContext) `json:"work,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *InteractionProgressOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.Title != nil { m["Title"] = serializeValue(d.Title) }
-	if d.PrimaryButtonText != nil { m["PrimaryButtonText"] = serializeValue(d.PrimaryButtonText) }
-	if d.EnableMessageMarkdown != nil { m["EnableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
+	if d.Title != nil { m["title"] = serializeValue(d.Title) }
+	if d.PrimaryButtonText != nil { m["primaryButtonText"] = serializeValue(d.PrimaryButtonText) }
+	if d.EnableMessageMarkdown != nil { m["enableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
 	if d.Work != nil {
 		cb := d.Work
-		m["Work"] = func(args ...any) any {
+		m["work"] = func(args ...any) any {
 			cb(callbackArg[ProgressContext](args, 0))
 			return nil
 		}
@@ -624,484 +624,498 @@ func (d *InteractionProgressOptions) ToMap() map[string]any {
 
 // BoolInteractionResult represents BoolInteractionResult.
 type BoolInteractionResult struct {
-	Canceled bool `json:"Canceled,omitempty"`
-	Value *bool `json:"Value,omitempty"`
+	Canceled bool `json:"canceled,omitempty"`
+	Value *bool `json:"value,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *BoolInteractionResult) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Canceled"] = serializeValue(d.Canceled)
-	if d.Value != nil { m["Value"] = serializeValue(d.Value) }
+	m["canceled"] = serializeValue(d.Canceled)
+	if d.Value != nil { m["value"] = serializeValue(d.Value) }
 	return m
 }
 
 // InputInteractionResult represents InputInteractionResult.
 type InputInteractionResult struct {
-	Canceled bool `json:"Canceled,omitempty"`
-	Input *InteractionInput `json:"Input,omitempty"`
+	Canceled bool `json:"canceled,omitempty"`
+	Input *InteractionInput `json:"input,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *InputInteractionResult) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Canceled"] = serializeValue(d.Canceled)
-	if d.Input != nil { m["Input"] = serializeValue(d.Input) }
+	m["canceled"] = serializeValue(d.Canceled)
+	if d.Input != nil { m["input"] = serializeValue(d.Input) }
 	return m
 }
 
 // ResourceEventDto represents ResourceEventDto.
 type ResourceEventDto struct {
-	ResourceName string `json:"ResourceName,omitempty"`
-	ResourceId string `json:"ResourceId,omitempty"`
-	State *string `json:"State,omitempty"`
-	StateStyle *string `json:"StateStyle,omitempty"`
-	HealthStatus *string `json:"HealthStatus,omitempty"`
-	ExitCode *float64 `json:"ExitCode,omitempty"`
+	ResourceName string `json:"resourceName,omitempty"`
+	ResourceId string `json:"resourceId,omitempty"`
+	State *string `json:"state,omitempty"`
+	StateStyle *string `json:"stateStyle,omitempty"`
+	HealthStatus *string `json:"healthStatus,omitempty"`
+	ExitCode *float64 `json:"exitCode,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *ResourceEventDto) ToMap() map[string]any {
 	m := map[string]any{}
-	m["ResourceName"] = serializeValue(d.ResourceName)
-	m["ResourceId"] = serializeValue(d.ResourceId)
-	if d.State != nil { m["State"] = serializeValue(d.State) }
-	if d.StateStyle != nil { m["StateStyle"] = serializeValue(d.StateStyle) }
-	if d.HealthStatus != nil { m["HealthStatus"] = serializeValue(d.HealthStatus) }
-	if d.ExitCode != nil { m["ExitCode"] = serializeValue(d.ExitCode) }
+	m["resourceName"] = serializeValue(d.ResourceName)
+	m["resourceId"] = serializeValue(d.ResourceId)
+	if d.State != nil { m["state"] = serializeValue(d.State) }
+	if d.StateStyle != nil { m["stateStyle"] = serializeValue(d.StateStyle) }
+	if d.HealthStatus != nil { m["healthStatus"] = serializeValue(d.HealthStatus) }
+	if d.ExitCode != nil { m["exitCode"] = serializeValue(d.ExitCode) }
 	return m
 }
 
 // ParameterCustomInputOptions represents ParameterCustomInputOptions.
 type ParameterCustomInputOptions struct {
-	InputType *InputType `json:"InputType,omitempty"`
-	Label *string `json:"Label,omitempty"`
-	Description *string `json:"Description,omitempty"`
-	EnableDescriptionMarkdown *bool `json:"EnableDescriptionMarkdown,omitempty"`
-	Options map[string]string `json:"Options,omitempty"`
-	Value *string `json:"Value,omitempty"`
-	Placeholder *string `json:"Placeholder,omitempty"`
-	AllowCustomChoice *bool `json:"AllowCustomChoice,omitempty"`
-	Disabled *bool `json:"Disabled,omitempty"`
-	MaxLength *float64 `json:"MaxLength,omitempty"`
+	InputType *InputType `json:"inputType,omitempty"`
+	Label *string `json:"label,omitempty"`
+	Description *string `json:"description,omitempty"`
+	EnableDescriptionMarkdown *bool `json:"enableDescriptionMarkdown,omitempty"`
+	Options map[string]string `json:"options,omitempty"`
+	Value *string `json:"value,omitempty"`
+	Placeholder *string `json:"placeholder,omitempty"`
+	AllowCustomChoice *bool `json:"allowCustomChoice,omitempty"`
+	Disabled *bool `json:"disabled,omitempty"`
+	MaxLength *float64 `json:"maxLength,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *ParameterCustomInputOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.InputType != nil { m["InputType"] = serializeValue(d.InputType) }
-	if d.Label != nil { m["Label"] = serializeValue(d.Label) }
-	if d.Description != nil { m["Description"] = serializeValue(d.Description) }
-	if d.EnableDescriptionMarkdown != nil { m["EnableDescriptionMarkdown"] = serializeValue(d.EnableDescriptionMarkdown) }
-	if d.Options != nil { m["Options"] = serializeValue(d.Options) }
-	if d.Value != nil { m["Value"] = serializeValue(d.Value) }
-	if d.Placeholder != nil { m["Placeholder"] = serializeValue(d.Placeholder) }
-	if d.AllowCustomChoice != nil { m["AllowCustomChoice"] = serializeValue(d.AllowCustomChoice) }
-	if d.Disabled != nil { m["Disabled"] = serializeValue(d.Disabled) }
-	if d.MaxLength != nil { m["MaxLength"] = serializeValue(d.MaxLength) }
+	if d.InputType != nil { m["inputType"] = serializeValue(d.InputType) }
+	if d.Label != nil { m["label"] = serializeValue(d.Label) }
+	if d.Description != nil { m["description"] = serializeValue(d.Description) }
+	if d.EnableDescriptionMarkdown != nil { m["enableDescriptionMarkdown"] = serializeValue(d.EnableDescriptionMarkdown) }
+	if d.Options != nil { m["options"] = serializeValue(d.Options) }
+	if d.Value != nil { m["value"] = serializeValue(d.Value) }
+	if d.Placeholder != nil { m["placeholder"] = serializeValue(d.Placeholder) }
+	if d.AllowCustomChoice != nil { m["allowCustomChoice"] = serializeValue(d.AllowCustomChoice) }
+	if d.Disabled != nil { m["disabled"] = serializeValue(d.Disabled) }
+	if d.MaxLength != nil { m["maxLength"] = serializeValue(d.MaxLength) }
 	return m
 }
 
 // ReferenceEnvironmentInjectionOptions represents ReferenceEnvironmentInjectionOptions.
 type ReferenceEnvironmentInjectionOptions struct {
-	ConnectionString bool `json:"ConnectionString,omitempty"`
-	ConnectionProperties bool `json:"ConnectionProperties,omitempty"`
-	ServiceDiscovery bool `json:"ServiceDiscovery,omitempty"`
-	Endpoints bool `json:"Endpoints,omitempty"`
+	ConnectionString bool `json:"connectionString,omitempty"`
+	ConnectionProperties bool `json:"connectionProperties,omitempty"`
+	ServiceDiscovery bool `json:"serviceDiscovery,omitempty"`
+	Endpoints bool `json:"endpoints,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *ReferenceEnvironmentInjectionOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	m["ConnectionString"] = serializeValue(d.ConnectionString)
-	m["ConnectionProperties"] = serializeValue(d.ConnectionProperties)
-	m["ServiceDiscovery"] = serializeValue(d.ServiceDiscovery)
-	m["Endpoints"] = serializeValue(d.Endpoints)
+	m["connectionString"] = serializeValue(d.ConnectionString)
+	m["connectionProperties"] = serializeValue(d.ConnectionProperties)
+	m["serviceDiscovery"] = serializeValue(d.ServiceDiscovery)
+	m["endpoints"] = serializeValue(d.Endpoints)
 	return m
 }
 
 // CertificateTrustExecutionConfigurationContext represents CertificateTrustExecutionConfigurationContext.
 type CertificateTrustExecutionConfigurationContext struct {
-	CertificateBundlePath *ReferenceExpression `json:"CertificateBundlePath,omitempty"`
-	CertificateDirectoriesPath *ReferenceExpression `json:"CertificateDirectoriesPath,omitempty"`
-	RootCertificatesPath string `json:"RootCertificatesPath,omitempty"`
-	IsContainer *bool `json:"IsContainer,omitempty"`
+	CertificateBundlePath *ReferenceExpression `json:"certificateBundlePath,omitempty"`
+	CertificateDirectoriesPath *ReferenceExpression `json:"certificateDirectoriesPath,omitempty"`
+	RootCertificatesPath string `json:"rootCertificatesPath,omitempty"`
+	IsContainer *bool `json:"isContainer,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *CertificateTrustExecutionConfigurationContext) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.CertificateBundlePath != nil { m["CertificateBundlePath"] = serializeValue(d.CertificateBundlePath) }
-	if d.CertificateDirectoriesPath != nil { m["CertificateDirectoriesPath"] = serializeValue(d.CertificateDirectoriesPath) }
-	m["RootCertificatesPath"] = serializeValue(d.RootCertificatesPath)
-	if d.IsContainer != nil { m["IsContainer"] = serializeValue(d.IsContainer) }
+	if d.CertificateBundlePath != nil { m["certificateBundlePath"] = serializeValue(d.CertificateBundlePath) }
+	if d.CertificateDirectoriesPath != nil { m["certificateDirectoriesPath"] = serializeValue(d.CertificateDirectoriesPath) }
+	m["rootCertificatesPath"] = serializeValue(d.RootCertificatesPath)
+	if d.IsContainer != nil { m["isContainer"] = serializeValue(d.IsContainer) }
 	return m
 }
 
 // CommandOptions represents CommandOptions.
 type CommandOptions struct {
-	Description *string `json:"Description,omitempty"`
-	Parameter any `json:"Parameter,omitempty"`
-	Arguments []*InteractionInput `json:"Arguments,omitempty"`
-	ValidateArguments func(arg InputsDialogValidationContext) `json:"ValidateArguments,omitempty"`
-	Visibility ResourceCommandVisibility `json:"Visibility,omitempty"`
-	ConfirmationMessage *string `json:"ConfirmationMessage,omitempty"`
-	IconName *string `json:"IconName,omitempty"`
-	IconVariant *IconVariant `json:"IconVariant,omitempty"`
-	IsHighlighted bool `json:"IsHighlighted,omitempty"`
-	UpdateState func(arg UpdateCommandStateContext) ResourceCommandState `json:"UpdateState,omitempty"`
-	Progress *CommandProgressOptions `json:"Progress,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Parameter any `json:"parameter,omitempty"`
+	Arguments []*InteractionInput `json:"arguments,omitempty"`
+	ValidateArguments func(arg InputsDialogValidationContext) `json:"validateArguments,omitempty"`
+	Visibility ResourceCommandVisibility `json:"visibility,omitempty"`
+	ConfirmationMessage *string `json:"confirmationMessage,omitempty"`
+	IconName *string `json:"iconName,omitempty"`
+	IconVariant *IconVariant `json:"iconVariant,omitempty"`
+	IsHighlighted bool `json:"isHighlighted,omitempty"`
+	UpdateState func(arg UpdateCommandStateContext) ResourceCommandState `json:"updateState,omitempty"`
+	Progress *CommandProgressOptions `json:"progress,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *CommandOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.Description != nil { m["Description"] = serializeValue(d.Description) }
-	if d.Parameter != nil { m["Parameter"] = serializeValue(d.Parameter) }
-	if d.Arguments != nil { m["Arguments"] = serializeValue(d.Arguments) }
+	if d.Description != nil { m["description"] = serializeValue(d.Description) }
+	if d.Parameter != nil { m["parameter"] = serializeValue(d.Parameter) }
+	if d.Arguments != nil { m["arguments"] = serializeValue(d.Arguments) }
 	if d.ValidateArguments != nil {
 		cb := d.ValidateArguments
-		m["ValidateArguments"] = func(args ...any) any {
+		m["validateArguments"] = func(args ...any) any {
 			cb(callbackArg[InputsDialogValidationContext](args, 0))
 			return nil
 		}
 	}
-	m["Visibility"] = serializeValue(d.Visibility)
-	if d.ConfirmationMessage != nil { m["ConfirmationMessage"] = serializeValue(d.ConfirmationMessage) }
-	if d.IconName != nil { m["IconName"] = serializeValue(d.IconName) }
-	if d.IconVariant != nil { m["IconVariant"] = serializeValue(d.IconVariant) }
-	m["IsHighlighted"] = serializeValue(d.IsHighlighted)
+	m["visibility"] = serializeValue(d.Visibility)
+	if d.ConfirmationMessage != nil { m["confirmationMessage"] = serializeValue(d.ConfirmationMessage) }
+	if d.IconName != nil { m["iconName"] = serializeValue(d.IconName) }
+	if d.IconVariant != nil { m["iconVariant"] = serializeValue(d.IconVariant) }
+	m["isHighlighted"] = serializeValue(d.IsHighlighted)
 	if d.UpdateState != nil {
 		cb := d.UpdateState
-		m["UpdateState"] = func(args ...any) any {
+		m["updateState"] = func(args ...any) any {
 			return cb(callbackArg[UpdateCommandStateContext](args, 0))
 		}
 	}
-	if d.Progress != nil { m["Progress"] = serializeValue(d.Progress) }
+	if d.Progress != nil { m["progress"] = serializeValue(d.Progress) }
 	return m
 }
 
 // CommandProgressOptions represents CommandProgressOptions.
 type CommandProgressOptions struct {
-	Message *string `json:"Message,omitempty"`
-	Title *string `json:"Title,omitempty"`
-	HideCancelButton bool `json:"HideCancelButton,omitempty"`
+	Message *string `json:"message,omitempty"`
+	Title *string `json:"title,omitempty"`
+	HideCancelButton bool `json:"hideCancelButton,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *CommandProgressOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.Message != nil { m["Message"] = serializeValue(d.Message) }
-	if d.Title != nil { m["Title"] = serializeValue(d.Title) }
-	m["HideCancelButton"] = serializeValue(d.HideCancelButton)
+	if d.Message != nil { m["message"] = serializeValue(d.Message) }
+	if d.Title != nil { m["title"] = serializeValue(d.Title) }
+	m["hideCancelButton"] = serializeValue(d.HideCancelButton)
 	return m
 }
 
 // HttpCommandExportOptions represents HttpCommandExportOptions.
 type HttpCommandExportOptions struct {
-	CommandOptions *CommandOptions `json:"CommandOptions,omitempty"`
-	Description *string `json:"Description,omitempty"`
-	ConfirmationMessage *string `json:"ConfirmationMessage,omitempty"`
-	IconName *string `json:"IconName,omitempty"`
-	IconVariant *IconVariant `json:"IconVariant,omitempty"`
-	IsHighlighted bool `json:"IsHighlighted,omitempty"`
-	CommandName *string `json:"CommandName,omitempty"`
-	EndpointName *string `json:"EndpointName,omitempty"`
-	MethodName *string `json:"MethodName,omitempty"`
-	PrepareRequest func(arg HttpCommandPrepareRequestContext) *HttpCommandRequestExportData `json:"PrepareRequest,omitempty"`
-	ResultMode HttpCommandResultMode `json:"ResultMode,omitempty"`
+	CommandOptions *CommandOptions `json:"commandOptions,omitempty"`
+	Description *string `json:"description,omitempty"`
+	ConfirmationMessage *string `json:"confirmationMessage,omitempty"`
+	IconName *string `json:"iconName,omitempty"`
+	IconVariant *IconVariant `json:"iconVariant,omitempty"`
+	IsHighlighted bool `json:"isHighlighted,omitempty"`
+	CommandName *string `json:"commandName,omitempty"`
+	EndpointName *string `json:"endpointName,omitempty"`
+	MethodName *string `json:"methodName,omitempty"`
+	PrepareRequest func(arg HttpCommandPrepareRequestContext) *HttpCommandRequestExportData `json:"prepareRequest,omitempty"`
+	ResultMode HttpCommandResultMode `json:"resultMode,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *HttpCommandExportOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.CommandOptions != nil { m["CommandOptions"] = serializeValue(d.CommandOptions) }
-	if d.Description != nil { m["Description"] = serializeValue(d.Description) }
-	if d.ConfirmationMessage != nil { m["ConfirmationMessage"] = serializeValue(d.ConfirmationMessage) }
-	if d.IconName != nil { m["IconName"] = serializeValue(d.IconName) }
-	if d.IconVariant != nil { m["IconVariant"] = serializeValue(d.IconVariant) }
-	m["IsHighlighted"] = serializeValue(d.IsHighlighted)
-	if d.CommandName != nil { m["CommandName"] = serializeValue(d.CommandName) }
-	if d.EndpointName != nil { m["EndpointName"] = serializeValue(d.EndpointName) }
-	if d.MethodName != nil { m["MethodName"] = serializeValue(d.MethodName) }
+	if d.CommandOptions != nil { m["commandOptions"] = serializeValue(d.CommandOptions) }
+	if d.Description != nil { m["description"] = serializeValue(d.Description) }
+	if d.ConfirmationMessage != nil { m["confirmationMessage"] = serializeValue(d.ConfirmationMessage) }
+	if d.IconName != nil { m["iconName"] = serializeValue(d.IconName) }
+	if d.IconVariant != nil { m["iconVariant"] = serializeValue(d.IconVariant) }
+	m["isHighlighted"] = serializeValue(d.IsHighlighted)
+	if d.CommandName != nil { m["commandName"] = serializeValue(d.CommandName) }
+	if d.EndpointName != nil { m["endpointName"] = serializeValue(d.EndpointName) }
+	if d.MethodName != nil { m["methodName"] = serializeValue(d.MethodName) }
 	if d.PrepareRequest != nil {
 		cb := d.PrepareRequest
-		m["PrepareRequest"] = func(args ...any) any {
+		m["prepareRequest"] = func(args ...any) any {
 			return cb(callbackArg[HttpCommandPrepareRequestContext](args, 0))
 		}
 	}
-	m["ResultMode"] = serializeValue(d.ResultMode)
+	m["resultMode"] = serializeValue(d.ResultMode)
 	return m
 }
 
 // HttpCommandRequestExportData represents HttpCommandRequestExportData.
 type HttpCommandRequestExportData struct {
-	MethodName *string `json:"MethodName,omitempty"`
-	Headers map[string]string `json:"Headers,omitempty"`
-	Content *string `json:"Content,omitempty"`
-	ContentType *string `json:"ContentType,omitempty"`
+	MethodName *string `json:"methodName,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+	Content *string `json:"content,omitempty"`
+	ContentType *string `json:"contentType,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *HttpCommandRequestExportData) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.MethodName != nil { m["MethodName"] = serializeValue(d.MethodName) }
-	if d.Headers != nil { m["Headers"] = serializeValue(d.Headers) }
-	if d.Content != nil { m["Content"] = serializeValue(d.Content) }
-	if d.ContentType != nil { m["ContentType"] = serializeValue(d.ContentType) }
+	if d.MethodName != nil { m["methodName"] = serializeValue(d.MethodName) }
+	if d.Headers != nil { m["headers"] = serializeValue(d.Headers) }
+	if d.Content != nil { m["content"] = serializeValue(d.Content) }
+	if d.ContentType != nil { m["contentType"] = serializeValue(d.ContentType) }
 	return m
 }
 
 // HttpsCertificateExecutionConfigurationContext represents HttpsCertificateExecutionConfigurationContext.
 type HttpsCertificateExecutionConfigurationContext struct {
-	CertificatePath *ReferenceExpression `json:"CertificatePath,omitempty"`
-	KeyPath *ReferenceExpression `json:"KeyPath,omitempty"`
-	CertificateWithKeyPath *ReferenceExpression `json:"CertificateWithKeyPath,omitempty"`
-	PfxPath *ReferenceExpression `json:"PfxPath,omitempty"`
+	CertificatePath *ReferenceExpression `json:"certificatePath,omitempty"`
+	KeyPath *ReferenceExpression `json:"keyPath,omitempty"`
+	CertificateWithKeyPath *ReferenceExpression `json:"certificateWithKeyPath,omitempty"`
+	PfxPath *ReferenceExpression `json:"pfxPath,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *HttpsCertificateExecutionConfigurationContext) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.CertificatePath != nil { m["CertificatePath"] = serializeValue(d.CertificatePath) }
-	if d.KeyPath != nil { m["KeyPath"] = serializeValue(d.KeyPath) }
-	if d.CertificateWithKeyPath != nil { m["CertificateWithKeyPath"] = serializeValue(d.CertificateWithKeyPath) }
-	if d.PfxPath != nil { m["PfxPath"] = serializeValue(d.PfxPath) }
+	if d.CertificatePath != nil { m["certificatePath"] = serializeValue(d.CertificatePath) }
+	if d.KeyPath != nil { m["keyPath"] = serializeValue(d.KeyPath) }
+	if d.CertificateWithKeyPath != nil { m["certificateWithKeyPath"] = serializeValue(d.CertificateWithKeyPath) }
+	if d.PfxPath != nil { m["pfxPath"] = serializeValue(d.PfxPath) }
 	return m
 }
 
 // GenerateParameterDefault represents GenerateParameterDefault.
 type GenerateParameterDefault struct {
-	MinLength float64 `json:"MinLength,omitempty"`
-	Lower bool `json:"Lower,omitempty"`
-	Upper bool `json:"Upper,omitempty"`
-	Numeric bool `json:"Numeric,omitempty"`
-	Special bool `json:"Special,omitempty"`
-	MinLower float64 `json:"MinLower,omitempty"`
-	MinUpper float64 `json:"MinUpper,omitempty"`
-	MinNumeric float64 `json:"MinNumeric,omitempty"`
-	MinSpecial float64 `json:"MinSpecial,omitempty"`
+	MinLength float64 `json:"minLength,omitempty"`
+	Lower bool `json:"lower,omitempty"`
+	Upper bool `json:"upper,omitempty"`
+	Numeric bool `json:"numeric,omitempty"`
+	Special bool `json:"special,omitempty"`
+	MinLower float64 `json:"minLower,omitempty"`
+	MinUpper float64 `json:"minUpper,omitempty"`
+	MinNumeric float64 `json:"minNumeric,omitempty"`
+	MinSpecial float64 `json:"minSpecial,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *GenerateParameterDefault) ToMap() map[string]any {
 	m := map[string]any{}
-	m["MinLength"] = serializeValue(d.MinLength)
-	m["Lower"] = serializeValue(d.Lower)
-	m["Upper"] = serializeValue(d.Upper)
-	m["Numeric"] = serializeValue(d.Numeric)
-	m["Special"] = serializeValue(d.Special)
-	m["MinLower"] = serializeValue(d.MinLower)
-	m["MinUpper"] = serializeValue(d.MinUpper)
-	m["MinNumeric"] = serializeValue(d.MinNumeric)
-	m["MinSpecial"] = serializeValue(d.MinSpecial)
+	m["minLength"] = serializeValue(d.MinLength)
+	m["lower"] = serializeValue(d.Lower)
+	m["upper"] = serializeValue(d.Upper)
+	m["numeric"] = serializeValue(d.Numeric)
+	m["special"] = serializeValue(d.Special)
+	m["minLower"] = serializeValue(d.MinLower)
+	m["minUpper"] = serializeValue(d.MinUpper)
+	m["minNumeric"] = serializeValue(d.MinNumeric)
+	m["minSpecial"] = serializeValue(d.MinSpecial)
 	return m
 }
 
 // ProcessCommandExportOptions represents ProcessCommandExportOptions.
 type ProcessCommandExportOptions struct {
-	ExecutablePath *string `json:"ExecutablePath,omitempty"`
-	Arguments []string `json:"Arguments,omitempty"`
-	WorkingDirectory *string `json:"WorkingDirectory,omitempty"`
-	EnvironmentVariables map[string]string `json:"EnvironmentVariables,omitempty"`
-	InheritEnvironmentVariables *bool `json:"InheritEnvironmentVariables,omitempty"`
-	StandardInputContent *string `json:"StandardInputContent,omitempty"`
-	KillEntireProcessTree *bool `json:"KillEntireProcessTree,omitempty"`
-	CreateProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData `json:"CreateProcessSpec,omitempty"`
-	CommandOptions *CommandOptions `json:"CommandOptions,omitempty"`
-	MaxOutputLineCount *float64 `json:"MaxOutputLineCount,omitempty"`
-	DisplayImmediately *bool `json:"DisplayImmediately,omitempty"`
-	SuccessExitCodes []float64 `json:"SuccessExitCodes,omitempty"`
+	ExecutablePath *string `json:"executablePath,omitempty"`
+	Arguments []string `json:"arguments,omitempty"`
+	WorkingDirectory *string `json:"workingDirectory,omitempty"`
+	EnvironmentVariables map[string]string `json:"environmentVariables,omitempty"`
+	InheritEnvironmentVariables *bool `json:"inheritEnvironmentVariables,omitempty"`
+	StandardInputContent *string `json:"standardInputContent,omitempty"`
+	KillEntireProcessTree *bool `json:"killEntireProcessTree,omitempty"`
+	CreateProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData `json:"createProcessSpec,omitempty"`
+	CommandOptions *CommandOptions `json:"commandOptions,omitempty"`
+	MaxOutputLineCount *float64 `json:"maxOutputLineCount,omitempty"`
+	DisplayImmediately *bool `json:"displayImmediately,omitempty"`
+	SuccessExitCodes []float64 `json:"successExitCodes,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *ProcessCommandExportOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.ExecutablePath != nil { m["ExecutablePath"] = serializeValue(d.ExecutablePath) }
-	if d.Arguments != nil { m["Arguments"] = serializeValue(d.Arguments) }
-	if d.WorkingDirectory != nil { m["WorkingDirectory"] = serializeValue(d.WorkingDirectory) }
-	if d.EnvironmentVariables != nil { m["EnvironmentVariables"] = serializeValue(d.EnvironmentVariables) }
-	if d.InheritEnvironmentVariables != nil { m["InheritEnvironmentVariables"] = serializeValue(d.InheritEnvironmentVariables) }
-	if d.StandardInputContent != nil { m["StandardInputContent"] = serializeValue(d.StandardInputContent) }
-	if d.KillEntireProcessTree != nil { m["KillEntireProcessTree"] = serializeValue(d.KillEntireProcessTree) }
+	if d.ExecutablePath != nil { m["executablePath"] = serializeValue(d.ExecutablePath) }
+	if d.Arguments != nil { m["arguments"] = serializeValue(d.Arguments) }
+	if d.WorkingDirectory != nil { m["workingDirectory"] = serializeValue(d.WorkingDirectory) }
+	if d.EnvironmentVariables != nil { m["environmentVariables"] = serializeValue(d.EnvironmentVariables) }
+	if d.InheritEnvironmentVariables != nil { m["inheritEnvironmentVariables"] = serializeValue(d.InheritEnvironmentVariables) }
+	if d.StandardInputContent != nil { m["standardInputContent"] = serializeValue(d.StandardInputContent) }
+	if d.KillEntireProcessTree != nil { m["killEntireProcessTree"] = serializeValue(d.KillEntireProcessTree) }
 	if d.CreateProcessSpec != nil {
 		cb := d.CreateProcessSpec
-		m["CreateProcessSpec"] = func(args ...any) any {
+		m["createProcessSpec"] = func(args ...any) any {
 			return cb(callbackArg[ExecuteCommandContext](args, 0))
 		}
 	}
-	if d.CommandOptions != nil { m["CommandOptions"] = serializeValue(d.CommandOptions) }
-	if d.MaxOutputLineCount != nil { m["MaxOutputLineCount"] = serializeValue(d.MaxOutputLineCount) }
-	if d.DisplayImmediately != nil { m["DisplayImmediately"] = serializeValue(d.DisplayImmediately) }
-	if d.SuccessExitCodes != nil { m["SuccessExitCodes"] = serializeValue(d.SuccessExitCodes) }
+	if d.CommandOptions != nil { m["commandOptions"] = serializeValue(d.CommandOptions) }
+	if d.MaxOutputLineCount != nil { m["maxOutputLineCount"] = serializeValue(d.MaxOutputLineCount) }
+	if d.DisplayImmediately != nil { m["displayImmediately"] = serializeValue(d.DisplayImmediately) }
+	if d.SuccessExitCodes != nil { m["successExitCodes"] = serializeValue(d.SuccessExitCodes) }
 	return m
 }
 
 // ProcessCommandSpecExportData represents ProcessCommandSpecExportData.
 type ProcessCommandSpecExportData struct {
-	ExecutablePath *string `json:"ExecutablePath,omitempty"`
-	Arguments []string `json:"Arguments,omitempty"`
-	WorkingDirectory *string `json:"WorkingDirectory,omitempty"`
-	EnvironmentVariables map[string]string `json:"EnvironmentVariables,omitempty"`
-	InheritEnvironmentVariables *bool `json:"InheritEnvironmentVariables,omitempty"`
-	StandardInputContent *string `json:"StandardInputContent,omitempty"`
-	KillEntireProcessTree *bool `json:"KillEntireProcessTree,omitempty"`
+	ExecutablePath *string `json:"executablePath,omitempty"`
+	Arguments []string `json:"arguments,omitempty"`
+	WorkingDirectory *string `json:"workingDirectory,omitempty"`
+	EnvironmentVariables map[string]string `json:"environmentVariables,omitempty"`
+	InheritEnvironmentVariables *bool `json:"inheritEnvironmentVariables,omitempty"`
+	StandardInputContent *string `json:"standardInputContent,omitempty"`
+	KillEntireProcessTree *bool `json:"killEntireProcessTree,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *ProcessCommandSpecExportData) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.ExecutablePath != nil { m["ExecutablePath"] = serializeValue(d.ExecutablePath) }
-	if d.Arguments != nil { m["Arguments"] = serializeValue(d.Arguments) }
-	if d.WorkingDirectory != nil { m["WorkingDirectory"] = serializeValue(d.WorkingDirectory) }
-	if d.EnvironmentVariables != nil { m["EnvironmentVariables"] = serializeValue(d.EnvironmentVariables) }
-	if d.InheritEnvironmentVariables != nil { m["InheritEnvironmentVariables"] = serializeValue(d.InheritEnvironmentVariables) }
-	if d.StandardInputContent != nil { m["StandardInputContent"] = serializeValue(d.StandardInputContent) }
-	if d.KillEntireProcessTree != nil { m["KillEntireProcessTree"] = serializeValue(d.KillEntireProcessTree) }
+	if d.ExecutablePath != nil { m["executablePath"] = serializeValue(d.ExecutablePath) }
+	if d.Arguments != nil { m["arguments"] = serializeValue(d.Arguments) }
+	if d.WorkingDirectory != nil { m["workingDirectory"] = serializeValue(d.WorkingDirectory) }
+	if d.EnvironmentVariables != nil { m["environmentVariables"] = serializeValue(d.EnvironmentVariables) }
+	if d.InheritEnvironmentVariables != nil { m["inheritEnvironmentVariables"] = serializeValue(d.InheritEnvironmentVariables) }
+	if d.StandardInputContent != nil { m["standardInputContent"] = serializeValue(d.StandardInputContent) }
+	if d.KillEntireProcessTree != nil { m["killEntireProcessTree"] = serializeValue(d.KillEntireProcessTree) }
 	return m
 }
 
 // ProcessCommandResultExportOptions represents ProcessCommandResultExportOptions.
 type ProcessCommandResultExportOptions struct {
-	CommandOptions *CommandOptions `json:"CommandOptions,omitempty"`
-	MaxOutputLineCount *float64 `json:"MaxOutputLineCount,omitempty"`
-	DisplayImmediately *bool `json:"DisplayImmediately,omitempty"`
-	SuccessExitCodes []float64 `json:"SuccessExitCodes,omitempty"`
+	CommandOptions *CommandOptions `json:"commandOptions,omitempty"`
+	MaxOutputLineCount *float64 `json:"maxOutputLineCount,omitempty"`
+	DisplayImmediately *bool `json:"displayImmediately,omitempty"`
+	SuccessExitCodes []float64 `json:"successExitCodes,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *ProcessCommandResultExportOptions) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.CommandOptions != nil { m["CommandOptions"] = serializeValue(d.CommandOptions) }
-	if d.MaxOutputLineCount != nil { m["MaxOutputLineCount"] = serializeValue(d.MaxOutputLineCount) }
-	if d.DisplayImmediately != nil { m["DisplayImmediately"] = serializeValue(d.DisplayImmediately) }
-	if d.SuccessExitCodes != nil { m["SuccessExitCodes"] = serializeValue(d.SuccessExitCodes) }
+	if d.CommandOptions != nil { m["commandOptions"] = serializeValue(d.CommandOptions) }
+	if d.MaxOutputLineCount != nil { m["maxOutputLineCount"] = serializeValue(d.MaxOutputLineCount) }
+	if d.DisplayImmediately != nil { m["displayImmediately"] = serializeValue(d.DisplayImmediately) }
+	if d.SuccessExitCodes != nil { m["successExitCodes"] = serializeValue(d.SuccessExitCodes) }
 	return m
 }
 
 // ExecuteCommandResult represents ExecuteCommandResult.
 type ExecuteCommandResult struct {
-	Success bool `json:"Success,omitempty"`
-	Canceled *bool `json:"Canceled,omitempty"`
-	ErrorMessage *string `json:"ErrorMessage,omitempty"`
-	Message *string `json:"Message,omitempty"`
-	Data *CommandResultData `json:"Data,omitempty"`
+	Success bool `json:"success,omitempty"`
+	Canceled *bool `json:"canceled,omitempty"`
+	ErrorMessage *string `json:"errorMessage,omitempty"`
+	Message *string `json:"message,omitempty"`
+	Data *CommandResultData `json:"data,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *ExecuteCommandResult) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Success"] = serializeValue(d.Success)
-	if d.Canceled != nil { m["Canceled"] = serializeValue(d.Canceled) }
-	if d.ErrorMessage != nil { m["ErrorMessage"] = serializeValue(d.ErrorMessage) }
-	if d.Message != nil { m["Message"] = serializeValue(d.Message) }
-	if d.Data != nil { m["Data"] = serializeValue(d.Data) }
+	m["success"] = serializeValue(d.Success)
+	if d.Canceled != nil { m["canceled"] = serializeValue(d.Canceled) }
+	if d.ErrorMessage != nil { m["errorMessage"] = serializeValue(d.ErrorMessage) }
+	if d.Message != nil { m["message"] = serializeValue(d.Message) }
+	if d.Data != nil { m["data"] = serializeValue(d.Data) }
 	return m
 }
 
 // CommandResultData represents CommandResultData.
 type CommandResultData struct {
-	Value string `json:"Value,omitempty"`
-	Format *CommandResultFormat `json:"Format,omitempty"`
-	DisplayImmediately *bool `json:"DisplayImmediately,omitempty"`
+	Value string `json:"value,omitempty"`
+	Format *CommandResultFormat `json:"format,omitempty"`
+	DisplayImmediately *bool `json:"displayImmediately,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *CommandResultData) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Value"] = serializeValue(d.Value)
-	if d.Format != nil { m["Format"] = serializeValue(d.Format) }
-	if d.DisplayImmediately != nil { m["DisplayImmediately"] = serializeValue(d.DisplayImmediately) }
+	m["value"] = serializeValue(d.Value)
+	if d.Format != nil { m["format"] = serializeValue(d.Format) }
+	if d.DisplayImmediately != nil { m["displayImmediately"] = serializeValue(d.DisplayImmediately) }
 	return m
 }
 
 // UpdateCommandStateResourceSnapshot represents UpdateCommandStateResourceSnapshot.
 type UpdateCommandStateResourceSnapshot struct {
-	ResourceType string `json:"ResourceType,omitempty"`
-	State *string `json:"State,omitempty"`
-	StateStyle *string `json:"StateStyle,omitempty"`
-	HealthStatus *HealthStatus `json:"HealthStatus,omitempty"`
-	ExitCode *float64 `json:"ExitCode,omitempty"`
+	ResourceType string `json:"resourceType,omitempty"`
+	State *string `json:"state,omitempty"`
+	StateStyle *string `json:"stateStyle,omitempty"`
+	HealthStatus *HealthStatus `json:"healthStatus,omitempty"`
+	ExitCode *float64 `json:"exitCode,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *UpdateCommandStateResourceSnapshot) ToMap() map[string]any {
 	m := map[string]any{}
-	m["ResourceType"] = serializeValue(d.ResourceType)
-	if d.State != nil { m["State"] = serializeValue(d.State) }
-	if d.StateStyle != nil { m["StateStyle"] = serializeValue(d.StateStyle) }
-	if d.HealthStatus != nil { m["HealthStatus"] = serializeValue(d.HealthStatus) }
-	if d.ExitCode != nil { m["ExitCode"] = serializeValue(d.ExitCode) }
+	m["resourceType"] = serializeValue(d.ResourceType)
+	if d.State != nil { m["state"] = serializeValue(d.State) }
+	if d.StateStyle != nil { m["stateStyle"] = serializeValue(d.StateStyle) }
+	if d.HealthStatus != nil { m["healthStatus"] = serializeValue(d.HealthStatus) }
+	if d.ExitCode != nil { m["exitCode"] = serializeValue(d.ExitCode) }
 	return m
 }
 
 // ResourceUrlAnnotation represents ResourceUrlAnnotation.
 type ResourceUrlAnnotation struct {
-	Url string `json:"Url,omitempty"`
-	DisplayText *string `json:"DisplayText,omitempty"`
-	Endpoint *EndpointReference `json:"Endpoint,omitempty"`
-	DisplayOrder *float64 `json:"DisplayOrder,omitempty"`
-	DisplayLocation UrlDisplayLocation `json:"DisplayLocation,omitempty"`
+	Url string `json:"url,omitempty"`
+	DisplayText *string `json:"displayText,omitempty"`
+	Endpoint *EndpointReference `json:"endpoint,omitempty"`
+	DisplayOrder *float64 `json:"displayOrder,omitempty"`
+	DisplayLocation UrlDisplayLocation `json:"displayLocation,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *ResourceUrlAnnotation) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Url"] = serializeValue(d.Url)
-	if d.DisplayText != nil { m["DisplayText"] = serializeValue(d.DisplayText) }
-	if d.Endpoint != nil { m["Endpoint"] = serializeValue(d.Endpoint) }
-	if d.DisplayOrder != nil { m["DisplayOrder"] = serializeValue(d.DisplayOrder) }
-	m["DisplayLocation"] = serializeValue(d.DisplayLocation)
+	m["url"] = serializeValue(d.Url)
+	if d.DisplayText != nil { m["displayText"] = serializeValue(d.DisplayText) }
+	if d.Endpoint != nil { m["endpoint"] = serializeValue(d.Endpoint) }
+	if d.DisplayOrder != nil { m["displayOrder"] = serializeValue(d.DisplayOrder) }
+	m["displayLocation"] = serializeValue(d.DisplayLocation)
+	return m
+}
+
+// TerminalOptions represents TerminalOptions.
+type TerminalOptions struct {
+	Columns float64 `json:"columns,omitempty"`
+	Rows float64 `json:"rows,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *TerminalOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	m["columns"] = serializeValue(d.Columns)
+	m["rows"] = serializeValue(d.Rows)
 	return m
 }
 
 // TestConfigDto represents TestConfigDto.
 type TestConfigDto struct {
-	Name string `json:"Name,omitempty"`
-	Port float64 `json:"Port,omitempty"`
-	Enabled bool `json:"Enabled,omitempty"`
-	OptionalField *string `json:"OptionalField,omitempty"`
+	Name string `json:"name,omitempty"`
+	Port float64 `json:"port,omitempty"`
+	Enabled bool `json:"enabled,omitempty"`
+	OptionalField *string `json:"optionalField,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *TestConfigDto) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Name"] = serializeValue(d.Name)
-	m["Port"] = serializeValue(d.Port)
-	m["Enabled"] = serializeValue(d.Enabled)
-	if d.OptionalField != nil { m["OptionalField"] = serializeValue(d.OptionalField) }
+	m["name"] = serializeValue(d.Name)
+	m["port"] = serializeValue(d.Port)
+	m["enabled"] = serializeValue(d.Enabled)
+	if d.OptionalField != nil { m["optionalField"] = serializeValue(d.OptionalField) }
 	return m
 }
 
 // TestNestedDto represents TestNestedDto.
 type TestNestedDto struct {
-	Id string `json:"Id,omitempty"`
-	Config *TestConfigDto `json:"Config,omitempty"`
-	Tags []string `json:"Tags,omitempty"`
-	Counts map[string]float64 `json:"Counts,omitempty"`
+	Id string `json:"id,omitempty"`
+	Config *TestConfigDto `json:"config,omitempty"`
+	Tags []string `json:"tags,omitempty"`
+	Counts map[string]float64 `json:"counts,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *TestNestedDto) ToMap() map[string]any {
 	m := map[string]any{}
-	m["Id"] = serializeValue(d.Id)
-	if d.Config != nil { m["Config"] = serializeValue(d.Config) }
-	if d.Tags != nil { m["Tags"] = serializeValue(d.Tags) }
-	if d.Counts != nil { m["Counts"] = serializeValue(d.Counts) }
+	m["id"] = serializeValue(d.Id)
+	if d.Config != nil { m["config"] = serializeValue(d.Config) }
+	if d.Tags != nil { m["tags"] = serializeValue(d.Tags) }
+	if d.Counts != nil { m["counts"] = serializeValue(d.Counts) }
 	return m
 }
 
 // TestDeeplyNestedDto represents TestDeeplyNestedDto.
 type TestDeeplyNestedDto struct {
-	NestedData map[string][]*TestConfigDto `json:"NestedData,omitempty"`
-	MetadataArray []map[string]string `json:"MetadataArray,omitempty"`
+	NestedData map[string][]*TestConfigDto `json:"nestedData,omitempty"`
+	MetadataArray []map[string]string `json:"metadataArray,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *TestDeeplyNestedDto) ToMap() map[string]any {
 	m := map[string]any{}
-	if d.NestedData != nil { m["NestedData"] = serializeValue(d.NestedData) }
-	if d.MetadataArray != nil { m["MetadataArray"] = serializeValue(d.MetadataArray) }
+	if d.NestedData != nil { m["nestedData"] = serializeValue(d.NestedData) }
+	if d.MetadataArray != nil { m["metadataArray"] = serializeValue(d.MetadataArray) }
 	return m
 }
 
@@ -1554,7 +1568,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithSerializedAnnotation(annotationId string, json string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithTerminal() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithTerminal(options ...*WithTerminalOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUrl(url any, options ...*WithUrlOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -3423,12 +3437,30 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithStatus(sta
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal(options ...*WithTerminalOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -3846,7 +3878,7 @@ type CSharpAppResource interface {
 	WithSerializedAnnotation(annotationId string, json string) CSharpAppResource
 	WithSessionLifetime() CSharpAppResource
 	WithStatus(status TestResourceStatus) CSharpAppResource
-	WithTerminal() CSharpAppResource
+	WithTerminal(options ...*WithTerminalOptions) CSharpAppResource
 	WithUnionDependency(dependency any) CSharpAppResource
 	WithUrl(url any, options ...*WithUrlOptions) CSharpAppResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) CSharpAppResource
@@ -5448,12 +5480,30 @@ func (s *cSharpAppResource) WithStatus(status TestResourceStatus) CSharpAppResou
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *cSharpAppResource) WithTerminal() CSharpAppResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *cSharpAppResource) WithTerminal(options ...*WithTerminalOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -5743,8 +5793,8 @@ type Configuration interface {
 	handleReference
 	Exists(key string) (bool, error)
 	GetChildren() ([]ConfigurationSection, error)
-	GetConfigValue(key string) (string, error)
-	GetConnectionString(name string) (string, error)
+	GetConfigValue(key string) (*string, error)
+	GetConnectionString(name string) (*string, error)
 	GetSection(key string) ConfigurationSection
 	Err() error
 }
@@ -5791,8 +5841,8 @@ func (s *configuration) GetChildren() ([]ConfigurationSection, error) {
 }
 
 // GetConfigValue gets a configuration value by key.
-func (s *configuration) GetConfigValue(key string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+func (s *configuration) GetConfigValue(key string) (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"configuration": s.handle.ToJSON(),
@@ -5800,15 +5850,15 @@ func (s *configuration) GetConfigValue(key string) (string, error) {
 	reqArgs["key"] = serializeValue(key)
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getConfigValue", reqArgs)
 	if err != nil {
-		var zero string
+		var zero *string
 		return zero, err
 	}
-	return decodeAs[string](result)
+	return decodeAs[*string](result)
 }
 
 // GetConnectionString gets a connection string by name.
-func (s *configuration) GetConnectionString(name string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+func (s *configuration) GetConnectionString(name string) (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"configuration": s.handle.ToJSON(),
@@ -5816,10 +5866,10 @@ func (s *configuration) GetConnectionString(name string) (string, error) {
 	reqArgs["name"] = serializeValue(name)
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getConnectionString", reqArgs)
 	if err != nil {
-		var zero string
+		var zero *string
 		return zero, err
 	}
-	return decodeAs[string](result)
+	return decodeAs[*string](result)
 }
 
 // GetSection gets a configuration section by key.
@@ -6793,7 +6843,7 @@ type ContainerRegistryResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ContainerRegistryResource
 	WithSessionLifetime() ContainerRegistryResource
 	WithStatus(status TestResourceStatus) ContainerRegistryResource
-	WithTerminal() ContainerRegistryResource
+	WithTerminal(options ...*WithTerminalOptions) ContainerRegistryResource
 	WithUnionDependency(dependency any) ContainerRegistryResource
 	WithUrl(url any, options ...*WithUrlOptions) ContainerRegistryResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerRegistryResource
@@ -7671,12 +7721,30 @@ func (s *containerRegistryResource) WithStatus(status TestResourceStatus) Contai
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *containerRegistryResource) WithTerminal() ContainerRegistryResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *containerRegistryResource) WithTerminal(options ...*WithTerminalOptions) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -7902,7 +7970,7 @@ type ContainerResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ContainerResource
 	WithSessionLifetime() ContainerResource
 	WithStatus(status TestResourceStatus) ContainerResource
-	WithTerminal() ContainerResource
+	WithTerminal(options ...*WithTerminalOptions) ContainerResource
 	WithUnionDependency(dependency any) ContainerResource
 	WithUrl(url any, options ...*WithUrlOptions) ContainerResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerResource
@@ -9770,12 +9838,30 @@ func (s *containerResource) WithStatus(status TestResourceStatus) ContainerResou
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *containerResource) WithTerminal() ContainerResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *containerResource) WithTerminal(options ...*WithTerminalOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -11633,7 +11719,7 @@ type DotnetToolResource interface {
 	WithSerializedAnnotation(annotationId string, json string) DotnetToolResource
 	WithSessionLifetime() DotnetToolResource
 	WithStatus(status TestResourceStatus) DotnetToolResource
-	WithTerminal() DotnetToolResource
+	WithTerminal(options ...*WithTerminalOptions) DotnetToolResource
 	WithToolIgnoreExistingFeeds() DotnetToolResource
 	WithToolIgnoreFailedSources() DotnetToolResource
 	WithToolPackage(packageId string) DotnetToolResource
@@ -13218,12 +13304,30 @@ func (s *dotnetToolResource) WithStatus(status TestResourceStatus) DotnetToolRes
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *dotnetToolResource) WithTerminal() DotnetToolResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *dotnetToolResource) WithTerminal(options ...*WithTerminalOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -13455,7 +13559,7 @@ type EndpointReference interface {
 	ExcludeReferenceEndpoint() (bool, error)
 	Exists() (bool, error)
 	GetTlsValue(enabledValue *ReferenceExpression, disabledValue *ReferenceExpression) *ReferenceExpression
-	GetValueAsync(options ...*GetValueAsyncOptions) (string, error)
+	GetValueAsync(options ...*GetValueAsyncOptions) (*string, error)
 	Host() (string, error)
 	IsAllocated() (bool, error)
 	IsHttp() (bool, error)
@@ -13563,8 +13667,8 @@ func (s *endpointReference) GetTlsValue(enabledValue *ReferenceExpression, disab
 }
 
 // GetValueAsync gets the URL of the endpoint asynchronously. Waits for the endpoint to be allocated if necessary.
-func (s *endpointReference) GetValueAsync(options ...*GetValueAsyncOptions) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+func (s *endpointReference) GetValueAsync(options ...*GetValueAsyncOptions) (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -13584,10 +13688,10 @@ func (s *endpointReference) GetValueAsync(options ...*GetValueAsyncOptions) (str
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync", reqArgs)
 	if err != nil {
-		var zero string
+		var zero *string
 		return zero, err
 	}
-	return decodeAs[string](result)
+	return decodeAs[*string](result)
 }
 
 // Host gets the host for this endpoint.
@@ -14559,7 +14663,7 @@ type ExecutableResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ExecutableResource
 	WithSessionLifetime() ExecutableResource
 	WithStatus(status TestResourceStatus) ExecutableResource
-	WithTerminal() ExecutableResource
+	WithTerminal(options ...*WithTerminalOptions) ExecutableResource
 	WithUnionDependency(dependency any) ExecutableResource
 	WithUrl(url any, options ...*WithUrlOptions) ExecutableResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExecutableResource
@@ -16138,12 +16242,30 @@ func (s *executableResource) WithStatus(status TestResourceStatus) ExecutableRes
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *executableResource) WithTerminal() ExecutableResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *executableResource) WithTerminal(options ...*WithTerminalOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -16625,7 +16747,7 @@ type ExternalServiceResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ExternalServiceResource
 	WithSessionLifetime() ExternalServiceResource
 	WithStatus(status TestResourceStatus) ExternalServiceResource
-	WithTerminal() ExternalServiceResource
+	WithTerminal(options ...*WithTerminalOptions) ExternalServiceResource
 	WithUnionDependency(dependency any) ExternalServiceResource
 	WithUrl(url any, options ...*WithUrlOptions) ExternalServiceResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExternalServiceResource
@@ -17521,12 +17643,30 @@ func (s *externalServiceResource) WithStatus(status TestResourceStatus) External
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *externalServiceResource) WithTerminal() ExternalServiceResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *externalServiceResource) WithTerminal(options ...*WithTerminalOptions) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -19313,8 +19453,10 @@ type ParameterResource interface {
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ParameterResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ParameterResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ParameterResource
+	SetValueAsync(options ...*SetValueAsyncOptions) error
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ParameterResource
 	TestWaitFor(dependency Resource) ParameterResource
+	TryGetCurrentValue() (*string, error)
 	WithCancellableOperation(operation func(arg *CancellationToken)) ParameterResource
 	WithChildRelationship(child Resource) ParameterResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ParameterResource
@@ -19344,6 +19486,7 @@ type ParameterResource interface {
 	WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) ParameterResource
 	WithModifiedAt(modifiedAt string) ParameterResource
 	WithNestedConfig(config *TestNestedDto) ParameterResource
+	WithOptional() ParameterResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) ParameterResource
 	WithOptionalString(options ...*WithOptionalStringOptions) ParameterResource
 	WithParentProcessLifetime(parentProcessId float64) ParameterResource
@@ -19354,12 +19497,13 @@ type ParameterResource interface {
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ParameterResource
 	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ParameterResource
 	WithRelationship(resourceBuilder Resource, type_ string) ParameterResource
+	WithRequired(options ...*WithRequiredOptions) ParameterResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ParameterResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ParameterResource
 	WithSerializedAnnotation(annotationId string, json string) ParameterResource
 	WithSessionLifetime() ParameterResource
 	WithStatus(status TestResourceStatus) ParameterResource
-	WithTerminal() ParameterResource
+	WithTerminal(options ...*WithTerminalOptions) ParameterResource
 	WithUnionDependency(dependency any) ParameterResource
 	WithUrl(url any, options ...*WithUrlOptions) ParameterResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ParameterResource
@@ -19542,6 +19686,30 @@ func (s *parameterResource) OnResourceStopped(callback func(arg ResourceStoppedE
 	return s
 }
 
+// SetValueAsync sets or replaces the value for this parameter.
+func (s *parameterResource) SetValueAsync(options ...*SetValueAsyncOptions) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &SetValueAsyncOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.CancellationToken != nil {
+			ctx = merged.CancellationToken.Context()
+			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
+				reqArgs["cancellationToken"] = id
+			}
+		}
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync", reqArgs)
+	return err
+}
+
 // SubscribeHttpsEndpointsUpdate subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
 func (s *parameterResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ParameterResource {
 	if s.err != nil { return s }
@@ -19572,6 +19740,21 @@ func (s *parameterResource) TestWaitFor(dependency Resource) ParameterResource {
 	reqArgs["dependency"] = serializeValue(dependency)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWaitFor", reqArgs); err != nil { s.setErr(err) }
 	return s
+}
+
+// TryGetCurrentValue gets the current value for this parameter without waiting for unresolved input.
+func (s *parameterResource) TryGetCurrentValue() (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue", reqArgs)
+	if err != nil {
+		var zero *string
+		return zero, err
+	}
+	return decodeAs[*string](result)
 }
 
 // WithCancellableOperation performs a cancellable operation
@@ -20005,6 +20188,17 @@ func (s *parameterResource) WithNestedConfig(config *TestNestedDto) ParameterRes
 	return s
 }
 
+// WithOptional marks the parameter resource as optional.
+func (s *parameterResource) WithOptional() ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptional", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithOptionalCallback configures with optional callback
 func (s *parameterResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) ParameterResource {
 	if s.err != nil { return s }
@@ -20187,6 +20381,24 @@ func (s *parameterResource) WithRelationship(resourceBuilder Resource, type_ str
 	return s
 }
 
+// WithRequired sets whether the parameter resource requires a value.
+func (s *parameterResource) WithRequired(options ...*WithRequiredOptions) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithRequiredOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequired", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithRequiredCommand declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
 func (s *parameterResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ParameterResource {
 	if s.err != nil { return s }
@@ -20268,12 +20480,30 @@ func (s *parameterResource) WithStatus(status TestResourceStatus) ParameterResou
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *parameterResource) WithTerminal() ParameterResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *parameterResource) WithTerminal(options ...*WithTerminalOptions) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -21181,7 +21411,7 @@ type ProjectResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ProjectResource
 	WithSessionLifetime() ProjectResource
 	WithStatus(status TestResourceStatus) ProjectResource
-	WithTerminal() ProjectResource
+	WithTerminal(options ...*WithTerminalOptions) ProjectResource
 	WithUnionDependency(dependency any) ProjectResource
 	WithUrl(url any, options ...*WithUrlOptions) ProjectResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ProjectResource
@@ -22783,12 +23013,30 @@ func (s *projectResource) WithStatus(status TestResourceStatus) ProjectResource 
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *projectResource) WithTerminal() ProjectResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *projectResource) WithTerminal(options ...*WithTerminalOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -24670,7 +24918,7 @@ type TestDatabaseResource interface {
 	WithSerializedAnnotation(annotationId string, json string) TestDatabaseResource
 	WithSessionLifetime() TestDatabaseResource
 	WithStatus(status TestResourceStatus) TestDatabaseResource
-	WithTerminal() TestDatabaseResource
+	WithTerminal(options ...*WithTerminalOptions) TestDatabaseResource
 	WithUnionDependency(dependency any) TestDatabaseResource
 	WithUrl(url any, options ...*WithUrlOptions) TestDatabaseResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestDatabaseResource
@@ -26538,12 +26786,30 @@ func (s *testDatabaseResource) WithStatus(status TestResourceStatus) TestDatabas
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *testDatabaseResource) WithTerminal() TestDatabaseResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *testDatabaseResource) WithTerminal(options ...*WithTerminalOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -27025,7 +27291,7 @@ type TestRedisResource interface {
 	WithSerializedAnnotation(annotationId string, json string) TestRedisResource
 	WithSessionLifetime() TestRedisResource
 	WithStatus(status TestResourceStatus) TestRedisResource
-	WithTerminal() TestRedisResource
+	WithTerminal(options ...*WithTerminalOptions) TestRedisResource
 	WithUnionDependency(dependency any) TestRedisResource
 	WithUrl(url any, options ...*WithUrlOptions) TestRedisResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestRedisResource
@@ -29204,12 +29470,30 @@ func (s *testRedisResource) WithStatus(status TestResourceStatus) TestRedisResou
 	return s
 }
 
-// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
-func (s *testRedisResource) WithTerminal() TestRedisResource {
+// WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+func (s *testRedisResource) WithTerminal(options ...*WithTerminalOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Configure != nil {
+			cb := merged.Configure
+			shim := func(args ...any) any {
+				arg0 := callbackArg[*TerminalOptions](args, 0)
+				cb(arg0)
+				return map[string]any{
+					"p0": serializeValue(arg0),
+				}
+			}
+			reqArgs["configure"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -29467,6 +29751,214 @@ func (s *testResourceContext) Value() (float64, error) {
 		return zero, err
 	}
 	return decodeAs[float64](result)
+}
+
+// TestReturnValueContext is the public interface for handle type TestReturnValueContext.
+type TestReturnValueContext interface {
+	handleReference
+	GetInt() (float64, error)
+	GetIntTaskAsync() (float64, error)
+	GetIntValueTaskAsync() (float64, error)
+	GetNullableInt() (*float64, error)
+	GetNullableIntTaskAsync() (*float64, error)
+	GetNullableIntValueTaskAsync() (*float64, error)
+	GetNullableString() (*string, error)
+	GetNullableStringTaskAsync() (*string, error)
+	GetNullableStringValueTaskAsync() (*string, error)
+	GetString() (string, error)
+	GetStringTaskAsync() (string, error)
+	GetStringValueTaskAsync() (string, error)
+	Err() error
+}
+
+// testReturnValueContext is the unexported impl of TestReturnValueContext.
+type testReturnValueContext struct {
+	*resourceBuilderBase
+}
+
+// newTestReturnValueContextFromHandle wraps an existing handle as TestReturnValueContext.
+func newTestReturnValueContextFromHandle(h *handle, c *client) TestReturnValueContext {
+	return &testReturnValueContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// GetInt invokes the GetInt method
+func (s *testReturnValueContext) GetInt() (float64, error) {
+	if s.err != nil { var zero float64; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getInt", reqArgs)
+	if err != nil {
+		var zero float64
+		return zero, err
+	}
+	return decodeAs[float64](result)
+}
+
+// GetIntTaskAsync invokes the GetIntTaskAsync method
+func (s *testReturnValueContext) GetIntTaskAsync() (float64, error) {
+	if s.err != nil { var zero float64; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntTaskAsync", reqArgs)
+	if err != nil {
+		var zero float64
+		return zero, err
+	}
+	return decodeAs[float64](result)
+}
+
+// GetIntValueTaskAsync invokes the GetIntValueTaskAsync method
+func (s *testReturnValueContext) GetIntValueTaskAsync() (float64, error) {
+	if s.err != nil { var zero float64; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntValueTaskAsync", reqArgs)
+	if err != nil {
+		var zero float64
+		return zero, err
+	}
+	return decodeAs[float64](result)
+}
+
+// GetNullableInt invokes the GetNullableInt method
+func (s *testReturnValueContext) GetNullableInt() (*float64, error) {
+	if s.err != nil { var zero *float64; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableInt", reqArgs)
+	if err != nil {
+		var zero *float64
+		return zero, err
+	}
+	return decodeAs[*float64](result)
+}
+
+// GetNullableIntTaskAsync invokes the GetNullableIntTaskAsync method
+func (s *testReturnValueContext) GetNullableIntTaskAsync() (*float64, error) {
+	if s.err != nil { var zero *float64; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntTaskAsync", reqArgs)
+	if err != nil {
+		var zero *float64
+		return zero, err
+	}
+	return decodeAs[*float64](result)
+}
+
+// GetNullableIntValueTaskAsync invokes the GetNullableIntValueTaskAsync method
+func (s *testReturnValueContext) GetNullableIntValueTaskAsync() (*float64, error) {
+	if s.err != nil { var zero *float64; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntValueTaskAsync", reqArgs)
+	if err != nil {
+		var zero *float64
+		return zero, err
+	}
+	return decodeAs[*float64](result)
+}
+
+// GetNullableString invokes the GetNullableString method
+func (s *testReturnValueContext) GetNullableString() (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableString", reqArgs)
+	if err != nil {
+		var zero *string
+		return zero, err
+	}
+	return decodeAs[*string](result)
+}
+
+// GetNullableStringTaskAsync invokes the GetNullableStringTaskAsync method
+func (s *testReturnValueContext) GetNullableStringTaskAsync() (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringTaskAsync", reqArgs)
+	if err != nil {
+		var zero *string
+		return zero, err
+	}
+	return decodeAs[*string](result)
+}
+
+// GetNullableStringValueTaskAsync invokes the GetNullableStringValueTaskAsync method
+func (s *testReturnValueContext) GetNullableStringValueTaskAsync() (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringValueTaskAsync", reqArgs)
+	if err != nil {
+		var zero *string
+		return zero, err
+	}
+	return decodeAs[*string](result)
+}
+
+// GetString invokes the GetString method
+func (s *testReturnValueContext) GetString() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getString", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// GetStringTaskAsync invokes the GetStringTaskAsync method
+func (s *testReturnValueContext) GetStringTaskAsync() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringTaskAsync", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// GetStringValueTaskAsync invokes the GetStringValueTaskAsync method
+func (s *testReturnValueContext) GetStringValueTaskAsync() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringValueTaskAsync", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
 }
 
 // UpdateCommandStateContext is the public interface for handle type UpdateCommandStateContext.
@@ -29899,6 +30391,18 @@ func (o *WithDescriptionOptions) ToMap() map[string]any {
 	return m
 }
 
+// WithRequiredOptions carries optional parameters for WithRequired.
+type WithRequiredOptions struct {
+	Required *bool `json:"required,omitempty"`
+}
+
+func (o *WithRequiredOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Required != nil { m["required"] = serializeValue(o.Required) }
+	return m
+}
+
 // AddConnectionStringOptions carries optional parameters for AddConnectionString.
 type AddConnectionStringOptions struct {
 	EnvironmentVariableNameOrExpression any `json:"environmentVariableNameOrExpression,omitempty"`
@@ -30237,6 +30741,17 @@ func (o *WithHiddenOnCompletionOptions) ToMap() map[string]any {
 	if o == nil { return m }
 	if o.ExitCode != nil { m["exitCode"] = serializeValue(o.ExitCode) }
 	if o.ExitCodes != nil { m["exitCodes"] = serializeValue(o.ExitCodes) }
+	return m
+}
+
+// WithTerminalOptions carries optional parameters for WithTerminal.
+type WithTerminalOptions struct {
+	Configure func(obj *TerminalOptions) `json:"-"`
+}
+
+func (o *WithTerminalOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
 	return m
 }
 
@@ -30714,6 +31229,19 @@ type GetValueAsyncOptions struct {
 func (o *GetValueAsyncOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
+	return m
+}
+
+// SetValueAsyncOptions carries optional parameters for SetValueAsync.
+type SetValueAsyncOptions struct {
+	Value *string `json:"value,omitempty"`
+	CancellationToken *CancellationToken `json:"-"`
+}
+
+func (o *SetValueAsyncOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Value != nil { m["value"] = serializeValue(o.Value) }
 	return m
 }
 
@@ -31195,6 +31723,9 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", func(h *handle, c *client) any {
 		return newTestResourceContextFromHandle(h, c)
 	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext", func(h *handle, c *client) any {
+		return newTestReturnValueContextFromHandle(h, c)
+	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext", func(h *handle, c *client) any {
 		return newUpdateCommandStateContextFromHandle(h, c)
 	})
@@ -31238,19 +31769,19 @@ func CreateBuilder(options ...*CreateBuilderOptions) (DistributedApplicationBuil
 		}
 		for k, v := range merged.ToMap() { resolved[k] = v }
 	}
-	if _, ok := resolved["Args"]; !ok { resolved["Args"] = os.Args[1:] }
-	if projectDirectory, ok := resolved["ProjectDirectory"].(string); !ok || projectDirectory == "" {
+	if _, ok := resolved["args"]; !ok { resolved["args"] = os.Args[1:] }
+	if projectDirectory, ok := resolved["projectDirectory"].(string); !ok || projectDirectory == "" {
 		if projectDirectory := os.Getenv("ASPIRE_PROJECT_DIRECTORY"); projectDirectory != "" {
-			resolved["ProjectDirectory"] = projectDirectory
+			resolved["projectDirectory"] = projectDirectory
 		} else if pwd, err := os.Getwd(); err == nil {
-			resolved["ProjectDirectory"] = pwd
+			resolved["projectDirectory"] = pwd
 		}
 	}
-	if appHostFilePath, ok := resolved["AppHostFilePath"].(string); !ok || appHostFilePath == "" {
-		if appHostFilePath := os.Getenv("ASPIRE_APPHOST_FILEPATH"); appHostFilePath != "" { resolved["AppHostFilePath"] = appHostFilePath }
+	if appHostFilePath, ok := resolved["appHostFilePath"].(string); !ok || appHostFilePath == "" {
+		if appHostFilePath := os.Getenv("ASPIRE_APPHOST_FILEPATH"); appHostFilePath != "" { resolved["appHostFilePath"] = appHostFilePath }
 	}
-	if dashboardApplicationName, ok := resolved["DashboardApplicationName"].(string); ok && dashboardApplicationName == "" {
-		delete(resolved, "DashboardApplicationName")
+	if dashboardApplicationName, ok := resolved["dashboardApplicationName"].(string); ok && dashboardApplicationName == "" {
+		delete(resolved, "dashboardApplicationName")
 	}
 
 	result, err := c.invokeCapability(context.Background(), "Aspire.Hosting/createBuilder", map[string]any{"argsOrOptions": resolved})

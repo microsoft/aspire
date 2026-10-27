@@ -63,26 +63,26 @@ public class ComponentTelemetryContextTests
 
         // Act & assert update properties
         telemetryContext.UpdateTelemetryProperties([new ComponentTelemetryProperty("Test", new AspireTelemetryProperty("Value"))], logger);
-        Assert.Collection(telemetryContext.Properties.OrderBy(p => p.Key),
-            kvp =>
-            {
-                Assert.Equal("Aspire.Dashboard.ComponentId", kvp.Key);
-                Assert.Equal("ComponentTelemetryContextTests", kvp.Value.Value);
-            },
-            kvp =>
-            {
-                Assert.Equal("Aspire.Dashboard.ComponentType", kvp.Key);
-                Assert.Equal("Page", kvp.Value.Value);
-            },
-            kvp =>
-            {
-                Assert.Equal("Aspire.Dashboard.UserAgent", kvp.Key);
-                Assert.Equal("mozilla", kvp.Value.Value);
-            },
+        Assert.Collection(telemetryContext.Properties.OrderBy(p => p.Key, StringComparer.Ordinal),
             kvp =>
             {
                 Assert.Equal("Test", kvp.Key);
                 Assert.Equal("Value", kvp.Value.Value);
+            },
+            kvp =>
+            {
+                Assert.Equal("aspire.dashboard.component.id", kvp.Key);
+                Assert.Equal("ComponentTelemetryContextTests", kvp.Value.Value);
+            },
+            kvp =>
+            {
+                Assert.Equal("aspire.dashboard.component.type", kvp.Key);
+                Assert.Equal("Page", kvp.Value.Value);
+            },
+            kvp =>
+            {
+                Assert.Equal("user_agent.original", kvp.Key);
+                Assert.Equal("mozilla", kvp.Value.Value);
             });
         Assert.False(fixture.LogChannel.Reader.TryRead(out _));
 

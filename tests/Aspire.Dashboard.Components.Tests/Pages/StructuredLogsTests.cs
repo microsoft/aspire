@@ -32,6 +32,33 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public partial class StructuredLogsTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(AspireDataType.StructuredLogs)]
+    [InlineData(AspireDataType.Traces)]
+    [InlineData(AspireDataType.Metrics)]
+    public async Task EmptyState_HelpDisappearsAfterAnySignalAndStaysHiddenAfterClear(AspireDataType signal)
+    {
+        SetupStructureLogsServices();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var cut = Render<StructuredLogs>(parameters => parameters.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".telemetry-help-button")));
+        Assert.Equal(Resources.StructuredLogs.StructuredLogsNoLogsFound, cut.Find(".telemetry-empty-content > div").TextContent.Trim());
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await TelemetryHelpSetupHelpers.AddSignalAsync(repository, signal);
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".telemetry-help-button")));
+        await repository.ClearStructuredLogsAsync();
+        await repository.ClearTracesAsync();
+        await repository.ClearMetricsAsync();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".telemetry-empty-content"));
+            Assert.Empty(cut.FindAll(".telemetry-help-button"));
+        });
+    }
+
     [Fact]
     public async Task Render_ResourceInstanceHasDashes_AppKeyResolvedCorrectly()
     {

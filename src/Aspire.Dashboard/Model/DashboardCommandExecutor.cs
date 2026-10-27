@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Net;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
@@ -23,6 +24,8 @@ public sealed class DashboardCommandExecutor(
     DashboardTelemetryService telemetryService,
     INotificationService notificationService)
 {
+    private const int MaxToastMessageLength = 250;
+
     private readonly HashSet<(string ResourceName, string CommandName)> _executingCommands = [];
     private readonly object _lock = new object();
 
@@ -34,7 +37,9 @@ public sealed class DashboardCommandExecutor(
         }
     }
 
-    public async Task ExecuteAsync(ResourceViewModel resource, CommandViewModel command, Func<ResourceViewModel, string> getResourceName)
+    /// <summary>Executes a resource command with confirmation and result notifications.</summary>
+    /// <returns>True only when the command completes successfully.</returns>
+    public async Task<bool> ExecuteAsync(ResourceViewModel resource, CommandViewModel command, Func<ResourceViewModel, string> getResourceName)
     {
         var executingCommandKey = (resource.Name, command.Name);
         lock (_lock)
@@ -54,13 +59,16 @@ public sealed class DashboardCommandExecutor(
 
             try
             {
-                await ExecuteAsyncCore(resource, command, getResourceName).ConfigureAwait(false);
+                var succeeded = await ExecuteAsyncCore(resource, command, getResourceName).ConfigureAwait(false);
                 telemetryService.SetOperationStatus(activity, ActivityStatusCode.Ok);
+                return succeeded;
             }
             catch (Exception)
             {
                 telemetryService.SetOperationStatus(activity, ActivityStatusCode.Error);
             }
+
+            return false;
         }
         finally
         {
@@ -81,14 +89,14 @@ public sealed class DashboardCommandExecutor(
         }
     }
 
-    public async Task ExecuteAsyncCore(ResourceViewModel resource, CommandViewModel command, Func<ResourceViewModel, string> getResourceName)
+    public async Task<bool> ExecuteAsyncCore(ResourceViewModel resource, CommandViewModel command, Func<ResourceViewModel, string> getResourceName)
     {
         if (!string.IsNullOrWhiteSpace(command.ConfirmationMessage))
         {
             var result = await dialogService.ShowConfirmationAsync(command.ConfirmationMessage).ConfigureAwait(false);
             if (result.Cancelled)
             {
-                return;
+                return false;
             }
         }
 
@@ -191,7 +199,7 @@ public sealed class DashboardCommandExecutor(
                 Body = response.Message,
                 Intent = FluentMessageIntent.Info,
             });
-            return;
+            return false;
         }
         else
         {
@@ -205,7 +213,10 @@ public sealed class DashboardCommandExecutor(
                 navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: getResourceName(resource)));
                 return Task.CompletedTask;
             };
-            toastOptions.Message = response.Message;
+            // Truncate plain-text command output before encoding it for Fluent's HTML-rendering toast,
+            // so the limit applies to displayed text rather than HTML entities.
+            var toastMessage = response.Message is null ? null : FormatHelpers.TruncateText(response.Message, MaxToastMessageLength);
+            toastOptions.Message = WebUtility.HtmlEncode(toastMessage);
 
             if (response.Result is not null)
             {
@@ -297,6 +308,8 @@ public sealed class DashboardCommandExecutor(
         {
             return progressNotificationId ?? throw new InvalidOperationException("The progress notification has not been created.");
         }
+
+        return response.Kind == ResourceCommandResponseKind.Succeeded;
     }
 
     // Copied from FluentUI.

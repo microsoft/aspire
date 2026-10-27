@@ -122,7 +122,7 @@ function makeButton(kind, label, svg) {
     return btn;
 }
 
-function initialize(container, label) {
+function initialize(container, label, followInitialContent) {
     if (activeControl !== null) {
         unregister(activeControl);
     }
@@ -136,7 +136,8 @@ function initialize(container, label) {
     const eventController = new AbortController();
     const entry = {
         container, root, bottomBtn, scrollEndHandler: null, showTimer: null,
-        layoutDirty: true, layoutActive: false, buttonSize: null, eventController
+        layoutDirty: true, layoutActive: false, buttonSize: null, eventController,
+        followInitialContent
     };
     activeControl = entry;
 
@@ -146,6 +147,7 @@ function initialize(container, label) {
     }, { signal: eventController.signal });
 
     const cancelForUserInput = function () {
+        entry.followInitialContent = false;
         cancelPendingScrollToBottom(entry);
         scheduleUpdate();
     };
@@ -215,7 +217,18 @@ function updateEntry(entry, showImmediately = false) {
     // Decide whether a jump is useful before measuring the container and clipping ancestors.
     // A pending smooth scroll owns the trip to the bottom, so keep the button hidden until it ends.
     const overflow = container.scrollHeight - container.clientHeight;
-    const atBottom = overflow - container.scrollTop <= edgeThreshold;
+    const distanceFromBottom = overflow - container.scrollTop;
+    const atBottom = distanceFromBottom <= edgeThreshold;
+    if (entry.followInitialContent && distanceFromBottom > 1) {
+        // Work around https://github.com/dotnet/aspnetcore/issues/69823. Virtualize can need
+        // multiple measurement passes to converge on its end anchor, so keep an initially empty
+        // live-data region pinned during those passes unless the user intervenes. Remove this
+        // workaround when the framework issue is fixed.
+        container.scrollTop = container.scrollHeight;
+        hideBottomButton(entry);
+        return;
+    }
+
     const shouldShow = overflow > overflowThreshold && !atBottom && entry.scrollEndHandler === null;
     if (!shouldShow) {
         // Cancel pending reveals without clearing layoutDirty. If the button is needed later,
@@ -337,7 +350,10 @@ class AspireScrollToBottom extends HTMLElement {
 
     connectedCallback() {
         if (this.isConnected && this.parentElement !== null && this.#entry === null) {
-            this.#entry = initialize(this.parentElement, this.dataset.scrollToBottomLabel || "Scroll to bottom");
+            this.#entry = initialize(
+                this.parentElement,
+                this.dataset.scrollToBottomLabel || "Scroll to bottom",
+                this.hasAttribute("data-follow-initial-content"));
         }
     }
 

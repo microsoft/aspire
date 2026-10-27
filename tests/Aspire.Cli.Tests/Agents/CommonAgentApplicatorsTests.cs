@@ -11,38 +11,9 @@ public class CommonAgentApplicatorsTests
     private const int MaxSkillDescriptionLength = 1024;
 
     [Fact]
-    public void SkillLocation_All_ContainsAllLocations()
+    public void AgentClient_All_ContainsSupportedGroups()
     {
-        Assert.Equal(4, SkillLocation.All.Count);
-        Assert.Contains(SkillLocation.All, l => l == SkillLocation.Standard);
-        Assert.Contains(SkillLocation.All, l => l == SkillLocation.ClaudeCode);
-        Assert.Contains(SkillLocation.All, l => l == SkillLocation.GitHubSkills);
-        Assert.Contains(SkillLocation.All, l => l == SkillLocation.OpenCode);
-    }
-
-    [Fact]
-    public void SkillLocation_Standard_IsDefaultAndIncludesUserLevel()
-    {
-        Assert.True(SkillLocation.Standard.IsDefault);
-        Assert.True(SkillLocation.Standard.IncludeUserLevel);
-        Assert.Equal(Path.Combine(".agents", "skills"), SkillLocation.Standard.RelativeSkillDirectory);
-    }
-
-    [Fact]
-    public void SkillLocation_ClaudeCode_IsNotDefaultAndNoUserLevel()
-    {
-        Assert.False(SkillLocation.ClaudeCode.IsDefault);
-        Assert.False(SkillLocation.ClaudeCode.IncludeUserLevel);
-        Assert.Equal(Path.Combine(".claude", "skills"), SkillLocation.ClaudeCode.RelativeSkillDirectory);
-    }
-
-    [Fact]
-    public void SkillLocation_OnlyStandardIsDefault()
-    {
-        Assert.True(SkillLocation.Standard.IsDefault);
-        Assert.False(SkillLocation.ClaudeCode.IsDefault);
-        Assert.False(SkillLocation.GitHubSkills.IsDefault);
-        Assert.False(SkillLocation.OpenCode.IsDefault);
+        Assert.Equal([AgentClient.Copilot, AgentClient.ClaudeCode, AgentClient.OpenCode], AgentClient.All);
     }
 
     [Fact]

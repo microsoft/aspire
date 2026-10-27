@@ -227,9 +227,11 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
         Assert.True(File.Exists(appHostSourcePath), $"Expected AppHost source file to exist at: {appHostSourcePath}");
 
         var appHostSource = File.ReadAllText(appHostSourcePath);
-        var sdkDirective = File.ReadLines(appHostSourcePath).First();
-        Assert.StartsWith("#:sdk Aspire.AppHost.Sdk@", sdkDirective);
+        Assert.StartsWith("#:package Aspire.Hosting.AppHost@", appHostSource);
+        Assert.False(string.IsNullOrWhiteSpace(CliE2ETestHelpers.GetAppHostVersion(appHostSource)));
+        Assert.Contains("#:package Aspire.Hosting.Dotnet@", appHostSource);
         Assert.Contains("var builder = DistributedApplication.CreateBuilder(args);", appHostSource);
+        Assert.DoesNotContain("#:sdk Aspire.AppHost.Sdk@", appHostSource);
         Assert.Contains("#:property AspireUseCliBundle=true", appHostSource);
 
         File.WriteAllText(

@@ -1,17 +1,15 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-var wps = builder.AddAzureWebPubSub("wps1");
+var wps = builder.AddAzureWebPubSub("wps1").RunAsEmulator();
 var chat = wps.AddHub("ChatForAspire");
 var notification = wps.AddHub("NotificationForAspire");
-var web = builder.AddProject<Projects.WebPubSubWeb>("webfrontend")
+var web = builder.AddProject<Projects.WebPubSubWeb>("webfrontend", launchProfileName: "https")
     .WithExternalHttpEndpoints()
     .WithReference(chat)
-    .WithReference(notification);
+    .WithReference(notification)
+    .WaitFor(wps);
 
-// Now only works in production since localhost is not accessible from Azure
-if (builder.ExecutionContext.IsPublishMode)
-{
-    wps.AddHub("ChatForAspire").AddEventHandler($"{web.GetEndpoint("https")}/eventhandler/", systemEvents: ["connected"]);
-}
+var callbackEndpoint = web.GetEndpoint("https");
+chat.AddEventHandler($"{callbackEndpoint}/eventhandler/{chat.Resource.HubName}", systemEvents: ["connected"]);
 
 builder.Build().Run();
