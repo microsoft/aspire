@@ -250,26 +250,34 @@ public class EntraIdApplicationResource : AzureProvisioningResource
         }
     }
 
-    // A resource can reference several registrations. Entries that different registrations write to the same configuration key
+    // A resource can reference several registrations. Entries that different registrations write to the same environment variable
     // would overwrite each other's scopes one by one, and leave behind the higher indexes of the longer list, mixing the permissions
-    // of two identities. Only a .NET program can clash, since its DownstreamApis section is the same whatever the connection name.
+    // of two identities. The check compares the names that the consumer receives, because a non-.NET resource gets encoded, upper snake
+    // case names: the prefixes "A"/"B-C" and "A_B"/"C", or the entries "orders-api" and "ordersApi", become the same variable. A .NET
+    // program's DownstreamApis section is the same whatever the connection name, so references clash there most easily.
     internal static void ValidateConsumerReferences(IResource consumer)
     {
         var owners = new Dictionary<string, (EntraIdApplicationResource Source, string Entry, string Prefix)>(StringComparer.OrdinalIgnoreCase);
         foreach (var reference in consumer.Annotations.OfType<EntraIdReferenceAnnotation>())
         {
+            var separator = reference.IsDotnetProgram ? "__" : "_";
             foreach (var entry in reference.Source.ApiAccess.SelectMany(static a => a.GetDownstreamApis()))
             {
-                var key = $"{reference.EnvironmentVariablePrefix}{entry.Name}";
-                if (owners.TryGetValue(key, out var other) && !ReferenceEquals(other.Source, reference.Source))
+                // Every variable of an entry starts with this name, so a clash of the first scope is a clash of the entry.
+                var key = reference.GetEnvironmentVariableName($"{reference.EnvironmentVariablePrefix}{entry.Name}{separator}Scopes{separator}0");
+                if (!owners.TryGetValue(key, out var other) || (ReferenceEquals(other.Source, reference.Source) && other.Entry == entry.Name))
                 {
-                    throw new InvalidOperationException(
-                        $"'{consumer.Name}' references the Entra ID applications '{other.Source.Name}' and '{reference.Source.Name}', and both declare permissions to an API that is configured as " +
-                        $"the DownstreamApis entry '{entry.Name}' under '{reference.DownstreamApisPrefix}', so their scopes would be mixed. Pass a different downstreamApisPrefix " +
-                        $"to WithReference for one of them.");
+                    owners[key] = (reference.Source, entry.Name, reference.DownstreamApisPrefix);
+                    continue;
                 }
 
-                owners[key] = (reference.Source, entry.Name, reference.DownstreamApisPrefix);
+                throw new InvalidOperationException(other.Entry == entry.Name
+                    ? $"'{consumer.Name}' references the Entra ID applications '{other.Source.Name}' and '{reference.Source.Name}', and both declare permissions to an API that is configured as " +
+                      $"the DownstreamApis entry '{entry.Name}' under '{reference.DownstreamApisPrefix}', so their scopes would be mixed. Pass a different downstreamApisPrefix " +
+                      $"to WithReference for one of them."
+                    : $"'{consumer.Name}' would receive the DownstreamApis entries '{other.Entry}' (of '{other.Source.Name}') and '{entry.Name}' (of '{reference.Source.Name}') as the same " +
+                      $"environment variable, '{key}', so their scopes would be mixed. Rename a resource that references the API, give an API created with " +
+                      $"EntraIdApi.FromApplicationId a different display name, or pass a different downstreamApisPrefix to WithReference for one of the references.");
             }
         }
     }
@@ -771,7 +779,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource
     // so one that isn't configured can't be guessed: a made-up URI would only fail later, as a token error.
     internal ReferenceExpression CreateScopeValue(string scope) => ApplicationIdUriValue switch
     {
-        string uri => ReferenceExpression.Create($"{uri}/{scope}"),
+        string uri => ReferenceExpression.Create($"{EntraIdApi.CreateScope(uri, scope)}"),
         BicepOutputReference output => ReferenceExpression.Create($"{output}/{scope}"),
         _ => throw CreateMissingApplicationIdUriException()
     };

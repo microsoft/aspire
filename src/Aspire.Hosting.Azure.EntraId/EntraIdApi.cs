@@ -180,9 +180,16 @@ public sealed class EntraIdApi
             throw new ArgumentException($"'{resourceUri}' is not a valid application ID URI. {uriError}", nameof(resourceUri));
         }
 
-        // A scope is requested as "{resourceUri}/{scope}", so a trailing slash would produce "//".
-        return new(displayName, Guid.Parse(applicationId).ToString("D"), resourceUri.TrimEnd('/'), null, s_noPermissions, s_noPermissions, hasCatalog: false);
+        // Keep the URI as given: a trailing slash is part of the resource identifier, and tokens for it carry that audience.
+        // See https://learn.microsoft.com/entra/identity-platform/scopes-oidc#trailing-slash-and-default.
+        return new(displayName, Guid.Parse(applicationId).ToString("D"), resourceUri, null, s_noPermissions, s_noPermissions, hasCatalog: false);
     }
+
+    // A permission value is appended to the resource identifier: "https://graph.microsoft.com/User.Read". When the identifier ends
+    // with a slash that slash is the separator, as in "https://management.azure.com/user_impersonation". The ".default" scope is
+    // different: it always follows a slash, which gives "{identifier}//.default" for an identifier with a trailing slash.
+    internal static string CreateScope(string resourceUri, string scope) =>
+        resourceUri.EndsWith('/') && scope != ".default" ? $"{resourceUri}{scope}" : $"{resourceUri}/{scope}";
 
     internal EntraIdResolvedPermission Resolve(EntraIdApiPermission permission)
     {
@@ -237,6 +244,9 @@ public sealed class EntraIdApi
 /// Delegated permissions are scopes that the API exposes and the application uses on behalf of a signed-in user.
 /// Application permissions are app roles that the API defines and the application uses as itself. They are different
 /// permissions, even when they share a name, and each needs its own consent.
+/// For a permission that isn't in an API's built-in list, Aspire can't check that the name and the ID belong together. The declaration
+/// uses the ID, while a delegated consent grant names the permission, so a name that doesn't match the ID would grant a permission that
+/// was never declared. Take both from the API's service principal.
 /// </remarks>
 public sealed class EntraIdApiPermission
 {

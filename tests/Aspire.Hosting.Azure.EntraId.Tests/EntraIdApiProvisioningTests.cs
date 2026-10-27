@@ -929,14 +929,16 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         var permission = EntraIdApiPermission.Delegated("Read", Guid.NewGuid());
         var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
             .WithApiPermissions(first, permission)
-            .WithApiPermissions(second, permission);
+            .WithApiPermissions(second, permission, EntraIdApiPermission.Application("Read.All", Guid.NewGuid()));
         var project = builder.AddResource(new ProjectResource("web")).WithReference(web);
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
         Assert.Equal("api://my-api/Read", env["DownstreamApis__MyAPI__Scopes__0"]);
-        // A trailing slash on the URI would otherwise produce "//" in the scope.
+        // The trailing slash is part of the resource identifier. It separates a permission from the identifier, and ".default" follows
+        // another slash, as in "https://management.azure.com//.default".
         Assert.Equal("https://contoso.onmicrosoft.com/other/Read", env["DownstreamApis__OtherAPI__Scopes__0"]);
+        Assert.Equal("https://contoso.onmicrosoft.com/other//.default", env["DownstreamApis__OtherAPIAppOnly__Scopes__0"]);
     }
     [Fact]
     public async Task WithReference_NamesDownstreamApisAfterTheResourcesThatReferenceTheApi()
@@ -1257,6 +1259,70 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
             "the DownstreamApis entry 'apiservice' under 'DownstreamApis', so their scopes would be mixed. Pass a different downstreamApisPrefix to WithReference for one of them.",
             exception.Message);
         Assert.Equal(exception.Message, Assert.Throws<InvalidOperationException>(first.Resource.ValidateApiAccess).Message);
+    }
+
+    [Fact]
+    public async Task WithReference_RejectsReferencesWhoseEncodedPrefixesAreTheSame()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var (first, second) = AddTwoClientsOfOneApi(builder);
+
+        // A non-.NET resource receives upper snake case names, so the prefixes "A"/"B-C" and "A_B"/"C" differ as written but
+        // both produce A_B_C_APISERVICE_SCOPES_0.
+        var worker = builder.AddContainer("worker", "myimage")
+            .WithReference(first, "A", "B-C")
+            .WithReference(second, "A_B", "C");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(worker.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance));
+
+        Assert.Contains("downstreamApisPrefix", exception.Message);
+    }
+
+    private static IResourceBuilder<EntraIdApplicationResource> AddClientOfTwoApisNamedAfterTheirConsumers(IDistributedApplicationBuilder builder)
+    {
+        var firstApi = builder.AddExistingEntraApplication("first-api", TenantId, ClientId)
+            .WithApplicationIdUri("api://first")
+            .WithScope("read", "Read", scope => scope.Id = Guid.NewGuid());
+        var secondApi = builder.AddExistingEntraApplication("second-api", TenantId, ClientId)
+            .WithApplicationIdUri("api://second")
+            .WithScope("read", "Read", scope => scope.Id = Guid.NewGuid());
+
+        // The entries are named after the resources that reference the APIs. As configuration keys they are different, but as
+        // environment variables of a non-.NET resource they are both ORDERS_API.
+        builder.AddResource(new ProjectResource("orders-api")).WithReference(firstApi);
+        builder.AddResource(new ProjectResource("ordersApi")).WithReference(secondApi);
+        return builder.AddExistingEntraApplication("web", TenantId, ClientId)
+            .WithApiPermissions(firstApi, "read")
+            .WithApiPermissions(secondApi, "read");
+    }
+
+    [Fact]
+    public async Task WithReference_KeepsEntriesApartWhoseNamesOnlyDifferInCaseOrPunctuationForDotnetResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = AddClientOfTwoApisNamedAfterTheirConsumers(builder);
+        var frontend = builder.AddResource(new ProjectResource("frontend")).WithReference(web);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(frontend.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("api://first/read", env["DownstreamApis__orders-api__Scopes__0"]);
+        Assert.Equal("api://second/read", env["DownstreamApis__ordersApi__Scopes__0"]);
+    }
+
+    [Fact]
+    public async Task WithReference_RejectsEntriesWhoseEncodedNamesAreTheSameForNonDotnetResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = AddClientOfTwoApisNamedAfterTheirConsumers(builder);
+        var worker = builder.AddContainer("worker", "myimage").WithReference(web);
+
+        // The environment would otherwise be built from duplicate keys.
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(worker.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance));
+
+        Assert.Contains("'orders-api'", exception.Message);
+        Assert.Contains("'ordersApi'", exception.Message);
     }
 
     [Fact]

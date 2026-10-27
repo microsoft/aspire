@@ -11,10 +11,10 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 public sealed class AzureEntraIdStarterDeploymentTests(ITestOutputHelper output)
 {
     /// <summary>
-    /// Deploys the Aspire starter application with Entra added: a protected API and a web front end that is granted the API's
-    /// delegated scope. The sign-in flow can't be automated, so this verifies the registrations, the permission relationship
-    /// between them and the configuration that each deployed app receives. The publish snapshot test in
-    /// Aspire.Hosting.Azure.EntraId.Tests covers the same AppHost.
+    /// Deploys the Aspire starter application with Entra added: a protected API and a web front end that declares permission to the
+    /// API's delegated scope. The scope is declared, not granted: the scenario adds neither admin consent nor pre-authorization. The
+    /// sign-in flow can't be automated, so this verifies the registrations, the declared permission between them and the configuration
+    /// that each deployed app receives. The publish snapshot test in Aspire.Hosting.Azure.EntraId.Tests covers the same AppHost.
     /// </summary>
     [Fact]
     public Task DeployStarterWithEntraApiAndWebRegistrations() =>

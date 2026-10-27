@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREAZURE003 // The managed identity annotation is experimental.
 
 using System.Collections.Immutable;
-using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Microsoft.Extensions.DependencyInjection;
@@ -2071,7 +2070,7 @@ public static class EntraIdResourceExtensions
 
         // That section is a sibling of AzureAd, not part of it, so a .NET program's entries ignore the connection name.
         var environmentVariablePrefix = isDotnetProgram ? $"{downstreamApisPrefix}__" : $"{keyPrefix}{downstreamApisPrefix}_";
-        builder.Resource.Annotations.Add(new EntraIdReferenceAnnotation(entra, downstreamApisPrefix, environmentVariablePrefix));
+        builder.Resource.Annotations.Add(new EntraIdReferenceAnnotation(entra, downstreamApisPrefix, environmentVariablePrefix, isDotnetProgram));
 
         if (entra.ClientCredentials.OfType<EntraIdFederatedIdentityCredential>().Any(c => c.UsesConsumerIdentity))
         {
@@ -2188,7 +2187,7 @@ public static class EntraIdResourceExtensions
             if (!isDotnetProgram)
             {
                 environmentVariables = environmentVariables.ToDictionary(
-                    kvp => JsonNamingPolicy.SnakeCaseUpper.ConvertName(EnvironmentVariableNameEncoder.Encode(kvp.Key)),
+                    kvp => EntraIdReferenceAnnotation.ToEnvironmentVariableName(isDotnetProgram, kvp.Key),
                     kvp => kvp.Value);
             }
 

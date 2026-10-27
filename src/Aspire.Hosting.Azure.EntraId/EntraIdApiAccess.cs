@@ -95,7 +95,7 @@ internal sealed class EntraIdApiAccess
 
     private object CreateScopeValue(string scope) => Application is { } application
         ? application.CreateScopeValue(scope)
-        : $"{Api!.ResourceUri}/{scope}";
+        : EntraIdApi.CreateScope(Api!.ResourceUri, scope);
 }
 
 /// <summary>

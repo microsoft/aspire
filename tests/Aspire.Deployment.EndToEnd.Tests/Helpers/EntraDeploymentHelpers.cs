@@ -237,9 +237,23 @@ internal static class EntraDeploymentHelpers
 
     private static async Task CleanupDirectoryAsync(HttpClient client, TokenCredential credential, string[] applicationUrls)
     {
+        // These objects outlive the resource group, so a failure to delete one must not leave the others behind.
+        var failures = new List<Exception>();
         foreach (var applicationUrl in applicationUrls)
         {
-            await CleanupApplicationAsync(client, credential, applicationUrl);
+            try
+            {
+                await CleanupApplicationAsync(client, credential, applicationUrl);
+            }
+            catch (Exception ex)
+            {
+                failures.Add(ex);
+            }
+        }
+
+        if (failures.Count > 0)
+        {
+            throw new AggregateException("Entra directory cleanup failed.", failures);
         }
     }
 
