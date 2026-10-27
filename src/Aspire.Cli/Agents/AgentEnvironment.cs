@@ -4,7 +4,7 @@
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Identifies an agent environment (CLI/editor) that Aspire can configure during <c>aspire agent init</c>.
+/// Identifies agent runtime and editor surfaces for discovery and telemetry-hook configuration.
 /// </summary>
 [Flags]
 internal enum AgentEnvironment

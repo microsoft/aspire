@@ -20,7 +20,9 @@ internal static class ConsoleHelpers
         const int emojiTargetWidth = 3; // 2 for emoji and 1 trailing space
 
         var cellLength = EmojiWidth.GetCachedCellWidth(emoji.Name, console);
-        var padding = Math.Max(1, emojiTargetWidth - cellLength);
+        // Some terminals let the warning glyph extend into a single-space gutter.
+        var minimumPadding = emoji.Name == KnownEmojis.Warning.Name ? 2 : 1;
+        var padding = Math.Max(minimumPadding, emojiTargetWidth - cellLength);
         var spectreEmojiText = $":{emoji.Name}:";
 
         if (replaceEmoji)
@@ -60,4 +62,3 @@ internal static class ConsoleHelpers
         return grid;
     }
 }
-

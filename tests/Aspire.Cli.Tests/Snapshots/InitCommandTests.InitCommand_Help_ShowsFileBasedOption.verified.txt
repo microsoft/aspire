@@ -11,7 +11,8 @@ Options:
   --suppress-agent-init                                                  Suppress AI agent environment configuration after project creation
   --agents <agents>                                                      Comma-separated agent IDs (copilot,claude,opencode), 'all', or 'none'. Defaults to detected agents, or Copilot when none are detected
   --scope <project|global>                                               Configuration and skill scope: project or global (default: project)
-  --skills <skills>                                                      Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include playwright-cli,dotnet-inspect. Use 'all' or 'none'
+  --skills <skills>                                                      Comma-separated skill/tool IDs (aspire,playwright-cli,dotnet-inspect), 'all', or 'none' (default: aspire)
+  --aspire-source <remote|embedded>                                      Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files) [default: remote]
   -?, -h, --help                                                         Show help and usage information
   -l, --log-level <Critical|Debug|Error|Information|None|Trace|Warning>  Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)
   --non-interactive                                                      Run the command in non-interactive mode, disabling all interactive prompts and spinners

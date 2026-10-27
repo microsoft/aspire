@@ -4,8 +4,11 @@
 using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.ClaudeCode;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
@@ -87,7 +90,6 @@ internal static class CliTestHelper
 
         var configBuilder = new ConfigurationBuilder();
         services.AddSingleton<ConfigSourceService>();
-        services.AddSingleton<IConfigSourceGitClient, TestConfigSourceGitClient>();
         services.AddSingleton<IInternalMicrosoftDetector, TestConfigSourceDetector>();
 
         var configurationValues = new Dictionary<string, string?>();
@@ -188,12 +190,16 @@ internal static class CliTestHelper
         services.AddSingleton(options.AuxiliaryBackchannelMonitorFactory);
         services.AddSingleton(options.AgentEnvironmentDetectorFactory);
         services.AddSingleton(options.GitRepositoryFactory);
-        services.AddSingleton(options.GitRunnerFactory);
+        services.AddSingleton<IGitCommandRunner, GitCommandRunner>();
+        services.AddSingleton(options.GitClientFactory);
         services.AddSingleton(options.NpmRunnerFactory);
         services.AddSingleton(options.NpmProvenanceCheckerFactory);
         services.AddSingleton(options.AspireSkillsInstallerFactory);
         services.AddSingleton(options.PlaywrightCliRunnerFactory);
         services.AddSingleton<PlaywrightCliInstaller>();
+        services.AddSingleton<IAgentClient, CopilotAgentClient>();
+        services.AddSingleton<IAgentClient, ClaudeCodeAgentClient>();
+        services.AddSingleton<IAgentClient, OpenCodeAgentClient>();
         services.AddSingleton<ITelemetryHookInstaller, TelemetryHookInstaller>();
         services.AddSingleton(options.TelemetryHookConfiguratorFactory);
         services.AddSingleton(options.ScaffoldingServiceFactory);
@@ -678,7 +684,7 @@ internal sealed class CliServiceCollectionTestOptions
 
     public Func<IServiceProvider, IAgentEnvironmentDetector> AgentEnvironmentDetectorFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
-        return new AgentEnvironmentDetector([]);
+        return new TestAgentEnvironmentDetector();
     };
 
     public Func<IServiceProvider, IGitRepository> GitRepositoryFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -689,8 +695,7 @@ internal sealed class CliServiceCollectionTestOptions
         return new GitRepository(executionContext, serviceProvider.GetRequiredService<IEnvironment>(), logger, profilingTelemetry);
     };
 
-    public Func<IServiceProvider, IGitRunner> GitRunnerFactory { get; set; } = serviceProvider =>
-        ActivatorUtilities.CreateInstance<GitRunner>(serviceProvider);
+    public Func<IServiceProvider, IGitClient> GitClientFactory { get; set; } = _ => new TestConfigSourceRepository();
 
     public Func<IServiceProvider, INpmRunner> NpmRunnerFactory { get; set; } = _ => new FakeNpmRunner();
 
