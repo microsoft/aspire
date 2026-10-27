@@ -69,7 +69,8 @@ internal sealed record GoDeclaration
 /// <para>
 /// Only top-level declarations are recognized, and only the exported ones, except that methods are
 /// reported with the name of their receiver even when the receiver type is unexported. Callers filter
-/// on <see cref="GoDeclaration.Owner"/>.
+/// on <see cref="GoDeclaration.Owner"/>. <see cref="ReadTypeDeclaration"/> reads the one unexported type
+/// that a caller names.
 /// </para>
 /// </remarks>
 internal static class GoDeclarationScanner
@@ -152,6 +153,55 @@ internal static class GoDeclarationScanner
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Returns the signature-only declaration of a top-level type: no doc comment, and the body of a
+    /// struct or interface kept. The type does not have to be exported.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Scan"/> skips unexported types, but some of them are part of what an exported type
+    /// promises. A declaration set that mentions such a type has to declare it too, without documenting it
+    /// as an item of its own.
+    /// </remarks>
+    /// <param name="source">The Go source.</param>
+    /// <param name="typeName">The name of a type that is not generic.</param>
+    /// <exception cref="InvalidOperationException">The source declares no such type.</exception>
+    public static string ReadTypeDeclaration(string source, string typeName)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrEmpty(typeName);
+
+        var lines = source.ReplaceLineEndings("\n").Split('\n');
+        var headerPrefix = $"type {typeName} ";
+        var start = Array.FindIndex(lines, line => line.StartsWith(headerPrefix, StringComparison.Ordinal));
+        if (start < 0)
+        {
+            throw new InvalidOperationException($"The Go source declares no type {typeName}.");
+        }
+
+        var declaration = new List<string> { CollapseWhitespace(TrimTrailingComment(lines[start])) };
+
+        // A one-line type, such as `type handleType = string`, has no body.
+        if (lines[start].EndsWith('{'))
+        {
+            for (var i = start + 1; i < lines.Length; i++)
+            {
+                if (lines[i] == "}")
+                {
+                    declaration.Add("}");
+                    break;
+                }
+
+                var bodyLine = lines[i].Trim();
+                if (bodyLine.Length > 0 && !bodyLine.StartsWith("//", StringComparison.Ordinal))
+                {
+                    declaration.Add('\t' + CollapseBodyLine(bodyLine));
+                }
+            }
+        }
+
+        return string.Join('\n', declaration);
     }
 
     // Examples of the headers handled here:
@@ -406,6 +456,20 @@ internal static class GoDeclarationScanner
     {
         var parts = text.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
         return string.Join(' ', parts);
+    }
+
+    // Examples of the body lines handled here:
+    //   HandleID string     `json:"$handle"`
+    //   Err()      error // Reports the deferred failure.
+    // The struct tag is kept as written because collapsing whitespace would change its value.
+    private static string CollapseBodyLine(string line)
+    {
+        var tagStart = line.IndexOf('`');
+        var tagEnd = line.LastIndexOf('`');
+
+        return tagStart >= 0 && tagEnd > tagStart
+            ? $"{CollapseWhitespace(line[..tagStart])} {line[tagStart..(tagEnd + 1)]}"
+            : CollapseWhitespace(TrimTrailingComment(line));
     }
 
     private static string StripCommentMarker(string line)

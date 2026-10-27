@@ -109,7 +109,8 @@ internal sealed partial class AtsGoCodeGenerator
 
     private static void ProjectRuntime(ApiExportScope scope)
     {
-        var declarations = GoDeclarationScanner.Scan(GetEmbeddedResource("transport.go"), includeBodyDocs: false)
+        var transport = GetEmbeddedResource("transport.go");
+        var declarations = GoDeclarationScanner.Scan(transport, includeBodyDocs: false)
             .Concat(GoDeclarationScanner.Scan(GetEmbeddedResource("base.go"), includeBodyDocs: false))
             .ToList();
 
@@ -119,6 +120,14 @@ internal sealed partial class AtsGoCodeGenerator
                 declaration is { Kind: GoDeclarationKind.Method, Name: "Err", Owner: "handleWrapperBase" })
             ?? throw new InvalidOperationException("The Go runtime declares no handleWrapperBase.Err method.");
 
+        // The scan skips unexported types, but every handle interface embeds handleReference and signatures
+        // can refer to it, so the fragment has to declare it and the types it refers to: getHandle returns
+        // a *handle, whose TypeID is a handleType. They are read from the source so that they cannot drift,
+        // and they are not items because they are not part of the documented surface.
+        var unexportedTypes = new[] { "handleReference", "handle", "handleType" }
+            .Select(name => GoDeclarationScanner.ReadTypeDeclaration(transport, name))
+            .ToList();
+
         var membersByOwner = declarations
             .Where(declaration => declaration.Kind is GoDeclarationKind.Method or GoDeclarationKind.Field or GoDeclarationKind.Constant)
             .ToLookup(declaration => declaration.Owner, StringComparer.Ordinal);
@@ -127,7 +136,7 @@ internal sealed partial class AtsGoCodeGenerator
         scope.AddDeclaration(new GoApiDeclaration
         {
             Id = ApiExportRuntimeDeclarationId,
-            Content = RenderRuntimeFragment(declarations, membersByOwner),
+            Content = RenderRuntimeFragment(declarations, membersByOwner, unexportedTypes),
             OwningAssemblyName = ApiExportRuntimeOwner
         });
 
@@ -173,7 +182,8 @@ internal sealed partial class AtsGoCodeGenerator
 
     private static string RenderRuntimeFragment(
         IReadOnlyList<GoDeclaration> declarations,
-        ILookup<string, GoDeclaration> membersByOwner)
+        ILookup<string, GoDeclaration> membersByOwner,
+        IReadOnlyList<string> unexportedTypes)
     {
         var blocks = new List<string>();
         foreach (var declaration in declarations)
@@ -187,6 +197,8 @@ internal sealed partial class AtsGoCodeGenerator
                 blocks.Add(declaration.Signature);
             }
         }
+
+        blocks.AddRange(unexportedTypes);
 
         return string.Join("\n\n", blocks);
     }
@@ -827,13 +839,30 @@ internal sealed partial class AtsGoCodeGenerator
                 _ => member with
                 {
                     ReturnType = GoDeclarationScanner.GetReturnType(declaration.Signature),
-                    ErrorModel = methodErrorModel,
+                    ErrorModel = methodErrorModel ?? InferErrorModel(declaration),
                     IsSynthesized = true
                 }
             });
         }
 
         return members;
+    }
+
+    // The hand-written runtime has no ATS capability to take the model from, so it follows from the results
+    // of the method: `error` and `(T, error)` hand the failure to the caller. Err is the exception because
+    // it reports a failure that a handle deferred; as on a handle interface, calling it cannot fail.
+    private static GoApiErrorModel InferErrorModel(GoDeclaration method)
+    {
+        var results = GoDeclarationScanner.GetReturnType(method.Signature);
+
+        if (results is null || method.Signature == "Err() error")
+        {
+            return GoApiErrorModel.None;
+        }
+
+        return results == "error" || results.EndsWith(" error)", StringComparison.Ordinal)
+            ? GoApiErrorModel.Returned
+            : GoApiErrorModel.None;
     }
 
     private static string RenderFieldDeclaration(GoDeclaration field)

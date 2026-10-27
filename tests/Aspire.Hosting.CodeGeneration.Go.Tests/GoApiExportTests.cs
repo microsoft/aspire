@@ -508,6 +508,82 @@ public class GoApiExportTests
         Assert.Equal(expected, GoDeclarationScanner.GetReturnType(signature));
     }
 
+    [Fact]
+    public void ReadTypeDeclaration_KeepsTheShapeOfAnUnexportedType()
+    {
+        var source = string.Join(
+            '\n',
+            "// handleType is the ATS type ID carried on a handle envelope.",
+            "type handleType = string",
+            "",
+            "// handle represents a reference to a server-side object.",
+            "type handle struct {",
+            "\tHandleID string     `json:\"$handle\"`",
+            "\t// TypeID is the ATS type ID.",
+            "\tTypeID   handleType `json:\"$type\"` // Not part of the tag.",
+            "}",
+            "",
+            "type handleReference interface {",
+            "\tgetHandle() *handle",
+            "\tErr()       error // Reports the deferred failure.",
+            "}",
+            "",
+            "type handleSource interface { handleReference }");
+
+        Assert.Equal("type handleType = string", GoDeclarationScanner.ReadTypeDeclaration(source, "handleType"));
+        Assert.Equal(
+            string.Join('\n', "type handle struct {", "\tHandleID string `json:\"$handle\"`", "\tTypeID handleType `json:\"$type\"`", "}"),
+            GoDeclarationScanner.ReadTypeDeclaration(source, "handle"));
+        Assert.Equal(
+            string.Join('\n', "type handleReference interface {", "\tgetHandle() *handle", "\tErr() error", "}"),
+            GoDeclarationScanner.ReadTypeDeclaration(source, "handleReference"));
+        Assert.Equal("type handleSource interface { handleReference }", GoDeclarationScanner.ReadTypeDeclaration(source, "handleSource"));
+    }
+
+    [Fact]
+    public void ReadTypeDeclaration_OfATypeTheSourceDoesNotDeclare_Throws()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => GoDeclarationScanner.ReadTypeDeclaration("type handle struct {\n}", "handleReference"));
+
+        Assert.Contains("handleReference", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApiExport_WithHosting_DeclaresTheTypesItsFragmentsEmbed()
+    {
+        AssertDeclarationsAreSelfContained(s_everything.Value);
+    }
+
+    [Fact]
+    public void ApiExport_ForPackage_DeclaresTheTypesItsFragmentsEmbed()
+    {
+        AssertDeclarationsAreSelfContained(BuildModel(TestTypesAssemblyName));
+    }
+
+    [Fact]
+    public void ApiExport_WithHosting_ReportsHowRuntimeMethodsFail()
+    {
+        var items = s_everything.Value.Modules.Single().Items;
+        var methods = items
+            .Where(item => item.Kind == GoApiItemKind.Type)
+            .SelectMany(item => item.Members)
+            .Where(member => member.Kind == GoApiMemberKind.Method)
+            .ToList();
+
+        Assert.NotEmpty(methods);
+        Assert.All(methods, method => Assert.True(method.ErrorModel is not null, $"{method.Id} has no error model."));
+
+        Assert.Equal(GoApiErrorModel.Returned, FindTypeMember(items, "List", "Count").ErrorModel);
+        Assert.Equal(GoApiErrorModel.Returned, FindTypeMember(items, "List", "Add").ErrorModel);
+        Assert.Equal(GoApiErrorModel.Returned, FindTypeMember(items, "Dict", "Get").ErrorModel);
+        Assert.Equal(GoApiErrorModel.Returned, FindTypeMember(items, "ReferenceExpression", "GetValue").ErrorModel);
+        Assert.Equal(GoApiErrorModel.None, FindTypeMember(items, "CancellationToken", "IsCancelled").ErrorModel);
+
+        // Err reports a failure that a handle deferred, so, as on a handle interface, calling it cannot fail.
+        Assert.Equal(GoApiErrorModel.None, FindTypeMember(items, "ReferenceExpression", "Err").ErrorModel);
+    }
+
     private static AtsContext CreateContext()
         => AtsCapabilityScanner.ScanAssemblies([typeof(DistributedApplication).Assembly, typeof(TestRedisResource).Assembly]).ToAtsContext();
 
@@ -545,6 +621,47 @@ public class GoApiExportTests
         var item = Assert.Single(items, item => item.Id == $"interface:{interfaceName}");
 
         return Assert.Single(item.Members, member => member.Name == memberName);
+    }
+
+    private static GoApiMember FindTypeMember(IReadOnlyList<GoApiItem> items, string typeName, string memberName)
+    {
+        var item = Assert.Single(items, item => item.Id == $"type:{typeName}");
+
+        return Assert.Single(item.Members, member => member.Name == memberName);
+    }
+
+    // The declarations are Go source, so a type that one of them embeds has to be declared by one of them.
+    // The generator embeds a type as a bare name on its own line:
+    //   type Redis interface {
+    //       handleReference
+    //       Err() error
+    //   }
+    // and declares a type with a header at the start of a line, where the name ends at a space or at a
+    // type parameter list: `type handle struct {`, `type handleType = string`, `type List[T any] struct {`.
+    private static void AssertDeclarationsAreSelfContained(GoApiModel model)
+    {
+        static bool IsIdentifierCharacter(char character) => char.IsLetterOrDigit(character) || character == '_';
+
+        var lines = model.Declarations
+            .SelectMany(declaration => declaration.Content.ReplaceLineEndings("\n").Split('\n'))
+            .ToList();
+
+        var declared = lines
+            .Where(line => line.StartsWith("type ", StringComparison.Ordinal))
+            .Select(line => new string(line["type ".Length..].TakeWhile(IsIdentifierCharacter).ToArray()))
+            .ToHashSet(StringComparer.Ordinal);
+        var embedded = lines
+            .Where(line => line.Length > 1 && line[0] == '\t' && line.Skip(1).All(IsIdentifierCharacter))
+            .Select(line => line[1..])
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Every handle interface embeds handleReference, so an export that embeds nothing has not been read.
+        Assert.Contains("handleReference", embedded);
+        Assert.Empty(embedded.Except(declared).Order(StringComparer.Ordinal));
+
+        // handleReference.getHandle returns a *handle, whose TypeID is a handleType.
+        Assert.Contains("handle", declared);
+        Assert.Contains("handleType", declared);
     }
 
     private static void AssertSameNames(IEnumerable<string> generated, IEnumerable<string> exported)
