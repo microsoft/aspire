@@ -76,11 +76,13 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         var time = new FakeTimeProvider();
         var commands = new TestGitCommandRunner
         {
-            RunCallback = (_, token) =>
+            RunCallback = (command, token) =>
             {
                 time.Advance(TimeSpan.FromSeconds(10));
                 token.ThrowIfCancellationRequested();
-                return Task.FromResult(TestGitCommandRunner.DefaultCommitSha);
+                return Task.FromResult(command.Arguments[0] == "ls-remote"
+                    ? $"{TestGitCommandRunner.DefaultCommitSha}\tHEAD\n"
+                    : TestGitCommandRunner.DefaultCommitSha);
             }
         };
         var client = new GitClient(commands);
@@ -102,11 +104,15 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task SharedGitCancellation_DisplaysPartialOutputOnlyForTimeout(bool check, bool userCancellation)
+    [InlineData(false, false, "fetch")]
+    [InlineData(false, true, "fetch")]
+    [InlineData(true, false, "fetch")]
+    [InlineData(true, true, "fetch")]
+    [InlineData(false, false, "ls-remote")]
+    [InlineData(false, true, "ls-remote")]
+    [InlineData(true, false, "ls-remote")]
+    [InlineData(true, true, "ls-remote")]
+    public async Task SharedGitCancellation_DisplaysPartialOutputOnlyForTimeout(bool check, bool userCancellation, string cancelledCommand)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
@@ -115,7 +121,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         {
             RunCallback = (command, token) =>
             {
-                if (command.Arguments[1] == "fetch")
+                if (command.Arguments[0] == cancelledCommand || command.Arguments[1] == cancelledCommand)
                 {
                     if (userCancellation)
                     {
@@ -125,9 +131,11 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
                     {
                         time.Advance(TimeSpan.FromSeconds(30));
                     }
-                    throw new GitProcessCanceledException("partial-private-fetch-diagnostic", token);
+                    throw new GitProcessCanceledException("partial-private-remote-diagnostic", token);
                 }
-                return Task.FromResult(string.Empty);
+                return Task.FromResult(command.Arguments[0] == "ls-remote"
+                    ? $"{TestGitCommandRunner.DefaultCommitSha}\tHEAD\n"
+                    : string.Empty);
             }
         };
         var client = new GitClient(commands);
@@ -145,13 +153,13 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         {
             var interaction = await CheckFailureAsync(workspace, client, source, time, cancellation.Token);
             Assert.Equal(string.Format(ConfigSourceStrings.CheckFailed, ConfigSourceStrings.GitTimeout), Assert.Single(interaction.DisplayedMessages).Message);
-            Assert.Equal("partial-private-fetch-diagnostic", Assert.Single(interaction.DisplayedRawText).Text);
+            Assert.Equal("partial-private-remote-diagnostic", Assert.Single(interaction.DisplayedRawText).Text);
         }
         else
         {
             var error = await Assert.ThrowsAsync<ConfigSourceException>(RunAsync);
             Assert.Equal(ConfigSourceStrings.GitTimeout, error.Message);
-            Assert.Equal("partial-private-fetch-diagnostic", error.GitOutput);
+            Assert.Equal("partial-private-remote-diagnostic", error.GitOutput);
         }
     }
 
@@ -315,6 +323,25 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         {
             Assert.Equal("never", startInfo.Environment["GCM_INTERACTIVE"]);
         }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CreateStartInfo_ReferenceResolutionCapturesRefsWithoutHidingInteractivePrompts(bool interactive)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var runner = CreateRunner(interactive
+            ? TestHelpers.CreateInteractiveHostEnvironment()
+            : TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var startInfo = runner.CreateStartInfo(workspace.Path, ["ls-remote", "--", "repository", "HEAD"], GitCommandMode.Interactive);
+
+        Assert.False(startInfo.RedirectStandardInput);
+        Assert.True(startInfo.RedirectStandardOutput);
+        Assert.Equal(!interactive, startInfo.RedirectStandardError);
+        Assert.Equal(!interactive, startInfo.StandardErrorEncoding is not null);
+        Assert.Equal(interactive ? "1" : "0", startInfo.Environment["GIT_TERMINAL_PROMPT"]);
     }
 
     [Theory]
@@ -578,8 +605,11 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
 
         Assert.NotEqual(original.Version, changed.Version);
         Assert.Equal(original, pinned);
-        Assert.Equal(Enumerable.Repeat(new[] { "init", "fetch", "rev-parse", "ls-tree" }, 4).SelectMany(sequence => sequence),
-            commands.Commands.Select(command => command.Arguments[0] == "init" ? "init" : command.Arguments[1]));
+        Assert.Equal(
+            Enumerable.Repeat(new[] { "ls-remote", "init", "fetch", "rev-parse", "ls-tree" }, 3).SelectMany(sequence => sequence)
+                .Concat(["init", "fetch", "rev-parse", "ls-tree"]),
+            commands.Commands.Select(command => command.Arguments[0].StartsWith("--git-dir=", StringComparison.Ordinal)
+                ? command.Arguments[1] : command.Arguments[0]));
     }
 
     [Theory]
@@ -621,10 +651,79 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         Assert.Equal(ConfigSourceStrings.MissingFile, error.Message);
     }
 
-    private async Task CreateRepositoryAsync(TemporaryWorkspace workspace, string path, string json)
+    [Theory]
+    [InlineData("sha1", "default", false)]
+    [InlineData("sha1", "branch", false)]
+    [InlineData("sha1", "commit", false)]
+    [InlineData("sha256", "default", false)]
+    [InlineData("sha256", "branch", false)]
+    [InlineData("sha256", "commit", false)]
+    [InlineData("sha1", "branch", true)]
+    [InlineData("sha256", "default", true)]
+    public async Task AcquireAndCheck_MatchRepositoryObjectFormat(string objectFormat, string selector, bool interactive)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, """{"custom":"original"}""", objectFormat);
+        var originalCommit = (await RunGitOutputAsync(workspace.Path, ["rev-parse", "HEAD"])).Trim();
+        var originalVersion = (await RunGitOutputAsync(workspace.Path, ["rev-parse", $"HEAD:{AspireConfigFile.FileName}"])).Trim();
+        var branch = (await RunGitOutputAsync(workspace.Path, ["branch", "--show-current"])).Trim();
+        var source = new ConfigSource
+        {
+            Repository = workspace.Path,
+            Path = AspireConfigFile.FileName,
+            Ref = selector switch
+            {
+                "branch" => branch,
+                "commit" => originalCommit,
+                _ => null
+            }
+        };
+        var runner = CreateRunner(interactive
+            ? TestHelpers.CreateInteractiveHostEnvironment()
+            : TestHelpers.CreateNonInteractiveHostEnvironment());
+        var commands = new TestGitCommandRunner
+        {
+            RunCallback = (command, cancellationToken) => runner.RunAsync(command.WorkingDirectory, command.Arguments, command.Mode, cancellationToken)
+        };
+        var client = new GitClient(commands);
+        // SHA-256 object names are longer; keep this fixture's cache below Windows MAX_PATH.
+        using var service = TestConfigSourceServices.Create(
+            workspace.CreateExecutionContext(aspireHomeDirectory: workspace.CreateDirectory("h")), git: client);
+        var token = TestContext.Current.CancellationToken;
+
+        var acquired = await service.AcquireAsync(source, force: true, token);
+        var checkedVersion = await client.CheckAsync(source, workspace.CreateDirectory("first-check").FullName, token);
+
+        Assert.Equal(originalCommit, acquired.Metadata.Commit);
+        Assert.Equal(originalVersion, acquired.Metadata.Version);
+        Assert.Equal("original", acquired.Configuration["custom"]!.GetValue<string>());
+        Assert.Equal((originalCommit, originalVersion), checkedVersion);
+        Assert.Equal(objectFormat == "sha256" ? 64 : 40, acquired.Metadata.Version.Length);
+
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName), """{"custom":"updated"}""", token);
+        await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-am", "Update configuration");
+        var expectedCommit = selector == "commit" ? originalCommit : (await RunGitOutputAsync(workspace.Path, ["rev-parse", "HEAD"])).Trim();
+        var expectedVersion = selector == "commit" ? originalVersion : (await RunGitOutputAsync(workspace.Path, ["rev-parse", $"HEAD:{AspireConfigFile.FileName}"])).Trim();
+
+        var refreshed = await service.AcquireAsync(source, force: true, token);
+        var updatedCheck = await client.CheckAsync(source, workspace.CreateDirectory("updated-check").FullName, token);
+
+        Assert.Equal(expectedCommit, refreshed.Metadata.Commit);
+        Assert.Equal(expectedVersion, refreshed.Metadata.Version);
+        Assert.Equal(selector == "commit" ? "original" : "updated", refreshed.Configuration["custom"]!.GetValue<string>());
+        Assert.Equal((expectedCommit, expectedVersion), updatedCheck);
+        Assert.Equal(Enumerable.Repeat($"--object-format={objectFormat}", 4),
+            commands.Commands.Where(command => command.Arguments[0] == "init").Select(command => command.Arguments[2]));
+        GitCommandMode[] expectedResolutionModes = selector == "commit" ? []
+            : [GitCommandMode.Interactive, GitCommandMode.Unattended, GitCommandMode.Interactive, GitCommandMode.Unattended];
+        Assert.Equal(expectedResolutionModes,
+            commands.Commands.Where(command => command.Arguments[0] == "ls-remote").Select(command => command.Mode));
+    }
+
+    private async Task CreateRepositoryAsync(TemporaryWorkspace workspace, string path, string json, string objectFormat = "sha1")
     {
         await GitTestHelper.EnsureGitAvailableAsync(outputHelper);
-        await workspace.InitializeGitAsync();
+        await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "init", $"--object-format={objectFormat}");
         await GitTestHelper.ConfigureGitIdentityAsync(workspace.Path, outputHelper);
         var configPath = Path.Combine(workspace.Path, path.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);

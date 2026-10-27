@@ -34,7 +34,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
         var startInfo = CreateStartInfo(workingDirectory.FullName, arguments, mode);
         var command = arguments[0].StartsWith("--git-dir=", StringComparison.Ordinal) ? arguments[1] : arguments[0];
         using var scope = logger.BeginScope("Git {Operation} ({OperationId})", command, Guid.NewGuid());
-        return await RunProcessAsync(startInfo, captureCancellationOutput: command == "fetch" && mode != GitCommandMode.Captured && startInfo.RedirectStandardOutput,
+        return await RunProcessAsync(startInfo, captureCancellationOutput: command is "fetch" or "ls-remote" && mode != GitCommandMode.Captured && startInfo.RedirectStandardOutput,
             mode, cancellationToken);
     }
 
@@ -43,14 +43,17 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
         var interactive = mode == GitCommandMode.Interactive && hostEnvironment.SupportsInteractiveInput;
         var command = arguments[0].StartsWith("--git-dir=", StringComparison.Ordinal) ? arguments[1] : arguments[0];
         var interactiveFetch = command == "fetch" && interactive;
+        // Ref resolution needs stdout for object IDs, but authentication instructions on
+        // stderr must remain visible before an interactive credential prompt completes.
+        var interactiveRemote = interactive && command is "fetch" or "ls-remote";
         var startInfo = new ProcessStartInfo("git", ["--literal-pathspecs", .. arguments])
         {
             WorkingDirectory = directory,
             // Fetch prompts need not end in a newline, and Git must control password echo.
             RedirectStandardOutput = !interactiveFetch,
-            RedirectStandardError = !interactiveFetch,
+            RedirectStandardError = !interactiveRemote,
             StandardOutputEncoding = interactiveFetch ? null : Encoding.UTF8,
-            StandardErrorEncoding = interactiveFetch ? null : Encoding.UTF8,
+            StandardErrorEncoding = interactiveRemote ? null : Encoding.UTF8,
             CreateNoWindow = !interactive
         };
         startInfo.Environment["GIT_TERMINAL_PROMPT"] = interactive ? "1" : "0";
@@ -105,7 +108,9 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
                     return new GitOutput(string.Empty, string.Empty);
                 }
                 var stdout = ReadOutputAsync(process.StandardOutput, token);
-                var stderr = ReadOutputAsync(process.StandardError, token);
+                var stderr = startInfo.RedirectStandardError
+                    ? ReadOutputAsync(process.StandardError, token)
+                    : Task.FromResult(string.Empty);
                 await Task.WhenAll(stdout, stderr);
                 logger.LogDebug("Git process {ProcessId} output drained after {Elapsed}.", process.Id, stopwatch.Elapsed);
                 return new GitOutput(await stdout, await stderr);

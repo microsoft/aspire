@@ -28,7 +28,7 @@ public class GitClientTests(ITestOutputHelper outputHelper)
         };
         var client = new GitClient(commands);
 
-        var resolved = await client.ResolveReferenceAsync("-repository with spaces", reference, workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
+        var resolved = await client.ResolveReferenceAsync("-repository with spaces", reference, workspace.WorkspaceRoot, GitCommandMode.Captured, TestContext.Current.CancellationToken);
 
         Assert.Equal(commitSha, resolved);
         var command = Assert.Single(commands.Commands);
@@ -52,7 +52,26 @@ public class GitClientTests(ITestOutputHelper outputHelper)
         var client = new GitClient(commands);
 
         Assert.Equal(TestGitCommandRunner.DefaultCommitSha,
-            await client.ResolveReferenceAsync("repository", "same", workspace.WorkspaceRoot, TestContext.Current.CancellationToken));
+            await client.ResolveReferenceAsync("repository", "same", workspace.WorkspaceRoot, GitCommandMode.Captured, TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData(nameof(GitCommandMode.Captured), 40)]
+    [InlineData(nameof(GitCommandMode.Interactive), 64)]
+    [InlineData(nameof(GitCommandMode.Unattended), 64)]
+    public async Task ResolveReferenceAsync_PreservesInteractionModeAndObjectIdLength(string mode, int length)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var commit = new string('a', length);
+        var commands = new TestGitCommandRunner { Output = $"{commit}\trefs/heads/main\n" };
+        var client = new GitClient(commands);
+        var interactionMode = Enum.Parse<GitCommandMode>(mode);
+
+        var resolved = await client.ResolveReferenceAsync("repository", "refs/heads/main", workspace.WorkspaceRoot,
+            interactionMode, TestContext.Current.CancellationToken);
+
+        Assert.Equal(commit, resolved);
+        Assert.Equal(interactionMode, Assert.Single(commands.Commands).Mode);
     }
 
     [Theory]
@@ -66,7 +85,7 @@ public class GitClientTests(ITestOutputHelper outputHelper)
         var client = new GitClient(commands);
 
         var exception = await Assert.ThrowsAsync<GitReferenceException>(() =>
-            client.ResolveReferenceAsync("repository", "missing", workspace.WorkspaceRoot, TestContext.Current.CancellationToken));
+            client.ResolveReferenceAsync("repository", "missing", workspace.WorkspaceRoot, GitCommandMode.Captured, TestContext.Current.CancellationToken));
 
         Assert.Equal("missing", exception.Reference);
     }
@@ -80,7 +99,7 @@ public class GitClientTests(ITestOutputHelper outputHelper)
         var commands = new TestGitCommandRunner();
         var client = new GitClient(commands);
 
-        var resolved = await client.ResolveReferenceAsync("repository", new string('A', length), workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
+        var resolved = await client.ResolveReferenceAsync("repository", new string('A', length), workspace.WorkspaceRoot, GitCommandMode.Captured, TestContext.Current.CancellationToken);
 
         Assert.Equal(new string('a', length), resolved);
         Assert.Empty(commands.Commands);

@@ -630,8 +630,23 @@ internal sealed class ConfigSourceService(
     private async Task<(GitRepositoryLocation Directory, string Commit, string Version)> FetchVersionAsync(
         ConfigSource source, string directory, bool allowInteractive, CancellationToken cancellationToken)
     {
+        var workingDirectory = new DirectoryInfo(directory);
+        var mode = allowInteractive ? GitCommandMode.Interactive : GitCommandMode.Unattended;
+        string resolvedCommit;
+        try
+        {
+            resolvedCommit = await git.ResolveReferenceAsync(source.Repository, source.GetGitRef(), workingDirectory, mode, cancellationToken);
+        }
+        catch (GitReferenceException)
+        {
+            throw new ConfigSourceException(ConfigSourceStrings.RepositoryUnavailable);
+        }
+        // Git cannot fetch between SHA-1 and SHA-256 repositories. Resolve the selector
+        // before initialization so branch/default selectors also choose the source format.
+        // https://git-scm.com/docs/git-init#Documentation/git-init.txt---object-formatltformatgt
         var repositoryDirectory = new GitRepositoryLocation(new DirectoryInfo(Path.Combine(directory, "repository.git")), IsBare: true);
-        await git.InitializeAsync(new DirectoryInfo(directory), repositoryDirectory, objectFormat: null, GitCommandMode.Interactive, cancellationToken);
+        await git.InitializeAsync(workingDirectory, repositoryDirectory,
+            resolvedCommit.Length == 64 ? "sha256" : "sha1", GitCommandMode.Interactive, cancellationToken);
         // Fetch accepts both a fully qualified branch ref and a full commit ID. Unlike
         // clone --branch, this also acquires commits outside the default branch's shallow history.
         // https://git-scm.com/docs/git-fetch

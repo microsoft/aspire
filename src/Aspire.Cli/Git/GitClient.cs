@@ -10,7 +10,7 @@ internal sealed class GitClient(IGitCommandRunner commands) : IGitClient
     internal static bool IsCommitSha(string value) =>
         value.Length is 40 or 64 && value.All(char.IsAsciiHexDigit);
 
-    public async Task<string> ResolveReferenceAsync(string repository, string? reference, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    public async Task<string> ResolveReferenceAsync(string repository, string? reference, DirectoryInfo workingDirectory, GitCommandMode mode, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (reference is not null && IsCommitSha(reference))
@@ -23,7 +23,7 @@ internal sealed class GitClient(IGitCommandRunner commands) : IGitClient
             ? [$"{requestedRef}^{{}}", requestedRef]
             : [$"refs/heads/{requestedRef}", $"refs/tags/{requestedRef}^{{}}", $"refs/tags/{requestedRef}"];
         var output = await commands.RunAsync(workingDirectory, ["ls-remote", "--", repository, .. candidates],
-            GitCommandMode.Captured, cancellationToken);
+            mode, cancellationToken);
 
         // git ls-remote emits "<object SHA>\t<ref>", including peeled annotated tags:
         //   abc...123\trefs/tags/v1

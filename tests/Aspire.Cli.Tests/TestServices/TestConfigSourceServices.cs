@@ -142,8 +142,8 @@ internal sealed class TestConfigSourceRepository : IGitClient
     public Task<string> ReadBlobAsync(GitRepositoryLocation repository, string objectId, GitCommandMode mode, CancellationToken cancellationToken) =>
         Task.FromResult(_repositories[repository.Directory.FullName].Content);
 
-    public Task<string> ResolveReferenceAsync(string repository, string? reference, DirectoryInfo workingDirectory, CancellationToken cancellationToken) =>
-        throw new InvalidOperationException("Configuration sources fetch refs directly.");
+    public Task<string> ResolveReferenceAsync(string repository, string? reference, DirectoryInfo workingDirectory, GitCommandMode mode, CancellationToken cancellationToken) =>
+        Task.FromResult(Commit);
 
     public Task CheckoutAsync(GitRepositoryLocation repository, GitCommandMode mode, CancellationToken cancellationToken) =>
         throw new InvalidOperationException("Configuration sources must not check out a worktree.");

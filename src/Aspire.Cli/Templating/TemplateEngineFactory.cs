@@ -121,7 +121,7 @@ internal sealed partial class TemplateEngineFactory(
         {
             var sha = await interactionService.ShowStatusAsync(NewCommandStrings.ResolvingTemplateRepository,
                 () => WithGitTimeoutAsync(
-                    token => git.ResolveReferenceAsync(repository, reference, executionContext.WorkingDirectory, token), cancellationToken));
+                    token => git.ResolveReferenceAsync(repository, reference, executionContext.WorkingDirectory, GitCommandMode.Captured, token), cancellationToken));
             cancellationToken.ThrowIfCancellationRequested();
             // Different paths and refs at the same commit share the complete repository snapshot.
             // NUL separates the repository address and SHA without ambiguous delimiters.
