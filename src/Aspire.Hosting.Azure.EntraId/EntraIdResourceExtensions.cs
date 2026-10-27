@@ -1489,8 +1489,8 @@ public static class EntraIdResourceExtensions
     /// <remarks>
     /// <para>
     /// The client ID exists only after Microsoft Graph creates the registration, so the URI is set by a second update of the
-    /// registration in the same deployment. <c>api://{clientId}</c> is the form that every tenant's default
-    /// application-management policy accepts, so it needs no verified domain. Adding a scope with
+    /// registration in the same deployment. <c>api://{clientId}</c> contains the application ID, a form that the tenant's default
+    /// identifier URI policy accepts, so it needs no verified domain. Adding a scope with
     /// <see cref="WithScope"/> uses this URI unless <see cref="WithApplicationIdUri(IResourceBuilder{EntraIdApplicationResource}, string)"/> sets another one.
     /// </para>
     /// <para>
@@ -1523,9 +1523,11 @@ public static class EntraIdResourceExtensions
     /// <exception cref="ArgumentException"><paramref name="applicationIdUri"/> is not an absolute URI without a query string or fragment.</exception>
     /// <remarks>
     /// <para>
-    /// For a registration created by Aspire, the URI is written to the registration. The URI must be unique in the tenant and must
-    /// satisfy the tenant's application-management policy, which by default allows <c>api://{clientId}</c>,
-    /// <c>api://{tenantId}/{name}</c> and URIs under one of the tenant's verified domains. A deployment fails when the policy rejects it.
+    /// For a registration created by Aspire, the URI is written to the registration. The URI must be unique in the tenant. A tenant's
+    /// default policy requires a new URI to contain a verified domain, the tenant ID or the application ID, but it doesn't apply
+    /// when the registration's <c>requestedAccessTokenVersion</c> is 2, which Aspire always sets, so a name such as <c>api://contoso-orders</c>
+    /// is normally accepted. A tenant can configure a stricter policy, and a deployment fails when the policy rejects the URI. See
+    /// <see href="https://aka.ms/identifier-uri-formatting-error"/>.
     /// </para>
     /// <para>
     /// For an existing registration, the URI is only configuration: Aspire does not modify the registration, and
