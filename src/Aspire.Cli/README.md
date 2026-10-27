@@ -68,11 +68,42 @@ C# AppHosts created with Aspire 17 or later use package directives instead of th
 | Command | Description |
 |---------|-------------|
 | `config` | Manage CLI configuration including feature flags. |
+| `secret` | Manage AppHost secrets. |
 | `cache` | Manage disk cache for CLI operations. |
 | `completions script [<shell>]` | Generate a completion script for Bash, Zsh, Fish, or PowerShell 7+. |
 | `doctor` | Diagnose Aspire environment issues and verify setup. |
 | `docs` | Browse and search Aspire documentation and API reference from aspire.dev. |
 | `agent` | Manage AI agent specific setup. |
+
+### Setting secrets
+
+Set a secret using a masked interactive prompt, a positional value, or an
+environment variable already supplied to the CLI process:
+
+```bash
+aspire secret set Parameters:api_key
+aspire secret set Parameters:api_key example-value
+aspire secret set Parameters:api_key --envvar API_KEY
+aspire secret set Parameters:api_key --envvar API_KEY --apphost ./AppHost.csproj
+aspire secret set Parameters:api_key --envvar API_KEY --environment Production
+```
+
+When neither a positional value nor `--envvar` is supplied, the CLI prompts
+for the value without displaying it. Empty values are accepted, including at the
+prompt. `--non-interactive` requires a positional value or `--envvar` and
+never prompts. Canceling the prompt does not initialize or modify the secrets store.
+
+Do not combine a positional value with `--envvar`. An unset source
+variable fails without prompting, initializing, or modifying the secrets store.
+Environment values are stored verbatim, without trimming or shell expansion.
+AppHost discovery works the same for all value sources.
+All value sources support `--environment` to select the AppHost environment's
+Aspire secrets file; the default environment is `Development`.
+
+`--envvar` keeps the secret value out of the command line, shell history,
+and CLI diagnostics. Expanding a shell variable into the positional value does
+not provide that protection. The process environment may still be inspectable;
+environment-variable input is not a guarantee that the secret cannot be read.
 
 ### Updating .NET AppHosts
 

@@ -61,6 +61,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Specify either a positional secret value or --envvar, not both..
+        /// </summary>
+        internal static string ConflictingValueSources {
+            get {
+                return ResourceManager.GetString("ConflictingValueSources", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string describing the AppHost environment whose secrets file is used.
         /// </summary>
         internal static string EnvironmentOptionDescription {
@@ -117,6 +126,33 @@ namespace Aspire.Cli.Resources {
         internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to --envvar requires a nonempty environment variable name..
+        /// </summary>
+        internal static string EnvvarSourceNameRequired {
+            get {
+                return ResourceManager.GetString("EnvvarSourceNameRequired", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Environment variable &apos;{0}&apos; is not set. No secret was changed..
+        /// </summary>
+        internal static string EnvvarSourceNotSet {
+            get {
+                return ResourceManager.GetString("EnvvarSourceNotSet", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Read the secret value from the named environment variable instead of a positional value.
+        /// </summary>
+        internal static string EnvvarSourceOptionDescription {
+            get {
+                return ResourceManager.GetString("EnvvarSourceOptionDescription", resourceCulture);
             }
         }
 
@@ -238,7 +274,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The secret value to set.
+        ///   Looks up a localized string similar to The secret value to set (omit to prompt or use --envvar).
         /// </summary>
         internal static string ValueArgumentDescription {
             get {
@@ -252,6 +288,24 @@ namespace Aspire.Cli.Resources {
         internal static string ValueColumnHeader {
             get {
                 return ResourceManager.GetString("ValueColumnHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Enter the secret value:.
+        /// </summary>
+        internal static string ValuePrompt {
+            get {
+                return ResourceManager.GetString("ValuePrompt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Specify a positional secret value or --envvar &lt;variable-name&gt;..
+        /// </summary>
+        internal static string ValueSourceRequired {
+            get {
+                return ResourceManager.GetString("ValueSourceRequired", resourceCulture);
             }
         }
     }
