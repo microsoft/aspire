@@ -40,6 +40,7 @@ public class GuestAppHostProjectTests : IDisposable
     private readonly IConfiguration _configuration;
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly List<FileLoggerProvider> _fileLoggerProviders = [];
 
     public GuestAppHostProjectTests(ITestOutputHelper outputHelper)
     {
@@ -51,6 +52,10 @@ public class GuestAppHostProjectTests : IDisposable
 
     public void Dispose()
     {
+        foreach (var provider in _fileLoggerProviders)
+        {
+            provider.Dispose();
+        }
         _profilingTelemetry.Dispose();
         _workspace.Dispose();
         _loggerFactory.Dispose();
@@ -2589,6 +2594,8 @@ public class GuestAppHostProjectTests : IDisposable
         // ConsoleCancellationManager so the fixture doesn't register process-global OS signal handlers;
         // none of the tests here drive the launcher or AppHostServerSession paths that would fire it.
         var shutdownWindow = new TestGracefulShutdownWindow();
+        var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter());
+        _fileLoggerProviders.Add(fileLoggerProvider);
 
         return new GuestAppHostProject(
             language: language,
@@ -2612,7 +2619,7 @@ public class GuestAppHostProjectTests : IDisposable
                 },
                 effectiveEnvironment),
             logger: NullLogger<GuestAppHostProject>.Instance,
-            fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
+            fileLoggerProvider: fileLoggerProvider,
             profilingTelemetry: _profilingTelemetry,
             gracefulShutdownSignaler: new NoOpGracefulSignaler(),
             shutdownService: shutdownWindow,
