@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
+using System.Text.Json;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -127,11 +129,35 @@ builder.Build().Run();
                 }
             }
 
+            // Keep the frontend endpoint structured until ACA supplies its public HTTPS address.
+            var frontendDeclaration = useDotnetProject
+                ? "builder.AddDotnetProject(\"webfrontend\","
+                : "builder.AddProject(\"webfrontend\",";
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, frontendDeclaration, $"var webfrontend = {frontendDeclaration}");
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, buildRunPattern, """
+                apiService.WithExternalHttpEndpoints()
+                    .WithEnvironment("BROWSER_ORIGIN", webfrontend.GetEndpoint("http").BrowserOrigins.First)
+                    .WithEnvironment("BROWSER_ORIGINS_JSON", webfrontend.GetEndpoint("http").BrowserOrigins.AsJson());
+
+                builder.Build().Run();
+                """);
             File.WriteAllText(appHostFilePath, content);
             var marker = $"aca-{Guid.NewGuid():N}";
-            DotnetProjectDeploymentHelpers.ReplaceInFile(Path.Combine(projectDir, $"{projectName}.ApiService", "Program.cs"),
+            var apiProgramPath = Path.Combine(projectDir, $"{projectName}.ApiService", "Program.cs");
+            DotnetProjectDeploymentHelpers.ReplaceInFile(apiProgramPath, "var app = builder.Build();", """
+                var browserOrigin = builder.Configuration["BROWSER_ORIGIN"]
+                    ?? throw new InvalidOperationException("The deployed browser origin is missing.");
+                var browserOriginsJson = builder.Configuration["BROWSER_ORIGINS_JSON"]
+                    ?? throw new InvalidOperationException("The deployed browser origins JSON is missing.");
+                builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
+                    policy.WithOrigins(browserOrigin).WithMethods("GET")));
+                var app = builder.Build();
+                app.UseCors();
+                """);
+            DotnetProjectDeploymentHelpers.ReplaceInFile(apiProgramPath,
                 "app.Run();", $$"""
                 app.MapGet("/deployment-marker", () => "{{marker}}");
+                app.MapGet("/browser-origins", () => new { origin = browserOrigin, originsJson = browserOriginsJson });
                 app.Run();
                 """);
             DotnetProjectDeploymentHelpers.ReplaceInFile(Path.Combine(projectDir, $"{projectName}.Web", "Program.cs"),
@@ -169,6 +195,7 @@ builder.Build().Run();
             // A fresh source marker traverses both .NET images and the template's service-discovery reference.
             // Checking arbitrary ingress URLs also reaches the dashboard and cannot prove this path works.
             var frontendUrlFile = Path.Combine(projectDir, "frontend-url.txt");
+            var apiUrlFile = Path.Combine(projectDir, "api-url.txt");
             await DotnetProjectDeploymentHelpers.RunScriptAsync(auto, counter, $$"""
                 set -euo pipefail
                 az() { command az "$@" --subscription {{subscriptionId}}; }
@@ -190,11 +217,32 @@ builder.Build().Run();
                     echo "$resource: $revision $running_image"
                     if [ "$resource" = webfrontend ]; then
                         az containerapp show -g {{resourceGroupName}} -n "$app" --query properties.configuration.ingress.fqdn -o tsv > {{AspireCliShellCommandHelpers.QuoteBashArg(frontendUrlFile)}}
+                    else
+                        az containerapp show -g {{resourceGroupName}} -n "$app" --query properties.configuration.ingress.fqdn -o tsv > {{AspireCliShellCommandHelpers.QuoteBashArg(apiUrlFile)}}
                     fi
                 done
                 """, TimeSpan.FromMinutes(9));
             var frontendUrl = $"https://{File.ReadAllText(frontendUrlFile).Trim()}";
             await DotnetProjectDeploymentHelpers.VerifyResponseAsync($"{frontendUrl}/deployment-marker", $"web:{marker}", cancellationToken);
+            var apiUrl = $"https://{File.ReadAllText(apiUrlFile).Trim()}";
+            await DotnetProjectDeploymentHelpers.VerifyResponseAsync($"{apiUrl}/deployment-marker", marker, cancellationToken);
+            using (var handler = new HttpClientHandler { AllowAutoRedirect = false })
+            using (var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) })
+            {
+                using var originsResponse = await http.GetAsync($"{apiUrl}/browser-origins", cancellationToken);
+                originsResponse.EnsureSuccessStatusCode();
+                using var received = JsonDocument.Parse(await originsResponse.Content.ReadAsStringAsync(cancellationToken));
+                Assert.Equal(frontendUrl, received.RootElement.GetProperty("origin").GetString());
+                using var origins = JsonDocument.Parse(received.RootElement.GetProperty("originsJson").GetString()!);
+                Assert.Equal(frontendUrl, Assert.Single(origins.RootElement.EnumerateArray()).GetString());
+
+                using var preflight = new HttpRequestMessage(HttpMethod.Options, $"{apiUrl}/browser-origins");
+                preflight.Headers.Add("Origin", frontendUrl);
+                preflight.Headers.Add("Access-Control-Request-Method", "GET");
+                using var preflightResponse = await http.SendAsync(preflight, cancellationToken);
+                Assert.Equal(HttpStatusCode.NoContent, preflightResponse.StatusCode);
+                Assert.Equal(frontendUrl, Assert.Single(preflightResponse.Headers.GetValues("Access-Control-Allow-Origin")));
+            }
             deploymentUrls["webfrontend"] = frontendUrl;
 
             // Step 11: Exit terminal

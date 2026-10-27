@@ -780,6 +780,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// <remarks>
     /// Manifest callbacks should use this method rather than writing
     /// <see cref="IManifestExpressionProvider.ValueExpression"/> directly when a value may require lowering.
+    /// Opaque tokens from symbolic-only providers are preserved without concrete evaluation.
     /// Call <see cref="TryAddDependentResources"/> to include its referenced resources.
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
@@ -881,7 +882,10 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
             }
             else
             {
-                throw new NotSupportedException($"Manifest reference '{token.Text}' has no supported representation or value provider.");
+                // Symbolic-only providers own their representation. They do not advertise
+                // concrete evaluation, so preserve opaque tokens as before rather than
+                // treating this publisher's vocabulary as validation of their contract.
+                lowered = token.Text;
             }
 
             builder.Append(expression, position, token.Start - position);

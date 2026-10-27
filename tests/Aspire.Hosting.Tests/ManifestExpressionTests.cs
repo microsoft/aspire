@@ -15,6 +15,26 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "5")]
 public class ManifestExpressionTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task SymbolicOnlyProvidersPreserveOpaqueTokensAlongsideLoweredOrigins()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
+        var origin = frontend.GetEndpoint("http").BrowserOrigins.First;
+        var opaque = new TestManifestExpression("{customValue}");
+        var mixed = new TestManifestExpression($"{opaque.ValueExpression}|{origin.ValueExpression}", opaque, origin);
+        var module = builder.AddResource(new AzureBicepResource("module", templateString: "param custom string\nparam mixed string"));
+        module.Resource.Parameters["custom"] = opaque;
+        module.Resource.Parameters["mixed"] = mixed;
+        using var app = builder.Build();
+
+        var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>(), workspace.Path)
+            .DefaultTimeout();
+
+        await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
+    }
+
     [Theory]
     [InlineData("{resource.connectionString}", true)]
     [InlineData("{parameter.value}", true)]
