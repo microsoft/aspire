@@ -27,11 +27,14 @@ internal sealed partial class EntraIdSymbolNames(AzureResourceInfrastructure inf
     // The symbols that the registration's own template always declares, which are added after the API access settings are written.
     private static readonly HashSet<string> s_fixedNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "application", "applicationIdentity", "servicePrincipal", "tenantResourceSuffix"
+        "application", "servicePrincipal", "tenantResourceSuffix"
     };
 
     private readonly HashSet<string> _allocated = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<(object Identity, string Purpose), string> _names = [];
+
+    /// <summary>Gets the symbol of the second declaration of a registration, which sets the default application ID URI.</summary>
+    public string ApplicationIdentity(EntraIdApplicationResource application) => Get(application, "ApplicationIdentity", "applicationIdentity");
 
     /// <summary>Gets the parameter that carries the application (client) ID of a registration in the AppHost.</summary>
     public string ClientId(EntraIdApplicationResource application) => Get(application, "ClientId", $"{Base(application)}ClientId");

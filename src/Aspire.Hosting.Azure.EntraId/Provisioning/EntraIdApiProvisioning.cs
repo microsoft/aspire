@@ -75,7 +75,7 @@ internal static class EntraIdApiProvisioning
             // cannot read a property of the resource that is being created. Declaring the application a second time under the same
             // unique name updates the created application in place (PATCH semantics) with a value that refers to the first
             // declaration's appId, so no tenant policy needs to allow a name-based URI.
-            target = new MicrosoftGraphApplication("applicationIdentity")
+            target = new MicrosoftGraphApplication(symbolNames.ApplicationIdentity(resource))
             {
                 DisplayName = registrationName,
                 UniqueName = registrationName

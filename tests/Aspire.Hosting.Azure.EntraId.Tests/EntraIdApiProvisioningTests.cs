@@ -1196,6 +1196,23 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void Symbols_TheSecondDeclarationDoesNotCollideWithAParameterFromTheAppHost()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // The second declaration of an API registration is the resource "applicationIdentity" unless the template already has that name.
+        var api = builder.AddEntraIdApplication("api")
+            .WithRedirectUris(builder.AddParameter("applicationIdentity"))
+            .WithScope("read", "Read");
+
+        var bicep = api.Resource.GetBicepTemplateString();
+
+        AssertSymbolsAreUniqueValidIdentifiers(bicep);
+        Assert.Contains("param applicationIdentity string", bicep);
+        Assert.Contains("resource applicationIdentity_2 'Microsoft.Graph/applications@v1.0'", bicep);
+    }
+
+    [Fact]
     public void Symbols_SameRegistrationAsApiAndPreAuthorizedClientSharesOneParameter()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
