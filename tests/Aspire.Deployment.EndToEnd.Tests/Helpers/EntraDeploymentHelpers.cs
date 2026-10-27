@@ -166,8 +166,13 @@ internal static class EntraDeploymentHelpers
                 // including when deployment failed before outputs could be read.
                 try
                 {
-                    await CleanupAsync(client, credential, deployment.ResourceGroupUrl, applicationUrls);
-                    DeploymentReporter.ReportCleanupStatus(deployment.ResourceGroupName, true, "Resource group and Entra directory objects deleted.");
+                    await CleanupAsync(client, credential, deployment.ResourceGroupUrl, applicationUrls, waitForResourceGroup: deploymentFailure is not null);
+                    DeploymentReporter.ReportCleanupStatus(
+                        deployment.ResourceGroupName,
+                        true,
+                        deploymentFailure is null
+                            ? "Resource group deletion requested and Entra directory objects deleted."
+                            : "Resource group and Entra directory objects deleted.");
                 }
                 catch (Exception ex)
                 {
@@ -280,14 +285,12 @@ internal static class EntraDeploymentHelpers
     }
 
     private static async Task CleanupAsync(
-        HttpClient client, TokenCredential credential, string resourceGroupUrl, string[] applicationUrls)
+        HttpClient client, TokenCredential credential, string resourceGroupUrl, string[] applicationUrls, bool waitForResourceGroup)
     {
         var failures = new List<Exception>();
         try
         {
-            // Finish ARM teardown before Graph cleanup to stop pending deployments from creating
-            // directory objects while they are being cleaned up.
-            await CleanupResourceGroupAsync(client, credential, resourceGroupUrl);
+            await CleanupResourceGroupAsync(client, credential, resourceGroupUrl, waitForResourceGroup);
         }
         catch (Exception ex)
         {
@@ -309,12 +312,20 @@ internal static class EntraDeploymentHelpers
         }
     }
 
-    private static async Task CleanupResourceGroupAsync(HttpClient client, TokenCredential credential, string resourceGroupUrl)
+    private static async Task CleanupResourceGroupAsync(
+        HttpClient client, TokenCredential credential, string resourceGroupUrl, bool waitForDeletion)
     {
         // Deleting a Container Apps environment can take well over 15 minutes.
         using var cleanup = new CancellationTokenSource(TimeSpan.FromMinutes(40));
         await DeleteResourceAsync(client, credential, resourceGroupUrl, cleanup.Token);
-        await WaitForDeletionAsync(client, credential, resourceGroupUrl, cleanup.Token);
+
+        // After a failure or timeout, a deployment can still be running on the Azure side. Finish ARM teardown before the directory
+        // cleanup, so that the deployment can't create directory objects while they are being deleted. After a deployment that completed,
+        // nothing can create them, so, like the other deployment tests, don't wait for the group to disappear.
+        if (waitForDeletion)
+        {
+            await WaitForDeletionAsync(client, credential, resourceGroupUrl, cleanup.Token);
+        }
     }
 
     private static async Task WaitForDeletionAsync(
