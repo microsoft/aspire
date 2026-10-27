@@ -123,10 +123,10 @@ public class AtsGoDerivedBuilderTests
             ],
             GetMethodSignatures(generated, "workloadResource", "With"));
 
-        // DTO fields and options struct fields are parameter-like positions too. The optional field is a
-        // pointer or a plain interface value depending on how optional handle parameters are rendered.
+        // DTO fields and options struct fields are parameter-like positions too. An optional handle parameter
+        // is a pointer field in its options struct.
         Assert.Matches(@"type PoolSettings struct \{\r?\n\tPool AnyPoolResource `json:""pool,omitempty""`", generated);
-        Assert.Matches(@"type WithOptionalPoolOptions struct \{\r?\n\tPool \*?AnyPoolResource `json:""pool,omitempty""`", generated);
+        Assert.Matches(@"type WithOptionalPoolOptions struct \{\r?\n\tPool \*AnyPoolResource `json:""pool,omitempty""`", generated);
 
         // The runtime guard for a union parameter must accept derived builders as well.
         Assert.Contains("// Allowed types for parameter pool: AnyPoolResource, string.", generated, StringComparison.Ordinal);

@@ -334,6 +334,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     // the fluent interface of any type. The base-type markers are what let an Any<Type> value be
     // passed where the Any<Base> of one of its base types is expected, because Go converts an
     // interface value to another interface only when its method set has every method of the target.
+    //
+    // A type that nothing derives from gets no accepting interface: its own interface already accepts
+    // exactly the same values. The cost is that the set of accepting interfaces, and which parameters
+    // use them, follows the handle types of the integrations an AppHost includes. The generated
+    // header (see GenerateAcceptingInterfaces) tells users so.
     private void BuildAcceptingInterfaces(AtsContext context)
     {
         var ancestorIdsByType = new Dictionary<string, List<string>>(StringComparer.Ordinal);
@@ -915,6 +920,12 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine("// satisfy the interface of its base type. Each Any<Type> below accepts <Type> or a handle");
         WriteLine("// of any type derived from it, and is used wherever a method, options struct, or DTO takes");
         WriteLine("// a <Type> as input. The unexported marker methods restrict it to that family of types.");
+        WriteLine("//");
+        WriteLine("// The set of Any<Type> interfaces depends on the integrations of the AppHost this SDK is");
+        WriteLine("// generated for: an Any<Type> exists only while some handle type in the SDK derives from <Type>.");
+        WriteLine("// Adding or removing an integration can add or remove an Any<Type> and change a method parameter");
+        WriteLine("// from <Type> to Any<Type>, so code that names an Any<Type> or such a parameter's type depends");
+        WriteLine("// on the integrations the AppHost includes.");
         WriteLine();
 
         foreach (var (typeId, name) in _acceptingNames.OrderBy(kv => kv.Value, StringComparer.Ordinal))
@@ -2313,6 +2324,10 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             AtsTypeCategory.Array or AtsTypeCategory.List => $"[]{MapDtoPropertyTypeToGo(typeRef.ElementType, false)}",
             AtsTypeCategory.Dict => $"map[{MapDtoPropertyTypeToGo(typeRef.KeyType, false)}]{MapDtoPropertyTypeToGo(typeRef.ValueType, false)}",
             AtsTypeCategory.Union => "any",
+            // DTO fields map like inputs, so a handle-typed field would become Any<Type>. That is only right for
+            // DTOs the caller builds: DTOs are also decoded from server results and passed to callbacks, where
+            // Any<Type> has no fluent methods and decodeStructFields cannot unmarshal into an interface-typed
+            // field. Revisit this mapping before a DTO with a handle-typed field can appear in a result.
             _ => MapInputTypeRefToGo(typeRef, isOptional: false)
         };
 

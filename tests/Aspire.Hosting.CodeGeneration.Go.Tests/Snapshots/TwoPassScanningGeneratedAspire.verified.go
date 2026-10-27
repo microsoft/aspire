@@ -1280,6 +1280,12 @@ type TestVaultResource interface {
 // satisfy the interface of its base type. Each Any<Type> below accepts <Type> or a handle
 // of any type derived from it, and is used wherever a method, options struct, or DTO takes
 // a <Type> as input. The unexported marker methods restrict it to that family of types.
+//
+// The set of Any<Type> interfaces depends on the integrations of the AppHost this SDK is
+// generated for: an Any<Type> exists only while some handle type in the SDK derives from <Type>.
+// Adding or removing an integration can add or remove an Any<Type> and change a method parameter
+// from <Type> to Any<Type>, so code that names an Any<Type> or such a parameter's type depends
+// on the integrations the AppHost includes.
 
 // AnyContainerResource accepts ContainerResource or a handle of any type derived from it.
 type AnyContainerResource interface {
