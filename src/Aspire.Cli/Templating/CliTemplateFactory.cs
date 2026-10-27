@@ -103,9 +103,9 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         return GetTemplateDefinitions();
     }
 
-    public Task<IEnumerable<ITemplate>> GetTemplatesAsync(CancellationToken cancellationToken = default)
+    public Task<IEnumerable<ITemplate>> GetTemplatesAsync(TemplateSource? source, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(GetTemplateDefinitions());
+        return Task.FromResult(source is null ? GetTemplateDefinitions() : []);
     }
 
     public Task<IEnumerable<ITemplate>> GetInitTemplatesAsync(CancellationToken cancellationToken = default)

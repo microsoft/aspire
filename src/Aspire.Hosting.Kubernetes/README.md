@@ -36,6 +36,31 @@ await builder.addKubernetesEnvironment("k8s");
 
 The dashboard container included in the published Helm chart opts out of dashboard usage and error telemetry by default (`ASPIRE_DASHBOARD_TELEMETRY_OPTOUT=true`). This does not affect the application's OpenTelemetry data sent to the dashboard.
 
+### Container registries
+
+Assign a registry to a project or Dockerfile-backed resource to include its registry-qualified image name in the published Helm chart:
+
+**C#**
+
+```csharp
+var registry = builder.AddContainerRegistry("registry", "registry.example.com", "apps");
+
+builder.AddProject<Projects.Api>("api")
+    .WithContainerRegistry(registry);
+```
+
+**TypeScript**
+
+```typescript
+const registry = await builder.addContainerRegistry("registry", "registry.example.com", "apps");
+const api = await builder.addNodeApp("api", "../api", "server.js");
+await api.withContainerRegistry(registry);
+```
+
+For this example, `aspire publish` writes `registry.example.com/apps/api:latest` to the image parameter in `values.yaml`. Image push options that customize the remote image name or tag are also respected. Existing container images, such as `redis:7`, are unchanged.
+
+Literal registry values and non-secret parameter defaults can be resolved during publishing. Registry values that require provisioning, secrets, or parameters without defaults remain deferred, with `<resource>:latest` as the published placeholder. `aspire deploy` resolves the image names again after provisioning and supplies them through a Helm values override file. If deploying the published chart yourself, supply the deferred image values to Helm.
+
 ### Volumes
 
 Use a target-neutral volume when the Kubernetes environment's default storage policy is sufficient:

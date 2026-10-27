@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE003
+#pragma warning disable ASPIREPIPELINES003
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Resources;
@@ -786,6 +788,185 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         }
 
         await settingsTask;
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PublishUsesConfiguredContainerRegistry(bool explicitRegistry, bool customizeImage)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var registry = builder.AddContainerRegistry("registry", "default.example.com", "default");
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint();
+
+        if (explicitRegistry)
+        {
+            var assignedRegistry = builder.AddContainerRegistry("assigned-registry", "registry.example.com", "apps");
+            environment.WithContainerRegistry(registry);
+            project.WithContainerRegistry(registry).WithContainerRegistry(assignedRegistry);
+        }
+
+        var callbackCount = 0;
+        if (customizeImage)
+        {
+            project.WithImagePushOptions(context =>
+            {
+                callbackCount++;
+                context.Options.RemoteImageName = "services/backend";
+                context.Options.RemoteImageTag = "v2";
+            });
+        }
+
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        Assert.Equal(customizeImage ? 1 : 0, callbackCount);
+        Assert.Same(project.Resource, Assert.Single(environment.Resource.CapturedHelmImageReferences).Resource);
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "api", "deployment.yaml")), "yaml")
+            .UseParameters(explicitRegistry, customizeImage);
+    }
+
+    [Fact]
+    public async Task PublishUsesContainerRegistryParameterDefaults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var endpoint = builder.AddParameter("registry-endpoint", "registry.example.com", publishValueAsDefault: true);
+        var repository = builder.AddParameter("registry-repository", "apps", publishValueAsDefault: true);
+        var registry = builder.AddContainerRegistry("registry", endpoint, repository);
+        builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry);
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PublishDefersContainerRegistryParameters(bool repositoryParameter, bool secret)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var endpoint = builder.AddParameter("registry-endpoint", "registry.example.com", publishValueAsDefault: true);
+        var repository = builder.AddParameter("registry-repository", "apps", publishValueAsDefault: true);
+        var deferredValue = repositoryParameter ? "apps" : "registry.example.com";
+        var deferred = builder.AddParameter("deferred", deferredValue, secret: secret);
+        var registry = builder.AddContainerRegistry("registry",
+            repositoryParameter ? endpoint : deferred,
+            repositoryParameter ? deferred : repository);
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry);
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        Assert.Same(project.Resource, Assert.Single(environment.Resource.CapturedHelmImageReferences).Resource);
+        var publishedValues = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml"));
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(workspace.Path, environment.Resource, CancellationToken.None);
+
+        await Verify(publishedValues, "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"))), "yaml")
+            .UseParameters(repositoryParameter, secret);
+    }
+
+    [Fact]
+    public async Task PublishDefersSecretContainerRegistryDefaults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var endpoint = builder.AddResource(ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, "registry-endpoint"));
+        var registry = builder.AddContainerRegistry("registry", endpoint);
+        builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry);
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishDefersMissingContainerRegistryParameters(bool repositoryParameter)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var endpoint = builder.AddParameter("registry-endpoint", "registry.example.com", publishValueAsDefault: true);
+        var missing = builder.AddParameter("missing");
+        var registry = builder.AddContainerRegistry("registry",
+            repositoryParameter ? endpoint : missing,
+            repositoryParameter ? missing : null);
+        builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry)
+            .WithImagePushOptions(_ => throw new InvalidOperationException("Deferred image must not be resolved during publish."));
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .UseParameters(repositoryParameter);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishDefersContainerRegistryOutputs(bool repositoryOutput)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var output = ReferenceExpression.Create($"{new TestValueProvider("provisioned-value")}");
+        var registry = builder.AddResource(new ContainerRegistryResource("registry",
+            repositoryOutput ? ReferenceExpression.Create($"registry.example.com") : output,
+            repositoryOutput ? output : null));
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry)
+            .WithImagePushOptions(_ => throw new InvalidOperationException("Deferred image must not be resolved during publish."));
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        Assert.Same(project.Resource, Assert.Single(environment.Resource.CapturedHelmImageReferences).Resource);
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .UseParameters(repositoryOutput);
+    }
+
+    [Fact]
+    public async Task PublishUsesContainerRegistryForDockerfileWithoutChangingPrebuiltImages()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var registry = builder.AddContainerRegistry("registry", "registry.example.com");
+        builder.AddExecutable("worker", "node", ".")
+            .PublishAsDockerFile()
+            .WithContainerRegistry(registry);
+        builder.AddContainer("cache", "redis", "7")
+            .WithContainerRegistry(registry);
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "worker", "deployment.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "cache", "deployment.yaml")), "yaml");
     }
 
     [Fact]

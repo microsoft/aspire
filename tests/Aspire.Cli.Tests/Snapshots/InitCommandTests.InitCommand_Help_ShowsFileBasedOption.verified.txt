@@ -7,6 +7,7 @@ Usage:
 Options:
   --language <language>                                                  The programming language for the AppHost (csharp, typescript)
   --file-based                                                           Create apphost.cs in the current directory, skipping .NET solution discovery. Requires C#.
+  --use-config-source                                                    Accept or decline the proposed Git configuration source for this project.
   --suppress-agent-init                                                  Suppress AI agent environment configuration after project creation
   --agents <agents>                                                      Comma-separated agent IDs (copilot,claude,opencode), 'all', or 'none'. Defaults to detected agents, or Copilot when none are detected
   --scope <project|global>                                               Configuration and skill scope: project or global (default: project)

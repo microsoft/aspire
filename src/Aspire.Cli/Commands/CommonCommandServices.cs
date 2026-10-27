@@ -17,7 +17,8 @@ internal sealed class CommonCommandServices(
     AspireCliTelemetry telemetry,
     ConsoleCancellationManager cancellationManager,
     ILoggerFactory loggerFactory,
-    ICliHostEnvironment hostEnvironment)
+    ICliHostEnvironment hostEnvironment,
+    ConfigSourceService configSources)
 {
     public IFeatures Features { get; } = features;
     public ICliUpdateNotifier UpdateNotifier { get; } = updateNotifier;
@@ -27,4 +28,5 @@ internal sealed class CommonCommandServices(
     public ConsoleCancellationManager CancellationManager { get; } = cancellationManager;
     public ILoggerFactory LoggerFactory { get; } = loggerFactory;
     public ICliHostEnvironment HostEnvironment { get; } = hostEnvironment;
+    public ConfigSourceService ConfigSources { get; } = configSources;
 }

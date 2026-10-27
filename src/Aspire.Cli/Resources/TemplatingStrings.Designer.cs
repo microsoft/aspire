@@ -223,6 +223,87 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Could not load template host configuration '{0}': {1}.
+        /// </summary>
+        internal static string InvalidTemplateHostConfiguration {
+            get {
+                return ResourceManager.GetString("InvalidTemplateHostConfiguration", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string..
+        /// </summary>
+        internal static string InvalidTemplateHostConfigurationFormat {
+            get {
+                return ResourceManager.GetString("InvalidTemplateHostConfigurationFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Parameter '{0}' uses a NuGet-computed value in a prompting condition. Computed values are resolved after prompting and cannot control parameter conditions.
+        /// </summary>
+        internal static string ComputedTemplateParameterCondition {
+            get {
+                return ResourceManager.GetString("ComputedTemplateParameterCondition", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.
+        /// </summary>
+        internal static string InvalidTemplateValueSource {
+            get {
+                return ResourceManager.GetString("InvalidTemplateValueSource", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not query the effective NuGet sources for package '{0}' to compute parameter '{1}'. Check the NuGet configuration, connectivity, and credentials.
+        /// </summary>
+        internal static string TemplatePackageVersionLookupFailed {
+            get {
+                return ResourceManager.GetString("TemplatePackageVersionLookupFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No version of package '{0}' matches range '{1}' with allowPrerelease={2} in the effective NuGet sources for parameter '{3}'.
+        /// </summary>
+        internal static string TemplatePackageVersionNotFound {
+            get {
+                return ResourceManager.GetString("TemplatePackageVersionNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to A computed value changed the generated NuGet configuration. NuGet-computed values must not control configuration contents, locations, or whether configuration files are generated.
+        /// </summary>
+        internal static string TemplateNuGetConfigurationChanged {
+            get {
+                return ResourceManager.GetString("TemplateNuGetConfigurationChanged", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The computed value working directory '{0}' must name an existing directory within the generated output.
+        /// </summary>
+        internal static string TemplateValueSourceWorkingDirectoryInvalid {
+            get {
+                return ResourceManager.GetString("TemplateValueSourceWorkingDirectoryInvalid", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Templates with NuGet-computed values cannot generate symbolic links.
+        /// </summary>
+        internal static string TemplateStagingLinkNotSupported {
+            get {
+                return ResourceManager.GetString("TemplateStagingLinkNotSupported", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to No.
         /// </summary>
         internal static string No {
@@ -372,6 +453,15 @@ namespace Aspire.Cli.Resources {
         internal static string SearchingForAvailableTemplateVersions {
             get {
                 return ResourceManager.GetString("SearchingForAvailableTemplateVersions", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skip.
+        /// </summary>
+        internal static string Skip {
+            get {
+                return ResourceManager.GetString("Skip", resourceCulture);
             }
         }
 

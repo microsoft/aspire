@@ -32,7 +32,7 @@
     <PackageVersion Include="Azure.Storage.Files.DataLake" Version="12.27.1" />
     <PackageVersion Include="Azure.Storage.Files.Shares" Version="12.27.1" />
     <PackageVersion Include="Azure.Storage.Queues" Version="12.27.1" />
-    <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.63.0" />
+    <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.63.1" />
     <PackageVersion Include="Microsoft.Azure.Kusto.Data" Version="14.2.2" />
     <PackageVersion Include="Microsoft.Azure.Kusto.Ingest" Version="14.2.2" />
     <PackageVersion Include="Microsoft.Azure.SignalR" Version="1.33.1" />
@@ -48,7 +48,7 @@
     <PackageVersion Include="Azure.Provisioning.ApplicationInsights" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.Cdn" Version="1.0.0-beta.4" />
     <PackageVersion Include="Azure.Provisioning.ContainerRegistry" Version="1.1.0" />
-    <PackageVersion Include="Azure.Provisioning.ContainerService" Version="1.0.0-beta.7" />
+    <PackageVersion Include="Azure.Provisioning.ContainerService" Version="1.0.0" />
     <PackageVersion Include="Azure.Provisioning.CognitiveServices" Version="1.2.0" />
     <PackageVersion Include="Azure.Provisioning.CosmosDB" Version="1.0.0" />
     <PackageVersion Include="Azure.Provisioning.EventHubs" Version="1.1.0" />

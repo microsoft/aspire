@@ -214,6 +214,7 @@ internal sealed class SdkExportCommand : BaseCommand
                 gracefulShutdownSignaler: null,
                 shutdownService: null,
                 isolateConsole: false,
+                ownsProject: true,
                 cancellationToken);
 
             await serverSession.StartAsync();

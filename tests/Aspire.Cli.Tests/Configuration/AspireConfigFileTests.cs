@@ -62,6 +62,31 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.Equal("http://localhost:4321/sitemap-0.xml", result.Docs?.Api?.SitemapUrl);
     }
 
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"repository":"https://git.example/configuration"}""")]
+    [InlineData("""{"path":"aspire.config.json"}""")]
+    public void Load_DoesNotValidateIncompleteConfigSource(string binding)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), $$"""
+            {
+              "appHost": { "path": "apphost.cs" },
+              "docs": { "llmsTxtUrl": "https://local.example/llms.txt" },
+              "configSource": {{binding}}
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.Path);
+
+        Assert.NotNull(result);
+        Assert.Equal("apphost.cs", result.AppHost?.Path);
+        Assert.Equal("https://local.example/llms.txt", result.Docs?.LlmsTxtUrl);
+        Assert.NotNull(result.ConfigSource);
+        var error = Assert.Throws<ConfigSourceException>(result.ConfigSource.Validate);
+        Assert.Equal(Aspire.Cli.Resources.ConfigSourceStrings.InvalidBinding, error.Message);
+    }
+
     [Fact]
     public void Load_ReturnsConfig_WhenFileContainsDocsSourceConfigurationWithDifferentCasing()
     {

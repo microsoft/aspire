@@ -125,10 +125,12 @@ public static class AzureWebPubSubExtensions
                     var urlExpression = url;
 
                     BicepValue<string> urlParameter;
-                    if (urlExpression.ManifestExpressions.Count == 0)
+                    // A conditional expression has no manifest expressions but is not a literal.
+                    if (!urlExpression.IsConditional && urlExpression.ManifestExpressions.Count == 0)
                     {
-                        // when urlExpression is literal string, simply add
-                        urlParameter = urlExpression.Format;
+                        // when urlExpression is literal string, simply add. Format escapes braces for string.Format
+                        // ({{event}}); ValueExpression is the URL template as written ({event}).
+                        urlParameter = urlExpression.ValueExpression;
                     }
                     else
                     {

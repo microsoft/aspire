@@ -44,16 +44,6 @@ internal sealed class DcpHost
     private string? _dcpTlsKeyFile;
     private Task? _logProcessorTask;
 
-    // These environment variables should never be inherited by DCP from the app host.
-    private static readonly string[] s_doNotInheritEnvironmentVars =
-    [
-        KnownAspNetCoreConfigNames.Urls,
-        "DOTNET_LAUNCH_PROFILE",
-        KnownAspNetCoreConfigNames.Environment,
-        KnownAspNetCoreConfigNames.DotNetEnvironment,
-        KnownConfigNames.AspireLogLevel,
-    ];
-
     public DcpHost(
         ILoggerFactory loggerFactory,
         IOptions<DcpOptions> dcpOptions,
@@ -342,7 +332,7 @@ internal sealed class DcpHost
         {
             var key = de.Key?.ToString();
             var val = de.Value?.ToString();
-            if (key is not null && val is not null && !IsExcludedEnvironmentVariable(key))
+            if (key is not null && val is not null && !DcpEnvironmentVariables.IsExcluded(key))
             {
                 dcpProcessSpec.EnvironmentVariables[key] = val;
             }
@@ -495,19 +485,6 @@ internal sealed class DcpHost
         {
             environmentVariables[dcpKey] = value;
         }
-    }
-
-    private static bool IsExcludedEnvironmentVariable(string key)
-    {
-        foreach (var entry in s_doNotInheritEnvironmentVars)
-        {
-            if (string.Equals(key, entry, StringComparisons.EnvironmentVariableName))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     internal static Socket CreateLoggingSocket(string socketPath)
