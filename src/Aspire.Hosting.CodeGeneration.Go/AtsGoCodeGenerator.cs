@@ -1885,18 +1885,23 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         foreach (var p in GetUnionParameters(capability))
         {
             var allowed = GetUnionAllowedTypes(p.Type!);
-            WriteLine($"// Allowed types for parameter {p.Name}: {allowed}.");
+            var numericNote = AllowsGoNumericTypes(GetUnionMemberTypes(p.Type!)) ? " (float64 accepts any built-in Go numeric type)" : "";
+            WriteLine($"// Allowed types for parameter {p.Name}: {allowed}{numericNote}.");
         }
     }
 
     private string GetUnionAllowedTypes(AtsTypeRef typeRef) => string.Join(", ", GetUnionMemberTypes(typeRef));
+
+    // float64 is how an ATS number maps to Go. A union that contains it also accepts the other
+    // Go numeric types (see GetUnionTypeSwitchCases), and the generated godoc says so.
+    private static bool AllowsGoNumericTypes(string[] memberTypes) => memberTypes.Contains("float64", StringComparer.Ordinal);
 
     // Go boxes an untyped constant such as 3 as int, so a union that allows an ATS number
     // (float64) has to accept the other Go numeric types too. They all serialize as JSON numbers.
     private string GetUnionTypeSwitchCases(AtsTypeRef typeRef)
     {
         var memberTypes = GetUnionMemberTypes(typeRef);
-        if (!memberTypes.Contains("float64", StringComparer.Ordinal))
+        if (!AllowsGoNumericTypes(memberTypes))
         {
             return string.Join(", ", memberTypes);
         }

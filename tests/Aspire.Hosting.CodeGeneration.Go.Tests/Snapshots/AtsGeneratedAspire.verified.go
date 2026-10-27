@@ -2067,7 +2067,7 @@ func (s *testRedisResource) WithRedisSpecific(option string) TestRedisResource {
 }
 
 // WithScalarField sets a scalar field value
-// Allowed types for parameter value: string, float64, bool.
+// Allowed types for parameter value: string, float64, bool (float64 accepts any built-in Go numeric type).
 func (s *testRedisResource) WithScalarField(path string, value any) TestRedisResource {
 	if s.err != nil { return s }
 	switch value.(type) {
