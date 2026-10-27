@@ -30,7 +30,11 @@ suite('CLI diagnostic log actions E2E', function () {
         ], 'CLI diagnostic log actions E2E teardown failed.');
     });
 
-    test('healthy status watching avoids frequent queries and stops when Aspire UI is hidden', async function () {
+    test('status polling reuses diagnostic logs without slowing queries and stops when Aspire UI is hidden', async function () {
+        if (process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true') {
+            this.skip();
+        }
+
         await openAspireView();
         await waitForWorkspaceAppHost();
         await waitForRepositoryIdle();
@@ -40,30 +44,33 @@ suite('CLI diagnostic log actions E2E', function () {
         const runRoot = getRunRoot();
         assert.ok(runRoot, 'An isolated E2E run root is required.');
         const logsDirectory = path.join(runRoot, 'aspire-home', 'logs');
-        const logFiles = () => fs.existsSync(logsDirectory) ? fs.readdirSync(logsDirectory).sort() : [];
+        const logFiles = () => fs.existsSync(logsDirectory) ? fs.readdirSync(logsDirectory).filter(file => file.endsWith('.log')).sort() : [];
         const statusSpawns = () => readExtensionLogs().split(/\r?\n/).filter(
             line => line.includes('Spawning Aspire CLI process:') && /\sps\s/.test(line)).length;
 
         try {
-            const previousFiles = new Set(logFiles());
             writeWorkspaceSetting(pollingSetting, 1000);
             await executeE2eControlCommand({ name: 'openFile', filePath: getPrimaryAppHostProjectPath() });
             await waitForExtensionState(() => getPsFollowProcesses().some(process => !process.exited), 'status follower to start');
             // Native launchers can own a separate managed CLI process. Identify its log by
-            // "[INFO] [Cli] Command: aspire ps --follow --format json --nologo", not the launcher PID.
+            // "[INFO] [Cli] [PID:1234] Command: aspire ps --follow --format json --nologo",
+            // not the launcher PID.
             await waitForExtensionState(() => logFiles().some(file =>
-                !previousFiles.has(file)
+                /^cli_vscode_[a-f0-9]+_ps\.log$/.test(file)
                 && fs.readFileSync(path.join(logsDirectory, file), 'utf8').includes('Command: aspire ps --follow --format json')),
-            'the status follower to persist its normal CLI diagnostic log');
+            'the status follower to persist its shared CLI diagnostic log');
             await waitForRepositoryIdle();
             const activeFiles = logFiles();
             const activeSpawns = statusSpawns();
             for (let interval = 0; interval < 4; interval++) {
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                assert.deepStrictEqual(logFiles(), activeFiles, 'Safety snapshots must not accumulate logs at the fast fallback interval.');
-                assert.strictEqual(statusSpawns(), activeSpawns, 'A healthy follow stream must not poll at the fallback interval.');
+                assert.deepStrictEqual(logFiles(), activeFiles, 'Periodic snapshots must append diagnostics rather than create more files.');
                 assert.strictEqual(getPsFollowProcesses().filter(process => !process.exited).length, 1);
             }
+            assert.ok(statusSpawns() > activeSpawns, 'Authoritative queries must retain the configured cadence while following.');
+            assert.ok(logFiles().some(file => /^cli_vscode_[a-f0-9]+_ps\.log$/.test(file)
+                && fs.readFileSync(path.join(logsDirectory, file), 'utf8').includes('Command: aspire ps --format json')),
+            'The shared diagnostic log must retain the periodic query entries as well as the follower.');
 
             await hideAspireView();
             assert.ok(getPsFollowProcesses().some(process => !process.exited), 'The visible AppHost editor still needs live data.');

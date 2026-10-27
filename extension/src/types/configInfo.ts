@@ -96,6 +96,12 @@ export const launchProfileCapability = 'launch-profile.v1';
 export const terminalInstanceSelectionCapability = 'terminal-instance-selection.v1';
 
 /**
+ * CLI diagnostic logs can append across processes with bounded rotation.
+ * Keep in sync with `KnownCapabilities.SharedFileLogging` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const sharedFileLoggingCapability = 'shared-file-logging.v1';
+
+/**
  * First Aspire CLI version that accepts `aspire run --isolated`.
  */
 export const isolatedLaunchMinimumVersion = '13.2.0';

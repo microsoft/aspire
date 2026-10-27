@@ -4,6 +4,7 @@
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Tests.Diagnostics;
 
@@ -154,7 +155,7 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
             UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
         File.SetUnixFileMode(parentDirectory, originalMode);
         var logPath = Path.Combine(parentDirectory, "test.log");
-        var options = new Program.CliLoggingOptions(null, false, logsDirectory, logPath);
+        var options = new Program.CliLoggingOptions(null, false, logsDirectory, logPath, SharedLogFile: false);
         var errorWriter = new TestStartupErrorWriter();
 
         var (loggerFactory, provider) = Program.CreateLoggerFactory([], options, errorWriter, new ConsoleLogBufferContext());
@@ -191,5 +192,92 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(["First log entry", "Second log entry"], File.ReadAllLines(logFilePath));
         Assert.Empty(errorWriter.MarkupLines);
+    }
+
+    [Fact]
+    public void SharedLogging_AppendsAcrossProvidersAndIdentifiesProcesses()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var logPath = Path.Combine(workspace.Path, "shared.log");
+        var errorWriter = new TestStartupErrorWriter();
+        var timestamp = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        using (var first = FileLoggerProvider.CreateShared(logPath, workspace.Path, errorWriter))
+        {
+            first.WriteLog(timestamp, LogLevel.Information, "Cli", "First query");
+        }
+        using (var second = FileLoggerProvider.CreateShared(logPath, workspace.Path, errorWriter))
+        {
+            second.WriteLog(timestamp, LogLevel.Information, "Cli", "Second query");
+        }
+
+        Assert.Equal([
+            $"[2026-01-01 00:00:00.000] [INFO] [Cli] [PID:{Environment.ProcessId}] First query",
+            $"[2026-01-01 00:00:00.000] [INFO] [Cli] [PID:{Environment.ProcessId}] Second query"
+        ], File.ReadAllLines(logPath));
+        Assert.Empty(errorWriter.MarkupLines);
+    }
+
+    [Fact]
+    public void SharedLogging_WriteFailureWarnsAndUnblocksTheQueue()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var logPath = Path.Combine(workspace.Path, "shared.log");
+        var errorWriter = new TestStartupErrorWriter();
+        using (var provider = FileLoggerProvider.CreateShared(logPath, workspace.Path, errorWriter))
+        {
+            File.Delete(logPath);
+            Directory.CreateDirectory(logPath);
+            for (var index = 0; index < 2048; index++)
+            {
+                provider.WriteLog("Cannot append to a directory");
+            }
+        }
+
+        Assert.StartsWith("Could not create log file at ", Assert.Single(errorWriter.MarkupLines));
+        Assert.Empty(Directory.GetFileSystemEntries(logPath));
+    }
+
+    [Fact]
+    public void SharedLogging_DefaultRotationIsBoundedToThreeTenMiBFiles()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var logPath = Path.Combine(workspace.Path, "shared.log");
+        var errorWriter = new TestStartupErrorWriter();
+        const int fileSizeLimit = 10 * 1024 * 1024;
+        using (var provider = FileLoggerProvider.CreateShared(logPath, workspace.Path, errorWriter))
+        {
+            for (var index = 0; index < 4; index++)
+            {
+                provider.WriteLog($"{index}:" + new string('x', fileSizeLimit - 2 - Environment.NewLine.Length));
+            }
+        }
+
+        Assert.Equal(3, Directory.GetFiles(workspace.Path).Length);
+        foreach (var (file, firstByte) in new[]
+        {
+            (Path.ChangeExtension(logPath, "2.log"), (int)'1'),
+            (Path.ChangeExtension(logPath, "1.log"), (int)'2'),
+            (logPath, (int)'3'),
+        })
+        {
+            Assert.Equal(fileSizeLimit, new FileInfo(file).Length);
+            using var stream = File.OpenRead(file);
+            Assert.Equal(firstByte, stream.ReadByte());
+        }
+        Assert.Empty(errorWriter.MarkupLines);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("../outside")]
+    [InlineData("..\\outside")]
+    [InlineData("a/b")]
+    [InlineData("a:b")]
+    [InlineData("log.name")]
+    [InlineData("\u00e9")]
+    public void SharedLogName_RejectsPathsAndInvalidCharacters(string name)
+    {
+        Assert.Throws<ArgumentException>(() => FileLoggerProvider.GetSharedLogFilePath("logs", name));
     }
 }

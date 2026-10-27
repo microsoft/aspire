@@ -11,6 +11,7 @@ using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
@@ -114,6 +115,45 @@ public class ProgramTests(ITestOutputHelper outputHelper)
         var result = Program.ParseLogFileOption(["run", "--", "--log-file", "app.log"]);
 
         Assert.Null(result);
+    }
+
+    [Fact]
+    public void ParseLoggingOptions_SharedNameUsesTheAspireLogsDirectory()
+    {
+        using var remote = RemoteExecutor.Invoke(static () =>
+        {
+            Environment.SetEnvironmentVariable(KnownConfigNames.CliSharedLogName, "vscode_test_ps");
+            var options = Program.ParseLoggingOptions([]);
+
+            Assert.True(options.SharedLogFile);
+            Assert.Equal(Path.Combine(options.LogsDirectory, "cli_vscode_test_ps.log"), options.LogFilePath);
+            return RemoteExecutor.SuccessExitCode;
+        });
+    }
+
+    [Fact]
+    public void ParseLoggingOptions_ExplicitLogFileOverridesTheSharedName()
+    {
+        using var remote = RemoteExecutor.Invoke(static () =>
+        {
+            Environment.SetEnvironmentVariable(KnownConfigNames.CliSharedLogName, "../invalid");
+            var options = Program.ParseLoggingOptions(["ps", "--log-file", "explicit.log"]);
+
+            Assert.False(options.SharedLogFile);
+            Assert.Equal("explicit.log", options.LogFilePath);
+            return RemoteExecutor.SuccessExitCode;
+        });
+    }
+
+    [Fact]
+    public void ParseLoggingOptions_InvalidSharedNameIsRejected()
+    {
+        using var remote = RemoteExecutor.Invoke(static () =>
+        {
+            Environment.SetEnvironmentVariable(KnownConfigNames.CliSharedLogName, "../invalid");
+            Assert.Throws<ArgumentException>(() => Program.ParseLoggingOptions([]));
+            return RemoteExecutor.SuccessExitCode;
+        });
     }
 
     [Fact]

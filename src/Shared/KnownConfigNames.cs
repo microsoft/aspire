@@ -61,6 +61,9 @@ internal static class KnownConfigNames
     public const string CliLauncherProcessStarted = "ASPIRE_LAUNCHER_STARTED";
 
     public const string CliLogFilePath = "ASPIRE_CLI_LOG_FILE";
+    // Opt-in diagnostic group for extension polling. The CLI owns its directory, append
+    // coordination, and bounded rotation; this is not the AppHost's own log file.
+    public const string CliSharedLogName = "ASPIRE_CLI_SHARED_LOG_NAME";
     public const string CliRunDetached = "ASPIRE_CLI_RUN_DETACHED";
     public const string CliGenerateHttpsCertificate = "ASPIRE_CLI_GENERATE_HTTPS_CERTIFICATE";
     public const string SuppressCliRunHook = "ASPIRE_SUPPRESS_CLI_RUN_HOOK";

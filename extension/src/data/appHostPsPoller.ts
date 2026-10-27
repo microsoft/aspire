@@ -7,6 +7,8 @@ import { errorFetchingAppHosts, errorStoppingAppHostWatcher } from '../loc/strin
 import { AppHostCliRunner, LimitedOutputBuffer, oneShotOutputBufferLimit } from './appHostCliRunner';
 import { windowCliPathTarget } from '../utils/cliPathVariables';
 import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
+import { ConfigInfoProvider } from '../utils/configInfoProvider';
+import { EnvVar } from '../dcp/types';
 
 export interface PsOutput {
     readonly stdout: string;
@@ -29,7 +31,6 @@ interface PsProcessTermination {
 export class AppHostPsPoller implements vscode.Disposable {
     private static readonly _oneShotOutputBufferLimit = oneShotOutputBufferLimit;
     private static readonly _authoritativeSnapshotFollowOutputLimit = 256;
-    private static readonly _minimumFollowReconciliationIntervalMs = 5 * 60 * 1000;
 
     private readonly _onDidReceivePsOutput = new vscode.EventEmitter<PsOutput>();
     readonly onDidReceivePsOutput = this._onDidReceivePsOutput.event;
@@ -49,6 +50,7 @@ export class AppHostPsPoller implements vscode.Disposable {
     private _pollingInterval: ReturnType<typeof setInterval> | undefined;
     private readonly _psProcesses = new Set<ChildProcessWithoutNullStreams>();
     private readonly _psProcessTerminations = new Map<ChildProcessWithoutNullStreams, PsProcessTermination>();
+    private readonly _backgroundLogEnvironments = new Map<string, Promise<EnvVar[]>>();
     private _pollingRequested = false;
     private _disposed = false;
     private _shutdownPromise: Promise<void> | undefined;
@@ -69,6 +71,7 @@ export class AppHostPsPoller implements vscode.Disposable {
     constructor(
         private readonly _terminalProvider: AspireTerminalProvider,
         private readonly _cliRunner: AppHostCliRunner,
+        private readonly _configInfoProvider: ConfigInfoProvider,
         private readonly _isDataActive: () => boolean,
         private readonly _clearPostStopRefreshTimers: () => void) {
     }
@@ -129,11 +132,7 @@ export class AppHostPsPoller implements vscode.Disposable {
             clearInterval(this._pollingInterval);
         }
 
-        // Follow supplies normal updates. Keep only a coarse safety rescan for missed
-        // notifications: each authoritative query starts a CLI process and diagnostic log.
-        const intervalMs = Math.max(
-            this.getPollingIntervalMs(),
-            AppHostPsPoller._minimumFollowReconciliationIntervalMs);
+        const intervalMs = this.getPollingIntervalMs();
         this._pollingInterval = setInterval(() => {
             if (!this._disposed) {
                 this.refreshAppHostsFromAuthoritativeSnapshot();
@@ -164,6 +163,7 @@ export class AppHostPsPoller implements vscode.Disposable {
         this._pollingRequested = false;
         this._psPollingGeneration++;
         this._psFetchVersion++;
+        this._backgroundLogEnvironments.clear();
         this._fetchInProgress = false;
         this._authoritativeSnapshotInProgress = false;
         this._authoritativeSnapshotPending = false;
@@ -272,6 +272,10 @@ export class AppHostPsPoller implements vscode.Disposable {
             return;
         }
         reportCliResolvedForOperation(windowCliPathTarget, cliPath);
+        const logEnvironment = await this._getBackgroundLogEnvironment(cliPath);
+        if (!this._isCurrentPsFetch(fetchVersion)) {
+            return;
+        }
 
         let psProcess: ChildProcessWithoutNullStreams | undefined;
         let psProcessCompletedSynchronously = false;
@@ -293,6 +297,7 @@ export class AppHostPsPoller implements vscode.Disposable {
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
             createProcessGroup: true,
             noExtensionVariables: true,
+            env: logEnvironment,
             stdoutCallback: (data) => {
                 psFollowStdout.append(data);
             },
@@ -519,6 +524,19 @@ export class AppHostPsPoller implements vscode.Disposable {
         return !this._disposed && this._isDataActive() && fetchVersion === this._psFetchVersion;
     }
 
+    private _getBackgroundLogEnvironment(cliPath: string): Promise<EnvVar[]> {
+        let environment = this._backgroundLogEnvironments.get(cliPath);
+        if (!environment) {
+            // A failed capability probe must not become an extra process/log on every poll.
+            // Retry it when monitoring resumes or resolves a different CLI.
+            environment = this._configInfoProvider.getConfigInfo({ suppressErrors: true, cliPath, target: windowCliPathTarget })
+                .then(info => this._cliRunner.getBackgroundLogEnvironment(info, undefined));
+            this._backgroundLogEnvironments.set(cliPath, environment);
+        }
+
+        return environment;
+    }
+
     private async _runPsCommand(args: string[], callback: (code: number, stdout: string, stderr: string) => void, options?: { fetchVersion?: number; force?: boolean; isCurrent?: () => boolean; onFirstStdout?: () => void; onAttemptRestart?: () => void }): Promise<void> {
         const fetchVersion = options?.fetchVersion;
         const force = options?.force === true;
@@ -554,6 +572,10 @@ export class AppHostPsPoller implements vscode.Disposable {
             return;
         }
         reportCliResolvedForOperation(windowCliPathTarget, cliPath);
+        const logEnvironment = await this._getBackgroundLogEnvironment(cliPath);
+        if (!isCurrentPsCommand()) {
+            return;
+        }
         const invocationArgs = this._cliRunner.normalizeNoLogoArgs(cliPath, args);
 
         let stdout = '';
@@ -575,6 +597,7 @@ export class AppHostPsPoller implements vscode.Disposable {
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, invocationArgs, {
             createProcessGroup: true,
             noExtensionVariables: true,
+            env: logEnvironment,
             stdoutCallback: (data) => {
                 if (stdout.length === 0 && data.length > 0) {
                     options?.onFirstStdout?.();

@@ -8,6 +8,17 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import * as cliModule from '../utils/process/cliProcess';
 import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
+import { ConfigInfo, sharedFileLoggingCapability } from '../types/configInfo';
+import { EnvironmentVariables } from '../utils/environment';
+
+const sharedLoggingConfigInfo: ConfigInfo = {
+    localSettingsPath: '',
+    globalSettingsPath: '',
+    availableFeatures: [],
+    localSettingsSchema: { properties: [] },
+    globalSettingsSchema: { properties: [] },
+    capabilities: [sharedFileLoggingCapability],
+};
 
 class TestChildProcess extends EventEmitter {
     killed = false;
@@ -54,6 +65,54 @@ suite('data/appHostCliRunner tests', () => {
             spawnStub.restore();
             getCliPathStub.restore();
             subscriptions.forEach(subscription => subscription.dispose());
+        });
+
+        test('reuses one diagnostic group per window and AppHost without conflating equal file names', () => {
+            const runner = new AppHostCliRunner(terminalProvider);
+            try {
+                const firstPath = vscode.Uri.file('/workspace/first/AppHost.csproj').fsPath;
+                const secondPath = vscode.Uri.file('/workspace/second/AppHost.csproj').fsPath;
+                const global = runner.getBackgroundLogEnvironment(sharedLoggingConfigInfo, undefined);
+                const first = runner.getBackgroundLogEnvironment(sharedLoggingConfigInfo, firstPath);
+                const second = runner.getBackgroundLogEnvironment(sharedLoggingConfigInfo, secondPath);
+
+                assert.deepStrictEqual(runner.getBackgroundLogEnvironment(sharedLoggingConfigInfo, undefined), global);
+                assert.deepStrictEqual(runner.getBackgroundLogEnvironment(sharedLoggingConfigInfo, firstPath), first);
+                assert.notDeepStrictEqual(first, second);
+                assert.notDeepStrictEqual(first, global);
+                for (const environment of [global, first, second]) {
+                    assert.strictEqual(environment.length, 1);
+                    assert.strictEqual(environment[0].name, EnvironmentVariables.ASPIRE_CLI_SHARED_LOG_NAME);
+                    assert.match(environment[0].value, /^vscode_[a-f0-9]{32}_[a-zA-Z0-9_-]+$/);
+                    assert.ok(environment[0].value.length <= 128);
+                }
+            } finally {
+                runner.dispose();
+            }
+        });
+
+        test('does not pass the logging handoff to older or unavailable CLIs', () => {
+            const runner = new AppHostCliRunner(terminalProvider);
+            try {
+                runner.getBackgroundLogEnvironment(sharedLoggingConfigInfo, undefined);
+                assert.deepStrictEqual(runner.getBackgroundLogEnvironment(null, undefined), []);
+                assert.deepStrictEqual(runner.getBackgroundLogEnvironment({ ...sharedLoggingConfigInfo, capabilities: [] }, undefined), []);
+                assert.deepStrictEqual(runner.getBackgroundLogEnvironment({ ...sharedLoggingConfigInfo, capabilities: undefined }, '/workspace/AppHost.csproj'), []);
+            } finally {
+                runner.dispose();
+            }
+        });
+
+        test('isolates diagnostic groups between extension repository instances', () => {
+            const first = new AppHostCliRunner(terminalProvider);
+            const second = new AppHostCliRunner(terminalProvider);
+            try {
+                assert.notDeepStrictEqual(first.getBackgroundLogEnvironment(sharedLoggingConfigInfo, undefined),
+                    second.getBackgroundLogEnvironment(sharedLoggingConfigInfo, undefined));
+            } finally {
+                first.dispose();
+                second.dispose();
+            }
         });
 
         test('completes a one-shot command when the direct process exits before close', async () => {

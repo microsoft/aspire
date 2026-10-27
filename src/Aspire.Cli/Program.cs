@@ -76,7 +76,8 @@ public class Program
     /// <param name="DebugMode">Whether --debug or -d was specified.</param>
     /// <param name="LogsDirectory">The directory where log files are stored.</param>
     /// <param name="LogFilePath">The full path to the current session's log file.</param>
-    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string LogFilePath);
+    /// <param name="SharedLogFile">Whether processes append to the same bounded diagnostic log.</param>
+    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string LogFilePath, bool SharedLogFile);
 
     /// <summary>
     /// Holds the objects created during early CLI startup, before DI is available.
@@ -135,9 +136,16 @@ public class Program
         }
 
         var logsDirectory = Path.Combine(GetUsersAspirePath(processPath), "logs");
-        var logFilePath = ParseLogFileOption(args) ?? FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
+        var logFilePath = ParseLogFileOption(args);
+        var sharedLogFile = false;
+        if (logFilePath is null && Environment.GetEnvironmentVariable(KnownConfigNames.CliSharedLogName) is { Length: > 0 } sharedLogName)
+        {
+            logFilePath = FileLoggerProvider.GetSharedLogFilePath(logsDirectory, sharedLogName);
+            sharedLogFile = true;
+        }
+        logFilePath ??= FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
 
-        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath);
+        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath, sharedLogFile);
     }
 
     /// <summary>
@@ -236,7 +244,9 @@ public class Program
             ((args[0] == "mcp" && args[1] == "start") || (args[0] == "agent" && args[1] == "mcp"));
 
         // Create file logger provider from pre-computed path info
-        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter);
+        var fileLoggerProvider = loggingOptions.SharedLogFile
+            ? FileLoggerProvider.CreateShared(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter)
+            : new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter);
 
         var factory = LoggerFactory.Create(builder =>
         {
