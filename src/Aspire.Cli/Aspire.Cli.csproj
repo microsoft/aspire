@@ -18,6 +18,7 @@
          in BackchannelJsonSerializerContext.cs. Suppress until MCP graduates these types. -->
     <NoWarn>$(NoWarn);CS1591;MCPEXP001</NoWarn>
     <PublishAot>true</PublishAot>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
     <!-- Sigstore and Tuf packages are not strong-named. Aspire.Cli is an executable tool,
          not a library referenced by strong-named assemblies, so this is safe. -->
     <SignAssembly>false</SignAssembly>
