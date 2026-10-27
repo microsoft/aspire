@@ -94,14 +94,16 @@ edit; source fallback does not guess whether their MSBuild conditions are active
 
 ## Configured template sources
 
-Register named local directories or Git repositories in the CLI's global configuration:
+Register named local directories, Git repositories, or HTTPS template catalogs in the
+CLI's global configuration. Source management is always global; no `--global` flag is needed:
 
 ```bash
-aspire config set templates.company /absolute/path/to/company-templates --global
-aspire config set templates.examples https://github.com/microsoft/aspire-templates --global
-aspire config set templates.release.repository https://github.com/microsoft/aspire-templates --global
-aspire config set templates.release.ref release/17.0 --global
-aspire config set templates.release.path templates --global
+aspire template source add company --path /absolute/path/to/company-templates
+aspire template source add examples --repository https://github.com/microsoft/aspire-templates
+aspire template source add release --repository https://github.com/microsoft/aspire-templates --ref release/17.0 --path templates
+aspire template source add catalog --href 'https://example.com/templates.json'
+aspire template source add search --href 'https://example.com/templates?q={search}&cliVersion={cliVersion}'
+aspire template source remove examples
 ```
 
 This writes the following shape to the global `~/.aspire/aspire.config.json` file:
@@ -109,12 +111,19 @@ This writes the following shape to the global `~/.aspire/aspire.config.json` fil
 ```json
 {
   "templates": {
-    "company": "/absolute/path/to/company-templates",
-    "examples": "https://github.com/microsoft/aspire-templates",
+    "company": {
+      "path": "/absolute/path/to/company-templates"
+    },
     "release": {
       "repository": "https://github.com/microsoft/aspire-templates",
       "ref": "release/17.0",
       "path": "templates"
+    },
+    "catalog": {
+      "href": "https://example.com/templates.json"
+    },
+    "search": {
+      "href": "https://example.com/templates?q={search}&cliVersion={cliVersion}"
     }
   }
 }
@@ -125,7 +134,11 @@ Local directories and Git repositories can contain one or more .NET template-eng
 templates using `.template.config/template.json`, including templates in subdirectories.
 Project-level `templates` settings are not used.
 
-Repository strings must be HTTPS or SSH URLs, for example
+All sources must use objects; path and URL string shorthands are not accepted.
+Source names cannot contain dots, colons, or control characters. Adding a name
+that already exists (case-insensitively) fails without overwriting it.
+
+The `repository` value must be an HTTPS or SSH URL, for example
 `https://github.com/microsoft/aspire-templates` or
 `ssh://git@github.com/microsoft/aspire-templates.git`.
 SCP-style addresses such as `git@github.com:owner/repo.git`, other URL schemes,
@@ -139,14 +152,16 @@ Use a repository object to select a branch, tag, or full commit SHA with `ref`, 
 limit discovery to a repository-relative `path`. Omit `ref` to use the default `HEAD`
 and omit `path` to search the repository root (`.`). Paths must stay inside the
 repository and must not traverse symbolic links. Object fields are case-sensitive:
-only `repository`, `ref`, and `path` are accepted; supplied values must be nonempty
-strings. Repository objects use the same URL restrictions as repository strings.
+only `repository`, `ref`, and `path` are accepted for Git sources; supplied values must
+be nonempty strings. A catalog uses `href` alone and cannot include these Git/local fields.
+Invalid combinations and unknown fields are rejected before saving. For stepwise
+editing with `aspire config set templates.<name>.<field> <value> --global`, incomplete
+Git objects are allowed until discovery; `source add` always requires a complete source.
 
 Each search resolves the selected ref to a commit and reuses a cached checkout of
 that commit, cloning only when it is not already cached. Multiple paths and refs
 resolving to the same repository commit share its checkout. Generation uses the
-selected checkout even if the remote subsequently changes. Searchable endpoints
-are not supported yet; the existing explicit `--template-repository`,
+selected checkout even if the remote subsequently changes. The existing explicit `--template-repository`,
 `--template-repository-ref`, and `--template-path` options are unchanged.
 
 Run `aspire new` interactively and select **Search for more templates** beneath the
@@ -162,6 +177,40 @@ displaying help or the default picker. Repository resolution and cloning show pr
 A source that cannot be read, resolved, authenticated, or cloned produces a warning
 without blocking other sources. Cancellation stops the search. You can search again
 or return to the default templates without creating project files.
+
+### HTTPS template catalogs
+
+Static JSON files and searchable endpoints return the same envelope:
+
+```json
+{
+  "templates": [
+    {
+      "name": "Contoso API",
+      "description": "An API with PostgreSQL",
+      "repository": "https://github.com/contoso/templates",
+      "ref": "release/17.0",
+      "path": "templates/api"
+    }
+  ]
+}
+```
+
+Each result requires nonempty `name`, `description`, `repository`, `ref`, and `path`
+strings. Its repository-relative path must identify exactly one .NET template.
+Invalid entries produce warnings without hiding valid entries. Additional metadata is ignored.
+
+Optional `{search}` and `{cliVersion}` placeholders are supported in the URL query
+only. Values are URL-escaped; the CLI always filters names and descriptions locally,
+even when the server also filters. An empty query lists the entire returned catalog.
+`cliVersion` is the CLI build identity, not a local compatibility filter.
+
+Catalog discovery does not resolve or clone Git repositories. Selecting a result
+acquires only its repository/ref and then uses the actual template's parameter prompts.
+HTTPS endpoints cannot contain credentials or fragments; redirects and cookies are
+disabled. Downloads have a 30-second timeout and a 4 MiB limit. Search text is sent
+to every configured catalog, so configure only trusted endpoints. Error diagnostics
+do not include request URLs, search text, or response bodies.
 
 ## Examples
 

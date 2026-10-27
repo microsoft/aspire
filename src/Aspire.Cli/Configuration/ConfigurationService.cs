@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -45,8 +46,12 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             settings = new JsonObject();
         }
 
-        // Set the configuration value using dot notation support
+        TemplateSourceConfiguration.ValidateEditKey(settings, key);
+
+        // Validate the candidate under the config lock, before writing. A rejected edit must
+        // preserve the original file, including comments and unrelated settings.
         SetNestedValue(settings, key, value);
+        TemplateSourceConfiguration.ValidateEditedSource(settings, key);
 
         await ConfigurationHelper.WriteSettingsFileAsync(settingsFilePath, settings, cancellationToken);
     }

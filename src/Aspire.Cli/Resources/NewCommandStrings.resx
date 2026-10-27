@@ -263,7 +263,7 @@
     <value>No matching templates were found in the configured sources.</value>
   </data>
   <data name="NoConfiguredTemplateSources" xml:space="preserve">
-    <value>No usable template sources are configured. Add an absolute directory path or an HTTPS or SSH Git repository URL with 'aspire config set templates.&lt;name&gt; &lt;path-or-url&gt; --global'.</value>
+    <value>No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path', '--repository', or '--href'. Sources are stored globally.</value>
   </data>
   <data name="TemplateSourceSearchFailed" xml:space="preserve">
     <value>Could not search template source '{0}': {1}</value>
@@ -272,6 +272,93 @@
     <value>The global 'templates' setting must be an object containing named template sources.</value>
   </data>
   <data name="InvalidConfiguredTemplateSource" xml:space="preserve">
-    <value>Template sources must have a nonempty name and be an absolute directory path, an HTTPS or SSH Git repository URL, or an object containing only a required 'repository' URL and optional nonempty 'ref' and 'path' strings. Repository URLs must not contain passwords, tokens, queries, or fragments. Searchable endpoints are not supported yet.</value>
+    <value>Expected a source object with an absolute 'path', a 'repository' and optional 'ref'/'path', or 'href' alone. Use 'aspire template source add' to configure a source.</value>
+  </data>
+  <data name="TemplateSourceSettingInvalid" xml:space="preserve">
+    <value>Invalid template setting '{0}': {1}</value>
+  </data>
+  <data name="TemplateSourceUnknownField" xml:space="preserve">
+    <value>Unknown source field. Use 'repository' with optional 'ref'/'path', or 'href' alone.</value>
+  </data>
+  <data name="TemplateSourceStringRequired" xml:space="preserve">
+    <value>Expected a nonempty string without control characters.</value>
+  </data>
+  <data name="TemplateSourceInvalidRepository" xml:space="preserve">
+    <value>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</value>
+  </data>
+  <data name="TemplateSourceInvalidHref" xml:space="preserve">
+    <value>Expected an HTTPS catalog URL without credentials, fragments, whitespace, or backslashes. Only query placeholders '{search}' and '{cliVersion}' are supported.</value>
+  </data>
+  <data name="TemplateSourceFieldConflict" xml:space="preserve">
+    <value>Cannot be combined with '{0}'. Remove the conflicting field before saving.</value>
+  </data>
+  <data name="TemplateSourceMissingLocation" xml:space="preserve">
+    <value>Specify an absolute 'path' for a local source, 'repository' for a Git source, or 'href' for a template catalog. 'ref' requires 'repository'.</value>
+  </data>
+  <data name="TemplateSourceNameRequired" xml:space="preserve">
+    <value>Template source names must be nonempty and must not contain dots, colons, or control characters.</value>
+  </data>
+  <data name="TemplateSourceCannotExtendString" xml:space="preserve">
+    <value>This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</value>
+  </data>
+  <data name="TemplateCatalogHttpFailed" xml:space="preserve">
+    <value>The template catalog returned HTTP {0}.</value>
+  </data>
+  <data name="TemplateCatalogInvalidResponse" xml:space="preserve">
+    <value>The template catalog must return a JSON object with a 'templates' array.</value>
+  </data>
+  <data name="TemplateCatalogEntryMustBeObject" xml:space="preserve">
+    <value>Expected a template object with 'name', 'description', 'repository', 'ref', and 'path' strings.</value>
+  </data>
+  <data name="TemplateCatalogRequiresSingleTemplate" xml:space="preserve">
+    <value>Catalog result '{0}' must identify a directory containing exactly one template.</value>
+  </data>
+  <data name="TemplateCatalogTimedOut" xml:space="preserve">
+    <value>The template catalog request timed out.</value>
+  </data>
+  <data name="TemplateCatalogDownloadFailed" xml:space="preserve">
+    <value>Could not download the template catalog. Check the endpoint, HTTPS connectivity, and the 4 MiB response limit.</value>
+  </data>
+  <data name="TemplateCommandDescription" xml:space="preserve">
+    <value>Manage project templates.</value>
+  </data>
+  <data name="TemplateSourceCommandDescription" xml:space="preserve">
+    <value>Manage global template sources.</value>
+  </data>
+  <data name="TemplateSourceAddDescription" xml:space="preserve">
+    <value>Add a named template source to global configuration.</value>
+  </data>
+  <data name="TemplateSourceRemoveDescription" xml:space="preserve">
+    <value>Remove a named template source from global configuration.</value>
+  </data>
+  <data name="TemplateSourceNameDescription" xml:space="preserve">
+    <value>The name of the template source.</value>
+  </data>
+  <data name="TemplateSourcePathDescription" xml:space="preserve">
+    <value>An absolute local template directory, or a repository-relative directory when --repository is specified.</value>
+  </data>
+  <data name="TemplateSourceRepositoryDescription" xml:space="preserve">
+    <value>An HTTPS or SSH Git repository URL containing templates.</value>
+  </data>
+  <data name="TemplateSourceRefDescription" xml:space="preserve">
+    <value>A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</value>
+  </data>
+  <data name="TemplateSourceHrefDescription" xml:space="preserve">
+    <value>An HTTPS JSON catalog URL, optionally containing query placeholders {search} and {cliVersion}.</value>
+  </data>
+  <data name="TemplateSourceAdded" xml:space="preserve">
+    <value>Template source '{0}' added to global configuration.</value>
+  </data>
+  <data name="TemplateSourceRemoved" xml:space="preserve">
+    <value>Template source '{0}' removed from global configuration.</value>
+  </data>
+  <data name="TemplateSourceAlreadyExists" xml:space="preserve">
+    <value>A template source with this name already exists. Remove it before adding a replacement.</value>
+  </data>
+  <data name="TemplateSourceNotFound" xml:space="preserve">
+    <value>Template source '{0}' was not found in global configuration.</value>
+  </data>
+  <data name="TemplateSourceWriteFailed" xml:space="preserve">
+    <value>Could not update global template sources. Check the configuration file's JSON format and file permissions.</value>
   </data>
 </root>

@@ -90,6 +90,64 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string TemplateSourceSettingInvalid => ResourceManager.GetString("TemplateSourceSettingInvalid", resourceCulture);
+
+        internal static string TemplateSourceUnknownField => ResourceManager.GetString("TemplateSourceUnknownField", resourceCulture);
+
+        internal static string TemplateSourceStringRequired => ResourceManager.GetString("TemplateSourceStringRequired", resourceCulture);
+
+        internal static string TemplateSourceInvalidRepository => ResourceManager.GetString("TemplateSourceInvalidRepository", resourceCulture);
+
+        internal static string TemplateSourceInvalidHref => ResourceManager.GetString("TemplateSourceInvalidHref", resourceCulture);
+
+        internal static string TemplateSourceFieldConflict => ResourceManager.GetString("TemplateSourceFieldConflict", resourceCulture);
+
+        internal static string TemplateSourceMissingLocation => ResourceManager.GetString("TemplateSourceMissingLocation", resourceCulture);
+
+        internal static string TemplateSourceNameRequired => ResourceManager.GetString("TemplateSourceNameRequired", resourceCulture);
+
+        internal static string TemplateSourceCannotExtendString => ResourceManager.GetString("TemplateSourceCannotExtendString", resourceCulture);
+
+        internal static string TemplateCatalogHttpFailed => ResourceManager.GetString("TemplateCatalogHttpFailed", resourceCulture);
+
+        internal static string TemplateCatalogInvalidResponse => ResourceManager.GetString("TemplateCatalogInvalidResponse", resourceCulture);
+
+        internal static string TemplateCatalogEntryMustBeObject => ResourceManager.GetString("TemplateCatalogEntryMustBeObject", resourceCulture);
+
+        internal static string TemplateCatalogRequiresSingleTemplate => ResourceManager.GetString("TemplateCatalogRequiresSingleTemplate", resourceCulture);
+
+        internal static string TemplateCatalogTimedOut => ResourceManager.GetString("TemplateCatalogTimedOut", resourceCulture);
+
+        internal static string TemplateCatalogDownloadFailed => ResourceManager.GetString("TemplateCatalogDownloadFailed", resourceCulture);
+
+        internal static string TemplateCommandDescription => ResourceManager.GetString("TemplateCommandDescription", resourceCulture);
+
+        internal static string TemplateSourceCommandDescription => ResourceManager.GetString("TemplateSourceCommandDescription", resourceCulture);
+
+        internal static string TemplateSourceAddDescription => ResourceManager.GetString("TemplateSourceAddDescription", resourceCulture);
+
+        internal static string TemplateSourceRemoveDescription => ResourceManager.GetString("TemplateSourceRemoveDescription", resourceCulture);
+
+        internal static string TemplateSourceNameDescription => ResourceManager.GetString("TemplateSourceNameDescription", resourceCulture);
+
+        internal static string TemplateSourcePathDescription => ResourceManager.GetString("TemplateSourcePathDescription", resourceCulture);
+
+        internal static string TemplateSourceRepositoryDescription => ResourceManager.GetString("TemplateSourceRepositoryDescription", resourceCulture);
+
+        internal static string TemplateSourceRefDescription => ResourceManager.GetString("TemplateSourceRefDescription", resourceCulture);
+
+        internal static string TemplateSourceHrefDescription => ResourceManager.GetString("TemplateSourceHrefDescription", resourceCulture);
+
+        internal static string TemplateSourceAdded => ResourceManager.GetString("TemplateSourceAdded", resourceCulture);
+
+        internal static string TemplateSourceRemoved => ResourceManager.GetString("TemplateSourceRemoved", resourceCulture);
+
+        internal static string TemplateSourceAlreadyExists => ResourceManager.GetString("TemplateSourceAlreadyExists", resourceCulture);
+
+        internal static string TemplateSourceNotFound => ResourceManager.GetString("TemplateSourceNotFound", resourceCulture);
+
+        internal static string TemplateSourceWriteFailed => ResourceManager.GetString("TemplateSourceWriteFailed", resourceCulture);
+
         private static global::System.Resources.ResourceManager resourceMan;
 
         private static global::System.Globalization.CultureInfo resourceCulture;

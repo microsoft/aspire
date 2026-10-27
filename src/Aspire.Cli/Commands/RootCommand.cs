@@ -162,6 +162,7 @@ internal sealed class RootCommand : BaseRootCommand
         DestroyCommand destroyCommand,
         DoCommand doCommand,
         ConfigCommand configCommand,
+        TemplateManagementCommand templateManagementCommand,
         CompletionsCommand completionsCommand,
         CacheCommand cacheCommand,
         CertificatesCommand certificatesCommand,
@@ -232,6 +233,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(addCommand);
         Subcommands.Add(publishCommand);
         Subcommands.Add(configCommand);
+        Subcommands.Add(templateManagementCommand);
         Subcommands.Add(completionsCommand);
         Subcommands.Add(cacheCommand);
         Subcommands.Add(certificatesCommand);

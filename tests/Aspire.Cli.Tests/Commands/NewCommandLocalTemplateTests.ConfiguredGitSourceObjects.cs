@@ -38,7 +38,7 @@ public partial class NewCommandLocalTemplateTests
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
 
         Assert.Equal("company", source.Key);
-        Assert.Equal(new TemplateSource(expectedPath, "https://example.test/templates", expectedRef), source.Value);
+        Assert.Equal(new TemplateSource(expectedPath, "https://example.test/templates", expectedRef), source.Value.Template);
         Assert.Empty(interaction.DisplayedMessages);
     }
 
@@ -64,7 +64,7 @@ public partial class NewCommandLocalTemplateTests
 
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
         Assert.Equal("company", source.Key);
-        Assert.Equal(new TemplateSource("templates", repository, "release/17.0"), source.Value);
+        Assert.Equal(new TemplateSource("templates", repository, "release/17.0"), source.Value.Template);
         Assert.Empty(git.ResolveCalls);
         Assert.Empty(git.CloneCalls);
         Assert.Empty(interaction.DisplayedMessages);
@@ -162,7 +162,9 @@ public partial class NewCommandLocalTemplateTests
         var warning = Assert.Single(interaction.DisplayedMessages);
         Assert.Equal(KnownEmojis.Warning, warning.Emoji);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
-            NewCommandStrings.TemplateSourceSearchFailed, "broken", NewCommandStrings.TemplateRepositoryPathInvalid),
+            NewCommandStrings.TemplateSourceSearchFailed, "broken",
+            string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSettingInvalid,
+                "templates.broken.path", NewCommandStrings.TemplateRepositoryPathInvalid)),
             warning.Message);
     }
 

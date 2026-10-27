@@ -137,7 +137,7 @@ public partial class NewCommandLocalTemplateTests
               // The global config permits comments and trailing commas.
               "templates": {
                 "broken": {{invalidValue}},
-                "working": {{JsonSerializer.Serialize(workspace.Path)}},
+                "working": { "path": {{JsonSerializer.Serialize(workspace.Path)}} },
               }
             }
             """);
@@ -145,11 +145,14 @@ public partial class NewCommandLocalTemplateTests
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
 
         Assert.Equal("working", source.Key);
-        Assert.Equal(new TemplateSource(workspace.Path, null, null), source.Value);
+        Assert.Equal(new TemplateSource(workspace.Path, null, null), source.Value.Template);
         var warning = Assert.Single(interaction.DisplayedMessages);
         Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+        using var document = JsonDocument.Parse(invalidValue);
+        var error = Assert.Throws<TemplateSourceConfigurationException>(() =>
+            TemplateSourceConfiguration.Parse(document.RootElement, "templates.broken", requireComplete: true));
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed,
-            "broken", NewCommandStrings.InvalidConfiguredTemplateSource), warning.Message);
+            "broken", error.Message), warning.Message);
     }
 
     [Theory]
@@ -179,7 +182,7 @@ public partial class NewCommandLocalTemplateTests
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
 
         Assert.Equal("company", source.Key);
-        Assert.Equal(workspace.Path, source.Value.Path);
+        Assert.Equal(workspace.Path, source.Value.Template?.Path);
         Assert.Empty(interaction.DisplayedMessages);
     }
 
@@ -430,13 +433,13 @@ public partial class NewCommandLocalTemplateTests
         var interaction = new TestInteractionService();
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var exitCode = await provider.GetRequiredService<RootCommand>()
-            .Parse(["config", "set", "templates.company", workspace.Path, "--global"])
+            .Parse(["config", "set", "templates.company.path", workspace.Path, "--global"])
             .InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
         Assert.Equal("company", source.Key);
-        Assert.Equal(workspace.Path, source.Value.Path);
+        Assert.Equal(workspace.Path, source.Value.Template?.Path);
     }
 
     [Theory]
@@ -469,7 +472,13 @@ public partial class NewCommandLocalTemplateTests
 
     private static Task WriteConfiguredSourcesAsync(IServiceProvider provider, Dictionary<string, object> sources) =>
         File.WriteAllTextAsync(provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true),
-            JsonSerializer.Serialize(new { templates = sources }));
+            JsonSerializer.Serialize(new
+            {
+                // Strings are fixture shorthand only; persisted sources always use objects.
+                templates = sources.ToDictionary(entry => entry.Key, entry => entry.Value is string text
+                    ? Path.IsPathFullyQualified(text) ? new { path = text } : (object)new { repository = text }
+                    : entry.Value)
+            }));
 
     private static async Task CreateSearchTemplateAsync(
         TemporaryWorkspace workspace, string directory, string shortName, string description, string marker)

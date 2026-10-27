@@ -4,6 +4,7 @@
 using System.Text.Json.Nodes;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
+using Hex1b.Input;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests;
@@ -12,17 +13,21 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task DirectoryTemplatePromptsWithoutDotNetSdk() => CreateFromTemplateAsync(repository: false, nonInteractive: false);
+    public Task DirectoryTemplatePromptsWithoutDotNetSdk() => CreateFromTemplateAsync(repository: false, nonInteractive: false, configured: false);
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task RepositoryTemplatePromptsWithoutDotNetSdk() => CreateFromTemplateAsync(repository: true, nonInteractive: false);
+    public Task RepositoryTemplatePromptsWithoutDotNetSdk() => CreateFromTemplateAsync(repository: true, nonInteractive: false, configured: false);
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task RepositoryTemplateUsesDefaultsNonInteractivelyWithoutDotNetSdk() => CreateFromTemplateAsync(repository: true, nonInteractive: true);
+    public Task RepositoryTemplateUsesDefaultsNonInteractivelyWithoutDotNetSdk() => CreateFromTemplateAsync(repository: true, nonInteractive: true, configured: false);
 
-    private async Task CreateFromTemplateAsync(bool repository, bool nonInteractive)
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task ConfiguredTemplateSourceCommandsAndSearchWithoutDotNetSdk() => CreateFromTemplateAsync(repository: false, nonInteractive: false, configured: true);
+
+    private async Task CreateFromTemplateAsync(bool repository, bool nonInteractive, bool configured)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var testDirectory = Path.Combine(repoRoot, "tests", "Aspire.Cli.EndToEnd.Tests");
@@ -56,6 +61,19 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
         await auto.InstallAspireCliAsync(strategy, counter);
         await auto.RunCommandAsync("! command -v dotnet", counter);
 
+        if (configured)
+        {
+            await auto.RunCommandAsync("aspire template source add company --path \"$PWD/template\" --nologo", counter);
+            await auto.RunCommandAsync("aspire template source add git-example --repository https://example.test/templates --ref main --path templates --nologo", counter);
+            await auto.RunCommandAsync("aspire template source add catalog --href 'https://example.test/index?q={search}&cliVersion={cliVersion}' --nologo", counter);
+            await auto.RunCommandAsync("cp \"$HOME/.aspire/aspire.config.json\" before.json", counter);
+            await auto.RunCommandAsync($"aspire template source add COMPANY --href https://example.test/replacement --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
+            await auto.RunCommandAsync("cmp before.json \"$HOME/.aspire/aspire.config.json\"", counter);
+            await auto.RunCommandAsync($"aspire config set templates.company.href https://example.test/conflicting --global --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
+            await auto.RunCommandAsync("cmp before.json \"$HOME/.aspire/aspire.config.json\"", counter);
+            await auto.RunCommandAsync("aspire template source remove git-example --nologo && aspire template source remove catalog --nologo", counter);
+        }
+
         if (repository)
         {
             // The bind-mounted template belongs to the host UID. Trust only this fixture for Git setup.
@@ -70,10 +88,22 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
         await using var server = repository
             ? await GitHttpServer.StartAsync(workspace.Path, TestContext.Current.CancellationToken)
             : null;
-        var source = server is not null ? $"--template-repository \"{server.RepositoryUrl}\"" : "--template-path template";
+        var source = configured ? "" : server is not null ? $"--template-repository \"{server.RepositoryUrl}\"" : "--template-path template";
         var mode = nonInteractive ? " --non-interactive" : "";
         await auto.TypeAsync($"aspire new {source} --name PromptDemo --output out --suppress-agent-init --nologo{mode}");
         await auto.EnterAsync();
+
+        if (configured)
+        {
+            await auto.WaitUntilTextAsync("Search for more templates", timeout: TimeSpan.FromSeconds(60));
+            await auto.KeyAsync(Hex1bKey.End);
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("Search templates (leave empty to list all)", timeout: TimeSpan.FromSeconds(30));
+            await auto.TypeAsync("CUSTOM");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("custom-template-fixture", timeout: TimeSpan.FromSeconds(30));
+            await auto.EnterAsync();
+        }
 
         if (!nonInteractive)
         {
@@ -107,11 +137,21 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
         }
         await auto.WaitForSuccessPromptAsync(counter, timeout: nonInteractive ? TimeSpan.FromSeconds(60) : null);
         await auto.RunCommandAsync("! command -v dotnet", counter);
+        if (configured)
+        {
+            await auto.RunCommandAsync("aspire template source remove COMPANY --nologo", counter);
+            await auto.RunCommandAsync($"aspire template source remove company --nologo; test $? -eq {CliExitCodes.ConfigNotFound}", counter);
+        }
 
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "out");
         var files = Directory.GetFiles(outputDirectory, "*", SearchOption.AllDirectories)
             .Order(StringComparer.Ordinal)
             .ToDictionary(path => Path.GetRelativePath(outputDirectory, path).Replace('\\', '/'), File.ReadAllText);
-        await VerifyXunit.Verifier.Verify(files).UseDirectory(Path.Combine(testDirectory, "Snapshots"));
+        var verification = VerifyXunit.Verifier.Verify(files).UseDirectory(Path.Combine(testDirectory, "Snapshots"));
+        if (configured)
+        {
+            verification = verification.UseMethodName(nameof(DirectoryTemplatePromptsWithoutDotNetSdk));
+        }
+        await verification;
     }
 }

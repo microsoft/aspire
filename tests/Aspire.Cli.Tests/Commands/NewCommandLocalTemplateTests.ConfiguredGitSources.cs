@@ -34,13 +34,13 @@ public partial class NewCommandLocalTemplateTests
         using var provider = services.BuildServiceProvider();
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
-            .Parse(["config", "set", "templates.company", repository, "--global"])
+            .Parse(["config", "set", "templates.company.repository", repository, "--global"])
             .InvokeAsync().DefaultTimeout();
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("company", source.Key);
-        Assert.Equal(new TemplateSource(".", repository, null), source.Value);
+        Assert.Equal(new TemplateSource(".", repository, null), source.Value.Template);
         Assert.Empty(git.ResolveCalls);
         Assert.Empty(git.CloneCalls);
         Assert.Empty(interaction.DisplayedMessages);

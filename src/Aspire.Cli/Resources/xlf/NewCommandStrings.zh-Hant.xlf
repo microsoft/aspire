@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InvalidConfiguredTemplateSource">
-        <source>Template sources must have a nonempty name and be an absolute directory path, an HTTPS or SSH Git repository URL, or an object containing only a required 'repository' URL and optional nonempty 'ref' and 'path' strings. Repository URLs must not contain passwords, tokens, queries, or fragments. Searchable endpoints are not supported yet.</source>
-        <target state="new">Template sources must have a nonempty name and be an absolute directory path, an HTTPS or SSH Git repository URL, or an object containing only a required 'repository' URL and optional nonempty 'ref' and 'path' strings. Repository URLs must not contain passwords, tokens, queries, or fragments. Searchable endpoints are not supported yet.</target>
+        <source>Expected a source object with an absolute 'path', a 'repository' and optional 'ref'/'path', or 'href' alone. Use 'aspire template source add' to configure a source.</source>
+        <target state="new">Expected a source object with an absolute 'path', a 'repository' and optional 'ref'/'path', or 'href' alone. Use 'aspire template source add' to configure a source.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidProjectName">
@@ -93,8 +93,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NoConfiguredTemplateSources">
-        <source>No usable template sources are configured. Add an absolute directory path or an HTTPS or SSH Git repository URL with 'aspire config set templates.&lt;name&gt; &lt;path-or-url&gt; --global'.</source>
-        <target state="new">No usable template sources are configured. Add an absolute directory path or an HTTPS or SSH Git repository URL with 'aspire config set templates.&lt;name&gt; &lt;path-or-url&gt; --global'.</target>
+        <source>No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path', '--repository', or '--href'. Sources are stored globally.</source>
+        <target state="new">No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path', '--repository', or '--href'. Sources are stored globally.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
@@ -202,6 +202,41 @@
         <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TemplateCatalogDownloadFailed">
+        <source>Could not download the template catalog. Check the endpoint, HTTPS connectivity, and the 4 MiB response limit.</source>
+        <target state="new">Could not download the template catalog. Check the endpoint, HTTPS connectivity, and the 4 MiB response limit.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateCatalogEntryMustBeObject">
+        <source>Expected a template object with 'name', 'description', 'repository', 'ref', and 'path' strings.</source>
+        <target state="new">Expected a template object with 'name', 'description', 'repository', 'ref', and 'path' strings.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateCatalogHttpFailed">
+        <source>The template catalog returned HTTP {0}.</source>
+        <target state="new">The template catalog returned HTTP {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateCatalogInvalidResponse">
+        <source>The template catalog must return a JSON object with a 'templates' array.</source>
+        <target state="new">The template catalog must return a JSON object with a 'templates' array.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateCatalogRequiresSingleTemplate">
+        <source>Catalog result '{0}' must identify a directory containing exactly one template.</source>
+        <target state="new">Catalog result '{0}' must identify a directory containing exactly one template.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateCatalogTimedOut">
+        <source>The template catalog request timed out.</source>
+        <target state="new">The template catalog request timed out.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateCommandDescription">
+        <source>Manage project templates.</source>
+        <target state="new">Manage project templates.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TemplateDirectoryNotFound">
         <source>The template directory '{0}' does not exist.</source>
         <target state="new">The template directory '{0}' does not exist.</target>
@@ -262,9 +297,119 @@
         <target state="new">Search templates (leave empty to list all)</target>
         <note />
       </trans-unit>
+      <trans-unit id="TemplateSourceAddDescription">
+        <source>Add a named template source to global configuration.</source>
+        <target state="new">Add a named template source to global configuration.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAdded">
+        <source>Template source '{0}' added to global configuration.</source>
+        <target state="new">Template source '{0}' added to global configuration.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAlreadyExists">
+        <source>A template source with this name already exists. Remove it before adding a replacement.</source>
+        <target state="new">A template source with this name already exists. Remove it before adding a replacement.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceCannotExtendString">
+        <source>This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</source>
+        <target state="new">This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceCommandDescription">
+        <source>Manage global template sources.</source>
+        <target state="new">Manage global template sources.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceFieldConflict">
+        <source>Cannot be combined with '{0}'. Remove the conflicting field before saving.</source>
+        <target state="new">Cannot be combined with '{0}'. Remove the conflicting field before saving.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceHrefDescription">
+        <source>An HTTPS JSON catalog URL, optionally containing query placeholders {search} and {cliVersion}.</source>
+        <target state="new">An HTTPS JSON catalog URL, optionally containing query placeholders {search} and {cliVersion}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceInvalidHref">
+        <source>Expected an HTTPS catalog URL without credentials, fragments, whitespace, or backslashes. Only query placeholders '{search}' and '{cliVersion}' are supported.</source>
+        <target state="new">Expected an HTTPS catalog URL without credentials, fragments, whitespace, or backslashes. Only query placeholders '{search}' and '{cliVersion}' are supported.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceInvalidRepository">
+        <source>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</source>
+        <target state="new">Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceMissingLocation">
+        <source>Specify an absolute 'path' for a local source, 'repository' for a Git source, or 'href' for a template catalog. 'ref' requires 'repository'.</source>
+        <target state="new">Specify an absolute 'path' for a local source, 'repository' for a Git source, or 'href' for a template catalog. 'ref' requires 'repository'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNameDescription">
+        <source>The name of the template source.</source>
+        <target state="new">The name of the template source.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNameRequired">
+        <source>Template source names must be nonempty and must not contain dots, colons, or control characters.</source>
+        <target state="new">Template source names must be nonempty and must not contain dots, colons, or control characters.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNotFound">
+        <source>Template source '{0}' was not found in global configuration.</source>
+        <target state="new">Template source '{0}' was not found in global configuration.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourcePathDescription">
+        <source>An absolute local template directory, or a repository-relative directory when --repository is specified.</source>
+        <target state="new">An absolute local template directory, or a repository-relative directory when --repository is specified.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRefDescription">
+        <source>A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</source>
+        <target state="new">A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRemoveDescription">
+        <source>Remove a named template source from global configuration.</source>
+        <target state="new">Remove a named template source from global configuration.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRemoved">
+        <source>Template source '{0}' removed from global configuration.</source>
+        <target state="new">Template source '{0}' removed from global configuration.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRepositoryDescription">
+        <source>An HTTPS or SSH Git repository URL containing templates.</source>
+        <target state="new">An HTTPS or SSH Git repository URL containing templates.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TemplateSourceSearchFailed">
         <source>Could not search template source '{0}': {1}</source>
         <target state="new">Could not search template source '{0}': {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceSettingInvalid">
+        <source>Invalid template setting '{0}': {1}</source>
+        <target state="new">Invalid template setting '{0}': {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceStringRequired">
+        <source>Expected a nonempty string without control characters.</source>
+        <target state="new">Expected a nonempty string without control characters.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceUnknownField">
+        <source>Unknown source field. Use 'repository' with optional 'ref'/'path', or 'href' alone.</source>
+        <target state="new">Unknown source field. Use 'repository' with optional 'ref'/'path', or 'href' alone.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceWriteFailed">
+        <source>Could not update global template sources. Check the configuration file's JSON format and file permissions.</source>
+        <target state="new">Could not update global template sources. Check the configuration file's JSON format and file permissions.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourcesMustBeObject">

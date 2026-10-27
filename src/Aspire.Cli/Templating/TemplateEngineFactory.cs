@@ -108,12 +108,7 @@ internal sealed partial class TemplateEngineFactory(
     {
         var cacheRoot = Path.Combine(executionContext.CacheDirectory.FullName, "git");
         var pathRoot = Path.Combine(cacheRoot, "repository");
-        var relativePath = Path.GetRelativePath(pathRoot, Path.GetFullPath(templatePath, pathRoot));
-        if (Path.IsPathRooted(templatePath) || relativePath == ".." ||
-            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-        {
-            throw new TemplateDiscoveryException(CliExitCodes.InvalidCommand, NewCommandStrings.TemplateRepositoryPathInvalid);
-        }
+        var relativePath = TemplateSource.GetRepositoryRelativePath(templatePath, pathRoot);
 
         try
         {

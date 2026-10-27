@@ -638,6 +638,16 @@ public class Program
         // Template factories.
         builder.Services.AddSingleton<TemplateNuGetConfigService>();
         builder.Services.AddSingleton<ITemplateProvider, TemplateProvider>();
+        builder.Services.AddHttpClient(nameof(TemplateCatalogService))
+            .RemoveAllLoggers()
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                // Catalog search text must not follow redirects to a different server.
+                AllowAutoRedirect = false,
+                UseCookies = false
+            });
+        builder.Services.AddSingleton<TemplateCatalogService>();
+        builder.Services.AddSingleton<TemplateSourceStore>();
         builder.Services.AddSingleton<ConfiguredTemplateSourceService>();
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, DotNetTemplateFactory>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, CliTemplateFactory>());
@@ -705,6 +715,7 @@ public class Program
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();
+        builder.Services.AddTransient<TemplateManagementCommand>();
         builder.Services.AddTransient<CompletionsCommand>();
         builder.Services.AddTransient<CacheCommand>();
         builder.Services.AddTransient<CertificatesCommand>();

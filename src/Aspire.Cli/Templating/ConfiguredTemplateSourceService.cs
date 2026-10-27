@@ -4,7 +4,6 @@
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
-using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -14,18 +13,20 @@ namespace Aspire.Cli.Templating;
 internal sealed class ConfiguredTemplateSourceService(
     IConfigurationService configurationService,
     ITemplateProvider templateProvider,
+    TemplateCatalogService catalogService,
     IInteractionService interactionService)
 {
-    internal async Task<IReadOnlyList<KeyValuePair<string, TemplateSource>>> GetSourcesAsync(CancellationToken cancellationToken)
+    internal async Task<IReadOnlyList<KeyValuePair<string, ConfiguredTemplateSource>>> GetSourcesAsync(CancellationToken cancellationToken)
     {
         var settingsPath = configurationService.GetSettingsFilePath(isGlobal: true);
         try
         {
             using var settings = JsonDocument.Parse(
                 await File.ReadAllTextAsync(settingsPath, cancellationToken), ConfigurationHelper.ParseOptions);
-            // Sources are path/URL strings or Git objects, e.g.
-            // { "templates": { "local": "/absolute/path",
-            //   "remote": { "repository": "https://host/repo", "ref": "main", "path": "templates" } } }.
+            // Sources are local, Git, or catalog objects, e.g.
+            // { "templates": { "local": { "path": "/absolute/path" },
+            //   "remote": { "repository": "https://host/repo", "ref": "main", "path": "templates" },
+            //   "catalog": { "href": "https://host/templates.json" } } }.
             // Read the JSON directly to preserve value types and avoid project-config overrides.
             if (settings.RootElement.ValueKind is not JsonValueKind.Object)
             {
@@ -42,17 +43,20 @@ internal sealed class ConfiguredTemplateSourceService(
                 return [];
             }
 
-            List<KeyValuePair<string, TemplateSource>> sources = [];
+            List<KeyValuePair<string, ConfiguredTemplateSource>> sources = [];
             foreach (var entry in templates.EnumerateObject())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (string.IsNullOrWhiteSpace(entry.Name) || ParseSource(entry.Value) is not { } source)
+                try
                 {
-                    Warn(entry.Name, NewCommandStrings.InvalidConfiguredTemplateSource);
-                    continue;
+                    TemplateSourceConfiguration.ValidateName(entry.Name);
+                    var source = TemplateSourceConfiguration.Parse(entry.Value, $"templates.{entry.Name}", requireComplete: true);
+                    sources.Add(new(entry.Name, source));
                 }
-
-                sources.Add(new(entry.Name, source));
+                catch (TemplateSourceConfigurationException ex)
+                {
+                    Warn(entry.Name, ex.Message);
+                }
             }
 
             return sources;
@@ -68,51 +72,6 @@ internal sealed class ConfiguredTemplateSourceService(
         }
     }
 
-    private static TemplateSource? ParseSource(JsonElement value)
-    {
-        if (ReadSourceString(value) is { } source)
-        {
-            return Path.IsPathFullyQualified(source)
-                ? new TemplateSource(source, null, null)
-                : GitRepositoryUrl.IsValid(source) ? new TemplateSource(".", source, null) : null;
-        }
-
-        if (value.ValueKind is not JsonValueKind.Object ||
-            value.EnumerateObject().Any(property => property.Name is not ("repository" or "ref" or "path")) ||
-            !value.TryGetProperty("repository", out var repositoryElement) ||
-            ReadSourceString(repositoryElement) is not { } repository ||
-            !GitRepositoryUrl.IsValid(repository))
-        {
-            return null;
-        }
-
-        var path = value.TryGetProperty("path", out var pathElement) ? ReadSourceString(pathElement) : ".";
-        if (path is null)
-        {
-            return null;
-        }
-
-        string? reference = null;
-        if (value.TryGetProperty("ref", out var refElement))
-        {
-            reference = ReadSourceString(refElement);
-            if (reference is null)
-            {
-                return null;
-            }
-        }
-
-        // The shared acquisition pipeline validates repository-relative paths before fetching
-        // and checks for symlink traversal after checkout, just as it does for explicit options.
-        return new TemplateSource(path, repository, reference);
-    }
-
-    private static string? ReadSourceString(JsonElement value) =>
-        value.ValueKind is JsonValueKind.String &&
-        value.GetString() is { } text &&
-        !string.IsNullOrWhiteSpace(text) &&
-        !text.Any(char.IsControl) ? text : null;
-
     public async Task<IReadOnlyList<ConfiguredTemplate>> SearchAsync(string query, CancellationToken cancellationToken)
     {
         var sources = await GetSourcesAsync(cancellationToken);
@@ -125,24 +84,35 @@ internal sealed class ConfiguredTemplateSourceService(
         List<ConfiguredTemplate> results = [];
         // The template engine owns mutable mount/resource state. Discover sequentially rather
         // than sharing a factory across concurrent source installations.
-        foreach (var (name, source) in sources)
+        foreach (var (name, configuredSource) in sources)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 var status = string.Format(CultureInfo.CurrentCulture, NewCommandStrings.SearchingTemplateSource, name);
                 IEnumerable<ITemplate> templates;
-                if (source.Repository is null)
+                if (configuredSource.Href is { } href)
                 {
                     templates = await interactionService.ShowStatusAsync(status,
-                        () => templateProvider.GetTemplatesAsync(source, cancellationToken));
+                        () => catalogService.SearchAsync(href, $"templates.{name}", query, cancellationToken));
+                }
+                else if (configuredSource.Template is { } source)
+                {
+                    if (source.Repository is null)
+                    {
+                        templates = await interactionService.ShowStatusAsync(status,
+                            () => templateProvider.GetTemplatesAsync(source, cancellationToken));
+                    }
+                    else
+                    {
+                        // Git owns its resolve/clone spinners; an enclosing status hides them.
+                        interactionService.DisplaySubtleMessage(status);
+                        templates = await templateProvider.GetTemplatesAsync(source, cancellationToken);
+                    }
                 }
                 else
                 {
-                    // The Git acquisition path owns its resolve/clone spinners. An enclosing
-                    // status would hide those stages behind a generic search spinner.
-                    interactionService.DisplaySubtleMessage(status);
-                    templates = await templateProvider.GetTemplatesAsync(source, cancellationToken);
+                    throw new InvalidOperationException("A complete template source must have a location.");
                 }
 
                 results.AddRange(templates
