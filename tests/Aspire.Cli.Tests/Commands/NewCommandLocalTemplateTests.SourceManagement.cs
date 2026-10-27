@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
+using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
@@ -14,8 +15,60 @@ namespace Aspire.Cli.Tests.Commands;
 public partial class NewCommandLocalTemplateTests
 {
     [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    [InlineData(2, true)]
+    [InlineData(3, true)]
+    [InlineData(4, false)]
+    [InlineData(5, false)]
+    [InlineData(6, true)]
+    [InlineData(7, true)]
+    [InlineData(8, true)]
+    [InlineData(9, false)]
+    [InlineData(10, false)]
+    [InlineData(11, false)]
+    [InlineData(12, false)]
+    [InlineData(13, false)]
+    [InlineData(14, false)]
+    [InlineData(15, false)]
+    public void TemplateSourceOptions_FromParseResultValidatesEveryFieldCombination(int fieldMask, bool valid)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CreateServices(workspace, new TestInteractionService(), interactive: true).BuildServiceProvider();
+        var path = (fieldMask & 2) != 0 ? "templates/api" : workspace.Path;
+        (int Mask, string Option, string Value)[] fields =
+        [
+            (1, "--path", path),
+            (2, "--repository", "https://example.test/repo"),
+            (4, "--ref", "main"),
+            (8, "--href", "https://example.test/templates")
+        ];
+        var arguments = fields.Where(field => (fieldMask & field.Mask) != 0)
+            .SelectMany(field => new[] { field.Option, field.Value }).ToArray();
+        var result = provider.GetRequiredService<RootCommand>().Parse(["template", "source", "add", "company", .. arguments]);
+        Assert.Empty(result.Errors);
+
+        if (valid)
+        {
+            var options = TemplateManagementCommand.AddSourceOptions.FromParseResult(result);
+            Assert.Equal("company", options.Name);
+            Assert.Equal((fieldMask & 1) != 0 ? path : null, options.Path);
+            Assert.Equal((fieldMask & 2) != 0 ? "https://example.test/repo" : null, options.Repository);
+            Assert.Equal((fieldMask & 4) != 0 ? "main" : null, options.Ref);
+            Assert.Equal((fieldMask & 8) != 0 ? "https://example.test/templates" : null, options.Href);
+        }
+        else
+        {
+            Assert.Throws<TemplateSourceConfigurationException>(() => TemplateManagementCommand.AddSourceOptions.FromParseResult(result));
+        }
+    }
+
+    [Theory]
     [InlineData("local")]
     [InlineData("git")]
+    [InlineData("git-defaults")]
+    [InlineData("git-path")]
+    [InlineData("git-ref")]
     [InlineData("catalog")]
     public async Task TemplateSourceCommands_AddAndRemoveGlobalObjects(string kind)
     {
@@ -31,6 +84,9 @@ public partial class NewCommandLocalTemplateTests
         {
             "local" => new[] { "--path", workspace.Path },
             "git" => ["--repository", "https://example.test/templates", "--ref", "release/17.0", "--path", "templates/api"],
+            "git-defaults" => ["--repository", "https://example.test/templates"],
+            "git-path" => ["--repository", "https://example.test/templates", "--path", "templates/api"],
+            "git-ref" => ["--repository", "https://example.test/templates", "--ref", "release/17.0"],
             _ => ["--href", "https://example.test/templates?q={search}&cliVersion={cliVersion}"]
         };
         var root = provider.GetRequiredService<RootCommand>();
