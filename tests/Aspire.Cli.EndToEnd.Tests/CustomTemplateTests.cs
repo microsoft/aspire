@@ -180,11 +180,6 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
         var files = Directory.GetFiles(outputDirectory, "*", SearchOption.AllDirectories)
             .Order(StringComparer.Ordinal)
             .ToDictionary(path => Path.GetRelativePath(outputDirectory, path).Replace('\\', '/'), File.ReadAllText);
-        var verification = VerifyXunit.Verifier.Verify(files).UseDirectory(Path.Combine(testDirectory, "Snapshots"));
-        if (configured)
-        {
-            verification = verification.UseMethodName(nameof(DirectoryTemplatePromptsWithoutDotNetSdk));
-        }
-        await verification;
+        await VerifyXunit.Verifier.Verify(files).UseDirectory(Path.Combine(testDirectory, "Snapshots"));
     }
 }
