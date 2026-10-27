@@ -322,6 +322,11 @@
         <target state="new">Manage global template sources.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TemplateSourceConfigurationHeader">
+        <source>Configuration</source>
+        <target state="new">Configuration</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TemplateSourceFieldConflict">
         <source>Cannot be combined with '{0}'. Remove the conflicting field before saving.</source>
         <target state="new">Cannot be combined with '{0}'. Remove the conflicting field before saving.</target>
@@ -342,6 +347,16 @@
         <target state="new">Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TemplateSourceListDescription">
+        <source>List named template sources from global configuration without discovering templates.</source>
+        <target state="new">List named template sources from global configuration without discovering templates.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceListEmpty">
+        <source>No template sources are configured. Use 'aspire template source add' to add one.</source>
+        <target state="new">No template sources are configured. Use 'aspire template source add' to add one.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TemplateSourceMissingLocation">
         <source>Specify an absolute 'path' for a local source, 'repository' for a Git source, or 'href' for a template catalog. 'ref' requires 'repository'.</source>
         <target state="new">Specify an absolute 'path' for a local source, 'repository' for a Git source, or 'href' for a template catalog. 'ref' requires 'repository'.</target>
@@ -350,6 +365,11 @@
       <trans-unit id="TemplateSourceNameDescription">
         <source>The name of the template source.</source>
         <target state="new">The name of the template source.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNameHeader">
+        <source>Name</source>
+        <target state="new">Name</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNameRequired">
@@ -365,6 +385,11 @@
       <trans-unit id="TemplateSourcePathDescription">
         <source>An absolute local template directory, or a repository-relative directory when --repository is specified.</source>
         <target state="new">An absolute local template directory, or a repository-relative directory when --repository is specified.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceReadFailed">
+        <source>Could not read global template sources. Check the configuration file's JSON format and file permissions.</source>
+        <target state="new">Could not read global template sources. Check the configuration file's JSON format and file permissions.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceRefDescription">

@@ -15,6 +15,14 @@ internal sealed class TemplateSourceStore(
     CliExecutionContext executionContext,
     ILogger<TemplateSourceStore> logger)
 {
+    public async Task<JsonObject> ListAsync(CancellationToken cancellationToken)
+    {
+        var settings = await ReadAsync(configurationService.GetSettingsFilePath(isGlobal: true), cancellationToken);
+        // Listing is configuration management, not discovery. Keep incomplete sources visible
+        // so users can inspect and finish objects created through stepwise config edits.
+        return GetSources(settings);
+    }
+
     public async Task AddAsync(string name, JsonObject source, CancellationToken cancellationToken)
     {
         TemplateSourceConfiguration.ValidateName(name);

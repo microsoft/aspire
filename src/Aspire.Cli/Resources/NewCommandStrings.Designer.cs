@@ -148,6 +148,16 @@ namespace Aspire.Cli.Resources {
 
         internal static string TemplateSourceWriteFailed => ResourceManager.GetString("TemplateSourceWriteFailed", resourceCulture);
 
+        internal static string TemplateSourceListDescription => ResourceManager.GetString("TemplateSourceListDescription", resourceCulture);
+
+        internal static string TemplateSourceListEmpty => ResourceManager.GetString("TemplateSourceListEmpty", resourceCulture);
+
+        internal static string TemplateSourceNameHeader => ResourceManager.GetString("TemplateSourceNameHeader", resourceCulture);
+
+        internal static string TemplateSourceConfigurationHeader => ResourceManager.GetString("TemplateSourceConfigurationHeader", resourceCulture);
+
+        internal static string TemplateSourceReadFailed => ResourceManager.GetString("TemplateSourceReadFailed", resourceCulture);
+
         private static global::System.Resources.ResourceManager resourceMan;
 
         private static global::System.Globalization.CultureInfo resourceCulture;

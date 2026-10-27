@@ -361,4 +361,19 @@
   <data name="TemplateSourceWriteFailed" xml:space="preserve">
     <value>Could not update global template sources. Check the configuration file's JSON format and file permissions.</value>
   </data>
+  <data name="TemplateSourceListDescription" xml:space="preserve">
+    <value>List named template sources from global configuration without discovering templates.</value>
+  </data>
+  <data name="TemplateSourceListEmpty" xml:space="preserve">
+    <value>No template sources are configured. Use 'aspire template source add' to add one.</value>
+  </data>
+  <data name="TemplateSourceNameHeader" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="TemplateSourceConfigurationHeader" xml:space="preserve">
+    <value>Configuration</value>
+  </data>
+  <data name="TemplateSourceReadFailed" xml:space="preserve">
+    <value>Could not read global template sources. Check the configuration file's JSON format and file permissions.</value>
+  </data>
 </root>

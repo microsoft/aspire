@@ -104,6 +104,8 @@ aspire template source add release --repository https://github.com/microsoft/asp
 aspire template source add catalog --href 'https://example.com/templates.json'
 aspire template source add search --href 'https://example.com/templates?q={search}&cliVersion={cliVersion}'
 aspire template source remove examples
+aspire template source list
+aspire template source list --format json
 ```
 
 This writes the following shape to the global `~/.aspire/aspire.config.json` file:
@@ -137,6 +139,30 @@ Project-level `templates` settings are not used.
 All sources must use objects; path and URL string shorthands are not accepted.
 Source names cannot contain dots, colons, or control characters. Adding a name
 that already exists (case-insensitively) fails without overwriting it.
+
+`source list` displays source names and their configured fields in a table.
+`--format json` writes only a JSON object keyed by source name to stdout, matching
+the global `templates` object (without the surrounding `templates` property):
+
+```json
+{
+  "company": {
+    "path": "/absolute/path/to/company-templates"
+  },
+  "release": {
+    "repository": "https://github.com/microsoft/aspire-templates",
+    "ref": "release/17.0",
+    "path": "templates"
+  }
+}
+```
+
+Listing sorts sources by name, preserves configured fields without adding defaults,
+and includes incomplete source objects so they can be inspected while editing.
+No configured sources produces `{}` in JSON mode. Invalid/unreadable global
+configuration fails with a nonzero exit code and diagnostics on stderr, not an
+empty success result. Listing does not scan directories, contact catalogs, resolve
+Git refs, or clone repositories.
 
 The `repository` value must be an HTTPS or SSH URL, for example
 `https://github.com/microsoft/aspire-templates` or

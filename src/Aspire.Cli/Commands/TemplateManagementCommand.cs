@@ -5,8 +5,10 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
+using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
 
@@ -27,6 +29,71 @@ internal sealed class TemplateManagementCommand : ParentCommand
         {
             Subcommands.Add(new AddSourceCommand(store, services));
             Subcommands.Add(new RemoveSourceCommand(store, services));
+            Subcommands.Add(new ListSourcesCommand(store, services));
+        }
+    }
+
+    private sealed class ListSourcesCommand : BaseCommand
+    {
+        private readonly Option<OutputFormat> _format = new("--format") { Description = SharedCommandStrings.LsFormatOptionDescription };
+        private readonly TemplateSourceStore _store;
+
+        public ListSourcesCommand(TemplateSourceStore store, CommonCommandServices services)
+            : base("list", NewCommandStrings.TemplateSourceListDescription, services)
+        {
+            _store = store;
+            Options.Add(_format);
+        }
+
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        {
+            JsonObject sources;
+            try
+            {
+                sources = await _store.ListAsync(cancellationToken);
+            }
+            catch (TemplateSourceConfigurationException ex)
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, ex.Message);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, NewCommandStrings.TemplateSourceReadFailed);
+            }
+
+            var orderedSources = sources.OrderBy(source => source.Key, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(source => source.Key, StringComparer.Ordinal);
+            if (parseResult.GetValue(_format) == OutputFormat.Json)
+            {
+                JsonObject result = new();
+                foreach (var (name, source) in orderedSources)
+                {
+                    result[name] = source?.DeepClone();
+                }
+
+                InteractionService.DisplayRawText(JsonSerializer.Serialize(result, JsonSourceGenerationContext.Default.JsonObject), ConsoleOutput.Standard);
+            }
+            else if (sources.Count == 0)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Information, NewCommandStrings.TemplateSourceListEmpty);
+            }
+            else
+            {
+                var table = new Table()
+                    .AddColumn(NewCommandStrings.TemplateSourceNameHeader)
+                    .AddColumn(NewCommandStrings.TemplateSourceConfigurationHeader);
+                foreach (var (name, source) in orderedSources)
+                {
+                    var configuration = source is JsonObject definition
+                        ? string.Join(Environment.NewLine, definition.Select(field => $"{field.Key}: {field.Value?.ToString() ?? "null"}"))
+                        : source?.ToJsonString() ?? "null";
+                    table.AddRow(name.EscapeMarkup(), configuration.EscapeMarkup());
+                }
+
+                InteractionService.DisplayRenderable(table);
+            }
+
+            return CommandResult.Success();
         }
     }
 
