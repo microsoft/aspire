@@ -1504,6 +1504,13 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Resource.UsesDefaultApplicationIdUri = true;
+
+        // A custom URI would take precedence over the default. For an existing registration the URI is configuration only and stays.
+        if (!builder.Resource.IsExistingApplication)
+        {
+            builder.Resource.ApplicationIdUri = null;
+        }
+
         return builder;
     }
 
@@ -1550,7 +1557,7 @@ public static class EntraIdResourceExtensions
     /// <param name="configure">An optional callback that sets the scope's other options.</param>
     /// <returns>The resource builder for chaining.</returns>
     /// <exception cref="ArgumentException">
-    /// The name is invalid or already used by another scope, or the scope of an existing registration has no <see cref="EntraIdScope.Id"/>.
+    /// The name is invalid or already used by another scope, or the explicit <see cref="EntraIdScope.Id"/> is already used by another scope.
     /// </exception>
     /// <remarks>
     /// <para>
@@ -1662,8 +1669,9 @@ public static class EntraIdResourceExtensions
     /// <returns>The resource builder for chaining.</returns>
     /// <exception cref="ArgumentException">A scope is not exposed or is disabled, or no scope was given.</exception>
     /// <exception cref="InvalidOperationException">
-    /// <paramref name="api"/> already pre-authorizes this registration, or depends on it in another way. See
-    /// <see cref="WithPreAuthorizedApplication"/>.
+    /// <paramref name="api"/> already pre-authorizes this registration, or depends on it in another way (see
+    /// <see cref="WithPreAuthorizedApplication"/>), or a scope of an existing <paramref name="api"/> has no <see cref="EntraIdScope.Id"/>,
+    /// which can't be derived for an existing registration.
     /// </exception>
     /// <remarks>
     /// <para>
@@ -1770,13 +1778,16 @@ public static class EntraIdResourceExtensions
     /// <param name="api">The registration that exposes the scopes.</param>
     /// <param name="scopeNames">The names of scopes already declared with <see cref="WithApiPermissions(IResourceBuilder{EntraIdApplicationResource}, IResourceBuilder{EntraIdApplicationResource}, string[])"/>.</param>
     /// <returns>The resource builder for chaining.</returns>
-    /// <exception cref="InvalidOperationException">A scope was not declared first.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// A scope was not declared first, or a scope of an existing <paramref name="api"/> has no <see cref="EntraIdScope.Id"/>.
+    /// </exception>
     /// <remarks>
     /// <para>
     /// This creates a delegated permission grant for all users (<c>consentType: AllPrincipals</c>) from this registration to
     /// <paramref name="api"/>, so nobody is prompted to consent. The identity that deploys needs a directory role such as
     /// Privileged Role Administrator, Cloud Application Administrator or Application Administrator, or a privileged
     /// Microsoft Graph permission such as <c>DelegatedPermissionGrant.ReadWrite.All</c>. Deployment fails without it.
+    /// See <see href="https://learn.microsoft.com/entra/identity/enterprise-apps/grant-admin-consent#prerequisites"/>.
     /// </para>
     /// <para>
     /// A grant is neither a declaration nor a pre-authorization. This only affects registrations created by Aspire.
@@ -1817,9 +1828,12 @@ public static class EntraIdResourceExtensions
     /// call the API as itself without a user.
     /// </para>
     /// <para>
-    /// The identity that deploys needs a directory role such as Privileged Role Administrator or Cloud Application Administrator, or a privileged
-    /// Microsoft Graph permission such as <c>DelegatedPermissionGrant.ReadWrite.All</c> (delegated grants) or
-    /// <c>AppRoleAssignment.ReadWrite.All</c> (application permissions). Deployment fails without it. Application permissions to broad
+    /// The identity that deploys needs one of the following, and deployment fails without it. For delegated permissions, a directory role such as
+    /// Privileged Role Administrator, Cloud Application Administrator or Application Administrator, or the
+    /// <c>DelegatedPermissionGrant.ReadWrite.All</c> Microsoft Graph permission. For Microsoft Graph application permissions, Cloud Application
+    /// Administrator and Application Administrator are not enough: use Privileged Role Administrator or a custom role, or the
+    /// <c>AppRoleAssignment.ReadWrite.All</c> Microsoft Graph permission when deploying as an application. See
+    /// <see href="https://learn.microsoft.com/entra/identity/enterprise-apps/grant-admin-consent#prerequisites"/>. Application permissions to broad
     /// scopes such as <c>Directory.Read.All</c> give the application access to the whole tenant, so grant only what the application needs.
     /// This only affects registrations created by Aspire.
     /// </para>

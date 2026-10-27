@@ -141,12 +141,14 @@ public sealed class EntraIdApi
     // The API's root URL for Microsoft.Identity.Web's DownstreamApis settings, when it is the same for every caller.
     internal string? BaseUrl { get; }
 
-    // The OpenID Connect scopes are requested at sign-in and don't belong to an API's resource, so they have no resource-qualified form.
-    internal static bool IsOpenIdScope(string name) =>
-        name.Equals("openid", StringComparison.OrdinalIgnoreCase) ||
-        name.Equals("profile", StringComparison.OrdinalIgnoreCase) ||
-        name.Equals("email", StringComparison.OrdinalIgnoreCase) ||
-        name.Equals("offline_access", StringComparison.OrdinalIgnoreCase);
+    // Microsoft Graph lists the OpenID Connect scopes among its delegated permissions, but they are requested at sign-in and don't belong
+    // to a resource, so they have no resource-qualified form. Another API can define a scope with one of these names, which is its own.
+    internal bool IsOpenIdScope(string name) =>
+        string.Equals(ApplicationId, MicrosoftGraph.ApplicationId, StringComparison.OrdinalIgnoreCase) &&
+        (name.Equals("openid", StringComparison.OrdinalIgnoreCase) ||
+         name.Equals("profile", StringComparison.OrdinalIgnoreCase) ||
+         name.Equals("email", StringComparison.OrdinalIgnoreCase) ||
+         name.Equals("offline_access", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Identifies another API, whose service principal must exist in the tenant, by its application ID.
@@ -197,6 +199,15 @@ public sealed class EntraIdApi
             {
                 throw new ArgumentException(
                     $"The {FormatType(permission.Type)} permission '{permission.Name}' of {DisplayName} has the ID '{catalogId:D}', not '{explicitId:D}'.",
+                    nameof(permission));
+            }
+
+            // The reverse mistake: a name that isn't in the catalog, with the ID of a permission that is. The consent would then name
+            // one permission while the declaration requests another.
+            if (knownId is null && known.FirstOrDefault(p => p.Value == explicitId) is { Key: { } otherName })
+            {
+                throw new ArgumentException(
+                    $"The ID '{explicitId:D}' is the {FormatType(permission.Type)} permission '{otherName}' of {DisplayName}, not '{permission.Name}'.",
                     nameof(permission));
             }
 
@@ -258,7 +269,7 @@ public sealed class EntraIdApiPermission
     /// <returns>The permission.</returns>
     public static EntraIdApiPermission Delegated(string name)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ValidateName(name);
         return new(EntraIdPermissionType.Delegated, name, null);
     }
 
@@ -270,7 +281,7 @@ public sealed class EntraIdApiPermission
     /// <returns>The permission.</returns>
     public static EntraIdApiPermission Delegated(string name, Guid id)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ValidateName(name);
         return new(EntraIdPermissionType.Delegated, name, ValidateId(id));
     }
 
@@ -281,7 +292,7 @@ public sealed class EntraIdApiPermission
     /// <returns>The permission.</returns>
     public static EntraIdApiPermission Application(string name)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ValidateName(name);
         return new(EntraIdPermissionType.Application, name, null);
     }
 
@@ -293,8 +304,20 @@ public sealed class EntraIdApiPermission
     /// <returns>The permission.</returns>
     public static EntraIdApiPermission Application(string name, Guid id)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ValidateName(name);
         return new(EntraIdPermissionType.Application, name, ValidateId(id));
+    }
+
+    // The names of granted delegated permissions are written to one space-separated string, so a name that contains a space would
+    // consent to a second, undeclared permission. Names must follow Microsoft Graph's rule for scope and app role values.
+    private static void ValidateName(string name)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        if (EntraIdValidation.ValidateScopeName(name) is { } error)
+        {
+            throw new ArgumentException($"'{name}' is not a valid permission name. {error}", nameof(name));
+        }
     }
 
     private static Guid ValidateId(Guid id) => id == Guid.Empty

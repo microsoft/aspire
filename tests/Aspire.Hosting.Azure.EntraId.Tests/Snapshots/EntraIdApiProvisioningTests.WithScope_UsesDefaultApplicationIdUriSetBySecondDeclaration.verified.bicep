@@ -38,6 +38,7 @@ resource applicationIdentity 'Microsoft.Graph/applications@v1.0' = {
         userConsentDescription: 'Allows the app to call the API on behalf of the signed-in user.'
       }
     ]
+    preAuthorizedApplications: []
   }
 }
 

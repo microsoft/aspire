@@ -139,7 +139,8 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("")]
     [InlineData("has space")]
-    [InlineData("slash/value")]
+    [InlineData(".read")]
+    [InlineData(".default")]
     [InlineData("é")]
     public void WithScope_RejectsInvalidNames(string name)
     {
@@ -173,8 +174,23 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("access_as_user")]
+    [InlineData("Files.Read.All")]
+    [InlineData("orders/read")]
+    [InlineData("a:b-c~d")]
+    public void WithScope_AcceptsTheCharactersGraphAllows(string name)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var api = builder.AddEntraIdApplication("entra-api").WithScope(name, ScopeDescription);
+
+        Assert.Equal(name, Assert.Single(api.Resource.Scopes).Name);
+    }
+
+    [Theory]
     [InlineData("not a uri")]
     [InlineData("relative/path")]
+    [InlineData("/orders")]
+    [InlineData("file:///orders")]
     [InlineData("api://contoso?x=1")]
     [InlineData("api://contoso#fragment")]
     public void WithApplicationIdUri_RejectsInvalidUris(string uri)
@@ -182,8 +198,111 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         var api = builder.AddEntraIdApplication("entra-api");
 
+        // A rooted path such as "/orders" parses as an absolute file URI on Linux and macOS, so it must be rejected on purpose.
         Assert.Throws<ArgumentException>(() => api.WithApplicationIdUri(uri));
         Assert.Null(api.Resource.ApplicationIdUri);
+    }
+
+    [Theory]
+    [InlineData("api://contoso-orders")]
+    [InlineData("https://contoso.onmicrosoft.com/orders")]
+    [InlineData("urn:contoso:orders")]
+    public void WithApplicationIdUri_AcceptsAbsoluteUris(string uri)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var api = builder.AddEntraIdApplication("entra-api").WithApplicationIdUri(uri);
+
+        Assert.Equal(uri, api.Resource.ApplicationIdUri);
+    }
+
+    [Fact]
+    public void WithApplicationIdUri_DefaultOverridesAnEarlierCustomUriInEitherOrder()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var customThenDefault = builder.AddEntraIdApplication("custom-then-default")
+            .WithScope("access_as_user", ScopeDescription)
+            .WithApplicationIdUri("api://custom")
+            .WithApplicationIdUri();
+        var defaultThenCustom = builder.AddEntraIdApplication("default-then-custom")
+            .WithScope("access_as_user", ScopeDescription)
+            .WithApplicationIdUri()
+            .WithApplicationIdUri("api://custom");
+
+        Assert.Null(customThenDefault.Resource.ApplicationIdUri);
+        var customThenDefaultBicep = customThenDefault.Resource.GetBicepTemplateString();
+        Assert.Contains("'api://${application.appId}'", customThenDefaultBicep);
+        Assert.DoesNotContain("api://custom", customThenDefaultBicep);
+
+        Assert.Equal("api://custom", defaultThenCustom.Resource.ApplicationIdUri);
+        var defaultThenCustomBicep = defaultThenCustom.Resource.GetBicepTemplateString();
+        Assert.Contains("'api://custom'", defaultThenCustomBicep);
+        Assert.DoesNotContain("api://${application.appId}", defaultThenCustomBicep);
+    }
+
+    [Fact]
+    public void WithApplicationIdUri_DefaultDoesNotClearTheUriOfAnExistingRegistration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var existing = builder.AddExistingEntraApplication("existing-api", TenantId, ClientId)
+            .WithApplicationIdUri("api://contoso-orders")
+            .WithApplicationIdUri();
+
+        Assert.Equal("api://contoso-orders", existing.Resource.ApplicationIdUri);
+    }
+
+    [Theory]
+    [InlineData("User.Read Directory.Read.All")]
+    [InlineData("User.Read\tDirectory.Read.All")]
+    [InlineData(" User.Read")]
+    [InlineData("")]
+    [InlineData(".default")]
+    public void EntraIdApiPermission_RejectsNamesThatAreNotValidScopeValues(string name)
+    {
+        // A name with a space would be written into the space-separated scope of a consent grant, granting a second, undeclared permission.
+        var userRead = new Guid("e1fe6dd8-ba31-4d61-89e7-88639da4683d");
+
+        Assert.ThrowsAny<ArgumentException>(() => EntraIdApiPermission.Delegated(name));
+        Assert.ThrowsAny<ArgumentException>(() => EntraIdApiPermission.Delegated(name, userRead));
+        Assert.ThrowsAny<ArgumentException>(() => EntraIdApiPermission.Application(name));
+        Assert.ThrowsAny<ArgumentException>(() => EntraIdApiPermission.Application(name, userRead));
+    }
+
+    [Fact]
+    public void WithApiPermissions_RejectsAnExplicitIdOfAnotherCatalogPermission()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = builder.AddEntraIdApplication("entra-web");
+
+        // The ID is User.Read's. A grant would name "Typo.Read" while the declaration requests User.Read.
+        var exception = Assert.Throws<ArgumentException>(() => web.WithApiPermissions(
+            EntraIdApi.MicrosoftGraph,
+            EntraIdApiPermission.Delegated("Typo.Read", new Guid("e1fe6dd8-ba31-4d61-89e7-88639da4683d"))));
+        Assert.Contains("'User.Read'", exception.Message);
+        Assert.Empty(web.Resource.ApiAccess);
+
+        // The same ID is the application permission of a different name, so the delegated catalog doesn't object.
+        web.WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Application("Custom.Role", new Guid("e1fe6dd8-ba31-4d61-89e7-88639da4683d")));
+    }
+
+    [Fact]
+    public async Task WithReference_OnlyMicrosoftGraphExcludesTheOpenIdScopesFromDownstreamApis()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var contoso = EntraIdApi.FromApplicationId("Contoso API", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://contoso");
+        var profileOnly = EntraIdApi.FromApplicationId("Profile API", "11110000-aaaa-7777-bbbb-6666cccc5555", "api://profile");
+        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
+            .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("openid"), EntraIdApiPermission.Delegated("User.Read"))
+            .WithApiPermissions(contoso, EntraIdApiPermission.Delegated("profile", Guid.NewGuid()), EntraIdApiPermission.Delegated("email", Guid.NewGuid()))
+            .WithApiPermissions(profileOnly, EntraIdApiPermission.Delegated("offline_access", Guid.NewGuid()));
+        var project = builder.AddResource(new ProjectResource("web")).WithReference(web);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        // Graph's OpenID Connect scopes are requested at sign-in; another API's scopes with the same names are its own.
+        Assert.Equal("https://graph.microsoft.com/User.Read", Assert.Single(env, e => e.Key.StartsWith("DownstreamApis__MicrosoftGraph__Scopes", StringComparison.Ordinal)).Value);
+        Assert.Equal("api://contoso/profile", env["DownstreamApis__ContosoAPI__Scopes__0"]);
+        Assert.Equal("api://contoso/email", env["DownstreamApis__ContosoAPI__Scopes__1"]);
+        Assert.Equal("api://profile/offline_access", env["DownstreamApis__ProfileAPI__Scopes__0"]);
     }
 
     [Fact]

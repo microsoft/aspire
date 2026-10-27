@@ -74,7 +74,7 @@ internal sealed class EntraIdApiAccess
     public IEnumerable<EntraIdDownstreamApi> GetDownstreamApis()
     {
         var delegatedScopes = Declared
-            .Where(p => p.Type == EntraIdPermissionType.Delegated && !(Api is not null && EntraIdApi.IsOpenIdScope(p.Name)))
+            .Where(p => p.Type == EntraIdPermissionType.Delegated && !(Api?.IsOpenIdScope(p.Name) ?? false))
             .Select(p => CreateScopeValue(p.Name))
             .ToArray();
         var hasApplicationPermissions = Declared.Any(p => p.Type == EntraIdPermissionType.Application);

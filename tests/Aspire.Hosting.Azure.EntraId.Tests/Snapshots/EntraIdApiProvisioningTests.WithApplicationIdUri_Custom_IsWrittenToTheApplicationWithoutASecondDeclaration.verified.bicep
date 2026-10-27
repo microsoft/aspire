@@ -30,6 +30,7 @@ resource application 'Microsoft.Graph/applications@v1.0' = {
         userConsentDescription: 'Write orders.'
       }
     ]
+    preAuthorizedApplications: []
   }
   web: {
     redirectUris: []

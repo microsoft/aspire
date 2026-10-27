@@ -23,6 +23,10 @@ resource applicationIdentity 'Microsoft.Graph/applications@v1.0' = {
   identifierUris: [
     'api://${application.appId}'
   ]
+  api: {
+    oauth2PermissionScopes: []
+    preAuthorizedApplications: []
+  }
 }
 
 resource servicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' = {

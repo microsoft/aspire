@@ -115,6 +115,20 @@ internal static partial class EntraIdApiProvisioning
             target.PreAuthorizedApplications.Add(preAuthorization);
         }
 
+        // Graph updates an application in place and keeps every property that a request omits, as the Bicep extension does for any
+        // template. Once the API is declared, its scopes and pre-authorized clients are the full desired state: sending them even when
+        // empty is what lets a deployment retire the last scope or remove the last pre-authorized client. Without any API configuration
+        // nothing is sent, so a registration that was never exposed as an API is left as it is.
+        if (target.PermissionScopes.Count == 0)
+        {
+            target.PermissionScopes = [];
+        }
+
+        if (target.PreAuthorizedApplications.Count == 0)
+        {
+            target.PreAuthorizedApplications = [];
+        }
+
         if (!ReferenceEquals(target, application))
         {
             infrastructure.Add(target);
