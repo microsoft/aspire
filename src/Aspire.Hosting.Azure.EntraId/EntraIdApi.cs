@@ -211,12 +211,12 @@ public sealed class EntraIdApi
                     nameof(permission));
             }
 
-            return new(permission.Type, canonicalName, explicitId);
+            return EntraIdResolvedPermission.Fixed(permission.Type, canonicalName, explicitId);
         }
 
         if (knownId is { } resolvedId)
         {
-            return new(permission.Type, canonicalName, resolvedId);
+            return EntraIdResolvedPermission.Fixed(permission.Type, canonicalName, resolvedId);
         }
 
         var message = _hasCatalog
@@ -387,4 +387,37 @@ public sealed class EntraIdScope
     public Guid? Id { get; set; }
 }
 
-internal readonly record struct EntraIdResolvedPermission(EntraIdPermissionType Type, string Name, Guid Id);
+/// <summary>
+/// A permission of an API that an application declares or has consented, with the ID that identifies it.
+/// </summary>
+/// <remarks>
+/// A first-party API's permission has a fixed ID. A delegated permission of a registration in the AppHost refers to the scope itself and
+/// reads its ID when the template is generated, because <see cref="EntraIdScope.Id"/> can still be set after the permission is declared and
+/// a copied ID would then disagree with the one that the API's own template writes.
+/// </remarks>
+internal readonly record struct EntraIdResolvedPermission
+{
+    private readonly Guid? _fixedId;
+    private readonly EntraIdApplicationResource? _owner;
+    private readonly EntraIdScope? _scope;
+
+    private EntraIdResolvedPermission(EntraIdPermissionType type, string name, Guid? fixedId, EntraIdApplicationResource? owner, EntraIdScope? scope)
+    {
+        Type = type;
+        Name = name;
+        _fixedId = fixedId;
+        _owner = owner;
+        _scope = scope;
+    }
+
+    public EntraIdPermissionType Type { get; }
+
+    public string Name { get; }
+
+    public Guid Id => _fixedId ?? _owner!.GetScopeId(_scope!);
+
+    public static EntraIdResolvedPermission Fixed(EntraIdPermissionType type, string name, Guid id) => new(type, name, id, null, null);
+
+    public static EntraIdResolvedPermission ForScope(EntraIdApplicationResource owner, EntraIdScope scope) =>
+        new(EntraIdPermissionType.Delegated, scope.Name, null, owner, scope);
+}

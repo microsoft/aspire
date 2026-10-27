@@ -1669,9 +1669,8 @@ public static class EntraIdResourceExtensions
     /// <returns>The resource builder for chaining.</returns>
     /// <exception cref="ArgumentException">A scope is not exposed or is disabled, or no scope was given.</exception>
     /// <exception cref="InvalidOperationException">
-    /// <paramref name="api"/> already pre-authorizes this registration, or depends on it in another way (see
-    /// <see cref="WithPreAuthorizedApplication"/>), or a scope of an existing <paramref name="api"/> has no <see cref="EntraIdScope.Id"/>,
-    /// which can't be derived for an existing registration.
+    /// <paramref name="api"/> already pre-authorizes this registration, or depends on it in another way. See
+    /// <see cref="WithPreAuthorizedApplication"/>.
     /// </exception>
     /// <remarks>
     /// <para>
@@ -1711,7 +1710,7 @@ public static class EntraIdResourceExtensions
         var scopes = FindScopes(apiResource, scopeNames, nameof(scopeNames));
         EnsureNoDependencyCycle(builder.Resource, apiResource);
 
-        var resolved = scopes.Select(s => new EntraIdResolvedPermission(EntraIdPermissionType.Delegated, s.Name, apiResource.GetScopeId(s))).ToArray();
+        var resolved = scopes.Select(s => EntraIdResolvedPermission.ForScope(apiResource, s)).ToArray();
         var access = GetOrAddApiAccess(builder.Resource, a => a.IsFor(apiResource), () => EntraIdApiAccess.ForApplication(apiResource));
         foreach (var permission in resolved)
         {
@@ -1778,9 +1777,7 @@ public static class EntraIdResourceExtensions
     /// <param name="api">The registration that exposes the scopes.</param>
     /// <param name="scopeNames">The names of scopes already declared with <see cref="WithApiPermissions(IResourceBuilder{EntraIdApplicationResource}, IResourceBuilder{EntraIdApplicationResource}, string[])"/>.</param>
     /// <returns>The resource builder for chaining.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// A scope was not declared first, or a scope of an existing <paramref name="api"/> has no <see cref="EntraIdScope.Id"/>.
-    /// </exception>
+    /// <exception cref="InvalidOperationException">A scope was not declared first.</exception>
     /// <remarks>
     /// <para>
     /// This creates a delegated permission grant for all users (<c>consentType: AllPrincipals</c>) from this registration to
@@ -1807,7 +1804,7 @@ public static class EntraIdResourceExtensions
         var access = builder.Resource.ApiAccess.FirstOrDefault(a => a.IsFor(apiResource));
         foreach (var scope in scopes)
         {
-            ConsentToDeclared(access, apiResource.Name, new EntraIdResolvedPermission(EntraIdPermissionType.Delegated, scope.Name, apiResource.GetScopeId(scope)));
+            ConsentToDeclared(access, apiResource.Name, EntraIdResolvedPermission.ForScope(apiResource, scope));
         }
 
         return builder;

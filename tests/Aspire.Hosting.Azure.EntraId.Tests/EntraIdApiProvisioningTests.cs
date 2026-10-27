@@ -380,18 +380,23 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void WithApiPermissions_ExistingApiScopeWithoutIdThrows()
+    public void WithApiPermissions_ExistingApiScopeIdCanBeSetAfterTheDeclaration()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var existingApi = builder.AddExistingEntraApplication("existing-api", TenantId, ClientId)
             .WithScope("orders.read", "Read orders.");
         var web = builder.AddEntraIdApplication("entra-web");
 
-        var exception = Assert.Throws<InvalidOperationException>(() => web.WithApiPermissions(existingApi, "orders.read"));
+        // The ID of an existing registration's scope can't be derived, but it is only needed when the template is generated,
+        // so it can be supplied after the permission is declared.
+        web.WithApiPermissions(existingApi, "orders.read");
+        var exception = Assert.Throws<InvalidOperationException>(web.Resource.GetBicepTemplateString);
         Assert.Contains("EntraIdScope.Id", exception.Message);
-        Assert.Empty(web.Resource.ApiAccess);
-    }
 
+        var id = Guid.Parse("11112222-aaaa-3333-bbbb-4444cccc5555");
+        existingApi.Resource.Scopes[0].Id = id;
+        Assert.Contains($"id: '{id:D}'", web.Resource.GetBicepTemplateString());
+    }
     [Fact]
     public void WithApiPermissions_ValidatesScopes()
     {
@@ -1325,5 +1330,80 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
 
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => ExecuteBeforeStartHooksAsync(app, default));
         Assert.Contains("downstreamApisConfigKey", exception.ToString());
+    }
+
+    [Fact]
+    public void ScopeId_ChangedAfterDeclaringThePermissionIsUsedByBothTheCallerAndTheApi()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var api = builder.AddEntraIdApplication("entra-api")
+            .WithScope("access_as_user", ScopeDescription)
+            .WithScope("other", "Another scope.");
+        var web = builder.AddEntraIdApplication("entra-web")
+            .WithApiPermissions(api, "access_as_user")
+            .WithAdminConsent(api, "access_as_user");
+        var derivedId = api.Resource.GetScopeId(api.Resource.Scopes[0]).ToString("D");
+
+        // Adopting an existing scope by its ID is a later call than the declaration in an AppHost that configures in several places.
+        var adoptedId = Guid.Parse("11112222-aaaa-3333-bbbb-4444cccc5555");
+        api.Resource.Scopes[0].Id = adoptedId;
+
+        var apiBicep = api.Resource.GetBicepTemplateString();
+        var webBicep = web.Resource.GetBicepTemplateString();
+
+        // The caller used to keep the ID that was derived when it declared the permission, so it would request a scope that doesn't exist.
+        Assert.Contains("id: '11112222-aaaa-3333-bbbb-4444cccc5555'", apiBicep);
+        Assert.Contains("id: '11112222-aaaa-3333-bbbb-4444cccc5555'", webBicep);
+        Assert.DoesNotContain(derivedId, apiBicep);
+        Assert.DoesNotContain(derivedId, webBicep);
+    }
+
+    [Fact]
+    public void ScopeId_ChangedAfterDeclaringThePermissionIsUsedForAnExistingApi()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var firstId = Guid.Parse("11112222-aaaa-3333-bbbb-4444cccc5555");
+        var secondId = Guid.Parse("22223333-aaaa-4444-bbbb-5555cccc6666");
+        var existingApi = builder.AddExistingEntraApplication("existing-api", TenantId, ClientId)
+            .WithApplicationIdUri("api://contoso-orders")
+            .WithScope("orders.read", "Read orders.", scope => scope.Id = firstId);
+        var web = builder.AddEntraIdApplication("entra-web").WithApiPermissions(existingApi, "orders.read");
+
+        existingApi.Resource.Scopes[0].Id = secondId;
+
+        var webBicep = web.Resource.GetBicepTemplateString();
+        Assert.Contains($"id: '{secondId:D}'", webBicep);
+        Assert.DoesNotContain(firstId.ToString("D"), webBicep);
+    }
+
+    [Fact]
+    public void ScopeId_AnExistingScopeThatLosesItsIdIsReportedWhenTheTemplateIsGenerated()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var existingApi = builder.AddExistingEntraApplication("existing-api", TenantId, ClientId)
+            .WithApplicationIdUri("api://contoso-orders")
+            .WithScope("orders.read", "Read orders.", scope => scope.Id = Guid.NewGuid());
+        var web = builder.AddEntraIdApplication("entra-web").WithApiPermissions(existingApi, "orders.read");
+
+        existingApi.Resource.Scopes[0].Id = null;
+
+        var exception = Assert.Throws<InvalidOperationException>(web.Resource.GetBicepTemplateString);
+        Assert.Contains("EntraIdScope.Id", exception.Message);
+    }
+
+    [Fact]
+    public void ScopeId_DeclaringTheSameScopeTwiceStaysOnePermission()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var api = builder.AddEntraIdApplication("entra-api").WithScope("access_as_user", ScopeDescription);
+        var web = builder.AddEntraIdApplication("entra-web")
+            .WithApiPermissions(api, "access_as_user")
+            .WithApiPermissions(api, "access_as_user")
+            .WithAdminConsent(api, "access_as_user")
+            .WithAdminConsent(api, "access_as_user");
+
+        var access = Assert.Single(web.Resource.ApiAccess);
+        Assert.Single(access.Declared);
+        Assert.Single(access.Consented);
     }
 }
