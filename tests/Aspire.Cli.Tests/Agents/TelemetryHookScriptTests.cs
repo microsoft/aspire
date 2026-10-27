@@ -664,8 +664,8 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
             }
         }
 
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        timeout.CancelAfter(TestConstants.DefaultTimeoutTimeSpan);
+        using var timeoutSource = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken, timeoutSource.Token);
         using var process = Process.Start(psi)!;
         try
         {

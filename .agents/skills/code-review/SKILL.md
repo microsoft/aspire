@@ -1,80 +1,57 @@
 ---
 name: code-review
-description: "Review a GitHub pull request for problems. Use when asked to review a PR, do a code review, check a PR for issues, or review pull request changes. Focuses only on identifying problems — not style nits or praise."
+description: "Review a GitHub pull request or requested local diff for problems. Use when asked to review a PR, do a code review, check a PR for issues, or review local changes. Focuses only on identifying problems — not style nits or praise."
 ---
 
 # PR Code Review
 
 You are a specialized code review agent for the microsoft/aspire repository. Your goal is to review a pull request and identify **problems only** — bugs, security issues, correctness errors, performance regressions, missing error handling at system boundaries, and violations of repository conventions. Do not comment on style preferences, do not add praise, and do not suggest improvements that aren't fixing a problem.
 
-## CRITICAL: Step Ordering
-
-**You MUST complete Step 1 (local checkout) BEFORE fetching PR diffs or file lists.** Branch-discovery calls (e.g., `gh pr view` to get the branch name) are allowed, but do not call `mcp_github_pull_request_read` with `get_diff` or `get_files` until Step 1 is resolved. Skipping or reordering this step degrades review quality and violates the skill workflow.
-
 ## Understanding User Requests
 
 Parse user requests to extract:
 1. **PR identifier** — a PR number (e.g., `7890`) or full URL (e.g., `https://github.com/microsoft/aspire/pull/7890`)
 2. **Repository** — defaults to `microsoft/aspire` unless specified otherwise
+3. **Review surface** — the requested local changes, an existing PR worktree, or a remote PR
 
-If no PR number is given, check if the current branch has an open PR:
-
-```bash
-gh pr view --json number,title,headRefName 2>/dev/null
-```
-
-## Step 1: Ensure the PR Branch Is Available Locally (BLOCKING — must complete before any other step)
-
-Check whether the PR branch is already checked out locally:
+For a requested local diff, review that diff without requiring a PR. Otherwise,
+if no PR number is given, check whether the current branch has an open PR:
 
 ```bash
-# Get PR branch name
-gh pr view <number> --repo microsoft/aspire --json headRefName --jq '.headRefName'
+gh pr view --json number,title,headRefName
 ```
 
-```bash
-# Check if we're already on that branch
-git branch --show-current
-```
+If there is no PR and the local comparison is unspecified, ask for the intended
+scope or return that blocker to the caller. Report authentication or retrieval
+errors rather than interpreting them as an absent PR.
 
-If the current branch **matches** the PR branch, proceed to Step 2.
+## Step 1: Establish the Review Surface
 
-If the current branch **does not match**, ask the user how they'd like to proceed:
+Preserve the current worktree and uncommitted changes. A review does not
+authorize stashing work, switching branches, or changing files.
 
-- **Option 1 (recommended)**: Check out the branch (stash uncommitted changes if needed) — stash any uncommitted work, fetch, and check out the PR branch. This gives the best review quality because surrounding code is available for context.
-- **Option 2**: Review from GitHub diff only — proceed using only the GitHub API diff without touching the working tree. Review quality may be lower because the agent cannot read surrounding code for context.
+- **Local changes:** inspect `git --no-pager status --short` and the requested
+  staged, unstaged, or branch diff. Establish the intended base before using a
+  branch comparison; do not substitute an unrelated open PR.
+- **Existing PR worktree:** compare `git --no-pager rev-parse HEAD` with the PR's
+  `headRefOid` and confirm the base. A different local branch name is not a
+  mismatch. Distinguish uncommitted changes from the published PR diff.
+- **Different PR content:** use the remote diff and fetch surrounding files
+  from the PR head. A separate checkout requires explicit authorization; do
+  not switch an app-managed worktree. State when local files do not represent
+  the reviewed head.
 
-### Option: Check out the branch
-
-```bash
-# Check for uncommitted changes
-git status --porcelain
-```
-
-If there are uncommitted changes, warn the user and stash them:
-
-```bash
-git stash push -m "auto-stash before PR review of #<number>"
-```
-
-Then check out the PR branch (this handles both same-repo and fork PRs):
-
-```bash
-gh pr checkout <number> --repo microsoft/aspire
-```
-
-### Option: GitHub diff only
-
-No local action needed. Proceed to Step 2. Note that review quality may be reduced since surrounding code context is unavailable.
+Use `git --no-pager` for every git invocation. Continue only once the reviewed
+base/head or local change set is explicit.
 
 ## Step 2: Gather PR Context
 
-Fetch the PR metadata, diff, and file list. This skill uses the `mcp_github_*` tools (MCP GitHub integration). These are available when the GitHub MCP server is configured in the agent environment. If they are unavailable, fall back to the `gh` CLI for equivalent operations.
-
-1. **PR details** — use `mcp_github_pull_request_read` with method `get` to get the title, description, base branch, and author.
-2. **Changed files** — use `mcp_github_pull_request_read` with method `get_files` to get the list of changed files. Paginate if there are many files.
-3. **Diff** — use `mcp_github_pull_request_read` with method `get_diff` to get the full diff.
-4. **Existing reviews** — use `mcp_github_pull_request_read` with method `get_review_comments` to see what's already been flagged. Don't duplicate existing review comments.
+For a PR, prefer `gh pr view`, `gh pr diff`, and `gh api` to fetch metadata,
+changed files, the complete diff, and existing review threads. Paginate API
+results and avoid duplicating existing findings. Available GitHub tools are an
+alternative when needed; discover their actual schemas rather than assuming
+tool names. For a local-only review, gather equivalent context from git and
+the user's requested scope.
 
 ## Step 3: Categorize the Changes
 
@@ -98,7 +75,7 @@ Group files by area to guide how deeply to review each:
 Read the diff carefully. For each changed file, also read surrounding context to understand the impact of the change.
 
 - **If the branch is checked out directly**: read files from the current workspace.
-- **If reviewing from GitHub diff only**: use `mcp_github_get_file_contents` to fetch specific files from the PR branch when additional context is needed.
+- **If reviewing a remote diff**: fetch specific files from the PR head when additional context is needed.
 
 ### Impact Analysis for Tests and Regressions
 
@@ -118,66 +95,12 @@ When the impact analysis is useful to explain a test finding, present it concise
 
 ### Conditional Test Selection Impact
 
-Apply the repository-wide Conditional Test Selection rules in `AGENTS.md`.
-Trace new test projects, CI jobs, workflows, scripts, and loose inputs to their
-actual consumers before deciding whether the map needs to change.
-
-Flag concrete selection gaps:
-
-- Treat files evaluated by the `Aspire.slnx` ProjectGraph as Layer 1-owned and
-  projects outside that graph as Layer 2 blind spots.
-- Route Layer 2 inputs to their precise consumer, to `ALL` for broad impact, or
-  explicitly outside the selector. Do not allow `ignore` or prefilter entries
-  to hide a real PR-CI consumer.
-- Inspect runtime-only package and fixture consumption in E2E tests, including
-  `aspire add`, generated AppHost package sets, package filters, templates, and
-  workspace copies. If a PR adds or removes one of these consumers, require the
-  corresponding exact `affected_project_rules` or `path_rules` entry to change
-  in the same PR.
-- Inspect changes to `QuarantinedTest`, `ActiveIssue`, and `OuterloopTest` on
-  runtime-consuming E2E scenarios. Regular-PR targets must include only
-  consumers eligible for regular PR CI; require the exact map edge and focused
-  regression coverage to change when eligibility changes.
-- Project-name patterns are globs, not regular expressions. For expensive or
-  class-sharded selector-gated targets, flag family globs that include projects
-  the target does not exercise. Use a family glob only when every current and
-  future matching project should select the target; otherwise keep an audited
-  exact consumer list. For smaller unsharded jobs, accept safe broad routing
-  when an exhaustive consumer list would add fragility for little CI savings.
-  Do not expand or refine advisory targets that gate no PR jobs in an unrelated
-  PR focused on PR-gated work; audit them when their workflow or routing is
-  intentionally in scope.
-- For a dedicated package-input directory in `path_rules`, prefer one stable
-  directory glob when enumerating individual files or RIDs would let a new
-  input silently miss its consumers. Accept cross-RID over-selection when that
-  is the explicit resilience tradeoff, and do not flag that over-selection as a
-  routing defect. Require focused exclusions only when a split has material
-  savings and can be maintained safely.
-- Keep each trigger-map `reason` concise: it should state what the rule covers
-  or why the target consumes the input. Request more detail only for a
-  non-obvious relationship or constraint. Do not turn `reason` into PR prose,
-  repeat the full rule, or preserve investigation history there. The `targets`
-  field owns the target list, so do not request those names again in `reason`.
-  Accept a category-level description; do not require the reason to explain
-  every target or make the rule self-contained. Selection-design rationale,
-  such as why paths are split or broadened, belongs in the PR or maintenance
-  documentation.
-- Require `run_*` wiring for gated `job:` targets, advisory classification for
-  targets outside the regular PR matrix or job gates, and routing from reusable
-  workflow implementations to the jobs they implement.
-
-Selector behavior changes must keep the action, workflow gates, tool, map,
-tests, and canonical documentation synchronized. Require real-map tests for
-curated routing changes: a representative positive per distinct routing
-boundary and focused negatives for deliberately excluded consumers. Audit
-intentionally duplicated consumer lists for consistency and exercise selector
-behavior through each routing mechanism, rather than asserting equality of
-configuration lists. Do not
-request an acceptance case per consumer; instead audit the complete curated
-list against the consuming workflow. Treat a widened or relaxed negative
-expectation as a finding until the workflow's artifacts and execution lane
-justify it. Require focused synthetic-map tests for engine or CLI behavior.
-See `docs/ci/test-trigger-map.md` for the complete contract.
+Use the Conditional Test Selection trigger list in `AGENTS.md`, including when
+the diff does not touch the YAML. For a matching change, read
+`.github/instructions/test-trigger-map.instructions.md` and follow its pointers
+before judging routing or coverage. Report concrete missing consumers,
+unjustified selection, or broken wiring, not requests to duplicate configuration
+in tests.
 
 ### Test Coverage Review
 
@@ -274,6 +197,10 @@ Do not escalate a concern that is already a concrete generic finding, merely hig
 
 **Do not post a review automatically.** Instead, present all findings as a numbered list for the user to triage. Order by potential impact.
 
+In a delegated or non-interactive review, return findings to the caller and
+stop. Do not wait for an unavailable user or treat delegation as permission to
+post a review.
+
 Then ask the user what to do next. The user may respond with:
 
 - **"Add 1, 3, 5 as comments"** — post only those numbered items as review comments.
@@ -304,23 +231,23 @@ Wait for the user's response before proceeding. If they choose option 2, use `ev
 
 ### Posting the review
 
-1. **Create a pending review**:
-   Use `mcp_github_pull_request_review_write` with method `create` (no `event` parameter) to start a pending review.
+1. **Choose an available posting operation**:
+   Prefer `gh api` or a discovered review tool. Verify the endpoint or tool
+   schema before constructing the request. Distinguish app-local pending drafts
+   from submitted GitHub reviews; staging comments does not post them.
 
-2. **Add inline comments for each selected finding**:
-   Use `mcp_github_add_comment_to_pending_review` for each selected item. Place comments on the specific lines in the diff:
-   - `subjectType`: `LINE` for line-specific comments, `FILE` for file-level comments
-   - `side`: `RIGHT` for comments on new code
-   - `path`: relative file path
-   - `line`: the line number in the diff
-   - `body`: concise description of the problem and how to fix it
+2. **Prepare the selected inline comments**:
+   Use each finding's relative file path, changed line, and correct diff side.
+   Describe the problem and fix concisely. Attach comments to the PR diff rather
+   than posting disconnected top-level comments.
 
-3. **Submit the review**:
-   Use `mcp_github_pull_request_review_write` with method `submit_pending`:
-   - If any comments were posted and the user explicitly asked to approve: use `event: "APPROVE"` only if auto-merge is not enabled on the PR, or the user confirmed they want to approve after seeing the auto-merge warning.
-   - If any comments were posted and the user did not ask to approve: use `event: "COMMENT"`.
+3. **Submit one review containing the selected comments and summary**:
+   - If comments are selected and the user explicitly asked to approve: use `event: "APPROVE"` only if auto-merge is not enabled on the PR, or the user confirmed they want to approve after seeing the auto-merge warning.
+   - If comments are selected and the user did not ask to approve: use `event: "COMMENT"`.
    - In either case, include a summary body listing the number of issues found by category. Do not use `"REQUEST_CHANGES"` unless the user explicitly asks for it.
    - If the user chose to add none: do not create or submit a review. Confirm to the user that no review was posted.
+
+Confirm that submission succeeded before reporting the review as posted.
 
 ## Review Quality Rules
 

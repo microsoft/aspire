@@ -15,7 +15,7 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDisposable
 {
-    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddXunit(outputHelper));
 
     public void Dispose() => _loggerFactory.Dispose();
 
@@ -24,7 +24,8 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
             "test",
             _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
             fileLoggerProvider: null,
-            processExecutionFactory: processExecutionFactory ?? TestProcessExecutionFactory.CreateForCliGuardian(new TestEnvironment()));
+            processExecutionFactory: processExecutionFactory ?? TestProcessExecutionFactory.CreateForCliGuardian(
+                new TestEnvironment(), _loggerFactory.CreateLogger<ProcessExecutionFactory>()));
 
     [Fact]
     public async Task LaunchAsync_WithIsolatedConsoleForGracefulShutdown_RequestsKillOnParentExit()
@@ -100,6 +101,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
         // Model the run path: graceful shutdown is enabled so the launcher routes through the ladder.
         var signaler = new RecordingGracefulSignaler(onSignal: pid =>
         {
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Graceful signal callback: killing process tree {pid}.");
             try
             {
                 using var proc = Process.GetProcessById(pid);
@@ -110,6 +112,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
                 // Already exited; treat as graceful success.
             }
 
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Graceful signal callback finished for process {pid}.");
             return Task.FromResult(true);
         });
 
@@ -213,8 +216,9 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
         // Escalation is driven by the explicit Expire() below, not by the budget elapsing.
 
         var signaled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var signaler = new RecordingGracefulSignaler(onSignal: _ =>
+        var signaler = new RecordingGracefulSignaler(onSignal: pid =>
         {
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Graceful signal requested for process {pid}; leaving it running.");
             signaled.TrySetResult();
             // Pretend the OS signal was delivered but the process is a bad citizen and refuses to exit.
             return Task.FromResult(true);
@@ -235,6 +239,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
             cts.Token);
 
         var descendantPid = await WaitForPidFileAsync(descendantPidFile);
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Descendant {descendantPid} started; requesting launch cancellation.");
 
         try
         {
@@ -245,11 +250,14 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
             // ordering rather than the escalation path.
             await signaled.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Graceful signal observed; expiring shutdown window.");
             shutdownService.Expire();
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Shutdown window expired; waiting for tree termination.");
 
             var stopwatch = Stopwatch.StartNew();
             var (exitCode, _) = await launchTask.WaitAsync(TimeSpan.FromSeconds(30));
             stopwatch.Stop();
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Launch returned {exitCode} after {stopwatch.Elapsed}; checking descendant {descendantPid}.");
 
             Assert.NotEqual(0, exitCode);
             Assert.True(WaitForProcessExit(descendantPid, TimeSpan.FromSeconds(10)), $"Expected descendant process {descendantPid} to be killed with the root process tree.");
@@ -258,7 +266,9 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
         }
         finally
         {
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Cleaning up descendant {descendantPid}.");
             TryKillProcess(descendantPid);
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Descendant cleanup returned.");
         }
     }
 

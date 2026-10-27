@@ -32,7 +32,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         }, workspace.WorkspaceRoot, CancellationToken.None);
         var configPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var originalConfiguration = await File.ReadAllTextAsync(configPath);
-        var git = new TestConfigSourceGitClient { Check = (_, _) => Task.FromResult(("commit-2", "version-2")) };
+        var git = new TestConfigSourceRepository { InspectConfiguration = (_, _) => Task.FromResult("version-2") };
         var interaction = new TestInteractionService();
         using var sources = TestConfigSourceServices.Create(executionContext, git: git, interaction: interaction);
         var resolver = new AppHostConnectionResolver(
