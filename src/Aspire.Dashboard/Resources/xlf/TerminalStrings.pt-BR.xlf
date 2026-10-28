@@ -4,312 +4,312 @@
     <body>
       <trans-unit id="MainLayoutToggleTerminalDock">
         <source>Toggle terminal (`)</source>
-        <target state="new">Toggle terminal (`)</target>
+        <target state="translated">Ativar/Desativar terminal (`)</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCloseTab">
         <source>Close tab</source>
-        <target state="new">Close tab</target>
+        <target state="translated">Fechar guia</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCopyFailed">
         <source>Could not copy to clipboard.</source>
-        <target state="new">Could not copy to clipboard.</target>
+        <target state="translated">Não foi possível copiar para a área de transferência.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCopyTitle">
         <source>Copy terminal title: {0}</source>
-        <target state="new">Copy terminal title: {0}</target>
+        <target state="translated">Copiar o título do terminal: {0}</target>
         <note>{0} is the terminal title.</note>
       </trans-unit>
       <trans-unit id="TerminalCopyWorkingDirectory">
         <source>Copy working directory: {0}</source>
-        <target state="new">Copy working directory: {0}</target>
+        <target state="translated">Copiar diretório de trabalho: {0}</target>
         <note>{0} is the working directory path.</note>
       </trans-unit>
       <trans-unit id="TerminalDisconnected">
         <source>The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</source>
-        <target state="new">The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</target>
+        <target state="translated">O terminal foi desconectado e as repetições automáticas foram interrompidas. Verifique se o recurso está em execução e tente novamente.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDisconnectedMessage">
         <source>Terminal disconnected. The last output has been preserved.</source>
-        <target state="new">Terminal disconnected. The last output has been preserved.</target>
+        <target state="translated">Terminal desconectado. A última saída foi preservada.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDisconnectedWithExitCode">
         <source>Terminal disconnected (exit code {0}). The last output has been preserved.</source>
-        <target state="new">Terminal disconnected (exit code {0}). The last output has been preserved.</target>
+        <target state="translated">O terminal foi desconectado (código de saída {0}). A última saída foi preservada.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDismissError">
         <source>Dismiss</source>
-        <target state="new">Dismiss</target>
+        <target state="translated">Ignorar</target>
         <note>Dismisses a terminal input, clipboard, or sizing error without reconnecting.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTab">
         <source>Close terminal '{0}'</source>
-        <target state="new">Close terminal '{0}'</target>
+        <target state="translated">Fechar o terminal "{0}"</target>
         <note>{0} is the terminal's display title.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTimedOutMessage">
         <source>Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</source>
-        <target state="new">Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</target>
+        <target state="translated">Tempo limite atingido ao aguardar o desligamento do '{0}' terminal. A limpeza continua em segundo plano.</target>
         <note>{0} is the terminal's display title.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTimedOutTitle">
         <source>Terminal close timed out</source>
-        <target state="new">Terminal close timed out</target>
+        <target state="translated">O tempo limite para fechar o terminal foi atingido</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetach">
         <source>Open terminal in a new window</source>
-        <target state="new">Open terminal in a new window</target>
+        <target state="translated">Abrir o terminal em uma nova janela</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetachBlocked">
         <source>The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</source>
-        <target state="new">The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</target>
+        <target state="translated">O navegador bloqueou a janela do terminal. Permita pop-ups para o dashboard e tente novamente.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetached">
         <source>This terminal is running in a separate window.</source>
-        <target state="new">This terminal is running in a separate window.</target>
+        <target state="translated">Este terminal está sendo executado em uma janela separada.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockFocusWindow">
         <source>Focus window</source>
-        <target state="new">Focus window</target>
+        <target state="translated">Janela de foco</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockHeight">
         <source>{0} pixels high</source>
-        <target state="new">{0} pixels high</target>
+        <target state="translated">{0} pixels de altura</target>
         <note>{0} is the terminal dock height in CSS pixels.</note>
       </trans-unit>
       <trans-unit id="TerminalDockHide">
         <source>Hide terminal panel (`)</source>
-        <target state="new">Hide terminal panel (`)</target>
+        <target state="translated">Ocultar painel do terminal (`)</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockMoreInformation">
         <source>More information</source>
-        <target state="new">More information</target>
+        <target state="translated">Mais informações</target>
         <note>Link to documentation about dashboard terminals, shown when the terminal dock is empty.</note>
       </trans-unit>
       <trans-unit id="TerminalDockPanelHeading">
         <source>No docked terminals</source>
-        <target state="new">No docked terminals</target>
+        <target state="translated">Nenhum terminal encaixado</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockPanelHint">
         <source>Press the backtick key (`) to hide this panel.</source>
-        <target state="new">Press the backtick key (`) to hide this panel.</target>
+        <target state="translated">Pressione a tecla de crase (`) para ocultar este painel.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockRecoveringWindow">
         <source>This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</source>
-        <target state="new">This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</target>
+        <target state="translated">Este terminal ainda pode estar aberto em uma janela separada. Focalize-o ou retorne-o ao painel para continuar.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockReorderHelp">
         <source>Drag to reorder tabs, or use Alt+Shift+Left or Alt+Shift+Right while a tab is focused.</source>
-        <target state="new">Drag to reorder tabs, or use Alt+Shift+Left or Alt+Shift+Right while a tab is focused.</target>
+        <target state="translated">Arraste para reordenar as guias ou use Alt+Shift+Left ou Alt+Shift+Right enquanto uma guia estiver em foco.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockResizeHelp">
         <source>Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</source>
-        <target state="new">Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</target>
+        <target state="translated">Use as setas para cima ou para baixo para redimensionar, Shift para aumentar os blocos, Home para definir a altura mínima e End para definir a altura máxima.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockReturnToDock">
         <source>Return to panel</source>
-        <target state="new">Return to panel</target>
+        <target state="translated">Voltar ao painel</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockScrollLeft">
         <source>Scroll terminal tabs left</source>
-        <target state="new">Scroll terminal tabs left</target>
+        <target state="translated">Rolar as guias do terminal para a esquerda</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockScrollRight">
         <source>Scroll terminal tabs right</source>
-        <target state="new">Scroll terminal tabs right</target>
+        <target state="translated">Rolar as guias do terminal para a direita</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockTabs">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">Terminais</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalFocusControlsDescription">
         <source>Focus terminal controls</source>
-        <target state="new">Focus terminal controls</target>
+        <target state="translated">Coloca o foco nos controles do terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalInputFailed">
         <source>The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</source>
-        <target state="new">The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</target>
+        <target state="translated">O terminal não pôde concluir a ação de entrada ou área de transferência. Verifique as permissões da área de transferência do navegador e tente novamente.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalInputLabel">
         <source>Interactive terminal input</source>
-        <target state="new">Interactive terminal input</target>
+        <target state="translated">Entrada interativa do terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalMountFailed">
         <source>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</source>
-        <target state="new">The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</target>
+        <target state="translated">O terminal não pôde se conectar ou inicializar seu renderizador. Verifique se o recurso está em execução e se seu navegador dá suporte a WebGPU ou WebGL2 e reconecte-se para tentar novamente. Você ainda pode exibir os logs do console deste recurso.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPalette">
         <source>Terminal palette</source>
-        <target state="new">Terminal palette</target>
+        <target state="translated">Paleta do terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteDark">
         <source>Dark</source>
-        <target state="new">Dark</target>
+        <target state="translated">Escuro</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteLabel">
         <source>Palette</source>
-        <target state="new">Palette</target>
+        <target state="translated">Paleta</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteLight">
         <source>Light</source>
-        <target state="new">Light</target>
+        <target state="translated">Claro</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteSaveFailed">
         <source>Unable to save the terminal palette. Check that browser storage is available and try again.</source>
-        <target state="new">Unable to save the terminal palette. Check that browser storage is available and try again.</target>
+        <target state="translated">Não é possível salvar a paleta de terminais. Verifique se o armazenamento do navegador está disponível e tente novamente.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalProgress">
         <source>Terminal progress</source>
-        <target state="new">Terminal progress</target>
+        <target state="translated">Progresso do terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalProgressError">
         <source>Error</source>
-        <target state="new">Error</target>
+        <target state="translated">Erro</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalProgressWarning">
         <source>Warning</source>
-        <target state="new">Warning</target>
+        <target state="translated">Aviso</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalRestartResource">
         <source>Restart resource</source>
-        <target state="new">Restart resource</target>
+        <target state="translated">Reiniciar recurso</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalRetry">
         <source>Reconnect terminal</source>
-        <target state="new">Reconnect terminal</target>
+        <target state="translated">Reconectar o terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalShowDisconnectedBanner">
         <source>Terminal disconnected. Show recovery actions</source>
-        <target state="new">Terminal disconnected. Show recovery actions</target>
+        <target state="translated">Terminal desconectado. Mostrar ações de recuperação</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalShowDisconnectedBannerWithExitCode">
         <source>Terminal disconnected (exit code {0}). Show recovery actions</source>
-        <target state="new">Terminal disconnected (exit code {0}). Show recovery actions</target>
+        <target state="translated">O terminal foi desconectado (código de saída {0}). Mostrar ações de recuperação</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalShowOutput">
         <source>Show terminal</source>
-        <target state="new">Show terminal</target>
+        <target state="translated">Mostrar terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalSizeLabel">
         <source>Size</source>
-        <target state="new">Size</target>
+        <target state="translated">Tamanho</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalSizingFailed">
         <source>The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</source>
-        <target state="new">The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</target>
+        <target state="translated">Não foi possível assumir o controle do redimensionamento do terminal nem alterar suas dimensões. Tente selecionar as dimensões novamente.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalTitle">
         <source>Terminal</source>
-        <target state="new">Terminal</target>
+        <target state="translated">Terminal</target>
         <note>Default terminal title when no resource name is available.</note>
       </trans-unit>
       <trans-unit id="TerminalToolbarDecreaseFontSize">
         <source>Decrease font size</source>
-        <target state="new">Decrease font size</target>
+        <target state="translated">Diminuir o tamanho da fonte</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarGridSize">
         <source>Terminal dimensions</source>
-        <target state="new">Terminal dimensions</target>
+        <target state="translated">Dimensões do terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarGridSizeAuto">
         <source>Fit terminal to available space</source>
-        <target state="new">Fit terminal to available space</target>
+        <target state="translated">Ajustar o terminal ao espaço disponível</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarIncreaseFontSize">
         <source>Increase font size</source>
-        <target state="new">Increase font size</target>
+        <target state="translated">Aumentar o tamanho da fonte</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarOpenInWindow">
         <source>Open in new window</source>
-        <target state="new">Open in new window</target>
+        <target state="translated">Abrir em uma nova janela</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarOpenInWindowBlocked">
         <source>The browser blocked the terminal window. Allow pop-ups for this site and try again.</source>
-        <target state="new">The browser blocked the terminal window. Allow pop-ups for this site and try again.</target>
+        <target state="translated">O navegador bloqueou a janela do terminal. Permita pop-ups para este site e tente novamente.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarOpenInWindowFailed">
         <source>Unable to open the terminal window. Reload the dashboard and try again.</source>
-        <target state="new">Unable to open the terminal window. Reload the dashboard and try again.</target>
+        <target state="translated">Não é possível abrir a janela do terminal. Recarregue o dashboard e tente novamente.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalWindowEnded">
         <source>This terminal has ended.</source>
-        <target state="new">This terminal has ended.</target>
+        <target state="translated">Este terminal foi encerrado.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalWindowTrackingFailed">
         <source>Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</source>
-        <target state="new">Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</target>
+        <target state="translated">Não é possível recuperar o estado da janela do terminal. Verifique as permissões de armazenamento do navegador, recarregue ou retorne explicitamente o terminal para o painel.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsHeader">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">Terminais</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsPageTitle">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">Terminais</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsSelectAResource">
         <source>Select a resource to view its terminal</source>
-        <target state="new">Select a resource to view its terminal</target>
+        <target state="translated">Selecione um recurso para exibir seu terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsSelectResourceToolbar">
         <source>Select resource</source>
-        <target state="new">Select resource</target>
+        <target state="translated">Selecionar recurso</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsSettings">
         <source>View options</source>
-        <target state="new">View options</target>
+        <target state="translated">Exibir opções</target>
         <note />
       </trans-unit>
     </body>
