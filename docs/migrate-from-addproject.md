@@ -164,9 +164,12 @@ Supported inputs are:
   One C# project plus one F# project is ambiguous; supply an explicit filename.
 * A file-based C# app (`.cs`), requiring .NET 10 or later.
 
-Extension matching is case-insensitive. Missing, unsupported, or ambiguous inputs are
-reported on the resource-start path; creating a builder alone is not proof of validity.
-Directory shorthand does not recursively search for a suitable service.
+Extension matching is case-insensitive. With default launch-profile handling, missing or
+unresolvable paths fail while `AddDotnetProject` discovers launch settings. Setting
+`ExcludeLaunchProfile = true` skips that discovery, so path errors surface later during
+resource startup or the SDK invocation. Existing unsupported files are validated at
+resource start even with default options. Creating a builder alone is not proof of
+validity. Directory shorthand does not recursively search for a suitable service.
 
 F# scripts (`.fsx`), non-SDK project systems, and arbitrary `*proj` files are not supported.
 File-based `.cs` apps do not support `WithBuildEnvironment` or EF migration factories.

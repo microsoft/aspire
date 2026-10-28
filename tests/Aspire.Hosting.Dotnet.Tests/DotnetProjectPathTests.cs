@@ -10,14 +10,15 @@ namespace Aspire.Hosting.Dotnet.Tests;
 public class DotnetProjectPathTests(ITestOutputHelper outputHelper)
 {
     [Theory]
-    [InlineData(".csproj", false)]
-    [InlineData(".fsproj", false)]
-    [InlineData(".vbproj", false)]
-    [InlineData(".CSPROJ", false)]
-    [InlineData(".FSPROJ", false)]
-    [InlineData(".VBPROJ", false)]
-    [InlineData(".cs", true)]
-    public async Task ExplicitSupportedFilesRetainTheirProjectOrFileAppCategory(string extension, bool fileBased)
+    [InlineData(".csproj", false, "CodeCsRectangle")]
+    [InlineData(".fsproj", false, "CodeFsRectangle")]
+    [InlineData(".vbproj", false, "CodeVbRectangle")]
+    [InlineData(".CSPROJ", false, "CodeCsRectangle")]
+    [InlineData(".FSPROJ", false, "CodeFsRectangle")]
+    [InlineData(".VBPROJ", false, "CodeVbRectangle")]
+    [InlineData(".cs", true, "CodeCsRectangle")]
+    [InlineData(".CS", true, "CodeCsRectangle")]
+    public async Task ExplicitSupportedFilesRetainTheirProjectOrFileAppCategory(string extension, bool fileBased, string iconName)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectPath = Path.Combine(workspace.Path, $"Service{extension}");
@@ -37,16 +38,18 @@ public class DotnetProjectPathTests(ITestOutputHelper outputHelper)
         Assert.Equal(["run", fileBased ? "--file" : "--project", projectPath, "--no-build"], arguments.Take(4));
         Assert.Equal(workspace.Path, resource.Resource.WorkingDirectory);
         Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.Equal(iconName, Assert.Single(resource.Resource.Annotations.OfType<ResourceIconAnnotation>()).IconName);
+        Assert.Equal(iconName, Assert.Single(relativeResource.Resource.Annotations.OfType<ResourceIconAnnotation>()).IconName);
     }
 
     [Theory]
-    [InlineData(".csproj")]
-    [InlineData(".fsproj")]
-    [InlineData(".vbproj")]
-    [InlineData(".CSPROJ")]
-    [InlineData(".FSPROJ")]
-    [InlineData(".VBPROJ")]
-    public void DirectoryShorthandResolvesExactlyOneSupportedProjectAcrossLanguages(string extension)
+    [InlineData(".csproj", "CodeCsRectangle")]
+    [InlineData(".fsproj", "CodeFsRectangle")]
+    [InlineData(".vbproj", "CodeVbRectangle")]
+    [InlineData(".CSPROJ", "CodeCsRectangle")]
+    [InlineData(".FSPROJ", "CodeFsRectangle")]
+    [InlineData(".VBPROJ", "CodeVbRectangle")]
+    public void DirectoryShorthandResolvesExactlyOneSupportedProjectAcrossLanguages(string extension, string iconName)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var directory = workspace.CreateDirectory("Service");
@@ -69,6 +72,8 @@ public class DotnetProjectPathTests(ITestOutputHelper outputHelper)
         Assert.Equal(directory.FullName, relative.Resource.WorkingDirectory);
         Assert.False(absolute.Resource.GetProjectMetadata().IsFileBasedApp);
         Assert.Single(Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>()).ProjectPaths);
+        Assert.Equal(iconName, Assert.Single(absolute.Resource.Annotations.OfType<ResourceIconAnnotation>()).IconName);
+        Assert.Equal(iconName, Assert.Single(relative.Resource.Annotations.OfType<ResourceIconAnnotation>()).IconName);
 
         File.WriteAllText(Path.Combine(directory.FullName, "Later.vbproj"), "<Project />");
         Assert.Equal(projectPath, absolute.Resource.GetProjectMetadata().ProjectPath);
@@ -219,5 +224,114 @@ public class DotnetProjectPathTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(workspace.Path, legacy.Resource.GetProjectMetadata().ProjectPath);
         Assert.Equal(path, modern.Resource.GetProjectMetadata().ProjectPath);
+    }
+
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    [InlineData(".cs")]
+    public void ExplicitIconOverridesTheLanguageDefault(string extension)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = Path.Combine(workspace.Path, $"Service{extension}");
+        File.WriteAllText(path, "");
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var resource = builder.AddDotnetProject("service", path)
+            .WithIconName("CodeCircle", IconVariant.Regular);
+
+        var icon = Assert.Single(resource.Resource.Annotations.OfType<ResourceIconAnnotation>());
+        Assert.Equal("CodeCircle", icon.IconName);
+        Assert.Equal(IconVariant.Regular, icon.IconVariant);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(".csproj", ".csproj")]
+    [InlineData(".csproj", ".fsproj")]
+    [InlineData(".csproj", ".vbproj")]
+    [InlineData(".fsproj", ".vbproj")]
+    [InlineData(".FSPROJ", ".VBPROJ")]
+    public void UnresolvableDirectoriesUseActionableErrorsWithDefaultOptions(
+        string? firstExtension,
+        string? secondExtension)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var directory = workspace.CreateDirectory("Service");
+        if (firstExtension is not null)
+        {
+            File.WriteAllText(Path.Combine(directory.FullName, $"First{firstExtension}"), "<Project />");
+            File.WriteAllText(Path.Combine(directory.FullName, $"Second{secondExtension}"), "<Project />");
+        }
+        File.WriteAllText(Path.Combine(directory.FullName, "app.cs"), "");
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var exception = Assert.Throws<DistributedApplicationException>(() =>
+            builder.AddDotnetProject("service", directory.FullName));
+
+        Assert.Equal(
+            $"Path to .NET project for resource 'service' could not be determined. The directory '{directory.FullName}' must contain exactly one .csproj, .fsproj, or .vbproj file. Specify an explicit project filename when multiple supported projects exist.",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData("Service.fs")]
+    [InlineData("Service.fsx")]
+    [InlineData("Service.vb")]
+    [InlineData("Service.vcxproj")]
+    [InlineData("Service.proj")]
+    public async Task ExistingUnsupportedFilesStillFailAtResourceStartWithDefaultOptions(string fileName)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = Path.Combine(workspace.Path, fileName);
+        File.WriteAllText(path, "");
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddDotnetProject("service", path);
+        using var app = builder.Build();
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(app, TestContext.Current.CancellationToken);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            builder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(resource.Resource, app.Services),
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            $"The .NET app path '{path}' for resource 'service' is invalid. The path must be to a .cs file, an SDK-style .csproj, .fsproj, or .vbproj file, or a directory containing exactly one supported project.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void MissingDirectoryUsesActionableErrorWithDefaultOptions()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = Path.Combine(workspace.Path, "MissingDirectory");
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var exception = Assert.Throws<DistributedApplicationException>(() =>
+            builder.AddDotnetProject("service", path));
+
+        Assert.Equal(
+            $"The .NET app path '{path}' for resource 'service' is invalid. The path must be to a .cs file, an SDK-style .csproj, .fsproj, or .vbproj file, or a directory containing exactly one supported project.",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    [InlineData(".cs")]
+    public void MissingSupportedFilesKeepTheirExistingValidationBoundary(string extension)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = Path.Combine(workspace.Path, $"Missing{extension}");
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var exception = Assert.Throws<DistributedApplicationException>(() =>
+            builder.AddDotnetProject("default", path));
+
+        Assert.Equal($"Project file '{path}' was not found.", exception.Message);
+        var excluded = builder.AddDotnetProject("excluded", path, options => options.ExcludeLaunchProfile = true);
+        Assert.Equal(path, excluded.Resource.GetProjectMetadata().ProjectPath);
     }
 }

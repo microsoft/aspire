@@ -405,7 +405,7 @@ public static class KubernetesPersistentVolumeExtensions
     ///     .WithCapacity("100Gi")
     ///     .WithAccessMode(PersistentVolumeAccessMode.ReadWriteMany);
     ///
-    /// builder.AddProject&lt;MyApi&gt;("api")
+    /// builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///        .WithPersistentVolume(media, "/srv/media");
     /// </code>
     /// </example>
@@ -444,7 +444,7 @@ public static class KubernetesPersistentVolumeExtensions
     /// var data = k8s.AddPersistentVolume("data")
     ///     .WithCapacity("20Gi");
     ///
-    /// builder.AddProject&lt;Projects.Api&gt;("api")
+    /// builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///     .WithPersistentVolume(data, "/srv/data", env: "DATA_PATH");
     /// </code>
     /// </example>

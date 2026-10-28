@@ -34,7 +34,7 @@ public static class KubernetesIngressExtensions
     /// var ingress = k8s.AddIngress("public")
     ///     .WithIngressClass("nginx");
     ///
-    /// var api = builder.AddProject&lt;MyApi&gt;("api");
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj");
     /// ingress.WithPath("/api", api.GetEndpoint("http"));
     /// </code>
     /// </example>
@@ -111,7 +111,7 @@ public static class KubernetesIngressExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// <code>
-    /// var api = builder.AddProject&lt;MyApi&gt;("api");
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj");
     /// ingress.WithPath("/api", api.GetEndpoint("http"));
     /// </code>
     /// </example>
@@ -153,7 +153,7 @@ public static class KubernetesIngressExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// <code>
-    /// var api = builder.AddProject&lt;MyApi&gt;("api");
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj");
     /// ingress.WithPath("api.example.com", "/", api.GetEndpoint("http"));
     /// </code>
     /// </example>

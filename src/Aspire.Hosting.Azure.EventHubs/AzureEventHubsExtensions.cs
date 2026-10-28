@@ -242,7 +242,7 @@ public static class AzureEventHubsExtensions
     ///    .RunAsEmulator()
     ///    .AddEventHub("hub");
     ///
-    /// builder.AddProject&lt;Projects.InventoryService&gt;()
+    /// builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
     ///        .WithReference(eventHub);
     ///
     /// builder.Build().Run();
@@ -508,7 +508,7 @@ public static class AzureEventHubsExtensions
     ///
     /// var eventHubs = builder.AddAzureEventHubs("eventHubs");
     ///
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///   .WithRoleAssignments(eventHubs, EventHubsBuiltInRole.AzureEventHubsDataSender)
     ///   .WithReference(eventHubs);
     /// </code>

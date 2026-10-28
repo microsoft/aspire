@@ -41,11 +41,11 @@ namespace Aspire.Hosting;
 /// </para>
 /// <example>
 /// The following example shows creating a PostgreSQL server resource with a database and referencing that
-/// database in a .NET project.
+/// database in a .NET project using the <c>Aspire.Hosting.Dotnet</c> package.
 /// <code lang="csharp">
 /// var builder = DistributedApplication.CreateBuilder(args);
 /// var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-/// builder.AddProject&lt;Projects.InventoryService&gt;()
+/// builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
 ///        .WithReference(inventoryDatabase);
 ///
 /// builder.Build().Run();
@@ -101,11 +101,11 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// when more control is needed over the behavior of the distributed application at runtime.
     /// <example>
     /// The following example is creating a Postgres server resource with a database and referencing that
-    /// database in a .NET project.
+    /// database in a .NET project using the <c>Aspire.Hosting.Dotnet</c> package.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder();
     /// var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-    /// builder.AddProject&lt;Projects.InventoryService&gt;()
+    /// builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
     ///        .WithReference(inventoryDatabase);
     ///
     /// builder.Build().Run();
@@ -134,11 +134,11 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// </para>
     /// <example>
     /// The following example shows creating a Postgres server resource with a database and referencing that
-    /// database in a .NET project.
+    /// database in a .NET project using the <c>Aspire.Hosting.Dotnet</c> package.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-    /// builder.AddProject&lt;Projects.InventoryService&gt;()
+    /// builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
     ///        .WithReference(inventoryDatabase);
     ///
     /// builder.Build().Run();
@@ -153,7 +153,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     ///     {
     ///         var builder = DistributedApplication.CreateBuilder(args);
     ///         var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-    ///         builder.AddProject&lt;Projects.InventoryService&gt;()
+    ///         builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
     ///                .WithReference(inventoryDatabase);
     ///
     ///         builder.Build().Run();
@@ -195,16 +195,17 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// correctly when used with deployment tools that need to enable publish mode.
     /// </para>
     /// <example>
-    /// Override the container registry used by the distributed application.
+    /// Override the container registry used by the distributed application. The .NET project example
+    /// requires the <c>Aspire.Hosting.Dotnet</c> package.
     /// <code lang="csharp">
     /// var options = new DistributedApplicationOptions
     /// {
-    ///     Args = args; // Important for deployment tools
+    ///     Args = args, // Important for deployment tools
     ///     ContainerRegistryOverride = "registry.example.com"
     /// };
     /// var builder = DistributedApplication.CreateBuilder(options);
     /// var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-    /// builder.AddProject&lt;Projects.InventoryService&gt;()
+    /// builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
     ///        .WithReference(inventoryDatabase);
     ///
     /// builder.Build().Run();

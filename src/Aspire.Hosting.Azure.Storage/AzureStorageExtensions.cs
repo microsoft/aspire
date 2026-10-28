@@ -450,7 +450,7 @@ public static class AzureStorageExtensions
     ///
     /// var blobs = builder.AddAzureStorage("storage").GetBlobService();
     ///
-    /// var myService = builder.AddProject&lt;Projects.MyService&gt;()
+    /// var myService = builder.AddDotnetProject("myservice", @"..\MyService\MyService.csproj")
     ///                       .WithReference(blobs, "blobs");
     /// 
     /// builder.Build().Run();
@@ -721,7 +721,7 @@ public static class AzureStorageExtensions
     /// var storage = builder.AddAzureStorage("storage");
     /// var blobs = storage.AddBlobs("blobs");
     /// 
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///   .WithRoleAssignments(storage, StorageBuiltInRole.StorageBlobDataContributor)
     ///   .WithReference(blobs);
     /// </code>

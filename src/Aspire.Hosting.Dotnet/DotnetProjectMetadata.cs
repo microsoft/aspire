@@ -17,8 +17,7 @@ internal sealed class DotnetProjectMetadata(string projectPath, string? buildCon
     private string? _buildWorkingDirectory;
     private string? _resolvedProjectPath;
 
-    // Resolution is deferred so construction never touches the file system; an unresolvable path is
-    // reported as a resource start failure instead.
+    // Keep directory shorthand stable if the directory contents change after the resource is added.
     public string ProjectPath => _resolvedProjectPath ??=
         ProjectPathResolver.ResolveProjectPath(projectPath, includeAllDotnetProjectTypes: true);
 
@@ -26,7 +25,15 @@ internal sealed class DotnetProjectMetadata(string projectPath, string? buildCon
     {
         get
         {
-            if (!ProjectPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase) || !File.Exists(ProjectPath))
+            if (!File.Exists(ProjectPath))
+            {
+                // The shared loader rejects non-file paths eagerly. Explain unresolved paths here,
+                // but keep existing unsupported files on the resource-start validation path.
+                ValidateProjectPath();
+                return null;
+            }
+
+            if (!ProjectPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
@@ -57,6 +64,20 @@ internal sealed class DotnetProjectMetadata(string projectPath, string? buildCon
 
     internal DotnetProjectRunPropertiesResolverCallback RunPropertiesResolver { get; set; } =
         DotnetProjectRunPropertiesResolver.ResolveAsync;
+
+    internal void ValidateProjectPath()
+    {
+        var path = ProjectPath;
+        if (ProjectPathResolver.IsSupportedDotnetProjectFile(path) || path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var message = Directory.Exists(path)
+            ? $"Path to .NET project for resource '{resourceName}' could not be determined. The directory '{path}' must contain exactly one .csproj, .fsproj, or .vbproj file. Specify an explicit project filename when multiple supported projects exist."
+            : $"The .NET app path '{path}' for resource '{resourceName}' is invalid. The path must be to a .cs file, an SDK-style .csproj, .fsproj, or .vbproj file, or a directory containing exactly one supported project.";
+        throw new DistributedApplicationException(message);
+    }
 
     /// <summary>
     /// Uses the exact path selected by the coordinated build for subsequent process and IDE launches.

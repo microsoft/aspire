@@ -26,7 +26,7 @@ public static class GarnetBuilderExtensions
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
     /// var garnet = builder.AddGarnet("garnet");
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api)
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///                  .WithReference(garnet);
     ///
     /// builder.Build().Run();
@@ -70,7 +70,7 @@ public static class GarnetBuilderExtensions
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
     /// var garnet = builder.AddGarnet("garnet");
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api)
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///                  .WithReference(garnet);
     ///
     /// builder.Build().Run();

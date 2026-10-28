@@ -105,7 +105,7 @@ public static class BrowserLogsBuilderExtensions
     /// <code>
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
-    /// builder.AddProject&lt;Projects.WebFrontend&gt;("web")
+    /// builder.AddDotnetProject("web", @"..\WebFrontend\WebFrontend.csproj")
     ///     .WithExternalHttpEndpoints()
     ///     .WithBrowserLogs();
     /// </code>

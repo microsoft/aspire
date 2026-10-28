@@ -119,7 +119,7 @@ public static class AzureSearchExtensions
     ///
     /// var search = builder.AddAzureSearch("search");
     /// 
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///   .WithRoleAssignments(search, SearchBuiltInRole.SearchIndexDataReader)
     ///   .WithReference(search);
     /// </code>

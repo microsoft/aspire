@@ -508,7 +508,7 @@ public static class MongoDBBuilderExtensions
     /// <code lang="csharp">
     /// var mongo = builder.AddMongoDB("mongo").WithReplicaSet();
     /// var database = mongo.AddDatabase("orders");
-    /// builder.AddProject&lt;Projects.Api&gt;("api").WithReference(database).WaitFor(database);
+    /// builder.AddDotnetProject("api", @"..\Api\Api.csproj").WithReference(database).WaitFor(database);
     /// </code>
     /// </example>
     [AspireExport]

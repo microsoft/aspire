@@ -38,7 +38,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// The following example shows how to create a dev tunnel resource that exposes all endpoints on a web application project and enable anonymous access:
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// var web = builder.AddProject&lt;Projects.WebApp&gt;("web");
+    /// var web = builder.AddDotnetProject("web", @"..\WebApp\WebApp.csproj");
     /// var tunnel = builder.AddDevTunnel("mytunnel")
     ///     .WithReference(web)
     ///     .WithAnonymousAccess();

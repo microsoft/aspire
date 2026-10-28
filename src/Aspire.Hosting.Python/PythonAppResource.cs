@@ -38,7 +38,7 @@ namespace Aspire.Hosting.Python;
 ///     .WithHttpEndpoint(port: 5000)
 ///     .WithArgs("--host", "0.0.0.0");
 /// 
-/// builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+/// builder.AddDotnetProject("frontend", @"..\Frontend\Frontend.csproj")
 ///     .WithReference(python);
 /// 
 /// builder.Build().Run();

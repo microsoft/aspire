@@ -38,7 +38,7 @@ public static class HostedAgentResourceBuilderExtensions
     /// </remarks>
     /// <example>
     /// <code lang="csharp">
-    /// var agent = builder.AddProject&lt;Projects.AgentService&gt;("agent")
+    /// var agent = builder.AddDotnetProject("agent", @"..\AgentService\AgentService.csproj")
     ///     .AsHostedAgent(HostedAgentProtocol.Responses, "2.0.0");
     /// </code>
     /// </example>

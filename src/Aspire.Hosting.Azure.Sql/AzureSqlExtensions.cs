@@ -169,7 +169,7 @@ public static class AzureSqlExtensions
     /// var data = builder.AddAzureSqlServer("data")
     ///     .RunAsContainer();
     ///
-    /// builder.AddProject&lt;Projects.ProductService&gt;()
+    /// builder.AddDotnetProject("productservice", @"..\ProductService\ProductService.csproj")
     ///     .WithReference(data);
     ///
     /// builder.Build().Run();

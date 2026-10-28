@@ -29,12 +29,12 @@ public static class McpServerResourceBuilderExtensions
     /// <example>
     /// Mark a resource as hosting an MCP server using the default endpoint:
     /// <code>
-    /// var api = builder.AddProject&lt;Projects.MyApi&gt;("api")
+    /// var api = builder.AddDotnetProject("api", @"..\MyApi\MyApi.csproj")
     ///     .WithMcpServer();
     /// </code>
     /// Mark a resource as hosting an MCP server with a custom path and endpoint:
     /// <code>
-    /// var api = builder.AddProject&lt;Projects.MyApi&gt;("api")
+    /// var api = builder.AddDotnetProject("api", @"..\MyApi\MyApi.csproj")
     ///     .WithMcpServer("/sse", endpointName: "https");
     /// </code>
     /// </example>

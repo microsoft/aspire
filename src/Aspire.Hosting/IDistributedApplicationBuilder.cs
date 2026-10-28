@@ -31,7 +31,7 @@ namespace Aspire.Hosting;
 /// <para>
 /// This example shows a distributed application that contains a .NET project (InventoryService) that uses
 /// a Redis cache and a PostgreSQL database. The builder is created using the <see cref="DistributedApplication.CreateBuilder(string[])"/>
-/// method.
+/// method. Adding the .NET project requires the <c>Aspire.Hosting.Dotnet</c> package.
 /// </para>
 /// <para>
 /// The <see href="https://learn.microsoft.com/dotnet/api/aspire.hosting.redisbuilderextensions.addredis">AddRedis</see>
@@ -44,9 +44,9 @@ namespace Aspire.Hosting;
 /// var builder = DistributedApplication.CreateBuilder(args);
 /// var cache = builder.AddRedis("cache");
 /// var inventoryDatabase = builder.AddPostgres("postgres").AddDatabase("inventory");
-/// builder.AddProject&lt;Projects.InventoryService&gt;("inventoryservice")
+/// builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
 ///        .WithReference(cache)
-///        .WithReference(inventory);
+///        .WithReference(inventoryDatabase);
 /// builder.Build().Run();
 /// </code>
 /// </example>

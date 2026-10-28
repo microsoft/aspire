@@ -37,7 +37,7 @@ public static class AzureManagedRedisExtensions
     ///
     /// var cache = builder.AddAzureManagedRedis("cache");
     ///
-    /// builder.AddProject&lt;Projects.ProductService&gt;()
+    /// builder.AddDotnetProject("productservice", @"..\ProductService\ProductService.csproj")
     ///     .WithReference(cache);
     ///
     /// builder.Build().Run();
@@ -78,7 +78,7 @@ public static class AzureManagedRedisExtensions
     /// var cache = builder.AddAzureManagedRedis("cache")
     ///     .RunAsContainer();
     ///
-    /// builder.AddProject&lt;Projects.ProductService&gt;()
+    /// builder.AddDotnetProject("productservice", @"..\ProductService\ProductService.csproj")
     ///     .WithReference(cache);
     ///
     /// builder.Build().Run();
@@ -124,7 +124,7 @@ public static class AzureManagedRedisExtensions
     /// var cache = builder.AddAzureManagedRedis("cache")
     ///     .WithAccessKeyAuthentication();
     ///
-    /// builder.AddProject&lt;Projects.ProductService&gt;()
+    /// builder.AddDotnetProject("productservice", @"..\ProductService\ProductService.csproj")
     ///     .WithReference(cache);
     ///
     /// builder.Build().Run();

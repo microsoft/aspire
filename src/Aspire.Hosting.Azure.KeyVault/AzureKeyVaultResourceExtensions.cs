@@ -164,7 +164,7 @@ public static partial class AzureKeyVaultResourceExtensions
     ///
     /// var vault = builder.AddAzureKeyVault("vault");
     /// 
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///   .WithRoleAssignments(vault, KeyVaultBuiltInRole.KeyVaultReader)
     ///   .WithReference(vault);
     /// </code>

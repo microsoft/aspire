@@ -31,7 +31,7 @@ public static class VolumeResourceBuilderExtensions
     /// </remarks>
     /// <example>
     /// <code language="csharp">
-    /// builder.AddProject&lt;Projects.Api&gt;("api")
+    /// builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///     .WithVolume("data", "/usr/data", env: "DATA_PATH");
     /// </code>
     /// </example>

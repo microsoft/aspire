@@ -33,6 +33,10 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// See the <see href="https://github.com/microsoft/aspire/blob/main/docs/migrate-from-addproject.md">migration guide</see>.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddProject{TProject}(IDistributedApplicationBuilder, string)"/> method takes
     /// a <typeparamref name="TProject"/> type parameter. The <typeparamref name="TProject"/> type parameter is constrained
     /// to types that implement the <see cref="IProjectMetadata"/> interface.
@@ -53,7 +57,7 @@ public static class ProjectResourceBuilderExtensions
     /// to build the equivalent <see cref="EndpointAnnotation"/>.
     /// </para>
     /// <example>
-    /// Example of adding a project to the application model.
+    /// Legacy example of adding a project to the application model.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -83,13 +87,17 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// See the <see href="https://github.com/microsoft/aspire/blob/main/docs/migrate-from-addproject.md">migration guide</see>.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddProject(IDistributedApplicationBuilder, string, string)"/> method adds a project to the application
     /// model using a path to the project file. This allows for projects to be referenced that may not be part of the same solution. If the project
     /// path is not an absolute path then it will be computed relative to the app host directory.
     /// </para>
     /// <inheritdoc cref="AddProject(IDistributedApplicationBuilder, string)" path="/remarks/para[@name='kestrel']" />
     /// <example>
-    /// Add a project to the app model via a project path.
+    /// Legacy example of adding a project to the app model via a project path.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -145,6 +153,10 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// See the <see href="https://github.com/microsoft/aspire/blob/main/docs/migrate-from-addproject.md">migration guide</see>.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddProject{TProject}(IDistributedApplicationBuilder, string)"/> method takes
     /// a <typeparamref name="TProject"/> type parameter. The <typeparamref name="TProject"/> type parameter is constrained
     /// to types that implement the <see cref="IProjectMetadata"/> interface.
@@ -162,7 +174,7 @@ public static class ProjectResourceBuilderExtensions
     /// </para>
     /// <inheritdoc cref="AddProject(IDistributedApplicationBuilder, string)" path="/remarks/para[@name='kestrel']" />
     /// <example>
-    /// Example of adding a project to the application model.
+    /// Legacy example of adding a project to the application model.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -197,13 +209,17 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// See the <see href="https://github.com/microsoft/aspire/blob/main/docs/migrate-from-addproject.md">migration guide</see>.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddProject(IDistributedApplicationBuilder, string, string)"/> method adds a project to the application
     /// model using a path to the project file. This allows for projects to be referenced that may not be part of the same solution. If the project
     /// path is not an absolute path then it will be computed relative to the app host directory.
     /// </para>
     /// <inheritdoc cref="AddProject(IDistributedApplicationBuilder, string)" path="/remarks/para[@name='kestrel']" />
     /// <example>
-    /// Add a project to the app model via a project path.
+    /// Legacy example of adding a project to the app model via a project path.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -238,6 +254,10 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// See the <see href="https://github.com/microsoft/aspire/blob/main/docs/migrate-from-addproject.md">migration guide</see>.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddProject{TProject}(IDistributedApplicationBuilder, string)"/> method takes
     /// a <typeparamref name="TProject"/> type parameter. The <typeparamref name="TProject"/> type parameter is constrained
     /// to types that implement the <see cref="IProjectMetadata"/> interface.
@@ -254,7 +274,7 @@ public static class ProjectResourceBuilderExtensions
     /// that references the project can have a <c>AspireProjectMetadataTypeName="..."</c> attribute added to override the name.
     /// </para>
     /// <example>
-    /// Example of adding a project to the application model.
+    /// Legacy example of adding a project to the application model.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -294,12 +314,16 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// See the <see href="https://github.com/microsoft/aspire/blob/main/docs/migrate-from-addproject.md">migration guide</see>.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddProject(IDistributedApplicationBuilder, string, string)"/> method adds a project to the application
     /// model using a path to the project file or directory. This allows for projects to be referenced that may not be part of the same solution. If the project
     /// path is not an absolute path then it will be computed relative to the app host directory.
     /// </para>
     /// <example>
-    /// Add a project to the app model via a project path.
+    /// Legacy example of adding a project to the app model via a project path.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -495,7 +519,7 @@ public static class ProjectResourceBuilderExtensions
     /// <para>
     /// The resource must carry <see cref="IProjectMetadata"/>. It is intended for language integration
     /// packages that add their own .NET resource type, such as <c>Aspire.Hosting.Dotnet</c>; use
-    /// <see cref="AddProject{TProject}(IDistributedApplicationBuilder, string)"/> for ordinary projects.
+    /// <c>AddDotnetProject</c> from that package for ordinary projects.
     /// </para>
     /// <para>
     /// The project metadata annotation must not be added, removed, or replaced after this method returns.
@@ -922,7 +946,8 @@ public static class ProjectResourceBuilderExtensions
     /// within a cluster of instances.
     /// </para>
     /// <example>
-    /// Start multiple instances of the same service.
+    /// Start multiple instances of a legacy <see cref="ProjectResource"/>.
+    /// For <c>AddDotnetProject</c> resources, use the overload from <c>Aspire.Hosting.Dotnet</c>.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -959,7 +984,8 @@ public static class ProjectResourceBuilderExtensions
     /// extension is used this environment variable will not be set.
     /// </para>
     /// <example>
-    /// Disable forwarded headers for a project.
+    /// Disable forwarded headers for a legacy <see cref="ProjectResource"/>.
+    /// For <c>AddDotnetProject</c> resources, use the overload from <c>Aspire.Hosting.Dotnet</c>.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///

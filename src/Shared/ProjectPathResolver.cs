@@ -10,8 +10,8 @@ internal static class ProjectPathResolver
     /// to that project file; anything else is returned unchanged.
     /// </summary>
     /// <remarks>
-    /// Ambiguous or missing project files are deliberately passed through rather than throwing, so the
-    /// error surfaces later as a resource start failure with a message naming the resource.
+    /// Unresolvable paths are returned unchanged so callers can report a contextual error at their
+    /// validation boundary.
     /// </remarks>
     public static string ResolveProjectPath(string path) =>
         ResolveProjectPath(path, includeAllDotnetProjectTypes: false);

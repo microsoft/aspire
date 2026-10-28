@@ -56,7 +56,7 @@ public static class AzureUserAssignedIdentityExtensions
     /// <example>
     /// <code>
     /// var identity = builder.AddAzureUserAssignedIdentity("myIdentity");
-    /// var app = builder.AddProject("myApp")
+    /// var app = builder.AddDotnetProject("myApp", @"..\MyApp\MyApp.csproj")
     ///     .WithAzureUserAssignedIdentity(identity);
     /// </code>
     /// </example>

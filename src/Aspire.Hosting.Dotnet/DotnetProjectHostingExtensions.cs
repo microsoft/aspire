@@ -360,16 +360,21 @@ public static class DotnetProjectHostingExtensions
 
         // ExecutableResource requires a working directory. Use the project/app directory so the process
         // launches from the same place a ProjectResource would (DCP used Path.GetDirectoryName(ProjectPath)).
-        // Accessing ProjectPath also resolves a project directory to its single supported project. Falling back to the
-        // app host directory keeps construction valid for invalid paths, which are reported by the
-        // OnBeforeResourceStarted validation below.
+        // Accessing ProjectPath also resolves directory shorthand. Unresolved paths are validated
+        // during launch-settings discovery or resource startup, depending on launch-profile options.
         var workingDirectory = Path.GetDirectoryName(projectMetadata.ProjectPath) ?? builder.AppHostDirectory;
+        var iconName = Path.GetExtension(projectMetadata.ProjectPath).ToLowerInvariant() switch
+        {
+            ".fsproj" => "CodeFsRectangle",
+            ".vbproj" => "CodeVbRectangle",
+            _ => "CodeCsRectangle"
+        };
 
         var app = new DotnetProjectResource(name, workingDirectory);
 
         var resource = builder.AddResource(app)
                               .WithAnnotation(projectMetadata)
-                              .WithIconName("CodeCsRectangle")
+                              .WithIconName(iconName)
                               .WithProjectDefaults(options)
                               .WithDotnetProgramPublishing();
         var projectLaunchConfigurationType = resource.Resource.Annotations
@@ -491,15 +496,7 @@ public static class DotnetProjectHostingExtensions
 
         resource.OnBeforeResourceStarted((r, e, ct) =>
         {
-            var projectPath = projectMetadata.ProjectPath;
-
-            if (!ProjectPathResolver.IsSupportedDotnetProjectFile(projectPath) && !projectPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
-            {
-                var message = Directory.Exists(projectPath)
-                    ? $"Path to .NET project for resource '{r.Name}' could not be determined. The directory '{projectPath}' must contain exactly one .csproj, .fsproj, or .vbproj file. Specify an explicit project filename when multiple supported projects exist."
-                    : $"The .NET app path '{projectPath}' for resource '{r.Name}' is invalid. The path must be to a .cs file, an SDK-style .csproj, .fsproj, or .vbproj file, or a directory containing exactly one supported project.";
-                throw new DistributedApplicationException(message);
-            }
+            projectMetadata.ValidateProjectPath();
 
             // The minimum-SDK check for file-based apps is applied by WithProjectDefaults.
             return Task.CompletedTask;

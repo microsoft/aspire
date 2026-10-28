@@ -192,7 +192,7 @@ public static class AzureAppConfigurationExtensions
     ///
     /// var appStore = builder.AddAzureAppConfiguration("appStore");
     /// 
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///   .WithRoleAssignments(appStore, AppConfigurationBuiltInRole.AppConfigurationDataReader)
     ///   .WithReference(appStore);
     /// </code>

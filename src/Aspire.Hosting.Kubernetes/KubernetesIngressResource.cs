@@ -28,7 +28,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// var ingress = k8s.AddIngress("public")
 ///     .WithIngressClass("nginx");
 ///
-/// var api = builder.AddProject&lt;MyApi&gt;("api");
+/// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj");
 /// ingress.WithPath("/api", api.GetEndpoint("http"));
 /// </code>
 /// </example>

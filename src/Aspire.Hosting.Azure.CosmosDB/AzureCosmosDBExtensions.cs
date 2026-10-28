@@ -537,7 +537,7 @@ public static class AzureCosmosExtensions
     /// var cosmosdb = builder.AddAzureCosmosDB("cache")
     ///     .WithAccessKeyAuthentication();
     ///
-    /// builder.AddProject&lt;Projects.ProductService&gt;()
+    /// builder.AddDotnetProject("productservice", @"..\ProductService\ProductService.csproj")
     ///     .WithReference(cosmosdb);
     ///
     /// builder.Build().Run();

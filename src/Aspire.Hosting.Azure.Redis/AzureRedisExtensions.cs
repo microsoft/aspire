@@ -104,7 +104,7 @@ public static class AzureRedisExtensions
     ///
     /// var cache = builder.AddAzureRedis("cache");
     ///
-    /// builder.AddProject&lt;Projects.ProductService&gt;()
+    /// builder.AddDotnetProject("productservice", @"..\ProductService\ProductService.csproj")
     ///     .WithReference(cache);
     ///
     /// builder.Build().Run();
@@ -143,7 +143,7 @@ public static class AzureRedisExtensions
     /// var cache = builder.AddAzureRedis("cache")
     ///     .RunAsContainer();
     ///
-    /// builder.AddProject&lt;Projects.ProductService&gt;()
+    /// builder.AddDotnetProject("productservice", @"..\ProductService\ProductService.csproj")
     ///     .WithReference(cache);
     ///
     /// builder.Build().Run();
@@ -188,7 +188,7 @@ public static class AzureRedisExtensions
     /// var cache = builder.AddAzureRedis("cache")
     ///     .WithAccessKeyAuthentication();
     ///
-    /// builder.AddProject&lt;Projects.ProductService&gt;()
+    /// builder.AddDotnetProject("productservice", @"..\ProductService\ProductService.csproj")
     ///     .WithReference(cache);
     ///
     /// builder.Build().Run();

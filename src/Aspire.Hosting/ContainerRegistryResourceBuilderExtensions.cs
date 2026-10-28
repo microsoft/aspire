@@ -176,7 +176,7 @@ public static class ContainerRegistryResourceBuilderExtensions
     /// Configure a project to use a container registry:
     /// <code>
     /// var registry = builder.AddContainerRegistry("docker-hub", "docker.io", "myusername");
-    /// var project = builder.AddProject&lt;MyProject&gt;("myproject")
+    /// var project = builder.AddDotnetProject("myproject", @"..\MyProject\MyProject.csproj")
     ///     .WithContainerRegistry(registry);
     /// </code>
     /// </example>

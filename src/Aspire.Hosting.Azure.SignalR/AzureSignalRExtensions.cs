@@ -192,7 +192,7 @@ public static class AzureSignalRExtensions
     ///
     /// var signalr = builder.AddAzureSignalR("signalr");
     /// 
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///   .WithRoleAssignments(signalr, SignalRBuiltInRole.SignalRContributor)
     ///   .WithReference(signalr);
     /// </code>

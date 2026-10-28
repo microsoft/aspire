@@ -45,7 +45,7 @@ public static class ContainerAppExtensions
     /// var builder = DistributedApplication.CreateBuilder();
     /// var customDomain = builder.AddParameter("customDomain"); // Value provided at first deployment.
     /// var certificateName = builder.AddParameter("certificateName"); // Value provided at second and subsequent deployments.
-    /// builder.AddProject&lt;Projects.InventoryService&gt;("inventory")
+    /// builder.AddDotnetProject("inventory", @"..\InventoryService\InventoryService.csproj")
     ///        .PublishAsAzureContainerApp((module, app) =>
     ///        {
     ///          app.ConfigureCustomDomain(customDomain, certificateName);
@@ -139,7 +139,7 @@ public static class ContainerAppExtensions
     /// 
     /// <example>
     /// <code>
-    /// builder.AddProject&lt;Projects.Api&gt;.PublishAsAzureContainerAppJob((infrastructure, job) =>
+    /// builder.AddDotnetProject("api", @"..\Api\Api.csproj").PublishAsAzureContainerAppJob((infrastructure, job) =>
     /// {
     ///     // Configure the container app job here
     ///     job.Configuration.TriggerType = ContainerAppJobTriggerType.Schedule;
@@ -181,7 +181,7 @@ public static class ContainerAppExtensions
     /// 
     /// <example>
     /// <code>
-    /// builder.AddProject&lt;Projects.ProcessorJob&gt;("processor-job")
+    /// builder.AddDotnetProject("processor-job", @"..\ProcessorJob\ProcessorJob.csproj")
     ///        .PublishAsAzureContainerAppJob(); // Manual trigger (default)
     /// </code>
     /// </example>
@@ -229,7 +229,7 @@ public static class ContainerAppExtensions
     /// 
     /// <example>
     /// <code>
-    /// builder.AddProject&lt;Projects.ProcessorJob&gt;("job")
+    /// builder.AddDotnetProject("job", @"..\ProcessorJob\ProcessorJob.csproj")
     ///        .PublishAsScheduledAzureContainerAppJob("0 0 * * *"); // Run every day at midnight
     /// </code>
     /// </example>

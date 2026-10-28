@@ -173,7 +173,7 @@ public static class AzureWebPubSubExtensions
     /// var webPubSub = builder.AddAzureWebPubSub("webpubsub")
     ///     .RunAsEmulator();
     /// var chat = webPubSub.AddHub("chat");
-    /// builder.AddProject&lt;Projects.Api&gt;("api").WithReference(chat);
+    /// builder.AddDotnetProject("api", @"..\Api\Api.csproj").WithReference(chat);
     /// </code>
     /// </example>
     [AspireExport(RunSyncOnBackgroundThread = true)]
@@ -410,7 +410,7 @@ public static class AzureWebPubSubExtensions
     ///
     /// var webPubSub = builder.AddAzureWebPubSub("webPubSub");
     ///
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///   .WithRoleAssignments(webPubSub, WebPubSubBuiltInRole.WebPubSubServiceReader)
     ///   .WithReference(webPubSub);
     /// </code>

@@ -29,9 +29,8 @@ public static class ConnectionStringBuilderExtensions
     /// var cs = builder.AddConnectionString("cs", ReferenceExpression.Create($"Endpoint=http://something;Key={apiKey}"));
     ///
     /// var backend = builder
-    ///     .AddProject&lt;Projects.Backend&gt;("backend")
-    ///     .WithReference(cs)
-    ///     .WaitFor(database);
+    ///     .AddDotnetProject("backend", @"..\Backend\Backend.csproj")
+    ///     .WithReference(cs);
     ///
     /// builder.Build().Run();
     /// </code>
@@ -135,9 +134,8 @@ public static class ConnectionStringBuilderExtensions
     /// var cs = builder.AddConnectionString("cs", b => b.Append($"Endpoint=http://something;Key={apiKey}"));
     ///
     /// var backend = builder
-    ///     .AddProject&lt;Projects.Backend&gt;("backend")
-    ///     .WithReference(cs)
-    ///     .WaitFor(database);
+    ///     .AddDotnetProject("backend", @"..\Backend\Backend.csproj")
+    ///     .WithReference(cs);
     ///
     /// builder.Build().Run();
     /// </code>

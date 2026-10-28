@@ -23,7 +23,7 @@ public static class AzureAppServiceComputeResourceExtensions
     /// <remarks>
     /// <example>
     /// <code>
-    /// builder.AddProject&lt;Projects.Api&gt;("name").PublishAsAzureAppServiceWebsite((infrastructure, app) =>
+    /// builder.AddDotnetProject("name", @"..\Api\Api.csproj").PublishAsAzureAppServiceWebsite((infrastructure, app) =>
     /// {
     ///     // Configure the App Service WebSite resource here
     /// });

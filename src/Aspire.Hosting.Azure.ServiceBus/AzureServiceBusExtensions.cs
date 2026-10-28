@@ -386,7 +386,7 @@ public static class AzureServiceBusExtensions
     ///    .RunAsEmulator()
     ///    .AddQueue("queue");
     ///
-    /// builder.AddProject&lt;Projects.InventoryService&gt;()
+    /// builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
     ///        .WithReference(serviceBus);
     ///
     /// builder.Build().Run();
@@ -824,7 +824,7 @@ public static class AzureServiceBusExtensions
     ///
     /// var sb = builder.AddAzureServiceBus("bus");
     ///
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///   .WithRoleAssignments(sb, ServiceBusBuiltInRole.AzureServiceBusDataSender)
     ///   .WithReference(sb);
     /// </code>

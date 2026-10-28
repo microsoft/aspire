@@ -36,7 +36,7 @@ public static class AzureKubernetesIngressExtensions
     /// var ingress = aks.AddIngress("public")
     ///     .WithIngressClass("azure-alb-external");
     ///
-    /// var api = builder.AddProject&lt;MyApi&gt;("api");
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj");
     /// ingress.WithPath("/api", api.GetEndpoint("http"));
     /// </code>
     /// </example>
@@ -66,7 +66,7 @@ public static class AzureKubernetesIngressExtensions
     /// var gateway = aks.AddGateway("public")
     ///     .WithGatewayClass("azure-alb-external");
     ///
-    /// var api = builder.AddProject&lt;MyApi&gt;("api");
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj");
     /// gateway.WithRoute("/api", api.GetEndpoint("http"));
     /// </code>
     /// </example>

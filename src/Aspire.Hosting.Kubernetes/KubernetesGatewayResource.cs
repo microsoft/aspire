@@ -28,7 +28,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// var gateway = k8s.AddGateway("public")
 ///     .WithGatewayClass("azure-alb-external");
 ///
-/// var api = builder.AddProject&lt;MyApi&gt;("api");
+/// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj");
 /// gateway.WithRoute("/api", api.GetEndpoint("http"));
 /// </code>
 /// </example>
