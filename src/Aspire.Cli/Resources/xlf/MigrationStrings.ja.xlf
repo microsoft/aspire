@@ -4,47 +4,47 @@
     <body>
       <trans-unit id="AvailableMigrationsHeader">
         <source>The following migrations will be applied:</source>
-        <target state="new">The following migrations will be applied:</target>
+        <target state="translated">次の移行が適用されます:</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfirmApplyPrompt">
         <source>Apply these migrations?</source>
-        <target state="new">Apply these migrations?</target>
+        <target state="translated">これらの移行を適用しますか?</target>
         <note />
       </trans-unit>
       <trans-unit id="MigratingStatus">
         <source>Migrating to apphost.mts</source>
-        <target state="new">Migrating to apphost.mts</target>
+        <target state="translated">apphost.mts に移行しています</target>
         <note />
       </trans-unit>
       <trans-unit id="MigrationCancelled">
         <source>Migration cancelled. No changes were made.</source>
-        <target state="new">Migration cancelled. No changes were made.</target>
+        <target state="translated">移行がキャンセルされました。変更は行われませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="MigrationSucceededFormat">
         <source>Migrated '{0}' to '{1}'.</source>
-        <target state="new">Migrated '{0}' to '{1}'.</target>
+        <target state="translated">'{0}' を '{1}' に移行しました。</target>
         <note>{0} is the legacy apphost.ts file name, {1} is the modern apphost.mts file name.</note>
       </trans-unit>
       <trans-unit id="NothingToMigrate">
         <source>Nothing to migrate. The current project is already using the latest recommended Aspire conventions.</source>
-        <target state="new">Nothing to migrate. The current project is already using the latest recommended Aspire conventions.</target>
+        <target state="translated">移行するものがありません。現在のプロジェクトでは、推奨される最新の Aspire 規則を既に使用しています。</target>
         <note />
       </trans-unit>
       <trans-unit id="RegenerateFailedWarning">
         <source>Migration completed, but regenerating the SDK code failed. Run 'aspire restore' to regenerate it.</source>
-        <target state="new">Migration completed, but regenerating the SDK code failed. Run 'aspire restore' to regenerate it.</target>
+        <target state="translated">移行は完了しましたが、SDK コードの再生成に失敗しました。再生成するには、'aspire restore' を実行してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="RegeneratingStatus">
         <source>Regenerating SDK code</source>
-        <target state="new">Regenerating SDK code</target>
+        <target state="translated">SDK コードを再生成しています</target>
         <note />
       </trans-unit>
       <trans-unit id="TypeScriptMigrationTitleFormat">
         <source>Migrate '{0}' to '{1}' (rewrites SDK imports and updates aspire.config.json and tsconfig.apphost.json).</source>
-        <target state="new">Migrate '{0}' to '{1}' (rewrites SDK imports and updates aspire.config.json and tsconfig.apphost.json).</target>
+        <target state="translated">'{0}' を '{1}' に移行します (SDK のインポートと更新の書き換え、aspire.config.json とtsconfig.apphost.json)。</target>
         <note>{0} is the legacy apphost.ts file name, {1} is the modern apphost.mts file name.</note>
       </trans-unit>
     </body>
