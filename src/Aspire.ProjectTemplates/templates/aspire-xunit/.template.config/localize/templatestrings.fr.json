@@ -4,7 +4,7 @@
   "description": "Projet qui contient les tests d’intégration xUnit.net d’un projet Aspire AppHost.",
   "symbols/Framework/description": "Framework cible du projet.",
   "symbols/Framework/choices/net10.0/description": "Net10.0 cible",
-  "symbols/Framework/choices/net11.0/description": "Target net11.0",
+  "symbols/Framework/choices/net11.0/description": "Net11.0 cible",
   "symbols/XUnitVersion/description": "Version de xUnit.net à utiliser.",
   "symbols/XUnitVersion/displayName": "version xUnit.net",
   "symbols/XUnitVersion/choices/v2/displayName": "v2",
