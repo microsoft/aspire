@@ -61,7 +61,7 @@ jobs:
           set -euo pipefail
           mkdir -p comparison
           git rev-parse HEAD | tee comparison/experiment-sha.txt
-          test "$(git rev-parse HEAD^)" = "$BASELINE"
+          test "$(git merge-base "$BASELINE" HEAD)" = "$BASELINE"
           test "$(git diff --name-only "$BASELINE" HEAD)" = ".github/workflows/reproduce-flaky-tests.yml"
           test "$(uname -m)" = "arm64"
           uname -a | tee comparison/platform.txt
@@ -241,10 +241,11 @@ jobs:
                       dict(test.attrib) for test in tree.findall(".//t:UnitTestResult", ns)
                       if test.get("outcome") == "Failed")
               total = sum(int(c.get("total", 0)) for c in result["counters"])
-              result["zero_tests_or_missing_trx"] = total == 0
+              executed = sum(int(c.get("executed", 0)) for c in result["counters"])
+              result["zero_tests_or_missing_trx"] = executed == 0
               failed = sum(int(c.get("failed", 0)) for c in result["counters"])
               result["passed"] = (result["exit_code"] == 0 and not result["timed_out"]
-                                  and total > 0 and failed == 0 and not result["trx_errors"])
+                                  and total > 0 and executed > 0 and failed == 0 and not result["trx_errors"])
               (directory / "status.json").write_text(json.dumps(result, indent=2))
               results.append(result)
               (root / "results.json").write_text(json.dumps(results, indent=2))
