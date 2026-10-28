@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="ComputedTemplateParameterCondition">
         <source>Parameter '{0}' uses a NuGet-computed value in a prompting condition. Computed values are resolved after prompting and cannot control parameter conditions.</source>
-        <target state="new">Parameter '{0}' uses a NuGet-computed value in a prompting condition. Computed values are resolved after prompting and cannot control parameter conditions.</target>
+        <target state="translated">參數 '{0}' 在提示條件中使用 NuGet 計算值。系統會在提示完成後解析計算值，因此計算值無法控制參數條件。</target>
         <note>{0} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="CreateNugetConfigConfirmation">
@@ -99,17 +99,17 @@
       </trans-unit>
       <trans-unit id="InvalidTemplateHostConfiguration">
         <source>Could not load template host configuration '{0}': {1}</source>
-        <target state="new">Could not load template host configuration '{0}': {1}</target>
+        <target state="translated">無法載入範本主機設定 '{0}'： {1}</target>
         <note>{0} is the host configuration path; {1} is the validation error.</note>
       </trans-unit>
       <trans-unit id="InvalidTemplateHostConfigurationFormat">
         <source>Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</source>
-        <target state="new">Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</target>
+        <target state="translated">必須是 JSON 物件。'createNuGetConfig' 必須是布林值，'symbolInfo' 必須是物件。符號項目必須是物件，'isHidden' 必須是 true 或 false，而 'displayName' 必須是字串。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidTemplateValueSource">
         <source>Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.</source>
-        <target state="new">Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.</target>
+        <target state="translated">計算值 '{0}' 必須以非保留的字串參數為目標，並指定 kind 'nugetPackageVersion'、有效的 'packageId' 和 'versionRange'、選用的布林值 'allowPrerelease'，以及選用的輸出相對工作目錄 'workingDirectory'。</target>
         <note>{0} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="No">
@@ -189,7 +189,7 @@
       </trans-unit>
       <trans-unit id="Skip">
         <source>Skip</source>
-        <target state="new">Skip</target>
+        <target state="translated">略過</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceOverrideNotPersistedWarning">
@@ -204,27 +204,27 @@
       </trans-unit>
       <trans-unit id="TemplateNuGetConfigurationChanged">
         <source>A computed value changed the generated NuGet configuration. NuGet-computed values must not control configuration contents, locations, or whether configuration files are generated.</source>
-        <target state="new">A computed value changed the generated NuGet configuration. NuGet-computed values must not control configuration contents, locations, or whether configuration files are generated.</target>
+        <target state="translated">計算值變更了產生的 NuGet 設定。NuGet 計算值不得控制設定內容、位置，或是否產生設定檔。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePackageVersionLookupFailed">
         <source>Could not query the effective NuGet sources for package '{0}' to compute parameter '{1}'. Check the NuGet configuration, connectivity, and credentials.</source>
-        <target state="new">Could not query the effective NuGet sources for package '{0}' to compute parameter '{1}'. Check the NuGet configuration, connectivity, and credentials.</target>
+        <target state="translated">無法查詢套件 '{0}' 的有效 NuGet 來源，以計算參數 '{1}'。檢查 NuGet 設定、連線能力及認證。</target>
         <note>{0} is the package ID; {1} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="TemplatePackageVersionNotFound">
         <source>No version of package '{0}' matches range '{1}' with allowPrerelease={2} in the effective NuGet sources for parameter '{3}'.</source>
-        <target state="new">No version of package '{0}' matches range '{1}' with allowPrerelease={2} in the effective NuGet sources for parameter '{3}'.</target>
+        <target state="translated">在參數 '{3}' 的有效 NuGet 來源中，沒有任何版本的套件 '{0}' 符合版本範圍 '{1}' (allowPrerelease={2})。</target>
         <note>{0} is the package ID; {1} is the version range; {2} is the prerelease Boolean; {3} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="TemplateStagingLinkNotSupported">
         <source>Templates with NuGet-computed values cannot generate symbolic links.</source>
-        <target state="new">Templates with NuGet-computed values cannot generate symbolic links.</target>
+        <target state="translated">包含 NuGet 計算值的範本無法產生符號連結。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateValueSourceWorkingDirectoryInvalid">
         <source>The computed value working directory '{0}' must name an existing directory within the generated output.</source>
-        <target state="new">The computed value working directory '{0}' must name an existing directory within the generated output.</target>
+        <target state="translated">計算值工作目錄 '{0}' 必須指定產生的輸出內現有的目錄。</target>
         <note>{0} is the relative working directory.</note>
       </trans-unit>
       <trans-unit id="TemplateVersionNotFound">
