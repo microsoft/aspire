@@ -245,7 +245,7 @@ internal sealed class TemplateNuGetConfigService(
             executionContext.NuGetServiceIndexOverride,
             cancellationToken);
         var targetFile = new FileInfo(Path.Combine(outputDirectory.FullName, "nuget.config"));
-        var content = await nuGetService.CreatePersistentNuGetConfigContentAsync(
+        var content = await new DotNetAppHostNuGetConfigMerger(nuGetService).CreatePersistentNuGetConfigContentAsync(
             configuration,
             targetFile,
             originalContent: null,

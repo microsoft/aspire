@@ -4,12 +4,11 @@
     <add key="aspire-test" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
   </packageSources>
   <packageSourceMapping>
-    <clear />
-    <packageSource key="nuget.org">
-      <package pattern="*" />
-    </packageSource>
     <packageSource key="aspire-test">
       <package pattern="Aspire*" />
+    </packageSource>
+    <packageSource key="nuget.org">
+      <package pattern="*" />
     </packageSource>
   </packageSourceMapping>
 </configuration>

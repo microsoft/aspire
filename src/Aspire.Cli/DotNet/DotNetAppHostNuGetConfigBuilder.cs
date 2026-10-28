@@ -1,0 +1,127 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
+
+namespace Aspire.Cli.DotNet;
+
+internal static class DotNetAppHostNuGetConfigBuilder
+{
+    public static NuGetConfiguration Build(
+        NuGetSettingsInfo settings, string workloadId, PackageMapping[]? selectedMappings)
+    {
+        var operation = NuGetConfigurationBuilder.Build(
+            settings, workloadId, selectedMappings, restrictToSelectedSources: false,
+            packageScopedAppendSource: null, hasAuthoritativeAspirePolicy: true);
+
+        return new NuGetConfiguration(settings, operation.ConfigSources, operation.Overlay)
+        {
+            AppHostConfig = selectedMappings is null
+                ? null
+                : Compose(settings, workloadId, selectedMappings, operation.ConfigSources, preservedSources: [])
+        };
+    }
+
+    public static NuGetConfiguration BuildStable(
+        NuGetSettingsInfo settings, string workloadId, PackageChannel channel)
+    {
+        var operation = NuGetConfigurationBuilder.BuildStableAppHostConfiguration(settings, workloadId, channel);
+
+        return new NuGetConfiguration(settings, operation.ConfigSources, operation.Overlay)
+        {
+            AppHostConfig = Compose(settings, workloadId, selectedMappings: [], selectedSources: [],
+                [.. (channel.Mappings ?? []).Select(static mapping => mapping.Source), PackageSources.NuGetOrg])
+        };
+    }
+
+    private static DotNetAppHostNuGetConfig Compose(
+        NuGetSettingsInfo settings,
+        string workloadId,
+        IReadOnlyList<PackageMapping> selectedMappings,
+        IReadOnlyList<NuGetConfigSource> selectedSources,
+        IReadOnlyList<string> preservedSources)
+    {
+        var specificSources = selectedMappings
+            .Where(static mapping => mapping.PackageFilter != PackageMapping.AllPackages)
+            .Select(static mapping => mapping.Source)
+            .ToHashSet(PackageSourceIdentity.Comparer);
+        var mappings = selectedSources
+            .Select(source => new NuGetPackageSourceMapping(source.Key,
+                [.. selectedMappings
+                    .Where(mapping => PackageSourceIdentity.Comparer.Equals(mapping.Source, source.Source))
+                    .Where(mapping => settings.PackageSourceMappings.Count == 0 ||
+                        mapping.PackageFilter != PackageMapping.AllPackages ||
+                        specificSources.Count == 0 || specificSources.Contains(mapping.Source))
+                    .Select(static mapping => mapping.PackageFilter)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)]))
+            .Where(static mapping => mapping.Patterns.Count > 0)
+            .ToArray();
+        var selectedPatterns = selectedMappings.Count == 0
+            ? [PackageSourceOverrideMappings.DefaultPackagePattern]
+            : selectedMappings.Where(static mapping => mapping.PackageFilter != PackageMapping.AllPackages)
+                .Select(static mapping => mapping.PackageFilter).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var selectedKeys = selectedSources.Select(static source => source.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var preservedIdentities = preservedSources
+            .Select(source => NuGetSourceIdentity.Compute(source, settings.SourceIdentityKey))
+            .ToHashSet(StringComparer.Ordinal);
+        var retiredKeys = new List<string>();
+        var removedMappings = new List<NuGetPackageSourceMapping>();
+        // Only CLI-owned channel entries are maintained. User mappings, including exact
+        // Aspire package mappings, retain their native NuGet precedence.
+        foreach (var source in settings.Sources.Where(source =>
+            NuGetConfigurationBuilder.IsCliManagedSource(source, workloadId) &&
+            !preservedIdentities.Contains(source.Identity)))
+        {
+            var patterns = settings.PackageSourceMappings
+                .Where(mapping => string.Equals(mapping.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase))
+                .SelectMany(static mapping => mapping.Patterns)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var obsoletePatterns = patterns.Where(pattern =>
+                (selectedMappings.Count == 0 && pattern == PackageMapping.AllPackages ||
+                 selectedPatterns.Any(selectedPattern =>
+                     PackageSourceOverrideMappings.CompetesWithAuthoritativePattern(pattern, selectedPattern))) &&
+                !mappings.Any(selected =>
+                    string.Equals(selected.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase) &&
+                    selected.Patterns.Contains(pattern, StringComparer.OrdinalIgnoreCase))).ToArray();
+            if (!selectedKeys.Contains(source.Name) &&
+                patterns.Except(obsoletePatterns, StringComparer.OrdinalIgnoreCase)
+                    .All(static pattern => pattern == PackageMapping.AllPackages))
+            {
+                retiredKeys.Add(source.Name);
+            }
+            else if (obsoletePatterns.Length > 0)
+            {
+                removedMappings.Add(new NuGetPackageSourceMapping(source.Name, obsoletePatterns));
+            }
+        }
+        var enabledKeys = selectedSources
+            .Where(static source => source.IsAmbient && !source.IsEnabled)
+            .Select(static source => source.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var clearDisabledSources = enabledKeys.Count > 0 || retiredKeys.Count > 0;
+
+        var sourceChanges = new NuGetConfigOverlay(
+            Sources: [.. selectedSources.Where(static source => !source.IsAmbient)
+                .Select(static source => (source.Key, source.Source))],
+            PackageSourceMappings: [],
+            ClearDisabledPackageSources: clearDisabledSources,
+            DisabledPackageSourceKeys: clearDisabledSources
+                ? [.. settings.DisabledPackageSourceKeys.Where(key => !enabledKeys.Contains(key))
+                    .Concat(retiredKeys).Distinct(StringComparer.OrdinalIgnoreCase)]
+                : [],
+            GlobalPackagesFolder: null)
+        {
+            RetiredSourceKeys = retiredKeys
+        };
+
+        return new DotNetAppHostNuGetConfig(sourceChanges, mappings, removedMappings);
+    }
+}
+
+internal sealed record DotNetAppHostNuGetConfig(
+    NuGetConfigOverlay SourceChanges,
+    IReadOnlyList<NuGetPackageSourceMapping> PackageSourceMappings,
+    IReadOnlyList<NuGetPackageSourceMapping> RemovedPackageSourceMappings);

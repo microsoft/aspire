@@ -7,11 +7,13 @@ using System.Xml;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
+using NuGet.Configuration;
 
 namespace Aspire.Cli.DotNet;
 
 /// <summary>
-/// Prepares and persists local .NET AppHost configuration changes from shared NuGet policy.
+/// Maintains channel-owned entries in local .NET AppHost configuration without replacing user policy.
 /// </summary>
 internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetService)
 {
@@ -83,7 +85,7 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
             return null;
         }
 
-        var proposedContent = await nuGetService.CreatePersistentNuGetConfigContentAsync(
+        var proposedContent = await CreatePersistentNuGetConfigContentAsync(
             configuration,
             targetFile,
             originalContent is null ? default(ReadOnlyMemory<byte>?) : new ReadOnlyMemory<byte>(originalContent),
@@ -95,6 +97,91 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
         }
 
         return new DotNetAppHostNuGetConfigMergerCandidate(targetFile, originalContent, proposedContent);
+    }
+
+    internal async Task<byte[]> CreatePersistentNuGetConfigContentAsync(
+        NuGetConfiguration configuration,
+        FileInfo targetFile,
+        ReadOnlyMemory<byte>? originalContent,
+        string? globalPackagesFolder,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(targetFile);
+        var content = configuration.AppHostConfig
+            ?? throw new InvalidOperationException("The resolved configuration does not require a NuGet configuration change.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var targetPath = PathNormalizer.ResolveToFilesystemPath(targetFile.FullName);
+        var paths = configuration.Settings.ConfigPaths.ToList();
+        var targetIndex = paths.FindIndex(path => string.Equals(
+            PathNormalizer.ResolveToFilesystemPath(path), targetPath, StringComparisons.FileSystemPath));
+        var inheritedPaths = targetIndex >= 0
+            ? paths.Skip(targetIndex + 1).ToArray()
+            : paths.Where(path => !BundleNuGetService.IsAncestorDirectory(
+                targetFile.DirectoryName!, Path.GetDirectoryName(path)!)).ToArray();
+
+        // NuGet's typed settings writer is file-backed. Persistence derives local edits
+        // against the target's remaining hierarchy, rather than copying projection masks.
+        using var file = await TemporaryNuGetConfigFile.CreateAsync(
+            path => WriteConfig(
+                content, path, originalContent, globalPackagesFolder, inheritedPaths, cancellationToken)).ConfigureAwait(false);
+        return await File.ReadAllBytesAsync(file.ConfigFile.FullName, cancellationToken).ConfigureAwait(false);
+    }
+
+    private void WriteConfig(
+        DotNetAppHostNuGetConfig configuration,
+        string outputPath,
+        ReadOnlyMemory<byte>? originalContent,
+        string? globalPackagesFolder,
+        IReadOnlyList<string> inheritedConfigPaths,
+        CancellationToken cancellationToken)
+    {
+        nuGetService.WriteNuGetConfig(
+            configuration.SourceChanges with { GlobalPackagesFolder = globalPackagesFolder },
+            outputPath, originalContent, omitRedundantDisabledSources: true, inheritedConfigPaths, cancellationToken);
+
+        var outputFile = new FileInfo(outputPath);
+        var settings = new Settings(outputFile.DirectoryName!, outputFile.Name, isMachineWide: false);
+        var changedKeys = configuration.PackageSourceMappings.Select(static mapping => mapping.SourceKey)
+            .Concat(configuration.RemovedPackageSourceMappings.Select(static mapping => mapping.SourceKey))
+            .Concat(configuration.SourceChanges.RetiredSourceKeys)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in changedKeys)
+        {
+            var existing = settings.GetSection(ConfigurationConstants.PackageSourceMapping)?.Items
+                .OfType<PackageSourceMappingSourceItem>()
+                .Where(mapping => string.Equals(mapping.Key, key, StringComparison.OrdinalIgnoreCase))
+                .ToArray() ?? [];
+            var patterns = configuration.SourceChanges.RetiredSourceKeys.Contains(key, StringComparer.OrdinalIgnoreCase)
+                ? []
+                : existing.SelectMany(static mapping => mapping.Patterns)
+                    .Where(pattern => !configuration.RemovedPackageSourceMappings.Any(removed =>
+                        string.Equals(removed.SourceKey, key, StringComparison.OrdinalIgnoreCase) &&
+                        removed.Patterns.Contains(pattern.Pattern, StringComparer.OrdinalIgnoreCase)))
+                    .Concat(configuration.PackageSourceMappings
+                        .Where(mapping => string.Equals(mapping.SourceKey, key, StringComparison.OrdinalIgnoreCase))
+                        .SelectMany(static mapping => mapping.Patterns)
+                        .Select(static pattern => new PackagePatternItem(pattern)))
+                    .DistinctBy(static pattern => pattern.Pattern, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            if (existing.SelectMany(static mapping => mapping.Patterns).Select(static pattern => pattern.Pattern)
+                .SequenceEqual(patterns.Select(static pattern => pattern.Pattern), StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            foreach (var mapping in existing)
+            {
+                settings.Remove(ConfigurationConstants.PackageSourceMapping, mapping);
+            }
+            if (patterns.Length > 0)
+            {
+                settings.AddOrUpdate(ConfigurationConstants.PackageSourceMapping,
+                    new PackageSourceMappingSourceItem(key, patterns));
+            }
+        }
+        settings.SaveToDisk();
     }
 
     internal static Task ApplyAsync(

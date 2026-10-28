@@ -5,9 +5,6 @@
     <add key="user-disabled" value="https://private.example/v3/index.json" />
     <add key="aspire-test" value="https://new.example/v3/index.json" />
   </packageSources>
-  <disabledPackageSources>
-    <add key="future-private" value="true" />
-  </disabledPackageSources>
   <packageSourceMapping>
     <clear />
     <packageSource key="company">
@@ -17,4 +14,7 @@
       <package pattern="Aspire*" />
     </packageSource>
   </packageSourceMapping>
+  <disabledPackageSources>
+    <add key="future-private" value="true" />
+  </disabledPackageSources>
 </configuration>

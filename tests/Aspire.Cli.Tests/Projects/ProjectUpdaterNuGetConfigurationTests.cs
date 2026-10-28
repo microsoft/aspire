@@ -423,8 +423,8 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         var configFile = new FileInfo(Path.Combine(workspace.Path, "NuGet.Config"));
         await File.WriteAllTextAsync(configFile.FullName, $$"""
             <configuration>
-              <packageSources><clear /><add key="old" value="{{oldFeed.FullName}}" /></packageSources>
-              <packageSourceMapping><clear /><packageSource key="old"><package pattern="Aspire*" /></packageSource></packageSourceMapping>
+              <packageSources><clear /><add key="aspire-daily" value="{{oldFeed.FullName}}" /></packageSources>
+              <packageSourceMapping><clear /><packageSource key="aspire-daily"><package pattern="Aspire*" /></packageSource></packageSourceMapping>
               <config><add key="globalPackagesFolder" value="{{packageCache.FullName}}" /></config>
             </configuration>
             """);
@@ -1011,7 +1011,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     [InlineData("success", true, false)]
     [InlineData("success", false, true)]
     [InlineData("mapping-only", false, false)]
-    public async Task UpdateAsync_AspireOnlyMappingsRepairUsesExistingConfigurationApproval(
+    public async Task UpdateAsync_PreservesAmbientMappingPolicy(
         string outcome, bool hasUnrelatedMappings, bool stable)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1054,7 +1054,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             await File.WriteAllTextAsync(Path.Combine(projectFile.DirectoryName!, AspireConfigFile.FileName),
                 """{ "channel": "daily", "sdkVersion": "9.4.1" }""");
         }
-        string[] expectedDependencies = hasUnrelatedMappings ? [] : [companySource];
+        string[] expectedDependencies = stable ? [companySource] : [];
         string[] expectedAspireSources = [stable ? companySource : mappingOnly ? oldHive : newSource];
         var restoreCount = 0;
         var packageEditCount = 0;
@@ -1108,19 +1108,25 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         else
         {
             var result = await updater.UpdateProjectAsync(context, TestContext.Current.CancellationToken);
-            Assert.Equal(outcome is "success" or "mapping-only", result.UpdatedApplied);
+            Assert.Equal(outcome == "success", result.UpdatedApplied);
+        }
+
+        if (mappingOnly)
+        {
+            Assert.Empty(interaction.BooleanPromptCalls);
+            Assert.Equal(0, restoreCount);
+            Assert.Equal(0, packageEditCount);
+            Assert.Equal(originalParent, await File.ReadAllBytesAsync(parentConfig.FullName));
+            Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configFile.FullName));
+            Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
+            return;
         }
 
         Assert.Equal([UpdateCommandStrings.PerformUpdatesPrompt, UpdateCommandStrings.ApplyChangesToNuGetConfig],
             interaction.BooleanPromptCalls.Select(static call => call.PromptText));
-        Assert.Equal(!hasUnrelatedMappings && !stable ? 1 : 0,
+        Assert.Equal(0,
             interaction.DisplayedPlainText.Count(text => text == string.Format(
                 CultureInfo.InvariantCulture, UpdateCommandStrings.MappingAddedFormat, "*")));
-        if (!hasUnrelatedMappings && !stable)
-        {
-            Assert.Contains(string.Format(CultureInfo.InvariantCulture,
-                UpdateCommandStrings.RetainedFeedFormat, "company"), interaction.DisplayedPlainText);
-        }
         Assert.Equal(originalParent, await File.ReadAllBytesAsync(parentConfig.FullName));
         Assert.Equal(outcome == "decline" ? 0 : 1, restoreCount);
         Assert.Equal(outcome == "decline" || mappingOnly ? 0 : 1, packageEditCount);
@@ -1135,7 +1141,8 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
                 AssertUpdatedSdk(provider, projectFile);
             }
             Assert.Equal(expectedDependencies, NuGetTestHelper.GetEligiblePackageSources(projectFile.DirectoryName!, "Example.Dependency"));
-            Assert.Equal([companySource], NuGetTestHelper.GetEligiblePackageSources(projectFile.DirectoryName!, "Contoso.Package"));
+            Assert.Equal(hasUnrelatedMappings || stable ? [companySource] : [],
+                NuGetTestHelper.GetEligiblePackageSources(projectFile.DirectoryName!, "Contoso.Package"));
             Assert.Equal(expectedAspireSources, NuGetTestHelper.GetEligiblePackageSources(projectFile.DirectoryName!, "Aspire.Hosting.Redis"));
             var document = new XmlDocument();
             document.Load(configFile.FullName);
@@ -1478,11 +1485,11 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             <configuration>
               <packageSources>
                 <clear />
-                <add key="company" value="{{source}}" />
+                <add key="aspire-staging" value="{{source}}" />
               </packageSources>
               <packageSourceMapping>
                 <clear />
-                <packageSource key="company"><package pattern="Aspire*" /></packageSource>
+                <packageSource key="aspire-staging"><package pattern="Aspire*" /></packageSource>
               </packageSourceMapping>
               {{cacheSetting}}
             </configuration>

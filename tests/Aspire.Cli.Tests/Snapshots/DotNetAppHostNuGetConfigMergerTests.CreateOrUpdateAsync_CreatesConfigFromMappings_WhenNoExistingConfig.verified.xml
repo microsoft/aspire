@@ -4,7 +4,6 @@
     <add key="aspire-test-0" value="https://feed2.example" />
   </packageSources>
   <packageSourceMapping>
-    <clear />
     <packageSource key="aspire-test">
       <package pattern="Aspire.*" />
     </packageSource>

@@ -120,7 +120,7 @@ public class DotNetAppHostNuGetConfigMergerTests
     }
 
     [Fact]
-    public async Task CreateOrUpdateAsync_RemapsPatternsAndRemovesEmptySources()
+    public async Task CreateOrUpdateAsync_PreservesUserMappingsForSelectedPattern()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
@@ -151,19 +151,15 @@ public class DotNetAppHostNuGetConfigMergerTests
 
         var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var packageSources = xml.Root!.Element("packageSources")!;
-        // Old source should be removed because it's no longer used
-        Assert.DoesNotContain(packageSources.Elements("add"), e => (string?)e.Attribute("value") == "https://old.example");
-        // New source should be present
-        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == "https://new.example");
-
-        var psm = xml.Root!.Element("packageSourceMapping")!;
-        Assert.Single(psm.Elements("packageSource"));
-        Assert.Equal("aspire-test", (string?)psm.Element("packageSource")!.Attribute("key"));
-        Assert.Equal("Lib.*", (string?)psm.Element("packageSource")!.Element("package")!.Attribute("pattern"));
+        Assert.Equal(["https://old.example", "https://new.example"],
+            packageSources.Elements("add").Select(e => (string?)e.Attribute("value")));
+        Assert.Equal(["https://new.example", "https://old.example"],
+            NuGetTestHelper.GetEligiblePackageSources(root.FullName, "Lib.Example"));
+        await Verify(xml.ToString(), "xml");
     }
 
     [Fact]
-    public async Task CreateOrUpdateAsync_RemapsAspirePackagesFromStagingToStableSource()
+    public async Task CreateOrUpdateAsync_RetiresStagingPolicyWithoutAddingStableMappings()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
@@ -187,7 +183,7 @@ public class DotNetAppHostNuGetConfigMergerTests
 
         var mappings = new[]
         {
-            new PackageMapping("Aspire.*", stableSource)
+            new PackageMapping("*", stableSource)
         };
 
         var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
@@ -197,12 +193,9 @@ public class DotNetAppHostNuGetConfigMergerTests
         var sources = NuGetTestHelper.CreateClient().GetSettings(root.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]).Sources;
         Assert.Equal(["nuget.org"], sources.Where(static source => source.IsEnabled).Select(static source => source.Name));
 
-        var packageSourceMapping = xml.Root!.Element("packageSourceMapping")!;
-        Assert.DoesNotContain(packageSourceMapping.Elements("packageSource"), e => (string?)e.Attribute("key") == "aspire-staging");
-
-        var stableMapping = Assert.Single(packageSourceMapping.Elements("packageSource"));
-        Assert.Equal("nuget.org", (string?)stableMapping.Attribute("key"));
-        Assert.Equal("Aspire.*", (string?)stableMapping.Element("package")!.Attribute("pattern"));
+        Assert.Null(xml.Root!.Element("packageSourceMapping"));
+        Assert.Equal([stableSource], NuGetTestHelper.GetEligiblePackageSources(root.FullName, "Aspire.Hosting"));
+        Assert.Equal([stableSource], NuGetTestHelper.GetEligiblePackageSources(root.FullName, "Example.Dependency"));
     }
 
     [Fact]
@@ -446,7 +439,7 @@ public class DotNetAppHostNuGetConfigMergerTests
     }
 
     [Fact]
-    public async Task CreateOrUpdateAsync_PreservesAllExistingSources_WhenCreatingPackageSourceMappingForFirstTime()
+    public async Task CreateOrUpdateAsync_DoesNotSynthesizeMappingsForExistingSources()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
@@ -484,28 +477,11 @@ public class DotNetAppHostNuGetConfigMergerTests
         // New aspire source should be added
         Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == "https://example.com/aspire-daily");
 
-        // Debug: Print the XML to understand what's happening
-        _outputHelper.WriteLine("Generated XML:");
-        _outputHelper.WriteLine(xml.ToString());
-
-        // Package source mapping should preserve the original behavior:
-        // Since the original config had NO packageSourceMapping, all existing sources should get "*" patterns
-        // so they can continue to serve packages
         var psm = xml.Root!.Element("packageSourceMapping")!;
-
-        // The aspire source should have its specific pattern
-        var aspireMapping = psm.Elements("packageSource").FirstOrDefault(ps => (string?)ps.Attribute("key") == "aspire-test");
-        Assert.NotNull(aspireMapping);
-        Assert.Contains(aspireMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "Aspire*");
-
-        // The existing sources should get wildcard patterns to preserve their original functionality
-        var nugetMapping = psm.Elements("packageSource").FirstOrDefault(ps => (string?)ps.Attribute("key") == "nuget.org");
-        Assert.NotNull(nugetMapping);
-        Assert.Contains(nugetMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
-
-        var customMapping = psm.Elements("packageSource").FirstOrDefault(ps => (string?)ps.Attribute("key") == "custom");
-        Assert.NotNull(customMapping);
-        Assert.Contains(customMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
+        var aspireMapping = Assert.Single(psm.Elements());
+        Assert.Equal("aspire-test", (string?)aspireMapping.Attribute("key"));
+        Assert.Equal("Aspire*", (string?)Assert.Single(aspireMapping.Elements("package")).Attribute("pattern"));
+        await Verify(xml.ToString(), "xml");
     }
 
     [Fact]
@@ -697,7 +673,7 @@ public class DotNetAppHostNuGetConfigMergerTests
         Assert.Contains(nugetMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "Aspire*");
         Assert.Contains(nugetMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "Microsoft.Extensions.ServiceDiscovery*");
         Assert.Equal(
-            ["Aspire*", "Microsoft.Extensions.ServiceDiscovery*"],
+            ["Aspire*", "Microsoft.Extensions.ServiceDiscovery*", "*"],
             nugetMapping.Elements("package").Select(p => (string)p.Attribute("pattern")!));
 
         // There should be two packageSource elements (nuget.org and valid.example)
@@ -1212,9 +1188,8 @@ public class DotNetAppHostNuGetConfigMergerTests
         const string dailySource = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json";
         foreach (var source in new[] { prSource, dailySource, prSource, dailySource, prSource })
         {
-            var configuration = service.BuildConfiguration(
+            var configuration = service.BuildAppHostConfiguration(
                 workspace.WorkspaceRoot, "apphost-0123456789abcdef", [new("Aspire*", source)],
-                restrictToSelectedSources: false, hasAuthoritativeAspirePolicy: true,
                 cancellationToken: TestContext.Current.CancellationToken);
             using var projection = await service.CreateConfigurationPreviewAsync(
                 workspace.WorkspaceRoot, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);

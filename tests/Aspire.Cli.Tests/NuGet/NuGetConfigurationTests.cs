@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.DotNet;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
@@ -119,6 +120,60 @@ public class NuGetConfigurationTests
         Assert.Equal(["aspire-test"], overlay.RetiredSourceKeys);
         Assert.Equal(["aspire-test"], overlay.DisabledPackageSourceKeys);
         Assert.True(overlay.ClearPackageSourceMappings);
+    }
+
+    [Fact]
+    public void Build_PersistenceLeavesCompetingUserFeedAlone()
+    {
+        var settings = CreateSettings(
+        [
+            new("company", ["Aspire.Hosting.Redis"]),
+            new("aspire-staging", ["Aspire*"])
+        ]) with
+        {
+            Sources =
+            [
+                new("company", "company", true, true, true),
+                new("aspire-staging", "staging", true, false, false),
+                new("disabled", "disabled", false, false, false)
+            ],
+            DisabledPackageSourceKeys = ["disabled"]
+        };
+
+        var configuration = DotNetAppHostNuGetConfigBuilder.Build(
+            settings, "test", [new("Aspire*", "https://selected.example/v3/index.json")]);
+
+        var operation = Assert.IsType<NuGetConfigOverlay>(configuration.Overlay);
+        Assert.Equal(["company", "aspire-staging"], operation.RetiredSourceKeys);
+        var persistence = Assert.IsType<DotNetAppHostNuGetConfig>(configuration.AppHostConfig);
+        Assert.Equal(["aspire-staging"], persistence.SourceChanges.RetiredSourceKeys);
+        Assert.Equal(["disabled", "aspire-staging"], persistence.SourceChanges.DisabledPackageSourceKeys);
+        Assert.Empty(persistence.SourceChanges.PackageSourceMappings);
+        Assert.False(persistence.SourceChanges.ClearPackageSourceMappings);
+        var mapping = Assert.Single(persistence.PackageSourceMappings);
+        Assert.Equal("aspire-test", mapping.SourceKey);
+        Assert.Equal(["Aspire*"], mapping.Patterns);
+        Assert.Equal(settings.PackageSourceMappings, configuration.Settings.PackageSourceMappings);
+        Assert.Equal(settings.DisabledPackageSourceKeys, configuration.Settings.DisabledPackageSourceKeys);
+    }
+
+    [Fact]
+    public void Build_PersistencePreservesUnrelatedPatternsOnCliFeed()
+    {
+        var settings = CreateSettings([new("aspire-staging", ["Aspire*", "Private.*"])]) with
+        {
+            Sources = [new("aspire-staging", "staging", true, false, false)]
+        };
+
+        var configuration = DotNetAppHostNuGetConfigBuilder.Build(
+            settings, "test", [new("Aspire*", "https://selected.example/v3/index.json")]);
+
+        var persistence = Assert.IsType<DotNetAppHostNuGetConfig>(configuration.AppHostConfig);
+        Assert.Empty(persistence.SourceChanges.RetiredSourceKeys);
+        Assert.Empty(persistence.SourceChanges.DisabledPackageSourceKeys);
+        var removed = Assert.Single(persistence.RemovedPackageSourceMappings);
+        Assert.Equal("aspire-staging", removed.SourceKey);
+        Assert.Equal(["Aspire*"], removed.Patterns);
     }
 
     [Fact]
