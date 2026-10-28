@@ -130,7 +130,7 @@ internal static class CliTestHelper
         var testLogsDirectory = Path.Combine(options.WorkingDirectory.FullName, ".aspire", "logs");
         var testLogFilePath = FileLoggerProvider.GenerateLogFilePath(testLogsDirectory, TimeProvider.System);
         services.AddSingleton(sp => new FileLoggerProvider(testLogFilePath, new TestStartupErrorWriter()));
-        services.AddSingleton(new Program.CliLoggingOptions(ConsoleLogLevel: null, DebugMode: false, LogsDirectory: testLogsDirectory, LogFilePath: testLogFilePath, FileLoggingEnabled: true));
+        services.AddSingleton(new Program.CliLoggingOptions(ConsoleLogLevel: null, DebugMode: false, LogsDirectory: testLogsDirectory, LogFilePath: testLogFilePath));
 
         services.AddMemoryCache();
 

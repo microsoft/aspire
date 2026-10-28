@@ -25,8 +25,7 @@ internal static class TestExecutionContextHelper
         bool identityOverridden = false,
         DirectoryInfo? aspireHomeDirectory = null,
         bool identityOverrideNoticeRequired = false,
-        string? nugetServiceIndexOverride = null,
-        bool fileLoggingEnabled = true)
+        string? nugetServiceIndexOverride = null)
     {
         return CreateExecutionContext(
             workspace.WorkspaceRoot,
@@ -37,8 +36,7 @@ internal static class TestExecutionContextHelper
             identityOverridden: identityOverridden,
             aspireHomeDirectory: aspireHomeDirectory,
             identityOverrideNoticeRequired: identityOverrideNoticeRequired,
-            nugetServiceIndexOverride: nugetServiceIndexOverride,
-            fileLoggingEnabled: fileLoggingEnabled);
+            nugetServiceIndexOverride: nugetServiceIndexOverride);
     }
 
     /// <summary>
@@ -60,8 +58,7 @@ internal static class TestExecutionContextHelper
         DirectoryInfo? identityPackagesDirectory = null,
         DirectoryInfo? aspireHomeDirectory = null,
         bool identityOverrideNoticeRequired = false,
-        string? nugetServiceIndexOverride = null,
-        bool fileLoggingEnabled = true)
+        string? nugetServiceIndexOverride = null)
     {
         var root = rootDirectory.FullName;
         hivesDirectory ??= new DirectoryInfo(Path.Combine(root, ".aspire", "hives"));
@@ -88,9 +85,6 @@ internal static class TestExecutionContextHelper
             debugMode: debugMode,
             homeDirectory: homeDirectory,
             packagesDirectory: packagesDirectory,
-            aspireHomeDirectory: aspireHomeDirectory)
-        {
-            FileLoggingEnabled = fileLoggingEnabled
-        };
+            aspireHomeDirectory: aspireHomeDirectory);
     }
 }

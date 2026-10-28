@@ -1398,6 +1398,7 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(spawnStub.firstCall.args[1], '/global/bin/aspire');
             assert.deepStrictEqual(getCliPathStub.firstCall.args, [windowCliPathTarget]);
             assert.strictEqual(spawnStub.firstCall.args[3].noExtensionVariables, true);
+            assert.strictEqual(spawnStub.firstCall.args[3].backgroundQuery, true);
 
             spawnStub.firstCall.args[3].stdoutCallback(JSON.stringify([{
                 appHostPath: '/workspace/AppHost.csproj',
@@ -1414,6 +1415,7 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(spawnStub.secondCall.args[1], '/workspace/bin/aspire');
             assert.deepStrictEqual(getCliPathStub.secondCall.args, [target]);
             assert.strictEqual(spawnStub.secondCall.args[3].noExtensionVariables, true);
+            assert.strictEqual(spawnStub.secondCall.args[3].backgroundQuery, true);
 
             spawnStub.secondCall.args[3].stdoutCallback(JSON.stringify({
                 resources: [{
@@ -1693,6 +1695,7 @@ suite('AppHostDataRepository', () => {
             assert.deepStrictEqual(getCliPathStub.firstCall.args, [target]);
             assert.strictEqual(spawnStub.firstCall.args[3].noExtensionVariables, true);
             assert.deepStrictEqual(spawnStub.firstCall.args[3].env, [{ name: 'ASPIRE_NON_INTERACTIVE', value: 'true' }]);
+            assert.strictEqual(spawnStub.firstCall.args[3].backgroundQuery, undefined);
 
             resourceProcess.markExited(0);
             spawnStub.firstCall.args[3].exitCallback(0);
@@ -7169,17 +7172,15 @@ setInterval(() => {}, 1000);
                 await clock.tickAsync(1);
                 assert.strictEqual(spawnStub.callCount, 2);
                 const snapshot = spawnStub.secondCall;
-                assert.deepStrictEqual(snapshot.args[3].env, follow.args[3].env);
-                assert.deepStrictEqual(follow.args[3].env, [
-                    { name: 'ASPIRE_CLI_DISABLE_FILE_LOGGING', value: String(!fileLoggingEnabled) },
-                ]);
+                assert.strictEqual(snapshot.args[3].backgroundQuery, true);
+                assert.strictEqual(follow.args[3].backgroundQuery, true);
                 assert.strictEqual(getConfigInfoStub.callCount, 0, 'File suppression must not require capability probes.');
 
                 repository.setPanelVisible(false);
                 await waitForMicrotasks();
                 repository.setPanelVisible(true);
                 await waitForMicrotasks();
-                assert.deepStrictEqual(spawnStub.thirdCall.args[3].env, follow.args[3].env);
+                assert.strictEqual(spawnStub.thirdCall.args[3].backgroundQuery, true);
             } finally {
                 repository.dispose();
                 configuration.restore();
@@ -7188,7 +7189,7 @@ setInterval(() => {}, 1000);
         });
     }
 
-    test('describe watchers suppress file logs across AppHosts and restarts', async () => {
+    test('describe watchers use background logging across AppHosts and restarts', async () => {
         const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const repository = new AppHostDataRepository(terminalProvider);
         try {
@@ -7206,7 +7207,7 @@ setInterval(() => {}, 1000);
             const describes = spawnStub.getCalls().filter(call => call.args[2][0] === 'describe');
             assert.strictEqual(describes.length, 2);
             for (const describe of describes) {
-                assert.deepStrictEqual(describe.args[3].env, [{ name: 'ASPIRE_CLI_DISABLE_FILE_LOGGING', value: 'true' }]);
+                assert.strictEqual(describe.args[3].backgroundQuery, true);
             }
 
             describes[0].returnValue.markExited(1);
@@ -7215,7 +7216,7 @@ setInterval(() => {}, 1000);
             const restarted = spawnStub.getCalls().filter(call => call.args[2][0] === 'describe').at(-1);
             assert.ok(restarted);
             assert.strictEqual(restarted.args[2].at(-1), describes[0].args[2].at(-1));
-            assert.deepStrictEqual(restarted.args[3].env, describes[0].args[3].env);
+            assert.strictEqual(restarted.args[3].backgroundQuery, true);
         } finally {
             repository.dispose();
             clock.restore();
@@ -7252,7 +7253,7 @@ setInterval(() => {}, 1000);
                 const restarted = spawnStub.getCalls().slice(initialCalls);
                 assert.deepStrictEqual(restarted.map(call => call.args[2][0]).sort(), ['describe', 'ps']);
                 for (const call of restarted) {
-                    assert.deepStrictEqual(call.args[3].env, [{ name: 'ASPIRE_CLI_DISABLE_FILE_LOGGING', value: String(!enabled) }]);
+                    assert.strictEqual(call.args[3].backgroundQuery, true);
                 }
             }
         } finally {
@@ -7464,7 +7465,7 @@ setInterval(() => {}, 1000);
             await clock.tickAsync(29000);
             assert.strictEqual(spawnStub.callCount, 1);
             assert.strictEqual(spawnStub.firstCall.args[1], '/current/aspire');
-            assert.strictEqual(spawnStub.firstCall.args[3].env.length, 1);
+            assert.strictEqual(spawnStub.firstCall.args[3].backgroundQuery, true);
 
             repository.setPanelVisible(false);
             await waitForMicrotasks();
@@ -7474,7 +7475,7 @@ setInterval(() => {}, 1000);
             repository.setPanelVisible(true);
             await waitForMicrotasks();
             assert.strictEqual(spawnStub.secondCall.args[1], '/older/aspire');
-            assert.deepStrictEqual(spawnStub.secondCall.args[3].env, [{ name: 'ASPIRE_CLI_DISABLE_FILE_LOGGING', value: 'true' }]);
+            assert.strictEqual(spawnStub.secondCall.args[3].backgroundQuery, true);
 
             await clock.tickAsync(29999);
             assert.strictEqual(spawnStub.callCount, 2);

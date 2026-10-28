@@ -32,7 +32,7 @@ internal sealed class FileLoggerProvider : ILoggerProvider
         _logFilePath = logFilePath;
     }
 
-    // Completion and background probes can use the normal logging pipeline without creating files.
+    // Completion builds the command model but must not create a log file for every Tab press.
     internal static FileLoggerProvider CreateDisabled(string logFilePath) => new(logFilePath);
 
     /// <summary>

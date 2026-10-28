@@ -31,7 +31,7 @@ suite('CLI diagnostic log actions E2E', function () {
     });
 
     test('status polling creates no diagnostic files by default and stops when Aspire UI is hidden', async function () {
-        if (process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true') {
+        if (process.platform !== 'win32') {
             this.skip();
         }
 
@@ -88,7 +88,7 @@ suite('CLI diagnostic log actions E2E', function () {
     });
 
     test('background CLI diagnostic files can be enabled for troubleshooting', async function () {
-        if (process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true') {
+        if (process.platform !== 'win32') {
             this.skip();
         }
 

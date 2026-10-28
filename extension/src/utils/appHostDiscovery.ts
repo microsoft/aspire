@@ -5,7 +5,7 @@ import { spawnCliProcess, terminateCliProcess } from './process/cliProcess';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { aspireConfigFileName } from './cliTypes';
 import { isNoLogoUnsupportedOutput, noLogoOption } from './cliCompatibility';
-import { EnvironmentVariables, getBackgroundCliEnvironment } from './environment';
+import { EnvironmentVariables } from './environment';
 import { extensionLogOutputChannel } from './logging';
 import { getAppHostDiscoveryTimeoutMs } from './settings';
 import { summarizeAppHostLanguages } from './appHostLanguage';
@@ -711,7 +711,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 childProcess = spawnCliProcess(this._terminalProvider, cliPath, cliArgs, {
                     createProcessGroup: true,
                     noExtensionVariables: true,
-                    env: getBackgroundCliEnvironment(),
+                    backgroundQuery: true,
                     workingDirectory,
                     stdoutCallback: data => {
                         onActivity?.();

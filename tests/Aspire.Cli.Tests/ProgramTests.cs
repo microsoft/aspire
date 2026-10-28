@@ -11,7 +11,6 @@ using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
-using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
@@ -115,50 +114,6 @@ public class ProgramTests(ITestOutputHelper outputHelper)
         var result = Program.ParseLogFileOption(["run", "--", "--log-file", "app.log"]);
 
         Assert.Null(result);
-    }
-
-    [Theory]
-    [InlineData("", true)]
-    [InlineData("false", true)]
-    [InlineData("true", false)]
-    [InlineData("TRUE", false)]
-    public void ParseLoggingOptions_FileLoggingCanBeDisabled(string value, bool expectedEnabled)
-    {
-        using var remote = RemoteExecutor.Invoke(static (value, expectedEnabled) =>
-        {
-            Environment.SetEnvironmentVariable(KnownConfigNames.CliDisableFileLogging, value);
-            var options = Program.ParseLoggingOptions([]);
-
-            Assert.Equal(bool.Parse(expectedEnabled), options.FileLoggingEnabled);
-            Assert.Equal(options.LogsDirectory, Path.GetDirectoryName(options.LogFilePath));
-            return RemoteExecutor.SuccessExitCode;
-        }, value, expectedEnabled.ToString());
-    }
-
-    [Fact]
-    public void ParseLoggingOptions_ExplicitLogFileOverridesSuppression()
-    {
-        using var remote = RemoteExecutor.Invoke(static () =>
-        {
-            Environment.SetEnvironmentVariable(KnownConfigNames.CliDisableFileLogging, "true");
-            var options = Program.ParseLoggingOptions(["ps", "--log-file", "explicit.log"]);
-
-            Assert.True(options.FileLoggingEnabled);
-            Assert.Equal("explicit.log", options.LogFilePath);
-            return RemoteExecutor.SuccessExitCode;
-        });
-    }
-
-    [Fact]
-    public void ParseLoggingOptions_ForwardedLogFileDoesNotOverrideSuppression()
-    {
-        using var remote = RemoteExecutor.Invoke(static () =>
-        {
-            Environment.SetEnvironmentVariable(KnownConfigNames.CliDisableFileLogging, "true");
-            var options = Program.ParseLoggingOptions(["run", "--", "--log-file", "app.log"]);
-            Assert.False(options.FileLoggingEnabled);
-            return RemoteExecutor.SuccessExitCode;
-        });
     }
 
     [Fact]

@@ -579,7 +579,6 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
             consoleLogLevel: null,
             logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
             logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "test.log"),
-            fileLoggingEnabled: true,
             identityResolver: resolver);
     }
 

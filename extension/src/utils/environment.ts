@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import { EnvVar } from "../dcp/types";
 
 const filteredEnvironmentKeyCounts = new Map<string, number>();
@@ -81,16 +80,9 @@ export const enum EnvironmentVariables {
     ASPIRE_APPHOST_STOP_ON_ENTRY = "ASPIRE_APPHOST_STOP_ON_ENTRY",
     ASPIRE_CLI_START_TIMEOUT = "ASPIRE_CLI_START_TIMEOUT",
     ASPIRE_CLI_APPHOST_SELECTION_ORIGIN = "ASPIRE_CLI_APPHOST_SELECTION_ORIGIN",
-    ASPIRE_CLI_DISABLE_FILE_LOGGING = "ASPIRE_CLI_DISABLE_FILE_LOGGING",
     ASPIRE_NON_INTERACTIVE = "ASPIRE_NON_INTERACTIVE"
 }
 
 export const nonInteractiveCliEnvironment: EnvVar[] = [
     { name: EnvironmentVariables.ASPIRE_NON_INTERACTIVE, value: 'true' },
 ];
-
-export function getBackgroundCliEnvironment(): EnvVar[] {
-    const enableFileLogging = vscode.workspace.getConfiguration('aspire').get<boolean>('enableAspireCliDebugLogging', false);
-    // Older CLIs ignore this environment variable; do not add a capability probe to every poll.
-    return [{ name: EnvironmentVariables.ASPIRE_CLI_DISABLE_FILE_LOGGING, value: String(!enableFileLogging) }];
-}

@@ -156,8 +156,6 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     /// </summary>
     public string LogFilePath { get; } = logFilePath;
 
-    public bool FileLoggingEnabled { get; init; } = true;
-
     /// <summary>
     /// Gets or sets the log file path of the CLI process managing the connected app host.
     /// This is populated after connecting to a running app host via <see cref="Backchannel.AppHostConnectionResolver"/>.

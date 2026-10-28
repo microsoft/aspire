@@ -4,7 +4,6 @@
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Tests.Diagnostics;
 
@@ -155,7 +154,7 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
             UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
         File.SetUnixFileMode(parentDirectory, originalMode);
         var logPath = Path.Combine(parentDirectory, "test.log");
-        var options = new Program.CliLoggingOptions(null, false, logsDirectory, logPath, FileLoggingEnabled: true);
+        var options = new Program.CliLoggingOptions(null, false, logsDirectory, logPath);
         var errorWriter = new TestStartupErrorWriter();
 
         var (loggerFactory, provider) = Program.CreateLoggerFactory([], options, errorWriter, new ConsoleLogBufferContext());
@@ -192,56 +191,5 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(["First log entry", "Second log entry"], File.ReadAllLines(logFilePath));
         Assert.Empty(errorWriter.MarkupLines);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void CreateLoggerFactory_HonorsFileLoggingPolicy(bool fileLoggingEnabled)
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var logsDirectory = Path.Combine(workspace.Path, "logs");
-        var logPath = Path.Combine(logsDirectory, "test.log");
-        var options = new Program.CliLoggingOptions(null, false, logsDirectory, logPath, fileLoggingEnabled);
-        var errorWriter = new TestStartupErrorWriter();
-        var (factory, provider) = Program.CreateLoggerFactory([], options, errorWriter, new ConsoleLogBufferContext());
-        using (factory)
-        using (provider)
-        {
-            factory.CreateLogger("Aspire.Cli").LogInformation("Background query");
-        }
-
-        Assert.Equal(fileLoggingEnabled, Directory.Exists(logsDirectory));
-        Assert.Equal(fileLoggingEnabled, File.Exists(logPath));
-        if (fileLoggingEnabled)
-        {
-            Assert.Single(File.ReadAllLines(logPath));
-        }
-        Assert.Empty(errorWriter.MarkupLines);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void CreateDisabled_DoesNotCreateOrOverwriteFiles(bool existingFile)
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var logPath = Path.Combine(workspace.Path, "test.log");
-        const string previousContents = "Previous diagnostics";
-        if (existingFile)
-        {
-            File.WriteAllText(logPath, previousContents);
-        }
-
-        using (var provider = FileLoggerProvider.CreateDisabled(logPath))
-        {
-            provider.WriteLog("Must not be persisted");
-        }
-
-        Assert.Equal(existingFile, File.Exists(logPath));
-        if (existingFile)
-        {
-            Assert.Equal(previousContents, File.ReadAllText(logPath));
-        }
     }
 }

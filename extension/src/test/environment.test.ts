@@ -1,7 +1,5 @@
 import * as assert from 'assert';
-import * as sinon from 'sinon';
-import * as vscode from 'vscode';
-import { getBackgroundCliEnvironment, getEnvironmentForChildProcess } from '../utils/environment';
+import { getEnvironmentForChildProcess } from '../utils/environment';
 
 suite('environment', () => {
     const enableBridgeVariable = 'ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE';
@@ -17,22 +15,10 @@ suite('environment', () => {
     });
 
     teardown(() => {
-        sinon.restore();
         restoreEnvironmentVariable(enableBridgeVariable, originalEnableBridge);
         restoreEnvironmentVariable(e2eNuGetPackagesVariable, originalE2eNuGetPackages);
         restoreEnvironmentVariable('NUGET_PACKAGES', originalNuGetPackages);
     });
-
-    for (const enabled of [false, true]) {
-        test(`background file logging is ${enabled ? 'enabled explicitly' : 'disabled by default'}`, () => {
-            const get = sinon.stub().withArgs('enableAspireCliDebugLogging', false).returns(enabled);
-            sinon.stub(vscode.workspace, 'getConfiguration').withArgs('aspire').returns({ get } as unknown as vscode.WorkspaceConfiguration);
-
-            assert.deepStrictEqual(getBackgroundCliEnvironment(), [
-                { name: 'ASPIRE_CLI_DISABLE_FILE_LOGGING', value: String(!enabled) },
-            ]);
-        });
-    }
 
     test('maps the E2E NuGet cache into child environments when the bridge is enabled', () => {
         process.env[enableBridgeVariable] = 'true';

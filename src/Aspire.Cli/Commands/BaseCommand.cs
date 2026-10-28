@@ -213,7 +213,6 @@ internal abstract class BaseCommand : Command
             && !result.ShouldDisplayHelp
             && !s_suppressErrorLogsMessageExitCodes.Contains(result.ExitCode);
         var displayedActionableFailure = shouldDisplayDiagnosticLogs
-            && _executionContext.FileLoggingEnabled
             && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && await extensionInteractionService.TryDisplayCommandFailureAsync(
                 result.ErrorMessage,
@@ -242,14 +241,11 @@ internal abstract class BaseCommand : Command
         // the log wouldn't contain useful context (e.g., missing required arguments).
         if (!displayedActionableFailure && shouldDisplayDiagnosticLogs)
         {
-            if (_executionContext.FileLoggingEnabled)
-            {
-                InteractionService.DisplayMessage(
-                    KnownEmojis.PageFacingUp,
-                    string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, _executionContext.LogFilePath)),
-                    allowMarkup: true,
-                    consoleOverride: ConsoleOutput.Error);
-            }
+            InteractionService.DisplayMessage(
+                KnownEmojis.PageFacingUp,
+                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, _executionContext.LogFilePath)),
+                allowMarkup: true,
+                consoleOverride: ConsoleOutput.Error);
 
             // If we connected to a running app host, also display the log file path of
             // the CLI process that launched it so users can diagnose issues in both processes.

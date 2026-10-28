@@ -7,7 +7,6 @@ import { errorFetchingAppHosts, errorStoppingAppHostWatcher } from '../loc/strin
 import { AppHostCliRunner, LimitedOutputBuffer, oneShotOutputBufferLimit } from './appHostCliRunner';
 import { windowCliPathTarget } from '../utils/cliPathVariables';
 import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
-import { getBackgroundCliEnvironment } from '../utils/environment';
 
 export interface PsOutput {
     readonly stdout: string;
@@ -291,7 +290,7 @@ export class AppHostPsPoller implements vscode.Disposable {
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
             createProcessGroup: true,
             noExtensionVariables: true,
-            env: getBackgroundCliEnvironment(),
+            backgroundQuery: true,
             stdoutCallback: (data) => {
                 psFollowStdout.append(data);
             },
@@ -574,7 +573,7 @@ export class AppHostPsPoller implements vscode.Disposable {
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, invocationArgs, {
             createProcessGroup: true,
             noExtensionVariables: true,
-            env: getBackgroundCliEnvironment(),
+            backgroundQuery: true,
             stdoutCallback: (data) => {
                 if (stdout.length === 0 && data.length > 0) {
                     options?.onFirstStdout?.();

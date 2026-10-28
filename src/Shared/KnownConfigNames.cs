@@ -61,7 +61,6 @@ internal static class KnownConfigNames
     public const string CliLauncherProcessStarted = "ASPIRE_LAUNCHER_STARTED";
 
     public const string CliLogFilePath = "ASPIRE_CLI_LOG_FILE";
-    public const string CliDisableFileLogging = "ASPIRE_CLI_DISABLE_FILE_LOGGING";
     public const string CliRunDetached = "ASPIRE_CLI_RUN_DETACHED";
     public const string CliGenerateHttpsCertificate = "ASPIRE_CLI_GENERATE_HTTPS_CERTIFICATE";
     public const string SuppressCliRunHook = "ASPIRE_SUPPRESS_CLI_RUN_HOOK";
