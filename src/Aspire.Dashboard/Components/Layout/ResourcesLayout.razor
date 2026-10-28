@@ -76,7 +76,6 @@
 
             @if (_isLoaded && DashboardClient.IsEnabled)
             {
-                var isAllSelected = _selectedResourceNames.Count == 0;
                 var allResources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources)).ToList();
                 var allResourceCount = allResources.Count(r => !r.IsParameter);
                 var allParameterCount = allResources.Count(r => r.IsParameter);
@@ -93,10 +92,10 @@
                        so it also tells whether a selection narrows the pages, without a line that appears and moves the list. *@
                     <div class="resource-select-all">
                         <button type="button"
-                                class="resource-select-all-toggle @(isAllSelected ? "on" : null)"
-                                aria-pressed="@(isAllSelected ? "true" : "false")"
+                                class="resource-select-all-toggle @(IsAllSelected ? "on" : null)"
+                                aria-pressed="@(IsAllSelected ? "true" : "false")"
                                 aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneSelectAll)]"
-                                data-tooltip="@Loc[isAllSelected ? nameof(Dashboard.Resources.Layout.ResourcePaneAllSelected) : nameof(Dashboard.Resources.Layout.ResourcePaneSelectAll)]"
+                                data-tooltip="@Loc[IsAllSelected ? nameof(Dashboard.Resources.Layout.ResourcePaneAllSelected) : nameof(Dashboard.Resources.Layout.ResourcePaneSelectAll)]"
                                 data-tooltip-positioning="above"
                                 @onclick="OnAllResourcesClickAsync">
                             <FluentIcon Value="@(new Icons.Regular.Size20.SelectAllOn())" Width="20px" Color="Color.Custom" CustomColor="currentColor" />

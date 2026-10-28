@@ -84,6 +84,84 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
+        public static string MetricsGroupByLabel {
+            get {
+                return ResourceManager.GetString("MetricsGroupByLabel", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortByLabel {
+            get {
+                return ResourceManager.GetString("MetricsSortByLabel", resourceCulture);
+            }
+        }
+
+        public static string MetricsGroupNone {
+            get {
+                return ResourceManager.GetString("MetricsGroupNone", resourceCulture);
+            }
+        }
+
+        public static string MetricsOrganizeResource {
+            get {
+                return ResourceManager.GetString("MetricsOrganizeResource", resourceCulture);
+            }
+        }
+
+        public static string MetricsOrganizeMeter {
+            get {
+                return ResourceManager.GetString("MetricsOrganizeMeter", resourceCulture);
+            }
+        }
+
+        public static string MetricsOrganizeInstrument {
+            get {
+                return ResourceManager.GetString("MetricsOrganizeInstrument", resourceCulture);
+            }
+        }
+
+        public static string MetricsOrganizeLandmark {
+            get {
+                return ResourceManager.GetString("MetricsOrganizeLandmark", resourceCulture);
+            }
+        }
+
+        public static string MetricsGroupByTooltip {
+            get {
+                return ResourceManager.GetString("MetricsGroupByTooltip", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortByTooltip {
+            get {
+                return ResourceManager.GetString("MetricsSortByTooltip", resourceCulture);
+            }
+        }
+
+        public static string MetricsGroupMenuTitle {
+            get {
+                return ResourceManager.GetString("MetricsGroupMenuTitle", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortMenuTitle {
+            get {
+                return ResourceManager.GetString("MetricsSortMenuTitle", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortValueDescending {
+            get {
+                return ResourceManager.GetString("MetricsSortValueDescending", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortValueAscending {
+            get {
+                return ResourceManager.GetString("MetricsSortValueAscending", resourceCulture);
+            }
+        }
+
         public static string MetricsNoMatchingInstruments {
             get {
                 return ResourceManager.GetString("MetricsNoMatchingInstruments", resourceCulture);

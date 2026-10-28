@@ -1060,7 +1060,7 @@ public partial class MetricsTests : DashboardTestContext
         cut.FindAll(".metric-group").Single(g => g.TextContent.Contains("test-meter2")).Click();
         cut.WaitForAssertion(() =>
         {
-            Assert.Empty(cut.FindAll(".metrics-filter-results-group"));
+            Assert.Empty(cut.FindAll(".metrics-section-title"));
             Assert.Equal(["queue.length"], GetCardNames(cut));
             Assert.Equal("test-meter2", cut.Find(".metric-group.selected .metric-group-name").TextContent);
         });
@@ -1079,7 +1079,7 @@ public partial class MetricsTests : DashboardTestContext
         // Each filter result as "<meter>: <instrument>".
         static List<string> GetFilterResults(IRenderedComponent<Metrics> cut) =>
             [.. cut.FindAll(".metrics-filter-results-group").SelectMany(g => g.QuerySelectorAll(".meter-card-name")
-                .Select(n => $"{g.QuerySelector(".metrics-filter-results-meter")!.TextContent}: {n.TextContent}"))];
+                .Select(n => $"{g.QuerySelector(".metrics-section-title")!.TextContent}: {n.TextContent}"))];
     }
 
     [Fact]
@@ -1615,7 +1615,7 @@ public partial class MetricsTests : DashboardTestContext
     // Each card of the grouped results as "<meter>: <instrument>".
     private static List<string> GetFilterResultsByMeter(IRenderedComponent<Metrics> cut) =>
         [.. cut.FindAll(".metrics-filter-results-group").SelectMany(g => g.QuerySelectorAll(".meter-card-name")
-            .Select(n => $"{g.QuerySelector(".metrics-filter-results-meter")!.TextContent}: {n.TextContent}"))];
+            .Select(n => $"{g.QuerySelector(".metrics-section-title")!.TextContent}: {n.TextContent}"))];
 
     // Each group as "<name> <instrument count>".
     private static List<string> GetMetricGroups(IRenderedComponent<Metrics> cut) =>

@@ -17,6 +17,26 @@
         <target state="new">Metrics matching "{0}"</target>
         <note>{0} is the filter text</note>
       </trans-unit>
+      <trans-unit id="MetricsGroupByLabel">
+        <source>Group by</source>
+        <target state="new">Group by</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsGroupByTooltip">
+        <source>Grouped by {0}. Select to change grouping.</source>
+        <target state="new">Grouped by {0}. Select to change grouping.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsGroupMenuTitle">
+        <source>Group metrics</source>
+        <target state="new">Group metrics</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsGroupNone">
+        <source>None</source>
+        <target state="new">None</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MetricsGroupsLabel">
         <source>Metric groups</source>
         <target state="new">Metric groups</target>
@@ -107,6 +127,26 @@
         <target state="translated">所选资源没有指标</target>
         <note />
       </trans-unit>
+      <trans-unit id="MetricsOrganizeInstrument">
+        <source>Instrument</source>
+        <target state="new">Instrument</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeLandmark">
+        <source>Organize metrics</source>
+        <target state="new">Organize metrics</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeMeter">
+        <source>Meter</source>
+        <target state="new">Meter</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeResource">
+        <source>Resource</source>
+        <target state="new">Resource</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MetricsOverviewNoData">
         <source>No data</source>
         <target state="new">No data</target>
@@ -145,6 +185,31 @@
       <trans-unit id="MetricsShowAllInstruments">
         <source>Show all instruments</source>
         <target state="new">Show all instruments</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortByLabel">
+        <source>Sort by</source>
+        <target state="new">Sort by</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortByTooltip">
+        <source>Sorted by {0}. Select to change sorting.</source>
+        <target state="new">Sorted by {0}. Select to change sorting.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortMenuTitle">
+        <source>Sort metrics</source>
+        <target state="new">Sort metrics</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortValueAscending">
+        <source>Value (low to high)</source>
+        <target state="new">Value (low to high)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortValueDescending">
+        <source>Value (high to low)</source>
+        <target state="new">Value (high to low)</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsUnpinInstrument">

@@ -34,6 +34,30 @@ public partial class MeterOverview : LiveSparklinesBase
     [Parameter]
     public Func<OtlpInstrumentSummary, string>? GetResourceLabel { get; set; }
 
+    /// <summary>
+    /// Gets or sets how cards are ordered. Null keeps the order of <see cref="LiveSparklinesBase.Instruments"/>.
+    /// Cards without data always go last.
+    /// </summary>
+    [Parameter]
+    public MetricSortBy? SortBy { get; set; }
+
+    private IEnumerable<OtlpInstrumentSummary> GetOrderedInstruments()
+    {
+        // OrderBy is stable, so each key keeps the order of the keys before it.
+        var ordered = Instruments.OrderBy(i => GetSparkline(i).LatestValue is null);
+        string ResourceLabel(OtlpInstrumentSummary i) => GetResourceLabel?.Invoke(i) ?? string.Empty;
+
+        return SortBy switch
+        {
+            MetricSortBy.Instrument => ordered.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ThenBy(ResourceLabel, StringComparer.OrdinalIgnoreCase),
+            MetricSortBy.Resource => ordered.ThenBy(ResourceLabel, StringComparer.OrdinalIgnoreCase).ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase),
+            // Values of different units aren't comparable, but within a group they usually are, e.g. request counts.
+            MetricSortBy.ValueDescending => ordered.ThenByDescending(i => GetSparkline(i).LatestValue).ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase),
+            MetricSortBy.ValueAscending => ordered.ThenBy(i => GetSparkline(i).LatestValue).ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase),
+            _ => ordered
+        };
+    }
+
     private string? GetInstrumentTypeName(OtlpInstrumentType type) => type switch
     {
         OtlpInstrumentType.Gauge => Loc[nameof(MetricsResources.MetricsInstrumentTypeGauge)].Value,
@@ -52,4 +76,20 @@ public partial class MeterOverview : LiveSparklinesBase
             _ => null
         };
     }
+}
+
+public enum MetricSortBy
+{
+    Instrument = 0,
+    Resource = 1,
+    ValueDescending = 3,
+    ValueAscending = 4
+}
+
+public enum MetricGroupBy
+{
+    None,
+    Resource,
+    Meter,
+    Instrument
 }

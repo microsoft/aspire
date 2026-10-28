@@ -896,8 +896,8 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         cut.Find("#resourcePaneGroupingButton").Click();
         var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.MenuButtonId == "resourcePaneGroupingButton");
-        Assert.Equal(["None", "Tags", "Resource type", "State"], menu.Instance.Items.Select(item => item.Text));
-        Assert.All(menu.Instance.Items, item => Assert.Equal(MenuItemRole.Radio, item.Role));
+        Assert.Equal(["None", "Tags", "Resource type", "State"], menu.Instance.Items.Where(item => !item.IsHeader).Select(item => item.Text));
+        Assert.All(menu.Instance.Items.Where(item => !item.IsHeader), item => Assert.Equal(MenuItemRole.Radio, item.Role));
         await cut.InvokeAsync(menu.Instance.Items.Single(item => item.Id == $"resource-grouping-{grouping}").OnClick!);
         Assert.Equal(expectedGroups, cut.FindAll(".resource-tag-group").Select(group => group.GetAttribute("aria-label")));
         Assert.Equal("http://localhost/structuredlogs/resource/api", navigation.Uri);

@@ -35,7 +35,7 @@ internal static class ResourceSetupHelpers
         var module = context.JSInterop.SetupModule(invocation => invocation.Arguments[0] is string path && path.Contains(nameof(ResourcesLayout), StringComparison.Ordinal));
         module.SetupVoid("registerPaneResizer", _ => true).SetVoidResult();
         module.SetupVoid("unregisterPaneResizer", _ => true).SetVoidResult();
-        module.SetupVoid("fitPaneToActions", _ => true).SetVoidResult();
+        module.Setup<bool>("fitPaneToActions", _ => true).SetResult(true);
         module.SetupVoid("setTabListAriaLabel", _ => true).SetVoidResult();
         module.SetupVoid("registerResourceOrdering", _ => true).SetVoidResult();
         module.SetupVoid("unregisterResourceOrdering", _ => true).SetVoidResult();
