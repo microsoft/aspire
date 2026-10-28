@@ -7,6 +7,7 @@ using System.IO.Hashing;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
@@ -31,7 +32,7 @@ internal sealed class ConfigSourceService(
     ILogger<ConfigSourceService> logger) : IDisposable
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
-    private static readonly string[][] s_allowedSettings = [["docs", "llmsTxtUrl"], ["docs", "api", "sitemapUrl"]];
+    private static readonly string[] s_allowedSettings = [SkillSource.SectionName];
     private static readonly TimeSpan s_gitTimeout = TimeSpan.FromSeconds(30);
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
     private string? _projectDirectory;
@@ -203,7 +204,7 @@ internal sealed class ConfigSourceService(
         EnsureSameProject(projectDirectory);
         var path = Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName);
         var configuration = await ReadProjectConfigurationAsync(path, cancellationToken);
-        if (configuration is not null && TryGetValue(configuration, [ConfigSource.SectionName], out _))
+        if (configuration is not null && configuration.ContainsKey(GetKey(configuration, ConfigSource.SectionName)))
         {
             CheckForConfigSourceUpdates(projectDirectory, cancellationToken);
             return null;
@@ -238,9 +239,23 @@ internal sealed class ConfigSourceService(
         ConfigurationHelper.NormalizeSettings(configuration);
         foreach (var setting in s_allowedSettings)
         {
-            if (TryGetValue(snapshot.Configuration, setting, out var value))
+            var supplied = snapshot.Configuration
+                .Where(property => property.Key.Equals(setting, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (supplied.Length == 0)
             {
-                SetValue(configuration, setting, value);
+                continue;
+            }
+
+            // Replace all case-equivalent local sections, preserving every source section
+            // that IConfiguration combines (for example {"SKILLSOURCES":{...},"skillSources":{...}}).
+            foreach (var key in configuration.Select(property => property.Key)
+                .Where(key => key.Equals(setting, StringComparison.OrdinalIgnoreCase)).ToArray())
+            {
+                configuration.Remove(key);
+            }
+            foreach (var (key, value) in supplied)
+            {
+                configuration[key] = value?.DeepClone();
             }
         }
         var binding = new ConfigSource
@@ -256,9 +271,6 @@ internal sealed class ConfigSourceService(
         {
             try
             {
-                // A preserved nested literal key can collide with a newly supplied leaf:
-                // {"docs":{"api:sitemapUrl":"local","api":{"sitemapUrl":"remote"}}}.
-                // Reject the merge rather than persisting settings startup cannot load.
                 using var parsed = new ConfigurationManager();
                 using var stream = new MemoryStream(Encoding.UTF8.GetBytes(configuration.ToJsonString()));
                 parsed.AddJsonStream(stream);
@@ -719,62 +731,6 @@ internal sealed class ConfigSourceService(
 
     private static string GetKey(JsonObject configuration, string key)
         => configuration.Select(p => p.Key).FirstOrDefault(p => p.Equals(key, StringComparison.OrdinalIgnoreCase)) ?? key;
-
-    private static bool TryGetValue(JsonObject configuration, string[] path, out JsonNode? value)
-    {
-        if (FindPropertyParent(configuration, path) is { } parent)
-        {
-            value = parent[GetKey(parent, path[^1])];
-            return true;
-        }
-
-        value = null;
-        return false;
-    }
-
-    private static JsonObject? FindPropertyParent(JsonObject configuration, ReadOnlySpan<string> path)
-    {
-        if (path.Length == 1)
-        {
-            return configuration.ContainsKey(GetKey(configuration, path[0])) ? configuration : null;
-        }
-
-        // IConfiguration combines sections such as {"DOCS":{"llmsTxtUrl":"a"},"docs":{"api":{"sitemapUrl":"b"}}}.
-        // Search every matching section so an earlier partial section cannot hide a later leaf.
-        foreach (var (key, value) in configuration)
-        {
-            if (key.Equals(path[0], StringComparison.OrdinalIgnoreCase)
-                && value is JsonObject section
-                && FindPropertyParent(section, path[1..]) is { } parent)
-            {
-                return parent;
-            }
-        }
-
-        return null;
-    }
-
-    private static void SetValue(JsonObject configuration, string[] path, JsonNode? value)
-    {
-        if (FindPropertyParent(configuration, path) is { } parent)
-        {
-            parent[GetKey(parent, path[^1])] = value?.DeepClone();
-            return;
-        }
-
-        var current = configuration;
-        foreach (var segment in path[..^1])
-        {
-            var key = GetKey(current, segment);
-            if (current[key] is not JsonObject nested)
-            {
-                nested = new JsonObject();
-                current[key] = nested;
-            }
-            current = nested;
-        }
-        current[GetKey(current, path[^1])] = value?.DeepClone();
-    }
 
     private readonly record struct ConfigSourceIdentity(string Repository, string Path, string? Ref);
 }

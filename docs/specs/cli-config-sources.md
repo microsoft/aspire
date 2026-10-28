@@ -1,6 +1,6 @@
 # Aspire CLI config sources
 
-**Status:** Configuration acquisition and allowlisted app-file materialization are implemented in the CLI. Content-acquisition customizations remain proposed.
+**Status:** Configuration acquisition, allowlisted app-file materialization, and named agent skill sources are implemented in the CLI. Other content-acquisition customizations remain proposed.
 
 For example developer journeys, see [Microsoft first-party config-source scenarios](cli-config-sources-1p-scenarios.md).
 
@@ -9,7 +9,7 @@ Config sources let organizations provide shared Aspire CLI configuration through
 1. **Acquire configuration:** select a remote source, obtain consent, acquire the file using Git, and merge allowlisted values into the application's `aspire.config.json`. Retain the fetched source and metadata in Aspire home for tracking.
 2. **Acquire content:** use the application's saved configuration to acquire skills, templates, and integrations.
 
-This specification focuses on the first phase. Content acquisition is summarized at the end; its detailed schema and behavior are deferred.
+This specification focuses on the first phase. Named agent skill sources are described below; other content acquisition is summarized at the end.
 
 The application's `aspire.config.json` is the runtime configuration, including values previously copied from a source. Normal CLI configuration precedence and explicit parent-setting inheritance continue to apply. The source is not an additional runtime configuration provider, and ordinary commands never load the cached source JSON to supply settings.
 
@@ -128,28 +128,27 @@ Git acquisition and advisory checks support cancellation and have a 30-second ti
 
 ### Materialize an allowlist into the app configuration
 
-Only explicitly allowlisted leaf settings may be copied. The initial allowlist is:
+Only explicitly allowlisted top-level settings may be copied. Each supplied section is copied in full, including all nested properties. The allowlist is:
 
 | Setting | Purpose |
 |---|---|
-| `docs.llmsTxtUrl` | General documentation source URL |
-| `docs.api.sitemapUrl` | API documentation sitemap URL |
+| `skillSources` | Named agent skill sources and all their settings |
 
-Use the same root-only normalization for local settings and source files before matching the allowlist, and match keys case-insensitively like other CLI settings. Root-level flat colon-separated keys merge into existing nested sections regardless of casing. Resolve collisions against the complete existing path across those sections, preserving its spelling, preferring an existing non-null nested value, and filling null leaves in their declaring section. Normalize source files before configuration-provider validation; genuine duplicate nested leaves remain validation errors. Nested colon keys remain literal, including profile names, environment-variable names, and partially flattened documentation keys such as `{"docs":{"api:sitemapUrl":"..."}}`. Those partially flattened keys are not expanded or matched to the source allowlist. There is no source-specific normalization.
+Use the same root-only normalization for local settings and source files before matching the allowlist, and match top-level names case-insensitively like other CLI settings. Root-level flat colon-separated keys merge into existing nested sections regardless of casing. Normalize source files before configuration-provider validation; genuine duplicate nested leaves remain validation errors. Nested colon keys remain literal, including profile names, environment-variable names, and custom skill-source keys such as `{"skillSources":{"team":{"custom:key":"..."}}}`. These keys are copied unchanged when their top-level section is allowed. There is no source-specific normalization.
 
-Resolve each allowed leaf across all case-equivalent sections, so `DOCS.llmsTxtUrl` and `docs.api.sitemapUrl` can both supply values. When updating an existing leaf, write to its declaring section rather than adding a duplicate path under a different casing. Reject a merge that would introduce duplicate configuration paths, leaving the saved file unchanged rather than rewriting literal keys. Allowing a leaf does not allow its entire parent object. Everything else is excluded unless a later specification change explicitly adds it to this list.
+Replace every local case-equivalent section when an allowed top-level setting is supplied. Preserve all source sections, including disjoint `SKILLSOURCES` and `skillSources` objects that `IConfiguration` combines. Do not filter or merge individual nested properties. Validate the complete resulting configuration before writing it. Other top-level settings remain excluded unless explicitly added to the allowlist.
 
-In particular, do not copy `$schema`, `configSource`, AppHost identity or paths, SDK/channel selection, language, package references, launch profiles, or arbitrary feature/content settings. The CLI creates and maintains its own source binding; the remote file cannot supply or replace it. The proposed content schema does not implicitly extend this allowlist.
+In particular, do not copy `docs`, `$schema`, `configSource`, AppHost identity or paths, SDK/channel selection, language, package references, launch profiles, or arbitrary feature/content settings. Documentation settings remain configurable locally but are not imported from a configuration source. The CLI creates and maintains its own source binding; the remote file cannot supply or replace it. The proposed content schema does not implicitly extend this allowlist.
 
 Merge the allowed values into the selected application's file, not a configuration file in the CLI's launch directory when a different app is selected:
 
 - On initial creation or initialization, combine generated project settings with the supplied allowlisted source values and save the result in the application's `aspire.config.json`.
-- On explicit update, a supplied allowlisted value replaces the existing app value at that leaf, including a locally edited value. The explicit update/confirmation is the authorization to apply these changes.
-- Preserve unrelated app settings and allowlisted keys omitted by the new source. Omission does not delete a previously materialized value.
+- On explicit update, a supplied allowlisted section replaces the entire existing app section, including locally edited or omitted nested properties. The explicit update/confirmation is the authorization to apply these changes.
+- Preserve unrelated top-level app settings and allowlisted sections omitted by the new source. Omitting an entire section does not delete a previously materialized value.
 - An explicit null is a supplied value and replaces the existing value where valid for that setting. Future allowlisted arrays replace the whole value rather than appending.
 - Do not merge a runtime view of global settings into the app file. Global settings remain separate.
 
-For example, after applying a source that supplies documentation URLs:
+For example, after applying a source that supplies named skill sources:
 
 ```json
 {
@@ -159,16 +158,17 @@ For example, after applying a source that supplies documentation URLs:
     "ref": "main",
     "appliedVersion": "<source-file-version>"
   },
-  "docs": {
-    "llmsTxtUrl": "https://docs.acme.example/llms-full.txt",
-    "api": {
-      "sitemapUrl": "https://docs.acme.example/sitemap.xml"
+  "skillSources": {
+    "default": {},
+    "platform": {
+      "repository": "https://git.acme.example/platform-skills",
+      "ref": "main"
     }
   }
 }
 ```
 
-This is an excerpt; other generated or existing app settings remain in the same file. Once saved, these documentation settings are ordinary project settings. Editing them locally changes subsequent command behavior without editing the source or its tracking copy. A later explicit source update may overwrite them according to the rules above.
+This is an excerpt; other generated or existing app settings remain in the same file. Once saved, these skill sources are ordinary project settings. Editing them locally changes subsequent agent initialization without editing the configuration source or its tracking copy. A later explicit source update may overwrite them according to the rules above.
 
 Stage and validate an update before replacing the project file. Write the settings and their applied version together so the file cannot claim a version whose values were not saved. If neither the supplied settings nor the saved binding change, report that the app configuration is already up to date and leave the project file untouched. Acquisition, validation, or project-write failure must be reported, without claiming a successful update or leaving a partially written app file.
 
@@ -307,7 +307,7 @@ Cover the renamed environment variables and default/explicit ref selection when 
 
 Verify non-default and slash-containing branch names, full commit IDs, acquisition of a commit absent from a shallow default-branch snapshot, and explicit errors for invalid/missing refs or server-denied commits without fallback. Verify persisted ref portability, separate tracking for different selectors, branch movement, default-branch changes, and commit pins remaining unchanged during checks and explicit updates. Initialization environment variables must not retarget a saved binding.
 
-Verify overwrite behavior for supplied allowlisted values, preservation of omitted and unrelated settings, valid null replacement, and no accidental copying of a parent section or normalized-key bypass. Verify atomic app-file updates and unchanged app/fetch state after failed or cancelled acquisition.
+Verify whole-section replacement, copying of arbitrary nested properties, preservation of omitted sections and unrelated top-level settings, valid null replacement, case-insensitive section matching, and no normalized-key bypass. Verify atomic app-file updates and unchanged app/fetch state after failed or cancelled acquisition.
 
 For ordinary commands, verify the exact 24-hour check boundary, cached availability notices, file-version comparison instead of unrelated repository commits, and actionable stderr output. Confirm no source-driven app writes, fetched-JSON writes, or loading cached JSON as configuration. Cover missing/corrupt tracking, unavailable Git/authentication/network, and continued command execution with saved app values after a reported check failure.
 
@@ -321,9 +321,37 @@ Keep no-source, declined-source, global-command, help, and completion paths free
 
 Skills, templates, and integrations are acquired according to the application's saved configuration and normal CLI precedence. These are separate operations from fetching or materializing a configuration source, and must not load source settings from the user-directory tracking copy.
 
+### Named agent skill sources
+
+`aspire agent init`, including its chained use from `aspire new` and `aspire init`, registers all enabled sources when the `aspire` skill choice and remote mode are selected. Configure sources in `aspire.config.json` or global settings:
+
+```json
+{
+  "skillSources": {
+    "default": {},
+    "aspire1p": {
+      "repository": "https://git.example.com/platform/skills.git",
+      "marketplace": "aspire1p",
+      "plugin": "aspire",
+      "ref": "main",
+      "openCodeV1Catalog": "https://skills.example.com/opencode/v1/",
+      "openCodeV2Catalog": "https://skills.example.com/opencode/v2/"
+    }
+  }
+}
+```
+
+Sources and their fields merge by name across configuration layers, case-insensitively. Agent initialization reads fresh global settings and the selected app's nearest local settings file; it does not retain local settings from a different launch directory. Additional sources do not replace the built-in `default` source, which registers `aspire@aspire-skills` from `microsoft/aspire-skills` and the official OpenCode catalogs. Override its fields to change that source, or set `"default": { "enabled": false }` to omit it. Setting `enabled` to false does not remove previously installed registrations or bypass the embedded-mode conflict check for an active built-in plugin or catalog.
+
+Each additional source requires a GitHub `owner/repository` or Git repository address. The marketplace identifier defaults to the source name and the plugin defaults to `aspire`; marketplace identifiers must be unique. An optional `ref` selects a branch or full commit for newly registered marketplaces. Copilot and Claude use native marketplace/plugin registration. OpenCode uses the catalog for its existing settings format, falling back to the other catalog when only one is supplied; sources without catalog URLs are not registered with OpenCode. Catalog URLs must use HTTPS. The CLI registers sources without acquiring their content; agent clients perform acquisition and authentication.
+
+Existing matching registrations and agent-side pins are retained. GitHub shorthand and the equivalent HTTPS repository URL match an existing native GitHub registration, including URLs with a `.git` suffix. Explicitly disabled plugins, mismatched marketplace repositories, and existing marketplace policies are conflicts rather than permission to overwrite user settings. Each target file is updated atomically, so a conflict in any source leaves that target unchanged. The source-review warning displays every configured repository.
+
+The allowlist copies the entire supplied `skillSources` section, including arbitrary nested properties, replacing the existing local section. If `skillSources` is omitted, the local section remains untouched. Sources still merge by name across runtime configuration layers such as global and local settings. Refreshing `configSource` updates configuration only, not agent registrations. Run `aspire agent init` to register newly configured sources. `--skills none`, suppressed agent initialization, and `--aspire-source embedded` do not register remote sources; embedded mode continues to use the CLI's bundled Aspire skills.
+
 | Content | Acquisition today | Possible configuration customizations |
 |---|---|---|
-| Skills | `aspire agent init` registers remote Aspire agent assets by default; `--aspire-source embedded` installs bundled skill files | Additional validated bundles, selected/default skills, and workspace installation destinations |
+| Skills | `aspire agent init` registers all configured native sources by default; `--aspire-source embedded` installs bundled skill files | Additional validated bundles, selected/default skills, and workspace installation destinations |
 | Templates | .NET templates are installed from NuGet; CLI-native starters use embedded files or scaffolding | Template catalogs, package identities, versions, and feeds; external starter content could follow later |
 | Integrations | Templates declare dependencies; `aspire add` and integration list/search discover NuGet packages | Additional catalog entries, package versions, feeds, and package-source mappings |
 

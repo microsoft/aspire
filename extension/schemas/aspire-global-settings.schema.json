@@ -223,6 +223,55 @@
       "description": "The Aspire SDK version used for this polyglot AppHost project. Determines the version of Aspire.Hosting packages to use.",
       "type": "string"
     },
+    "skillSources": {
+      "description": "Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Whether to register this source. Defaults to true. Set default.enabled to false to omit the built-in Aspire source.",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          },
+          "repository": {
+            "description": "GitHub owner/repository or an HTTPS/SSH Git repository URL containing the agent marketplace.",
+            "type": "string"
+          },
+          "marketplace": {
+            "description": "Agent marketplace identifier. Defaults to the source name, or aspire-skills for the default source.",
+            "type": "string"
+          },
+          "plugin": {
+            "description": "Plugin name within the marketplace. Defaults to aspire.",
+            "type": "string"
+          },
+          "ref": {
+            "description": "Optional marketplace Git ref. Existing agent-side pins are preserved.",
+            "type": "string"
+          },
+          "openCodeV1Catalog": {
+            "description": "HTTPS skills catalog URL for OpenCode V1. Omit for sources without an OpenCode catalog.",
+            "type": "string"
+          },
+          "openCodeV2Catalog": {
+            "description": "HTTPS skills catalog URL for OpenCode V2. Omit for sources without an OpenCode catalog.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "$schema": {
       "type": "string",
       "description": "JSON Schema reference"

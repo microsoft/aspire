@@ -111,6 +111,7 @@ internal sealed class ConfigSourceTestContext
         {
             var configuration = await ReadConfigurationAsync();
             Assert.Null(configuration["configSource"]);
+            Assert.Null(configuration["skillSources"]);
             Assert.Equal("""{"custom":"keep"}""", configuration["docs"]!.ToJsonString());
             await AssertSourceNotAcquiredAsync();
         }
@@ -155,6 +156,68 @@ internal sealed class ConfigSourceTestContext
         Assert.Equal("teams/platform.json", configuration["configSource"]!["path"]!.GetValue<string>());
         Assert.Equal("main", configuration["configSource"]!["ref"]!.GetValue<string>());
         return configuration;
+    }
+
+    public async Task RegisterAndAssertSkillSourcesAsync()
+    {
+        const string command = "aspire agent init --workspace-root . --agents copilot,claude,opencode --scope project " +
+            "--skills aspire --aspire-source remote --mcp=false --non-interactive";
+        const string expectedPluginSettings = """
+            {
+              "extraKnownMarketplaces": {
+                "aspire-skills": { "source": { "source": "github", "repo": "microsoft/aspire-skills" } },
+                "platform": { "source": { "source": "github", "repo": "example/platform-skills", "ref": "original" } },
+                "team": { "source": { "source": "github", "repo": "example/team-skills" } }
+              },
+              "enabledPlugins": {
+                "aspire@aspire-skills": true,
+                "aspire@platform": true,
+                "original@team": true
+              }
+            }
+            """;
+        const string expectedOpenCodeSettings = """
+            {
+              "skills": {
+                "urls": [
+                  "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/",
+                  "https://skills.example/original/"
+                ]
+              }
+            }
+            """;
+        (string Path, string Expected)[] settings =
+        [
+            (".github/copilot/settings.json", expectedPluginSettings),
+            (".claude/settings.json", expectedPluginSettings),
+            ("opencode.jsonc", expectedOpenCodeSettings)
+        ];
+        foreach (var repository in new[] { "microsoft/aspire-skills", "https://github.com/microsoft/aspire-skills.git" })
+        {
+            await _auto.RunCommandAsync(
+                $"aspire config set skillSources.default.repository {repository}", _counter);
+            await _auto.RunCommandAsync(command, _counter);
+            foreach (var (path, expected) in settings)
+            {
+                await _auto.RunCommandAsync(
+                    $"cat \"{path}\" > \"$ASPIRE_E2E_WORKSPACE/actual-agent-settings.json\"", _counter);
+                var actual = await File.ReadAllTextAsync(Path.Combine(_root, "actual-agent-settings.json"), _cancellationToken);
+                Assert.True(JsonNode.DeepEquals(JsonNode.Parse(expected), JsonNode.Parse(actual)),
+                    $"Unexpected skill-source registration in {path}: {actual}");
+            }
+        }
+
+        foreach (var source in new[] { "default", "platform", "team" })
+        {
+            await _auto.RunCommandAsync($"aspire config set skillSources.{source}.enabled false", _counter);
+        }
+        await _auto.RunCommandAsync(
+            "aspire agent init --workspace-root . --agents copilot,claude,opencode --scope project " +
+            "--skills aspire --aspire-source embedded --mcp=false --non-interactive " +
+            "> \"$ASPIRE_E2E_WORKSPACE/embedded-conflict.log\" 2>&1; " +
+            "result=$?; cat \"$ASPIRE_E2E_WORKSPACE/embedded-conflict.log\"; " +
+            $"test \"$result\" -eq {CliExitCodes.InvalidCommand}", _counter);
+        Assert.False(Directory.Exists(Path.Combine(_root, "SourceApp", ".agents", "skills")));
     }
 
     public async Task UpdateSourceAsync()
@@ -210,8 +273,7 @@ internal sealed class ConfigSourceTestContext
         var actual = await ReadConfigurationAsync();
         var version = await ReadSourceVersionAsync();
         AssertSourceValues(actual, "updated", version);
-        original["docs"]!["llmsTxtUrl"] = actual["docs"]!["llmsTxtUrl"]!.DeepClone();
-        original["docs"]!["api"]!["sitemapUrl"] = actual["docs"]!["api"]!["sitemapUrl"]!.DeepClone();
+        original["skillSources"] = actual["skillSources"]!.DeepClone();
         original["configSource"]!["appliedVersion"] = version;
         Assert.Equal(original.ToJsonString(), actual.ToJsonString());
     }
@@ -268,11 +330,20 @@ internal sealed class ConfigSourceTestContext
         var directory = Directory.CreateDirectory(Path.Combine(_root, "configuration source", "teams"));
         await File.WriteAllTextAsync(Path.Combine(directory.FullName, "platform.json"), $$"""
             {
-              "docs": {
-                "llmsTxtUrl": "https://docs.example/{{version}}/llms.txt",
-                "api": {
-                  "sitemapUrl": "https://docs.example/{{version}}/sitemap.xml"
+              "skillSources": {
+                "default": {},
+                "platform": {
+                  "repository": "example/platform-skills",
+                  "ref": "{{version}}"
+                },
+                "team": {
+                  "repository": "example/team-skills",
+                  "plugin": "{{version}}",
+                  "openCodeV2Catalog": "https://skills.example/{{version}}/"
                 }
+              },
+              "docs": {
+                "llmsTxtUrl": "https://excluded.example/{{version}}/llms.txt"
               }
             }
             """, _cancellationToken);
@@ -296,9 +367,19 @@ internal sealed class ConfigSourceTestContext
 
     private static void AssertSourceValues(JsonObject config, string version, string appliedVersion)
     {
-        Assert.Equal($"https://docs.example/{version}/llms.txt", config["docs"]!["llmsTxtUrl"]!.GetValue<string>());
-        Assert.Equal($"https://docs.example/{version}/sitemap.xml", config["docs"]!["api"]!["sitemapUrl"]!.GetValue<string>());
-        Assert.Equal("keep", config["docs"]!["custom"]!.GetValue<string>());
+        var expectedSources = JsonNode.Parse($$"""
+            {
+              "default": {},
+              "platform": { "repository": "example/platform-skills", "ref": "{{version}}" },
+              "team": {
+                "repository": "example/team-skills",
+                "plugin": "{{version}}",
+                "openCodeV2Catalog": "https://skills.example/{{version}}/"
+              }
+            }
+            """);
+        Assert.True(JsonNode.DeepEquals(expectedSources, config["skillSources"]));
+        Assert.Equal("""{"custom":"keep"}""", config["docs"]!.ToJsonString());
         Assert.Equal(appliedVersion, config["configSource"]!["appliedVersion"]!.GetValue<string>());
     }
 

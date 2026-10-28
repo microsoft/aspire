@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.Utils;
 
@@ -9,6 +10,20 @@ namespace Aspire.Cli.Tests.Configuration;
 
 public class AspireConfigFileTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public void FromLegacy_PreservesNamedSkillSources()
+    {
+        var sources = new Dictionary<string, SkillSource>
+        {
+            ["default"] = new() { Enabled = false },
+            ["team"] = new() { Repository = "example/team" }
+        };
+
+        var config = AspireConfigFile.FromLegacy(new AspireJsonConfiguration { SkillSources = sources }, profiles: null);
+
+        Assert.Same(sources, config.SkillSources);
+    }
+
     [Fact]
     public void Load_ReturnsNull_WhenFileDoesNotExist()
     {

@@ -1,22 +1,20 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
-using Aspire.Cli.Documentation.ApiDocs;
-using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -126,102 +124,57 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Docs_UsesMaterializedConfigurationWithoutAcquisition(bool localOverride)
+    [InlineData("copilot", false)]
+    [InlineData("copilot", true)]
+    [InlineData("claude", false)]
+    [InlineData("claude", true)]
+    [InlineData("opencode", false)]
+    [InlineData("opencode", true)]
+    public async Task AgentInit_UsesMaterializedSkillSourcesWithoutAcquisition(string agent, bool localOverride)
     {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string sharedUrl = "https://shared.example.test/llms-full.txt";
-        const string localUrl = "https://local.example.test/llms-full.txt";
+        using var context = new AgentConfigurationTestContext(outputHelper);
         var acquired = new TestConfigSourceRepository
         {
-            ReadConfiguration = (_, _) => Task.FromResult(("version-1", new JsonObject
-            {
-                ["docs"] = new JsonObject { ["llmsTxtUrl"] = sharedUrl }
-            }))
+            ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
+                {
+                  "skillSources": {
+                    "default": {},
+                    "team": {
+                      "repository": "example/shared",
+                      "openCodeV2Catalog": "https://shared.example/skills/"
+                    }
+                  }
+                }
+                """)!.AsObject()))
         };
-        await TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: acquired)
-            .MaterializeAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
+        using var sourceService = TestConfigSourceServices.Create(context.ExecutionContext, git: acquired);
+        await sourceService.MaterializeAsync(s_source, context.Project, CancellationToken.None);
         if (localOverride)
         {
+            var path = Path.Combine(context.Project.FullName, AspireConfigFile.FileName);
             await ConfigurationService.SetConfigurationInFileAsync(
-                Path.Combine(workspace.Path, AspireConfigFile.FileName), "docs.llmsTxtUrl", localUrl);
+                path, "skillSources.team.repository", "example/local");
+            await ConfigurationService.SetConfigurationInFileAsync(
+                path, "skillSources.team.openCodeV2Catalog", "https://local.example/skills/");
         }
-        using var response = new HttpResponseMessage(HttpStatusCode.OK)
-        {
-            Content = new StringContent("# Shared Document\n\n[Related](/guide/)\n")
-        };
-        string? requestedUrl = null;
-        using var handler = new MockHttpMessageHandler(response, request => requestedUrl = request.RequestUri!.AbsoluteUri);
-        using var httpClient = new HttpClient(handler);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        services.AddSingleton<IDocsFetcher>(provider => new DocsFetcher(httpClient,
-            provider.GetRequiredService<IDocsCache>(), provider.GetRequiredService<IConfiguration>(), NullLogger<DocsFetcher>.Instance));
-        using var provider = services.BuildServiceProvider();
+        using var provider = context.CreateServiceCollection(outputHelper).BuildServiceProvider();
         var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         var root = provider.GetRequiredService<RootCommand>();
         Assert.Equal(0, git.Calls);
 
-        var result = root.Parse("docs get shared-document --format json");
+        var result = root.Parse($"agent init --agents {agent} --scope project --skills aspire --non-interactive");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
 
-        Assert.Equal(localOverride ? localUrl : sharedUrl, requestedUrl);
-        Assert.Equal(0, git.Calls);
-        Assert.Equal(0, git.CheckCalls);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ApiDocs_UsesMaterializedConfigurationWithoutAcquisition(bool localOverride)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string sharedUrl = "https://shared.example.test/sitemap.xml";
-        const string localUrl = "https://local.example.test/sitemap.xml";
-        var acquired = new TestConfigSourceRepository
+        var client = agent switch
         {
-            ReadConfiguration = (_, _) => Task.FromResult(("version-1", new JsonObject
-            {
-                ["docs"] = new JsonObject { ["api"] = new JsonObject { ["sitemapUrl"] = sharedUrl } }
-            }))
+            "copilot" => context.Copilot,
+            "claude" => context.ClaudeCode,
+            _ => context.OpenCode
         };
-        await TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: acquired)
-            .MaterializeAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
-        var expectedUrl = localOverride ? localUrl : sharedUrl;
-        if (localOverride)
-        {
-            await ConfigurationService.SetConfigurationInFileAsync(
-                Path.Combine(workspace.Path, AspireConfigFile.FileName), "docs.api.sitemapUrl", localUrl);
-        }
-        var requests = new List<string>();
-        using var handler = new MockHttpMessageHandler(request =>
-        {
-            requests.Add(request.RequestUri!.AbsoluteUri);
-            return new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(request.RequestUri.AbsoluteUri.EndsWith(".xml", StringComparison.Ordinal) ? """
-                    <?xml version="1.0" encoding="UTF-8"?>
-                    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-                      <url><loc>https://aspire.dev/reference/api/csharp/aspire.hosting/</loc></url>
-                    </urlset>
-                    """ : "# Aspire.Hosting\n\n[Related](/guide/)\n")
-            };
-        });
-        using var httpClient = new HttpClient(handler);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        services.AddSingleton<IApiDocsFetcher>(provider => new ApiDocsFetcher(httpClient,
-            provider.GetRequiredService<IApiDocsCache>(), provider.GetRequiredService<IConfiguration>(), NullLogger<ApiDocsFetcher>.Instance));
-        using var provider = services.BuildServiceProvider();
-        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
-        var root = provider.GetRequiredService<RootCommand>();
-        Assert.Equal(0, git.Calls);
-
-        var result = root.Parse("docs api get csharp/aspire.hosting --format json");
-        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-
-        Assert.Equal([expectedUrl, $"{new Uri(expectedUrl).GetLeftPart(UriPartial.Authority)}/reference/api/csharp/aspire.hosting.md"], requests);
         Assert.Equal(0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
+        await Verify(await File.ReadAllTextAsync(client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)), "json")
+            .UseParameters(agent, localOverride);
     }
 
     [Fact]
@@ -308,7 +261,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             AppliedVersion = s_source.AppliedVersion
         }, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        await ConfigurationService.SetConfigurationInFileAsync(path, "docs.llmsTxtUrl", "https://local.example/llms.txt");
+        await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.team.repository", "example/local");
         await ConfigurationService.SetConfigurationInFileAsync(path, "appHost.path", "apphost.cs");
         if (invalidField is "repository" or "path" or "both")
         {
@@ -335,7 +288,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             projectFile, createSettingsFile: true, CancellationToken.None);
         await provider.GetRequiredService<ConfigSourceService>().WaitForChecksAsync().DefaultTimeout();
         Assert.Equal(projectFile.FullName, project?.FullName);
-        var result = provider.GetRequiredService<RootCommand>().Parse("config get docs.llmsTxtUrl");
+        var result = provider.GetRequiredService<RootCommand>().Parse("config get skillSources.team.repository");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(previous, await File.ReadAllTextAsync(path));
@@ -610,12 +563,12 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     public async Task ProjectSelection_ChecksAncestorSourceWithoutCopyingItsBinding()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var inheritedUrl = "https://parent.example/llms.txt";
+        var inheritedRepository = "example/parent";
         var initial = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: new TestConfigSourceRepository
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", new JsonObject
             {
-                ["docs"] = new JsonObject { ["llmsTxtUrl"] = inheritedUrl }
+                ["skillSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = inheritedRepository } }
             }))
         });
         await initial.MaterializeAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
@@ -635,8 +588,8 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(projectFile.FullName, project?.FullName);
         var inherited = await provider.GetRequiredService<IConfigurationService>().GetConfigurationFromDirectoryAsync(
-            "docs.llmsTxtUrl", selected, continueSearchWhenKeyMissing: true, cancellationToken: CancellationToken.None);
-        Assert.Equal(inheritedUrl, inherited);
+            "skillSources.team.repository", selected, continueSearchWhenKeyMissing: true, cancellationToken: CancellationToken.None);
+        Assert.Equal(inheritedRepository, inherited);
         await sources.CheckProjectAsync(selected, force: true, CancellationToken.None);
         Assert.Equal(1, git.Calls);
         Assert.Equal(0, git.CheckCalls);
@@ -828,7 +781,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equivalent(accepted ? s_source : null, AspireConfigFile.Load(output)?.ConfigSource, strict: true);
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(output, AspireConfigFile.FileName)))!;
-        Assert.Equal(accepted ? "https://docs.example/llms.txt" : null, configuration["docs"]?["llmsTxtUrl"]?.GetValue<string>());
+        Assert.Equal(accepted ? "example/team" : null, configuration["skillSources"]?["team"]?["repository"]?.GetValue<string>());
         Assert.Equal(accepted ? 1 : 0, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
     }
@@ -844,7 +797,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equivalent(s_source, AspireConfigFile.Load(workspace.Path)!.ConfigSource, strict: true);
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName)))!;
-        Assert.Equal("https://docs.example/llms.txt", configuration["docs"]!["llmsTxtUrl"]!.GetValue<string>());
+        Assert.Equal("example/team", configuration["skillSources"]!["team"]!["repository"]!.GetValue<string>());
         Assert.True(File.Exists(Path.Combine(workspace.Path, "apphost.cs")));
         Assert.Equal(1, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
     }
@@ -859,7 +812,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             Assert.Equal(CliExitCodes.Success, await original.GetRequiredService<RootCommand>().Parse(command).InvokeAsync().DefaultTimeout());
         }
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        await ConfigurationService.SetConfigurationInFileAsync(path, "docs.llmsTxtUrl", "https://local.example/llms.txt");
+        await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.team.repository", "example/local");
         var services = CreateCreationServices(workspace);
         services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
         {
@@ -871,7 +824,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             "init --file-based --language csharp --suppress-agent-init --non-interactive").InvokeAsync().DefaultTimeout());
 
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
-        Assert.Equal("https://local.example/llms.txt", configuration["docs"]!["llmsTxtUrl"]!.GetValue<string>());
+        Assert.Equal("example/local", configuration["skillSources"]!["team"]!["repository"]!.GetValue<string>());
         Assert.Equivalent(s_source, configuration["configSource"]!.Deserialize(JsonSourceGenerationContext.Default.ConfigSource), strict: true);
         var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         Assert.Equal(0, git.Calls);
@@ -892,7 +845,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(childPath, "Test.AppHost.csproj");
         var rootConfigPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(rootConfigPath, """
-            {"appHost":{"path":"Test.AppHost/Test.AppHost.csproj"},"custom":"solution","docs":{"llmsTxtUrl":"https://solution.example/llms.txt"}}
+            {"appHost":{"path":"Test.AppHost/Test.AppHost.csproj"},"custom":"solution","skillSources":{"team":{"repository":"example/solution"}}}
             """);
         if (appHostConfig)
         {
@@ -920,7 +873,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         if (existingBinding)
         {
             await TestConfigSourceServices.SaveBindingAsync(s_source, configDirectory, CancellationToken.None);
-            await ConfigurationService.SetConfigurationInFileAsync(configPath, "docs.llmsTxtUrl", "https://local.example/llms.txt");
+            await ConfigurationService.SetConfigurationInFileAsync(configPath, "skillSources.team.repository", "example/local");
         }
         var originalRootConfiguration = await File.ReadAllTextAsync(rootConfigPath);
         var originalConfiguration = existingBinding ? await File.ReadAllTextAsync(configPath) : null;
@@ -983,7 +936,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         var configuration = AspireConfigFile.Load(configDirectory.FullName)!;
         Assert.Equivalent(s_source, configuration.ConfigSource, strict: true);
-        Assert.Equal(existingBinding ? "https://local.example/llms.txt" : "https://docs.example/llms.txt", configuration.Docs?.LlmsTxtUrl);
+        Assert.Equal(existingBinding ? "example/local" : "example/team", configuration.SkillSources!["team"].Repository);
         Assert.True(Directory.Exists(childPath));
         Assert.Equal(appHostConfig, File.Exists(Path.Combine(childPath, AspireConfigFile.FileName)));
         Assert.Equal(appHostConfig ? "Test.AppHost.csproj" : "Test.AppHost/Test.AppHost.csproj", configuration.AppHost!.Path);
@@ -1012,7 +965,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             Assert.True(ConfigSource.HasSameIdentity(s_source, source));
             return Task.FromResult(("version-2", new JsonObject
             {
-                ["docs"] = new JsonObject { ["llmsTxtUrl"] = "https://updated.example/llms.txt" }
+                ["skillSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/updated" } }
             }));
         };
         var refresh = refreshProvider.GetRequiredService<RootCommand>().Parse(
@@ -1022,7 +975,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         var refreshed = AspireConfigFile.Load(configDirectory.FullName)!;
         Assert.Equal("version-2", refreshed.ConfigSource!.AppliedVersion);
-        Assert.Equal("https://updated.example/llms.txt", refreshed.Docs!.LlmsTxtUrl);
+        Assert.Equal("example/updated", refreshed.SkillSources!["team"].Repository);
         Assert.Equal(configuration.AppHost.Path, refreshed.AppHost!.Path);
         Assert.Equal(appHostConfig, File.Exists(Path.Combine(childPath, AspireConfigFile.FileName)));
         if (appHostConfig)
@@ -1069,7 +1022,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", new JsonObject
             {
-                ["docs"] = new JsonObject { ["llmsTxtUrl"] = "https://docs.example/llms.txt" },
+                ["skillSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/team" } },
                 ["sdk"] = new JsonObject { ["version"] = "99.0.0" }
             }))
         });

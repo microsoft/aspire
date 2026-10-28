@@ -1,0 +1,13 @@
+﻿{
+  "extraKnownMarketplaces": {
+    "team": {
+      "source": {
+        "source": "github",
+        "repo": "example/team"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "team@team": true
+  }
+}
