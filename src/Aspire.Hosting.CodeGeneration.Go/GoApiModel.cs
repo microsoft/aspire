@@ -143,7 +143,8 @@ internal sealed record GoApiParameter
     public string? Summary { get; init; }
 
     /// <summary>
-    /// Gets the Go types a union parameter accepts. The generated parameter itself is <c>any</c>.
+    /// Gets the Go types a union parameter accepts, as the generated guard lists them. A handle type that has
+    /// derived types is listed as its <c>Any&lt;Type&gt;</c> interface. The generated parameter itself is <c>any</c>.
     /// </summary>
     public IReadOnlyList<string> AllowedTypes { get; init; } = [];
 }

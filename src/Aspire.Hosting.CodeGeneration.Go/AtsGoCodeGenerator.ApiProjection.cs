@@ -795,7 +795,10 @@ internal sealed partial class AtsGoCodeGenerator
             IsCallback = parameter.IsCallback,
             JsonName = string.Equals(parameter.Name, name, StringComparison.Ordinal) ? null : parameter.Name,
             Summary = parameter.Documentation?.Summary,
-            AllowedTypes = unionParameters.Contains(parameter) ? GetUnionAllowedTypeList(parameter.Type!) : []
+            // A union member is a value the caller supplies, so it maps as an input: a base handle type is
+            // listed as its Any<Type> interface, the type the emitted guard and godoc accept. The generator's
+            // own helper keeps the two from drifting apart.
+            AllowedTypes = unionParameters.Contains(parameter) ? GetUnionMemberTypes(parameter.Type!) : []
         };
     }
 
@@ -815,11 +818,6 @@ internal sealed partial class AtsGoCodeGenerator
             Summary = parameter.Documentation?.Summary
         };
     }
-
-    private IReadOnlyList<string> GetUnionAllowedTypeList(AtsTypeRef typeRef)
-        => typeRef.UnionTypes is { Count: > 0 } unionTypes
-            ? unionTypes.Select(type => MapTypeRefToGo(type, isOptional: false)).Distinct(StringComparer.Ordinal).ToList()
-            : [];
 
     private static List<AtsParameterInfo> GetNonTargetParameters(AtsCapabilityInfo capability)
     {
