@@ -8,7 +8,8 @@ namespace Aspire.Dashboard.Model;
 
 internal sealed class DashboardExperienceRedirectMiddleware(
     RequestDelegate next,
-    IOptionsMonitor<DashboardOptions> options)
+    IOptionsMonitor<DashboardOptions> options,
+    DashboardExperienceAvailability availability)
 {
     private const string ExperienceCookieName = "Aspire_Dashboard_Experience";
 
@@ -29,9 +30,11 @@ internal sealed class DashboardExperienceRedirectMiddleware(
         var isLegacyPath = string.Equals(path, "/legacy", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/legacy/", StringComparison.OrdinalIgnoreCase);
         var cookieValue = context.Request.Cookies[ExperienceCookieName];
-        var experience = options.CurrentValue.UI.DisableModernDashboard == true
+        var experience = availability.LegacyAvailable && options.CurrentValue.UI.DisableModernDashboard == true
             ? "legacy"
-            : cookieValue is "legacy" or "modern"
+            : availability.LegacyAvailable && cookieValue is "legacy"
+                ? "legacy"
+                : cookieValue == "modern"
                 ? cookieValue
                 : "modern";
 
@@ -59,3 +62,5 @@ internal sealed class DashboardExperienceRedirectMiddleware(
         path.StartsWith("/_", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("/terminal-window", StringComparison.OrdinalIgnoreCase);
 }
+
+internal sealed record DashboardExperienceAvailability(bool LegacyAvailable);

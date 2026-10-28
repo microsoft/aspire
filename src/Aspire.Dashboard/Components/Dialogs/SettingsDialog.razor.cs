@@ -98,11 +98,16 @@ public partial class SettingsDialog : IDisposable
             new(GroupOverview.Summary, new Icons.Regular.Size20.Home(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
             new(GroupOverview.Graph, new Icons.Regular.Size20.ShareAndroid(), ResourcesLoc[nameof(Dashboard.Resources.Resources.GraphPageTitle)]),
         ];
-        _dashboardExperienceOptions =
-        [
-            new(NewDashboardExperience, new Icons.Regular.Size24.Sparkle(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogDashboardExperienceNew)]),
-            new(PreviousDashboardExperience, new Icons.Regular.Size24.History(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogDashboardExperiencePrevious)]),
-        ];
+        var dashboardExperienceOptions = new List<IconToggleOption<string>>
+        {
+            new(NewDashboardExperience, new Icons.Regular.Size24.Sparkle(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogDashboardExperienceNew)])
+        };
+        if (DashboardExperienceComponents.IsLegacyAvailable)
+        {
+            dashboardExperienceOptions.Add(
+                new(PreviousDashboardExperience, new Icons.Regular.Size24.History(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogDashboardExperiencePrevious)]));
+        }
+        _dashboardExperienceOptions = dashboardExperienceOptions;
         _currentSetting = ThemeManager.SelectedTheme ?? ThemeManager.ThemeSettingSystem;
 
         // Handle value being changed in a different browser window.
@@ -169,7 +174,10 @@ public partial class SettingsDialog : IDisposable
     }
 
     internal async Task SwitchDashboardExperienceAsync(string experience) =>
-        await JS.InvokeVoidAsync("setDashboardExperience", experience, experience == PreviousDashboardExperience ? "/legacy" : "/");
+        await JS.InvokeVoidAsync(
+            "setDashboardExperience",
+            experience == PreviousDashboardExperience && DashboardExperienceComponents.IsLegacyAvailable ? PreviousDashboardExperience : NewDashboardExperience,
+            experience == PreviousDashboardExperience && DashboardExperienceComponents.IsLegacyAvailable ? "/legacy" : "/");
 
     private async Task OnTimeFormatChanged(TimeFormat timeFormat)
     {

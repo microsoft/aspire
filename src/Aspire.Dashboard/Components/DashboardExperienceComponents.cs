@@ -8,17 +8,21 @@ namespace Aspire.Dashboard.Components;
 
 internal static class DashboardExperienceComponents
 {
+#if ASPIRE_LEGACY_DASHBOARD
     private const DynamicallyAccessedMemberTypes RuntimeActivatedComponentMembers =
         DynamicallyAccessedMemberTypes.PublicConstructors |
         DynamicallyAccessedMemberTypes.PublicProperties |
         DynamicallyAccessedMemberTypes.NonPublicProperties;
     private const string DashboardAssemblyName = "Aspire.Dashboard";
+#endif
     private const string LegacyNamespacePrefix = "Aspire.Dashboard.Components.Legacy.";
     private const string LegacyMainLayoutTypeName = $"{LegacyNamespacePrefix}Layout.LegacyMainLayout";
     private const string LegacyNotFoundTypeName = $"{LegacyNamespacePrefix}Pages.NotFound";
 
     private static readonly Type? s_legacyMainLayoutType = typeof(App).Assembly.GetType(LegacyMainLayoutTypeName);
     private static readonly Type? s_legacyNotFoundType = typeof(App).Assembly.GetType(LegacyNotFoundTypeName);
+
+    internal static bool IsLegacyAvailable => s_legacyMainLayoutType is not null && s_legacyNotFoundType is not null;
 
     internal static Type GetDefaultLayout(Type pageType) =>
         IsLegacyPage(pageType) && s_legacyMainLayoutType is { } legacyLayout
@@ -45,6 +49,7 @@ internal static class DashboardExperienceComponents
             path.StartsWith("legacy/", StringComparison.OrdinalIgnoreCase);
     }
 
+#if ASPIRE_LEGACY_DASHBOARD
     [DynamicDependency(RuntimeActivatedComponentMembers, LegacyMainLayoutTypeName, DashboardAssemblyName)]
     [DynamicDependency(RuntimeActivatedComponentMembers, $"{LegacyNamespacePrefix}Pages.ConsoleLogs", DashboardAssemblyName)]
     [DynamicDependency(RuntimeActivatedComponentMembers, $"{LegacyNamespacePrefix}Pages.Error", DashboardAssemblyName)]
@@ -57,6 +62,7 @@ internal static class DashboardExperienceComponents
     [DynamicDependency(RuntimeActivatedComponentMembers, $"{LegacyNamespacePrefix}Pages.TerminalWindow", DashboardAssemblyName)]
     [DynamicDependency(RuntimeActivatedComponentMembers, $"{LegacyNamespacePrefix}Pages.TraceDetail", DashboardAssemblyName)]
     [DynamicDependency(RuntimeActivatedComponentMembers, $"{LegacyNamespacePrefix}Pages.Traces", DashboardAssemblyName)]
+#endif
     internal static void PreserveLegacyComponents()
     {
     }

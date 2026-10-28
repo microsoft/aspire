@@ -41,9 +41,7 @@ public sealed class SettingsDialogTests : DashboardTestContext
 
         var cut = Render<SettingsDialog>();
 
-        Assert.Equal(
-            ["System", "Light", "Dark", "Spacious", "Comfortable", "Compact", "Cards", "Home", "Graph", "System", "12-hour", "24-hour", "New dashboard", "Previous dashboard"],
-            cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
+        Assert.Equal(GetExpectedIconLabels(), cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
     }
 
     [Fact]
@@ -70,13 +68,9 @@ public sealed class SettingsDialogTests : DashboardTestContext
         var cut = Render<SettingsDialog>();
 
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".icon-toggle-current")));
-        Assert.Equal(
-            ["System", "Light", "Dark", "Spacious", "Comfortable", "Compact", "Cards", "Home", "Graph", "System", "12-hour", "24-hour", "New dashboard", "Previous dashboard"],
-            cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
+        Assert.Equal(GetExpectedIconLabels(), cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
         Assert.Equal(["System", "Compact", "Cards", "System", "New dashboard"], cut.FindAll(".icon-toggle[aria-pressed='true']").Select(e => e.GetAttribute("aria-label")));
-        Assert.Equal(
-            ["System", "Light", "Dark", "Spacious", "Comfortable", "Compact", "Cards", "Home", "Graph", "System", "12-hour", "24-hour", "New dashboard", "Previous dashboard"],
-            cut.FindAll(".icon-toggle-option-text").Select(e => e.TextContent));
+        Assert.Equal(GetExpectedIconLabels(), cut.FindAll(".icon-toggle-option-text").Select(e => e.TextContent));
 
         await cut.InvokeAsync(() => cut.Find(".icon-toggle[aria-label='Dark']").Click());
         await cut.InvokeAsync(() => cut.Find(".icon-toggle[aria-label='Comfortable']").Click());
@@ -92,21 +86,40 @@ public sealed class SettingsDialogTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData("modern", "/")]
-    [InlineData("legacy", "/legacy")]
-    public async Task SwitchDashboardExperience_UsesExperienceRoot(string experience, string expectedPath)
+    [InlineData("modern")]
+    [InlineData("legacy")]
+    public async Task SwitchDashboardExperience_UsesExperienceRoot(string experience)
     {
+        var expectedExperience = experience == "legacy" && DashboardExperienceComponents.IsLegacyAvailable ? "legacy" : "modern";
+        var expectedPath = expectedExperience == "legacy" ? "/legacy" : "/";
         var themeManager = new ThemeManager(new TestThemeResolver());
         await themeManager.EnsureInitializedAsync();
         FluentUISetupHelpers.AddCommonDashboardServices(this, themeManager: themeManager);
         FluentUISetupHelpers.SetupFluentList(this);
-        JSInterop.SetupVoid("setDashboardExperience", experience, expectedPath).SetVoidResult();
+        JSInterop.SetupVoid("setDashboardExperience", expectedExperience, expectedPath).SetVoidResult();
         var cut = Render<SettingsDialog>();
 
         await cut.InvokeAsync(() => cut.Instance.SwitchDashboardExperienceAsync(experience));
 
         var invocation = Assert.Single(JSInterop.Invocations["setDashboardExperience"]);
-        Assert.Equal(experience, invocation.Arguments[0]);
+        Assert.Equal(expectedExperience, invocation.Arguments[0]);
         Assert.Equal(expectedPath, invocation.Arguments[1]);
+    }
+
+    private static IReadOnlyList<string> GetExpectedIconLabels()
+    {
+        var labels = new List<string>
+        {
+            "System", "Light", "Dark",
+            "Spacious", "Comfortable", "Compact",
+            "Cards", "Home", "Graph",
+            "System", "12-hour", "24-hour",
+            "New dashboard"
+        };
+        if (DashboardExperienceComponents.IsLegacyAvailable)
+        {
+            labels.Add("Previous dashboard");
+        }
+        return labels;
     }
 }

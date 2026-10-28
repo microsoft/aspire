@@ -233,6 +233,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Telemetry must be available before options validation so failed startup attempts
         // can be recorded even though the host never starts.
         builder.Services.TryAddScoped<ComponentTelemetryContextProvider>();
+        builder.Services.TryAddSingleton(new DashboardExperienceAvailability(DashboardExperienceComponents.IsLegacyAvailable));
         builder.Services.TryAddSingleton<DashboardTelemetryService>();
         builder.Services.TryAddSingleton(services => DashboardTelemetryConfiguration.Create(
             services.GetRequiredService<IConfiguration>()));

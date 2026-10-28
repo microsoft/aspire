@@ -58,7 +58,20 @@ public sealed class DashboardExperienceRedirectMiddlewareTests
         Assert.Equal("/legacy#", context.Response.Headers.Location);
     }
 
-    private static DashboardExperienceRedirectMiddleware CreateMiddleware(bool disableModernDashboard = false)
+    [Fact]
+    public async Task InvokeAsync_LegacyUnavailable_IgnoresLegacyConfigurationAndCookie()
+    {
+        var context = CreateContext("legacy", "/traces", "text/html");
+        var middleware = CreateMiddleware(disableModernDashboard: true, legacyAvailable: false);
+
+        await middleware.InvokeAsync(context);
+
+        Assert.Equal(StatusCodes.Status204NoContent, context.Response.StatusCode);
+    }
+
+    private static DashboardExperienceRedirectMiddleware CreateMiddleware(
+        bool disableModernDashboard = false,
+        bool legacyAvailable = true)
     {
         var options = new DashboardOptions();
         options.UI.DisableModernDashboard = disableModernDashboard;
@@ -68,7 +81,8 @@ public sealed class DashboardExperienceRedirectMiddlewareTests
                 context.Response.StatusCode = StatusCodes.Status204NoContent;
                 return Task.CompletedTask;
             },
-            new TestOptionsMonitor<DashboardOptions>(options));
+            new TestOptionsMonitor<DashboardOptions>(options),
+            new DashboardExperienceAvailability(legacyAvailable));
     }
 
     private static DefaultHttpContext CreateContext(string experience, string path, string accept)
