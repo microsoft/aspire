@@ -166,7 +166,7 @@ public sealed class ResourceMenuBuilder
             Icon = s_terminalIcon,
             OnClick = () =>
             {
-                _navigationManager.NavigateTo(DashboardUrls.TerminalsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
+                _navigationManager.NavigateTo(DashboardUrls.TerminalsUrl(resource: ResourceViewModel.GetResourceTargetName(resource, resourceByName)));
                 return Task.CompletedTask;
             }
         };
@@ -180,7 +180,7 @@ public sealed class ResourceMenuBuilder
             Icon = s_consoleLogsIcon,
             OnClick = () =>
             {
-                _navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
+                _navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceTargetName(resource, resourceByName)));
                 return Task.CompletedTask;
             }
         };
@@ -247,7 +247,7 @@ public sealed class ResourceMenuBuilder
                     Icon = s_structuredLogsIcon,
                     OnClick = () =>
                     {
-                        _navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
+                        _navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(resource: ResourceViewModel.GetResourceTargetName(resource, resourceByName)));
                         return Task.CompletedTask;
                     }
                 });
@@ -260,7 +260,7 @@ public sealed class ResourceMenuBuilder
                 Icon = s_tracesIcon,
                 OnClick = () =>
                 {
-                    _navigationManager.NavigateTo(DashboardUrls.TracesUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
+                    _navigationManager.NavigateTo(DashboardUrls.TracesUrl(resource: ResourceViewModel.GetResourceTargetName(resource, resourceByName)));
                     return Task.CompletedTask;
                 }
             });
@@ -274,7 +274,7 @@ public sealed class ResourceMenuBuilder
                     Icon = s_metricsIcon,
                     OnClick = () =>
                     {
-                        _navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
+                        _navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: ResourceViewModel.GetResourceTargetName(resource, resourceByName)));
                         return Task.CompletedTask;
                     }
                 });

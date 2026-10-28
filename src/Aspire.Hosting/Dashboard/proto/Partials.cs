@@ -14,7 +14,9 @@ partial class Resource
         {
             Name = snapshot.Name,
             ResourceType = snapshot.ResourceType,
+            ResourceTypeDisplayName = snapshot.ResourceTypeDisplayName,
             DisplayName = snapshot.DisplayName,
+            ResourceDisplayName = snapshot.ResourceDisplayName,
             Uid = snapshot.Uid,
             State = snapshot.State ?? "",
             StateStyle = snapshot.StateStyle ?? "",

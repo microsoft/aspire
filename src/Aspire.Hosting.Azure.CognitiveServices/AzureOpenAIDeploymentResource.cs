@@ -12,6 +12,9 @@ namespace Aspire.Hosting.ApplicationModel;
 [AspireExport(ExposeProperties = true)]
 public class AzureOpenAIDeploymentResource : Resource, IResourceWithParent<AzureOpenAIResource>, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Azure OpenAI Deployment";
+
     /// <value>"Standard"</value>
     private const string DefaultSkuName = "Standard";
 

@@ -328,6 +328,10 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		IconVariant: &iconVariant,
 	})
 
+	// WithResourceTypeDisplayName
+	container.WithResourceTypeDisplayName("Validation Service")
+	container.WithResourceDisplayName("Validation Container")
+
 	// WithHttpProbe
 	container.WithHttpProbe(aspire.ProbeTypeLiveness, &aspire.WithHttpProbeOptions{
 		Path: aspire.StringPtr("/health"),

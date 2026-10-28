@@ -27,13 +27,17 @@ public static class ModelTestHelpers
         string? iconName = null,
         IconVariant? iconVariant = null,
         ImmutableArray<VolumeViewModel>? volumes = null,
-        ImmutableArray<HealthReportViewModel>? healthReports = null)
+        ImmutableArray<HealthReportViewModel>? healthReports = null,
+        string? resourceDisplayName = null,
+        string? resourceTypeDisplayName = null)
     {
         return new ResourceViewModel
         {
             Name = resourceName ?? "Name!",
             ResourceType = resourceType ?? KnownResourceTypes.Container,
             DisplayName = displayName ?? resourceName ?? "Display name!",
+            ResourceDisplayName = resourceDisplayName ?? displayName ?? resourceName ?? "Display name!",
+            ResourceTypeDisplayName = resourceTypeDisplayName ?? resourceType ?? KnownResourceTypes.Container,
             Uid = Guid.NewGuid().ToString(),
             ReplicaIndex = 0,
             CreationTimeStamp = DateTime.UtcNow,

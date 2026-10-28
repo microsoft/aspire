@@ -3313,6 +3313,24 @@ public class CSharpAppResource extends ProjectResource {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable name displayed for the resource. */
+    public CSharpAppResource withResourceDisplayName(String resourceDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceDisplayName", AspireClient.serializeValue(resourceDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceDisplayName", reqArgs);
+        return this;
+    }
+
+    /** Overrides the human-readable resource type label. */
+    public CSharpAppResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public CSharpAppResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -5817,6 +5835,24 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable name displayed for the resource. */
+    public ContainerRegistryResource withResourceDisplayName(String resourceDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceDisplayName", AspireClient.serializeValue(resourceDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceDisplayName", reqArgs);
+        return this;
+    }
+
+    /** Overrides the human-readable resource type label. */
+    public ContainerRegistryResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public ContainerRegistryResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -7694,6 +7730,24 @@ public class ContainerResource extends ResourceBuilderBase {
 
     public ContainerResource withChildRelationship(ResourceBuilderBase child) {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
+    }
+
+    /** Overrides the human-readable name displayed for the resource. */
+    public ContainerResource withResourceDisplayName(String resourceDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceDisplayName", AspireClient.serializeValue(resourceDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceDisplayName", reqArgs);
+        return this;
+    }
+
+    /** Overrides the human-readable resource type label. */
+    public ContainerResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
     }
 
     public ContainerResource withIconName(String iconName) {
@@ -10472,6 +10526,24 @@ public class DotnetToolResource extends ExecutableResource {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable name displayed for the resource. */
+    public DotnetToolResource withResourceDisplayName(String resourceDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceDisplayName", AspireClient.serializeValue(resourceDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceDisplayName", reqArgs);
+        return this;
+    }
+
+    /** Overrides the human-readable resource type label. */
+    public DotnetToolResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public DotnetToolResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -12958,6 +13030,24 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable name displayed for the resource. */
+    public ExecutableResource withResourceDisplayName(String resourceDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceDisplayName", AspireClient.serializeValue(resourceDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceDisplayName", reqArgs);
+        return this;
+    }
+
+    /** Overrides the human-readable resource type label. */
+    public ExecutableResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public ExecutableResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -14227,6 +14317,24 @@ public class ExternalServiceResource extends ResourceBuilderBase {
 
     public ExternalServiceResource withChildRelationship(ResourceBuilderBase child) {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
+    }
+
+    /** Overrides the human-readable name displayed for the resource. */
+    public ExternalServiceResource withResourceDisplayName(String resourceDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceDisplayName", AspireClient.serializeValue(resourceDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceDisplayName", reqArgs);
+        return this;
+    }
+
+    /** Overrides the human-readable resource type label. */
+    public ExternalServiceResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
     }
 
     public ExternalServiceResource withIconName(String iconName) {
@@ -19102,6 +19210,24 @@ public class ParameterResource extends ResourceBuilderBase {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable name displayed for the resource. */
+    public ParameterResource withResourceDisplayName(String resourceDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceDisplayName", AspireClient.serializeValue(resourceDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceDisplayName", reqArgs);
+        return this;
+    }
+
+    /** Overrides the human-readable resource type label. */
+    public ParameterResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public ParameterResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -21414,6 +21540,24 @@ public class ProjectResource extends ResourceBuilderBase {
 
     public ProjectResource withChildRelationship(ResourceBuilderBase child) {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
+    }
+
+    /** Overrides the human-readable name displayed for the resource. */
+    public ProjectResource withResourceDisplayName(String resourceDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceDisplayName", AspireClient.serializeValue(resourceDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceDisplayName", reqArgs);
+        return this;
+    }
+
+    /** Overrides the human-readable resource type label. */
+    public ProjectResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
     }
 
     public ProjectResource withIconName(String iconName) {
@@ -24994,6 +25138,24 @@ public class TestDatabaseResource extends ContainerResource {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable name displayed for the resource. */
+    public TestDatabaseResource withResourceDisplayName(String resourceDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceDisplayName", AspireClient.serializeValue(resourceDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceDisplayName", reqArgs);
+        return this;
+    }
+
+    /** Overrides the human-readable resource type label. */
+    public TestDatabaseResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public TestDatabaseResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -27301,6 +27463,24 @@ public class TestRedisResource extends ContainerResource {
 
     public TestRedisResource withChildRelationship(ResourceBuilderBase child) {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
+    }
+
+    /** Overrides the human-readable name displayed for the resource. */
+    public TestRedisResource withResourceDisplayName(String resourceDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceDisplayName", AspireClient.serializeValue(resourceDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceDisplayName", reqArgs);
+        return this;
+    }
+
+    /** Overrides the human-readable resource type label. */
+    public TestRedisResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
     }
 
     public TestRedisResource withIconName(String iconName) {
@@ -29794,6 +29974,24 @@ public class TestVaultResource extends ContainerResource {
 
     public TestVaultResource withChildRelationship(ResourceBuilderBase child) {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
+    }
+
+    /** Overrides the human-readable name displayed for the resource. */
+    public TestVaultResource withResourceDisplayName(String resourceDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceDisplayName", AspireClient.serializeValue(resourceDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceDisplayName", reqArgs);
+        return this;
+    }
+
+    /** Overrides the human-readable resource type label. */
+    public TestVaultResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
     }
 
     public TestVaultResource withIconName(String iconName) {

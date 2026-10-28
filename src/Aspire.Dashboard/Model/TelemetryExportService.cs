@@ -145,7 +145,7 @@ public sealed class TelemetryExportService
     {
         foreach (var resource in resources)
         {
-            var resourceName = ResourceViewModel.GetResourceName(resource, resources);
+            var resourceName = ResourceViewModel.GetResourceTargetName(resource, resources);
             var resourceJson = CreateResourceJson(resource, resources);
             exportArchive.Resources[resourceName] = resourceJson;
         }
@@ -712,7 +712,7 @@ public sealed class TelemetryExportService
                     relationships.Add(new ResourceRelationshipJson
                     {
                         Type = relationship.Type,
-                        ResourceName = ResourceViewModel.GetResourceName(match, allResources)
+                        ResourceName = ResourceViewModel.GetResourceTargetName(match, allResources)
                     });
                 }
             }
@@ -724,9 +724,11 @@ public sealed class TelemetryExportService
             Name = resource.Name,
             DisplayName = resource.DisplayName,
             ResourceType = resource.ResourceType,
+            ResourceTypeDisplayName = resource.ResourceTypeDisplayName,
+            ResourceDisplayName = resource.ResourceDisplayName,
             Uid = resource.Uid,
             State = resource.State,
-            WaitingFor = resource.TryGetResolvedWaitingForDependencies(allResources, out var waitingForDependencies) ? [.. waitingForDependencies] : null,
+            WaitingFor = resource.TryGetResolvedWaitingForDependencies(allResources, useFriendlyNames: false, out var waitingForDependencies) ? [.. waitingForDependencies] : null,
             CreationTimestamp = resource.CreationTimeStamp,
             StartTimestamp = resource.StartTimeStamp,
             StopTimestamp = resource.StopTimeStamp,

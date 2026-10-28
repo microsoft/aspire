@@ -215,7 +215,7 @@ public class ResourceStateViewModelTests
 
         var resources = new CopyToThrowingResourceCollection(resource, dependency);
 
-        var result = resource.TryGetResolvedWaitingForDependencies(resources, out var dependencies);
+        var result = resource.TryGetResolvedWaitingForDependencies(resources, useFriendlyNames: true, out var dependencies);
 
         Assert.True(result);
         Assert.Equal(["messaging"], dependencies);

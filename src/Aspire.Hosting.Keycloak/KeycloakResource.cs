@@ -13,6 +13,9 @@ namespace Aspire.Hosting.ApplicationModel;
 public sealed class KeycloakResource(string name, ParameterResource? admin, ParameterResource adminPassword)
     : ContainerResource(name), IResourceWithServiceDiscovery
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Keycloak";
+
     private const string DefaultAdmin = "admin";
     internal const string PrimaryEndpointName = "http";
 

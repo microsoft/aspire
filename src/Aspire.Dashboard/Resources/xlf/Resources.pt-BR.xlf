@@ -207,6 +207,16 @@
         <target state="translated">Caminho do projeto</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesDetailsResourceNameProperty">
+        <source>Resource name</source>
+        <target state="new">Resource name</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesDetailsResourceTypeDisplayNameProperty">
+        <source>Type display name</source>
+        <target state="new">Type display name</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesDetailsStartTimeProperty">
         <source>Start time</source>
         <target state="translated">Hora de início</target>

@@ -17,6 +17,26 @@ public abstract class Resource : IResource
     public virtual string Name { get; }
 
     /// <summary>
+    /// Gets the default human-readable name of this resource, falling back to <see cref="Name"/>.
+    /// </summary>
+    /// <remarks>
+    /// This is presentation metadata only. Use <see cref="ResourceBuilderExtensions.WithResourceDisplayName{T}"/>
+    /// to override the label without changing resource identity, service discovery, or telemetry identity.
+    /// </remarks>
+    public virtual string ResourceDisplayName => Name;
+
+    /// <summary>
+    /// Gets the default human-readable name of this resource's type.
+    /// </summary>
+    /// <remarks>
+    /// Override this property to identify the service, such as Redis or PostgreSQL Server,
+    /// independently of its technical resource type. The default is the resource type.
+    /// This label does not change the resource name, service discovery, or OpenTelemetry identity.
+    /// Use <see cref="ResourceBuilderExtensions.WithResourceTypeDisplayName{T}"/> to override the label for an instance.
+    /// </remarks>
+    public virtual string ResourceTypeDisplayName => this.GetResourceType();
+
+    /// <summary>
     /// Gets the annotations associated with the resource.
     /// </summary>
     public virtual ResourceAnnotationCollection Annotations { get; } = new();

@@ -18,6 +18,7 @@ Each page reads current state; restart from offset 0 if resource membership chan
 [
   {
     "name": "api",
+    "resource_display_name": "api",
     "waiting_for": [
       "redis-visible",
       "redis-hidden"

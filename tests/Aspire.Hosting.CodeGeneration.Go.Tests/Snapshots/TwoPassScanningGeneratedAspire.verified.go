@@ -1565,6 +1565,8 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithRemoteImageTag(remoteImageTag string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithResourceDisplayName(resourceDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithSerializedAnnotation(annotationId string, json string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -3401,6 +3403,30 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCo
 	return s
 }
 
+// WithResourceDisplayName overrides the human-readable name displayed for the resource.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithResourceDisplayName(resourceDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithSerializedAnnotation(annotationId string, json string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -3875,6 +3901,8 @@ type CSharpAppResource interface {
 	WithReplicas(replicas float64) CSharpAppResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) CSharpAppResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) CSharpAppResource
+	WithResourceDisplayName(resourceDisplayName string) CSharpAppResource
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) CSharpAppResource
 	WithSerializedAnnotation(annotationId string, json string) CSharpAppResource
 	WithSessionLifetime() CSharpAppResource
 	WithStatus(status TestResourceStatus) CSharpAppResource
@@ -5444,6 +5472,30 @@ func (s *cSharpAppResource) WithRequiredCommandValidation(command string, valida
 	return s
 }
 
+// WithResourceDisplayName overrides the human-readable name displayed for the resource.
+func (s *cSharpAppResource) WithResourceDisplayName(resourceDisplayName string) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *cSharpAppResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
 func (s *cSharpAppResource) WithSerializedAnnotation(annotationId string, json string) CSharpAppResource {
 	if s.err != nil { return s }
@@ -6840,6 +6892,8 @@ type ContainerRegistryResource interface {
 	WithRelationship(resourceBuilder Resource, type_ string) ContainerRegistryResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerRegistryResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerRegistryResource
+	WithResourceDisplayName(resourceDisplayName string) ContainerRegistryResource
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerRegistryResource
 	WithSerializedAnnotation(annotationId string, json string) ContainerRegistryResource
 	WithSessionLifetime() ContainerRegistryResource
 	WithStatus(status TestResourceStatus) ContainerRegistryResource
@@ -7685,6 +7739,30 @@ func (s *containerRegistryResource) WithRequiredCommandValidation(command string
 	return s
 }
 
+// WithResourceDisplayName overrides the human-readable name displayed for the resource.
+func (s *containerRegistryResource) WithResourceDisplayName(resourceDisplayName string) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *containerRegistryResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
 func (s *containerRegistryResource) WithSerializedAnnotation(annotationId string, json string) ContainerRegistryResource {
 	if s.err != nil { return s }
@@ -7967,6 +8045,8 @@ type ContainerResource interface {
 	WithRemoteImageTag(remoteImageTag string) ContainerResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerResource
+	WithResourceDisplayName(resourceDisplayName string) ContainerResource
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerResource
 	WithSerializedAnnotation(annotationId string, json string) ContainerResource
 	WithSessionLifetime() ContainerResource
 	WithStatus(status TestResourceStatus) ContainerResource
@@ -9799,6 +9879,30 @@ func (s *containerResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceDisplayName overrides the human-readable name displayed for the resource.
+func (s *containerResource) WithResourceDisplayName(resourceDisplayName string) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *containerResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11716,6 +11820,8 @@ type DotnetToolResource interface {
 	WithRemoteImageTag(remoteImageTag string) DotnetToolResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) DotnetToolResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) DotnetToolResource
+	WithResourceDisplayName(resourceDisplayName string) DotnetToolResource
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) DotnetToolResource
 	WithSerializedAnnotation(annotationId string, json string) DotnetToolResource
 	WithSessionLifetime() DotnetToolResource
 	WithStatus(status TestResourceStatus) DotnetToolResource
@@ -13268,6 +13374,30 @@ func (s *dotnetToolResource) WithRequiredCommandValidation(command string, valid
 	return s
 }
 
+// WithResourceDisplayName overrides the human-readable name displayed for the resource.
+func (s *dotnetToolResource) WithResourceDisplayName(resourceDisplayName string) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *dotnetToolResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
 func (s *dotnetToolResource) WithSerializedAnnotation(annotationId string, json string) DotnetToolResource {
 	if s.err != nil { return s }
@@ -14660,6 +14790,8 @@ type ExecutableResource interface {
 	WithRemoteImageTag(remoteImageTag string) ExecutableResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExecutableResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExecutableResource
+	WithResourceDisplayName(resourceDisplayName string) ExecutableResource
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ExecutableResource
 	WithSerializedAnnotation(annotationId string, json string) ExecutableResource
 	WithSessionLifetime() ExecutableResource
 	WithStatus(status TestResourceStatus) ExecutableResource
@@ -16206,6 +16338,30 @@ func (s *executableResource) WithRequiredCommandValidation(command string, valid
 	return s
 }
 
+// WithResourceDisplayName overrides the human-readable name displayed for the resource.
+func (s *executableResource) WithResourceDisplayName(resourceDisplayName string) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *executableResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
 func (s *executableResource) WithSerializedAnnotation(annotationId string, json string) ExecutableResource {
 	if s.err != nil { return s }
@@ -16744,6 +16900,8 @@ type ExternalServiceResource interface {
 	WithRelationship(resourceBuilder Resource, type_ string) ExternalServiceResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExternalServiceResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExternalServiceResource
+	WithResourceDisplayName(resourceDisplayName string) ExternalServiceResource
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ExternalServiceResource
 	WithSerializedAnnotation(annotationId string, json string) ExternalServiceResource
 	WithSessionLifetime() ExternalServiceResource
 	WithStatus(status TestResourceStatus) ExternalServiceResource
@@ -17604,6 +17762,30 @@ func (s *externalServiceResource) WithRequiredCommandValidation(command string, 
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceDisplayName overrides the human-readable name displayed for the resource.
+func (s *externalServiceResource) WithResourceDisplayName(resourceDisplayName string) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *externalServiceResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -19500,6 +19682,8 @@ type ParameterResource interface {
 	WithRequired(options ...*WithRequiredOptions) ParameterResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ParameterResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ParameterResource
+	WithResourceDisplayName(resourceDisplayName string) ParameterResource
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ParameterResource
 	WithSerializedAnnotation(annotationId string, json string) ParameterResource
 	WithSessionLifetime() ParameterResource
 	WithStatus(status TestResourceStatus) ParameterResource
@@ -20441,6 +20625,30 @@ func (s *parameterResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceDisplayName overrides the human-readable name displayed for the resource.
+func (s *parameterResource) WithResourceDisplayName(resourceDisplayName string) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *parameterResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -21408,6 +21616,8 @@ type ProjectResource interface {
 	WithReplicas(replicas float64) ProjectResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ProjectResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ProjectResource
+	WithResourceDisplayName(resourceDisplayName string) ProjectResource
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ProjectResource
 	WithSerializedAnnotation(annotationId string, json string) ProjectResource
 	WithSessionLifetime() ProjectResource
 	WithStatus(status TestResourceStatus) ProjectResource
@@ -22974,6 +23184,30 @@ func (s *projectResource) WithRequiredCommandValidation(command string, validati
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceDisplayName overrides the human-readable name displayed for the resource.
+func (s *projectResource) WithResourceDisplayName(resourceDisplayName string) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *projectResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -24915,6 +25149,8 @@ type TestDatabaseResource interface {
 	WithRemoteImageTag(remoteImageTag string) TestDatabaseResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestDatabaseResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestDatabaseResource
+	WithResourceDisplayName(resourceDisplayName string) TestDatabaseResource
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) TestDatabaseResource
 	WithSerializedAnnotation(annotationId string, json string) TestDatabaseResource
 	WithSessionLifetime() TestDatabaseResource
 	WithStatus(status TestResourceStatus) TestDatabaseResource
@@ -26750,6 +26986,30 @@ func (s *testDatabaseResource) WithRequiredCommandValidation(command string, val
 	return s
 }
 
+// WithResourceDisplayName overrides the human-readable name displayed for the resource.
+func (s *testDatabaseResource) WithResourceDisplayName(resourceDisplayName string) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *testDatabaseResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
 func (s *testDatabaseResource) WithSerializedAnnotation(annotationId string, json string) TestDatabaseResource {
 	if s.err != nil { return s }
@@ -27288,6 +27548,8 @@ type TestRedisResource interface {
 	WithRemoteImageTag(remoteImageTag string) TestRedisResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestRedisResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestRedisResource
+	WithResourceDisplayName(resourceDisplayName string) TestRedisResource
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) TestRedisResource
 	WithSerializedAnnotation(annotationId string, json string) TestRedisResource
 	WithSessionLifetime() TestRedisResource
 	WithStatus(status TestResourceStatus) TestRedisResource
@@ -29431,6 +29693,30 @@ func (s *testRedisResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceDisplayName overrides the human-readable name displayed for the resource.
+func (s *testRedisResource) WithResourceDisplayName(resourceDisplayName string) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *testRedisResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

@@ -149,6 +149,8 @@ internal static class ResourceSnapshotMapper
             Name = snapshot.Name,
             DisplayName = snapshot.DisplayName,
             ResourceType = snapshot.ResourceType,
+            ResourceTypeDisplayName = snapshot.ResourceTypeDisplayName,
+            ResourceDisplayName = snapshot.ResourceDisplayName,
             State = snapshot.State,
             WaitingFor = waitingFor,
             StateStyle = snapshot.StateStyle,
@@ -194,7 +196,7 @@ internal static class ResourceSnapshotMapper
             var matches = ResolveResources(dependency, allSnapshots);
             if (matches.Count == 1)
             {
-                dependencyName = GetResourceName(matches[0], allSnapshots);
+                dependencyName = GetResourceTargetName(matches[0], allSnapshots);
             }
 
             if (seenDependencies.Add(dependencyName))
@@ -345,7 +347,15 @@ internal static class ResourceSnapshotMapper
     /// <param name="allResources">All resources to check for duplicates.</param>
     /// <returns>The display name if unique, otherwise the unique resource name.</returns>
     public static string GetResourceName(ResourceSnapshot resource, IEnumerable<ResourceSnapshot> allResources)
+        => GetResourceName(resource, allResources, useFriendlyName: true);
+
+    // Machine-readable dependency names and export keys must remain valid resource identifiers.
+    public static string GetResourceTargetName(ResourceSnapshot resource, IEnumerable<ResourceSnapshot> allResources)
+        => GetResourceName(resource, allResources, useFriendlyName: false);
+
+    private static string GetResourceName(ResourceSnapshot resource, IEnumerable<ResourceSnapshot> allResources, bool useFriendlyName)
     {
+        var name = useFriendlyName ? resource.ResourceDisplayName : resource.DisplayName;
         var count = 0;
         foreach (var item in allResources)
         {
@@ -355,19 +365,21 @@ internal static class ResourceSnapshotMapper
                 continue;
             }
 
-            if (string.Equals(item.DisplayName, resource.DisplayName, StringComparisons.ResourceName))
+            if (string.Equals(useFriendlyName ? item.ResourceDisplayName : item.DisplayName, name, StringComparisons.ResourceName))
             {
                 count++;
                 if (count >= 2)
                 {
-                    // There are multiple resources with the same display name so they're part of a replica set.
-                    // Need to use the name which has a unique ID to tell them apart.
-                    return resource.Name;
+                    // Labels can be shared by replicas or unrelated resources. Keep the technical name
+                    // visible to disambiguate custom labels without changing resource identity.
+                    return !useFriendlyName || resource.ResourceDisplayName == resource.DisplayName
+                        ? resource.Name
+                        : $"{resource.ResourceDisplayName} ({resource.Name})";
                 }
             }
         }
 
-        return resource.DisplayName ?? resource.Name;
+        return name ?? resource.Name;
     }
 
     /// <summary>

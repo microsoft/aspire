@@ -20,7 +20,9 @@ CREATE TABLE IF NOT EXISTS dashboard_resources (
     supports_detailed_telemetry INTEGER NOT NULL,
     icon_name TEXT NULL,
     icon_variant INTEGER NULL,
-    console_logs_loaded INTEGER NOT NULL
+    console_logs_loaded INTEGER NOT NULL,
+    resource_type_display_name TEXT NULL,
+    resource_display_name TEXT NULL
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS dashboard_resource_environment (
