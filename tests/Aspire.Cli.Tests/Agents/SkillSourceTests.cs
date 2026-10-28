@@ -189,6 +189,38 @@ public class SkillSourceTests(ITestOutputHelper output)
         Assert.Empty(Directory.GetFiles(context.Project.FullName, "*", SearchOption.AllDirectories));
     }
 
+    [Theory]
+    [InlineData("copilot", "https://github.com/Microsoft/Aspire-Skills", "https://github.com/microsoft/aspire-skills.git", true)]
+    [InlineData("claude", "https://github.com/Microsoft/Aspire-Skills", "https://github.com/microsoft/aspire-skills.git", true)]
+    [InlineData("copilot", "https://GITHUB.COM/Microsoft/Aspire-Skills.git/", "https://github.com/microsoft/aspire-skills.git", true)]
+    [InlineData("claude", "https://GITHUB.COM/Microsoft/Aspire-Skills.git/", "https://github.com/microsoft/aspire-skills.git", true)]
+    [InlineData("copilot", "https://git.example.com/team/skills", "https://git.example.com/team/skills.git", true)]
+    [InlineData("claude", "https://git.example.com/team/skills", "https://git.example.com/team/skills.git", true)]
+    [InlineData("copilot", "https://git.example.com/Team/Skills", "https://git.example.com/team/skills.git", false)]
+    [InlineData("claude", "https://git.example.com/Team/Skills", "https://git.example.com/team/skills.git", false)]
+    public async Task Configure_MatchesExistingGitSourcesUsingHostCaseRules(string clientId, string repository, string existingRepository, bool matches)
+    {
+        using var context = new AgentConfigurationTestContext(output);
+        context.Configuration["skillSources:default:repository"] = repository;
+        context.Configuration["skillSources:default:ref"] = "main";
+        var client = context.Clients.Single(client => client.Id == clientId);
+        var path = client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project);
+        var original = $$"""
+            {
+              "extraKnownMarketplaces": {
+                "aspire-skills": { "source": { "source": "git", "url": "{{existingRepository}}", "ref": "release" } }
+              },
+              "enabledPlugins": { "aspire@aspire-skills": true }
+            }
+            """;
+        await AgentConfigurationTestContext.WriteAsync(path, original);
+
+        var result = Assert.Single(await context.ConfigureIntegrationAsync(AgentConfigurationScope.Project, [client]).DefaultTimeout());
+
+        Assert.Equal(matches ? AgentConfigurationStatus.Unchanged : AgentConfigurationStatus.Failed, result.Status);
+        Assert.Equal(original, await File.ReadAllTextAsync(path));
+    }
+
     [Fact]
     public async Task Configure_DefaultOverridesAndCatalogFallback()
     {
