@@ -4,6 +4,7 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREPIPELINES003
 
+using System.Text;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
@@ -430,6 +431,110 @@ public class DockerContainerRuntimeTests
                 build.ArgumentList));
     }
 
+    [Fact]
+    public async Task BuildImageAsync_PreservesWhitespaceAndQuotesAsSingleArguments()
+    {
+        const string cacheDestination = "type=local,dest=/tmp/build cache";
+        const string quotedOption = "label=name\"quoted,mode=max";
+        const string buildArgValue = "value with spaces";
+        const string secretPath = "/tmp/my secrets/token\".txt";
+        const string stage = "final stage";
+        var contextDirectory = Directory.CreateTempSubdirectory("aspire build");
+        var options = new ContainerImageBuildOptions
+        {
+            ImageName = "myapp",
+            Tag = "latest",
+            AdditionalArguments = ["--cache-to", cacheDestination, "--opt", quotedOption]
+        };
+        var buildArguments = new Dictionary<string, string?>
+        {
+            ["APP_MESSAGE"] = buildArgValue
+        };
+        var buildSecrets = new Dictionary<string, BuildImageSecretValue>
+        {
+            ["npmrc"] = new BuildImageSecretValue(secretPath, BuildImageSecretType.File)
+        };
+
+        try
+        {
+            var dockerRunner = new TestProcessRunner();
+            dockerRunner.EnqueueResult();
+            var docker = new DockerContainerRuntime(NullLogger<DockerContainerRuntime>.Instance, dockerRunner);
+            await docker.BuildImageAsync(
+                contextDirectory.FullName,
+                "Docker file",
+                options,
+                buildArguments,
+                buildSecrets,
+                stage,
+                CancellationToken.None);
+
+            // Docker Buildx parses the secret spec as CSV, so a quote in the path is doubled and the field is quoted.
+            // Podman takes the same spec literally. See ContainerRuntimeBase.FormatSecretField.
+            var dockerSecret = $"id=npmrc,type=file,\"src={secretPath.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+            var normalizedContext = Path.TrimEndingDirectorySeparator(Path.GetFullPath(contextDirectory.FullName));
+            var dockerArguments = AssertBuildArgumentList(
+                dockerRunner.ProcessSpecs[^1],
+                [
+                    "buildx",
+                    "build",
+                    "--file",
+                    "Docker file",
+                    "--tag",
+                    "myapp:latest",
+                    "--build-arg",
+                    $"APP_MESSAGE={buildArgValue}",
+                    "--secret",
+                    dockerSecret,
+                    "--target",
+                    stage,
+                    "--cache-to",
+                    cacheDestination,
+                    "--opt",
+                    quotedOption,
+                    normalizedContext
+                ]);
+
+            var podmanRunner = new TestProcessRunner();
+            var podman = new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, podmanRunner);
+            await podman.BuildImageAsync(
+                contextDirectory.FullName,
+                "Docker file",
+                options,
+                buildArguments,
+                buildSecrets,
+                stage,
+                CancellationToken.None);
+            var podmanArguments = AssertBuildArgumentList(
+                podmanRunner.ProcessSpecs[^1],
+                [
+                    "build",
+                    "--file",
+                    "Docker file",
+                    "--tag",
+                    "myapp:latest",
+                    "--build-arg",
+                    $"APP_MESSAGE={buildArgValue}",
+                    "--secret",
+                    $"id=npmrc,type=file,src={secretPath}",
+                    "--target",
+                    stage,
+                    "--cache-to",
+                    cacheDestination,
+                    "--opt",
+                    quotedOption,
+                    contextDirectory.FullName
+                ]);
+
+            Assert.Equal(dockerArguments, await EchoArgumentsAsync(dockerArguments));
+            Assert.Equal(podmanArguments, await EchoArgumentsAsync(podmanArguments));
+        }
+        finally
+        {
+            contextDirectory.Delete(recursive: true);
+        }
+    }
+
     private static Task BuildImageAsync(
         DockerContainerRuntime runtime,
         ContainerImageBuildOptions options)
@@ -442,6 +547,44 @@ public class DockerContainerRuntimeTests
             buildSecrets: [],
             stage: null,
             cancellationToken: CancellationToken.None);
+    }
+
+    private static IReadOnlyList<string> AssertBuildArgumentList(ProcessSpec spec, IReadOnlyList<string> expected)
+    {
+        Assert.Null(spec.Arguments);
+        Assert.Equal(expected, spec.ArgumentList);
+
+        return spec.ArgumentList!;
+    }
+
+    private static async Task<string[]> EchoArgumentsAsync(IReadOnlyList<string> arguments)
+    {
+        var directory = Directory.CreateTempSubdirectory("aspire-arg-echo");
+        try
+        {
+            // File-based apps disable reflection JSON serialization, so each argument is echoed as base64.
+            var appPath = DotnetFileAppProcess.WriteApp(directory.FullName, "echo-args.cs", """
+                #:sdk Microsoft.NET.Sdk
+                foreach (var arg in args)
+                {
+                    Console.WriteLine(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(arg)));
+                }
+                """);
+            var lines = new List<string>();
+            var spec = DotnetFileAppProcess.CreateDcpProcessSpec(appPath, arguments, lines.Add);
+            var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+            await using (processDisposable)
+            {
+                var result = await pendingProcessResult.WaitAsync(TimeSpan.FromMinutes(2));
+                Assert.Equal(0, result.ExitCode);
+            }
+
+            return lines.Select(static line => Encoding.UTF8.GetString(Convert.FromBase64String(line))).ToArray();
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     private static string AssertAndGetBuilderName(object? argumentsValue)

@@ -991,6 +991,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         await imageBuilder.BuildImageAsync(resource.Resource);
 
+        Assert.Equal(1, callbackCount);
         Assert.True(File.Exists(archivePath));
         Assert.Equal<byte>([0x1f, 0x8b], File.ReadAllBytes(archivePath)[..2]);
         Assert.Equal([$"{imageName}:{imageTag}"], TestContainerImageArchive.ReadDockerImageReferences(archivePath));
@@ -1020,7 +1021,6 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         Assert.Equal(
             new[] { $"{imageName}:{sdkTag}", $"{imageName}:{layeredOptions.Tag}" }.Order(StringComparer.Ordinal),
             containerRuntime.RemoveImageCalls.Order(StringComparer.Ordinal));
-        Assert.Equal(1, callbackCount);
         Assert.Empty(containerRuntime.TagImageCalls);
         Assert.False(Directory.Exists(layeredOptions.OutputPath));
     }
@@ -1693,7 +1693,14 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecrets(secrets, useCsv: true);
 
-        Assert.Equal(["--secret", "id=ENV_TOKEN,type=env,env=ENV_TOKEN", "--secret", "id=npmrc,type=file,src=/app/.npmrc"], result);
+        Assert.Equal(
+            [
+                "--secret",
+                "id=ENV_TOKEN,type=env,env=ENV_TOKEN",
+                "--secret",
+                "id=npmrc,type=file,src=/app/.npmrc"
+            ],
+            result);
     }
 
     [Fact]
@@ -2260,6 +2267,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             File.Exists(expectedArchivePath),
             $"Expected an image archive at '{expectedArchivePath}'. '{outputPath}' contains: {actualArchives}.");
     }
+
 }
 
 file sealed class TestProjectMetadata(string projectPath) : IProjectMetadata

@@ -460,16 +460,18 @@ public class ContainerRuntimeBaseTests
     }
 
     [Fact]
-    public void BuildAdditionalArguments_PreservesEntriesAsTokens()
+    public void BuildAdditionalArguments_PreservesCommasSpacesAndQuotesAsTokens()
     {
-        // Entries must not be quoted or joined: cache flags like
-        // --cache-to take comma-separated key=value lists, and values may contain spaces.
+        // Commas in a cache spec are data, not separators. Spaces and quotes must also stay inside
+        // the token instead of being treated as shell syntax.
         var result = TestContainerRuntime.FormatAdditionalArguments(
         [
             "--cache-from",
             "type=registry,ref=cr.example.com/app:cache",
             "--cache-to",
-            "type=registry,ref=cr.example.com/app:cache,mode=max"
+            "type=local,dest=/tmp/build cache",
+            "--opt",
+            "label=name\"quoted,mode=max"
         ]);
 
         Assert.Equal(
@@ -477,7 +479,9 @@ public class ContainerRuntimeBaseTests
             "--cache-from",
             "type=registry,ref=cr.example.com/app:cache",
             "--cache-to",
-            "type=registry,ref=cr.example.com/app:cache,mode=max"
+            "type=local,dest=/tmp/build cache",
+            "--opt",
+            "label=name\"quoted,mode=max"
         ], result);
     }
 
