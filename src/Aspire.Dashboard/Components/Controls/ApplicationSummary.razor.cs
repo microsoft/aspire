@@ -283,8 +283,11 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private void QueueTelemetryRefresh()
     {
-        if (Interlocked.Exchange(ref _telemetryRefreshPending, 1) == 1)
+        // Single-flight: the gate (1) is held through delay, load and publish. Notifications that
+        // arrive while a refresh is running set the dirty flag (2) so exactly one trailing refresh runs.
+        if (Interlocked.CompareExchange(ref _telemetryRefreshPending, 1, 0) != 0)
         {
+            Interlocked.CompareExchange(ref _telemetryRefreshPending, 2, 1);
             return;
         }
 
@@ -292,17 +295,21 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         {
             try
             {
-                await Task.Delay(s_telemetryRefreshDelay, _cts.Token).ConfigureAwait(false);
-                Interlocked.Exchange(ref _telemetryRefreshPending, 0);
-
-                var telemetry = await LoadTelemetryAsync(_cts.Token).ConfigureAwait(false);
-                var unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
-                await InvokeAsync(() =>
+                do
                 {
-                    _telemetry = telemetry;
-                    _unviewedErrorCounts = unviewedErrorCounts;
-                    StateHasChanged();
-                }).ConfigureAwait(false);
+                    await Task.Delay(s_telemetryRefreshDelay, _cts.Token).ConfigureAwait(false);
+                    Interlocked.Exchange(ref _telemetryRefreshPending, 1);
+
+                    var telemetry = await LoadTelemetryAsync(_cts.Token).ConfigureAwait(false);
+                    var unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
+                    await InvokeAsync(() =>
+                    {
+                        _telemetry = telemetry;
+                        _unviewedErrorCounts = unviewedErrorCounts;
+                        StateHasChanged();
+                    }).ConfigureAwait(false);
+                }
+                while (Interlocked.CompareExchange(ref _telemetryRefreshPending, 0, 1) == 2);
             }
             catch (OperationCanceledException)
             {
@@ -483,6 +490,16 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         var totalRequests = okBuckets.Sum() + errorBuckets.Sum();
         var totalErrors = errorBuckets.Sum();
         var windowMinutes = s_activityBucketSize.TotalMinutes * ActivityBucketCount;
+        if (spanTotal > spanCount && spans.Count > 0)
+        {
+            // Only the newest MaxActivitySpans were sampled, so the rate must be computed over the
+            // interval those spans actually cover rather than the full window.
+            var oldestSampled = spans.Min(s => s.StartTime);
+            if (oldestSampled > windowStart)
+            {
+                windowMinutes = Math.Max(s_activityBucketSize.TotalMinutes, (windowEnd - oldestSampled).TotalMinutes);
+            }
+        }
 
         return new HomeActivity
         {
