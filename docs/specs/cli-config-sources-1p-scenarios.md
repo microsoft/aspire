@@ -74,7 +74,6 @@ For this scenario, suppose the repository initially supplies:
 ```json
 {
   "skillSources": {
-    "default": {},
     "platform": {
       "repository": "https://git.example/platform-skills"
     }
@@ -106,7 +105,6 @@ The relevant excerpt from the project's file is:
     "appliedVersion": "<initial-source-file-version>"
   },
   "skillSources": {
-    "default": {},
     "platform": {
       "repository": "https://git.example/platform-skills"
     }
@@ -148,7 +146,6 @@ Leo maintains the organization's configuration repository. He expands its config
 ```json
 {
   "skillSources": {
-    "default": {},
     "platform": {
       "repository": "https://git.example/platform-skills"
     },
@@ -179,7 +176,6 @@ Her project file now contains all the skill sources, with her edit to the invent
     "appliedVersion": "<expanded-source-file-version>"
   },
   "skillSources": {
-    "default": {},
     "platform": {
       "repository": "https://git.example/platform-skills"
     },

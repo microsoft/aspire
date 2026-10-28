@@ -33,7 +33,7 @@ internal sealed class ConfigSource
             return "HEAD";
         }
 
-        return IsCommit(Ref) || Ref.StartsWith("refs/heads/", StringComparison.Ordinal) ? Ref : $"refs/heads/{Ref}";
+        return GitClient.IsCommitSha(Ref) || Ref.StartsWith("refs/heads/", StringComparison.Ordinal) ? Ref : $"refs/heads/{Ref}";
     }
 
     public static bool HasSameIdentity(ConfigSource first, ConfigSource second)
@@ -47,24 +47,7 @@ internal sealed class ConfigSource
         {
             throw new ConfigSourceException(ConfigSourceStrings.InvalidBinding);
         }
-        // Git accepts https://host/repo, ssh://git@host/repo, git@host:repo, and local paths.
-        // Require fully qualified local paths so a saved binding cannot change repositories
-        // when a later command runs in a different working directory.
-        var isLocal = System.IO.Path.IsPathFullyQualified(Repository);
-        var isUrl = GitHelpers.IsValidRepositoryUrl(Repository);
-        var at = Repository.IndexOf('@');
-        var colon = Repository.IndexOf(':');
-        var isScp = at > 0 && colon > at + 1 && colon < Repository.Length - 1
-            && !Repository.Contains("://", StringComparison.Ordinal)
-            && !Repository[..colon].Contains('/')
-            && !Repository.Contains('\\')
-            && Repository[0] != '-'
-            && Repository[..at].All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-')
-            && Uri.CheckHostName(Repository[(at + 1)..colon]) != UriHostNameType.Unknown;
-        if (Repository.Any(char.IsControl)
-            || (!isLocal && (Repository.Any(char.IsWhiteSpace)
-                || Repository.Contains('?') || Repository.Contains('#')
-                || Repository.StartsWith('-') || (!isUrl && !isScp))))
+        if (!GitSourceValidator.IsValidRepository(Repository))
         {
             throw new ConfigSourceException(ConfigSourceStrings.InvalidRepository);
         }
@@ -76,24 +59,11 @@ internal sealed class ConfigSource
             throw new ConfigSourceException(ConfigSourceStrings.InvalidPath);
         }
 
-        if (Ref is not null && !IsCommit(Ref))
+        if (!GitSourceValidator.IsValidRef(Ref))
         {
-            var branch = Ref.StartsWith("refs/heads/", StringComparison.Ordinal) ? Ref["refs/heads/".Length..] : Ref;
-            // Branch selectors follow git-check-ref-format rather than accepting revision
-            // expressions, refspec operators, tags, or command-line options.
-            // https://git-scm.com/docs/git-check-ref-format
-            if (branch is "" or "@" or "HEAD" || branch.StartsWith('-') || branch.StartsWith("refs/", StringComparison.Ordinal)
-                || branch.Contains("..", StringComparison.Ordinal) || branch.Contains("@{", StringComparison.Ordinal)
-                || branch.Any(c => char.IsWhiteSpace(c) || char.IsControl(c) || c is '\\' or ':' or '?' or '*' or '[' or '~' or '^')
-                || branch.Split('/').Any(part => part.Length == 0 || part.StartsWith('.') || part.EndsWith('.')
-                    || part.EndsWith(".lock", StringComparison.OrdinalIgnoreCase)))
-            {
-                throw new ConfigSourceException(ConfigSourceStrings.InvalidRef);
-            }
+            throw new ConfigSourceException(ConfigSourceStrings.InvalidRef);
         }
     }
-
-    private static bool IsCommit(string value) => value.Length is 40 or 64 && value.All(char.IsAsciiHexDigit);
 }
 
 internal sealed record ConfigSourceMetadata(ConfigSource Source, string Commit, string Version, DateTimeOffset FetchedAt);
