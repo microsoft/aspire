@@ -309,6 +309,12 @@
   <data name="ResourcePaneResourceActions" xml:space="preserve">
     <value>Actions for {0}</value>
   </data>
+  <data name="ResourcePaneSelectAll" xml:space="preserve">
+    <value>Select all</value>
+  </data>
+  <data name="ResourcePaneAllSelected" xml:space="preserve">
+    <value>All selected</value>
+  </data>
   <data name="ResourcePaneUnviewedErrors" xml:space="preserve">
     <value>{0} unviewed error logs</value>
   </data>
@@ -372,9 +378,6 @@
   <data name="ResourcePaneKindHide" xml:space="preserve">
     <value>Select to hide {0}</value>
   </data>
-  <data name="ResourcePaneSelectedCount" xml:space="preserve">
-    <value>{0} selected</value>
-  </data>
   <data name="ResourcePaneNoKindsHint" xml:space="preserve">
     <value>Turn on a type above to list it.</value>
   </data>
@@ -383,9 +386,6 @@
   </data>
   <data name="ResourcePaneKindsLandmark" xml:space="preserve">
     <value>Types to show</value>
-  </data>
-  <data name="ResourcePaneClearSelection" xml:space="preserve">
-    <value>Clear selection</value>
   </data>
   <data name="ResourceTabsMore" xml:space="preserve">
     <value>More views</value>

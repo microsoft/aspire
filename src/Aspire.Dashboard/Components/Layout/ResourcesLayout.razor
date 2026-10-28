@@ -89,15 +89,19 @@
                         @KindToggle(PaneKind.Parameters, allParameterCount, new Icons.Regular.Size20.Key(), Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)])
                         @KindToggle(PaneKind.TelemetrySources, _telemetryOnlyResources.Count, new Icons.Regular.Size20.DataUsage(), Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)])
                     </div>
-                    @if (!isAllSelected)
-                    {
-                        <div class="resource-selection-bar">
-                            <span>@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneSelectedCount)], _selectedResourceNames.Count)</span>
-                            <button type="button" class="resource-selection-clear" @onclick="OnAllResourcesClickAsync">
-                                @Loc[nameof(Dashboard.Resources.Layout.ResourcePaneClearSelection)]
-                            </button>
-                        </div>
-                    }
+                    @* Selects every item again, like the "All resources" row. It stays pressed while everything is selected,
+                       so it also tells whether a selection narrows the pages, without a line that appears and moves the list. *@
+                    <div class="resource-select-all">
+                        <button type="button"
+                                class="resource-select-all-toggle @(isAllSelected ? "on" : null)"
+                                aria-pressed="@(isAllSelected ? "true" : "false")"
+                                aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneSelectAll)]"
+                                data-tooltip="@Loc[isAllSelected ? nameof(Dashboard.Resources.Layout.ResourcePaneAllSelected) : nameof(Dashboard.Resources.Layout.ResourcePaneSelectAll)]"
+                                data-tooltip-positioning="above"
+                                @onclick="OnAllResourcesClickAsync">
+                            <FluentIcon Value="@(new Icons.Regular.Size20.SelectAllOn())" Width="20px" Color="Color.Custom" CustomColor="currentColor" />
+                        </button>
+                    </div>
                 </div>
             }
 
@@ -305,7 +309,7 @@
                         {
                             var telemetryResourceName = telemetryResource.Name;
                             var isSelected = IsSelected(telemetryResourceName);
-                            <div class="resource-row @(isSelected ? "selected" : string.Empty)" @key="@($"otlp:{telemetryResourceName}")">
+                            <div class="resource-row @(isSelected || IsAllSelected ? "selected" : string.Empty)" @key="@($"otlp:{telemetryResourceName}")">
                                 <a class="resource-row-link"
                                    href="@GetRowUrl(telemetryResourceName)"
                                    aria-current="@GetRowAriaCurrent(isSelected)"
@@ -785,7 +789,7 @@
         // The whole row is the drag source, so reordering doesn't need a separate grip.
         var canReorder = CanReorderResources && !resource.IsParameter;
 
-        <div class="resource-row @(isSelected ? "selected" : string.Empty) @(resource.IsResourceHidden(showHiddenResources: false) ? "resource-row-hidden" : null)"
+        <div class="resource-row @(isSelected || IsAllSelected ? "selected" : string.Empty) @(resource.IsResourceHidden(showHiddenResources: false) ? "resource-row-hidden" : null)"
              data-resource-name="@resource.Name"
              data-resource-parent="@GetReorderParentName(resource)"
              @key="resource.Name">

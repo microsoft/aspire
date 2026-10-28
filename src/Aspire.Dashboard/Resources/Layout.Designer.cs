@@ -871,6 +871,24 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Select all.
+        /// </summary>
+        public static string ResourcePaneSelectAll {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectAll", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to All selected.
+        /// </summary>
+        public static string ResourcePaneAllSelected {
+            get {
+                return ResourceManager.GetString("ResourcePaneAllSelected", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to {0} unviewed error logs.
         /// </summary>
         public static string ResourcePaneUnviewedErrors {
@@ -903,15 +921,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourcePaneKindHide {
             get {
                 return ResourceManager.GetString("ResourcePaneKindHide", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to {0} selected.
-        /// </summary>
-        public static string ResourcePaneSelectedCount {
-            get {
-                return ResourceManager.GetString("ResourcePaneSelectedCount", resourceCulture);
             }
         }
 
@@ -957,15 +966,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourcePaneKindsLandmark {
             get {
                 return ResourceManager.GetString("ResourcePaneKindsLandmark", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Clear selection.
-        /// </summary>
-        public static string ResourcePaneClearSelection {
-            get {
-                return ResourceManager.GetString("ResourcePaneClearSelection", resourceCulture);
             }
         }
 

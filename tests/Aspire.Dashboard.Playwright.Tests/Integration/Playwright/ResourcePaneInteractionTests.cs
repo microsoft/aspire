@@ -85,14 +85,14 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
 
             var pane = page.Locator(".resource-pane");
             var title = page.Locator("h1.resource-title");
-            var selectionBar = pane.Locator(".resource-selection-bar");
+            var selectAll = pane.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneSelectAll, Exact = true });
             await Assertions.Expect(title).ToHaveTextAsync(resourceName);
-            await Assertions.Expect(selectionBar).ToBeVisibleAsync();
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-pressed", "false");
 
-            // With a selection, the pane offers to clear it. Clearing selects all resources again.
-            await selectionBar.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneClearSelection }).ClickAsync();
+            // With a selection, "Select all" isn't pressed. Pressing it selects all resources again.
+            await selectAll.ClickAsync();
             await Assertions.Expect(title).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
-            await Assertions.Expect(selectionBar).ToHaveCountAsync(0);
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-pressed", "true");
             await Assertions.Expect(pane.Locator("a[aria-current]")).ToHaveCountAsync(0);
 
             var overviewCards = page.Locator(".resource-card-grid");
@@ -107,7 +107,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             await page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.ResourceTabOverview }).ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
             await Assertions.Expect(overviewCards).ToBeVisibleAsync();
-            await Assertions.Expect(selectionBar).ToHaveCountAsync(0);
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-pressed", "true");
 
             // The cleared selection is remembered when entering the resources view again.
             await page.GotoAsync("/resources");

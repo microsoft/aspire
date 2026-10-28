@@ -322,9 +322,9 @@
         <target state="new">Started</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneClearSelection">
-        <source>Clear selection</source>
-        <target state="new">Clear selection</target>
+      <trans-unit id="ResourcePaneAllSelected">
+        <source>All selected</source>
+        <target state="new">All selected</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneClose">
@@ -482,9 +482,9 @@
         <target state="new">Actions for {0}</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneSelectedCount">
-        <source>{0} selected</source>
-        <target state="new">{0} selected</target>
+      <trans-unit id="ResourcePaneSelectAll">
+        <source>Select all</source>
+        <target state="new">Select all</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneTagGroupLabel">

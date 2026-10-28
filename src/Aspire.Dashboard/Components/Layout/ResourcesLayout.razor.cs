@@ -1869,6 +1869,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private bool IsSelected(string resourceName) => _selectedResourceNames.Contains(resourceName, StringComparers.ResourceName);
 
+    // An empty selection means everything is selected, so every row is shown selected. Only the look follows: the
+    // rows aren't each announced as current, "Select all" being pressed already says it.
+    private bool IsAllSelected => _selectedResourceNames.Count == 0;
+
     private string? GetRowAriaCurrent(bool isSelected) => isSelected ? (IsMultiSelection ? "true" : "page") : null;
 
     private static string GetTabId(ResourceTab tab) => $"tab-{tab}";

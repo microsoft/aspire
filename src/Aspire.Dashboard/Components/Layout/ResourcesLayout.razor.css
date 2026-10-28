@@ -417,19 +417,23 @@
 /* The toggles sit between the search row and the list, outside the scrolling list. A scrollbar in the list never
    changes their width (which would change which labels fit), and the divider marks where the scrolling begins. */
 .resource-pane-kinds {
+    display: flex;
     flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     /* The same inline padding as the search row, so the toggles line up with the search box on the left and the
        grouping button on the right. */
     padding: 2px 12px 10px;
     border-bottom: 1px solid var(--colorNeutralStroke2);
-    container-type: inline-size;
 }
 /* Toggles for the kinds of items the pane lists. They look like the layout switcher in the page header: a quiet
    tray with icon buttons, where an on button is the raised one with a brand-colored icon. Every button is the same
    size in both states, so toggling never shifts the list. The name and count are in the tooltip. */
-.resource-kind-toggles {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+/* The trays and buttons have the same sizes as the icon toggles in the settings and the layout switcher. */
+.resource-kind-toggles,
+.resource-select-all {
+    display: inline-flex;
     gap: 2px;
     padding: 2px;
     border: 1px solid var(--colorNeutralStroke1);
@@ -437,12 +441,13 @@
     background: var(--colorNeutralBackground2);
 }
 
-.resource-kind-toggle {
+.resource-kind-toggle,
+.resource-select-all-toggle {
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 0;
+    width: 32px;
     height: 28px;
     padding: 0;
     border: 0;
@@ -452,56 +457,30 @@
     cursor: pointer;
 }
 
-.resource-kind-toggle:hover {
+.resource-kind-toggle:hover,
+.resource-select-all-toggle:hover {
     background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
     color: var(--colorNeutralForeground1);
 }
 
-.resource-kind-toggle.on {
+.resource-kind-toggle.on,
+.resource-select-all-toggle.on {
     background: var(--colorNeutralBackground1);
     box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
     color: var(--colorBrandForeground1);
 }
 
-.resource-kind-toggle.on:hover {
+.resource-kind-toggle.on:hover,
+.resource-select-all-toggle.on:hover {
     background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
     color: var(--colorBrandForeground1);
 }
 
-.resource-kind-toggle:focus-visible {
+.resource-kind-toggle:focus-visible,
+.resource-select-all-toggle:focus-visible {
     outline: 2px solid var(--colorStrokeFocus2);
     outline-offset: 1px;
 }
-.resource-selection-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin: 8px 4px 0;
-    color: var(--colorNeutralForeground2);
-    font-size: var(--fontSizeBase200);
-}
-
-.resource-selection-clear {
-    padding: 2px 6px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--colorBrandForegroundLink);
-    font: inherit;
-    cursor: pointer;
-}
-
-.resource-selection-clear:hover {
-    background: var(--colorNeutralBackground1Hover);
-    text-decoration: underline;
-}
-
-.resource-selection-clear:focus-visible {
-    outline: 2px solid var(--colorStrokeFocus2);
-    outline-offset: 1px;
-}
-
 .resource-row-all::after {
     content: "";
     position: absolute;
