@@ -2336,7 +2336,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandNonInteractive_WithClient_InstallsBundledSkills()
+    public async Task NewCommandNonInteractive_WithClient_RegistersAspireRemotely()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
@@ -2350,17 +2350,15 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --agents copilot --skills aspire --aspire-source embedded");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --agents copilot --skills aspire");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
-        var aspireSkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
-        Assert.True(File.Exists(aspireSkillPath), $"Expected aspire skill file at {aspireSkillPath}");
-
-        var aspireifySkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
-        Assert.True(File.Exists(aspireifySkillPath), $"Expected bundled aspireify skill file at {aspireifySkillPath}");
+        Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
+            [Path.Combine(outputDir, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
+        Assert.False(Directory.Exists(Path.Combine(outputDir, ".agents", "skills")));
     }
 
     [Fact]
@@ -3386,7 +3384,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommand_ExplicitUndetectedClientAndGlobalScope_AreForwardedWithoutMcp()
+    public async Task NewCommand_ExplicitUndetectedClientAndGlobalScope_RegistersAspireWithoutMcp()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
@@ -3398,17 +3396,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var result = provider.GetRequiredService<NewCommand>().Parse(
-            "new aspire-empty --name TestApp --output ./output --agents claude --scope global --skills aspire --aspire-source embedded");
+            "new aspire-empty --name TestApp --output ./output --agents claude --scope global --skills aspire");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        var bundle = Assert.IsType<AspireSkillsBundle>(
-            (await provider.GetRequiredService<IAspireSkillsInstaller>().InstallAsync(CancellationToken.None)).Bundle);
-        var expectedFiles = new List<string>();
-        foreach (var skill in bundle.GetSkillDefinitions())
-        {
-            expectedFiles.AddRange((await bundle.GetSkillFilesAsync(skill, CancellationToken.None))
-                .Select(file => Path.Combine(homeDirectory.FullName, ".claude", "skills", skill.Name, file.RelativePath)));
-        }
-        Assert.Equal(expectedFiles.Order(), Directory.EnumerateFiles(homeDirectory.FullName, "*", SearchOption.AllDirectories).Order());
+        var configurationPath = Path.Combine(homeDirectory.FullName, ".claude", "settings.json");
+        Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
+            [configurationPath], TestContext.Current.CancellationToken));
+        Assert.Equal([configurationPath], Directory.EnumerateFiles(homeDirectory.FullName, "*", SearchOption.AllDirectories));
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".claude", "skills")));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));

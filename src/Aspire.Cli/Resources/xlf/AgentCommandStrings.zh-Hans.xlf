@@ -42,46 +42,6 @@
         <target state="translated">tool_invocation 事件的 Aspire MCP 工具名称</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
-        <source>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</source>
-        <target state="translated">嵌入式 Aspire 技能存档未能通过 SHA-512 验证。应为“{0}”，但收到“{1}”。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_GitHubUnavailable">
-        <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</source>
-        <target state="translated">无法从已验证的 GitHub 发布资产下载 Aspire 技能，并且没有可用的有效缓存或嵌入式捆绑包。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InvalidMetadata">
-        <source>Embedded Aspire skills bundle metadata is invalid: {0}</source>
-        <target state="translated">嵌入式 Aspire 技能捆绑包元数据无效: {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MetadataRepositoryMismatch">
-        <source>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</source>
-        <target state="translated">嵌入式 Aspire 技能元数据存储库“{0}”与预期的存储库“{1}”不匹配。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataAssetName">
-        <source>Embedded Aspire skills metadata must specify a release asset name.</source>
-        <target state="translated">嵌入式 Aspire 技能元数据必须指定发布资产名称。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataSha512">
-        <source>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</source>
-        <target state="translated">嵌入式 Aspire 技能元数据必须指定发布资产 SHA-512 哈希。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataTag">
-        <source>Embedded Aspire skills metadata must specify a GitHub release tag.</source>
-        <target state="translated">嵌入式 Aspire 技能元数据必须指定 GitHub 发布标记。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataVersion">
-        <source>Embedded Aspire skills metadata must specify a version.</source>
-        <target state="translated">嵌入式 Aspire 技能元数据必须指定版本。</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">
         <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
         <target state="translated">以下智能体配置使用已弃用的 "mcp start" 命令。是否更新它们?</target>
@@ -132,20 +92,10 @@
         <target state="new">Agent assets from microsoft/aspire-skills</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_AspireSourceOptionDescription">
-        <source>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</source>
-        <target state="new">Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
         <source>{0}: {1}</source>
         <target state="new">{0}: {1}</target>
         <note>{0} is the agent name, and {1} lists its configuration paths separated by commas.</note>
-      </trans-unit>
-      <trans-unit id="InitCommand_ConfigureAspireSourcePrompt">
-        <source>Which source do you want to use for Aspire?</source>
-        <target state="new">Which source do you want to use for Aspire?</target>
-        <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
@@ -167,11 +117,6 @@
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
         <target state="translated">为所选智能体客户端初始化配置和技能</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_EmbeddedSkillsChoice">
-        <source>Embedded (bundled skill files)</source>
-        <target state="new">Embedded (bundled skill files)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentLocationDescription">
@@ -231,11 +176,6 @@
         <target state="translated">技能: {0}</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_InvalidAspireSource">
-        <source>Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</source>
-        <target state="new">Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_InvalidEnvironments">
         <source>Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
         <target state="translated">无效的智能体选择 '{0}'。请使用 {1}、'{2}' 或 '{3}'。</target>
@@ -285,28 +225,14 @@
       </trans-unit>
       <trans-unit id="InitCommand_PluginRiskWarning">
         <source>Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Choose Embedded, or install skills directly from {0}.</source>
+Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions.</source>
         <target state="new">Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Choose Embedded, or install skills directly from {0}.</target>
+Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions.</target>
         <note>{0} is the official Aspire skills repository URL.</note>
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>
         <target state="translated">项目(安装在你的工作区根目录中；随项目一起提交)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_RemoteSkillsChoice">
-        <source>Remote (plugin)</source>
-        <target state="new">Remote (plugin)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_RemoteSkillsConflict">
-        <source>The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</source>
-        <target state="new">The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -369,16 +295,6 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
         <target state="translated">工作区根目录的路径</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InstallingStatus">
-        <source>Installing Aspire skills...</source>
-        <target state="translated">正在安装 Aspire 技能...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InvalidBundle">
-        <source>The Aspire skills bundle is invalid: {0}</source>
-        <target state="translated">Aspire 技能捆绑包无效: {0}</target>
-        <note />
-      </trans-unit>
       <trans-unit id="LocalSkills_ReadFailed">
         <source>Could not check local Aspire skills at '{0}': {1}</source>
         <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
@@ -437,21 +353,6 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
       <trans-unit id="PlaywrightCliInstaller_ProvenanceVerificationFailed">
         <source>Provenance verification failed for {0}: {1}</source>
         <target state="translated">{0} 的来源验证失败: {1}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_Aspire">
-        <source>Aspire CLI commands and workflows for distributed apps</source>
-        <target state="translated">分布式应用的 Aspire CLI 命令和工作流</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_AspireDeployment">
-        <source>Aspire deployment target selection, preflight, publish, and deploy workflows</source>
-        <target state="translated">Aspire 部署目标选择、预检、发布和部署工作流</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_Aspireify">
-        <source>One-time setup: wire up AppHost with discovered projects</source>
-        <target state="translated">一次性设置: 连接 AppHost 与发现的项目</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_DotnetInspect">

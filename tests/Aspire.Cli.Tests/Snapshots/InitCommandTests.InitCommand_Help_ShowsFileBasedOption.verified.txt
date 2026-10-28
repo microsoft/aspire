@@ -18,3 +18,4 @@ Options:
   --nologo                                                               Suppress the startup banner and telemetry notice
   --banner                                                               Display the animated Aspire CLI welcome banner
   --wait-for-debugger                                                    Wait for a debugger to attach before executing the command
+

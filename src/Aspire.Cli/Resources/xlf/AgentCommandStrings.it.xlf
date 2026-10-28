@@ -42,46 +42,6 @@
         <target state="translated">Nome dello strumento MCP di Aspire per un evento tool_invocation</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
-        <source>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</source>
-        <target state="translated">La verifica SHA-512 dell'archivio competenze Aspire incorporato non è riuscita. Previsto '{0}', ottenuto '{1}'.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_GitHubUnavailable">
-        <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</source>
-        <target state="translated">Non è stato possibile scaricare le capacità di Aspire dall'asset della release verificata di GitHub e non è disponibile alcun pacchetto valido nella cache o incorporato.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InvalidMetadata">
-        <source>Embedded Aspire skills bundle metadata is invalid: {0}</source>
-        <target state="translated">I metadati del pacchetto incorporato delle capacità di Aspire non sono validi: {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MetadataRepositoryMismatch">
-        <source>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</source>
-        <target state="translated">Il '{0}' del repository dei metadati delle competenze Aspire incorporato non corrisponde ai '{1}' previsti.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataAssetName">
-        <source>Embedded Aspire skills metadata must specify a release asset name.</source>
-        <target state="translated">I metadati incorporati delle capacità di Aspire devono specificare il nome di un asset della release.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataSha512">
-        <source>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</source>
-        <target state="translated">I metadati incorporati delle capacità di Aspire devono specificare l'hash SHA-512 dell'asset della release.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataTag">
-        <source>Embedded Aspire skills metadata must specify a GitHub release tag.</source>
-        <target state="translated">I metadati incorporati delle capacità di Aspire devono specificare un tag della release di GitHub.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataVersion">
-        <source>Embedded Aspire skills metadata must specify a version.</source>
-        <target state="translated">I metadati incorporati delle capacità di Aspire devono specificare una versione.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">
         <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
         <target state="translated">Le configurazioni agente seguenti usano il comando 'mcp start' deprecato. Aggiornare ora?</target>
@@ -132,20 +92,10 @@
         <target state="new">Agent assets from microsoft/aspire-skills</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_AspireSourceOptionDescription">
-        <source>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</source>
-        <target state="new">Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
         <source>{0}: {1}</source>
         <target state="new">{0}: {1}</target>
         <note>{0} is the agent name, and {1} lists its configuration paths separated by commas.</note>
-      </trans-unit>
-      <trans-unit id="InitCommand_ConfigureAspireSourcePrompt">
-        <source>Which source do you want to use for Aspire?</source>
-        <target state="new">Which source do you want to use for Aspire?</target>
-        <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
@@ -167,11 +117,6 @@
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
         <target state="translated">Inizializza la configurazione e le competenze per i client agente selezionati</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_EmbeddedSkillsChoice">
-        <source>Embedded (bundled skill files)</source>
-        <target state="new">Embedded (bundled skill files)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentLocationDescription">
@@ -231,11 +176,6 @@
         <target state="translated">Capacità: {0}</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_InvalidAspireSource">
-        <source>Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</source>
-        <target state="new">Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_InvalidEnvironments">
         <source>Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
         <target state="translated">La selezione dell'agente non è valida '{0}'. Usa {1}, '{2}' o '{3}'.</target>
@@ -285,28 +225,14 @@
       </trans-unit>
       <trans-unit id="InitCommand_PluginRiskWarning">
         <source>Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Choose Embedded, or install skills directly from {0}.</source>
+Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions.</source>
         <target state="new">Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Choose Embedded, or install skills directly from {0}.</target>
+Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions.</target>
         <note>{0} is the official Aspire skills repository URL.</note>
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>
         <target state="translated">Progetto (Installare nella radice dell'area di lavoro; commit eseguito insieme al progetto)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_RemoteSkillsChoice">
-        <source>Remote (plugin)</source>
-        <target state="new">Remote (plugin)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_RemoteSkillsConflict">
-        <source>The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</source>
-        <target state="new">The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -369,16 +295,6 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
         <target state="translated">Percorso della directory radice dell'area di lavoro</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InstallingStatus">
-        <source>Installing Aspire skills...</source>
-        <target state="translated">Installazione delle capacità di Aspire in corso...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InvalidBundle">
-        <source>The Aspire skills bundle is invalid: {0}</source>
-        <target state="translated">Il pacchetto di capacità Aspire non è valido: {0}</target>
-        <note />
-      </trans-unit>
       <trans-unit id="LocalSkills_ReadFailed">
         <source>Could not check local Aspire skills at '{0}': {1}</source>
         <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
@@ -437,21 +353,6 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
       <trans-unit id="PlaywrightCliInstaller_ProvenanceVerificationFailed">
         <source>Provenance verification failed for {0}: {1}</source>
         <target state="translated">Verifica della provenienza non riuscita per {0}: {1}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_Aspire">
-        <source>Aspire CLI commands and workflows for distributed apps</source>
-        <target state="translated">Comandi e flussi di lavoro della CLI di Aspire per app distribuite</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_AspireDeployment">
-        <source>Aspire deployment target selection, preflight, publish, and deploy workflows</source>
-        <target state="translated">Selezione della destinazione di distribuzione, preliminari, pubblicazione e flussi di lavoro di distribuzione di Aspire</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_Aspireify">
-        <source>One-time setup: wire up AppHost with discovered projects</source>
-        <target state="translated">Configurazione iniziale: collega AppHost ai progetti rilevati</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_DotnetInspect">

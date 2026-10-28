@@ -10,9 +10,9 @@ namespace Aspire.Cli.Agents.Hooks;
 /// </summary>
 internal sealed partial class AgentTelemetryCatalog
 {
-    private static readonly Lazy<AgentTelemetryCatalog> s_bundled = new(LoadEmbedded);
+    private static readonly Lazy<AgentTelemetryCatalog> s_canonical = new(LoadCanonical);
 
-    internal static AgentTelemetryCatalog Bundled => s_bundled.Value;
+    internal static AgentTelemetryCatalog Canonical => s_canonical.Value;
 
     internal IReadOnlySet<string> Skills { get; }
     internal IReadOnlySet<string> Tools { get; }
@@ -82,7 +82,7 @@ internal sealed partial class AgentTelemetryCatalog
         return result;
     }
 
-    private static AgentTelemetryCatalog LoadEmbedded()
+    private static AgentTelemetryCatalog LoadCanonical()
     {
         // Read only the compiled canonical hook. User-installed scripts and plugin contents must not
         // be able to introduce new telemetry dimensions.

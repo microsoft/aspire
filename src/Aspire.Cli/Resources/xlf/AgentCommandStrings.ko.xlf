@@ -42,46 +42,6 @@
         <target state="translated">tool_invocation 이벤트에 대한 Aspire MCP 도구 이름</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
-        <source>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</source>
-        <target state="translated">포함된 Aspire 기술 보관함이 SHA-512 확인에 실패했습니다. '{0}' 필요한데 '{1}' 받았습니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_GitHubUnavailable">
-        <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</source>
-        <target state="translated">확인된 GitHub 릴리스 자산에서 Aspire 기술을 다운로드할 수 없으며, 유효한 캐시 번들이나 포함된 번들도 없습니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InvalidMetadata">
-        <source>Embedded Aspire skills bundle metadata is invalid: {0}</source>
-        <target state="translated">포함된 Aspire 기술 번들 메타데이터가 유효하지 않음: {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MetadataRepositoryMismatch">
-        <source>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</source>
-        <target state="translated">포함된 Aspire 기술 메타데이터 리포지토리 '{0}'이(가) 필요한 리포지토리 '{1}'와(과) 일치하지 않습니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataAssetName">
-        <source>Embedded Aspire skills metadata must specify a release asset name.</source>
-        <target state="translated">포함된 Aspire 기술 메타데이터에 릴리스 자산 이름을 지정해야 합니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataSha512">
-        <source>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</source>
-        <target state="translated">포함된 Aspire 기술 메타데이터에 릴리스 자산 SHA-512 해시를 지정해야 합니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataTag">
-        <source>Embedded Aspire skills metadata must specify a GitHub release tag.</source>
-        <target state="translated">포함된 Aspire 기술 메타데이터는 GitHub 릴리스 태그를 지정해야 합니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataVersion">
-        <source>Embedded Aspire skills metadata must specify a version.</source>
-        <target state="translated">포함된 Aspire 기술 메타데이터에 버전을 지정해야 합니다.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">
         <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
         <target state="translated">다음 에이전트 구성에서 더 이상 사용되지 않는 'mcp start' 명령을 사용하고 있습니다. 업데이트하시겠습니까?</target>
@@ -132,20 +92,10 @@
         <target state="new">Agent assets from microsoft/aspire-skills</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_AspireSourceOptionDescription">
-        <source>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</source>
-        <target state="new">Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
         <source>{0}: {1}</source>
         <target state="new">{0}: {1}</target>
         <note>{0} is the agent name, and {1} lists its configuration paths separated by commas.</note>
-      </trans-unit>
-      <trans-unit id="InitCommand_ConfigureAspireSourcePrompt">
-        <source>Which source do you want to use for Aspire?</source>
-        <target state="new">Which source do you want to use for Aspire?</target>
-        <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
@@ -167,11 +117,6 @@
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
         <target state="translated">선택한 에이전트 클라이언트의 구성 및 기술 초기화</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_EmbeddedSkillsChoice">
-        <source>Embedded (bundled skill files)</source>
-        <target state="new">Embedded (bundled skill files)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentLocationDescription">
@@ -231,11 +176,6 @@
         <target state="translated">기술: {0}</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_InvalidAspireSource">
-        <source>Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</source>
-        <target state="new">Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_InvalidEnvironments">
         <source>Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
         <target state="translated">에이전트 선택 '{0}'이 잘못되었습니다. {1}, '{2}' 또는 '{3}'를 사용합니다.</target>
@@ -285,28 +225,14 @@
       </trans-unit>
       <trans-unit id="InitCommand_PluginRiskWarning">
         <source>Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Choose Embedded, or install skills directly from {0}.</source>
+Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions.</source>
         <target state="new">Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Choose Embedded, or install skills directly from {0}.</target>
+Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions.</target>
         <note>{0} is the official Aspire skills repository URL.</note>
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>
         <target state="translated">프로젝트(작업 영역 루트에 설치, 프로젝트와 함께 커밋됨)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_RemoteSkillsChoice">
-        <source>Remote (plugin)</source>
-        <target state="new">Remote (plugin)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_RemoteSkillsConflict">
-        <source>The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</source>
-        <target state="new">The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -369,16 +295,6 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
         <target state="translated">작업 영역 루트 디렉터리의 경로</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InstallingStatus">
-        <source>Installing Aspire skills...</source>
-        <target state="translated">Aspire 기술을 설치하는 중...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InvalidBundle">
-        <source>The Aspire skills bundle is invalid: {0}</source>
-        <target state="translated">Aspire 기술 번들이 유효하지 않음: {0}</target>
-        <note />
-      </trans-unit>
       <trans-unit id="LocalSkills_ReadFailed">
         <source>Could not check local Aspire skills at '{0}': {1}</source>
         <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
@@ -437,21 +353,6 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
       <trans-unit id="PlaywrightCliInstaller_ProvenanceVerificationFailed">
         <source>Provenance verification failed for {0}: {1}</source>
         <target state="translated">{0}의 출처 확인이 실패함: {1}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_Aspire">
-        <source>Aspire CLI commands and workflows for distributed apps</source>
-        <target state="translated">분산 앱을 위한 Aspire CLI 명령 및 워크플로</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_AspireDeployment">
-        <source>Aspire deployment target selection, preflight, publish, and deploy workflows</source>
-        <target state="translated">Aspire 배포 대상 선택, 사전 점검, 게시 및 배포 워크플로</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_Aspireify">
-        <source>One-time setup: wire up AppHost with discovered projects</source>
-        <target state="translated">일회성 설정: 검색된 프로젝트를 AppHost와 연결</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_DotnetInspect">

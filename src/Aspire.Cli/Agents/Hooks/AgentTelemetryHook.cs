@@ -3,7 +3,6 @@
 
 using System.Globalization;
 using System.Text.Json;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -131,7 +130,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                 {
                     skill = skill[7..];
                 }
-                if (AgentTelemetryCatalog.Bundled.Skills.Contains(skill))
+                if (AgentTelemetryCatalog.Canonical.Skills.Contains(skill))
                 {
                     trackedEvent = (AgentTelemetryProtocol.SkillInvocationEventType, AgentTelemetryProtocol.SkillNameOptionName, skill);
                 }
@@ -150,13 +149,13 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                     }
                     var skill = segments[i + 1];
                     var relativePath = string.Join('/', segments[(i + 1)..]);
-                    if (AgentTelemetryCatalog.Bundled.Skills.Contains(skill))
+                    if (AgentTelemetryCatalog.Canonical.Skills.Contains(skill))
                     {
                         if (segments[^1].Equals(SkillFileName, StringComparison.OrdinalIgnoreCase))
                         {
                             trackedEvent = (AgentTelemetryProtocol.SkillInvocationEventType, AgentTelemetryProtocol.SkillNameOptionName, skill);
                         }
-                        else if (AgentTelemetryCatalog.Bundled.References.Contains(relativePath))
+                        else if (AgentTelemetryCatalog.Canonical.References.Contains(relativePath))
                         {
                             trackedEvent = (AgentTelemetryProtocol.ReferenceFileReadEventType, AgentTelemetryProtocol.FileReferenceOptionName, relativePath);
                         }
@@ -168,7 +167,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
             {
                 foreach (var prefix in s_mcpPrefixes)
                 {
-                    if (tool.StartsWith(prefix, StringComparison.Ordinal) && AgentTelemetryCatalog.Bundled.Tools.Contains(tool[prefix.Length..]))
+                    if (tool.StartsWith(prefix, StringComparison.Ordinal) && AgentTelemetryCatalog.Canonical.Tools.Contains(tool[prefix.Length..]))
                     {
                         trackedEvent = (AgentTelemetryProtocol.ToolInvocationEventType, AgentTelemetryProtocol.ToolNameOptionName, tool);
                         break;

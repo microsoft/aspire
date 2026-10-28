@@ -163,9 +163,9 @@ public class AgentTelemetryHookTests
             var body = Regex.Match(script, $@"\${name} = @\((.*?)\)", RegexOptions.Singleline).Groups[1].Value;
             return Regex.Matches(body, "'([^']+)'").Select(match => match.Groups[1].Value).Order().ToArray();
         }
-        Assert.Equal(Values(script, "AspireSkills"), AgentTelemetryCatalog.Bundled.Skills.Order());
-        Assert.Equal(Values(script, "AspireMcpTools"), AgentTelemetryCatalog.Bundled.Tools.Order());
-        Assert.Equal(Values(script, "AspireReferenceFiles"), AgentTelemetryCatalog.Bundled.References.Order());
+        Assert.Equal(Values(script, "AspireSkills"), AgentTelemetryCatalog.Canonical.Skills.Order());
+        Assert.Equal(Values(script, "AspireMcpTools"), AgentTelemetryCatalog.Canonical.Tools.Order());
+        Assert.Equal(Values(script, "AspireReferenceFiles"), AgentTelemetryCatalog.Canonical.References.Order());
     }
 
     [Theory]

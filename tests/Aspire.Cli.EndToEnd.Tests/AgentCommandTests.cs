@@ -237,10 +237,10 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Aspire selection registers the plugin without restoring copied bundle skills.
+    /// Aspire selection registers the plugin without restoring copied skills.
     /// </summary>
     [Fact]
-    public async Task AgentInit_NonInteractive_RegistersAspireWithoutCopiedBundle()
+    public async Task AgentInit_NonInteractive_RegistersAspireWithoutCopiedSkills()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -392,7 +392,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task AgentInit_DefaultSource_RegistersAllClientsOfflineAndPreservesSettingsOnRepeat()
+    public async Task AgentInit_RegistersAllClientsOfflineAndPreservesSettingsOnRepeat()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
