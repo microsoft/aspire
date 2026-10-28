@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard reconnect dialog fix",
+  "mergedAt": "2026-10-28T02:49:40Z",
+  "number": 21337,
+  "runDate": "2026-10-28T06:10:00Z",
+  "status": "included",
+  "title": "Keep reconnect dialog above interaction dialogs"
+}

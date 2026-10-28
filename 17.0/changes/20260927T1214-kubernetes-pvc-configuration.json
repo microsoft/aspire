@@ -7,15 +7,16 @@
   "communityContributors": [
     "@cdbrown2018"
   ],
-  "description": "Adds `WithConfiguration(...)` for customizing the generated Kubernetes `PersistentVolumeClaim` for first-class persistent volumes, plus `WithoutStorageClass()` and polyglot `WithPersistentVolumeName(...)` for claiming existing volumes. This lets callers mutate claim metadata and spec fields not covered by the existing volume configuration methods.",
+  "description": "Adds `WithConfiguration(...)` for customizing the generated Kubernetes `PersistentVolumeClaim` for first-class persistent volumes, plus `WithoutStorageClass()` and polyglot `WithPersistentVolumeName(...)` for claiming existing volumes. This lets callers mutate claim metadata and spec fields not covered by the existing volume configuration methods. TypeScript AppHosts can use the same callback to customize claim labels, annotations, storage class, volume name/mode, access modes, and resource requests.",
   "docsPrs": [],
   "docsRequired": true,
   "emoji": "📦",
   "firstMergedAt": "2026-09-27T12:14:51Z",
-  "lastMergedAt": "2026-09-27T12:14:51Z",
+  "lastMergedAt": "2026-10-28T00:30:23Z",
   "name": "Customizable Kubernetes PersistentVolumeClaims",
   "owner": "mitchdenny",
   "prs": [
-    19900
+    19900,
+    21124
   ]
 }

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The dashboard reconnect dialog now stays above interaction dialogs, so users can see connection status and use recovery actions instead of interacting with a disconnected dashboard.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-10-28T02:49:40Z",
+  "lastMergedAt": "2026-10-28T02:49:40Z",
+  "name": "Reconnect dialog stays above interaction dialogs",
+  "owner": "JamesNK",
+  "prs": [
+    21337
+  ]
+}

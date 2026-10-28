@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "TypeScript PVC configuration callbacks; grouped with Kubernetes PVC entry",
+  "mergedAt": "2026-10-28T00:30:23Z",
+  "number": 21124,
+  "runDate": "2026-10-28T06:10:00Z",
+  "status": "included",
+  "title": "Add ATS support for Kubernetes PVC configuration callbacks"
+}
