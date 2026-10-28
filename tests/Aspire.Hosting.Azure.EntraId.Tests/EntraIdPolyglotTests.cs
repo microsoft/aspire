@@ -45,6 +45,39 @@ public class EntraIdPolyglotTests
             consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance));
     }
 
+    [Theory]
+    [InlineData(false, null, "ENTRA_INSTANCE", "ENTRA_TENANT_ID", "ENTRA_CLIENT_ID")]
+    [InlineData(false, "Identity", "IDENTITY_INSTANCE", "IDENTITY_TENANT_ID", "IDENTITY_CLIENT_ID")]
+    [InlineData(true, null, "AzureAd__Instance", "AzureAd__TenantId", "AzureAd__ClientId")]
+    [InlineData(true, "Identity", "Identity__Instance", "Identity__TenantId", "Identity__ClientId")]
+    public async Task GenericWithReference_UsesTheConsumersConfigurationFormat(bool dotnet, string? connectionName, string instanceKey, string tenantKey, string clientKey)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddExistingEntraApplicationForExport("entra", "contoso.onmicrosoft.com", ClientId);
+        IResource consumer;
+        if (dotnet)
+        {
+            var project = builder.AddResource(new ProjectResource("web"));
+            DispatchReference(project, entra, connectionName);
+            consumer = project.Resource;
+        }
+        else
+        {
+            var container = builder.AddContainer("web", "image");
+            DispatchReference(container, entra, connectionName);
+            consumer = container.Resource;
+        }
+
+        Assert.Same(consumer, Assert.Single(entra.Resource.Consumers));
+        Assert.Equal(new Dictionary<string, string>
+        {
+            [instanceKey] = "https://login.microsoftonline.com/",
+            [tenantKey] = "contoso.onmicrosoft.com",
+            [clientKey] = ClientId
+        }, await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            consumer, DistributedApplicationOperation.Run, TestServiceProvider.Instance));
+    }
+
     [Fact]
     public async Task AsExistingApplication_RetainsAzureSetupAndReplacesPreviousIds()
     {
@@ -430,10 +463,11 @@ public class EntraIdPolyglotTests
     private static AtsCapabilityScanner.ScanResult ScanExports() => AtsCapabilityScanner.ScanAssemblies(
         [typeof(DistributedApplication).Assembly, typeof(AzureProvisioningResource).Assembly, typeof(EntraIdApplicationResource).Assembly]);
 
-    private static void DispatchReference(IResourceBuilder<ContainerResource> consumer, IResourceBuilder<EntraIdApplicationResource> source,
+    private static void DispatchReference<T>(IResourceBuilder<T> consumer, IResourceBuilder<EntraIdApplicationResource> source,
         string? connectionName = null, bool optional = false, string? name = null)
+        where T : IResourceWithEnvironment
     {
-        var method = ScanExports().Methods["Aspire.Hosting/withReference"].MakeGenericMethod(typeof(ContainerResource));
+        var method = ScanExports().Methods["Aspire.Hosting/withReference"].MakeGenericMethod(typeof(T));
         Assert.Same(consumer, method.Invoke(null, [consumer, source, connectionName, optional, name]));
     }
 }

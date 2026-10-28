@@ -22,6 +22,10 @@ aspire add Aspire.Hosting.Azure.EntraId
 
 Then, in a C# or TypeScript AppHost, add an Entra ID application resource and reference it from another resource.
 
+### Polyglot AppHosts
+
+The integration is available in TypeScript, Python, Go, Java, and Rust AppHosts, with the same behavior as C#. Method names follow each language's conventions, and optional arguments are passed as options objects or keyword arguments; for example, Python's generator abbreviates `Application` to `app` (`add_entra_id_app`, `with_app_owners`). The TypeScript examples in this README show the shapes. `withReference` applies the same configuration rules as C#, and `withEntraIdReference` is the explicit form that also sets the `DownstreamApis` prefix. Neither configures authentication middleware in the workload.
+
 ### Create registrations
 
 `AddEntraIdApplication` creates a registration and its service principal using the Microsoft Graph Bicep extension:
