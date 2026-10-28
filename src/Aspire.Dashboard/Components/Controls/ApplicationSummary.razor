@@ -201,7 +201,7 @@
                             <span class="resource-card-start-time"
                                   data-tooltip="@GetResourceStartTimeTooltip(resource)">
                                 <FluentIcon Value="@(new Icons.Regular.Size16.Clock())" Color="Color.Default" />
-                                <StartTimeColumnDisplay Resource="@resource" />
+                                <span>@GetResourceStartAge(resource)</span>
                             </span>
                         }
                         <div class="resource-card-footer-actions">

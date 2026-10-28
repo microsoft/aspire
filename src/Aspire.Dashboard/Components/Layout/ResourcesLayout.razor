@@ -82,9 +82,9 @@
                    width or layout. They decide what the list shows and what "all resources" covers. *@
                 <div class="resource-pane-kinds">
                     <div class="resource-kind-toggles" role="group" aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneKindsLandmark)]">
-                        @KindToggle(PaneKind.Resources, allResourceCount, new Icons.Regular.Size20.AppFolder(), ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)], ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)])
-                        @KindToggle(PaneKind.Parameters, allParameterCount, new Icons.Regular.Size20.Key(), Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)], Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)])
-                        @KindToggle(PaneKind.TelemetrySources, _telemetryOnlyResources.Count, new Icons.Regular.Size20.DataUsage(), Loc[nameof(Dashboard.Resources.Layout.ResourcePaneKindTelemetry)], Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)])
+                        @KindToggle(PaneKind.Resources, allResourceCount, new Icons.Regular.Size20.AppFolder(), ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)])
+                        @KindToggle(PaneKind.Parameters, allParameterCount, new Icons.Regular.Size20.Key(), Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)])
+                        @KindToggle(PaneKind.TelemetrySources, _telemetryOnlyResources.Count, new Icons.Regular.Size20.DataUsage(), Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)])
                     </div>
                     @if (!isAllSelected)
                     {
@@ -479,7 +479,7 @@
         </div>
     };
 
-    private RenderFragment KindToggle(PaneKind kind, int count, Icon icon, string label, string fullLabel) => __builder =>
+    private RenderFragment KindToggle(PaneKind kind, int count, Icon icon, string fullLabel) => __builder =>
     {
         var isOn = IsKindShown(kind);
         var countText = kind switch
@@ -489,20 +489,16 @@
             _ => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.TelemetryPaneCountSingular) : nameof(Dashboard.Resources.Layout.TelemetryPaneCountPlural)], count)
         };
 
-        @* The segments are the same size on or off: only color changes, so toggling never moves the list below. *@
+        @* Icon-only, like the layout switcher. The name and count are the tooltip and the accessible description. The segments are the same size on or off, so toggling never moves the list below. *@
         <button type="button"
                 class="resource-kind-toggle @(isOn ? "on" : null)"
                 aria-pressed="@(isOn ? "true" : "false")"
                 aria-label="@fullLabel"
                 aria-description="@countText"
-                data-tooltip="@($"{fullLabel}: {countText}")"
+                data-tooltip="@string.Format(CultureInfo.CurrentCulture, Loc[isOn ? nameof(Dashboard.Resources.Layout.ResourcePaneKindHide) : nameof(Dashboard.Resources.Layout.ResourcePaneKindShow)], countText)"
                 data-tooltip-positioning="above"
                 @onclick="@(() => ToggleKindAsync(kind))">
-            <span class="resource-kind-icon" aria-hidden="true">
-                <FluentIcon Value="@icon" Width="18px" Color="Color.Custom" CustomColor="currentColor" />
-            </span>
-            <span class="resource-kind-label">@label</span>
-            <span class="resource-kind-count">@count</span>
+            <FluentIcon Value="@icon" Width="20px" Color="Color.Custom" CustomColor="currentColor" />
         </button>
     };
     private RenderFragment RenderPaneCounts(int resourceCount, int parameterCount, int telemetrySourceCount) => __builder =>
@@ -872,6 +868,14 @@
                         </span>
                         @if (IsSpacious && !resource.IsParameter)
                         {
+                            @if (resource.StartTimeStamp is not null)
+                            {
+                                @* How long ago it started. The tooltip adds the exact time. *@
+                                <span class="resource-row-detail resource-row-started" data-tooltip="@GetStartedTooltip(resource)">
+                                    <FluentIcon Value="@(new Icons.Regular.Size12.Clock())" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
+                                    <span>@GetStartedAge(resource)</span>
+                                </span>
+                            }
                             @if (resource.HealthStatus is { } healthStatus &&
                                  healthStatus != Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy)
                             {

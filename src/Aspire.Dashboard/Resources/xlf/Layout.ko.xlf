@@ -392,9 +392,14 @@
         <target state="new">State</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneKindTelemetry">
-        <source>Telemetry</source>
-        <target state="new">Telemetry</target>
+      <trans-unit id="ResourcePaneKindHide">
+        <source>Select to hide {0}</source>
+        <target state="new">Select to hide {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneKindShow">
+        <source>Select to show {0}</source>
+        <target state="new">Select to show {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneKindsLandmark">

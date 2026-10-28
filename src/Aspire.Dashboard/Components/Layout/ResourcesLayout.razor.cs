@@ -52,6 +52,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private readonly ResourcesPage.ResourcesViewModel _filter = new() { SelectedViewKind = ResourcesPage.ResourceViewKind.Table };
 
     private Task? _resourceSubscriptionTask;
+    private Task? _ageRefreshTask;
     private Subscription? _logsSubscription;
     private Subscription? _telemetryResourcesSubscription;
     private Dictionary<ResourceKey, int>? _unviewedErrorCounts;
@@ -126,6 +127,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     [Inject]
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
+
+    [Inject]
+    public required BrowserTimeProvider TimeProvider { get; init; }
 
     [Inject]
     public required IStringLocalizer<Resources.Resources> ResourcesLoc { get; init; }
@@ -220,6 +224,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // re-creates the page and can dispose this layout while it's still initializing. Capture the token before
         // the first await: DisposeAsync cancels and then disposes the source, after which its Token throws.
         var cancellationToken = _cts.Token;
+        _ageRefreshTask = RefreshAgesPeriodicallyAsync(cancellationToken);
 
         _lastLocation = NavigationManager.Uri;
         UpdateFromLocation(_lastLocation);
@@ -1250,6 +1255,36 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool IsCompact => ViewPreferences.Density == ResourceListDensity.Compact;
     private bool IsSpacious => ViewPreferences.Density == ResourceListDensity.Spacious;
 
+    // How long ago a resource started, for the detail line of a spacious row, and the same with the exact time for its tooltip.
+    private string? GetStartedAge(ResourceViewModel resource) =>
+        resource.StartTimeStamp is { } startTimeStamp
+            ? Aspire.Dashboard.Components.Controls.DashboardRunSelect.FormatRunAge(new DateTimeOffset(startTimeStamp), TimeProvider.GetUtcNow(), Loc)
+            : null;
+
+    private string? GetStartedTooltip(ResourceViewModel resource) =>
+        resource.StartTimeStamp is { } startTimeStamp
+            ? $"{GetStartedAge(resource)} ({FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTimeStamp)})"
+            : null;
+
+    // Spacious rows show the age, so re-render now and then to keep it current.
+    private async Task RefreshAgesPeriodicallyAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30), TimeProvider);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (IsSpacious)
+                {
+                    await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
     private static IEnumerable<CommandViewModel> GetHighlightedCommands(ResourceViewModel resource) => resource.Commands
         .Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden)
         .Take(DashboardUIHelpers.MaxHighlightedCommands);
@@ -1949,6 +1984,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _logsSubscription?.Dispose();
         _telemetryResourcesSubscription?.Dispose();
         await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
+        await TaskHelpers.WaitIgnoreCancelAsync(_ageRefreshTask);
         _cts.Dispose();
 
         if (_jsModule is { } module)

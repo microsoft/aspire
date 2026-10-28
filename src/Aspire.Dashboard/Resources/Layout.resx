@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -366,8 +366,11 @@
   <data name="ResourcePaneFilterReset" xml:space="preserve">
     <value>Reset</value>
   </data>
-  <data name="ResourcePaneKindTelemetry" xml:space="preserve">
-    <value>Telemetry</value>
+  <data name="ResourcePaneKindShow" xml:space="preserve">
+    <value>Select to show {0}</value>
+  </data>
+  <data name="ResourcePaneKindHide" xml:space="preserve">
+    <value>Select to hide {0}</value>
   </data>
   <data name="ResourcePaneSelectedCount" xml:space="preserve">
     <value>{0} selected</value>

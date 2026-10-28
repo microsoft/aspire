@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -40,6 +40,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     // Metrics arrive every few seconds from each resource, so coalesce telemetry notifications to bound the
     // number of repository queries the page runs.
     private static readonly TimeSpan s_telemetryRefreshDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan s_ageRefreshInterval = TimeSpan.FromSeconds(30);
     private static readonly List<TelemetryFilter> s_errorLogFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.GreaterThanOrEqual, Value = nameof(LogLevel.Error) }];
     private static readonly List<TelemetryFilter> s_warningLogFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.Equals, Value = nameof(LogLevel.Warning) }];
     private static readonly FieldTelemetryFilter s_failedTraceFilter = new() { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = nameof(OtlpSpanStatusCode.Error) };
@@ -48,6 +49,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly CancellationTokenSource _cts = new();
     private Task? _resourceSubscriptionTask;
+    private Task? _ageRefreshTask;
     private Subscription? _logsSubscription;
     private Subscription? _tracesSubscription;
     private Subscription? _metricsSubscription;
@@ -161,6 +163,12 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _ => "resource-card-grid-comfortable"
     };
 
+    private string? GetResourceStartAge(ResourceViewModel resource) =>
+        resource.StartTimeStamp is { } startTimeStamp
+            ? DashboardRunSelect.FormatRunAge(new DateTimeOffset(startTimeStamp), TimeProvider.GetUtcNow(), LayoutLoc)
+            : null;
+
+    // The card shows how long ago the resource started. The tooltip adds the exact time: "5 minutes ago (10:34:56 AM)".
     private string? GetResourceStartTimeTooltip(ResourceViewModel resource)
     {
         if (resource.StartTimeStamp is not { } startTimeStamp)
@@ -168,8 +176,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             return null;
         }
 
-        var age = DashboardRunSelect.FormatRunAge(new DateTimeOffset(startTimeStamp), TimeProvider.GetUtcNow(), LayoutLoc);
-        return $"{LayoutLoc[nameof(Dashboard.Resources.Layout.ResourceHeaderStarted)]} {age}";
+        // The resource server's time stamp has second precision, so no milliseconds.
+        return $"{GetResourceStartAge(resource)} ({FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTimeStamp)})";
     }
 
     protected override async Task OnInitializedAsync()
@@ -194,6 +202,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             _resourceByName[resource.Name] = resource;
         }
         _isLoaded = true;
+
+        _ageRefreshTask = RefreshAgesPeriodicallyAsync(_cts.Token);
 
         _resourceSubscriptionTask = Task.Run(async () =>
         {
@@ -848,6 +858,22 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         await UpdateResourceGraphResourcesAsync();
     });
 
+    // The cards show how long ago a resource started, so re-render now and then to keep that current.
+    private async Task RefreshAgesPeriodicallyAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(s_ageRefreshInterval, TimeProvider);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         _isDisposing = true;
@@ -857,6 +883,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _tracesSubscription?.Dispose();
         _metricsSubscription?.Dispose();
         await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
+        await TaskHelpers.WaitIgnoreCancelAsync(_ageRefreshTask);
         _resourcesInteropReference?.Dispose();
         if (_jsModule is not null)
         {

@@ -94,7 +94,7 @@
 
 /* A faint tint of the text color reads the same on light and dark themes, unlike a neutral surface token. */
 .resource-filter-group-header:hover {
-    background: color-mix(in srgb, var(--colorNeutralForeground1) 7%, transparent);
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
 }
 
 .resource-filter-group-header:active {
