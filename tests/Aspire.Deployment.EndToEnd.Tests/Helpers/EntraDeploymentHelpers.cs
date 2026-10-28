@@ -206,13 +206,15 @@ internal static class EntraDeploymentHelpers
         // the backing application of the service principal being created must in the local tenant".
         // Creating a federated credential, which addresses its application by unique name, fails with:
         // "Request_ResourceNotFound: Resource '{uniqueName}' does not exist or one of its queried reference-property objects are not present".
+        // Setting the default application ID URI, api://{clientId}, on the application that was just created fails with:
+        // "InvalidIdentifierUri: The application identifier uri 'api://{clientId}' is invalid".
         // A deployment upserts, so the retry finds the application and carries on.
         const string command =
             "( log=$(mktemp) || exit; trap 'rm -f \"$log\"' EXIT; " +
             "for attempt in 1 2 3; do " +
             "aspire deploy --clear-cache --non-interactive 2>&1 | tee \"$log\"; status=${PIPESTATUS[0]}; " +
             "if (( status == 0 )); then exit 0; fi; " +
-            "if (( attempt == 3 )) || ! grep -Fq -e 'the backing application of the service principal being created must in the' -e 'Request_ResourceNotFound' \"$log\"; " +
+            "if (( attempt == 3 )) || ! grep -Fq -e 'the backing application of the service principal being created must in the' -e 'Request_ResourceNotFound' -e 'InvalidIdentifierUri' \"$log\"; " +
             "then exit \"$status\"; fi; " +
             "echo 'Retrying deployment after Graph could not resolve a newly created object in its tenant (30s).'; " +
             "sleep 30; done )";
