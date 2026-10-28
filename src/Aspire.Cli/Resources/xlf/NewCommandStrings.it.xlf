@@ -19,22 +19,22 @@
       </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
         <source>Directly in the selected folder</source>
-        <target state="new">Directly in the selected folder</target>
+        <target state="translated">Direttamente nella cartella selezionata</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectNameSubdirectoryChoice">
         <source>In a subdirectory named '{0}' in the selected folder</source>
-        <target state="new">In a subdirectory named '{0}' in the selected folder</target>
+        <target state="translated">In una sottodirectory denominata '{0}' nella cartella selezionata</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Create a new app from an Aspire starter template</source>
-        <target state="needs-review-translation">Creare un nuovo progetto Aspire.</target>
+        <target state="translated">Crea una nuova app da un modello di avvio di Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
         <source>Enter the output path</source>
-        <target state="new">Enter the output path</target>
+        <target state="translated">Consente di immettere il percorso di output</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheProjectName">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
         <source>The programming language for the AppHost</source>
-        <target state="new">The programming language for the AppHost</target>
+        <target state="translated">Linguaggio di programmazione per l'AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateCreationFailed">
@@ -69,12 +69,12 @@
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
         <source>The name of the project to create</source>
-        <target state="needs-review-translation">Nome del progetto da creare.</target>
+        <target state="translated">Nome del progetto da creare</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChannelFoundMatching">
         <source>No channel found matching '{0}'. Valid options are: {1}.</source>
-        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <target state="translated">Nessun canale corrispondente trovato '{0}'. Le opzioni valide sono: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
@@ -84,42 +84,42 @@
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
         <source>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</source>
-        <target state="new">No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</target>
+        <target state="translated">Nessun Aspire locale corrispondente. È stato trovato il pacchetto ProjectTemplates per Aspire versione CLI '{0}'. Consente di compilare e preparare per il commit pacchetti corrispondenti con localhive.sh (macOS/Linux) o localhive.ps1 (Windows), impostare ASPIRE_CLI_PACKAGES su una directory contenente il pacchetto o scegliere in modo esplicito modelli supportati da feed con --channel, --source o --version.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoPackageChannelsAvailable">
         <source>No package channels are available.</source>
-        <target state="new">No package channels are available.</target>
+        <target state="translated">Non sono disponibili canali per i pacchetti.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTemplateVersionsFoundInChannel">
         <source>No template versions found in channel '{0}'.</source>
-        <target state="new">No template versions found in channel '{0}'.</target>
+        <target state="translated">Non è stata trovata alcuna versione del modello nel canale '{0}'.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveTemplateRequired">
         <source>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</source>
-        <target state="new">A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</target>
+        <target state="translated">È necessario specificare un modello durante l'esecuzione in modalità non interattiva. Usare 'aspire new &lt;template&gt;'.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
         <source>The output path for the project</source>
-        <target state="needs-review-translation">Percorso di output per il progetto.</target>
+        <target state="translated">Percorso di output per il progetto</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyNonInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify --output with a different location.</target>
+        <target state="translated">La directory di output '{0}' esiste già e non è vuota. Specificare --output con un percorso diverso.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify a different location.</target>
+        <target state="translated">La directory di output '{0}' esiste già e non è vuota. Specificare un percorso diverso.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputPathContainsInvalidCharacters">
         <source>The output path '{0}' contains invalid characters.</source>
-        <target state="new">The output path '{0}' contains invalid characters.</target>
+        <target state="translated">Il percorso dell'output '{0}' contiene caratteri non validi.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateRepository">
@@ -144,22 +144,22 @@
       </trans-unit>
       <trans-unit id="SelectProjectCreationLocation">
         <source>Where do you want the project to be created?</source>
-        <target state="new">Where do you want the project to be created?</target>
+        <target state="translated">Dove vuoi creare il progetto?</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
         <source>The NuGet source to use for the project templates</source>
-        <target state="needs-review-translation">Origine NuGet da utilizzare per i modelli di progetto.</target>
+        <target state="translated">Origine NuGet da utilizzare per i modelli di progetto</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceDirectoryNotFound">
         <source>The local NuGet source directory '{0}' does not exist.</source>
-        <target state="new">The local NuGet source directory '{0}' does not exist.</target>
+        <target state="translated">La directory dell'origine NuGet locale '{0}' non esiste.</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceWithCredentialsCannotBePersisted">
         <source>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
-        <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
+        <target state="translated">L'URL --source contiene credenziali, una stringa di query o un frammento e non può essere scritto nel file NuGet.config del progetto. Configura le credenziali con i provider di credenziali NuGet o con la configurazione NuGet a livello utente, quindi passa l'URL del feed senza segreti incorporati.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateDirectoryNotFound">
@@ -224,7 +224,7 @@
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
         <source>The version of the project templates to use</source>
-        <target state="needs-review-translation">Versione dei modelli di progetto da utilizzare.</target>
+        <target state="translated">Versione dei modelli di progetto da utilizzare</target>
         <note />
       </trans-unit>
     </body>

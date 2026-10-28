@@ -1,18 +1,18 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Projeto de Teste Aspire (xUnit)",
-  "description": "Um projeto que contém xUnit.net de integração de um projeto AppHost do Studio.",
+  "description": "Um projeto que contém testes de integração xUnit.net de um projeto Aspire AppHost.",
   "symbols/Framework/description": "A estrutura de destino do projeto.",
   "symbols/Framework/choices/net10.0/description": "Net10.0 de destino",
-  "symbols/Framework/choices/net11.0/description": "Target net11.0",
+  "symbols/Framework/choices/net11.0/description": "Net11.0 de destino",
   "symbols/XUnitVersion/description": "A versão do xUnit.net a ser usada.",
   "symbols/XUnitVersion/displayName": "Versão xUnit.net",
   "symbols/XUnitVersion/choices/v2/displayName": "v2",
   "symbols/XUnitVersion/choices/v2/description": "Escolhe xUnit.net v2 com VSTest",
   "symbols/XUnitVersion/choices/v3/displayName": "v3",
-  "symbols/XUnitVersion/choices/v3/description": "Escolhe xUnit.net v3 com VSTest (somente versão 9.2 e posterior)",
+  "symbols/XUnitVersion/choices/v3/description": "Seleciona xUnit.net v3 com VSTest (somente versão 9.2 e posterior do Aspire)",
   "symbols/XUnitVersion/choices/v3mtp/displayName": "v3 com a Plataforma de Teste da Microsoft",
-  "symbols/XUnitVersion/choices/v3mtp/description": "Escolhe xUnit.net v3 com a Plataforma de Teste da Microsoft (somente a versão 9.2 e posteriores)",
+  "symbols/XUnitVersion/choices/v3mtp/description": "Seleciona xUnit.net v3 com a Plataforma de Teste da Microsoft (somente Aspire versão 9.2 e posterior)",
   "symbols/skipRestore/description": "Se especificado, ignora a restauração automática do projeto sendo criado.",
   "postActions/restore/description": "Restaure os pacotes NuGet exigidos por este projeto.",
   "postActions/restore/manualInstructions/default/text": "Executa 'dotnet restore'"

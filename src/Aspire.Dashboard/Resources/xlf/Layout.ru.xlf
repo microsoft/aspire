@@ -4,42 +4,42 @@
     <body>
       <trans-unit id="DashboardRunMenuAccessibleLabel">
         <source>Select run: {0}</source>
-        <target state="new">Select run: {0}</target>
+        <target state="translated">Выбранный запуск: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuCurrent">
         <source>Live run</source>
-        <target state="new">Live run</target>
+        <target state="translated">Интерактивный запуск</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuHelp">
         <source>Learn about runs</source>
-        <target state="new">Learn about runs</target>
+        <target state="translated">Подробнее о запусках</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuHelpTooltip">
         <source>Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</source>
-        <target state="new">Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</target>
+        <target state="translated">Переключаться между текущим запуском и данными предыдущих запусков только для чтения. Закрепить запуск, чтобы он не удалялся автоматически.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuIncompatibleTooltip">
         <source>This run can't be viewed because it was created by an incompatible version of the dashboard.</source>
-        <target state="new">This run can't be viewed because it was created by an incompatible version of the dashboard.</target>
+        <target state="translated">Этот запуск нельзя просмотреть, так как он создан несовместимой версией панели мониторинга.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuPin">
         <source>Pin run</source>
-        <target state="new">Pin run</target>
+        <target state="translated">Закрепить запуск</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuTitle">
         <source>Select dashboard run</source>
-        <target state="new">Select dashboard run</target>
+        <target state="translated">Выбрать запуск панели мониторинга</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuUnpin">
         <source>Unpin run</source>
-        <target state="new">Unpin run</target>
+        <target state="translated">Открепить запуск</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectAccessibleLabel">
@@ -154,12 +154,12 @@
       </trans-unit>
       <trans-unit id="MainLayoutLaunchAIAgents">
         <source>AI agents</source>
-        <target state="new">AI agents</target>
+        <target state="translated">Агенты ИИ</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutLaunchNotifications">
         <source>Notifications</source>
-        <target state="new">Notifications</target>
+        <target state="translated">Уведомления</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutLaunchSettings">
@@ -169,7 +169,7 @@
       </trans-unit>
       <trans-unit id="MainLayoutNotificationCenterTitle">
         <source>Notifications</source>
-        <target state="new">Notifications</target>
+        <target state="translated">Уведомления</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutSettingsDialogClose">
@@ -214,7 +214,7 @@
       </trans-unit>
       <trans-unit id="NavMenuConsoleLogsTab">
         <source>Console logs</source>
-        <target state="needs-review-translation">Консоль</target>
+        <target state="translated">Журналы консоли</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuExtensionsTab">
@@ -254,7 +254,7 @@
       </trans-unit>
       <trans-unit id="NavMenuStructuredLogsTab">
         <source>Structured logs</source>
-        <target state="needs-review-translation">Структурированные</target>
+        <target state="translated">Структурированные журналы</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuTelemetrySourcesTab">
@@ -264,7 +264,7 @@
       </trans-unit>
       <trans-unit id="NavMenuTerminalsTab">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">Терминалы</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuTagsTab">
@@ -274,12 +274,12 @@
       </trans-unit>
       <trans-unit id="NavMenuToggleCollapse">
         <source>Collapse navigation to icons</source>
-        <target state="new">Collapse navigation to icons</target>
+        <target state="translated">Свернуть навигацию до значков</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuToggleExpand">
         <source>Expand navigation labels</source>
-        <target state="new">Expand navigation labels</target>
+        <target state="translated">Развернуть метки навигации</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuTracesTab">

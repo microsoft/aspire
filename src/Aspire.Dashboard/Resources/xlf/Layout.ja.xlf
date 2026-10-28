@@ -4,42 +4,42 @@
     <body>
       <trans-unit id="DashboardRunMenuAccessibleLabel">
         <source>Select run: {0}</source>
-        <target state="new">Select run: {0}</target>
+        <target state="translated">実行の選択: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuCurrent">
         <source>Live run</source>
-        <target state="new">Live run</target>
+        <target state="translated">ライブ実行</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuHelp">
         <source>Learn about runs</source>
-        <target state="new">Learn about runs</target>
+        <target state="translated">実行の詳細</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuHelpTooltip">
         <source>Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</source>
-        <target state="new">Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</target>
+        <target state="translated">ライブ実行と過去の実行の読み取り専用データを切り替えます。実行をピン留めして、自動的に削除されないようにします。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuIncompatibleTooltip">
         <source>This run can't be viewed because it was created by an incompatible version of the dashboard.</source>
-        <target state="new">This run can't be viewed because it was created by an incompatible version of the dashboard.</target>
+        <target state="translated">この実行は、互換性のないバージョンのダッシュボードで作成されたため、表示できません。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuPin">
         <source>Pin run</source>
-        <target state="new">Pin run</target>
+        <target state="translated">実行をピン留めする</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuTitle">
         <source>Select dashboard run</source>
-        <target state="new">Select dashboard run</target>
+        <target state="translated">ダッシュボードの実行を選択する</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunMenuUnpin">
         <source>Unpin run</source>
-        <target state="new">Unpin run</target>
+        <target state="translated">実行のピン留めを外す</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectAccessibleLabel">
@@ -154,12 +154,12 @@
       </trans-unit>
       <trans-unit id="MainLayoutLaunchAIAgents">
         <source>AI agents</source>
-        <target state="new">AI agents</target>
+        <target state="translated">AI エージェント</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutLaunchNotifications">
         <source>Notifications</source>
-        <target state="new">Notifications</target>
+        <target state="translated">通知</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutLaunchSettings">
@@ -169,7 +169,7 @@
       </trans-unit>
       <trans-unit id="MainLayoutNotificationCenterTitle">
         <source>Notifications</source>
-        <target state="new">Notifications</target>
+        <target state="translated">通知</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutSettingsDialogClose">
@@ -214,7 +214,7 @@
       </trans-unit>
       <trans-unit id="NavMenuConsoleLogsTab">
         <source>Console logs</source>
-        <target state="needs-review-translation">コンソール</target>
+        <target state="translated">コンソール ログ</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuExtensionsTab">
@@ -254,7 +254,7 @@
       </trans-unit>
       <trans-unit id="NavMenuStructuredLogsTab">
         <source>Structured logs</source>
-        <target state="needs-review-translation">構造化</target>
+        <target state="translated">構造化ログ</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuTelemetrySourcesTab">
@@ -264,7 +264,7 @@
       </trans-unit>
       <trans-unit id="NavMenuTerminalsTab">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">ターミナル</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuTagsTab">
@@ -274,12 +274,12 @@
       </trans-unit>
       <trans-unit id="NavMenuToggleCollapse">
         <source>Collapse navigation to icons</source>
-        <target state="new">Collapse navigation to icons</target>
+        <target state="translated">ナビゲーションをアイコン表示に折りたたむ</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuToggleExpand">
         <source>Expand navigation labels</source>
-        <target state="new">Expand navigation labels</target>
+        <target state="translated">ナビゲーション ラベルを展開する</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuTracesTab">

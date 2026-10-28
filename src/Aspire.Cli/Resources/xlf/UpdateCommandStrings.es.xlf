@@ -9,12 +9,12 @@
       </trans-unit>
       <trans-unit id="AnalyzeAppHost">
         <source>Analyze AppHost</source>
-        <target state="needs-review-translation">Analizar host de aplicación</target>
+        <target state="translated">Análisis de AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHostSdk">
         <source>Analyze AppHost SDK</source>
-        <target state="needs-review-translation">Analizar el SDK de host de aplicaciones</target>
+        <target state="translated">Análisis del SDK de AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeProjectFormat">
@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="ChannelNonePlaceholder">
         <source>(none)</source>
-        <target state="new">(none)</target>
+        <target state="translated">(ninguno)</target>
         <note>Displayed in place of the current channel value when aspire.config.json has no channel pinned.</note>
       </trans-unit>
       <trans-unit id="ChannelOptionDescription">
@@ -59,7 +59,7 @@
       </trans-unit>
       <trans-unit id="ChannelUpdateRequiresAmbientNuGetConfigurationFormat">
         <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported.</source>
-        <target state="new">Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported.</target>
+        <target state="translated">No se puede aplicar el '{0}' de canal para '{1}' porque MSBuild invalida la configuración de NuGet: {2}. Quite estas invalidaciones para habilitar las actualizaciones de canal explícitas. Las novedades sin un canal explícito siguen siendo compatibles.</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingForUpdates">
@@ -69,12 +69,12 @@
       </trans-unit>
       <trans-unit id="ConditionalSdkEvaluationRequiredFormat">
         <source>Cannot determine active conditional Aspire.AppHost.Sdk declarations for '{0}' without successful MSBuild evaluation; update the conditional SDK version explicitly.</source>
-        <target state="new">Cannot determine active conditional Aspire.AppHost.Sdk declarations for '{0}' without successful MSBuild evaluation; update the conditional SDK version explicitly.</target>
+        <target state="translated">No es posible determinar las declaraciones condicionales activas de Aspire.AppHost.Sdk para "{0}" sin una evaluación correcta de MSBuild; actualice explícitamente la versión del SDK condicional.</target>
         <note>{0} = AppHost project path.</note>
       </trans-unit>
       <trans-unit id="ConditionalSdkExplicitEditRequiredFormat">
         <source>Cannot safely update conditional Aspire.AppHost.Sdk declarations for '{0}'; update the conditional SDK version explicitly.</source>
-        <target state="new">Cannot safely update conditional Aspire.AppHost.Sdk declarations for '{0}'; update the conditional SDK version explicitly.</target>
+        <target state="translated">No se puede actualizar de forma segura el Aspire condicional. Declaraciones de AppHost.Sdk para '{0}'; actualizar la versión condicional del SDK explícitamente.</target>
         <note>{0} = AppHost project path.</note>
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
@@ -94,7 +94,7 @@
       </trans-unit>
       <trans-unit id="Description">
         <source>Update integrations and repository Aspire CLI references</source>
-        <target state="needs-review-translation">Actualizar las integraciones en el proyecto Aspire. (Versión preliminar)</target>
+        <target state="translated">Actualizar las integraciones y las referencias de Aspire CLI del repositorio</target>
         <note />
       </trans-unit>
       <trans-unit id="DotNetToolSelfUpdateMessage">
@@ -129,22 +129,22 @@
       </trans-unit>
       <trans-unit id="FailedReadToolManifestFormat">
         <source>Failed to read tool manifest '{0}': {1}</source>
-        <target state="new">Failed to read tool manifest '{0}': {1}</target>
+        <target state="translated">No se pudo leer el manifiesto de la herramienta "{0}": {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedResolveNpmToolFormat">
         <source>Could not resolve @microsoft/aspire-cli@{0} from npm. Check that npm is available and this version is published. Repository tool manifests were not changed.</source>
-        <target state="new">Could not resolve @microsoft/aspire-cli@{0} from npm. Check that npm is available and this version is published. Repository tool manifests were not changed.</target>
+        <target state="translated">No se pudo resolver @microsoft/aspire-cli@{0} desde npm. Compruebe que npm esté disponible y que esta versión esté publicada. No se cambiaron los manifiestos de la herramienta de repositorio.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToRegenerateSdkAfterUpdateFormat">
         <source>Update failed regenerating the SDK code for project {0}. Configuration changes were not persisted.</source>
-        <target state="new">Update failed regenerating the SDK code for project {0}. Configuration changes were not persisted.</target>
+        <target state="translated">La actualización no pudo regenerar el código del SDK para el proyecto {0}. No se conservaron los cambios de configuración.</target>
         <note>{0} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedToRestoreAfterUpdateFormat">
         <source>Failed to restore packages for project {0} after update.</source>
-        <target state="new">Failed to restore packages for project {0} after update.</target>
+        <target state="translated">No se han podido restaurar los paquetes del proyecto {0} después de la actualización.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
@@ -154,7 +154,7 @@
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
         <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
-        <target state="needs-review-translation">Nota: El plan de actualización se generó usando un análisis alternativo debido a un SDK de AppHost no resoluble. El análisis de dependencias puede ser menos preciso.</target>
+        <target state="translated">Nota: El plan de actualización se generó usando un análisis alternativo debido a un SDK de AppHost no resoluble. El análisis de dependencias puede ser menos preciso.</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">
@@ -174,7 +174,7 @@
       </trans-unit>
       <trans-unit id="MigrateOptionDescription">
         <source>Apply any pending migrations to the project after updating its packages.</source>
-        <target state="new">Apply any pending migrations to the project after updating its packages.</target>
+        <target state="translated">Aplique las migraciones pendientes al proyecto después de actualizar sus paquetes.</target>
         <note />
       </trans-unit>
       <trans-unit id="MigratedToNewSdkFormat">
@@ -184,17 +184,17 @@
       </trans-unit>
       <trans-unit id="MigrationApplyFailedWarning">
         <source>The project packages were updated, but applying migrations failed. Run 'aspire update --migrate' again to retry.</source>
-        <target state="new">The project packages were updated, but applying migrations failed. Run 'aspire update --migrate' again to retry.</target>
+        <target state="translated">Los paquetes de proyecto se actualizaron, pero se produjo un error al aplicar las migraciones. Vuelva a ejecutar "aspire update --migrate" para volver a intentarlo.</target>
         <note />
       </trans-unit>
       <trans-unit id="NixSelfUpdateMessage">
         <source>To update the Aspire CLI when installed from Nix, update the profile package or flake input:</source>
-        <target state="new">To update the Aspire CLI when installed from Nix, update the profile package or flake input:</target>
+        <target state="translated">Para actualizar la CLI de Aspire cuando se haya instalado desde Nix, actualice el paquete del perfil o la entrada de flake:</target>
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
         <source>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</source>
-        <target state="needs-review-translation">No se encontró ningún proyecto de AppHost. ¿Quiere actualizar la CLI de Aspire en su lugar?</target>
+        <target state="translated">No se encontró ningún proyecto de AppHost. ¿Quiere actualizar la CLI de Aspire en su lugar?</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChangesDetectedInNuGetConfig">
@@ -204,7 +204,7 @@
       </trans-unit>
       <trans-unit id="NoChannelFoundMatching">
         <source>No channel found matching '{0}'. Valid options are: {1}.</source>
-        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <target state="translated">No se encontró ningún canal que coincida con '{0}'. Las opciones válidas son: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoPackageFoundFormat">
@@ -219,22 +219,22 @@
       </trans-unit>
       <trans-unit id="NpmSelfUpdateMessage">
         <source>To update the Aspire CLI when installed from npm, run:</source>
-        <target state="new">To update the Aspire CLI when installed from npm, run:</target>
+        <target state="translated">Para actualizar la CLI de Aspire cuando está instalada desde npm, ejecuta:</target>
         <note />
       </trans-unit>
       <trans-unit id="NuGetConfigDirOptionDescription">
         <source>Directory to create or update the NuGet.config file in</source>
-        <target state="new">Directory to create or update the NuGet.config file in</target>
+        <target state="translated">Directorio para crear o actualizar el archivo NuGet.config en</target>
         <note />
       </trans-unit>
       <trans-unit id="NuGetConfigOutsideHierarchyFormat">
         <source>NuGet configuration '{0}' must be in '{1}' or an ancestor directory so that native restore uses the updated policy.</source>
-        <target state="new">NuGet configuration '{0}' must be in '{1}' or an ancestor directory so that native restore uses the updated policy.</target>
+        <target state="translated">La configuración de NuGet "{0}" debe estar en "{1}" o en un directorio antecesor para que la restauración nativa use la directiva actualizada.</target>
         <note />
       </trans-unit>
       <trans-unit id="PackageNotFoundInChannelWarningFormat">
         <source>No package found with ID '{0}' in channel '{1}'. Skipping.</source>
-        <target state="new">No package found with ID '{0}' in channel '{1}'. Skipping.</target>
+        <target state="translated">No se encontró ningún paquete con id. '{0}' en el canal '{1}'. Saltando.</target>
         <note />
       </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
@@ -249,12 +249,12 @@
       </trans-unit>
       <trans-unit id="PendingMigrationsHeader">
         <source>This project has pending migrations:</source>
-        <target state="new">This project has pending migrations:</target>
+        <target state="translated">Este proyecto tiene migraciones pendientes:</target>
         <note />
       </trans-unit>
       <trans-unit id="PendingMigrationsHint">
         <source>Run 'aspire update --migrate' to apply them.</source>
-        <target state="new">Run 'aspire update --migrate' to apply them.</target>
+        <target state="translated">Ejecute "aspire update --migrate" para aplicarlos.</target>
         <note />
       </trans-unit>
       <trans-unit id="PerformUpdatesPrompt">
@@ -264,12 +264,12 @@
       </trans-unit>
       <trans-unit id="PreparingSdkForUpdateStatus">
         <source>Preparing the target AppHost SDK...</source>
-        <target state="new">Preparing the target AppHost SDK...</target>
+        <target state="translated">Preparando el SDK de AppHost de destino...</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file or a directory to search</source>
-        <target state="needs-review-translation">La ruta de acceso al archivo del proyecto host de la AppHost Aspire.</target>
+        <target state="translated">Ruta de acceso al archivo del proyecto AppHost de Aspire o a un directorio en el que buscar</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectReferenceNoFullPath">
@@ -284,7 +284,7 @@
       </trans-unit>
       <trans-unit id="ProjectUpdateSkippedAfterCliUpdateMessage">
         <source>Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</source>
-        <target state="new">Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</target>
+        <target state="translated">Se omitió la actualización del proyecto. Actualice la CLI de Aspire y vuelva a ejecutar `aspire update`.</target>
         <note />
       </trans-unit>
       <trans-unit id="QualityOptionDescription">
@@ -319,32 +319,32 @@
       </trans-unit>
       <trans-unit id="RepositoryToolUpdateFormat">
         <source>{0}: [bold yellow]{1}[/] [bold green]{2}[/] to [bold green]{3}[/]</source>
-        <target state="new">{0}: [bold yellow]{1}[/] [bold green]{2}[/] to [bold green]{3}[/]</target>
+        <target state="translated">{0}: [bold yellow]{1}[/] [bold green]{2}[/] a [bold green]{3}[/]</target>
         <note>{0} = manifest path, {1} = package ID, {2} = current version, {3} = new version. Values are markup-escaped.</note>
       </trans-unit>
       <trans-unit id="RepositoryToolsUpToDate">
         <source>Repository Aspire CLI references are up to date.</source>
-        <target state="new">Repository Aspire CLI references are up to date.</target>
+        <target state="translated">Las referencias de la CLI de Aspire del repositorio están actualizadas.</target>
         <note />
       </trans-unit>
       <trans-unit id="RepositoryToolsUpdated">
         <source>Repository Aspire CLI references updated. The running CLI was not replaced.</source>
-        <target state="new">Repository Aspire CLI references updated. The running CLI was not replaced.</target>
+        <target state="translated">Se han actualizado las referencias de Aspire CLI del repositorio. No se ha reemplazado la CLI en ejecución.</target>
         <note />
       </trans-unit>
       <trans-unit id="RestoreRepositoryDotNetTool">
         <source>Run 'dotnet tool restore' in the repository to use the updated .NET tool. Ensure its NuGet configuration includes the selected channel's feed.</source>
-        <target state="new">Run 'dotnet tool restore' in the repository to use the updated .NET tool. Ensure its NuGet configuration includes the selected channel's feed.</target>
+        <target state="translated">Ejecute "dotnet tool restore" en el repositorio para usar la herramienta actualizada de .NET. Asegúrese de que su configuración de NuGet incluye la fuente del canal seleccionado.</target>
         <note />
       </trans-unit>
       <trans-unit id="RestoreRepositoryNpmTool">
         <source>Lockfiles were not changed. Run your package manager's install command (for example, 'npm install') to refresh the lockfile and use the updated npm tool.</source>
-        <target state="new">Lockfiles were not changed. Run your package manager's install command (for example, 'npm install') to refresh the lockfile and use the updated npm tool.</target>
+        <target state="translated">No se cambiaron los archivos de bloqueo. Ejecute el comando de instalación del administrador de paquetes (por ejemplo, "npm install") para actualizar el archivo de bloqueo y usar la herramienta npm actualizada.</target>
         <note />
       </trans-unit>
       <trans-unit id="RestoringPackagesAfterUpdate">
         <source>Restoring packages...</source>
-        <target state="new">Restoring packages...</target>
+        <target state="translated">Restaurando paquetes...</target>
         <note />
       </trans-unit>
       <trans-unit id="RetainedFeedFormat">
@@ -354,7 +354,7 @@
       </trans-unit>
       <trans-unit id="SdkVersionUnknownPlaceholder">
         <source>(unknown)</source>
-        <target state="new">(unknown)</target>
+        <target state="translated">(desconocido)</target>
         <note>Displayed in place of the current SDK version when aspire.config.json has no SDK version pinned.</note>
       </trans-unit>
       <trans-unit id="SelectChannelPrompt">
@@ -364,47 +364,47 @@
       </trans-unit>
       <trans-unit id="SelfOptionDescription">
         <source>Update the Aspire CLI itself to the latest version</source>
-        <target state="new">Update the Aspire CLI itself to the latest version</target>
+        <target state="translated">Actualizar la CLI de Aspire a la versión más reciente</target>
         <note />
       </trans-unit>
       <trans-unit id="ToolManifestChangedFormat">
         <source>The tool manifest '{0}' changed during update. Run 'aspire update' again.</source>
-        <target state="new">The tool manifest '{0}' changed during update. Run 'aspire update' again.</target>
+        <target state="translated">El manifiesto de la herramienta '{0}' cambió durante la actualización. Vuelva a ejecutar "aspire update".</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedCodePath">
         <source>Unexpected code path.</source>
-        <target state="new">Unexpected code path.</target>
+        <target state="translated">Ruta de acceso al código inesperada.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnsupportedToolVersionFormat">
         <source>Skipping the Aspire CLI reference in '{0}': '{1}' is not an exact version or a simple ^/~ version range.</source>
-        <target state="new">Skipping the Aspire CLI reference in '{0}': '{1}' is not an exact version or a simple ^/~ version range.</target>
+        <target state="translated">Se omitirá la referencia de Aspire CLI en "{0}": "{1}" no es una versión exacta ni un intervalo de versiones simple con ^/~.</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateCandidateFileChangedFormat">
         <source>The file '{0}' changed after the update was planned. Run 'aspire update' again.</source>
-        <target state="new">The file '{0}' changed after the update was planned. Run 'aspire update' again.</target>
+        <target state="translated">El archivo '{0}' cambiado después de planear la actualización. Vuelva a ejecutar "aspire update".</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateCandidatePolicyChangedFormat">
         <source>NuGet policy for '{0}' changed while the update was being validated. Run 'aspire update' again.</source>
-        <target state="new">NuGet policy for '{0}' changed while the update was being validated. Run 'aspire update' again.</target>
+        <target state="translated">La directiva de NuGet para '{0}' cambió mientras se validaba la actualización. Vuelva a ejecutar "aspire update".</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateCandidateRollbackFailed">
         <source>The update failed and some original files could not be restored.</source>
-        <target state="new">The update failed and some original files could not be restored.</target>
+        <target state="translated">Error en la actualización y no se pudieron restaurar algunos archivos originales.</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateCandidateRollbackFileChangedFormat">
         <source>Could not restore '{0}' because it changed after the candidate edit.</source>
-        <target state="new">Could not restore '{0}' because it changed after the candidate edit.</target>
+        <target state="translated">No se pudo restaurar "{0}" porque cambió después de la edición candidata.</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateChannelStepDescriptionFormat">
         <source>Update aspire.config.json channel from '{0}' to '{1}'</source>
-        <target state="new">Update aspire.config.json channel from '{0}' to '{1}'</target>
+        <target state="translated">Actualizar el cana de aspire.config.json de "{0}" a "{1}"</target>
         <note>{0} = current channel name (or '(none)' if absent). {1} = new channel name.</note>
       </trans-unit>
       <trans-unit id="UpdateCliAfterProjectUpdatePrompt">
@@ -414,7 +414,7 @@
       </trans-unit>
       <trans-unit id="UpdateCliBeforeGuestProjectUpdatePrompt">
         <source>The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</source>
-        <target state="new">The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</target>
+        <target state="translated">El SDK de Aspire seleccionado es más reciente que esta CLI de Aspire. ¿Quiere actualizar ahora la CLI de Aspire y volver a ejecutar `aspire update` para actualizar este proyecto?</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdatePackageFormat">
@@ -424,7 +424,7 @@
       </trans-unit>
       <trans-unit id="UpdateRepositoryTools">
         <source>Update repository Aspire CLI references</source>
-        <target state="new">Update repository Aspire CLI references</target>
+        <target state="translated">Actualizar las referencias de Aspire CLI del repositorio</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateSuccessfulMessage">
@@ -439,7 +439,7 @@
       </trans-unit>
       <trans-unit id="YesOptionDescription">
         <source>Automatically confirm all update prompts without asking</source>
-        <target state="new">Automatically confirm all update prompts without asking</target>
+        <target state="translated">Confirmar automáticamente todas las solicitudes de actualización sin preguntar</target>
         <note />
       </trans-unit>
     </body>

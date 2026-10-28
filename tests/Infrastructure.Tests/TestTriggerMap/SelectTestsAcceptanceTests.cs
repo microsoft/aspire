@@ -1062,6 +1062,8 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     [Theory]
     [InlineData("Aspire.Hosting.Redis")]
     [InlineData("Aspire.StackExchange.Redis")]
+    [InlineData("Aspire.Hosting.Go")]
+    [InlineData("Aspire.Hosting.CodeGeneration.Go")]
     public void RealMapRepresentativeCliE2eRuntimeConsumerSelectsCliE2e(string project)
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");

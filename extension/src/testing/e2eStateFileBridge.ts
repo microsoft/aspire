@@ -1327,13 +1327,56 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
   const exceptionStopHandlers: Promise<void>[] = [];
   const breakpointRequests: DebugAdapterMessageSummary[] = [];
   const breakpointResponses: DebugAdapterMessageSummary[] = [];
+  const terminatedSessions: vscode.DebugSession[] = [];
+  const outputEvents: DebugAdapterOutputEvent[] = [];
+
+  const isProofSession = (session: vscode.DebugSession | undefined): boolean => {
+    while (session) {
+      if (typeof session.configuration.program === 'string' && isSamePath(session.configuration.program, appHostPath)) {
+        return true;
+      }
+      session = session.parentSession;
+    }
+
+    return false;
+  };
+  const waitForProofValue = async <T>(description: string, getValue: () => T | undefined | Promise<T | undefined>, describeState?: () => string): Promise<T> => {
+    // waitForE2eValue retries thrown errors. Return terminal failures as values so they
+    // escape that retry loop instead of becoming another five-minute breakpoint timeout.
+    const result = await waitForE2eValue<{ value: T } | { failure: string }>(description, timeoutMs, async () => {
+      const failedResponse = debugAdapterResponses.find(response =>
+        (response.command === 'launch' || response.command === 'attach') && isProofSession(sessionById.get(response.sessionId)));
+      if (failedResponse) {
+        return { failure: `AppHost debug proof ${failedResponse.command} failed: ${JSON.stringify(failedResponse.body)}` };
+      }
+      const terminatedSession = terminatedSessions.find(isProofSession);
+      if (terminatedSession) {
+        return { failure: `AppHost debug proof session '${terminatedSession.name}' (${terminatedSession.type}) terminated while waiting for ${description}.` };
+      }
+
+      const value = await getValue();
+      return value === undefined ? undefined : { value };
+    }, describeState);
+    if ('failure' in result) {
+      throw new Error(result.failure);
+    }
+
+    return result.value;
+  };
 
   const sessionSubscription = vscode.debug.onDidStartDebugSession(session => {
     sessionById.set(session.id, session);
     debugSessions.push(toDebugSessionSnapshot(session));
   });
+  const terminateSubscription = vscode.debug.onDidTerminateDebugSession(session => {
+    if (isProofSession(session)) {
+      terminatedSessions.push(session);
+    }
+  });
   const trackerRegistration = vscode.debug.registerDebugAdapterTrackerFactory('*', {
     createDebugAdapterTracker(session) {
+      // Launch can fail before VS Code raises onDidStartDebugSession.
+      sessionById.set(session.id, session);
       return {
         onWillReceiveMessage(message) {
           if (message?.type === 'request' && message.command === 'launch') {
@@ -1355,6 +1398,13 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
           }
         },
         onDidSendMessage(message) {
+          if (message?.type === 'event' && message.event === 'output' && isProofSession(session)) {
+            pushBounded(outputEvents, {
+              sessionId: session.id,
+              sessionType: session.type,
+              output: String(message.body?.output ?? '').slice(-4000),
+            }, 100);
+          }
           if (message?.type === 'response' && message.success === false) {
             debugAdapterResponses.push({
               sessionId: session.id,
@@ -1416,9 +1466,8 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
     true);
   vscode.debug.addBreakpoints([appHostBreakpoint, resourceBreakpoint]);
 
-  const waitForBreakpoint = async (sourcePath: string, breakpointLine: number) => await waitForE2eValue(
+  const waitForBreakpoint = async (sourcePath: string, breakpointLine: number) => await waitForProofValue(
     `breakpoint in ${sourcePath}:${breakpointLine + 1}`,
-    timeoutMs,
     async () => {
       for (const stoppedEvent of stoppedEvents) {
         if (stoppedEvent.threadId === undefined) {
@@ -1472,21 +1521,24 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
     // a runner that is already hosting the Java language server, so capping this at five minutes
     // reported a timeout while the resource was legitimately still coming up - and reported it as
     // "300000ms" even though the spec had asked for fifteen minutes.
+    const baseUrl = await waitForProofValue(
+      `an HTTP endpoint for resource '${resourceName}'`,
+      () => {
+        const element = appHostTreeProvider.findEndpointElement({ appHostPath, resourceName });
+        return element && hasEndpointUrl(element) ? element.url : undefined;
+      },
+      () => describeResourcesForE2E(appHostTreeProvider, appHostPath, resourceName));
     const resourceHit = await withResourceTraffic(
-      appHostTreeProvider,
-      appHostPath,
-      resourceName,
+      baseUrl,
       resourceRequestPath,
-      timeoutMs,
       () => waitForBreakpoint(resourceSourcePath, resourceBreakpointLine));
     if (resourceHit.matchingFrame.line !== resourceBreakpointLine + 1) {
       throw new Error(`Expected resource breakpoint line ${resourceBreakpointLine + 1}, got ${resourceHit.matchingFrame.line}.`);
     }
     await resourceHit.session.customRequest('continue', { threadId: resourceHit.stoppedEvent.threadId });
 
-    const aspireDebugSession = await waitForE2eValue(
+    const aspireDebugSession = await waitForProofValue(
       'Aspire AppHost debug startup completion',
-      timeoutMs,
       () => aspireContext.aspireDebugSessions.find(session =>
         session.startupCompleted &&
         typeof session.appHostPath === 'string' &&
@@ -1521,6 +1573,8 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
       breakpointResponses,
       stoppedEvents,
       exceptionStops,
+      terminatedSessions: terminatedSessions.map(toDebugSessionSnapshot),
+      outputEvents,
     };
   }
   catch (error) {
@@ -1539,11 +1593,14 @@ ${JSON.stringify({
       breakpointResponses,
       stoppedEvents,
       exceptionStops,
+      terminatedSessions: terminatedSessions.map(toDebugSessionSnapshot),
+      outputEvents,
     }, undefined, 2)}`);
   }
   finally {
     vscode.debug.removeBreakpoints([appHostBreakpoint, resourceBreakpoint]);
     sessionSubscription.dispose();
+    terminateSubscription.dispose();
     trackerRegistration.dispose();
     await vscode.debug.stopDebugging();
   }
@@ -2522,22 +2579,10 @@ async function runAspireCliForE2E(
  * to satisfy; each attempt is abandoned after a short timeout and another is sent behind it.
  */
 async function withResourceTraffic<T>(
-  appHostTreeProvider: AspireAppHostTreeProvider,
-  appHostPath: string,
-  resourceName: string,
+  baseUrl: string,
   requestPath: string,
-  endpointTimeoutMs: number,
   waitForHit: () => Promise<T>
 ): Promise<T> {
-  const baseUrl = await waitForE2eValue(
-    `an HTTP endpoint for resource '${resourceName}'`,
-    endpointTimeoutMs,
-    () => {
-      const element = appHostTreeProvider.findEndpointElement({ appHostPath, resourceName });
-      return element && hasEndpointUrl(element) ? element.url : undefined;
-    },
-    () => describeResourcesForE2E(appHostTreeProvider, appHostPath, resourceName));
-
   // A relative path resolves against the endpoint only when the base ends in '/'; without it the
   // last segment of the endpoint would be replaced instead.
   const requestUrl = new URL(requestPath.replace(/^\//, ''), baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`).toString();

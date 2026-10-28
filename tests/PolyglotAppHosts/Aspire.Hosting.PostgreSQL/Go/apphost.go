@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	postgres := builder.AddPostgres("pg")
@@ -33,12 +33,12 @@ func main() {
 	postgres.WithHostPort(aspire.Float64Ptr(5432))
 
 	if err = postgres.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	db.WithCreationScript(`CREATE DATABASE "testdb"`)
 	if err = db.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	customPassword := builder.AddParameter("pg-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
@@ -47,7 +47,7 @@ func main() {
 	pg2.WithPassword(customPassword)
 	pg2.WithUserName(customUser)
 	if err = pg2.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	_ = postgres.PrimaryEndpoint()
@@ -63,9 +63,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

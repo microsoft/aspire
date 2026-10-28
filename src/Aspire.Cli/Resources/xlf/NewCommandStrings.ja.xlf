@@ -19,22 +19,22 @@
       </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
         <source>Directly in the selected folder</source>
-        <target state="new">Directly in the selected folder</target>
+        <target state="translated">選択したフォルダーに直接</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectNameSubdirectoryChoice">
         <source>In a subdirectory named '{0}' in the selected folder</source>
-        <target state="new">In a subdirectory named '{0}' in the selected folder</target>
+        <target state="translated">選択したフォルダー内の '{0}' という名前のサブディレクトリ</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Create a new app from an Aspire starter template</source>
-        <target state="needs-review-translation">新しい Aspire プロジェクトを作成します。</target>
+        <target state="translated">Aspire スターター テンプレートから新しいアプリを作成します</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
         <source>Enter the output path</source>
-        <target state="new">Enter the output path</target>
+        <target state="translated">出力パスを入力します</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheProjectName">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
         <source>The programming language for the AppHost</source>
-        <target state="new">The programming language for the AppHost</target>
+        <target state="translated">AppHost のプログラミング言語</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateCreationFailed">
@@ -69,12 +69,12 @@
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
         <source>The name of the project to create</source>
-        <target state="needs-review-translation">作成するプロジェクトの名前。</target>
+        <target state="translated">作成するプロジェクトの名前</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChannelFoundMatching">
         <source>No channel found matching '{0}'. Valid options are: {1}.</source>
-        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <target state="translated">'{0}' に一致するチャネルが見つかりませんでした。有効なオプション: {1}。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
@@ -84,42 +84,42 @@
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
         <source>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</source>
-        <target state="new">No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</target>
+        <target state="translated">Aspire CLI バージョン '{0}' に一致するローカルの Aspire.ProjectTemplates パッケージが見つかりませんでした。localhive.sh (macOS/Linux) または localhive.ps1 (Windows) を使用して一致するパッケージをビルドしてステージングするか、パッケージを含むディレクトリを ASPIRE_CLI_PACKAGES に設定します。または、--channel、--source、--version のいずれかを使用して、フィードを使用するテンプレートを明示的に選択します。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoPackageChannelsAvailable">
         <source>No package channels are available.</source>
-        <target state="new">No package channels are available.</target>
+        <target state="translated">利用できるパッケージ チャネルがありません。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTemplateVersionsFoundInChannel">
         <source>No template versions found in channel '{0}'.</source>
-        <target state="new">No template versions found in channel '{0}'.</target>
+        <target state="translated">チャネル '{0}' にテンプレート バージョンが見つかりません。</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveTemplateRequired">
         <source>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</source>
-        <target state="new">A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</target>
+        <target state="translated">非対話型モードで実行する場合は、テンプレートを指定する必要があります。'aspire new &lt;template&gt;' を使用します。</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
         <source>The output path for the project</source>
-        <target state="needs-review-translation">プロジェクトの出力パス。</target>
+        <target state="translated">プロジェクトの出力パス</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyNonInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify --output with a different location.</target>
+        <target state="translated">出力ディレクトリ '{0}' は既に存在し、空ではありません。別の場所で --output を指定してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify a different location.</target>
+        <target state="translated">出力ディレクトリ '{0}' は既に存在し、空ではありません。別の場所を指定してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputPathContainsInvalidCharacters">
         <source>The output path '{0}' contains invalid characters.</source>
-        <target state="new">The output path '{0}' contains invalid characters.</target>
+        <target state="translated">出力パス '{0}' に無効な文字が含まれています。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateRepository">
@@ -144,22 +144,22 @@
       </trans-unit>
       <trans-unit id="SelectProjectCreationLocation">
         <source>Where do you want the project to be created?</source>
-        <target state="new">Where do you want the project to be created?</target>
+        <target state="translated">プロジェクトをどこに作成しますか?</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
         <source>The NuGet source to use for the project templates</source>
-        <target state="needs-review-translation">プロジェクト テンプレートに使用する NuGet ソース。</target>
+        <target state="translated">プロジェクト テンプレートに使用する NuGet ソース</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceDirectoryNotFound">
         <source>The local NuGet source directory '{0}' does not exist.</source>
-        <target state="new">The local NuGet source directory '{0}' does not exist.</target>
+        <target state="translated">ローカル NuGet ソース ディレクトリ '{0}' が存在しません。</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceWithCredentialsCannotBePersisted">
         <source>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
-        <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
+        <target state="translated">--source URL には資格情報、クエリ文字列、またはフラグメントが含まれているため、プロジェクトの NuGet.config に書き込めません。NuGet 資格情報プロバイダーまたはユーザー レベルの NuGet 構成で資格情報を設定してから、シークレットを埋め込んでいないフィード URL を渡してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateDirectoryNotFound">
@@ -224,7 +224,7 @@
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
         <source>The version of the project templates to use</source>
-        <target state="needs-review-translation">使用するプロジェクト テンプレートのバージョン。</target>
+        <target state="translated">使用するプロジェクト テンプレートのバージョン</target>
         <note />
       </trans-unit>
     </body>

@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	eventHubs := builder.AddAzureEventHubs("eventhubs")
@@ -18,7 +18,7 @@ func main() {
 		namespace.Tags().Set("provisioning-proxy", "go")
 	})
 	if eventHubs.Err() != nil {
-		log.Fatalf(aspire.FormatError(eventHubs.Err()))
+		log.Fatal(aspire.FormatError(eventHubs.Err()))
 	}
 
 	eventHubs.WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
@@ -34,7 +34,7 @@ func main() {
 		_, _ = configuredHub.PartitionCount()
 	})
 	if hub.Err() != nil {
-		log.Fatalf(aspire.FormatError(hub.Err()))
+		log.Fatal(aspire.FormatError(hub.Err()))
 	}
 
 	_ = hub.Parent()
@@ -46,7 +46,7 @@ func main() {
 		aspire.AzureEventHubsRoleAzureEventHubsDataReceiver,
 	})
 	if consumerGroup.Err() != nil {
-		log.Fatalf(aspire.FormatError(consumerGroup.Err()))
+		log.Fatal(aspire.FormatError(consumerGroup.Err()))
 	}
 
 	eventHubs.RunAsEmulator(&aspire.RunAsEmulatorOptions{
@@ -62,9 +62,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

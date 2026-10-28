@@ -4,7 +4,7 @@
   "description": "Modello di progetto per la creazione di un'app Aspire con front-end Web Blazor e servizio back-end API Web, con cache Redis opzionale.",
   "symbols/Framework/description": "Il framework di destinazione per il progetto.",
   "symbols/Framework/choices/net10.0/description": "Destinazione net10.0",
-  "symbols/Framework/choices/net11.0/description": "Target net11.0",
+  "symbols/Framework/choices/net11.0/description": "Destinazione net11.0",
   "symbols/UseRedisCache/displayName": "_Usare Redis per la memorizzazione nella cache (richiede un runtime del contenitore supportato)",
   "symbols/UseRedisCache/description": "Configura se impostare l'applicazione per l'utilizzo di Redis per la memorizzazione nella cache. Richiede l'esecuzione locale di un runtime del contenitore supportato. Per altri dettagli, vedere https://aka.ms/aspire/containers.",
   "symbols/TestFx/displayName": "Creare un _progetto di test",
