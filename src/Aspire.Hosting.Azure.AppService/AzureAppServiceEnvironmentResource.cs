@@ -34,7 +34,7 @@ public class AzureAppServiceEnvironmentResource :
 #pragma warning restore ASPIREAZURE003
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure App Service Environment";
+    public override string ResourceTypeDisplayName => "Azure App Service Environment";
 
     /// <inheritdoc />
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.AppServiceEnvironments;

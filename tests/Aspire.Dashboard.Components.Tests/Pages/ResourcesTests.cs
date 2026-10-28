@@ -43,6 +43,42 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public partial class ResourcesTests : DashboardTestContext
 {
+    [Fact]
+    public void Resources_DisplaysFriendlyResourceAndTypeNames()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "cache-123",
+            displayName: "cache",
+            resourceType: "Container",
+            resourceDisplayName: "Shared [Cache]",
+            resourceTypeDisplayName: "Redis",
+            state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            initialResources: [resource],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key => key == BrowserStorageKeys.ResourcesShowResourceTypes ? (true, true) : (false, null)
+        };
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient, sessionStorage: sessionStorage);
+        JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true).SetVoidResult();
+        JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.TextInput.attachImmediateEvent", _ => true).SetVoidResult();
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
+
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(cut.FindAll("td"), cell => cell.TextContent.Contains("Shared [Cache]", StringComparison.Ordinal));
+            Assert.Contains(cut.FindAll("td"), cell => cell.TextContent.Contains("Redis", StringComparison.Ordinal));
+        });
+        Assert.Equal("cache-123", resource.Name);
+        Assert.Equal("cache", resource.DisplayName);
+        Assert.Equal("Container", resource.ResourceType);
+    }
+
     [Theory]
     [InlineData(Components.Pages.Resources.ResourceViewKind.Graph)]
     [InlineData(Components.Pages.Resources.ResourceViewKind.Parameters)]

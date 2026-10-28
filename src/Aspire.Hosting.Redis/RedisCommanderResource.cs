@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Redis;
 public class RedisCommanderResource(string name) : ContainerResource(name)
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Redis Commander";
+    public override string ResourceTypeDisplayName => "Redis Commander";
 
     internal const string PrimaryEndpointName = "http";
 

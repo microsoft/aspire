@@ -105,19 +105,19 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
     {
         if (resource.IsFailedToStart())
         {
-            return loc.GetString(nameof(Columns.StateColumnResourceFailedToStart), resource.ServiceDisplayName);
+            return loc.GetString(nameof(Columns.StateColumnResourceFailedToStart), resource.ResourceTypeDisplayName);
         }
         else if (resource.IsStopped())
         {
             if (resource.TryGetExitCode(out var exitCode) && exitCode is not 0)
             {
                 // Process completed unexpectedly, hence the non-zero code. This is almost certainly an error, so warn users.
-                return loc.GetString(nameof(Columns.StateColumnResourceExitedUnexpectedly), resource.ServiceDisplayName, exitCode);
+                return loc.GetString(nameof(Columns.StateColumnResourceExitedUnexpectedly), resource.ResourceTypeDisplayName, exitCode);
             }
             else
             {
                 // Process completed, which may not have been unexpected.
-                return loc.GetString(nameof(Columns.StateColumnResourceExited), resource.ServiceDisplayName);
+                return loc.GetString(nameof(Columns.StateColumnResourceExited), resource.ResourceTypeDisplayName);
             }
         }
         else if (resource is { KnownState: KnownResourceState.Running, HealthStatus: not HealthStatus.Healthy })
@@ -133,7 +133,7 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
         else if (resource.IsWaiting())
         {
             if (allResources is not null
-                ? resource.TryGetResolvedWaitingForDependencies(allResources, out var dependencies)
+                ? resource.TryGetResolvedWaitingForDependencies(allResources, useFriendlyNames: true, out var dependencies)
                 : resource.TryGetWaitingForDependencies(out dependencies))
             {
                 return loc.GetString(nameof(Columns.StateColumnResourceWaitingFor), string.Join(", ", dependencies));

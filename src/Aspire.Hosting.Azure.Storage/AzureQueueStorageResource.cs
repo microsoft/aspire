@@ -19,7 +19,7 @@ public class AzureQueueStorageResource(string name, AzureStorageResource storage
     IAzurePrivateEndpointTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Queue Storage";
+    public override string ResourceTypeDisplayName => "Azure Queue Storage";
 
     /// <summary>
     /// Gets the parent AzureStorageResource of this AzureQueueStorageResource.

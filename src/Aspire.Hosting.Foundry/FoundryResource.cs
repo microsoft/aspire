@@ -20,7 +20,7 @@ public class FoundryResource(string name, Action<AzureResourceInfrastructure> co
     AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Microsoft Foundry";
+    public override string ResourceTypeDisplayName => "Microsoft Foundry";
 
     internal const string FoundryUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
 

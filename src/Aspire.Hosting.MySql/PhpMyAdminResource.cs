@@ -12,7 +12,7 @@ namespace Aspire.Hosting.MySql;
 public sealed class PhpMyAdminContainerResource(string name) : ContainerResource(name)
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "phpMyAdmin";
+    public override string ResourceTypeDisplayName => "phpMyAdmin";
 
     internal const string PrimaryEndpointName = "http";
 

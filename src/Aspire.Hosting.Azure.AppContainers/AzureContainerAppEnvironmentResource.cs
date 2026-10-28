@@ -25,7 +25,7 @@ public class AzureContainerAppEnvironmentResource :
 #pragma warning restore CS0618 // Type or member is obsolete
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Container Apps Environment";
+    public override string ResourceTypeDisplayName => "Azure Container Apps Environment";
 
     /// <inheritdoc />
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.ContainerAppEnvironments;

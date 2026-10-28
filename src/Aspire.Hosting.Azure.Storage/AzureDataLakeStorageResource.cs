@@ -17,7 +17,7 @@ public class AzureDataLakeStorageResource(string name, AzureStorageResource stor
     IAzurePrivateEndpointTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Data Lake Storage";
+    public override string ResourceTypeDisplayName => "Azure Data Lake Storage";
 
     /// <summary>
     /// Gets the parent AzureStorageResource of this AzureDataLakeResource.

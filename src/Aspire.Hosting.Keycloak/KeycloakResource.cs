@@ -14,7 +14,7 @@ public sealed class KeycloakResource(string name, ParameterResource? admin, Para
     : ContainerResource(name), IResourceWithServiceDiscovery
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Keycloak";
+    public override string ResourceTypeDisplayName => "Keycloak";
 
     private const string DefaultAdmin = "admin";
     internal const string PrimaryEndpointName = "http";

@@ -161,7 +161,8 @@ void main() throws Exception {
         container.withoutHttpsCertificate();
         container.withChildRelationship(exe);
         container.withIconName("Database", IconVariant.FILLED);
-        container.withServiceDisplayName("Validation Service");
+        container.withResourceTypeDisplayName("Validation Service");
+        container.withResourceDisplayName("Validation Container");
         container.withHttpProbe(ProbeType.LIVENESS, new WithHttpProbeOptions().path("/health"));
         container.withRemoteImageName("myregistry.azurecr.io/myapp");
         container.withRemoteImageTag("latest");

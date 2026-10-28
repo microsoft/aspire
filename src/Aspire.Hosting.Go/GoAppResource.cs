@@ -37,5 +37,5 @@ public class GoAppResource(string name, string workingDirectory)
     : ExecutableResource(name, "go", workingDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Go";
+    public override string ResourceTypeDisplayName => "Go";
 }

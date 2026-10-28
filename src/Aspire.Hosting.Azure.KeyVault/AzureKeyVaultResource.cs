@@ -18,7 +18,7 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString, IAzureKeyVaultResource, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Key Vault";
+    public override string ResourceTypeDisplayName => "Azure Key Vault";
 
     /// <summary>
     /// The secrets for this Key Vault.

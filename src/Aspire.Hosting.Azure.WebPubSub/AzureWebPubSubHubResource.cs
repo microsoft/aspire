@@ -16,7 +16,7 @@ public class AzureWebPubSubHubResource(string name, AzureWebPubSubResource webpu
     IResourceWithParent<AzureWebPubSubResource>, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Web PubSub Hub";
+    public override string ResourceTypeDisplayName => "Azure Web PubSub Hub";
 
     /// <summary>
     /// Represents an Azure Web PubSub Hub setting resource.

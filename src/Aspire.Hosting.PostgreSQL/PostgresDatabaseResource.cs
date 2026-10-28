@@ -21,7 +21,7 @@ public class PostgresDatabaseResource(string name, string databaseName, Postgres
     : Resource(name), IResourceWithParent<PostgresServerResource>, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "PostgreSQL Database";
+    public override string ResourceTypeDisplayName => "PostgreSQL Database";
 
     /// <summary>
     /// Gets the parent PostgresSQL container resource.

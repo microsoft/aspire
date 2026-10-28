@@ -28,5 +28,5 @@ public class UvicornAppResource(string name, string executablePath, string appDi
     : PythonAppResource(name, executablePath, appDirectory)
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Uvicorn";
+    public override string ResourceTypeDisplayName => "Uvicorn";
 }

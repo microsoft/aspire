@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Milvus;
 public class AttuResource(string name) : ContainerResource(name)
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Attu";
+    public override string ResourceTypeDisplayName => "Attu";
 
     internal const string PrimaryEndpointName = "http";
 

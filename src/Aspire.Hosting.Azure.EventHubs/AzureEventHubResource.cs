@@ -25,7 +25,7 @@ public class AzureEventHubResource(string name, string hubName, AzureEventHubsRe
     : Resource(name), IResourceWithParent<AzureEventHubsResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Event Hub";
+    public override string ResourceTypeDisplayName => "Azure Event Hub";
 
     /// <summary>
     /// The event hub name.

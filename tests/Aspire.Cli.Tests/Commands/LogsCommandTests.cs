@@ -401,6 +401,61 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LogsCommand_JsonOutput_UsesTechnicalNamesInsteadOfResourceDisplayNames()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateLogsTestServices(workspace, outputWriter, configureConnection: connection =>
+        {
+            connection.ResourceSnapshots =
+            [
+                new ResourceSnapshot
+                {
+                    Name = "redis",
+                    DisplayName = "redis",
+                    ResourceDisplayName = "Shared Cache",
+                    ResourceType = "Container",
+                    State = "Running"
+                },
+                new ResourceSnapshot
+                {
+                    Name = "apiservice-abc123",
+                    DisplayName = "apiservice",
+                    ResourceDisplayName = "Orders API",
+                    ResourceType = "Project",
+                    State = "Running"
+                },
+                new ResourceSnapshot
+                {
+                    Name = "apiservice-def456",
+                    DisplayName = "apiservice",
+                    ResourceDisplayName = "Orders API",
+                    ResourceType = "Project",
+                    State = "Running"
+                }
+            ];
+        });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+        Assert.Collection(
+            logsOutput.Logs,
+            log => Assert.Equal("redis", log.ResourceName),
+            log => Assert.Equal("apiservice-abc123", log.ResourceName),
+            log => Assert.Equal("apiservice-def456", log.ResourceName));
+    }
+
+    [Fact]
     public async Task LogsCommand_TextOutput_ResolvesResourceNames()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -11,7 +11,7 @@ namespace Aspire.Hosting.ApplicationModel;
 public class SeqResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Seq";
+    public override string ResourceTypeDisplayName => "Seq";
 
     internal const string PrimaryEndpointName = "http";
 

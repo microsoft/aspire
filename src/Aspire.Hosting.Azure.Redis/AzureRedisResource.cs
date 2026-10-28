@@ -15,7 +15,7 @@ public class AzureRedisResource(RedisResource innerResource, Action<AzureResourc
     : AzureProvisioningResource(innerResource.Name, configureInfrastructure), IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Cache for Redis";
+    public override string ResourceTypeDisplayName => "Azure Cache for Redis";
 
     private readonly RedisResource _innerResource = innerResource ?? throw new ArgumentNullException(nameof(innerResource));
 

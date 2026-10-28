@@ -27,7 +27,7 @@ namespace Aspire.Hosting.Docker;
 public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Docker Compose Environment";
+    public override string ResourceTypeDisplayName => "Docker Compose Environment";
 
     private const string DockerComposeUpTag = "docker-compose-up";
 

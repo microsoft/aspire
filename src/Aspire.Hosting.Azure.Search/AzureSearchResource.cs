@@ -18,7 +18,7 @@ public class AzureSearchResource(string name, Action<AzureResourceInfrastructure
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure AI Search";
+    public override string ResourceTypeDisplayName => "Azure AI Search";
 
     /// <summary>
     /// Gets the "connectionString" output reference from the Azure AI Search resource.

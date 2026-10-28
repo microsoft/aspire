@@ -12,7 +12,7 @@ namespace Aspire.Hosting.MongoDB;
 public sealed class MongoExpressContainerResource(string name) : ContainerResource(name)
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Mongo Express";
+    public override string ResourceTypeDisplayName => "Mongo Express";
 
     internal const string PrimaryEndpointName = "http";
 

@@ -52,7 +52,7 @@ public static class ResourceGraphMapper
             {
                 Path = icon,
                 Color = color,
-                Tooltip = r.ServiceDisplayName
+                Tooltip = r.ResourceTypeDisplayName
             },
             StateIcon = new IconDto
             {

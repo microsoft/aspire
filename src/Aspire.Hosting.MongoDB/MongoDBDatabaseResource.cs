@@ -20,7 +20,7 @@ public class MongoDBDatabaseResource(string name, string databaseName, MongoDBSe
     : Resource(name), IResourceWithParent<MongoDBServerResource>, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "MongoDB Database";
+    public override string ResourceTypeDisplayName => "MongoDB Database";
 
     /// <summary>
     /// Gets the connection string expression for the MongoDB database.

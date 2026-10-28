@@ -13,7 +13,7 @@ public class AzureCosmosDBEmulatorResource(AzureCosmosDBResource innerResource)
     : ContainerResource(innerResource.Name)
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Cosmos DB Emulator";
+    public override string ResourceTypeDisplayName => "Azure Cosmos DB Emulator";
 
     internal AzureCosmosDBResource InnerResource { get; } = innerResource ?? throw new ArgumentNullException(nameof(innerResource));
 

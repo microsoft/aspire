@@ -20,7 +20,7 @@ public class SqlServerDatabaseResource(string name, string databaseName, SqlServ
     : Resource(name), IResourceWithParent<SqlServerServerResource>, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "SQL Server Database";
+    public override string ResourceTypeDisplayName => "SQL Server Database";
 
     /// <summary>
     /// Gets the parent SQL Server container resource.

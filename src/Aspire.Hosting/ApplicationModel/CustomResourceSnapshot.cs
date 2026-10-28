@@ -18,7 +18,7 @@ public sealed record CustomResourceSnapshot
 {
     private readonly ImmutableArray<HealthReportSnapshot> _healthReports = [];
     private readonly ResourceStateSnapshot? _state;
-    private readonly string? _serviceDisplayName;
+    private readonly string? _resourceTypeDisplayName;
 
     /// <summary>
     /// Monotonically increasing version number for the snapshot.
@@ -31,22 +31,41 @@ public sealed record CustomResourceSnapshot
     public required string ResourceType { get; init; }
 
     /// <summary>
-    /// Gets or initializes the human-readable service label, falling back to <see cref="ResourceType"/> when not set.
+    /// Gets or initializes the human-readable resource name, or <see langword="null"/> to use the resource's name.
+    /// </summary>
+    /// <remarks>
+    /// This label is presentation metadata and does not change resource identity or command targeting.
+    /// </remarks>
+    public string? ResourceDisplayName
+    {
+        get;
+        init
+        {
+            if (value is not null)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(value);
+            }
+            field = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or initializes the human-readable resource type label, falling back to <see cref="ResourceType"/> when not set.
     /// </summary>
     /// <remarks>
     /// This label is presentation metadata and must not be used to identify resource capabilities.
     /// </remarks>
-    public string ServiceDisplayName
+    public string ResourceTypeDisplayName
     {
-        get => _serviceDisplayName ?? ResourceType;
+        get => _resourceTypeDisplayName ?? ResourceType;
         init
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(value);
-            _serviceDisplayName = value;
+            _resourceTypeDisplayName = value;
         }
     }
 
-    internal bool HasServiceDisplayName() => _serviceDisplayName is not null;
+    internal bool HasResourceTypeDisplayName() => _resourceTypeDisplayName is not null;
 
     /// <summary>
     /// The properties that should show up in the dashboard for this resource.
@@ -200,7 +219,8 @@ public sealed record CustomResourceSnapshot
         // Version counts publications rather than describing the resource. HealthStatus is derived
         // from State and HealthReports, so neither property needs an independent comparison.
         if (ResourceType != other.ResourceType ||
-            _serviceDisplayName != other._serviceDisplayName ||
+            ResourceDisplayName != other.ResourceDisplayName ||
+            _resourceTypeDisplayName != other._resourceTypeDisplayName ||
             CreationTimeStamp != other.CreationTimeStamp ||
             StartTimeStamp != other.StartTimeStamp ||
             StopTimeStamp != other.StopTimeStamp ||

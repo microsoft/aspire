@@ -13,7 +13,7 @@ public class AzureEventHubsEmulatorResource(AzureEventHubsResource innerResource
     : ContainerResource(innerResource.Name), IResource
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Event Hubs Emulator";
+    public override string ResourceTypeDisplayName => "Azure Event Hubs Emulator";
 
     // The path to the emulator configuration file in the container.
     // The path to the emulator configuration files in the container.

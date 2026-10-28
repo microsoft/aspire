@@ -58,7 +58,8 @@ internal sealed class McpResourceJson
     public string? Name { get; init; }
     public string? DisplayName { get; init; }
     public string? ResourceType { get; init; }
-    public string? ServiceDisplayName { get; init; }
+    public string? ResourceTypeDisplayName { get; init; }
+    public string? ResourceDisplayName { get; init; }
     public string? State { get; init; }
     public string[] WaitingFor { get; init; } = [];
     public string? StateStyle { get; init; }
@@ -205,7 +206,8 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
                 Name = GetBoundedText(snapshot.Name),
                 DisplayName = GetBoundedText(snapshot.DisplayName),
                 ResourceType = GetBoundedText(snapshot.ResourceType),
-                ServiceDisplayName = GetBoundedText(snapshot.ServiceDisplayName),
+                ResourceTypeDisplayName = GetBoundedText(snapshot.ResourceTypeDisplayName),
+                ResourceDisplayName = GetBoundedText(snapshot.ResourceDisplayName),
                 State = McpToolHelpers.MapResourceState(snapshot.State),
                 WaitingFor = GetBoundedWaitingFor(snapshot, resourceIdentities),
                 StateStyle = GetBoundedText(snapshot.StateStyle),

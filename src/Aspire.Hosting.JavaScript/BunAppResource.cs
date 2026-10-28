@@ -16,5 +16,5 @@ public sealed class BunAppResource(string name, string command, string workingDi
     : JavaScriptAppResource(name, command, workingDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Bun";
+    public override string ResourceTypeDisplayName => "Bun";
 }

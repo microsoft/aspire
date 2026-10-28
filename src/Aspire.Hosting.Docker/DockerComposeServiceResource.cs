@@ -23,7 +23,7 @@ namespace Aspire.Hosting.Docker;
 public class DockerComposeServiceResource : Resource, IResourceWithParent<DockerComposeEnvironmentResource>
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Docker Compose Service";
+    public override string ResourceTypeDisplayName => "Docker Compose Service";
 
     private readonly IResource _targetResource;
     private readonly DockerComposeEnvironmentResource _composeEnvironmentResource;

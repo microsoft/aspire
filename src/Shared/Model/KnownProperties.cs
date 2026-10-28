@@ -17,7 +17,8 @@ internal static class KnownProperties
         public const string Uid = "resource.uid";
         public const string Name = "resource.name";
         public const string Type = "resource.type";
-        public const string ServiceDisplayName = "resource.serviceDisplayName";
+        public const string ResourceTypeDisplayName = "resource.resourceTypeDisplayName";
+        public const string ResourceDisplayName = "resource.resourceDisplayName";
         public const string DisplayName = "resource.displayName";
         public const string State = "resource.state";
         public const string ExitCode = "resource.exitCode";
@@ -89,7 +90,7 @@ internal static class KnownResourcePropertySortOrder
 {
     public const int DisplayName = 0;
     public const int ResourceType = 1;
-    public const int ServiceDisplayName = 2;
+    public const int ResourceTypeDisplayName = 2;
     public const int State = 3;
     public const int HealthState = 4;
     public const int StartTime = 5;

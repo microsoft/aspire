@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Postgres;
 public sealed class PostgresMcpContainerResource(string name) : ContainerResource(name)
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "PostgreSQL MCP Server";
+    public override string ResourceTypeDisplayName => "PostgreSQL MCP Server";
 
     internal const string PrimaryEndpointName = "http";
 

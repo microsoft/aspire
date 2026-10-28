@@ -20,7 +20,7 @@ namespace Aspire.Hosting;
 public sealed class BlazorWasmAppResource(string name, string projectPath) : Resource(name), IResourceWithEnvironment, IResourceWithParent
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Blazor WebAssembly";
+    public override string ResourceTypeDisplayName => "Blazor WebAssembly";
 
     /// <summary>Fully-qualified path to the .csproj file.</summary>
     public string ProjectPath { get; } = projectPath;

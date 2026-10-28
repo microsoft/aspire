@@ -18,7 +18,7 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithAzureFunctionsConfig, IAzureNspAssociationTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Storage";
+    public override string ResourceTypeDisplayName => "Azure Storage";
 
     internal const string BlobsConnectionKeyPrefix = "Aspire__Azure__Storage__Blobs";
     internal const string QueuesConnectionKeyPrefix = "Aspire__Azure__Storage__Queues";

@@ -15,10 +15,62 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class ResourceViewModelTests
 {
     [Theory]
+    [InlineData(null, "cache")]
+    [InlineData("", "cache")]
+    [InlineData("Shared Cache", "Shared Cache")]
+    public void ResourceDisplayName_PreservesIdentityAndNavigation(string? label, string expected)
+    {
+        var resource = new Resource
+        {
+            Name = "cache-123",
+            DisplayName = "cache",
+            ResourceType = "Container",
+            CreatedAt = Timestamp.FromDateTime(s_dateTime)
+        };
+        if (label is not null)
+        {
+            resource.ResourceDisplayName = label;
+        }
+        var vm = ToViewModel(resource);
+        var resources = new Dictionary<string, ResourceViewModel> { [vm.Name] = vm };
+
+        Assert.Equal(expected, vm.ResourceDisplayName);
+        Assert.Equal(expected, ResourceViewModel.GetResourceName(vm, resources));
+        Assert.Equal("cache", ResourceViewModel.GetResourceTargetName(vm, resources));
+        Assert.Equal("cache_0", vm.PersistentKey);
+        Assert.True(ResourceViewModel.TryGetResourceByName("cache", resources, out var found));
+        Assert.Same(vm, found);
+        Assert.False(ResourceViewModel.TryGetResourceByName("Shared Cache", resources, out _));
+        Assert.True(vm.MatchesFilter(expected));
+    }
+
+    [Fact]
+    public void ResourceDisplayName_DuplicateLabelsKeepRuntimeNamesAndReplicaIdentity()
+    {
+        var first = ToViewModel(new Resource
+        {
+            Name = "cache-123", DisplayName = "cache", ResourceDisplayName = "Shared Cache",
+            CreatedAt = Timestamp.FromDateTime(s_dateTime)
+        });
+        var second = ToViewModel(new Resource
+        {
+            Name = "cache-456", DisplayName = "cache", ResourceDisplayName = "Shared Cache",
+            CreatedAt = Timestamp.FromDateTime(s_dateTime)
+        });
+        var resources = new Dictionary<string, ResourceViewModel> { [first.Name] = first, [second.Name] = second };
+
+        Assert.Equal("Shared Cache (cache-123)", ResourceViewModel.GetResourceName(first, resources));
+        Assert.Equal("Shared Cache (cache-456)", ResourceViewModel.GetResourceName(second, resources));
+        Assert.Equal("cache-123", ResourceViewModel.GetResourceTargetName(first, resources));
+        Assert.Equal("cache-456", ResourceViewModel.GetResourceTargetName(second, resources));
+        Assert.False(ResourceViewModel.TryGetResourceByName("cache", resources, out _));
+    }
+
+    [Theory]
     [InlineData(null, "Container")]
     [InlineData("", "Container")]
     [InlineData("Redis", "Redis")]
-    public void ToViewModel_ServiceDisplayNamePreservesTechnicalType(string? serviceDisplayName, string expected)
+    public void ToViewModel_ResourceTypeDisplayNamePreservesTechnicalType(string? resourceTypeDisplayName, string expected)
     {
         var resource = new Resource
         {
@@ -26,15 +78,15 @@ public sealed class ResourceViewModelTests
             ResourceType = "Container",
             CreatedAt = Timestamp.FromDateTime(s_dateTime)
         };
-        if (serviceDisplayName is not null)
+        if (resourceTypeDisplayName is not null)
         {
-            resource.ServiceDisplayName = serviceDisplayName;
+            resource.ResourceTypeDisplayName = resourceTypeDisplayName;
         }
 
         var vm = ToViewModel(resource);
 
         Assert.Equal("Container", vm.ResourceType);
-        Assert.Equal(expected, vm.ServiceDisplayName);
+        Assert.Equal(expected, vm.ResourceTypeDisplayName);
         Assert.True(vm.IsContainer());
     }
 

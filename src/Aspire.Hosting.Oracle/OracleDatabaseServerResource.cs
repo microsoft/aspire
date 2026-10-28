@@ -10,7 +10,7 @@ namespace Aspire.Hosting.ApplicationModel;
 public class OracleDatabaseServerResource : ContainerResource, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Oracle Database Server";
+    public override string ResourceTypeDisplayName => "Oracle Database Server";
 
     internal const string PrimaryEndpointName = "tcp";
     private const string DefaultUserName = "system";

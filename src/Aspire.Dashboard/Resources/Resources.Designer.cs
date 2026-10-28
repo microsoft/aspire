@@ -349,11 +349,20 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Service.
+        ///   Looks up a localized string similar to Type display name.
         /// </summary>
-        public static string ResourcesDetailsServiceDisplayNameProperty {
+        public static string ResourcesDetailsResourceTypeDisplayNameProperty {
             get {
-                return ResourceManager.GetString("ResourcesDetailsServiceDisplayNameProperty", resourceCulture);
+                return ResourceManager.GetString("ResourcesDetailsResourceTypeDisplayNameProperty", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resource name.
+        /// </summary>
+        public static string ResourcesDetailsResourceNameProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsResourceNameProperty", resourceCulture);
             }
         }
 

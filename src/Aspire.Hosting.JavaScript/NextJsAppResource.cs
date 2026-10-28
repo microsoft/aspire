@@ -17,5 +17,5 @@ public class NextJsAppResource(string name, string command, string workingDirect
     : JavaScriptAppResource(name, command, workingDirectory)
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Next.js";
+    public override string ResourceTypeDisplayName => "Next.js";
 }

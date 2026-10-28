@@ -20,7 +20,7 @@ public class OracleDatabaseResource(string name, string databaseName, OracleData
     : Resource(name), IResourceWithParent<OracleDatabaseServerResource>, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Oracle Database";
+    public override string ResourceTypeDisplayName => "Oracle Database";
 
     /// <summary>
     /// Gets the parent Oracle container resource.

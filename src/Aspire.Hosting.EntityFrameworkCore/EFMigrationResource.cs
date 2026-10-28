@@ -22,7 +22,7 @@ namespace Aspire.Hosting.EntityFrameworkCore;
 public class EFMigrationResource : ContainerResource
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Entity Framework Core Migration";
+    public override string ResourceTypeDisplayName => "Entity Framework Core Migration";
 
     private readonly ProjectResource? _legacyProjectResource;
 

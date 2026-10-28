@@ -19,7 +19,7 @@ public class AzurePostgresFlexibleServerDatabaseResource(string name, string dat
     : Resource(name), IResourceWithParent<AzurePostgresFlexibleServerResource>, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Database for PostgreSQL Database";
+    public override string ResourceTypeDisplayName => "Azure Database for PostgreSQL Database";
 
     /// <summary>
     /// Gets the parent Azure PostgresSQL resource.

@@ -19,7 +19,7 @@ namespace Aspire.Hosting.Azure;
 public class AzureKustoClusterResource : AzureProvisioningResource, IResourceWithConnectionString, IResourceWithEndpoints
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Data Explorer Cluster";
+    public override string ResourceTypeDisplayName => "Azure Data Explorer Cluster";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureKustoClusterResource"/> class.

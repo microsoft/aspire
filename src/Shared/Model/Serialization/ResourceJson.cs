@@ -30,9 +30,14 @@ internal sealed class ResourceJson
     public string? ResourceType { get; set; }
 
     /// <summary>
-    /// The human-readable service label, independent of the technical resource type.
+    /// The human-readable resource type label, independent of the technical resource type.
     /// </summary>
-    public string? ServiceDisplayName { get; set; }
+    public string? ResourceTypeDisplayName { get; set; }
+
+    /// <summary>
+    /// The friendly resource name, independent of technical names used for identity.
+    /// </summary>
+    public string? ResourceDisplayName { get; set; }
 
     /// <summary>
     /// The unique identifier of the resource.

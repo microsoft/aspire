@@ -22,7 +22,7 @@ public class AzureEventHubConsumerGroupResource(string name, string consumerGrou
     : Resource(name), IResourceWithParent<AzureEventHubResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Event Hub Consumer Group";
+    public override string ResourceTypeDisplayName => "Azure Event Hub Consumer Group";
 
     /// <summary>
     /// The event hub consumer group name.

@@ -18,7 +18,7 @@ public class AzureKeyVaultSecretResource(string name, string secretName, AzureKe
     : Resource(name), IResourceWithParent<AzureKeyVaultResource>, IAzureKeyVaultSecretReference
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Key Vault Secret";
+    public override string ResourceTypeDisplayName => "Azure Key Vault Secret";
 
     private readonly IAzureKeyVaultSecretReference _secret = parent.GetSecret(secretName);
 

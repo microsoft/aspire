@@ -1101,11 +1101,20 @@ internal sealed class ResourceSnapshot
     public string? ResourceType { get; init; }
 
     /// <summary>
-    /// Gets the human-readable service label, falling back to the resource type for older producers.
+    /// Gets the human-readable resource type label, falling back to the resource type for older producers.
     /// </summary>
-    public string? ServiceDisplayName
+    public string? ResourceTypeDisplayName
     {
         get => string.IsNullOrWhiteSpace(field) ? ResourceType : field;
+        init;
+    }
+
+    /// <summary>
+    /// Gets the friendly instance name, falling back to the existing display name or runtime name.
+    /// </summary>
+    public string? ResourceDisplayName
+    {
+        get => string.IsNullOrWhiteSpace(field) ? DisplayName ?? Name : field;
         init;
     }
 

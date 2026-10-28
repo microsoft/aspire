@@ -27,7 +27,7 @@ public sealed class MongoDBReplicaSetResource(
 ) : Resource(name), IResourceWithWaitSupport, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "MongoDB Replica Set";
+    public override string ResourceTypeDisplayName => "MongoDB Replica Set";
 
     /// <summary>
     /// Gets the combined connection string for the MongoDB replica set, which includes the endpoints of all members, interpretable by the MongoDB driver.

@@ -26,7 +26,7 @@ public class AzureServiceBusTopicResource(string name, string topicName, AzureSe
     : Resource(name), IResourceWithParent<AzureServiceBusResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Service Bus Topic";
+    public override string ResourceTypeDisplayName => "Azure Service Bus Topic";
 
     private string _topicName = ThrowIfNullOrEmpty(topicName);
 

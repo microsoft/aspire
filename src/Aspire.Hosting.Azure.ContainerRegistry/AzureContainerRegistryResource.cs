@@ -17,7 +17,7 @@ namespace Aspire.Hosting.Azure;
 public class AzureContainerRegistryResource : AzureProvisioningResource, IAzureContainerRegistryResource, IAzurePrivateEndpointTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Container Registry";
+    public override string ResourceTypeDisplayName => "Azure Container Registry";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureContainerRegistryResource"/> class.

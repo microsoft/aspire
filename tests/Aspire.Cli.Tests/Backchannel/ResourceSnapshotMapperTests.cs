@@ -12,11 +12,41 @@ namespace Aspire.Cli.Tests.Backchannel;
 public class ResourceSnapshotMapperTests
 {
     [Theory]
+    [InlineData(null, "cache")]
+    [InlineData("", "cache")]
+    [InlineData("Shared Cache", "Shared Cache")]
+    public void ResourceDisplayName_DeserializesAndMapsWithoutChangingIdentity(string? label, string expected)
+    {
+        var json = JsonSerializer.Serialize(new { Name = "cache-123", DisplayName = "cache", ResourceType = "Container", ResourceDisplayName = label });
+        var snapshot = JsonSerializer.Deserialize(json, BackchannelJsonSerializerContext.Default.ResourceSnapshot)!;
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot]);
+
+        Assert.Equal("cache-123", result.Name);
+        Assert.Equal("cache", result.DisplayName);
+        Assert.Equal(expected, result.ResourceDisplayName);
+        Assert.Single(ResourceSnapshotMapper.WhereMatchesResourceName([snapshot], "cache"));
+        Assert.Empty(ResourceSnapshotMapper.WhereMatchesResourceName([snapshot], "Shared Cache"));
+    }
+
+    [Fact]
+    public void ResourceDisplayName_DuplicateLabelsAreDisambiguatedWithoutChangingTargetNames()
+    {
+        var first = new ResourceSnapshot { Name = "cache-123", DisplayName = "cache", ResourceType = "Container", ResourceDisplayName = "Shared Cache" };
+        var second = new ResourceSnapshot { Name = "another-cache", DisplayName = "another-cache", ResourceType = "Container", ResourceDisplayName = "Shared Cache" };
+        ResourceSnapshot[] snapshots = [first, second];
+
+        Assert.Equal("Shared Cache (cache-123)", ResourceSnapshotMapper.GetResourceName(first, snapshots));
+        Assert.Equal("Shared Cache (another-cache)", ResourceSnapshotMapper.GetResourceName(second, snapshots));
+        Assert.Equal("cache", ResourceSnapshotMapper.GetResourceTargetName(first, snapshots));
+        Assert.Equal("another-cache", ResourceSnapshotMapper.GetResourceTargetName(second, snapshots));
+    }
+
+    [Theory]
     [InlineData("""{"Name":"cache","ResourceType":"Container"}""", "Container")]
-    [InlineData("""{"Name":"cache","ResourceType":"Container","ServiceDisplayName":"Redis"}""", "Redis")]
-    [InlineData("""{"Name":"cache","ResourceType":"Container","ServiceDisplayName":""}""", "Container")]
-    [InlineData("""{"Name":"cache","ResourceType":"Container","ServiceDisplayName":null}""", "Container")]
-    public void ServiceDisplayName_DeserializesAndMapsWithFallback(string json, string expected)
+    [InlineData("""{"Name":"cache","ResourceType":"Container","ResourceTypeDisplayName":"Redis"}""", "Redis")]
+    [InlineData("""{"Name":"cache","ResourceType":"Container","ResourceTypeDisplayName":""}""", "Container")]
+    [InlineData("""{"Name":"cache","ResourceType":"Container","ResourceTypeDisplayName":null}""", "Container")]
+    public void ResourceTypeDisplayName_DeserializesAndMapsWithFallback(string json, string expected)
     {
         var snapshot = JsonSerializer.Deserialize(json, BackchannelJsonSerializerContext.Default.ResourceSnapshot);
         Assert.NotNull(snapshot);
@@ -24,7 +54,7 @@ public class ResourceSnapshotMapperTests
         var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot]);
 
         Assert.Equal("Container", result.ResourceType);
-        Assert.Equal(expected, result.ServiceDisplayName);
+        Assert.Equal(expected, result.ResourceTypeDisplayName);
     }
 
     [Fact]

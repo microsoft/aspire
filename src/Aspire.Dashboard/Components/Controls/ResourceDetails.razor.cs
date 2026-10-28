@@ -193,7 +193,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                     Type = typeof(ResourceStateValue),
                     Parameters = { ["Resource"] = _resource }
                 },
-                [KnownProperties.Resource.DisplayName] = new ComponentMetadata
+                [_resource.ResourceDisplayName == _resource.DisplayName ? KnownProperties.Resource.DisplayName : KnownProperties.Resource.ResourceDisplayName] = new ComponentMetadata
                 {
                     Type = typeof(ResourceNameValue),
                     Parameters = { ["Resource"] = _resource, ["FormatName"] = new Func<ResourceViewModel, string>(FormatName) }

@@ -18,5 +18,5 @@ public sealed class DenoAppResource(string name, string command, string workingD
     : JavaScriptAppResource(name, command, workingDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Deno";
+    public override string ResourceTypeDisplayName => "Deno";
 }

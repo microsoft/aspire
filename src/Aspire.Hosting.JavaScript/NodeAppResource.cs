@@ -16,5 +16,5 @@ public class NodeAppResource(string name, string command, string workingDirector
     : JavaScriptAppResource(name, command, workingDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Node.js";
+    public override string ResourceTypeDisplayName => "Node.js";
 }

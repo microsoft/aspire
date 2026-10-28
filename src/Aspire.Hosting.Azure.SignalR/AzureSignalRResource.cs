@@ -18,7 +18,7 @@ public class AzureSignalRResource(string name, Action<AzureResourceInfrastructur
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithEndpoints, IAzurePrivateEndpointTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure SignalR Service";
+    public override string ResourceTypeDisplayName => "Azure SignalR Service";
 
     internal EndpointReference EmulatorEndpoint => new(this, "emulator");
 

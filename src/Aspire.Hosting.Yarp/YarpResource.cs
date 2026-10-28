@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Yarp;
 public class YarpResource : ContainerResource, IResourceWithServiceDiscovery, IContainerFilesDestinationResource
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "YARP";
+    public override string ResourceTypeDisplayName => "YARP";
 
     internal List<YarpRoute> Routes { get; } = [];
 

@@ -19,7 +19,7 @@ public class AzureEventHubsResource(string name, Action<AzureResourceInfrastruct
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithEndpoints, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Event Hubs";
+    public override string ResourceTypeDisplayName => "Azure Event Hubs";
 
     private static readonly string[] s_eventHubClientNames =
     [

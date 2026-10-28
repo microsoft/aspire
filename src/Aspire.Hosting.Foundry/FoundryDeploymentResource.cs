@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Foundry;
 public class FoundryDeploymentResource : Resource, IResourceWithParent<FoundryResource>, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Microsoft Foundry Deployment";
+    public override string ResourceTypeDisplayName => "Microsoft Foundry Deployment";
 
     /// <value>"GlobalStandard"</value>
     private const string DefaultSkuName = "GlobalStandard";

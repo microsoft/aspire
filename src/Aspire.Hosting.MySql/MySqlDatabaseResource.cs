@@ -21,7 +21,7 @@ public class MySqlDatabaseResource(string name, string databaseName, MySqlServer
     : Resource(name), IResourceWithParent<MySqlServerResource>, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "MySQL Database";
+    public override string ResourceTypeDisplayName => "MySQL Database";
 
     /// <summary>
     /// Gets the parent MySQL container resource.

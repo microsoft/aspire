@@ -25,7 +25,7 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     IAzureNspAssociationTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Cosmos DB";
+    public override string ResourceTypeDisplayName => "Azure Cosmos DB";
 
     internal List<AzureCosmosDBDatabaseResource> Databases { get; } = [];
 

@@ -15,5 +15,5 @@ public class JavaContainerResource(string name, string? entrypoint = null)
     : ContainerResource(name, entrypoint), IJavaAppResource, IResourceWithServiceDiscovery
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Java";
+    public override string ResourceTypeDisplayName => "Java";
 }

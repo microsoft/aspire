@@ -10,7 +10,7 @@ namespace Aspire.Hosting.ApplicationModel;
 public class MySqlServerResource : ContainerResource, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "MySQL Server";
+    public override string ResourceTypeDisplayName => "MySQL Server";
 
     internal static string PrimaryEndpointName => "tcp";
     private const string DefaultUserName = "root";

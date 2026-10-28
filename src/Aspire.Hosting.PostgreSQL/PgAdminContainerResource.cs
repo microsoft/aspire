@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Postgres;
 public sealed class PgAdminContainerResource(string name) : ContainerResource(name)
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "pgAdmin";
+    public override string ResourceTypeDisplayName => "pgAdmin";
 
     internal const string PrimaryEndpointName = "http";
 

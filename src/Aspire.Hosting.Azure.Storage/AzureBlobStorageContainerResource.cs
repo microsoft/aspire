@@ -21,7 +21,7 @@ public class AzureBlobStorageContainerResource(string name, string blobContainer
     IResourceWithParent<AzureBlobStorageResource>
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Blob Storage Container";
+    public override string ResourceTypeDisplayName => "Azure Blob Storage Container";
 
     /// <summary>
     /// Gets the blob container name.

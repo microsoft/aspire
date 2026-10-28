@@ -15,7 +15,7 @@ public class RustAppResource(string name, string workingDirectory)
     : ExecutableResource(name, "cargo", workingDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Rust";
+    public override string ResourceTypeDisplayName => "Rust";
 
     /// <summary>
     /// The cargo arguments produced the last time the resource's command line was built.

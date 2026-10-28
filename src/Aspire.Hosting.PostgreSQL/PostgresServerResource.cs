@@ -10,7 +10,7 @@ namespace Aspire.Hosting.ApplicationModel;
 public class PostgresServerResource : ContainerResource, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "PostgreSQL Server";
+    public override string ResourceTypeDisplayName => "PostgreSQL Server";
 
     internal const string PrimaryEndpointName = "tcp";
     private const string DefaultUserName = "postgres";

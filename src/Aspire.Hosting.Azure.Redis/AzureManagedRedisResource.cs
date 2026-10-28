@@ -23,7 +23,7 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IAzurePrivateEndpointTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Managed Redis";
+    public override string ResourceTypeDisplayName => "Azure Managed Redis";
 
     /// <summary>
     /// Gets the "connectionString" output reference from the bicep template for the Azure Managed Redis resource.

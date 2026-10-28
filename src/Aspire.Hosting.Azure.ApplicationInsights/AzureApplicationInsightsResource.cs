@@ -17,7 +17,7 @@ public class AzureApplicationInsightsResource(string name, Action<AzureResourceI
     IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Application Insights";
+    public override string ResourceTypeDisplayName => "Azure Application Insights";
 
     /// <summary>
     /// Gets the "name" output reference for the resource.

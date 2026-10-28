@@ -15,7 +15,7 @@ namespace Aspire.Hosting.ApplicationModel;
 public class MongoDBServerResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "MongoDB Server";
+    public override string ResourceTypeDisplayName => "MongoDB Server";
 
     internal const string PrimaryEndpointName = "tcp";
     internal const string DefaultUserName = "admin";

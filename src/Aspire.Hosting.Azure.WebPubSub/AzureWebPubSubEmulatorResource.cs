@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Azure;
 public class AzureWebPubSubEmulatorResource(AzureWebPubSubResource innerResource) : ContainerResource((innerResource ?? throw new ArgumentNullException(nameof(innerResource))).Name), IResource
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Web PubSub Emulator";
+    public override string ResourceTypeDisplayName => "Azure Web PubSub Emulator";
 
     private readonly AzureWebPubSubResource _innerResource = innerResource;
 

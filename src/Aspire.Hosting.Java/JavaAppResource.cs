@@ -19,5 +19,5 @@ public class JavaAppResource(string name, string workingDirectory)
     : ExecutableResource(name, "java", workingDirectory), IJavaAppResource, IResourceWithServiceDiscovery, IContainerFilesDestinationResource
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Java";
+    public override string ResourceTypeDisplayName => "Java";
 }

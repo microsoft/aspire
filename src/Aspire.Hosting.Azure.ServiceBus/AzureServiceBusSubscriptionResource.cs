@@ -26,7 +26,7 @@ public class AzureServiceBusSubscriptionResource(string name, string subscriptio
     : Resource(name), IResourceWithParent<AzureServiceBusTopicResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Service Bus Subscription";
+    public override string ResourceTypeDisplayName => "Azure Service Bus Subscription";
 
     private string _subscriptionName = ThrowIfNullOrEmpty(subscriptionName);
 

@@ -20,7 +20,7 @@ public class AzureOpenAIResource(string name, Action<AzureResourceInfrastructure
     IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure OpenAI";
+    public override string ResourceTypeDisplayName => "Azure OpenAI";
 
     [Obsolete("Use AzureOpenAIDeploymentResource instead.")]
     private readonly List<AzureOpenAIDeployment> _deployments = [];

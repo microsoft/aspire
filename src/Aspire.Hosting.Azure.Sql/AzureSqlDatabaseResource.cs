@@ -21,7 +21,7 @@ public class AzureSqlDatabaseResource(string name, string databaseName, AzureSql
     : Resource(name), IResourceWithParent<AzureSqlServerResource>, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure SQL Database";
+    public override string ResourceTypeDisplayName => "Azure SQL Database";
 
     /// <summary>
     /// SKU associated with the free offer

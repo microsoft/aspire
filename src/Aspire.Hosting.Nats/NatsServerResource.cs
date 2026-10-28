@@ -11,7 +11,7 @@ namespace Aspire.Hosting.ApplicationModel;
 public class NatsServerResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "NATS";
+    public override string ResourceTypeDisplayName => "NATS";
 
     internal const string PrimaryEndpointName = "tcp";
     internal const string PrimaryNatsSchemeName = "nats";

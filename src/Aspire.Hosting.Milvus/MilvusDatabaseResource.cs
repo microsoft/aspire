@@ -20,7 +20,7 @@ namespace Aspire.Hosting.ApplicationModel;
 public class MilvusDatabaseResource(string name, string databaseName, MilvusServerResource parent) : Resource(name), IResourceWithParent<MilvusServerResource>, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Milvus Database";
+    public override string ResourceTypeDisplayName => "Milvus Database";
 
     /// <summary>
     /// Gets the parent Milvus container resource.

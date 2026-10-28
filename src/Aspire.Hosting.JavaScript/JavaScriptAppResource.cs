@@ -16,5 +16,5 @@ public class JavaScriptAppResource(string name, string command, string workingDi
     : ExecutableResource(name, command, workingDirectory), IResourceWithServiceDiscovery, IResourceWithContainerFiles
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "JavaScript";
+    public override string ResourceTypeDisplayName => "JavaScript";
 }

@@ -14,7 +14,7 @@ namespace Aspire.Hosting.Docker;
 public class DockerComposeAspireDashboardResource(string name) : ContainerResource(name)
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Aspire Dashboard";
+    public override string ResourceTypeDisplayName => "Aspire Dashboard";
 
     /// <summary>
     /// Gets the primary endpoint of the Aspire Dashboard.

@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Azure;
 public class AzureStorageEmulatorResource(AzureStorageResource innerResource) : ContainerResource(innerResource.Name), IResource
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azurite";
+    public override string ResourceTypeDisplayName => "Azurite";
 
     private readonly AzureStorageResource _innerResource = innerResource ?? throw new ArgumentNullException(nameof(innerResource));
 

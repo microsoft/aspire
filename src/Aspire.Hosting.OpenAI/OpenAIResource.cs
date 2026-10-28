@@ -11,7 +11,7 @@ namespace Aspire.Hosting.OpenAI;
 public sealed class OpenAIResource : Resource, IResourceWithConnectionString
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "OpenAI";
+    public override string ResourceTypeDisplayName => "OpenAI";
 
     internal ParameterResource DefaultKeyParameter { get; }
     private const string DefaultEndpoint = "https://api.openai.com/v1";

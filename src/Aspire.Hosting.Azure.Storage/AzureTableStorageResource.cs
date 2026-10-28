@@ -21,7 +21,7 @@ public class AzureTableStorageResource(string name, AzureStorageResource storage
     IAzurePrivateEndpointTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Table Storage";
+    public override string ResourceTypeDisplayName => "Azure Table Storage";
 
     /// <summary>
     /// Gets the parent AzureStorageResource of this AzureTableStorageResource.

@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Azure;
 public class AzureAppConfigurationEmulatorResource(AzureAppConfigurationResource innerResource) : ContainerResource(innerResource.Name), IResource
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure App Configuration Emulator";
+    public override string ResourceTypeDisplayName => "Azure App Configuration Emulator";
 
     private readonly AzureAppConfigurationResource _innerResource = innerResource ?? throw new ArgumentNullException(nameof(innerResource));
 

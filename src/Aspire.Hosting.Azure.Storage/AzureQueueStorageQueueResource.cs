@@ -21,7 +21,7 @@ public class AzureQueueStorageQueueResource(string name, string queueName, Azure
     IResourceWithParent<AzureQueueStorageResource>
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Storage Queue";
+    public override string ResourceTypeDisplayName => "Azure Storage Queue";
 
     /// <summary>
     /// Gets the blob container name.

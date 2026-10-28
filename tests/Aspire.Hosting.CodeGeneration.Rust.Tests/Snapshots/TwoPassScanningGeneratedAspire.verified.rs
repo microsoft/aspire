@@ -3025,12 +3025,22 @@ impl CSharpAppResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable service label displayed for the resource.
-    pub fn with_service_display_name(&self, service_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Overrides the human-readable name displayed for the resource.
+    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("serviceDisplayName".to_string(), serde_json::to_value(&service_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withServiceDisplayName", args)?;
+        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -4608,12 +4618,22 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable service label displayed for the resource.
-    pub fn with_service_display_name(&self, service_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Overrides the human-readable name displayed for the resource.
+    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("serviceDisplayName".to_string(), serde_json::to_value(&service_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withServiceDisplayName", args)?;
+        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -5991,12 +6011,22 @@ impl ContainerResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable service label displayed for the resource.
-    pub fn with_service_display_name(&self, service_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Overrides the human-readable name displayed for the resource.
+    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("serviceDisplayName".to_string(), serde_json::to_value(&service_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withServiceDisplayName", args)?;
+        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -7932,12 +7962,22 @@ impl DotnetToolResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable service label displayed for the resource.
-    pub fn with_service_display_name(&self, service_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Overrides the human-readable name displayed for the resource.
+    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("serviceDisplayName".to_string(), serde_json::to_value(&service_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withServiceDisplayName", args)?;
+        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -9862,12 +9902,22 @@ impl ExecutableResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable service label displayed for the resource.
-    pub fn with_service_display_name(&self, service_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Overrides the human-readable name displayed for the resource.
+    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("serviceDisplayName".to_string(), serde_json::to_value(&service_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withServiceDisplayName", args)?;
+        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -10806,12 +10856,22 @@ impl ExternalServiceResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable service label displayed for the resource.
-    pub fn with_service_display_name(&self, service_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Overrides the human-readable name displayed for the resource.
+    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("serviceDisplayName".to_string(), serde_json::to_value(&service_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withServiceDisplayName", args)?;
+        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -14408,12 +14468,22 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable service label displayed for the resource.
-    pub fn with_service_display_name(&self, service_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Overrides the human-readable name displayed for the resource.
+    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("serviceDisplayName".to_string(), serde_json::to_value(&service_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withServiceDisplayName", args)?;
+        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -16104,12 +16174,22 @@ impl ProjectResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable service label displayed for the resource.
-    pub fn with_service_display_name(&self, service_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Overrides the human-readable name displayed for the resource.
+    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("serviceDisplayName".to_string(), serde_json::to_value(&service_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withServiceDisplayName", args)?;
+        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -18445,12 +18525,22 @@ impl TestDatabaseResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable service label displayed for the resource.
-    pub fn with_service_display_name(&self, service_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Overrides the human-readable name displayed for the resource.
+    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("serviceDisplayName".to_string(), serde_json::to_value(&service_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withServiceDisplayName", args)?;
+        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -20104,12 +20194,22 @@ impl TestRedisResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable service label displayed for the resource.
-    pub fn with_service_display_name(&self, service_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Overrides the human-readable name displayed for the resource.
+    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("serviceDisplayName".to_string(), serde_json::to_value(&service_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withServiceDisplayName", args)?;
+        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -21983,12 +22083,22 @@ impl TestVaultResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable service label displayed for the resource.
-    pub fn with_service_display_name(&self, service_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Overrides the human-readable name displayed for the resource.
+    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("serviceDisplayName".to_string(), serde_json::to_value(&service_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withServiceDisplayName", args)?;
+        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Overrides the human-readable resource type label.
+    pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resourceTypeDisplayName".to_string(), serde_json::to_value(&resource_type_display_name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withResourceTypeDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }

@@ -19,7 +19,7 @@ public class AzureServiceBusResource(string name, Action<AzureResourceInfrastruc
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithAzureFunctionsConfig, IResourceWithEndpoints, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Service Bus";
+    public override string ResourceTypeDisplayName => "Azure Service Bus";
 
     internal List<AzureServiceBusQueueResource> Queues { get; } = [];
     internal List<AzureServiceBusTopicResource> Topics { get; } = [];

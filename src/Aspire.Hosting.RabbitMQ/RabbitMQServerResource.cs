@@ -10,7 +10,7 @@ namespace Aspire.Hosting.ApplicationModel;
 public class RabbitMQServerResource : ContainerResource, IResourceWithConnectionString, IResourceWithEnvironment
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "RabbitMQ";
+    public override string ResourceTypeDisplayName => "RabbitMQ";
 
     internal const string PrimaryEndpointName = "tcp";
     internal const string ManagementEndpointName = "management";

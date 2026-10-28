@@ -14,7 +14,7 @@ public class ViteAppResource(string name, string command, string workingDirector
     : JavaScriptAppResource(name, command, workingDirectory)
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Vite";
+    public override string ResourceTypeDisplayName => "Vite";
 
     /// <summary>
     /// Gets or sets the path to the Vite configuration file.

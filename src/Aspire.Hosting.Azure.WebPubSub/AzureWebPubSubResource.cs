@@ -18,7 +18,7 @@ public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastruct
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithEndpoints, IAzurePrivateEndpointTarget
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Web PubSub";
+    public override string ResourceTypeDisplayName => "Azure Web PubSub";
 
     internal const string EmulatorAccessKey = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGH";
 

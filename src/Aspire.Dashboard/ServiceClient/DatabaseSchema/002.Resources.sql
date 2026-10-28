@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS dashboard_resources (
     icon_name TEXT NULL,
     icon_variant INTEGER NULL,
     console_logs_loaded INTEGER NOT NULL,
-    service_display_name TEXT NULL
+    resource_type_display_name TEXT NULL,
+    resource_display_name TEXT NULL
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS dashboard_resource_environment (

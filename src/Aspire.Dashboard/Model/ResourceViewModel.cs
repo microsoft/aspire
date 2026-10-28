@@ -26,12 +26,17 @@ public sealed class ResourceViewModel
 
     public required string Name { get; init; }
     public required string ResourceType { get; init; }
-    public string ServiceDisplayName
+    public string ResourceTypeDisplayName
     {
         get => string.IsNullOrWhiteSpace(field) ? ResourceType : field;
         init;
     }
     public required string DisplayName { get; init; }
+    public string ResourceDisplayName
+    {
+        get => string.IsNullOrWhiteSpace(field) ? DisplayName : field;
+        init;
+    }
     public required string Uid { get; init; }
     public required int ReplicaIndex { get; init; }
     public required string? State { get; init; }
@@ -170,7 +175,8 @@ public sealed class ResourceViewModel
     {
         // TODO let ResourceType define the additional data values we include in searches
         return Name.Contains(filter, StringComparisons.UserTextSearch) ||
-            ServiceDisplayName.Contains(filter, StringComparisons.UserTextSearch);
+            ResourceDisplayName.Contains(filter, StringComparisons.UserTextSearch) ||
+            ResourceTypeDisplayName.Contains(filter, StringComparisons.UserTextSearch);
     }
 
     public string? GetResourcePropertyValue(string propertyName)
@@ -217,23 +223,36 @@ public sealed class ResourceViewModel
     }
 
     public static string GetResourceName(ResourceViewModel resource, IEnumerable<ResourceViewModel> allResources)
+        => GetResourceName(resource, allResources, useFriendlyName: true);
+
+    // Navigation and telemetry filters still require the app-model name (or runtime name for replicas).
+    public static string GetResourceTargetName(ResourceViewModel resource, IDictionary<string, ResourceViewModel> allResources)
+        => GetResourceName(resource, allResources.Values, useFriendlyName: false);
+
+    public static string GetResourceTargetName(ResourceViewModel resource, IEnumerable<ResourceViewModel> allResources)
+        => GetResourceName(resource, allResources, useFriendlyName: false);
+
+    private static string GetResourceName(ResourceViewModel resource, IEnumerable<ResourceViewModel> allResources, bool useFriendlyName)
     {
+        var name = useFriendlyName ? resource.ResourceDisplayName : resource.DisplayName;
         var count = 0;
         foreach (var item in allResources)
         {
-            if (string.Equals(item.DisplayName, resource.DisplayName, StringComparisons.ResourceName))
+            if (string.Equals(useFriendlyName ? item.ResourceDisplayName : item.DisplayName, name, StringComparisons.ResourceName))
             {
                 count++;
                 if (count >= 2)
                 {
-                    // There are multiple resources with the same display name so they're part of a replica set.
-                    // Need to use the name which has a unique ID to tell them apart.
-                    return resource.Name;
+                    // Labels can be shared by replicas or unrelated resources. Keep the technical name
+                    // visible to disambiguate custom labels without changing resource identity.
+                    return !useFriendlyName || resource.ResourceDisplayName == resource.DisplayName
+                        ? resource.Name
+                        : $"{resource.ResourceDisplayName} ({resource.Name})";
                 }
             }
         }
 
-        return resource.DisplayName;
+        return name;
     }
 
     public static bool TryGetResourceByName(string resourceName, IDictionary<string, ResourceViewModel> resourceByName, [NotNullWhen(true)] out ResourceViewModel? resource)
@@ -266,7 +285,7 @@ public sealed class ResourceViewModelNameComparer : IComparer<ResourceViewModel>
         // Use display name by itself first.
         // This is to avoid the problem of using the full name where one resource is called "database" and another is called "database-admin".
         // The full names could end up "database-xyz" and "database-admin-xyz", which would put resources out of order.
-        var displayNameResult = string.Compare(x.DisplayName, y.DisplayName, StringComparisons.ResourceName);
+        var displayNameResult = string.Compare(x.ResourceDisplayName, y.ResourceDisplayName, StringComparisons.ResourceName);
         if (displayNameResult != 0)
         {
             return displayNameResult;

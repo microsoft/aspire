@@ -63,5 +63,5 @@ public class PythonAppResource(string name, string executablePath, string appDir
     : ExecutableResource(name, executablePath, appDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Python";
+    public override string ResourceTypeDisplayName => "Python";
 }

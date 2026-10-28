@@ -19,7 +19,7 @@ namespace Aspire.Hosting.Azure;
 public class AzureCosmosDBContainerResource : Resource, IResourceWithParent<AzureCosmosDBDatabaseResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
     /// <inheritdoc/>
-    public override string ServiceDisplayName => "Azure Cosmos DB Container";
+    public override string ResourceTypeDisplayName => "Azure Cosmos DB Container";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureCosmosDBContainerResource"/> class.
