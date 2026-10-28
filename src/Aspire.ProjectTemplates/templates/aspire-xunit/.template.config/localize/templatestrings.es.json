@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Proyecto de prueba de Aspire (xUnit)",
   "description": "Un proyecto que contiene pruebas de integración de xUnit.net de un proyecto AppHost de Aspire.",
