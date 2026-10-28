@@ -14,8 +14,11 @@
     var parameterRows = GetParameterPaneRows();
     var groups = isGrouped ? GetResourceGroups() : new List<ResourceGroup>();
     var telemetryRows = GetVisibleTelemetryResources().ToList();
-    var paneResourceCount = isGrouped ? groups.SelectMany(g => g.Resources).DistinctBy(r => r.Name).Count() : paneRows.Count;
-    var paneParameterCount = parameterRows.Count;
+    // Grouping by tags puts parameters in the groups (see GetTagGroups). Other groupings list them in their own section.
+    var parametersInGroups = isGrouped && _grouping == ResourceGrouping.Tags;
+    var groupedItems = groups.SelectMany(g => g.Resources).DistinctBy(r => r.Name).ToList();
+    var paneResourceCount = isGrouped ? groupedItems.Count(r => !r.IsParameter) : paneRows.Count;
+    var paneParameterCount = parametersInGroups ? groupedItems.Count(r => r.IsParameter) : parameterRows.Count;
     var paneTelemetrySourceCount = telemetryRows.Count;
     var paneItemCount = paneResourceCount + paneParameterCount + paneTelemetrySourceCount;
     var isDesktop = ViewportInformation.IsDesktop;
@@ -259,26 +262,26 @@
                             RenderResourceRow(__builder, row.Resource, row);
                         }
                     }
+                }
 
-                    @if (DashboardClient.IsEnabled && parameterRows.Count > 0)
+                @if (DashboardClient.IsEnabled && !parametersInGroups && parameterRows.Count > 0)
+                {
+                    var parametersCollapsed = IsSectionCollapsed(ParametersSectionKey);
+                    <button type="button"
+                            class="resource-pane-section-header"
+                            aria-expanded="@((!parametersCollapsed).ToString().ToLowerInvariant())"
+                            @onclick="@(() => ToggleSection(ParametersSectionKey))">
+                        <span>@Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)]</span>
+                        <span class="resource-pane-section-count">@parameterRows.Count</span>
+                        <span class="resource-pane-section-chevron @(parametersCollapsed ? "collapsed" : null)">
+                            <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Default" />
+                        </span>
+                    </button>
+                    @if (!parametersCollapsed)
                     {
-                        var parametersCollapsed = IsSectionCollapsed(ParametersSectionKey);
-                        <button type="button"
-                                class="resource-pane-section-header"
-                                aria-expanded="@((!parametersCollapsed).ToString().ToLowerInvariant())"
-                                @onclick="@(() => ToggleSection(ParametersSectionKey))">
-                            <span>@Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)]</span>
-                            <span class="resource-pane-section-count">@parameterRows.Count</span>
-                            <span class="resource-pane-section-chevron @(parametersCollapsed ? "collapsed" : null)">
-                                <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Default" />
-                            </span>
-                        </button>
-                        @if (!parametersCollapsed)
+                        foreach (var parameter in parameterRows)
                         {
-                            foreach (var parameter in parameterRows)
-                            {
-                                RenderResourceRow(__builder, parameter, row: null);
-                            }
+                            RenderResourceRow(__builder, parameter, row: null);
                         }
                     }
                 }

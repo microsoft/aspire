@@ -53,6 +53,52 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData("Tags")]
+    [InlineData("ResourceType")]
+    public void Grouping_ParametersJoinTagGroupsAndKeepTheirSectionOtherwise(string grouping)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var name = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag;
+        Dictionary<string, ResourcePropertyViewModel> Tags(params string[] tags) => new()
+        {
+            [name] = new(name, Value.ForList([.. tags.Select(Value.ForString)]), false, null, 0, null, false)
+        };
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", resourceType: "Project", properties: Tags("Backend")),
+                ModelTestHelpers.CreateResource("api-key", resourceType: KnownResourceTypes.Parameter, properties: Tags("Backend")),
+                ModelTestHelpers.CreateResource("theme", resourceType: KnownResourceTypes.Parameter)
+            ], resourceChannelProvider: () => channel));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, grouping) : (false, null);
+        Render<FluentToastProvider>();
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".resource-tag-group")));
+        var groups = cut.FindAll(".resource-tag-group").Select(g => (
+            g.GetAttribute("data-resource-group-key"),
+            string.Join(", ", g.QuerySelectorAll(".resource-row-name").Select(n => n.TextContent.Trim())))).ToList();
+        var sections = cut.FindAll(".resource-pane-section-header > span:first-child").Select(s => s.TextContent.Trim()).ToList();
+        if (grouping == "Tags")
+        {
+            // A parameter shows with the resources that share its tags, after them. Untagged ones are with the untagged.
+            Assert.Equal([("Tags:Backend", "api, api-key"), ("Tags:", "theme")], groups);
+            Assert.Empty(sections);
+        }
+        else
+        {
+            // Other groupings are about resources: the parameters stay in their own section rather than disappearing.
+            Assert.Equal([("ResourceType:Project", "api")], groups);
+            Assert.Equal(["Parameters"], sections);
+            Assert.Equal(
+                ["api-key", "theme"],
+                cut.FindAll(".resource-pane-section-header ~ .resource-row .resource-row-name").Select(n => n.TextContent.Trim()));
+        }
+    }
+
+    [Theory]
     [InlineData("Tags", "Tags:A new group")]
     [InlineData("ResourceType", "ResourceType:AAA")]
     [InlineData("State", "State:Building")]

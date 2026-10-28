@@ -900,7 +900,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     private List<ResourceGroup> GetResourceGroups()
     {
-        if (!_showResources)
+        // Tag groups include parameters (see GetTagGroups), so they can have content when only parameters are shown.
+        if (_grouping == ResourceGrouping.Tags ? !_showResources && !_showParameters : !_showResources)
         {
             return [];
         }
@@ -979,13 +980,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneGrouping, grouping.ToString());
     }
 
-    // Resources with multiple tags appear in each group; untagged resources initially appear last.
+    // Resources with multiple tags appear in each group; untagged resources initially appear last. Parameters are part of
+    // the groups too, after the group's resources: an app tags a parameter like the resource that uses it, so the
+    // parameter shows next to that resource.
     private List<ResourceGroup> GetTagGroups()
     {
         var textFilter = _filter.TextFilter;
         var resources = _resourceByName.Values
-            .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
-            .OrderBy(r => r.ResourceType)
+            .Where(r => (r.IsParameter ? _showParameters : _showResources) && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
+            .OrderBy(r => r.IsParameter)
+            .ThenBy(r => r.ResourceType)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
             .ToList();
 

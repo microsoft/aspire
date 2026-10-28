@@ -7,18 +7,21 @@ using Microsoft.Extensions.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+// Parameters have the same two tags as the resource that uses them, so grouping the dashboard by tags shows them
+// together: Frontend/Storefront for the frontend, Backend/API for the catalog service, and Backend/Checkout for the
+// basket service.
 var storefrontPromotion = builder.AddParameter("storefront-promotion", "Free shipping over $50")
-                                .WithTags("Frontend", "Marketing");
+                                .WithTags("Frontend", "Storefront");
 var lowStockThreshold = builder.AddParameter("low-stock-threshold", "5")
-                         .WithTags("Backend", "Inventory");
+                         .WithTags("Backend", "API");
 var checkoutSigningKey = builder.AddParameter("checkout-signing-key", () => Guid.NewGuid().ToString(), secret: true)
-                          .WithTags("Backend", "Security");
+                          .WithTags("Backend", "Checkout");
 builder.AddParameter("support-contact-email")
        .WithDescription("The customer support email address displayed by the storefront.")
-       .WithTags("Frontend", "Support");
+       .WithTags("Frontend", "Storefront");
 builder.AddParameter("storefront-theme", "system")
        .WithDescription("Choose the storefront color theme.")
-       .WithTags("Frontend", "Appearance")
+       .WithTags("Frontend", "Storefront")
        .WithCustomInput(parameter => new()
        {
            Name = parameter.Name,
@@ -34,7 +37,7 @@ builder.AddParameter("storefront-theme", "system")
        });
 builder.AddParameter("storefront-accent", "blue")
        .WithDescription("Choose a suggested accent or enter a custom value.")
-       .WithTags("Frontend", "Appearance")
+       .WithTags("Frontend", "Storefront")
        .WithCustomInput(parameter => new()
        {
            Name = parameter.Name,
@@ -51,7 +54,7 @@ builder.AddParameter("storefront-accent", "blue")
        });
 builder.AddParameter("recommendation-limit", "12")
        .WithDescription("The maximum number of recommendations to display.")
-       .WithTags("Backend", "Inventory")
+       .WithTags("Backend", "API")
        .WithCustomInput(parameter => new()
        {
            Name = parameter.Name,
@@ -62,7 +65,7 @@ builder.AddParameter("recommendation-limit", "12")
        });
 builder.AddParameter("maintenance-mode", "false")
        .WithDescription("Temporarily show the storefront maintenance experience.")
-       .WithTags("Frontend", "Operations")
+       .WithTags("Frontend", "Storefront")
        .WithCustomInput(parameter => new()
        {
            Name = parameter.Name,
@@ -72,7 +75,7 @@ builder.AddParameter("maintenance-mode", "false")
        });
 builder.AddParameter("storefront-certificate")
        .WithDescription("Upload the certificate used by the storefront.")
-       .WithTags("Frontend", "Security")
+       .WithTags("Frontend", "Storefront")
        .WithCustomInput(parameter => new()
        {
            Name = parameter.Name,
@@ -163,7 +166,7 @@ var messaging = builder.AddRabbitMQ("messaging")
                        .PublishAsContainer();
 
 var basketService = builder.AddProject("basketservice", @"..\BasketService\BasketService.csproj")
-                           .WithTags("Backend")
+                           .WithTags("Backend", "Checkout")
                            .WithEnvironment("Checkout__SigningKey", checkoutSigningKey)
                            .WithDashboardPosition(20)
                            .WithReference(basketCache)
@@ -172,7 +175,7 @@ var basketService = builder.AddProject("basketservice", @"..\BasketService\Baske
                            .WaitFor(messaging);
 
 var frontend = builder.AddProject<Projects.MyFrontend>("frontend")
-    .WithTags("Frontend")
+    .WithTags("Frontend", "Storefront")
     .WithEnvironment("Storefront__Promotion", storefrontPromotion)
     .WithDashboardPosition(0)
     .WithExternalHttpEndpoints()
