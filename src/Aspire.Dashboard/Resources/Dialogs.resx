@@ -345,13 +345,13 @@
     <value>Step {0} of 2</value>
   </data>
   <data name="DashboardFeedbackStepOneTitle" xml:space="preserve">
-    <value>Why are you switching?</value>
+    <value>Why are you going back to the previous dashboard?</value>
   </data>
   <data name="DashboardFeedbackStepTwoTitle" xml:space="preserve">
-    <value>Anything else we should know?</value>
+    <value>Is there anything else you want to tell us?</value>
   </data>
   <data name="DashboardFeedbackStepTwoDescription" xml:space="preserve">
-    <value>These details are optional, but they help us understand what to improve.</value>
+    <value>Both questions are optional, but your answers help us decide what to improve.</value>
   </data>
   <data name="DashboardFeedbackContinue" xml:space="preserve">
     <value>Continue</value>
@@ -366,67 +366,67 @@
     <value>Open new discussion and switch</value>
   </data>
   <data name="DashboardFeedbackDurationLabel" xml:space="preserve">
-    <value>Time using the new dashboard</value>
+    <value>How long have you used the new dashboard?</value>
   </data>
   <data name="DashboardFeedbackDurationNotSpecified" xml:space="preserve">
-    <value>Prefer not to say</value>
+    <value>I&apos;d rather not say</value>
   </data>
   <data name="DashboardFeedbackDurationLessThanOneHour" xml:space="preserve">
-    <value>Less than one hour</value>
+    <value>Less than an hour</value>
   </data>
   <data name="DashboardFeedbackDurationOneDay" xml:space="preserve">
-    <value>About one day</value>
+    <value>About a day</value>
   </data>
   <data name="DashboardFeedbackDurationTwoToSevenDays" xml:space="preserve">
-    <value>2-7 days</value>
+    <value>2 to 7 days</value>
   </data>
   <data name="DashboardFeedbackDurationMoreThanOneWeek" xml:space="preserve">
-    <value>More than one week</value>
+    <value>More than a week</value>
   </data>
   <data name="DashboardFeedbackReasonsLabel" xml:space="preserve">
-    <value>Reasons for returning to the previous dashboard</value>
+    <value>What made you go back? Select all that apply.</value>
   </data>
   <data name="DashboardFeedbackReasonNavigation" xml:space="preserve">
-    <value>Navigation</value>
+    <value>It was hard to find my way around</value>
   </data>
   <data name="DashboardFeedbackReasonFindingApplicationUrls" xml:space="preserve">
-    <value>Finding application URLs</value>
+    <value>I couldn&apos;t find my application URLs</value>
   </data>
   <data name="DashboardFeedbackReasonTelemetryWorkflow" xml:space="preserve">
-    <value>Telemetry workflow</value>
+    <value>The telemetry workflow didn&apos;t work for me</value>
   </data>
   <data name="DashboardFeedbackReasonTerminals" xml:space="preserve">
-    <value>Terminals</value>
+    <value>The terminals didn&apos;t work for me</value>
   </data>
   <data name="DashboardFeedbackReasonPerformanceOrAccessibility" xml:space="preserve">
-    <value>Performance or accessibility</value>
+    <value>It was slow or hard to use with assistive technology</value>
   </data>
   <data name="DashboardFeedbackReasonMissingFeature" xml:space="preserve">
-    <value>A missing feature</value>
+    <value>A feature I need is missing</value>
   </data>
   <data name="DashboardFeedbackReasonOther" xml:space="preserve">
-    <value>Other</value>
+    <value>Another reason</value>
   </data>
   <data name="DashboardFeedbackOtherPlaceholder" xml:space="preserve">
-    <value>Describe another reason</value>
+    <value>Tell us what happened</value>
   </data>
   <data name="DashboardFeedbackMissingLabel" xml:space="preserve">
-    <value>What are you missing from the new dashboard?</value>
+    <value>What is missing from the new dashboard?</value>
   </data>
   <data name="DashboardFeedbackDifficultiesLabel" xml:space="preserve">
-    <value>What felt harder or less clear?</value>
+    <value>What was harder or less clear than in the previous dashboard?</value>
   </data>
   <data name="DashboardFeedbackPreviewLabel" xml:space="preserve">
-    <value>Feedback to copy</value>
+    <value>Your feedback</value>
   </data>
   <data name="DashboardFeedbackModeLabel" xml:space="preserve">
-    <value>Dashboard mode</value>
+    <value>How do you run the dashboard?</value>
   </data>
   <data name="DashboardFeedbackModeAppHost" xml:space="preserve">
-    <value>AppHost</value>
+    <value>With an AppHost</value>
   </data>
   <data name="DashboardFeedbackModeStandalone" xml:space="preserve">
-    <value>Standalone telemetry</value>
+    <value>Standalone, for telemetry only</value>
   </data>
   <data name="DashboardFeedbackMarkdownTitle" xml:space="preserve">
     <value>Dashboard experience feedback</value>

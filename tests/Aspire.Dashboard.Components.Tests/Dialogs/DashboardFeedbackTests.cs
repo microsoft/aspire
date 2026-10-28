@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Dialogs;
@@ -29,8 +29,8 @@ public sealed class DashboardFeedbackTests : DashboardTestContext
             """
             ### Dashboard experience feedback
 
-            **Dashboard mode**
-            Standalone telemetry
+            **How do you run the dashboard?**
+            Standalone, for telemetry only
             """,
             markdown);
     }
@@ -57,21 +57,21 @@ public sealed class DashboardFeedbackTests : DashboardTestContext
             """
             ### Dashboard experience feedback
 
-            **Time using the new dashboard**
-            2-7 days
+            **How long have you used the new dashboard?**
+            2 to 7 days
 
-            **Reasons for returning to the previous dashboard**
-            - Navigation
-            - Other: The layout used too much horizontal space.
+            **What made you go back? Select all that apply.**
+            - It was hard to find my way around
+            - Another reason: The layout used too much horizontal space.
 
-            **What are you missing from the new dashboard?**
+            **What is missing from the new dashboard?**
             A direct link to my frontend.
 
-            **What felt harder or less clear?**
+            **What was harder or less clear than in the previous dashboard?**
             Primary navigation was difficult to scan.
 
-            **Dashboard mode**
-            AppHost
+            **How do you run the dashboard?**
+            With an AppHost
             """,
             markdown);
     }
@@ -125,7 +125,7 @@ public sealed class DashboardFeedbackTests : DashboardTestContext
         var select = cut.FindComponent<FluentSelect<DashboardFeedbackUsageDuration, DashboardFeedbackUsageDuration>>();
         Assert.NotNull(select.Find("fluent-dropdown"));
         Assert.Equal(DashboardFeedbackUsageDuration.NotSpecified, select.Instance.Value);
-        Assert.Equal("Time using the new dashboard", select.Instance.AriaLabel);
+        Assert.Equal("How long have you used the new dashboard?", select.Instance.AriaLabel);
     }
 
     [Fact]
