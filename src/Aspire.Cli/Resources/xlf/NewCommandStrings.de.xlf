@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="CloningTemplateRepository">
         <source>Cloning template repository...</source>
-        <target state="new">Cloning template repository...</target>
+        <target state="translated">Vorlagenrepository wird geklont…</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
@@ -54,17 +54,17 @@
       </trans-unit>
       <trans-unit id="LocalTemplateCreationFailed">
         <source>Could not create the local template ({0}): {1}</source>
-        <target state="new">Could not create the local template ({0}): {1}</target>
+        <target state="translated">Die lokale Vorlage ({0}) konnte nicht erstellt werden: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateLoadFailed">
         <source>Could not load the local template: {0}</source>
-        <target state="new">Could not load the local template: {0}</target>
+        <target state="translated">Die lokale Vorlage konnte nicht geladen werden: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateSelectionRequiresInteraction">
         <source>The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</source>
-        <target state="new">The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</target>
+        <target state="translated">Das Verzeichnis enthält mehrere Vorlagen. Führen Sie den Befehl interaktiv aus, um eine Vorlage auszuwählen, oder geben Sie mit „--template-path“ ein einzelnes Vorlagenverzeichnis an.</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
         <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
-        <target state="new">No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</target>
+        <target state="translated">In '{0}' wurden keine .NET-Vorlagen gefunden. Es wurde eine .template.config/template.json-Datei im Verzeichnis oder einem seiner Unterverzeichnisse erwartet.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
@@ -124,7 +124,7 @@
       </trans-unit>
       <trans-unit id="ResolvingTemplateRepository">
         <source>Resolving template repository ref...</source>
-        <target state="new">Resolving template repository ref...</target>
+        <target state="translated">Referenz des Vorlagenrepositorys wird aufgelöst…</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
@@ -164,57 +164,57 @@
       </trans-unit>
       <trans-unit id="TemplateDirectoryNotFound">
         <source>The template directory '{0}' does not exist.</source>
-        <target state="new">The template directory '{0}' does not exist.</target>
+        <target state="translated">Das Vorlagenverzeichnis „{0}“ ist nicht vorhanden.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathConflictingOptions">
         <source>--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</source>
-        <target state="new">--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</target>
+        <target state="translated">--template-path und --template-repository erfordern nicht leere Werte und können nicht mit einem Vorlagenunterbefehl, --source, --version, --channel oder --language kombiniert werden.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathOptionDescription">
         <source>Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</source>
-        <target state="new">Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</target>
+        <target state="translated">Pfad zu einem entpackten Verzeichnis mit einem .NET-Vorlagenpaket (relativ zum Repository, wenn --template-repository angegeben ist)</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitExited">
         <source>Git failed with exit code {0}: {1}</source>
-        <target state="new">Git failed with exit code {0}: {1}</target>
+        <target state="translated">Git ist mit Exitcode {0} fehlgeschlagen: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitFailed">
         <source>Could not access the template repository: {0}</source>
-        <target state="new">Could not access the template repository: {0}</target>
+        <target state="translated">Auf das Vorlagenrepository konnte nicht zugegriffen werden: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
-        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <target state="translated">Git konnte nicht gestartet werden. Installieren Sie Git, und stellen Sie sicher, dass es sich in PATH befindet.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryOptionDescription">
         <source>Clone a Git repository containing templates; --template-path is relative to its root</source>
-        <target state="new">Clone a Git repository containing templates; --template-path is relative to its root</target>
+        <target state="translated">Ein Git-Repository mit Vorlagen klonen; --template-path ist relativ zu dessen Stammverzeichnis</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryPathInvalid">
         <source>When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</source>
-        <target state="new">When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</target>
+        <target state="translated">Wenn „--template-repository“ angegeben ist, muss „--template-path“ relativ sein und sich innerhalb des Repositorys befinden, ohne symbolische Links zu durchlaufen.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefNotFound">
         <source>Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</source>
-        <target state="new">Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</target>
+        <target state="translated">Die Referenz des Vorlagenrepositorys „{0}“ konnte nicht in eine Commit-SHA aufgelöst werden. Geben Sie einen Branch, ein Tag oder eine vollständige Commit-SHA an.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefOptionDescription">
         <source>Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</source>
-        <target state="new">Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</target>
+        <target state="translated">Branch, Tag oder vollständige Commit-SHA des Vorlagenrepositorys (erfordert --template-repository; standardmäßig wird der Remote-HEAD verwendet)</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefRequiresRepository">
         <source>--template-repository-ref requires --template-repository and a non-empty ref value.</source>
-        <target state="new">--template-repository-ref requires --template-repository and a non-empty ref value.</target>
+        <target state="translated">--template-repository-ref erfordert --template-repository und einen nicht leeren Referenzwert.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">

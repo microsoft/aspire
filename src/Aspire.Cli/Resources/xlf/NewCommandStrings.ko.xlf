@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="CloningTemplateRepository">
         <source>Cloning template repository...</source>
-        <target state="new">Cloning template repository...</target>
+        <target state="translated">템플릿 리포지토리를 복제하는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
@@ -54,17 +54,17 @@
       </trans-unit>
       <trans-unit id="LocalTemplateCreationFailed">
         <source>Could not create the local template ({0}): {1}</source>
-        <target state="new">Could not create the local template ({0}): {1}</target>
+        <target state="translated">로컬 템플릿을 만들 수 없습니다({0}). {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateLoadFailed">
         <source>Could not load the local template: {0}</source>
-        <target state="new">Could not load the local template: {0}</target>
+        <target state="translated">로컬 템플릿을 로드할 수 없습니다. {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateSelectionRequiresInteraction">
         <source>The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</source>
-        <target state="new">The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</target>
+        <target state="translated">디렉터리에 여러 템플릿이 포함되어 있습니다. 대화형으로 실행해 하나를 선택하거나, --template-path에 단일 템플릿 디렉터리의 경로를 지정하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
         <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
-        <target state="new">No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</target>
+        <target state="translated">'{0}'에서 .NET 템플릿을 찾을 수 없습니다. 디렉터리 또는 하위 디렉터리 중 하나에 .template.config/template.json 파일이 있어야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
@@ -124,7 +124,7 @@
       </trans-unit>
       <trans-unit id="ResolvingTemplateRepository">
         <source>Resolving template repository ref...</source>
-        <target state="new">Resolving template repository ref...</target>
+        <target state="translated">템플릿 리포지토리 참조를 확인하는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
@@ -164,57 +164,57 @@
       </trans-unit>
       <trans-unit id="TemplateDirectoryNotFound">
         <source>The template directory '{0}' does not exist.</source>
-        <target state="new">The template directory '{0}' does not exist.</target>
+        <target state="translated">템플릿 디렉터리 '{0}'이(가) 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathConflictingOptions">
         <source>--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</source>
-        <target state="new">--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</target>
+        <target state="translated">--template-path와 --template-repository에는 비어 있지 않은 값을 지정해야 합니다. 템플릿 하위 명령, --source, --version, --channel 또는 --language와 함께 사용할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathOptionDescription">
         <source>Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</source>
-        <target state="new">Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</target>
+        <target state="translated">압축을 푼 .NET 템플릿 패키지 디렉터리의 경로입니다. --template-repository를 지정한 경우 리포지토리를 기준으로 한 상대 경로입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitExited">
         <source>Git failed with exit code {0}: {1}</source>
-        <target state="new">Git failed with exit code {0}: {1}</target>
+        <target state="translated">종료 코드 {1}을(를) 반환하며 테스트 {0}에 실패했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitFailed">
         <source>Could not access the template repository: {0}</source>
-        <target state="new">Could not access the template repository: {0}</target>
+        <target state="translated">템플릿 리포지토리에 액세스할 수 없습니다: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
-        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <target state="translated">Git을 시작할 수 없습니다. Git을 설치하고 PATH에 포함되어 있는지 확인하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryOptionDescription">
         <source>Clone a Git repository containing templates; --template-path is relative to its root</source>
-        <target state="new">Clone a Git repository containing templates; --template-path is relative to its root</target>
+        <target state="translated">템플릿이 포함된 Git 리포지토리를 복제합니다. --template-path는 리포지토리 루트를 기준으로 한 상대 경로입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryPathInvalid">
         <source>When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</source>
-        <target state="new">When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</target>
+        <target state="translated">--template-repository를 지정하면 --template-path는 상대 경로여야 합니다. 심볼릭 링크를 따라가지 않고 리포지토리 내부에 있어야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefNotFound">
         <source>Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</source>
-        <target state="new">Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</target>
+        <target state="translated">템플릿 리포지토리 ref '{0}'을(를) 커밋 SHA로 확인할 수 없습니다. 브랜치, 태그 또는 전체 커밋 SHA를 지정하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefOptionDescription">
         <source>Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</source>
-        <target state="new">Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</target>
+        <target state="translated">템플릿 리포지토리의 브랜치, 태그 또는 전체 커밋 SHA입니다. --template-repository가 필요하며, 기본값은 원격 HEAD입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefRequiresRepository">
         <source>--template-repository-ref requires --template-repository and a non-empty ref value.</source>
-        <target state="new">--template-repository-ref requires --template-repository and a non-empty ref value.</target>
+        <target state="translated">--template-repository-ref를 사용하려면 --template-repository와 비어 있지 않은 ref 값을 지정해야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">

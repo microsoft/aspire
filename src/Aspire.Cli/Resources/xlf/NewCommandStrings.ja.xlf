@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="CloningTemplateRepository">
         <source>Cloning template repository...</source>
-        <target state="new">Cloning template repository...</target>
+        <target state="translated">テンプレート リポジトリをクローンしています...</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
@@ -54,17 +54,17 @@
       </trans-unit>
       <trans-unit id="LocalTemplateCreationFailed">
         <source>Could not create the local template ({0}): {1}</source>
-        <target state="new">Could not create the local template ({0}): {1}</target>
+        <target state="translated">ローカル テンプレート ({0}) を作成できませんでした: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateLoadFailed">
         <source>Could not load the local template: {0}</source>
-        <target state="new">Could not load the local template: {0}</target>
+        <target state="translated">ローカル テンプレートを読み込めませんでした: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateSelectionRequiresInteraction">
         <source>The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</source>
-        <target state="new">The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</target>
+        <target state="translated">ディレクトリに複数のテンプレートが含まれています。対話的に実行して 1 つを選択するか、--template-path に単一のテンプレートのディレクトリを指定してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
         <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
-        <target state="new">No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</target>
+        <target state="translated">'{0}' に .NET テンプレートが見つかりませんでした。ディレクトリまたはそのいずれかのサブディレクトリに .template.config/template.json ファイルが必要です。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
@@ -124,7 +124,7 @@
       </trans-unit>
       <trans-unit id="ResolvingTemplateRepository">
         <source>Resolving template repository ref...</source>
-        <target state="new">Resolving template repository ref...</target>
+        <target state="translated">テンプレート リポジトリの参照を解決しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
@@ -164,57 +164,57 @@
       </trans-unit>
       <trans-unit id="TemplateDirectoryNotFound">
         <source>The template directory '{0}' does not exist.</source>
-        <target state="new">The template directory '{0}' does not exist.</target>
+        <target state="translated">テンプレート ディレクトリ '{0}' が存在しません。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathConflictingOptions">
         <source>--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</source>
-        <target state="new">--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</target>
+        <target state="translated">--template-path および --template-repository は、空でない値が必要であり、テンプレート サブコマンド、--source、--version、--channel、または --language と組み合わせることができません。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathOptionDescription">
         <source>Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</source>
-        <target state="new">Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</target>
+        <target state="translated">アンパックした .NET テンプレート パッケージ ディレクトリへのパス (--template-repository を指定した場合は、リポジトリからの相対パス)</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitExited">
         <source>Git failed with exit code {0}: {1}</source>
-        <target state="new">Git failed with exit code {0}: {1}</target>
+        <target state="translated">Git が終了コード {0} で失敗しました: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitFailed">
         <source>Could not access the template repository: {0}</source>
-        <target state="new">Could not access the template repository: {0}</target>
+        <target state="translated">テンプレート リポジトリにアクセスできませんでした: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
-        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <target state="translated">Git を開始できませんでした。Git をインストールし、PATH にあることを確認してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryOptionDescription">
         <source>Clone a Git repository containing templates; --template-path is relative to its root</source>
-        <target state="new">Clone a Git repository containing templates; --template-path is relative to its root</target>
+        <target state="translated">テンプレートを含む Git リポジトリをクローンします。--template-path はそのルートからの相対パスです</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryPathInvalid">
         <source>When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</source>
-        <target state="new">When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</target>
+        <target state="translated">--template-repository を指定する場合、--template-path は相対パスであり、シンボリック リンクをたどることなくリポジトリ内に留まる必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefNotFound">
         <source>Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</source>
-        <target state="new">Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</target>
+        <target state="translated">テンプレート リポジトリの参照 '{0}' をコミット SHA に解決できませんでした。ブランチ、タグ、または完全なコミット SHA を指定してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefOptionDescription">
         <source>Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</source>
-        <target state="new">Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</target>
+        <target state="translated">テンプレート リポジトリのブランチ、タグ、または完全なコミット SHA (--template-repository が必要。既定値はリモート HEAD)</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefRequiresRepository">
         <source>--template-repository-ref requires --template-repository and a non-empty ref value.</source>
-        <target state="new">--template-repository-ref requires --template-repository and a non-empty ref value.</target>
+        <target state="translated">--template-repository-ref には、--template-repository と、空でない ref 値が必要です。</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
