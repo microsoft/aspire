@@ -1779,6 +1779,7 @@ public static class EntraIdResourceExtensions
     /// <param name="api">The registration that exposes the scopes.</param>
     /// <param name="scopeNames">The names of scopes already declared with <see cref="WithApiPermissions(IResourceBuilder{EntraIdApplicationResource}, IResourceBuilder{EntraIdApplicationResource}, string[])"/>.</param>
     /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentException">A scope is not exposed or is disabled, or no scope was given.</exception>
     /// <exception cref="InvalidOperationException">A scope was not declared first.</exception>
     /// <remarks>
     /// <para>
@@ -1790,6 +1791,11 @@ public static class EntraIdResourceExtensions
     /// </para>
     /// <para>
     /// A grant is neither a declaration nor a pre-authorization. This only affects registrations created by Aspire.
+    /// </para>
+    /// <para>
+    /// The grant is declared in full: it is set to exactly the scopes passed to <c>WithAdminConsent</c> for this registration and
+    /// <paramref name="api"/>. A scope that was granted to the pair outside Aspire, or that is removed from the calls while others remain,
+    /// is revoked by the next deployment. When no call remains for the pair, nothing is sent and the existing grant stays.
     /// </para>
     /// </remarks>
     public static IResourceBuilder<EntraIdApplicationResource> WithAdminConsent(
@@ -1825,6 +1831,13 @@ public static class EntraIdResourceExtensions
     /// A delegated permission becomes a delegated permission grant for all users (<c>consentType: AllPrincipals</c>).
     /// An application permission becomes an app role assignment to this registration's service principal, so the application can
     /// call the API as itself without a user.
+    /// </para>
+    /// <para>
+    /// The delegated grant is declared in full: it is set to exactly the delegated permissions passed to <c>WithAdminConsent</c> for this
+    /// registration and <paramref name="api"/>. A permission that was granted to the pair outside Aspire, or that is removed from the calls while
+    /// others remain, is revoked by the next deployment. When no delegated call remains for the pair, nothing is sent and the existing grant stays.
+    /// Each application permission is a separate app role assignment: Aspire creates it, but doesn't delete it when its consent is removed
+    /// from the AppHost, so remove it in the Microsoft Entra admin center.
     /// </para>
     /// <para>
     /// The identity that deploys needs one of the following, and deployment fails without it. For delegated permissions, a directory role such as
