@@ -194,7 +194,8 @@ jobs:
           discoveries = {}
           for selection, filters in (("included", []), ("excluded", excluded)):
               directory = root / ("discovery-" + selection)
-              result = execute(base + traits + filters + ["--list-tests"], directory, 180)
+              # The SDK must select discovery mode before negotiating with MTP.
+              result = execute(base[:-1] + ["--list-tests", "--"] + traits + filters, directory, 180)
               discoveries[selection] = result
               if result["exit_code"] != 0 or result["timed_out"]:
                   (root / "discovery-status.json").write_text(json.dumps(discoveries, indent=2))
