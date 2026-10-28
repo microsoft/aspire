@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aplicativo Inicial Aspire (ASP.NET Core/React, C# AppHost)",
   "description": "Um modelo de projeto para criar um aplicativo Aspire com front-end React e serviço de back-end C# com API Mínima, com cache Redis opcional.",
