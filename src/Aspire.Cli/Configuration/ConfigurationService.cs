@@ -59,7 +59,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         SetNestedValue(settings, key, value);
         TemplateSourceConfiguration.ValidateEditedSource(settings, key);
 
-        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(settingsFilePath, settings, cancellationToken);
+        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(settingsFilePath, settings, cancellationToken, preserveOwnershipAndAcl: true);
     }
 
     public async Task<bool> DeleteConfigurationAsync(string key, bool isGlobal = false, CancellationToken cancellationToken = default)
@@ -101,7 +101,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
 
             if (deleted)
             {
-                await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(settingsFilePath, settings, cancellationToken);
+                await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(settingsFilePath, settings, cancellationToken, preserveOwnershipAndAcl: true);
             }
 
             return deleted;

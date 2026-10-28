@@ -44,7 +44,7 @@ internal sealed class TemplateSourceStore(
             throw new TemplateSourceConfigurationException($"templates.{name}", NewCommandStrings.TemplateSourceAlreadyExists);
         }
         sources[name] = source.DeepClone();
-        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, settings, cancellationToken);
+        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, settings, cancellationToken, preserveOwnershipAndAcl: true);
     }
 
     public async Task<bool> RemoveAsync(string name, CancellationToken cancellationToken)
@@ -67,7 +67,7 @@ internal sealed class TemplateSourceStore(
         {
             settings.Remove(TemplateSourceConfiguration.GetPropertyName(settings, "templates"));
         }
-        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, settings, cancellationToken);
+        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, settings, cancellationToken, preserveOwnershipAndAcl: true);
         return true;
     }
 

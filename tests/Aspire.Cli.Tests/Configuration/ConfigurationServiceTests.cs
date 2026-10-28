@@ -4,6 +4,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Templating;
+using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -71,6 +73,59 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
         await Verify(await File.ReadAllTextAsync(destination), "json");
         Assert.Equal(original, await File.ReadAllTextAsync(legacyPath));
         Assert.Equal(profiles, await File.ReadAllTextAsync(profilesPath));
+    }
+
+    [Theory]
+    [InlineData("set")]
+    [InlineData("delete")]
+    [InlineData("source-add")]
+    [InlineData("source-remove")]
+    public async Task ConfigurationMutations_PreserveLinuxAccessAcl(string mutation)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("Linux POSIX ACL validation.");
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, _) = CreateService(workspace);
+        var path = service.GetSettingsFilePath(isGlobal: true);
+        await File.WriteAllTextAsync(path, """{"custom":"original","templates":{"company":{"href":"https://example.test/templates"}}}""");
+        // The ACL mask makes the group mode r--, but group::--- denies the owning group access.
+        TestPosixAcl.Set(path, "user::rw-,user:65534:r--,group::---,mask::r--,other::---");
+        var acl = TestPosixAcl.Get(path);
+        var mode = File.GetUnixFileMode(path);
+        var store = new TemplateSourceStore(service, workspace.CreateExecutionContext(), NullLogger<TemplateSourceStore>.Instance);
+
+        switch (mutation)
+        {
+            case "set":
+                await service.SetConfigurationAsync("custom", "updated", isGlobal: true);
+                break;
+            case "delete":
+                Assert.True(await service.DeleteConfigurationAsync("custom", isGlobal: true));
+                break;
+            case "source-add":
+                await store.AddAsync("added", new JsonObject { ["href"] = "https://example.test/added" }, CancellationToken.None);
+                break;
+            case "source-remove":
+                Assert.True(await store.RemoveAsync("company", CancellationToken.None));
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mutation));
+        }
+
+        Assert.Equal(acl, TestPosixAcl.Get(path));
+        Assert.Equal(mode, File.GetUnixFileMode(path));
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        Assert.Equal(mutation == "delete" ? null : mutation == "set" ? "updated" : "original", settings["custom"]?.GetValue<string>());
+        Assert.Equal(mutation switch
+        {
+            "source-add" => ["company", "added"],
+            "source-remove" => [],
+            _ => new[] { "company" }
+        }, settings["templates"]?.AsObject().Select(source => source.Key).ToArray() ?? []);
     }
 
     [Theory]
