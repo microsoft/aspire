@@ -1,0 +1,45 @@
+{
+  "run_id": 40745948349,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/40745948349",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-28T20:37:33Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "88ff9ba57c2841cce759adffa849373f9406b0f5",
+    "failed_sha": "f9569111c13997441e31cd570d600f185f4efc72",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 123048868447,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/40745948349/job/123048868447",
+      "classification": "transient-infra",
+      "reason": "Test host SIGKILLed (exit 137) after 5034 passed, 0 failed; matches known macOS infra cause.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, apphost-lifecycle-tools)",
+      "id": 123056121676,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/40745948349/job/123056121676",
+      "classification": "transient-infra",
+      "reason": "E2E shard failed with multi-minute stalls and no Mocha details; no deterministic evidence, treated as transient.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "aspire-cli-tests-macos-testhost-sigkill-137",
+    "vscode-e2e-apphost-lifecycle-tools-linux-timeout"
+  ]
+}

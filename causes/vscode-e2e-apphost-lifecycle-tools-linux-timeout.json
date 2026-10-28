@@ -1,0 +1,15 @@
+{
+  "id": "vscode-e2e-apphost-lifecycle-tools-linux-timeout",
+  "type": "infra-failure",
+  "title": "VS Code extension E2E (Linux, apphost-lifecycle-tools) shard fails with long stalls and no Mocha failure details",
+  "error_pattern": "Aspire extension E2E shard 'apphost-lifecycle-tools' failed.\nMocha failure details were not available in mocha.json.\nProcess completed with exit code 1.",
+  "occurrences": [
+    {
+      "run_id": 40745948349,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/40745948349",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, apphost-lifecycle-tools)",
+      "pr_number": 0,
+      "observed_at": "2026-10-28T20:37:33Z"
+    }
+  ]
+}
