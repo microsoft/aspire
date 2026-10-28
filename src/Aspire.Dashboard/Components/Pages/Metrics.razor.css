@@ -324,7 +324,7 @@
 
 .metrics-section-toggle:hover {
     background: light-dark(
-        var(--colorNeutralBackground1Hover),
+        var(--colorNeutralBackground3),
         color-mix(in srgb, var(--aspire-control-background) 96%, var(--colorNeutralForeground1)));
 }
 
