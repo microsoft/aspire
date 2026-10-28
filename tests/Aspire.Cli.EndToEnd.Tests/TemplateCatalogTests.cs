@@ -100,7 +100,8 @@ public sealed class TemplateCatalogTests(ITestOutputHelper output)
         await auto.WaitForAnyPromptAsync(counter, timeout: TimeSpan.FromSeconds(15));
         await auto.WaitUntilAsync(_ => server.CancelledRequests.Length > cancelledCount, TimeSpan.FromSeconds(15), description: "waiting for HTTP request cancellation");
         Assert.Equal("/slow-headers", server.CancelledRequests.Last());
-        await auto.RunCommandAsync("cp -R \"$HOME/.aspire/logs\" catalog-logs", counter);
+        // Only the exported test logs should be readable by the non-root Linux host runner.
+        await auto.RunCommandAsync("cp -R \"$HOME/.aspire/logs\" catalog-logs && chmod -R a+rX catalog-logs", counter);
         var logs = Directory.GetFiles(Path.Combine(workspace.Path, "catalog-logs"), "*.log", SearchOption.AllDirectories);
         Assert.NotEmpty(logs);
         Assert.All(logs, path => Assert.False(File.ReadAllText(path).Contains("cUsToM", StringComparison.Ordinal)));
