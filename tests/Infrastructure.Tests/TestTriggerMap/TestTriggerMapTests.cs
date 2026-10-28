@@ -789,6 +789,20 @@ public sealed class TestTriggerMapTests
             result.Jobs.Order(StringComparer.Ordinal));
     }
 
+    [Theory]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs")]
+    public void GoModTemplatesSelectCliMinimumGoVersionGuard(string path)
+    {
+        var result = SelectWithRealMap(path, "Aspire.Hosting.CodeGeneration.Go");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
+    }
+
     [Fact]
     public void CliStarterValidationDoesNotRunForSharedTestUtilityChange()
     {

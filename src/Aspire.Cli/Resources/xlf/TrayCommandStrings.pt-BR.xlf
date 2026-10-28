@@ -4,62 +4,62 @@
     <body>
       <trans-unit id="BundleRequired">
         <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion.</source>
-        <target state="new">The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion.</target>
+        <target state="translated">A bandeja experimental do Aspire requer um pacote CLI licenciado e com versão. Nenhum pacote utilizável foi encontrado. Instale um pacote Aspire para Windows ou macOS que inclua o complemento na bandeja do sistema.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage the Windows or macOS tray companion (Experimental)</source>
-        <target state="new">Manage the Windows or macOS tray companion (Experimental)</target>
+        <target state="translated">Gerenciar o complemento da bandeja do Windows ou macOS (Experimental)</target>
         <note />
       </trans-unit>
       <trans-unit id="HelperFailed">
         <source>The Aspire tray '{0}' helper failed with exit code {1}.</source>
-        <target state="new">The Aspire tray '{0}' helper failed with exit code {1}.</target>
+        <target state="translated">O auxiliar da bandeja do Aspire '{0}', falhou com o código de saída {1}.</target>
         <note>{0} is the start or stop subcommand name. {1} is the helper exit code.</note>
       </trans-unit>
       <trans-unit id="HelperTimedOut">
         <source>The Aspire tray '{0}' helper did not acknowledge completion within 30 seconds.</source>
-        <target state="new">The Aspire tray '{0}' helper did not acknowledge completion within 30 seconds.</target>
+        <target state="translated">O auxiliar da bandeja do Aspire '{0}' não confirmou a conclusão em até 30 segundos.</target>
         <note>{0} is the start or stop subcommand name.</note>
       </trans-unit>
       <trans-unit id="NativeCliRequired">
         <source>Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
-        <target state="new">Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</target>
+        <target state="translated">Para iniciar a bandeja experimental, é necessário ter um executável nativo da CLI do Aspire instalado. Não há suporte para compilações de desenvolvimento gerenciadas nem para 'dotnet aspire.dll'.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationFailed">
         <source>Could not complete Aspire tray '{0}': {1}</source>
-        <target state="new">Could not complete Aspire tray '{0}': {1}</target>
+        <target state="translated">Não foi possível concluir a bandeja do Aspire {0}': {1}</target>
         <note>{0} is the start or stop subcommand name. {1} is the underlying error message.</note>
       </trans-unit>
       <trans-unit id="PayloadMissing">
         <source>The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</source>
-        <target state="new">The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</target>
+        <target state="translated">O pacote da CLI não contém o complemento de bandeja para esta plataforma (Windows: bandeja/aspire-tray.exe e bandeja/Aspire.ico; macOS: bandeja/Tray.app). Instale um pacote nativo do Aspire compatível ou execute 'aspire setup --force' para corrigir uma extração incompleta.</target>
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
         <source>Start or restore the tray icon (Experimental)</source>
-        <target state="new">Start or restore the tray icon (Experimental)</target>
+        <target state="translated">Iniciar ou restaurar o ícone na bandeja (Experimental)</target>
         <note />
       </trans-unit>
       <trans-unit id="Started">
         <source>The Aspire Tray is starting.</source>
-        <target state="new">The Aspire Tray is starting.</target>
+        <target state="translated">A Bandeja do Aspire está sendo iniciada.</target>
         <note />
       </trans-unit>
       <trans-unit id="StopDescription">
         <source>Stop the tray without stopping AppHosts (Experimental)</source>
-        <target state="new">Stop the tray without stopping AppHosts (Experimental)</target>
+        <target state="translated">Parar a bandeja sem parar os AppHosts (Experimental)</target>
         <note />
       </trans-unit>
       <trans-unit id="Stopped">
         <source>The Aspire tray is stopped. AppHosts were not stopped.</source>
-        <target state="new">The Aspire tray is stopped. AppHosts were not stopped.</target>
+        <target state="translated">A bandeja do Aspire foi parada. Os AppHosts não foram parados.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
         <source>The experimental Aspire tray supports Windows and macOS x64/ARM64 installations. Linux is not supported.</source>
-        <target state="new">The experimental Aspire tray supports Windows and macOS x64/ARM64 installations. Linux is not supported.</target>
+        <target state="translated">A bandeja experimental do Aspire oferece suporte a instalações do Windows e macOS x64/ARM64. Não há suporte para Linux.</target>
         <note />
       </trans-unit>
     </body>

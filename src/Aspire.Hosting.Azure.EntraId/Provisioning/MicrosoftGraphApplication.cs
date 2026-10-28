@@ -73,9 +73,45 @@ internal sealed class MicrosoftGraphApplication(string bicepIdentifier)
     }
     private BicepList<string>? _owners;
 
+    public BicepList<string> IdentifierUris
+    {
+        get { Initialize(); return _identifierUris!; }
+        set { Initialize(); _identifierUris!.Assign(value); }
+    }
+    private BicepList<string>? _identifierUris;
+
+    public BicepList<MicrosoftGraphPermissionScope> PermissionScopes
+    {
+        get { Initialize(); return _permissionScopes!; }
+        set { Initialize(); _permissionScopes!.Assign(value); }
+    }
+    private BicepList<MicrosoftGraphPermissionScope>? _permissionScopes;
+
+    public BicepList<MicrosoftGraphPreAuthorizedApplication> PreAuthorizedApplications
+    {
+        get { Initialize(); return _preAuthorizedApplications!; }
+        set { Initialize(); _preAuthorizedApplications!.Assign(value); }
+    }
+    private BicepList<MicrosoftGraphPreAuthorizedApplication>? _preAuthorizedApplications;
+
+    public BicepList<MicrosoftGraphRequiredResourceAccess> RequiredResourceAccess
+    {
+        get { Initialize(); return _requiredResourceAccess!; }
+        set { Initialize(); _requiredResourceAccess!.Assign(value); }
+    }
+    private BicepList<MicrosoftGraphRequiredResourceAccess>? _requiredResourceAccess;
+
+    public BicepList<MicrosoftGraphAppRole> AppRoles
+    {
+        get { Initialize(); return _appRoles!; }
+        set { Initialize(); _appRoles!.Assign(value); }
+    }
+    private BicepList<MicrosoftGraphAppRole>? _appRoles;
+
     protected override void DefineProvisionableProperties()
     {
         base.DefineProvisionableProperties();
+        _appRoles = DefineListProperty<MicrosoftGraphAppRole>(nameof(AppRoles), ["appRoles"]);
         _id = DefineProperty<string>(nameof(Id), ["id"], isOutput: true);
         _appId = DefineProperty<string>(nameof(AppId), ["appId"], isOutput: true);
         _displayName = DefineProperty<string>(nameof(DisplayName), ["displayName"], isRequired: true);
@@ -85,5 +121,9 @@ internal sealed class MicrosoftGraphApplication(string bicepIdentifier)
         _redirectUris = DefineListProperty<string>(nameof(RedirectUris), ["web", "redirectUris"]);
         _enableIdTokenIssuance = DefineProperty<bool>(nameof(EnableIdTokenIssuance), ["web", "implicitGrantSettings", "enableIdTokenIssuance"]);
         _owners = DefineListProperty<string>(nameof(Owners), ["owners", "relationships"]);
+        _identifierUris = DefineListProperty<string>(nameof(IdentifierUris), ["identifierUris"]);
+        _permissionScopes = DefineListProperty<MicrosoftGraphPermissionScope>(nameof(PermissionScopes), ["api", "oauth2PermissionScopes"]);
+        _preAuthorizedApplications = DefineListProperty<MicrosoftGraphPreAuthorizedApplication>(nameof(PreAuthorizedApplications), ["api", "preAuthorizedApplications"]);
+        _requiredResourceAccess = DefineListProperty<MicrosoftGraphRequiredResourceAccess>(nameof(RequiredResourceAccess), ["requiredResourceAccess"]);
     }
 }

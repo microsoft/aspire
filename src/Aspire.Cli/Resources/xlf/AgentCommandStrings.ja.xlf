@@ -1,90 +1,95 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ja" original="../AgentCommandStrings.resx">
     <body>
       <trans-unit id="AgentTelemetryCommand_ClientNameDescription">
         <source>The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</source>
-        <target state="new">The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</target>
+        <target state="translated">イベントを生成した AI エージェント クライアント (copilot-cli、claude-code、vscode など)</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_Description">
         <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
-        <target state="new">Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</target>
+        <target state="translated">AI エージェントのスキルとツールの使用状況テレメトリを記録します。Aspire エージェン トテレメトリ フック スクリプトによって呼び出されます。直接実行することを意図していません。</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
         <source>The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</source>
-        <target state="new">The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</target>
+        <target state="translated">テレメトリ イベントの種類 (skill_invocation、tool_invocation、またはreference_file_read)</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_FileReferenceDescription">
         <source>The Aspire skills-relative reference file path for a reference_file_read event</source>
-        <target state="new">The Aspire skills-relative reference file path for a reference_file_read event</target>
+        <target state="translated">reference_file_read イベントの Aspire スキル相対参照ファイル パス</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
         <source>The opaque AI agent session identifier</source>
-        <target state="new">The opaque AI agent session identifier</target>
+        <target state="translated">不透明な AI エージェント セッション識別子</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SkillNameDescription">
         <source>The Aspire skill name for a skill_invocation event</source>
-        <target state="new">The Aspire skill name for a skill_invocation event</target>
+        <target state="translated">skill_invocation イベントの Aspire スキル名</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_TimestampDescription">
         <source>The timestamp recorded for the event</source>
-        <target state="new">The timestamp recorded for the event</target>
+        <target state="translated">イベントに記録されたタイムスタンプ</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_ToolNameDescription">
         <source>The Aspire MCP tool name for a tool_invocation event</source>
-        <target state="new">The Aspire MCP tool name for a tool_invocation event</target>
+        <target state="translated">tool_invocation イベントの Aspire MCP ツール名</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
         <source>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</source>
-        <target state="new">Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</target>
+        <target state="translated">埋め込み Aspire スキル アーカイブが SHA-512 検証に失敗しました。'{0}' が必要です。'{1}' を取得しました。</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_GitHubUnavailable">
         <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</source>
-        <target state="new">Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</target>
+        <target state="translated">検証済みの GitHub リリース アセットから Aspire スキルをダウンロードできず、有効なキャッシュ済みバンドルまたは埋め込みバンドルも利用できません。</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InvalidMetadata">
         <source>Embedded Aspire skills bundle metadata is invalid: {0}</source>
-        <target state="new">Embedded Aspire skills bundle metadata is invalid: {0}</target>
+        <target state="translated">埋め込み Aspire スキル バンドルのメタデータが無効です: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MetadataRepositoryMismatch">
         <source>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</source>
-        <target state="new">Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</target>
+        <target state="translated">埋め込まれた Aspire スキル メタデータのリポジトリ '{0}' が、想定されるリポジトリ '{1}' と一致しません。</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataAssetName">
         <source>Embedded Aspire skills metadata must specify a release asset name.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a release asset name.</target>
+        <target state="translated">埋め込まれた Aspire スキル メタデータには、リリース アセット名を指定する必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataSha512">
         <source>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</source>
-        <target state="new">Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</target>
+        <target state="translated">埋め込み Aspire スキル メタデータでは、リリース資産 SHA-512 ハッシュを指定する必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataTag">
         <source>Embedded Aspire skills metadata must specify a GitHub release tag.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a GitHub release tag.</target>
+        <target state="translated">埋め込み Aspire スキル メタデータでは、GitHub リリース タグを指定する必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataVersion">
         <source>Embedded Aspire skills metadata must specify a version.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a version.</target>
+        <target state="translated">埋め込み Aspire スキル メタデータでは、バージョンを指定する必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">
         <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
         <target state="translated">次のエージェント構成で非推奨の 'mcp start' コマンドが使用されています。これらを更新しますか?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigurationWriteRefused">
+        <source>Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</source>
+        <target state="new">Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeprecatedConfigFix">
@@ -104,277 +109,364 @@
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage AI agent environment configuration</source>
-        <target state="needs-review-translation">AI エージェントの統合を管理します。</target>
+        <target state="translated">AI エージェント環境構成を管理します</target>
         <note />
       </trans-unit>
       <trans-unit id="Environment_ClaudeCode">
         <source>Claude Code</source>
-        <target state="new">Claude Code</target>
+        <target state="translated">Claude Code</target>
         <note />
       </trans-unit>
       <trans-unit id="Environment_Copilot">
         <source>GitHub Copilot</source>
-        <target state="new">GitHub Copilot</target>
+        <target state="translated">GitHub Copilot</target>
         <note />
       </trans-unit>
       <trans-unit id="Environment_OpenCode">
         <source>OpenCode</source>
-        <target state="new">OpenCode</target>
+        <target state="translated">OpenCode</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_AspireSkillChoice">
+        <source>Agent assets from microsoft/aspire-skills</source>
+        <target state="new">Agent assets from microsoft/aspire-skills</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_AspireSourceOptionDescription">
+        <source>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</source>
+        <target state="new">Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigurationTarget">
+        <source>{0}: {1}</source>
+        <target state="new">{0}: {1}</target>
+        <note>{0} is the agent name, and {1} lists its configuration paths separated by commas.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigureAspireSourcePrompt">
+        <source>Which source do you want to use for Aspire?</source>
+        <target state="new">Which source do you want to use for Aspire?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
-        <target state="new">Install Aspire MCP server</target>
+        <target state="translated">Aspire MCP サーバーのインストール</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServerPrompt">
         <source>Configure the Aspire MCP server for selected agent environments?</source>
-        <target state="new">Configure the Aspire MCP server for selected agent environments?</target>
+        <target state="translated">選択したエージェント環境用に Aspire MCP サーバーを構成しますか?</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfiguredTargets">
+        <source>Configured Aspire plugin:
+  {0}</source>
+        <target state="new">Configured Aspire plugin:
+  {0}</target>
+        <note>{0} lists one agent per line, with that agent's configuration paths comma-separated.</note>
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
-        <target state="needs-review-translation">検出されたエージェントのエージェント環境構成を初期化します。</target>
+        <target state="translated">選択したエージェント クライアントの構成とスキルを初期化します</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_EmbeddedSkillsChoice">
+        <source>Embedded (bundled skill files)</source>
+        <target state="new">Embedded (bundled skill files)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentLocationDescription">
         <source>{0}: {1}</source>
-        <target state="new">{0}: {1}</target>
+        <target state="translated">{0}: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentsOptionDescription">
         <source>Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</source>
-        <target state="new">Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</target>
+        <target state="translated">コンマ区切りのエージェント ID ({0})、'{1}'、または '{2}'。検出されたエージェントを既定とし、エージェントが検出されない場合は Copilot を使用します</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ExistingConfigurationConflict">
+        <source>Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</source>
+        <target state="new">Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</target>
+        <note>{0} identifies the conflicting JSON setting or environment override.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_FailedTarget">
+        <source>Failed to configure Aspire plugin:
+  {0}</source>
+        <target state="new">Failed to configure Aspire plugin:
+  {0}</target>
+        <note>{0} lists each agent's configuration path and failure details, one target per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_FailedToInstallSkill">
         <source>Failed to install {0} skill at {1}: {2}</source>
-        <target state="new">Failed to install {0} skill at {1}: {2}</target>
+        <target state="translated">{1} でスキル {0} をインストールできませんでした: {2}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_GlobalScope">
         <source>Global (Install in your home directory; available across all projects)</source>
-        <target state="new">Global (Install in your home directory; available across all projects)</target>
+        <target state="translated">グローバル (ホーム ディレクトリにインストールし、すべてのプロジェクトで使用可能)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallationLocations">
         <source>Installation locations:</source>
-        <target state="new">Installation locations:</target>
+        <target state="translated">インストールの場所:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledPlaywrightCli">
         <source>Installed Playwright CLI.</source>
-        <target state="new">Installed Playwright CLI.</target>
+        <target state="translated">Playwright CLI がインストールされました。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummary">
         <source>Installed Aspire agent skills:</source>
-        <target state="new">Installed Aspire agent skills:</target>
+        <target state="translated">インストールされている Aspire エージェントのスキル:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
         <source>Locations: {0}</source>
-        <target state="new">Locations: {0}</target>
+        <target state="translated">場所: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummarySkills">
         <source>Skills: {0}</source>
-        <target state="new">Skills: {0}</target>
+        <target state="translated">スキル: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InvalidAspireSource">
+        <source>Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</source>
+        <target state="new">Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InvalidEnvironments">
         <source>Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
-        <target state="new">Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <target state="translated">エージェントの選択 '{0}' が無効です。{1}、'{2}'、または '{3}' を使用します。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InvalidScope">
         <source>Invalid scope '{0}'. Use 'project' or 'global'.</source>
-        <target state="new">Invalid scope '{0}'. Use 'project' or 'global'.</target>
+        <target state="translated">スコープ '{0}' が無効です。'project' または 'global' を使用してください。</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InvalidSkills">
+        <source>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
+        <target state="new">Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_LocalSkillsConflict">
+        <source>Local Aspire skill files may override plugin skills:
+{0}</source>
+        <target state="new">Local Aspire skill files may override plugin skills:
+{0}</target>
+        <note>{0} lists the local skill entry-point paths, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_McpConfigurationDescription">
         <source>Configure Aspire MCP for {0} at {1}</source>
-        <target state="new">Configure Aspire MCP for {0} at {1}</target>
+        <target state="translated">Aspire MCP を {0} で {1} 用に構成する</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_McpLocationHint">
         <source>MCP: {0}</source>
-        <target state="new">MCP: {0}</target>
+        <target state="translated">MCP: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_McpOptionDescription">
         <source>Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</source>
-        <target state="new">Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</target>
+        <target state="translated">選択したエージェント環境用に Aspire MCP サーバーを構成します。MCP を構成しない場合は省略します。オプトインするには '--mcp' を渡し、明示的にオプトアウトするには '--mcp=false' を渡します</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_NoConfigurationSelected">
         <source>No agent configuration selected. Existing configuration was left unchanged.</source>
-        <target state="new">No agent configuration selected. Existing configuration was left unchanged.</target>
+        <target state="translated">エージェント構成が選択されていません。既存の構成は変更されませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
         <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
-        <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
+        <target state="translated">Playwright CLI には npm が必要ですが、PATH 上に見つかりませんでした。インストールをスキップしています。</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_PluginRiskWarning">
+        <source>Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from {0}.</source>
+        <target state="new">Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from {0}.</target>
+        <note>{0} is the official Aspire skills repository URL.</note>
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>
-        <target state="new">Project (Install in your workspace root; committed with your project)</target>
+        <target state="translated">プロジェクト (ワークスペースのルートにインストールし、プロジェクトとともにコミット)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoteSkillsChoice">
+        <source>Remote (plugin)</source>
+        <target state="new">Remote (plugin)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoteSkillsConflict">
+        <source>The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</source>
+        <target state="new">The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
         <source>Configuration and skill scope: project or global (default: project)</source>
-        <target state="new">Configuration and skill scope: project or global (default: project)</target>
+        <target state="translated">構成とスキルのスコープ: プロジェクトまたはグローバル (既定値: プロジェクト)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectAgentsPrompt">
         <source>Which agents do you use?</source>
-        <target state="new">Which agents do you use?</target>
+        <target state="translated">どのエージェントを使用していますか?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectScopePrompt">
         <source>Installation scope</source>
-        <target state="new">Installation scope</target>
+        <target state="translated">インストールのスコープ</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocation">
         <source>{0} (shared: {1})</source>
-        <target state="new">{0} (shared: {1})</target>
+        <target state="translated">{0} (共有: {1})</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocationNotice">
         <source>Shared files may be discovered by agents that aren't selected.</source>
-        <target state="new">Shared files may be discovered by agents that aren't selected.</target>
+        <target state="translated">共有ファイルは、選択されていないエージェントによって検出される可能性があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>
-        <target state="new">Skills: {0}</target>
+        <target state="translated">スキル: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
-        <source>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</source>
-        <target state="new">Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</target>
+        <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</source>
+        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
         <source>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</target>
+        <target state="translated">構成ファイルに形式が正しくない JSON が含まれているため、{0} のテレメトリ フックをスキップしました。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedUnexpectedShape">
         <source>Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</target>
+        <target state="translated">構成に予期しない形状があるため、{0} のテレメトリ フックをスキップしました。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookWriteFailed">
         <source>Skipped the telemetry hook for {0} because its configuration could not be written.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration could not be written.</target>
+        <target state="translated">構成を書き込めなかったため、{0} のテレメトリ フックをスキップしました。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
         <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
+        <target state="translated">Aspire エージェント テレメトリ フックがインストールされました: {0}。Aspire スキル、MCP ツール、および参照ファイルの使用状況のみが記録されます。ASPIRE_CLI_TELEMETRY_OPTOUT=true に設定すると、いつでもオプトアウトできます。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
-        <target state="new">Path to the workspace root directory</target>
+        <target state="translated">ワークスペースのルート ディレクトリへのパス</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InstallingStatus">
         <source>Installing Aspire skills...</source>
-        <target state="new">Installing Aspire skills...</target>
+        <target state="translated">Aspire スキルをインストールしています...</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InvalidBundle">
         <source>The Aspire skills bundle is invalid: {0}</source>
-        <target state="new">The Aspire skills bundle is invalid: {0}</target>
+        <target state="translated">Aspire スキル バンドルが無効です: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalSkills_ReadFailed">
+        <source>Could not check local Aspire skills at '{0}': {1}</source>
+        <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="McpServerContainerMustBeJsonObject">
         <source>The MCP server container '{0}' in '{1}' must be a JSON object.</source>
-        <target state="new">The MCP server container '{0}' in '{1}' must be a JSON object.</target>
+        <target state="translated">'{1}' の MCP サーバー コンテナー '{0}' は JSON オブジェクトである必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToDownload">
         <source>Failed to download {0}.</source>
-        <target state="new">Failed to download {0}.</target>
+        <target state="translated">{0} のダウンロードに失敗しました。</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToGenerateSkillFiles">
         <source>Failed to generate Playwright CLI skill files.</source>
-        <target state="new">Failed to generate Playwright CLI skill files.</target>
+        <target state="translated">Playwright CLI スキル ファイルを生成できませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToInstallGlobally">
         <source>Failed to install {0} globally via npm.</source>
-        <target state="new">Failed to install {0} globally via npm.</target>
+        <target state="translated">npm 経由で {0} をグローバルにインストールできませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToMirrorSkillFiles">
         <source>Failed to copy Playwright CLI skill files to the selected locations.</source>
-        <target state="new">Failed to copy Playwright CLI skill files to the selected locations.</target>
+        <target state="translated">選択した場所に Playwright CLI スキル ファイルをコピーできませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToResolvePackage">
         <source>Failed to resolve {0} from the npm registry.</source>
-        <target state="new">Failed to resolve {0} from the npm registry.</target>
+        <target state="translated">npm レジストリからの {0} を解決できませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_InstalledWithMirrorWarnings">
         <source>Installed Playwright CLI (some locations failed to mirror).</source>
-        <target state="new">Installed Playwright CLI (some locations failed to mirror).</target>
+        <target state="translated">インストールされた Playwright CLI (一部の場所をミラー化できませんでした)。</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_InstallingStatus">
         <source>Installing Playwright CLI...</source>
-        <target state="new">Installing Playwright CLI...</target>
+        <target state="translated">Playwright CLI をインストールしています...</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_IntegrityVerificationFailed">
         <source>Integrity verification failed for {0}. The downloaded package may have been tampered with.</source>
-        <target state="new">Integrity verification failed for {0}. The downloaded package may have been tampered with.</target>
+        <target state="translated">{0} の整合性の検証に失敗しました。ダウンロードされたパッケージは改ざんされている可能性があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_InvalidVersionOverride">
         <source>The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</source>
-        <target state="new">The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</target>
+        <target state="translated">構成設定 '{0}' ('{1}') の値は、有効な SemVer 2.0 バージョンではありません。</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_ProvenanceVerificationFailed">
         <source>Provenance verification failed for {0}: {1}</source>
-        <target state="new">Provenance verification failed for {0}: {1}</target>
+        <target state="translated">{0} の実証検証に失敗しました: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_Aspire">
         <source>Aspire CLI commands and workflows for distributed apps</source>
-        <target state="new">Aspire CLI commands and workflows for distributed apps</target>
+        <target state="translated">分散アプリの Aspire CLI コマンドとワークフロー</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_AspireDeployment">
         <source>Aspire deployment target selection, preflight, publish, and deploy workflows</source>
-        <target state="new">Aspire deployment target selection, preflight, publish, and deploy workflows</target>
+        <target state="translated">Aspire のデプロイ先の選択、プレフライト、公開、デプロイのワークフロー</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_Aspireify">
         <source>One-time setup: wire up AppHost with discovered projects</source>
-        <target state="new">One-time setup: wire up AppHost with discovered projects</target>
+        <target state="translated">1 回限りのセットアップ: 検出されたプロジェクトを使用して AppHost を接続する</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_DotnetInspect">
         <source>Query .NET API surfaces across NuGet packages and platform libraries</source>
-        <target state="new">Query .NET API surfaces across NuGet packages and platform libraries</target>
+        <target state="translated">NuGet パッケージとプラットフォーム ライブラリ間で .NET API サーフェスにクエリを実行する</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_PlaywrightCli">
         <source>Browser automation and functional testing</source>
-        <target state="new">Browser automation and functional testing</target>
+        <target state="translated">ブラウザーの自動化と機能テスト</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectSkills">
-        <source>Which skills should be installed?</source>
-        <target state="new">Which skills should be installed?</target>
+        <source>Which skills and tools do you want to configure?</source>
+        <target state="new">Which skills and tools do you want to configure?</target>
         <note />
       </trans-unit>
       <trans-unit id="MalformedConfigFileError">
@@ -384,12 +476,12 @@
       </trans-unit>
       <trans-unit id="McpCommand_Description">
         <source>Start the MCP (Model Context Protocol) server</source>
-        <target state="needs-review-translation">MCP (モデル コンテキスト プロトコル) サーバーを起動します。</target>
+        <target state="translated">MCP (モデル コンテキスト プロトコル) サーバーを起動します</target>
         <note />
       </trans-unit>
       <trans-unit id="SkipNoneDescription">
         <source>None — skip</source>
-        <target state="new">None — skip</target>
+        <target state="translated">なし — スキップ</target>
         <note />
       </trans-unit>
       <trans-unit id="SkippedMalformedConfigFile">

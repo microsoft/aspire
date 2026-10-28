@@ -4,37 +4,37 @@
     <body>
       <trans-unit id="Description">
         <source>Destroy a previously deployed AppHost environment</source>
-        <target state="new">Destroy a previously deployed AppHost environment</target>
+        <target state="translated">Détruire un environnement AppHost précédemment déployé</target>
         <note />
       </trans-unit>
       <trans-unit id="DestroyCanceled">
         <source>The destroy operation was canceled.</source>
-        <target state="new">The destroy operation was canceled.</target>
+        <target state="translated">L’opération de destruction a été annulée.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveRequiresYes">
         <source>The destroy command requires --yes when the --non-interactive option is specified.</source>
-        <target state="new">The destroy command requires --yes when the --non-interactive option is specified.</target>
+        <target state="translated">La commande destroy requiert --yes lorsque l’option --non-interactive est spécifiée.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
         <source>Destroy completed</source>
-        <target state="new">Destroy completed</target>
+        <target state="translated">Destruction terminée</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationFailedPrefix">
         <source>Destroy failed</source>
-        <target state="new">Destroy failed</target>
+        <target state="translated">Échec de la destruction</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The output path containing the deployment artifacts to destroy</source>
-        <target state="new">The output path containing the deployment artifacts to destroy</target>
+        <target state="translated">Chemin de sortie contenant les artefacts de déploiement à détruire</target>
         <note />
       </trans-unit>
       <trans-unit id="YesOptionDescription">
         <source>Do not prompt for confirmation before destroying resources</source>
-        <target state="new">Do not prompt for confirmation before destroying resources</target>
+        <target state="translated">Ne pas demander de confirmation avant de détruire des ressources</target>
         <note />
       </trans-unit>
     </body>

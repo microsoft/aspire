@@ -1,35 +1,35 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../DoctorCommandStrings.resx">
     <body>
       <trans-unit id="AppHostCategoryHeader">
         <source>AppHost</source>
-        <target state="new">AppHost</target>
+        <target state="translated">AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostVersionCheckFailedMessage">
         <source>Could not determine AppHost version</source>
-        <target state="new">Could not determine AppHost version</target>
+        <target state="translated">Não foi possível determinar a versão do AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostVersionMessageFormat">
         <source>AppHost version {0} ({1})</source>
-        <target state="new">AppHost version {0} ({1})</target>
+        <target state="translated">Versão do AppHost {0} ({1})</target>
         <note>{0} is the AppHost Aspire.Hosting version. {1} is the AppHost project path.</note>
       </trans-unit>
       <trans-unit id="AppHostVersionUnknownMessageFormat">
         <source>Could not determine AppHost version ({0})</source>
-        <target state="new">Could not determine AppHost version ({0})</target>
+        <target state="translated">Não foi possível determinar a versão do AppHost ({0})</target>
         <note>{0} is the AppHost project path.</note>
       </trans-unit>
       <trans-unit id="AspireCategoryHeader">
         <source>Aspire</source>
-        <target state="new">Aspire</target>
+        <target state="translated">Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelSuffixFormat">
         <source> (channel: {0})</source>
-        <target state="new"> (channel: {0})</target>
+        <target state="translated"> (canal: {0})</target>
         <note>{0} is the Aspire channel name (e.g., "stable", "staging", "daily", "local", "pr-1234"). Appended to CLI / AppHost version messages.</note>
       </trans-unit>
       <trans-unit id="CheckingPrerequisites">
@@ -39,47 +39,47 @@
       </trans-unit>
       <trans-unit id="CliVersionMessageFormat">
         <source>Aspire CLI version {0}</source>
-        <target state="new">Aspire CLI version {0}</target>
+        <target state="translated">Versão {0} do Aspire CLI</target>
         <note>{0} is the current Aspire CLI version.</note>
       </trans-unit>
       <trans-unit id="CliVersionOutOfDateFixFormat">
         <source>Run '{0}' to update Aspire CLI.</source>
-        <target state="new">Run '{0}' to update Aspire CLI.</target>
+        <target state="translated">Execute '{0}' para atualizar o Aspire CLI.</target>
         <note>{0} is the command to update Aspire CLI.</note>
       </trans-unit>
       <trans-unit id="CliVersionOutOfDateMessageFormat">
         <source>Aspire CLI version {0} is out of date. Latest version is {1}</source>
-        <target state="new">Aspire CLI version {0} is out of date. Latest version is {1}</target>
+        <target state="translated">A versão {0} do Aspire CLI está desatualizada. A versão mais recente é {1}</target>
         <note>{0} is the current Aspire CLI version. {1} is the latest available Aspire CLI version.</note>
       </trans-unit>
       <trans-unit id="CliVersionUpdateCheckFailedMessage">
         <source>Could not check for Aspire CLI updates</source>
-        <target state="new">Could not check for Aspire CLI updates</target>
+        <target state="translated">Não foi possível verificar se há atualizações do Aspire CLI</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnChannel">
         <source>Channel</source>
-        <target state="new">Channel</target>
+        <target state="translated">Canal</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnPath">
         <source>Path</source>
-        <target state="new">Path</target>
+        <target state="translated">Caminho</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnPathStatus">
         <source>PATH status</source>
-        <target state="new">PATH status</target>
+        <target state="translated">Status do PATH</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnRoute">
         <source>Route</source>
-        <target state="new">Route</target>
+        <target state="translated">Roteamento</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnVersion">
         <source>Version</source>
-        <target state="new">Version</target>
+        <target state="translated">Versão</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerCategoryHeader">
@@ -89,422 +89,422 @@
       </trans-unit>
       <trans-unit id="ContainerRuntimeActiveSuffix">
         <source> ← active</source>
-        <target state="new"> ← active</target>
+        <target state="translated"> ← ativo</target>
         <note>Suffix marking the automatically selected runtime. Preserve the leading space and arrow.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeCheckFailedMessage">
         <source>Failed to check container runtime</source>
-        <target state="new">Failed to check container runtime</target>
+        <target state="translated">Falha ao verificar o runtime do contêiner</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeClientVersionWarningFormat">
         <source>{0} client version {1} is below minimum required {2}</source>
-        <target state="new">{0} client version {1} is below minimum required {2}</target>
+        <target state="translated">{0} versão do cliente {1} está abaixo do mínimo necessário {2}</target>
         <note>{0} is the runtime name, {1} the detected version, {2} the minimum version.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeExplicitSelectionSuffix">
         <source> ← explicitly selected</source>
-        <target state="new"> ← explicitly selected</target>
+        <target state="translated"> ← explicitamente selecionado</target>
         <note>Suffix marking a configured runtime. Preserve the leading space and arrow.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallDockerFix">
         <source>Install Docker Desktop: https://www.docker.com/products/docker-desktop</source>
-        <target state="new">Install Docker Desktop: https://www.docker.com/products/docker-desktop</target>
+        <target state="translated">Instale o Docker Desktop: https://www.docker.com/products/docker-desktop</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallFix">
         <source>Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation</source>
-        <target state="new">Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation</target>
+        <target state="translated">Instale o Docker Desktop: https://www.docker.com/products/docker-desktop, o Podman: https://podman.io/getting-started/installation</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallGenericFixFormat">
         <source>Install {0}</source>
-        <target state="new">Install {0}</target>
+        <target state="translated">Instalar {0}</target>
         <note>{0} is the runtime name.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallPodmanFix">
         <source>Install Podman: https://podman.io/getting-started/installation</source>
-        <target state="new">Install Podman: https://podman.io/getting-started/installation</target>
+        <target state="translated">Instale o Podman: https://podman.io/getting-started/installation</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallWindowsFix">
         <source>Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation or WSLc: https://aka.ms/aspire/containers</source>
-        <target state="new">Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation or WSLc: https://aka.ms/aspire/containers</target>
+        <target state="translated">Instale o Docker Desktop: https://www.docker.com/products/docker-desktop, o Podman: https://podman.io/getting-started/installation ou o WSLc: https://aka.ms/aspire/containers</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallWslcFix">
         <source>Install WSLc on Windows: https://aka.ms/aspire/containers</source>
-        <target state="new">Install WSLc on Windows: https://aka.ms/aspire/containers</target>
+        <target state="translated">Instale o WSLc no Windows: https://aka.ms/aspire/containers</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotDetectedMessage">
         <source>No container runtime detected</source>
-        <target state="new">No container runtime detected</target>
+        <target state="translated">Nenhum runtime de contêiner detectado</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotFoundMessageFormat">
         <source>{0}: not found (configured via ASPIRE_CONTAINER_RUNTIME={1}){2}</source>
-        <target state="new">{0}: not found (configured via ASPIRE_CONTAINER_RUNTIME={1}){2}</target>
+        <target state="translated">{0}: não encontrado (configurado via ASPIRE_CONTAINER_RUNTIME={1}){2}</target>
         <note>{0} is the runtime name, {1} the configuration value, {2} the selection suffix. Do not translate ASPIRE_CONTAINER_RUNTIME.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeRunningMessageFormat">
         <source>{0}{1}: running{2}</source>
-        <target state="new">{0}{1}: running{2}</target>
+        <target state="translated">{0}{1}: em execução{2}</target>
         <note>{0} is the runtime name, {1} the optional version suffix, {2} the selection suffix.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeSelectAlternativeFix">
         <source>Set ASPIRE_CONTAINER_RUNTIME to docker or podman.</source>
-        <target state="new">Set ASPIRE_CONTAINER_RUNTIME to docker or podman.</target>
+        <target state="translated">Defina ASPIRE_CONTAINER_RUNTIME como docker ou podman.</target>
         <note>ASPIRE_CONTAINER_RUNTIME, docker and podman are configuration identifiers. Do not translate them.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeServerVersionWarningFormat">
         <source>{0} server version {1} is below minimum required {2}</source>
-        <target state="new">{0} server version {1} is below minimum required {2}</target>
+        <target state="translated">{0} versão do servidor {1} está abaixo do mínimo necessário {2}</target>
         <note>{0} is the runtime name, {1} the detected version, {2} the minimum version.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeStartDaemonFixFormat">
         <source>Start {0} daemon</source>
-        <target state="new">Start {0} daemon</target>
+        <target state="translated">Iniciar {0} daemon</target>
         <note>{0} is the runtime name.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeStartDockerDesktopFix">
         <source>Start Docker Desktop</source>
-        <target state="new">Start Docker Desktop</target>
+        <target state="translated">Iniciar o Docker Desktop</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeStartPodmanFix">
         <source>Start Podman service: sudo systemctl start podman</source>
-        <target state="new">Start Podman service: sudo systemctl start podman</target>
+        <target state="translated">Iniciar o serviço Podman: sudo systemctl start podman</target>
         <note>Do not translate the command sudo systemctl start podman.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeStartWslcFix">
         <source>Ensure the WSLc session manager is running. Check its status with: wslc info --format json</source>
-        <target state="new">Ensure the WSLc session manager is running. Check its status with: wslc info --format json</target>
+        <target state="translated">Verifique se o gerenciador de sessões do WSLc está em execução. Verifique seu status com: wslc info --format json</target>
         <note>Do not translate the command wslc info --format json.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeStoppedMessageFormat">
         <source>{0}: installed but not running{1}</source>
-        <target state="new">{0}: installed but not running{1}</target>
+        <target state="translated">{0}: instalado, mas não em execução{1}</target>
         <note>{0} is the runtime name, {1} the selection suffix.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeUpgradeFixFormat">
         <source>Upgrade {0} to version {1} or later from: {2}</source>
-        <target state="new">Upgrade {0} to version {1} or later from: {2}</target>
+        <target state="translated">Atualize {0} para a versão {1} ou posterior de: {2}</target>
         <note>{0} is the runtime name, {1} the minimum version, {2} the installation URL.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeUpgradeGenericFixFormat">
         <source>Upgrade {0} to a newer version</source>
-        <target state="new">Upgrade {0} to a newer version</target>
+        <target state="translated">Atualizar {0} para uma versão mais recente</target>
         <note>{0} is the runtime name.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeUpgradeWslcFixFormat">
         <source>Upgrade WSLc to version {0} or later. See: https://aka.ms/aspire/containers</source>
-        <target state="new">Upgrade WSLc to version {0} or later. See: https://aka.ms/aspire/containers</target>
+        <target state="translated">Atualize o WSLc para a versão {0} ou posterior. Consulte: https://aka.ms/aspire/containers</target>
         <note>{0} is the minimum version.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeVersionSuffixFormat">
         <source> v{0}</source>
-        <target state="new"> v{0}</target>
+        <target state="translated"> v{0}</target>
         <note>{0} is the runtime version. Preserve the leading space.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeVersionUnavailableMessageFormat">
         <source>{0}: required version metadata could not be validated</source>
-        <target state="new">{0}: required version metadata could not be validated</target>
+        <target state="translated">{0}: não foi possível validar os metadados da versão necessária</target>
         <note>{0} is the runtime name.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeWindowsModeDetails">
         <source>Aspire requires Linux containers. Windows containers are not supported.</source>
-        <target state="new">Aspire requires Linux containers. Windows containers are not supported.</target>
+        <target state="translated">O Aspire requer contêineres do Linux. Não há suporte para contêineres do Windows.</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeWindowsModeFix">
         <source>Switch Docker Desktop to Linux containers mode (right-click Docker tray icon → 'Switch to Linux containers...')</source>
-        <target state="new">Switch Docker Desktop to Linux containers mode (right-click Docker tray icon → 'Switch to Linux containers...')</target>
+        <target state="translated">Alterne o Docker Desktop para o modo de contêineres do Linux (clique com o botão direito do mouse no ícone do Docker na bandeja do sistema → "Alternar para contêineres do Linux...")</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeWindowsModeMessageFormat">
         <source>{0} is running in Windows container mode</source>
-        <target state="new">{0} is running in Windows container mode</target>
+        <target state="translated">{0} está em execução no modo de contêiner do Windows</target>
         <note>{0} is Docker or Docker Desktop.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeWslcUnsupportedHostMessage">
         <source>WSLc is only supported on Windows</source>
-        <target state="new">WSLc is only supported on Windows</target>
+        <target state="translated">O WSLc só tem suporte no Windows</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpApiServerReturnedHttpStatusMessageFormat">
         <source>Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</source>
-        <target state="new">Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</target>
+        <target state="translated">O servidor da API do Plano de Controle do Desenvolvedor (DCP) retornou HTTP {0} ({1}).</target>
         <note>{0} is the numeric HTTP status code. {1} is the HTTP status code name.</note>
       </trans-unit>
       <trans-unit id="DcpBundleNotFoundDetails">
         <source>The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP).</source>
-        <target state="new">The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP).</target>
+        <target state="translated">O Aspire CLI em execução não está associado a um layout de pacote que contenha o Plano de Controle do Desenvolvedor (DCP).</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpBundleNotFoundMessage">
         <source>Developer Control Plane (DCP) bundle not found; skipping connection health checks</source>
-        <target state="new">Developer Control Plane (DCP) bundle not found; skipping connection health checks</target>
+        <target state="translated">O pacote do Plano de Controle do Desenvolvedor (DCP) não foi encontrado; as verificações de integridade da conexão serão ignoradas</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpConnectionCheckFailedMessage">
         <source>Failed to check Developer Control Plane (DCP) connection health</source>
-        <target state="new">Failed to check Developer Control Plane (DCP) connection health</target>
+        <target state="translated">Não foi possível verificar a integridade da conexão do Plano de Controle do Desenvolvedor (DCP)</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpConnectionSucceededMessage">
         <source>Developer Control Plane (DCP) connection health checks succeeded</source>
-        <target state="new">Developer Control Plane (DCP) connection health checks succeeded</target>
+        <target state="translated">As verificações de integridade da conexão do Plano de Controle do Desenvolvedor (DCP) foram bem-sucedidas</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpConnectionTimedOutMessageFormat">
         <source>Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</source>
-        <target state="new">Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</target>
+        <target state="translated">O tempo limite de verificação da integridade da conexão do Plano de Controle do Desenvolvedor (DCP) foi atingido após {0} segundos.</target>
         <note>{0} is the timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateConnectionFailedMessage">
         <source>Developer Control Plane (DCP) connection using the developer certificate failed</source>
-        <target state="new">Developer Control Plane (DCP) connection using the developer certificate failed</target>
+        <target state="translated">A conexão do Plano de Controle do Desenvolvedor (DCP) usando o certificado de desenvolvedor falhou</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateConnectionSucceededMessage">
         <source>Developer Control Plane (DCP) connection using the developer certificate succeeded</source>
-        <target state="new">Developer Control Plane (DCP) connection using the developer certificate succeeded</target>
+        <target state="translated">A conexão do Plano de Controle do Desenvolvedor (DCP) usando o certificado de desenvolvedor foi bem-sucedida</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateInvalidForCacheDetails">
         <source>The developer certificate could not be cached because it was not valid.</source>
-        <target state="new">The developer certificate could not be cached because it was not valid.</target>
+        <target state="translated">O certificado de desenvolvedor não pôde ser armazenado em cache porque não era válido.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateMissingThumbprintDetails">
         <source>The developer certificate did not have a thumbprint.</source>
-        <target state="new">The developer certificate did not have a thumbprint.</target>
+        <target state="translated">O certificado de desenvolvedor não tinha uma impressão digital.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateNoTrustedExportableDetails">
         <source>No fully trusted exportable developer certificate with a private key was found.</source>
-        <target state="new">No fully trusted exportable developer certificate with a private key was found.</target>
+        <target state="translated">Não foi encontrado nenhum certificado de desenvolvedor exportável totalmente confiável com uma chave privada.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateRepairTrustFix">
         <source>Run `aspire certs trust` to repair developer certificate trust.</source>
-        <target state="new">Run `aspire certs trust` to repair developer certificate trust.</target>
+        <target state="translated">Execute `aspire certs trust` para reparar a confiança no certificado de desenvolvedor.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateTrustFix">
         <source>Run `aspire certs trust` to create and trust a developer certificate.</source>
-        <target state="new">Run `aspire certs trust` to create and trust a developer certificate.</target>
+        <target state="translated">Execute `aspire certs trust` para criar e confiar em um certificado de desenvolvedor.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateUnavailableMessage">
         <source>No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check</source>
-        <target state="new">No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check</target>
+        <target state="translated">Não havia nenhum certificado de desenvolvedor confiável disponível para a verificação da conexão usando o certificado de desenvolvedor do Plano de Controle do Desenvolvedor (DCP)</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateUserProfileMissingDetails">
         <source>The developer certificate could not be cached because the user profile directory could not be determined.</source>
-        <target state="new">The developer certificate could not be cached because the user profile directory could not be determined.</target>
+        <target state="translated">Não foi possível armazenar em cache o certificado de desenvolvedor porque o diretório de perfil de usuário não pôde ser determinado.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpEphemeralCertificateConnectionFailedMessage">
         <source>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</source>
-        <target state="new">Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</target>
+        <target state="translated">A conexão do Plano de Controle do Desenvolvedor (DCP) usando um certificado efêmero gerenciado pelo DCP falhou</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpEphemeralCertificateConnectionSucceededMessage">
         <source>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</source>
-        <target state="new">Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</target>
+        <target state="translated">A conexão do Plano de Controle do Desenvolvedor (DCP) usando um certificado efêmero gerenciado pelo DCP foi bem-sucedida</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpExecutableNotFoundDetailsFormat">
         <source>Expected Developer Control Plane (DCP) executable at '{0}'.</source>
-        <target state="new">Expected Developer Control Plane (DCP) executable at '{0}'.</target>
+        <target state="translated">O executável esperado do Plano de Controle do Desenvolvedor (DCP) está em '{0}'.</target>
         <note>{0} is the expected DCP executable path.</note>
       </trans-unit>
       <trans-unit id="DcpExecutableNotFoundMessage">
         <source>Developer Control Plane (DCP) executable not found</source>
-        <target state="new">Developer Control Plane (DCP) executable not found</target>
+        <target state="translated">Executável do Plano de Controle do Desenvolvedor (DCP) não encontrado</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpExitedBeforeKubeconfigDetailsFormat">
         <source>Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}</source>
-        <target state="new">Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}</target>
+        <target state="translated">O DCP (Plano de Controle do Desenvolvedor) foi encerrado antes de gravar kubeconfig. Código de saída: {0}.{1}{2}</target>
         <note>{0} is the DCP process exit code. {1} is a newline. {2} is recent DCP process output.</note>
       </trans-unit>
       <trans-unit id="DcpKubeconfigMissingServerDetails">
         <source>Developer Control Plane (DCP) kubeconfig did not contain a valid server URI.</source>
-        <target state="new">Developer Control Plane (DCP) kubeconfig did not contain a valid server URI.</target>
+        <target state="translated">O kubeconfig do Plano de Controle do Desenvolvedor (DCP) não continha um URI de servidor válido.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpNoOutputDetails">
         <source>Developer Control Plane (DCP) did not write any output.</source>
-        <target state="new">Developer Control Plane (DCP) did not write any output.</target>
+        <target state="translated">O Plano de Controle do Desenvolvedor (DCP) não gerou nenhuma saída.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpStartFailedMessage">
         <source>Failed to start Developer Control Plane (DCP).</source>
-        <target state="new">Failed to start Developer Control Plane (DCP).</target>
+        <target state="translated">Falha ao iniciar o Plano de Controle do Desenvolvedor (DCP).</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpTlsAuthenticationFailedDetailsFormat">
         <source>TLS authentication failed: {0}</source>
-        <target state="new">TLS authentication failed: {0}</target>
+        <target state="translated">Falha na autenticação TLS: {0}</target>
         <note>{0} is the TLS authentication error message.</note>
       </trans-unit>
       <trans-unit id="Description">
         <source>Diagnose Aspire environment issues and verify setup</source>
-        <target state="needs-review-translation">Diagnosticar problemas de ambiente do Aspire e verificar a configuração</target>
+        <target state="translated">Diagnosticar problemas de ambiente do Aspire e verificar a configuração</target>
         <note />
       </trans-unit>
       <trans-unit id="DetailedPrerequisitesLink">
         <source>For detailed prerequisites: {0}</source>
-        <target state="new">For detailed prerequisites: {0}</target>
+        <target state="translated">Para pré-requisitos detalhados: {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
       <trans-unit id="DevCertsCleanAndTrustFixFormat">
         <source>Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</source>
-        <target state="new">Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</target>
+        <target state="translated">Execute "{0}" para remover todos os certificados e, em seguida, execute "{1}" para criar e confiar em um novo.</target>
         <note>{0} is the aspire certs clean command, {1} is the aspire certs trust command (not localizable)</note>
       </trans-unit>
       <trans-unit id="DevCertsInstallOpenSslCleanAndTrustFixFormat">
         <source>Install {0}, run '{1}' to remove all certificates, then run '{2}' to create and trust a new one.</source>
-        <target state="new">Install {0}, run '{1}' to remove all certificates, then run '{2}' to create and trust a new one.</target>
+        <target state="translated">Instale {0}, execute '{1}' para remover todos os certificados e execute '{2}' para criar e confiar em um novo.</target>
         <note>{0} is the openssl command/package name, {1} is the aspire certs clean command, {2} is the aspire certs trust command (not localizable)</note>
       </trans-unit>
       <trans-unit id="DevCertsMissingCertUtilDetails">
         <source>Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</source>
-        <target state="new">Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</target>
+        <target state="translated">O Aspire usa o certutil para consultar e atualizar bancos de dados de certificados NSS usados pelos navegadores Firefox e Chromium no Linux.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMissingCertUtilFix">
         <source>Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</source>
-        <target state="new">Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</target>
+        <target state="translated">Instale certutil do pacote de ferramentas NSS da sua distribuição (por exemplo, libnss3-tools).</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMissingCertUtilMessage">
         <source>certutil is not available; browser certificate trust may be incomplete</source>
-        <target state="new">certutil is not available; browser certificate trust may be incomplete</target>
+        <target state="translated">certutil não está disponível; a confiança no certificado do navegador pode estar incompleta</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMultipleNoneTrustedDetailsFormat">
         <source>Found certificates: {0}. Having multiple certificates can cause confusion.</source>
-        <target state="new">Found certificates: {0}. Having multiple certificates can cause confusion.</target>
+        <target state="translated">Certificados encontrados: {0}. Ter vários certificados pode causar confusão.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMultipleNoneTrustedMessageFormat">
         <source>Multiple HTTPS development certificates found ({0} certificates), but none are trusted</source>
-        <target state="new">Multiple HTTPS development certificates found ({0} certificates), but none are trusted</target>
+        <target state="translated">Vários certificados de desenvolvimento HTTPS encontrados ({0} certificados), mas nenhum é confiável</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMultipleSomeUntrustedDetailsFormat">
         <source>Found certificates: {0}. Having multiple certificates can cause confusion when selecting which one to use.</source>
-        <target state="new">Found certificates: {0}. Having multiple certificates can cause confusion when selecting which one to use.</target>
+        <target state="translated">Certificados encontrados: {0}. Ter vários certificados pode causar confusão ao selecionar qual deles usar.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMultipleSomeUntrustedMessageFormat">
         <source>Multiple HTTPS development certificates found ({0} certificates)</source>
-        <target state="new">Multiple HTTPS development certificates found ({0} certificates)</target>
+        <target state="translated">Vários certificados de desenvolvimento HTTPS encontrados ({0} certificados)</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsNoCertificateDetails">
         <source>Aspire uses HTTPS for secure communication between the dashboard and your services during local development.</source>
-        <target state="new">Aspire uses HTTPS for secure communication between the dashboard and your services during local development.</target>
+        <target state="translated">A Aspire usa HTTPS para comunicação segura entre o painel e os seus serviços durante o desenvolvimento local.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsNoCertificateMessage">
         <source>No HTTPS development certificate found</source>
-        <target state="new">No HTTPS development certificate found</target>
+        <target state="translated">Nenhum certificado de desenvolvimento HTTPS encontrado</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsNotTrustedDetailsFormat">
         <source>Certificate {0} exists in the personal store but was not found in the trusted root store.</source>
-        <target state="new">Certificate {0} exists in the personal store but was not found in the trusted root store.</target>
+        <target state="translated">O certificado {0} existe no repositório pessoal, mas não foi encontrado no repositório raiz confiável.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsNotTrustedMessage">
         <source>HTTPS development certificate is not trusted</source>
-        <target state="new">HTTPS development certificate is not trusted</target>
+        <target state="translated">O certificado de desenvolvimento de HTTPS não é confiável</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOldVersionDetailsFormat">
         <source>Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios.</source>
-        <target state="new">Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios.</target>
+        <target state="translated">Versões de certificado mais antigas (&lt; v{0}) podem não dar suporte a todos os cenários de confiança de certificado.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOldVersionMessageFormat">
         <source>HTTPS development certificate has an older version ({0})</source>
-        <target state="new">HTTPS development certificate has an older version ({0})</target>
+        <target state="translated">O certificado de desenvolvimento HTTPS tem uma versão mais antiga ({0})</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheMissingCurrentCertificateMessage">
         <source>OpenSSL HTTPS development certificate cache is missing the current certificate</source>
-        <target state="new">OpenSSL HTTPS development certificate cache is missing the current certificate</target>
+        <target state="translated">O cache de certificados de desenvolvimento HTTPS do OpenSSL não contém o certificado atual</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheMissingDetailsFormat">
         <source>The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</source>
-        <target state="new">The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</target>
+        <target state="translated">O cache de certificados do OpenSSL em '{0}' não contém o certificado {1} do armazenamento de certificados do usuário atual do .NET. Execute 'aspire certs clean' e depois 'aspire certs trust' para remover certificados obsoletos ou corrompidos e gerar novamente certificados de desenvolvimento confiáveis.</target>
         <note>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</note>
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheMissingHashLinkDetailsFormat">
         <source>The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories.</source>
-        <target state="new">The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories.</target>
+        <target state="translated">O cache de certificados do OpenSSL em '{0}' contém o certificado {1}, mas nenhum ponto de entrada de hash do assunto aponta para ele. As cargas de trabalho do OpenSSL usam entradas de hash do assunto ao carregar diretórios de CA.</target>
         <note>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</note>
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheMissingHashLinkMessage">
         <source>OpenSSL HTTPS development certificate cache is missing subject-hash links</source>
-        <target state="new">OpenSSL HTTPS development certificate cache is missing subject-hash links</target>
+        <target state="translated">O cache de certificados de desenvolvimento HTTPS do OpenSSL não contém o certificado atual</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheUnreadableFilesDetailsFormat">
         <source>Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</source>
-        <target state="new">Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</target>
+        <target state="translated">Não foi possível ler os arquivos de certificado em '{0}': {1}. Execute 'aspire certs clean' e depois 'aspire certs trust' para remover certificados obsoletos ou corrompidos e gerar novamente certificados de desenvolvimento confiáveis.</target>
         <note>{0} is the OpenSSL certificate cache directory. {1} is a comma-separated list of certificate file names.</note>
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheUnreadableMessage">
         <source>OpenSSL HTTPS development certificate cache contains unreadable certificate files</source>
-        <target state="new">OpenSSL HTTPS development certificate cache contains unreadable certificate files</target>
+        <target state="translated">O cache de certificados de desenvolvimento HTTPS do OpenSSL contém arquivos de certificado ilegíveis</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsPartiallyTrustedDetailsFormat">
         <source>The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically.</source>
-        <target state="new">The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically.</target>
+        <target state="translated">O certificado está no repositório confiável, mas SSL_CERT_DIR está configurado para incluir "{0}". Alguns aplicativos podem não confiar no certificado. "aspire run" configurará isso automaticamente.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsPartiallyTrustedFixFormat">
         <source>Set SSL_CERT_DIR in your shell profile: {0}</source>
-        <target state="new">Set SSL_CERT_DIR in your shell profile: {0}</target>
+        <target state="translated">Defina SSL_CERT_DIR no perfil do shell: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsPartiallyTrustedMessage">
         <source>HTTPS development certificate is only partially trusted</source>
-        <target state="new">HTTPS development certificate is only partially trusted</target>
+        <target state="translated">O certificado de desenvolvimento HTTPS é apenas parcialmente confiável</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsTrustFixFormat">
         <source>Run '{0}' to trust the HTTPS development certificate.</source>
-        <target state="new">Run '{0}' to trust the HTTPS development certificate.</target>
+        <target state="translated">Execute "{0}" para confiar no certificado de desenvolvimento HTTPS.</target>
         <note>{0} is the aspire certs trust command (not localizable)</note>
       </trans-unit>
       <trans-unit id="DevCertsTrustLabelFull">
         <source>[trusted]</source>
-        <target state="new">[trusted]</target>
+        <target state="translated">[confiável]</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsTrustLabelPartial">
         <source>[partial]</source>
-        <target state="new">[partial]</target>
+        <target state="translated">[parcial]</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsTrustedMessage">
         <source>HTTPS development certificate is trusted</source>
-        <target state="new">HTTPS development certificate is trusted</target>
+        <target state="translated">O certificado de desenvolvimento HTTPS é confiável</target>
         <note />
       </trans-unit>
       <trans-unit id="DevelopmentToolsCategoryHeader">
         <source>Development Tools</source>
-        <target state="new">Development Tools</target>
+        <target state="translated">Ferramentas de Desenvolvimento</target>
         <note />
       </trans-unit>
       <trans-unit id="EnvironmentCategoryHeader">
@@ -519,61 +519,61 @@
       </trans-unit>
       <trans-unit id="EnvironmentCheckTimedOutMessageFormat">
         <source>Environment check '{0}' timed out after {1} seconds.</source>
-        <target state="new">Environment check '{0}' timed out after {1} seconds.</target>
+        <target state="translated">A verificação de ambiente '{0}' atingiu o tempo limite após {1} segundos.</target>
         <note>{0} is the environment check name. {1} is the timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="EnvironmentChecksTimedOutMessageFormat">
         <source>Environment checks timed out after {0} seconds.</source>
-        <target state="new">Environment checks timed out after {0} seconds.</target>
+        <target state="translated">As verificações do ambiente atingiram o tempo limite após {0} segundos.</target>
         <note>{0} is the total timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="HeaderInstallations">
         <source>Aspire CLI Installations</source>
-        <target state="new">Aspire CLI Installations</target>
+        <target state="translated">Instalações do Aspire CLI</target>
         <note />
       </trans-unit>
       <trans-unit id="InstallationDiscoveryFailedReason">
         <source>Install discovery failed. See the Aspire CLI logs for details.</source>
-        <target state="new">Install discovery failed. See the Aspire CLI logs for details.</target>
+        <target state="translated">Falha na descoberta da instalação. Consulte os logs do Aspire CLI para obter detalhes.</target>
         <note />
       </trans-unit>
       <trans-unit id="InstallationDiscoveryTimedOutReasonFormat">
         <source>Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</source>
-        <target state="new">Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</target>
+        <target state="translated">A instalação da descoberta atingiu o tempo limite após {0} segundos. Consulte os logs do Aspire CLI para obter detalhes.</target>
         <note>{0} is the timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">Resultados de saída como JSON para integração de ferramentas</target>
+        <target state="translated">Formato de saída (Tabela ou Json)</target>
         <note />
       </trans-unit>
       <trans-unit id="LegacySettingsDetectedFix">
         <source>Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
 The legacy file continues to work — this is a non-blocking warning.</source>
-        <target state="new">Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
-The legacy file continues to work — this is a non-blocking warning.</target>
+        <target state="translated">Execute 'aspire init' (ou qualquer comando aspire run/add/update/pipeline) para migrar para aspire.config.json.
+O arquivo legado continua funcionando — este é um aviso que não impede a operação.</target>
         <note />
       </trans-unit>
       <trans-unit id="LegacySettingsDetectedMessageFormat">
         <source>Legacy .aspire/settings.json detected at {0}</source>
-        <target state="new">Legacy .aspire/settings.json detected at {0}</target>
+        <target state="translated">.herdado/settings.json detectado em {0}</target>
         <note>{0} is the full path to the legacy settings file.</note>
       </trans-unit>
       <trans-unit id="LegacyTypeScriptAppHostMessageFormat">
         <source>Legacy 'apphost.ts' layout detected at {0}</source>
-        <target state="new">Legacy 'apphost.ts' layout detected at {0}</target>
+        <target state="translated">Layout legado de 'apphost.ts' detectado em {0}</target>
         <note>{0} is the full path to the legacy apphost.ts file.</note>
       </trans-unit>
       <trans-unit id="OperatingSystemMessageFormat">
         <source>Operating system: {0}</source>
-        <target state="new">Operating system: {0}</target>
+        <target state="translated">Sistema operacional: {0}</target>
         <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
       </trans-unit>
       <trans-unit id="PendingMigrationFix">
         <source>Run 'aspire update --migrate' to apply the recommended migration.
 The current layout continues to work — this is a non-blocking warning.</source>
-        <target state="new">Run 'aspire update --migrate' to apply the recommended migration.
-The current layout continues to work — this is a non-blocking warning.</target>
+        <target state="translated">Execute 'aspire update --migrate' para aplicar a migração recomendada.
+O layout atual continua funcionando — este é um aviso que não impede a operação.</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">
@@ -588,57 +588,57 @@ The current layout continues to work — this is a non-blocking warning.</target
       </trans-unit>
       <trans-unit id="ValueCurrentMarker">
         <source>(current)</source>
-        <target state="new">(current)</target>
+        <target state="translated">(atual)</target>
         <note>Suffix appended to the running CLI's path so the user can identify which install is themselves.</note>
       </trans-unit>
       <trans-unit id="ValueNotProbed">
         <source>(not probed)</source>
-        <target state="new">(not probed)</target>
+        <target state="translated">(não investigado)</target>
         <note>Placeholder shown in the table when an install was found but not asked to self-describe (e.g., trust gate).</note>
       </trans-unit>
       <trans-unit id="ValuePathActive">
         <source>active</source>
-        <target state="new">active</target>
+        <target state="translated">ativo</target>
         <note>Shown when an install is the first Aspire CLI resolved from PATH.</note>
       </trans-unit>
       <trans-unit id="ValuePathNotOnPath">
         <source>not on PATH</source>
-        <target state="new">not on PATH</target>
+        <target state="translated">não está no PATH</target>
         <note>Shown when an install was not discovered from PATH.</note>
       </trans-unit>
       <trans-unit id="ValuePathShadowed">
         <source>shadowed</source>
-        <target state="new">shadowed</target>
+        <target state="translated">sombreado</target>
         <note>Shown when an install is on PATH but an earlier Aspire CLI entry shadows it.</note>
       </trans-unit>
       <trans-unit id="ValueProbeFailed">
         <source>(probe failed)</source>
-        <target state="new">(probe failed)</target>
+        <target state="translated">(falha na investigação)</target>
         <note>Placeholder shown in the table when an install was probed but did not return usable data.</note>
       </trans-unit>
       <trans-unit id="ValueUnknown">
         <source>(unknown)</source>
-        <target state="new">(unknown)</target>
+        <target state="translated">(desconhecido)</target>
         <note>Placeholder shown in the table when a field could not be determined for a discovered install.</note>
       </trans-unit>
       <trans-unit id="VersionUnknown">
         <source>unknown</source>
-        <target state="new">unknown</target>
+        <target state="translated">desconhecido</target>
         <note />
       </trans-unit>
       <trans-unit id="VsCodeExtensionInstalledMessage">
         <source>Aspire extension for VS Code is installed</source>
-        <target state="new">Aspire extension for VS Code is installed</target>
+        <target state="translated">A extensão do Aspire para VS Code está instalada</target>
         <note />
       </trans-unit>
       <trans-unit id="VsCodeExtensionMissingFix">
         <source>Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</source>
-        <target state="new">Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</target>
+        <target state="translated">Instale a extensão do Aspire no Marketplace do VS Code para ter uma experiência integrada com o Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="VsCodeExtensionMissingMessage">
         <source>VS Code is installed, but the Aspire extension is not installed</source>
-        <target state="new">VS Code is installed, but the Aspire extension is not installed</target>
+        <target state="translated">O VS Code está instalado, mas a extensão do Aspire não está instalada</target>
         <note />
       </trans-unit>
     </body>

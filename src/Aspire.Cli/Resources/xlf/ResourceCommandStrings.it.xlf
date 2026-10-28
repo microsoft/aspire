@@ -4,62 +4,62 @@
     <body>
       <trans-unit id="ArgumentRequired">
         <source>The '{0}' argument is required.</source>
-        <target state="new">The '{0}' argument is required.</target>
+        <target state="translated">L'argomento '{0}' è obbligatorio.</target>
         <note />
       </trans-unit>
       <trans-unit id="AvailableResourceCommands">
         <source>Available resource commands:</source>
-        <target state="new">Available resource commands:</target>
+        <target state="translated">Comandi disponibili per la risorsa:</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandDescription">
         <source>Execute a command on a resource (e.g. start, stop, restart)</source>
-        <target state="needs-review-translation">Eseguire un comando su una risorsa.</target>
+        <target state="translated">Eseguire un comando su una risorsa (ad esempio start, stop, restart)</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
         <source>The name of the command to execute (e.g. start, stop, restart)</source>
-        <target state="needs-review-translation">Nome del comando da eseguire.</target>
+        <target state="translated">Nome del comando da eseguire (ad esempio start, stop, restart)</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
         <source>The name of the resource to execute the command on</source>
-        <target state="needs-review-translation">Nome della risorsa di destinazione rispetto al quale eseguire il comando.</target>
+        <target state="translated">Nome della risorsa su cui eseguire il comando</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpAllowedValues">
         <source>Allowed values: {0}.</source>
-        <target state="new">Allowed values: {0}.</target>
+        <target state="translated">Valori consentiti: {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpCommandOptions">
         <source>Command options:</source>
-        <target state="new">Command options:</target>
+        <target state="translated">Opzioni dei comandi:</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpDefaultValue">
         <source>Default: {0}.</source>
-        <target state="new">Default: {0}.</target>
+        <target state="translated">Valore predefinito: {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpDelimiterHint">
         <source>Use `-- --{0}{1}` to pass this command option.</source>
-        <target state="new">Use `-- --{0}{1}` to pass this command option.</target>
+        <target state="translated">Usare `-- --{0}{1}` per specificare questa opzione del comando.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpRequired">
         <source>Required.</source>
-        <target state="new">Required.</target>
+        <target state="translated">Obbligatorio.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpUsageSyntax">
         <source>aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</source>
-        <target state="new">aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</target>
+        <target state="translated">aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpValuePlaceholder">
         <source>value</source>
-        <target state="new">value</target>
+        <target state="translated">valore</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

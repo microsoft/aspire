@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="CommandProgressCancelButtonText">
         <source>Cancel</source>
-        <target state="new">Cancel</target>
+        <target state="translated">Annulla</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeDockerAdvice">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotInstalledMessage">
         <source>Container runtime could not be found. See https://aka.ms/aspire/containers for more details on supported container runtimes.</source>
-        <target state="translated">Non è possibile trovare il runtime del contenitore. Vedi https://aka.ms/aspire/containers per altri dettagli sui runtime del contenitore supportati.</target>
+        <target state="translated">Non è possibile trovare il runtime del contenitore. Vedere https://aka.ms/aspire/containers per altri dettagli sui runtime del contenitore supportati.</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotInstalledTitle">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="DeleteParameterMessage">
         <source>Are you sure you want to delete the value for parameter `{0}`?</source>
-        <target state="needs-review-translation">Eliminare il valore del parametro '{0}'? </target>
+        <target state="translated">Eliminare il valore del parametro `{0}`?</target>
         <note>Contains markdown. {0} is the parameter name.</note>
       </trans-unit>
       <trans-unit id="DeleteParameterPrimaryButtonText">
@@ -64,22 +64,22 @@
       </trans-unit>
       <trans-unit id="DeveloperCertificateNotFullyTrustedMessage">
         <source>The most recent development certificate isn't fully trusted. See https://aka.ms/aspire/devcerts for more information.</source>
-        <target state="new">The most recent development certificate isn't fully trusted. See https://aka.ms/aspire/devcerts for more information.</target>
+        <target state="translated">Il certificato di sviluppo più recente non è completamente attendibile. Per altre informazioni, vedere https://aka.ms/aspire/devcerts.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeveloperCertificateNotFullyTrustedTitle">
         <source>Development certificate not fully trusted</source>
-        <target state="new">Development certificate not fully trusted</target>
+        <target state="translated">Certificato di sviluppo non completamente attendibile</target>
         <note />
       </trans-unit>
       <trans-unit id="NoDeveloperCertificateTrustedMessage">
         <source>No trusted development certificate was found. See https://aka.ms/aspire/devcerts for more information.</source>
-        <target state="new">No trusted development certificate was found. See https://aka.ms/aspire/devcerts for more information.</target>
+        <target state="translated">Nessun certificato di sviluppo attendibile è stato trovato. Per altre informazioni, vedere https://aka.ms/aspire/devcerts.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoDeveloperCertificateTrustedTitle">
         <source>No trusted development certificate</source>
-        <target state="new">No trusted development certificate</target>
+        <target state="translated">Nessun certificato di sviluppo attendibile</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersBarMessage">
@@ -99,7 +99,7 @@
       </trans-unit>
       <trans-unit id="ParametersInputsDeleteDescription">
         <source>Delete a value that is saved in [user secrets](https://aka.ms/aspire/user-secrets).</source>
-        <target state="new">Delete a value that is saved in [user secrets](https://aka.ms/aspire/user-secrets).</target>
+        <target state="translated">Elimina un valore salvato in [user secrets](https://aka.ms/aspire/user-secrets).</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="ParametersInputsDeleteLabel">
@@ -129,12 +129,12 @@
       </trans-unit>
       <trans-unit id="ParametersInputsRememberDescriptionConfigured">
         <source>Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use.</source>
-        <target state="new">Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use.</target>
+        <target state="translated">Salvare il valore in [user secrets](https://aka.ms/aspire/user-secrets) per un uso futuro.</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="ParametersInputsRememberDescriptionNotConfigured">
         <source>Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
-        <target state="new">Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</target>
+        <target state="translated">È necessario configurare i segreti utente per AppHost. Eseguire `aspire secret set &lt;key&gt; &lt;value&gt;` per inizializzare i segreti utente oppure consultare [user secrets](https://aka.ms/aspire/user-secrets) per ulteriori informazioni.</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="ParametersInputsRememberLabel">
@@ -169,9 +169,7 @@
       </trans-unit>
       <trans-unit id="SetParameterMessage">
         <source>Please provide a value for the parameter. New parameter values may not be used until dependent resources are restarted.</source>
-        <target state="needs-review-translation">Specificare un valore per il parametro. I parametri possono essere salvati nei [segreti utente](https://learn.microsoft.com/aspnet/core/security/app-secrets) per usi futuri.
-
-I nuovi valori del parametro potrebbero non essere usati finché le risorse dipendenti non vengono riavviate.</target>
+        <target state="translated">Specificare un valore per il parametro. Non è possibile usare i nuovi valori di parametro fino al riavvio delle risorse dipendenti.</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="SetParameterTitle">

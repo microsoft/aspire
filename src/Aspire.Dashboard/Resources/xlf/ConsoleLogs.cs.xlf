@@ -29,12 +29,12 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsNoLogsFound">
         <source>No logs found</source>
-        <target state="new">No logs found</target>
+        <target state="translated">Nenašly se žádné protokoly.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsNoLogsMatchFilter">
         <source>No logs match the filter</source>
-        <target state="new">No logs match the filter</target>
+        <target state="translated">Filtru neodpovídají žádné protokoly</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsNoResourceSelected">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsNotCapturedForRun">
         <source>Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</source>
-        <target state="new">Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</target>
+        <target state="translated">Pro toto spuštění nebyly zachyceny protokoly konzoly. Protokoly konzoly se zachytávají jen tehdy, když tuto stránku otevřete za běhu AppHostu.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsPageTitle">
@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsTextFilter">
         <source>Console logs filter</source>
-        <target state="new">Console logs filter</target>
+        <target state="translated">Filtr protokolů konzoly</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsTimestampHide">
@@ -124,7 +124,7 @@
       </trans-unit>
       <trans-unit id="PauseInProgressText">
         <source>Console logs capture paused at {0}</source>
-        <target state="new">Console logs capture paused at {0}</target>
+        <target state="translated">Zachytávání protokolů konzoly pozastaveno v {0}</target>
         <note>{0} is a time</note>
       </trans-unit>
     </body>
