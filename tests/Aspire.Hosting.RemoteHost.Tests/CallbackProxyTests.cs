@@ -528,6 +528,7 @@ internal sealed class TestCallbackInvoker : ICallbackInvoker
     public List<(string CallbackId, JsonNode? Args)> Invocations { get; } = [];
     public JsonNode? ResultToReturn { get; set; }
     public Exception? ExceptionToThrow { get; set; }
+    public Func<string, JsonNode?, CancellationToken, Task>? OnInvoke { get; set; }
     public bool IsConnected => true;
 
     public Task<TResult> InvokeAsync<TResult>(string callbackId, JsonNode? args, CancellationToken cancellationToken = default)
@@ -540,13 +541,16 @@ internal sealed class TestCallbackInvoker : ICallbackInvoker
         return Task.FromResult(ResultToReturn is TResult result ? result : default!);
     }
 
-    public Task InvokeAsync(string callbackId, JsonNode? args, CancellationToken cancellationToken = default)
+    public async Task InvokeAsync(string callbackId, JsonNode? args, CancellationToken cancellationToken = default)
     {
         Invocations.Add((callbackId, args));
         if (ExceptionToThrow != null)
         {
             throw ExceptionToThrow;
         }
-        return Task.CompletedTask;
+        if (OnInvoke is { } onInvoke)
+        {
+            await onInvoke(callbackId, args, cancellationToken);
+        }
     }
 }

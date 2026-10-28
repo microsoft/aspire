@@ -148,11 +148,22 @@ public class AtsGoCodeGeneratorTests
                 package aspire
 
                 import (
+                    "context"
+                    "errors"
                     "io"
                     "os"
                     "testing"
                     "time"
                 )
+
+                func TestCanceledResponse(t *testing.T) {
+                    result, err := extractResult(map[string]any{
+                        "error": map[string]any{"code": float64(-32800), "message": "canceled"},
+                    })
+                    if result != nil || !errors.Is(err, context.Canceled) {
+                        t.Fatalf("expected cancellation, got result %v and error %v", result, err)
+                    }
+                }
 
                 func TestDuplexConnection(t *testing.T) {
                     conn, err := openConnection(os.Getenv("TEST_SOCKET_PATH"), 5*time.Second)

@@ -11,7 +11,9 @@ import {
     EnvironmentCallbackContext,
     ExecuteCommandContext,
     InputsDialogValidationContext,
-    InputType
+    InputType,
+    TerminalKeyName,
+    TerminalPlacement
 } from './.aspire/modules/aspire.mjs';
 
 console.log("Aspire TypeScript AppHost starting...\n");
@@ -31,6 +33,7 @@ await builder.addDockerComposeEnvironment("compose");
 const dir = await builder.appHostDirectory();
 console.log(`AppHost directory: ${dir}`);
 const processCommandScriptPath = join(dir, "process-command-scripts", "node-process-check.js");
+const terminalScriptPath = join(dir, "terminal-scripts", "greeting.mjs");
 
 // Add PostgreSQL server and database
 const postgres = await builder.addPostgres("postgres");
@@ -51,6 +54,82 @@ console.log("Added Express API with reference to PostgreSQL database");
 // Redis
 const cache = await builder.addRedis("cache");
 await cache.withPersistentLifetime();
+await cache.withCommand(
+    "terminal-dock",
+    "Open AppHost terminal",
+    async (context: ExecuteCommandContext) => {
+        const terminals = await context.services().getTerminalService();
+        const terminal = await terminals.createTerminal({
+            title: "TypeScript AppHost terminal",
+            executable: process.execPath,
+            arguments: [terminalScriptPath],
+            workingDirectory: dir,
+            placement: TerminalPlacement.Dock
+        });
+        await terminal.start();
+        await terminal.show();
+
+        // The dock owns presentation, not lifetime: keep this terminal until its tab closes or the AppHost stops.
+        return { success: true, message: `Opened terminal ${await terminal.id()}. Type a name or 'quit'.` };
+    },
+    {
+        commandOptions: {
+            description: "Creates an AppHost-owned terminal that stays in the dashboard dock.",
+            iconName: "WindowConsole"
+        }
+    });
+await cache.withCommand(
+    "terminal-dialog",
+    "Run terminal interaction",
+    async (context: ExecuteCommandContext) => {
+        const services = await context.services();
+        const interactions = await services.getInteractionService();
+        if (!(await interactions.isAvailable())) {
+            return { success: false, message: "Interaction service is not available." };
+        }
+        const terminals = await services.getTerminalService();
+        const terminal = await terminals.createTerminal({
+            title: "Terminal setup",
+            executable: process.execPath,
+            arguments: [terminalScriptPath],
+            workingDirectory: dir,
+            placement: TerminalPlacement.Dialog
+        });
+        try {
+            await terminal.start();
+            const result = await interactions.promptTerminal(
+                "The TypeScript AppHost will answer this terminal's prompt.",
+                terminal,
+                {
+                    title: "Automated terminal interaction",
+                    primaryButtonText: "Cancel",
+                    work: async (workContext) => {
+                        const cancellationToken = await workContext.cancellationToken();
+                        await terminal.waitForText("Name: ", { timeout: 10000, cancellationToken });
+                        await terminal.sendText("Aspire", { cancellationToken });
+                        await terminal.sendKey(TerminalKeyName.Enter, { cancellationToken });
+                        await terminal.waitForText("Hello, Aspire!", { timeout: 10000, cancellationToken });
+                    }
+                },
+                await context.cancellationToken());
+
+            if ((await terminals.getTerminal(await terminal.id())) === null) {
+                throw new Error("The interaction unexpectedly disposed its borrowed terminal.");
+            }
+            return {
+                success: !result.canceled,
+                message: result.canceled ? "Terminal interaction canceled." : "Terminal interaction completed."
+            };
+        } finally {
+            await terminal.dispose();
+        }
+    },
+    {
+        commandOptions: {
+            description: "Drives a terminal through ATS while its dialog is displayed, then explicitly disposes it.",
+            iconName: "WindowConsole"
+        }
+    });
 await cache.withCommand(
     "set-prefix",
     "Set prefix",

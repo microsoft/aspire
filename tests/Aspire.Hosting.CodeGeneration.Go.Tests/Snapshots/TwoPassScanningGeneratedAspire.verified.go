@@ -33,6 +33,24 @@ const (
 	ContainerMountTypeVolume ContainerMountType = "Volume"
 )
 
+// TerminalOwner represents TerminalOwner.
+type TerminalOwner string
+
+const (
+	TerminalOwnerAppHost TerminalOwner = "AppHost"
+	TerminalOwnerResource TerminalOwner = "Resource"
+)
+
+// TerminalPlacement represents TerminalPlacement.
+type TerminalPlacement string
+
+const (
+	TerminalPlacementDock TerminalPlacement = "Dock"
+	TerminalPlacementDialog TerminalPlacement = "Dialog"
+	TerminalPlacementResourceView TerminalPlacement = "ResourceView"
+	TerminalPlacementNone TerminalPlacement = "None"
+)
+
 // ContainerLifetime represents ContainerLifetime.
 type ContainerLifetime string
 
@@ -132,6 +150,86 @@ const (
 	ProbeTypeStartup ProbeType = "Startup"
 	ProbeTypeReadiness ProbeType = "Readiness"
 	ProbeTypeLiveness ProbeType = "Liveness"
+)
+
+// TerminalKeyName represents TerminalKeyName.
+type TerminalKeyName string
+
+const (
+	TerminalKeyNameA TerminalKeyName = "A"
+	TerminalKeyNameB TerminalKeyName = "B"
+	TerminalKeyNameC TerminalKeyName = "C"
+	TerminalKeyNameD TerminalKeyName = "D"
+	TerminalKeyNameE TerminalKeyName = "E"
+	TerminalKeyNameF TerminalKeyName = "F"
+	TerminalKeyNameG TerminalKeyName = "G"
+	TerminalKeyNameH TerminalKeyName = "H"
+	TerminalKeyNameI TerminalKeyName = "I"
+	TerminalKeyNameJ TerminalKeyName = "J"
+	TerminalKeyNameK TerminalKeyName = "K"
+	TerminalKeyNameL TerminalKeyName = "L"
+	TerminalKeyNameM TerminalKeyName = "M"
+	TerminalKeyNameN TerminalKeyName = "N"
+	TerminalKeyNameO TerminalKeyName = "O"
+	TerminalKeyNameP TerminalKeyName = "P"
+	TerminalKeyNameQ TerminalKeyName = "Q"
+	TerminalKeyNameR TerminalKeyName = "R"
+	TerminalKeyNameS TerminalKeyName = "S"
+	TerminalKeyNameT TerminalKeyName = "T"
+	TerminalKeyNameU TerminalKeyName = "U"
+	TerminalKeyNameV TerminalKeyName = "V"
+	TerminalKeyNameW TerminalKeyName = "W"
+	TerminalKeyNameX TerminalKeyName = "X"
+	TerminalKeyNameY TerminalKeyName = "Y"
+	TerminalKeyNameZ TerminalKeyName = "Z"
+	TerminalKeyNameD0 TerminalKeyName = "D0"
+	TerminalKeyNameD1 TerminalKeyName = "D1"
+	TerminalKeyNameD2 TerminalKeyName = "D2"
+	TerminalKeyNameD3 TerminalKeyName = "D3"
+	TerminalKeyNameD4 TerminalKeyName = "D4"
+	TerminalKeyNameD5 TerminalKeyName = "D5"
+	TerminalKeyNameD6 TerminalKeyName = "D6"
+	TerminalKeyNameD7 TerminalKeyName = "D7"
+	TerminalKeyNameD8 TerminalKeyName = "D8"
+	TerminalKeyNameD9 TerminalKeyName = "D9"
+	TerminalKeyNameF1 TerminalKeyName = "F1"
+	TerminalKeyNameF2 TerminalKeyName = "F2"
+	TerminalKeyNameF3 TerminalKeyName = "F3"
+	TerminalKeyNameF4 TerminalKeyName = "F4"
+	TerminalKeyNameF5 TerminalKeyName = "F5"
+	TerminalKeyNameF6 TerminalKeyName = "F6"
+	TerminalKeyNameF7 TerminalKeyName = "F7"
+	TerminalKeyNameF8 TerminalKeyName = "F8"
+	TerminalKeyNameF9 TerminalKeyName = "F9"
+	TerminalKeyNameF10 TerminalKeyName = "F10"
+	TerminalKeyNameF11 TerminalKeyName = "F11"
+	TerminalKeyNameF12 TerminalKeyName = "F12"
+	TerminalKeyNameEnter TerminalKeyName = "Enter"
+	TerminalKeyNameTab TerminalKeyName = "Tab"
+	TerminalKeyNameEscape TerminalKeyName = "Escape"
+	TerminalKeyNameBackspace TerminalKeyName = "Backspace"
+	TerminalKeyNameDelete TerminalKeyName = "Delete"
+	TerminalKeyNameInsert TerminalKeyName = "Insert"
+	TerminalKeyNameSpace TerminalKeyName = "Space"
+	TerminalKeyNameUp TerminalKeyName = "Up"
+	TerminalKeyNameDown TerminalKeyName = "Down"
+	TerminalKeyNameLeft TerminalKeyName = "Left"
+	TerminalKeyNameRight TerminalKeyName = "Right"
+	TerminalKeyNameHome TerminalKeyName = "Home"
+	TerminalKeyNameEnd TerminalKeyName = "End"
+	TerminalKeyNamePageUp TerminalKeyName = "PageUp"
+	TerminalKeyNamePageDown TerminalKeyName = "PageDown"
+	TerminalKeyNameComma TerminalKeyName = "Comma"
+	TerminalKeyNamePeriod TerminalKeyName = "Period"
+	TerminalKeyNameMinus TerminalKeyName = "Minus"
+	TerminalKeyNameEqualsSign TerminalKeyName = "EqualsSign"
+	TerminalKeyNameSlash TerminalKeyName = "Slash"
+	TerminalKeyNameSemicolon TerminalKeyName = "Semicolon"
+	TerminalKeyNameLeftBracket TerminalKeyName = "LeftBracket"
+	TerminalKeyNameBackslash TerminalKeyName = "Backslash"
+	TerminalKeyNameRightBracket TerminalKeyName = "RightBracket"
+	TerminalKeyNameApostrophe TerminalKeyName = "Apostrophe"
+	TerminalKeyNameBacktick TerminalKeyName = "Backtick"
 )
 
 // ContainerImageDestination represents ContainerImageDestination.
@@ -622,6 +720,30 @@ func (d *InteractionProgressOptions) ToMap() map[string]any {
 	return m
 }
 
+// InteractionTerminalOptions represents InteractionTerminalOptions.
+type InteractionTerminalOptions struct {
+	Title *string `json:"title,omitempty"`
+	PrimaryButtonText *string `json:"primaryButtonText,omitempty"`
+	EnableMessageMarkdown *bool `json:"enableMessageMarkdown,omitempty"`
+	Work func(arg TerminalContext) `json:"work,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *InteractionTerminalOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if d.Title != nil { m["title"] = serializeValue(d.Title) }
+	if d.PrimaryButtonText != nil { m["primaryButtonText"] = serializeValue(d.PrimaryButtonText) }
+	if d.EnableMessageMarkdown != nil { m["enableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
+	if d.Work != nil {
+		cb := d.Work
+		m["work"] = func(args ...any) any {
+			cb(callbackArg[TerminalContext](args, 0))
+			return nil
+		}
+	}
+	return m
+}
+
 // BoolInteractionResult represents BoolInteractionResult.
 type BoolInteractionResult struct {
 	Canceled bool `json:"canceled,omitempty"`
@@ -717,6 +839,48 @@ func (d *ReferenceEnvironmentInjectionOptions) ToMap() map[string]any {
 	m["connectionProperties"] = serializeValue(d.ConnectionProperties)
 	m["serviceDiscovery"] = serializeValue(d.ServiceDiscovery)
 	m["endpoints"] = serializeValue(d.Endpoints)
+	return m
+}
+
+// CreateTerminalOptions represents CreateTerminalOptions.
+type CreateTerminalOptions struct {
+	Title string `json:"title,omitempty"`
+	Executable string `json:"executable,omitempty"`
+	Arguments []string `json:"arguments,omitempty"`
+	WorkingDirectory *string `json:"workingDirectory,omitempty"`
+	EnvironmentVariables map[string]string `json:"environmentVariables,omitempty"`
+	Columns *float64 `json:"columns,omitempty"`
+	Rows *float64 `json:"rows,omitempty"`
+	Placement *TerminalPlacement `json:"placement,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *CreateTerminalOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	m["title"] = serializeValue(d.Title)
+	m["executable"] = serializeValue(d.Executable)
+	if d.Arguments != nil { m["arguments"] = serializeValue(d.Arguments) }
+	if d.WorkingDirectory != nil { m["workingDirectory"] = serializeValue(d.WorkingDirectory) }
+	if d.EnvironmentVariables != nil { m["environmentVariables"] = serializeValue(d.EnvironmentVariables) }
+	if d.Columns != nil { m["columns"] = serializeValue(d.Columns) }
+	if d.Rows != nil { m["rows"] = serializeValue(d.Rows) }
+	if d.Placement != nil { m["placement"] = serializeValue(d.Placement) }
+	return m
+}
+
+// TerminalKeyModifiers represents TerminalKeyModifiers.
+type TerminalKeyModifiers struct {
+	Ctrl *bool `json:"ctrl,omitempty"`
+	Alt *bool `json:"alt,omitempty"`
+	Shift *bool `json:"shift,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *TerminalKeyModifiers) ToMap() map[string]any {
+	m := map[string]any{}
+	if d.Ctrl != nil { m["ctrl"] = serializeValue(d.Ctrl) }
+	if d.Alt != nil { m["alt"] = serializeValue(d.Alt) }
+	if d.Shift != nil { m["shift"] = serializeValue(d.Shift) }
 	return m
 }
 
@@ -1451,6 +1615,216 @@ func (s *aspireStore) GetFileNameWithContent(filenameTemplate string, sourceFile
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// AspireTerminal is the public interface for handle type AspireTerminal.
+type AspireTerminal interface {
+	handleReference
+	Dispose() error
+	GetScreenText() (string, error)
+	Id() (string, error)
+	Owner() (TerminalOwner, error)
+	Placement() (TerminalPlacement, error)
+	SendKey(key TerminalKeyName, options ...*SendKeyOptions) error
+	SendText(text string, options ...*SendTextOptions) error
+	Show() error
+	Start() error
+	Title() (string, error)
+	WaitForText(text string, options ...*WaitForTextOptions) error
+	Err() error
+}
+
+// aspireTerminal is the unexported impl of AspireTerminal.
+type aspireTerminal struct {
+	*resourceBuilderBase
+}
+
+// newAspireTerminalFromHandle wraps an existing handle as AspireTerminal.
+func newAspireTerminalFromHandle(h *handle, c *client) AspireTerminal {
+	return &aspireTerminal{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Dispose releases the terminal handle, stopping the workload only when the AppHost owns it.
+func (s *aspireTerminal) Dispose() error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"terminal": s.handle.ToJSON(),
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting/AspireTerminal.dispose", reqArgs)
+	return err
+}
+
+// GetScreenText gets the current terminal screen text, with lines separated by newlines.
+func (s *aspireTerminal) GetScreenText() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"terminal": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/AspireTerminal.getScreenText", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// Id gets the opaque identifier used to address this terminal over the dashboard connection.
+func (s *aspireTerminal) Id() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/AspireTerminal.id", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// Owner gets the process that owns this terminal's workload.
+func (s *aspireTerminal) Owner() (TerminalOwner, error) {
+	if s.err != nil { var zero TerminalOwner; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/AspireTerminal.owner", reqArgs)
+	if err != nil {
+		var zero TerminalOwner
+		return zero, err
+	}
+	return decodeAs[TerminalOwner](result)
+}
+
+// Placement gets where this terminal is displayed in the dashboard.
+func (s *aspireTerminal) Placement() (TerminalPlacement, error) {
+	if s.err != nil { var zero TerminalPlacement; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/AspireTerminal.placement", reqArgs)
+	if err != nil {
+		var zero TerminalPlacement
+		return zero, err
+	}
+	return decodeAs[TerminalPlacement](result)
+}
+
+// SendKey sends a named key with optional Control, Alt, and Shift modifiers.
+func (s *aspireTerminal) SendKey(key TerminalKeyName, options ...*SendKeyOptions) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"terminal": s.handle.ToJSON(),
+	}
+	reqArgs["key"] = serializeValue(key)
+	if len(options) > 0 {
+		merged := &SendKeyOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.CancellationToken != nil {
+			ctx = merged.CancellationToken.Context()
+			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
+				reqArgs["cancellationToken"] = id
+			}
+		}
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting/AspireTerminal.sendKey", reqArgs)
+	return err
+}
+
+// SendText sends text as though it had been typed into the terminal.
+func (s *aspireTerminal) SendText(text string, options ...*SendTextOptions) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"terminal": s.handle.ToJSON(),
+	}
+	reqArgs["text"] = serializeValue(text)
+	if len(options) > 0 {
+		merged := &SendTextOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.CancellationToken != nil {
+			ctx = merged.CancellationToken.Context()
+			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
+				reqArgs["cancellationToken"] = id
+			}
+		}
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting/AspireTerminal.sendText", reqArgs)
+	return err
+}
+
+// Show reveals a dock terminal and selects its tab. Other placements are unaffected.
+func (s *aspireTerminal) Show() error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"terminal": s.handle.ToJSON(),
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting/AspireTerminal.show", reqArgs)
+	return err
+}
+
+// Start starts the terminal workload. Resource-owned workloads are started by their resource.
+func (s *aspireTerminal) Start() error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"terminal": s.handle.ToJSON(),
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting/AspireTerminal.start", reqArgs)
+	return err
+}
+
+// Title gets the title shown on the terminal's dock tab.
+func (s *aspireTerminal) Title() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/AspireTerminal.title", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// WaitForText waits for text on the terminal screen. Timeout is in milliseconds and defaults to 30 seconds.
+func (s *aspireTerminal) WaitForText(text string, options ...*WaitForTextOptions) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"terminal": s.handle.ToJSON(),
+	}
+	reqArgs["text"] = serializeValue(text)
+	if len(options) > 0 {
+		merged := &WaitForTextOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.CancellationToken != nil {
+			ctx = merged.CancellationToken.Context()
+			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
+				reqArgs["cancellationToken"] = id
+			}
+		}
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting/AspireTerminal.waitForText", reqArgs)
+	return err
 }
 
 // Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource is the public interface for handle type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource.
@@ -11066,6 +11440,7 @@ func (s *distributedApplicationModel) FindResourceByName(name string) Resource {
 	reqArgs["name"] = serializeValue(name)
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/findResourceByName", reqArgs)
 	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	typed, ok := result.(Resource)
 	if !ok {
 		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/findResourceByName returned unexpected type %T", result))
@@ -18872,6 +19247,7 @@ type InteractionService interface {
 	PromptMessageBox(title string, message string, options ...*PromptMessageBoxOptions) (*BoolInteractionResult, error)
 	PromptNotification(title string, message string, options ...*PromptNotificationOptions) (*BoolInteractionResult, error)
 	PromptProgress(message string, options ...*PromptProgressOptions) (*BoolInteractionResult, error)
+	PromptTerminal(message string, terminal AspireTerminal, options ...*PromptTerminalOptions) (*BoolInteractionResult, error)
 	Err() error
 }
 
@@ -19246,6 +19622,37 @@ func (s *interactionService) PromptProgress(message string, options ...*PromptPr
 		}
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/promptProgress", reqArgs)
+	if err != nil {
+		var zero *BoolInteractionResult
+		return zero, err
+	}
+	return decodeAs[*BoolInteractionResult](result)
+}
+
+// PromptTerminal displays a Dialog-placement terminal without taking ownership of it. Completion, cancellation, and callback failure leave the terminal alive; the caller must explicitly dispose it when finished.
+func (s *interactionService) PromptTerminal(message string, terminal AspireTerminal, options ...*PromptTerminalOptions) (*BoolInteractionResult, error) {
+	if s.err != nil { var zero *BoolInteractionResult; return zero, s.err }
+	if terminal != nil { if err := terminal.Err(); err != nil { var zero *BoolInteractionResult; return zero, err } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	reqArgs["message"] = serializeValue(message)
+	reqArgs["terminal"] = serializeValue(terminal)
+	if len(options) > 0 {
+		merged := &PromptTerminalOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.CancellationToken != nil {
+			ctx = merged.CancellationToken.Context()
+			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
+				reqArgs["cancellationToken"] = id
+			}
+		}
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/promptTerminal", reqArgs)
 	if err != nil {
 		var zero *BoolInteractionResult
 		return zero, err
@@ -24260,6 +24667,7 @@ func (s *resourceUrlsCallbackContext) GetEndpoint(name string) EndpointReference
 	if err != nil {
 		return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
+	if result == nil { return nil }
 	href, ok := result.(handleReference)
 	if !ok {
 		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/getEndpoint returned unexpected type %T", result)
@@ -24467,6 +24875,7 @@ type ServiceProvider interface {
 	GetResourceCommandService() ResourceCommandService
 	GetResourceLoggerService() ResourceLoggerService
 	GetResourceNotificationService() ResourceNotificationService
+	GetTerminalService() TerminalService
 	GetUserSecretsManager() UserSecretsManager
 	Err() error
 }
@@ -24633,6 +25042,25 @@ func (s *serviceProvider) GetResourceNotificationService() ResourceNotificationS
 	return &resourceNotificationService{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
+// GetTerminalService gets the terminal service from the AppHost service provider.
+func (s *serviceProvider) GetTerminalService() TerminalService {
+	if s.err != nil { return &terminalService{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"serviceProvider": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getTerminalService", reqArgs)
+	if err != nil {
+		return &terminalService{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/getTerminalService returned unexpected type %T", result)
+		return &terminalService{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &terminalService{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
 // GetUserSecretsManager gets the user secrets manager from the service provider.
 func (s *serviceProvider) GetUserSecretsManager() UserSecretsManager {
 	if s.err != nil { return &userSecretsManager{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
@@ -24650,6 +25078,97 @@ func (s *serviceProvider) GetUserSecretsManager() UserSecretsManager {
 		return &userSecretsManager{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &userSecretsManager{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// TerminalContext is the public interface for handle type TerminalContext.
+type TerminalContext interface {
+	handleReference
+	CancellationToken() (*CancellationToken, error)
+	Err() error
+}
+
+// terminalContext is the unexported impl of TerminalContext.
+type terminalContext struct {
+	*resourceBuilderBase
+}
+
+// newTerminalContextFromHandle wraps an existing handle as TerminalContext.
+func newTerminalContextFromHandle(h *handle, c *client) TerminalContext {
+	return &terminalContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// CancellationToken gets the token signaled when the user requests cancellation or the interaction is externally canceled.
+func (s *terminalContext) CancellationToken() (*CancellationToken, error) {
+	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/TerminalContext.cancellationToken", reqArgs)
+	if err != nil {
+		var zero *CancellationToken
+		return zero, err
+	}
+	return decodeAs[*CancellationToken](result)
+}
+
+// TerminalService is the public interface for handle type TerminalService.
+type TerminalService interface {
+	handleReference
+	CreateTerminal(options *CreateTerminalOptions) AspireTerminal
+	GetTerminal(terminalId string) AspireTerminal
+	Err() error
+}
+
+// terminalService is the unexported impl of TerminalService.
+type terminalService struct {
+	*resourceBuilderBase
+}
+
+// newTerminalServiceFromHandle wraps an existing handle as TerminalService.
+func newTerminalServiceFromHandle(h *handle, c *client) TerminalService {
+	return &terminalService{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// CreateTerminal creates a terminal without starting it. The caller owns its lifetime; dock terminals can be left running until AppHost shutdown, and showing a terminal in a dialog does not transfer ownership.
+func (s *terminalService) CreateTerminal(options *CreateTerminalOptions) AspireTerminal {
+	if s.err != nil { return &aspireTerminal{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"terminalService": s.handle.ToJSON(),
+	}
+	if options != nil { reqArgs["options"] = serializeValue(options) }
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createTerminal", reqArgs)
+	if err != nil {
+		return &aspireTerminal{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/createTerminal returned unexpected type %T", result)
+		return &aspireTerminal{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &aspireTerminal{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// GetTerminal gets an existing terminal by ID, or null if it is not found.
+func (s *terminalService) GetTerminal(terminalId string) AspireTerminal {
+	if s.err != nil { return &aspireTerminal{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"terminalService": s.handle.ToJSON(),
+	}
+	reqArgs["terminalId"] = serializeValue(terminalId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getTerminal", reqArgs)
+	if err != nil {
+		return &aspireTerminal{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/getTerminal returned unexpected type %T", result)
+		return &aspireTerminal{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &aspireTerminal{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // TestCallbackContext is the public interface for handle type TestCallbackContext.
@@ -30959,6 +31478,19 @@ func (o *PromptProgressOptions) ToMap() map[string]any {
 	return m
 }
 
+// PromptTerminalOptions carries optional parameters for PromptTerminal.
+type PromptTerminalOptions struct {
+	Options *InteractionTerminalOptions `json:"options,omitempty"`
+	CancellationToken *CancellationToken `json:"-"`
+}
+
+func (o *PromptTerminalOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
 // PromptInputOptions carries optional parameters for PromptInput.
 type PromptInputOptions struct {
 	Options *InteractionInputsDialogOptions `json:"options,omitempty"`
@@ -31147,6 +31679,43 @@ func (o *ExecuteCommandAsyncOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.Arguments != nil { m["arguments"] = serializeValue(o.Arguments) }
+	return m
+}
+
+// SendTextOptions carries optional parameters for SendText.
+type SendTextOptions struct {
+	CancellationToken *CancellationToken `json:"-"`
+}
+
+func (o *SendTextOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	return m
+}
+
+// SendKeyOptions carries optional parameters for SendKey.
+type SendKeyOptions struct {
+	Modifiers *TerminalKeyModifiers `json:"modifiers,omitempty"`
+	CancellationToken *CancellationToken `json:"-"`
+}
+
+func (o *SendKeyOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Modifiers != nil { m["modifiers"] = serializeValue(o.Modifiers) }
+	return m
+}
+
+// WaitForTextOptions carries optional parameters for WaitForText.
+type WaitForTextOptions struct {
+	Timeout *float64 `json:"timeout,omitempty"`
+	CancellationToken *CancellationToken `json:"-"`
+}
+
+func (o *WaitForTextOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Timeout != nil { m["timeout"] = serializeValue(o.Timeout) }
 	return m
 }
 
@@ -31435,6 +32004,9 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore", func(h *handle, c *client) any {
 		return newAspireStoreFromHandle(h, c)
 	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AspireTerminal", func(h *handle, c *client) any {
+		return newAspireTerminalFromHandle(h, c)
+	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource", func(h *handle, c *client) any {
 		return newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h, c)
 	})
@@ -31698,6 +32270,12 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("System.ComponentModel/System.IServiceProvider", func(h *handle, c *client) any {
 		return newServiceProviderFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.TerminalContext", func(h *handle, c *client) any {
+		return newTerminalContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TerminalService", func(h *handle, c *client) any {
+		return newTerminalServiceFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", func(h *handle, c *client) any {
 		return newTestCallbackContextFromHandle(h, c)

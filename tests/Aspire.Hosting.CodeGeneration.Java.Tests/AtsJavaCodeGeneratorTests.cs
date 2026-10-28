@@ -708,8 +708,10 @@ public class AtsJavaCodeGeneratorTests
         Assert.Contains("OK", run.StdOut, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task GeneratedTransport_CallbackCanInvokeNestedCapability()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GeneratedTransport_CallbackCanInvokeNestedCapability(bool canceled)
     {
         using var workspace = await CreateJavaProbeWorkspaceAsync();
         workspace.WriteSource(
@@ -760,13 +762,17 @@ public class AtsJavaCodeGeneratorTests
                         throw new IllegalStateException("unexpected nested request: " + nestedRequest);
                     }
 
-                    writeMessage(
-                        serverOutput,
-                        "{\"jsonrpc\":\"2.0\",\"id\":" + nestedId + ",\"result\":\"nested-result\"}");
+                    boolean canceled = CANCEL_NESTED;
+                    writeMessage(serverOutput,
+                        "{\"jsonrpc\":\"2.0\",\"id\":" + nestedId
+                            + (canceled
+                                ? ",\"error\":{\"code\":-32800,\"message\":\"canceled\"}}"
+                                : ",\"result\":\"nested-result\"}"));
 
                     String callbackResponse = readMessage(serverInput);
+                    String expectedResult = canceled ? "\"code\":-32800" : "\"result\":\"nested-result\"";
                     if (!callbackResponse.contains("\"id\":9001")
-                        || !callbackResponse.contains("\"result\":\"nested-result\"")) {
+                        || !callbackResponse.contains(expectedResult)) {
                         throw new IllegalStateException("unexpected callback response: " + callbackResponse);
                     }
 
@@ -848,7 +854,7 @@ public class AtsJavaCodeGeneratorTests
                     return buffer.toString(StandardCharsets.UTF_8);
                 }
             }
-            """);
+            """.Replace("CANCEL_NESTED", canceled ? "true" : "false", StringComparison.Ordinal));
 
         await workspace.CompileAsync();
         var run = await workspace.RunClassAsync("aspire.TransportReentrancyProbe", TimeSpan.FromSeconds(6));

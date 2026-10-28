@@ -386,6 +386,13 @@ impl AspireClient {
                             .get("message")
                             .and_then(|v| v.as_str())
                             .unwrap_or("Unknown error");
+                        if error.get("code").and_then(|value| value.as_i64()) == Some(-32800) {
+                            return Err(Box::new(CapabilityError {
+                                code: "-32800".to_string(),
+                                message: message.to_string(),
+                                capability: None,
+                            }));
+                        }
                         return Err(message.into());
                     }
                     return Ok(response.get("result").cloned().unwrap_or(Value::Null));

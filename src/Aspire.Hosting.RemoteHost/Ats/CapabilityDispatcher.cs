@@ -623,6 +623,12 @@ internal sealed class CapabilityDispatcher
                 registration.Capability?.TargetParameterName,
                 errorCode: AtsErrorCodes.TypeMismatch).ToCapabilityException();
         }
+        catch (OperationCanceledException ex)
+        {
+            activity.SetError(ex);
+            _logger.LogDebug("Capability {CapabilityId} canceled", capabilityId);
+            throw;
+        }
         catch (Exception ex)
         {
             activity.SetError(ex);
@@ -694,7 +700,7 @@ internal sealed class CapabilityDispatcher
 
             return result;
         }
-        catch (Exception ex) when (ex is not InvalidOperationException)
+        catch (Exception ex) when (ex is not (InvalidOperationException or OperationCanceledException))
         {
             throw new InvalidOperationException(ex.Message, ex);
         }

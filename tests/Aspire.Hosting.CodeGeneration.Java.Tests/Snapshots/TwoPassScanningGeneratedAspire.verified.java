@@ -942,7 +942,10 @@ public class AspireClient {
                 error = createError(-32601, "Unknown method: " + method);
             }
         } catch (Exception e) {
-            error = createError(-32603, e.getMessage());
+            // Preserve StreamJsonRpc cancellation when a callback re-enters a canceled capability.
+            int code = e instanceof CapabilityError capabilityError && "-32800".equals(capabilityError.getCode())
+                ? -32800 : -32603;
+            error = createError(code, e.getMessage());
         }
 
         if (!request.containsKey("id")) {
@@ -1909,6 +1912,9 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService", (h, c) -> new ResourceCommandService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IInteractionService", (h, c) -> new IInteractionService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ProgressContext", (h, c) -> new ProgressContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TerminalService", (h, c) -> new TerminalService(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AspireTerminal", (h, c) -> new AspireTerminal(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.TerminalContext", (h, c) -> new TerminalContext(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", (h, c) -> new IConfiguration(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection", (h, c) -> new IConfigurationSection(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment", (h, c) -> new IHostEnvironment(h, c));
@@ -2009,6 +2015,149 @@ public class AspireRegistrations {
     static void ensureRegistered() {
         // Called to trigger static initializer
     }
+}
+
+// ===== aspire/AspireTerminal.java =====
+// AspireTerminal.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.AspireTerminal. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class AspireTerminal extends HandleWrapperBase {
+    AspireTerminal(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the opaque identifier used to address this terminal over the dashboard connection. */
+    public String id() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/AspireTerminal.id", reqArgs);
+        return (String) result;
+    }
+
+    /** Gets the title shown on the terminal's dock tab. */
+    public String title() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/AspireTerminal.title", reqArgs);
+        return (String) result;
+    }
+
+    /** Gets the process that owns this terminal's workload. */
+    public TerminalOwner owner() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/AspireTerminal.owner", reqArgs);
+        return TerminalOwner.fromValue((String) result);
+    }
+
+    /** Gets where this terminal is displayed in the dashboard. */
+    public TerminalPlacement placement() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/AspireTerminal.placement", reqArgs);
+        return TerminalPlacement.fromValue((String) result);
+    }
+
+    /** Starts the terminal workload. Resource-owned workloads are started by their resource. */
+    public void start() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("terminal", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/AspireTerminal.start", reqArgs);
+    }
+
+    /** Reveals a dock terminal and selects its tab. Other placements are unaffected. */
+    public void show() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("terminal", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/AspireTerminal.show", reqArgs);
+    }
+
+    public void sendText(String text) {
+        sendText(text, null);
+    }
+
+    /** Sends text as though it had been typed into the terminal. */
+    public void sendText(String text, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("terminal", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("text", AspireClient.serializeValue(text));
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", cancellationToken);
+        }
+        getClient().invokeCapability("Aspire.Hosting/AspireTerminal.sendText", reqArgs);
+    }
+
+    /** Sends a named key with optional Control, Alt, and Shift modifiers. */
+    public void sendKey(TerminalKeyName key, SendKeyOptions optionsBag) {
+        var modifiers = optionsBag == null ? null : optionsBag.getModifiers();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        sendKeyImpl(key, modifiers, cancellationToken);
+    }
+
+    public void sendKey(TerminalKeyName key) {
+        sendKey(key, null);
+    }
+
+    /** Sends a named key with optional Control, Alt, and Shift modifiers. */
+    private void sendKeyImpl(TerminalKeyName key, TerminalKeyModifiers modifiers, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("terminal", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("key", AspireClient.serializeValue(key));
+        if (modifiers != null) {
+            reqArgs.put("modifiers", AspireClient.serializeValue(modifiers));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", cancellationToken);
+        }
+        getClient().invokeCapability("Aspire.Hosting/AspireTerminal.sendKey", reqArgs);
+    }
+
+    /** Waits for text on the terminal screen. Timeout is in milliseconds and defaults to 30 seconds. */
+    public void waitForText(String text, WaitForTextOptions optionsBag) {
+        var timeout = optionsBag == null ? null : optionsBag.getTimeout();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        waitForTextImpl(text, timeout, cancellationToken);
+    }
+
+    public void waitForText(String text) {
+        waitForText(text, null);
+    }
+
+    /** Waits for text on the terminal screen. Timeout is in milliseconds and defaults to 30 seconds. */
+    private void waitForTextImpl(String text, Number timeout, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("terminal", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("text", AspireClient.serializeValue(text));
+        if (timeout != null) {
+            reqArgs.put("timeout", AspireClient.serializeValue(timeout));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", cancellationToken);
+        }
+        getClient().invokeCapability("Aspire.Hosting/AspireTerminal.waitForText", reqArgs);
+    }
+
+    /** Gets the current terminal screen text, with lines separated by newlines. */
+    public String getScreenText() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("terminal", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/AspireTerminal.getScreenText", reqArgs);
+        return (String) result;
+    }
+
+    /** Releases the terminal handle, stopping the workload only when the AppHost owns it. */
+    public void dispose() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("terminal", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/AspireTerminal.dispose", reqArgs);
+    }
+
 }
 
 // ===== aspire/AspireUnion.java =====
@@ -8780,6 +8929,79 @@ public class CreateInteractionInputOptions implements JsonSerializable {
         map.put("maxFileSize", AspireClient.serializeValue(maxFileSize));
         map.put("allowMultipleFiles", AspireClient.serializeValue(allowMultipleFiles));
         map.put("fileFilter", AspireClient.serializeValue(fileFilter));
+        return map;
+    }
+}
+
+// ===== aspire/CreateTerminalOptions.java =====
+// CreateTerminalOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** CreateTerminalOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class CreateTerminalOptions implements JsonSerializable {
+    private String title;
+    private String executable;
+    private String[] arguments;
+    private String workingDirectory;
+    private Map<String, String> environmentVariables;
+    private Number columns;
+    private Number rows;
+    private TerminalPlacement placement;
+
+    public String getTitle() { return title; }
+    public void setTitle(String value) { this.title = value; }
+    public String getExecutable() { return executable; }
+    public void setExecutable(String value) { this.executable = value; }
+    public String[] getArguments() { return arguments; }
+    public void setArguments(String[] value) { this.arguments = value; }
+    public String getWorkingDirectory() { return workingDirectory; }
+    public void setWorkingDirectory(String value) { this.workingDirectory = value; }
+    public Map<String, String> getEnvironmentVariables() { return environmentVariables; }
+    public void setEnvironmentVariables(Map<String, String> value) { this.environmentVariables = value; }
+    public Number getColumns() { return columns; }
+    public void setColumns(Number value) { this.columns = value; }
+    public Number getRows() { return rows; }
+    public void setRows(Number value) { this.rows = value; }
+    public TerminalPlacement getPlacement() { return placement; }
+    public void setPlacement(TerminalPlacement value) { this.placement = value; }
+
+    @SuppressWarnings("unchecked")
+    public static CreateTerminalOptions fromMap(Map<String, Object> map) {
+        var value = new CreateTerminalOptions();
+        var titleValue = map.get("title");
+        value.setTitle((String) titleValue);
+        var executableValue = map.get("executable");
+        value.setExecutable((String) executableValue);
+        var argumentsValue = map.get("arguments");
+        value.setArguments(argumentsValue == null ? null : (String[]) AspireClient.convertArray(argumentsValue, String[].class.getComponentType(), item0 -> (String) item0));
+        var workingDirectoryValue = map.get("workingDirectory");
+        value.setWorkingDirectory(workingDirectoryValue == null ? null : (String) workingDirectoryValue);
+        var environmentVariablesValue = map.get("environmentVariables");
+        value.setEnvironmentVariables(environmentVariablesValue == null ? null : (Map<String, String>) environmentVariablesValue);
+        var columnsValue = map.get("columns");
+        value.setColumns(columnsValue == null ? null : ((Number) columnsValue).doubleValue());
+        var rowsValue = map.get("rows");
+        value.setRows(rowsValue == null ? null : ((Number) rowsValue).doubleValue());
+        var placementValue = map.get("placement");
+        value.setPlacement(placementValue == null ? null : TerminalPlacement.fromValue((String) placementValue));
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("title", AspireClient.serializeValue(title));
+        map.put("executable", AspireClient.serializeValue(executable));
+        map.put("arguments", AspireClient.serializeValue(arguments));
+        map.put("workingDirectory", AspireClient.serializeValue(workingDirectory));
+        map.put("environmentVariables", AspireClient.serializeValue(environmentVariables));
+        map.put("columns", AspireClient.serializeValue(columns));
+        map.put("rows", AspireClient.serializeValue(rows));
+        map.put("placement", AspireClient.serializeValue(placement));
         return map;
     }
 }
@@ -16757,6 +16979,33 @@ public class IInteractionService extends HandleWrapperBase {
         return BoolInteractionResult.fromMap((Map<String, Object>) result);
     }
 
+    /** Displays a Dialog-placement terminal without taking ownership of it. Completion, cancellation, and callback failure leave the terminal alive; the caller must explicitly dispose it when finished. */
+    public BoolInteractionResult promptTerminal(String message, AspireTerminal terminal, PromptTerminalOptions optionsBag) {
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptTerminalImpl(message, terminal, options, cancellationToken);
+    }
+
+    public BoolInteractionResult promptTerminal(String message, AspireTerminal terminal) {
+        return promptTerminal(message, terminal, null);
+    }
+
+    /** Displays a Dialog-placement terminal without taking ownership of it. Completion, cancellation, and callback failure leave the terminal alive; the caller must explicitly dispose it when finished. */
+    private BoolInteractionResult promptTerminalImpl(String message, AspireTerminal terminal, InteractionTerminalOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        reqArgs.put("terminal", AspireClient.serializeValue(terminal));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", cancellationToken);
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptTerminal", reqArgs);
+        return BoolInteractionResult.fromMap((Map<String, Object>) result);
+    }
+
     /** Prompts the user for a single input. */
     public InputInteractionResult promptInput(String title, String message, InteractionInputBuilder input, PromptInputOptions optionsBag) {
         var options = optionsBag == null ? null : optionsBag.getOptions();
@@ -17439,6 +17688,14 @@ public class IServiceProvider extends HandleWrapperBase {
         reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/getResourceCommandService", reqArgs);
         return (ResourceCommandService) result;
+    }
+
+    /** Gets the terminal service from the AppHost service provider. */
+    public TerminalService getTerminalService() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/getTerminalService", reqArgs);
+        return (TerminalService) result;
     }
 
     /** Gets the user secrets manager from the service provider. */
@@ -18479,6 +18736,60 @@ public class InteractionProgressOptions implements JsonSerializable {
         map.put("enableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
         map.put("work", work == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
             var arg = (ProgressContext) transportArg;
+            work.invoke(arg);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
+        }));
+        return map;
+    }
+}
+
+// ===== aspire/InteractionTerminalOptions.java =====
+// InteractionTerminalOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
+/** InteractionTerminalOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class InteractionTerminalOptions implements JsonSerializable {
+    private String title;
+    private String primaryButtonText;
+    private Boolean enableMessageMarkdown;
+    private AspireAction1<TerminalContext> work;
+
+    public String getTitle() { return title; }
+    public void setTitle(String value) { this.title = value; }
+    public String getPrimaryButtonText() { return primaryButtonText; }
+    public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
+    public Boolean getEnableMessageMarkdown() { return enableMessageMarkdown; }
+    public void setEnableMessageMarkdown(Boolean value) { this.enableMessageMarkdown = value; }
+    public AspireAction1<TerminalContext> getWork() { return work; }
+    public void setWork(AspireAction1<TerminalContext> value) { this.work = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InteractionTerminalOptions fromMap(Map<String, Object> map) {
+        var value = new InteractionTerminalOptions();
+        var titleValue = map.get("title");
+        value.setTitle(titleValue == null ? null : (String) titleValue);
+        var primaryButtonTextValue = map.get("primaryButtonText");
+        value.setPrimaryButtonText(primaryButtonTextValue == null ? null : (String) primaryButtonTextValue);
+        var enableMessageMarkdownValue = map.get("enableMessageMarkdown");
+        value.setEnableMessageMarkdown(enableMessageMarkdownValue == null ? null : (Boolean) enableMessageMarkdownValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("title", AspireClient.serializeValue(title));
+        map.put("primaryButtonText", AspireClient.serializeValue(primaryButtonText));
+        map.put("enableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
+        map.put("work", work == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
+            var arg = (TerminalContext) transportArg;
             work.invoke(arg);
             var __aspireCallbackArguments = new HashMap<String, Object>();
             __aspireCallbackArguments.put("p0", arg);
@@ -22358,6 +22669,31 @@ public final class PromptProgressOptions {
 
 }
 
+// ===== aspire/PromptTerminalOptions.java =====
+// PromptTerminalOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for PromptTerminal. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class PromptTerminalOptions {
+    private InteractionTerminalOptions options;
+    private CancellationToken cancellationToken;
+
+    public InteractionTerminalOptions getOptions() { return options; }
+    public PromptTerminalOptions options(InteractionTerminalOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptTerminalOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
 // ===== aspire/ProtocolType.java =====
 // ProtocolType.java - GENERATED CODE - DO NOT EDIT
 
@@ -23433,6 +23769,31 @@ public class RunConfiguration implements JsonSerializable {
     }
 }
 
+// ===== aspire/SendKeyOptions.java =====
+// SendKeyOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for SendKey. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class SendKeyOptions {
+    private TerminalKeyModifiers modifiers;
+    private CancellationToken cancellationToken;
+
+    public TerminalKeyModifiers getModifiers() { return modifiers; }
+    public SendKeyOptions modifiers(TerminalKeyModifiers value) {
+        this.modifiers = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public SendKeyOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
 // ===== aspire/SetValueAsyncOptions.java =====
 // SetValueAsyncOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -23456,6 +23817,173 @@ public final class SetValueAsyncOptions {
         return this;
     }
 
+}
+
+// ===== aspire/TerminalContext.java =====
+// TerminalContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.TerminalContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class TerminalContext extends HandleWrapperBase {
+    TerminalContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the token signaled when the user requests cancellation or the interaction is externally canceled. */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/TerminalContext.cancellationToken", reqArgs);
+        return (CancellationToken) result;
+    }
+
+}
+
+// ===== aspire/TerminalKeyModifiers.java =====
+// TerminalKeyModifiers.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** TerminalKeyModifiers DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class TerminalKeyModifiers implements JsonSerializable {
+    private Boolean ctrl;
+    private Boolean alt;
+    private Boolean shift;
+
+    public Boolean getCtrl() { return ctrl; }
+    public void setCtrl(Boolean value) { this.ctrl = value; }
+    public Boolean getAlt() { return alt; }
+    public void setAlt(Boolean value) { this.alt = value; }
+    public Boolean getShift() { return shift; }
+    public void setShift(Boolean value) { this.shift = value; }
+
+    @SuppressWarnings("unchecked")
+    public static TerminalKeyModifiers fromMap(Map<String, Object> map) {
+        var value = new TerminalKeyModifiers();
+        var ctrlValue = map.get("ctrl");
+        value.setCtrl(ctrlValue == null ? null : (Boolean) ctrlValue);
+        var altValue = map.get("alt");
+        value.setAlt(altValue == null ? null : (Boolean) altValue);
+        var shiftValue = map.get("shift");
+        value.setShift(shiftValue == null ? null : (Boolean) shiftValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("ctrl", AspireClient.serializeValue(ctrl));
+        map.put("alt", AspireClient.serializeValue(alt));
+        map.put("shift", AspireClient.serializeValue(shift));
+        return map;
+    }
+}
+
+// ===== aspire/TerminalKeyName.java =====
+// TerminalKeyName.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** TerminalKeyName enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public enum TerminalKeyName implements WireValueEnum {
+    A("A"),
+    B("B"),
+    C("C"),
+    D("D"),
+    E("E"),
+    F("F"),
+    G("G"),
+    H("H"),
+    I("I"),
+    J("J"),
+    K("K"),
+    L("L"),
+    M("M"),
+    N("N"),
+    O("O"),
+    P("P"),
+    Q("Q"),
+    R("R"),
+    S("S"),
+    T("T"),
+    U("U"),
+    V("V"),
+    W("W"),
+    X("X"),
+    Y("Y"),
+    Z("Z"),
+    D0("D0"),
+    D1("D1"),
+    D2("D2"),
+    D3("D3"),
+    D4("D4"),
+    D5("D5"),
+    D6("D6"),
+    D7("D7"),
+    D8("D8"),
+    D9("D9"),
+    F1("F1"),
+    F2("F2"),
+    F3("F3"),
+    F4("F4"),
+    F5("F5"),
+    F6("F6"),
+    F7("F7"),
+    F8("F8"),
+    F9("F9"),
+    F10("F10"),
+    F11("F11"),
+    F12("F12"),
+    ENTER("Enter"),
+    TAB("Tab"),
+    ESCAPE("Escape"),
+    BACKSPACE("Backspace"),
+    DELETE("Delete"),
+    INSERT("Insert"),
+    SPACE("Space"),
+    UP("Up"),
+    DOWN("Down"),
+    LEFT("Left"),
+    RIGHT("Right"),
+    HOME("Home"),
+    END("End"),
+    PAGE_UP("PageUp"),
+    PAGE_DOWN("PageDown"),
+    COMMA("Comma"),
+    PERIOD("Period"),
+    MINUS("Minus"),
+    EQUALS_SIGN("EqualsSign"),
+    SLASH("Slash"),
+    SEMICOLON("Semicolon"),
+    LEFT_BRACKET("LeftBracket"),
+    BACKSLASH("Backslash"),
+    RIGHT_BRACKET("RightBracket"),
+    APOSTROPHE("Apostrophe"),
+    BACKTICK("Backtick");
+
+    private final String value;
+
+    TerminalKeyName(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static TerminalKeyName fromValue(String value) {
+        for (TerminalKeyName e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
 }
 
 // ===== aspire/TerminalOptions.java =====
@@ -23493,6 +24021,97 @@ public class TerminalOptions implements JsonSerializable {
         map.put("rows", AspireClient.serializeValue(rows));
         return map;
     }
+}
+
+// ===== aspire/TerminalOwner.java =====
+// TerminalOwner.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** TerminalOwner enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public enum TerminalOwner implements WireValueEnum {
+    APP_HOST("AppHost"),
+    RESOURCE("Resource");
+
+    private final String value;
+
+    TerminalOwner(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static TerminalOwner fromValue(String value) {
+        for (TerminalOwner e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
+// ===== aspire/TerminalPlacement.java =====
+// TerminalPlacement.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** TerminalPlacement enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public enum TerminalPlacement implements WireValueEnum {
+    DOCK("Dock"),
+    DIALOG("Dialog"),
+    RESOURCE_VIEW("ResourceView"),
+    NONE("None");
+
+    private final String value;
+
+    TerminalPlacement(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static TerminalPlacement fromValue(String value) {
+        for (TerminalPlacement e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
+// ===== aspire/TerminalService.java =====
+// TerminalService.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.TerminalService. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class TerminalService extends HandleWrapperBase {
+    TerminalService(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Creates a terminal without starting it. The caller owns its lifetime; dock terminals can be left running until AppHost shutdown, and showing a terminal in a dialog does not transfer ownership. */
+    public AspireTerminal createTerminal(CreateTerminalOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("terminalService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("options", AspireClient.serializeValue(options));
+        var result = getClient().invokeCapability("Aspire.Hosting/createTerminal", reqArgs);
+        return (AspireTerminal) result;
+    }
+
+    /** Gets an existing terminal by ID, or null if it is not found. */
+    public AspireTerminal getTerminal(String terminalId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("terminalService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("terminalId", AspireClient.serializeValue(terminalId));
+        var result = getClient().invokeCapability("Aspire.Hosting/getTerminal", reqArgs);
+        return (AspireTerminal) result;
+    }
+
 }
 
 // ===== aspire/TestCallbackContext.java =====
@@ -30670,6 +31289,31 @@ public enum WaitBehavior implements WireValueEnum {
     }
 }
 
+// ===== aspire/WaitForTextOptions.java =====
+// WaitForTextOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for WaitForText. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class WaitForTextOptions {
+    private Number timeout;
+    private CancellationToken cancellationToken;
+
+    public Number getTimeout() { return timeout; }
+    public WaitForTextOptions timeout(Number value) {
+        this.timeout = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public WaitForTextOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
 // ===== aspire/WellKnownPipelineSteps.java =====
 // WellKnownPipelineSteps.java - GENERATED CODE - DO NOT EDIT
 
@@ -31439,6 +32083,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/AspireFunc4.java
 .aspire/modules/aspire/AspireList.java
 .aspire/modules/aspire/AspireRegistrations.java
+.aspire/modules/aspire/AspireTerminal.java
 .aspire/modules/aspire/AspireUnion.java
 .aspire/modules/aspire/BaseRegistrations.java
 .aspire/modules/aspire/BeforePublishEvent.java
@@ -31485,6 +32130,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/CreateDirectoryOptions.java
 .aspire/modules/aspire/CreateFileOptions.java
 .aspire/modules/aspire/CreateInteractionInputOptions.java
+.aspire/modules/aspire/CreateTerminalOptions.java
 .aspire/modules/aspire/DistributedApplication.java
 .aspire/modules/aspire/DistributedApplicationEventSubscription.java
 .aspire/modules/aspire/DistributedApplicationExecutionContext.java
@@ -31577,6 +32223,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/InteractionMessageBoxOptions.java
 .aspire/modules/aspire/InteractionNotificationOptions.java
 .aspire/modules/aspire/InteractionProgressOptions.java
+.aspire/modules/aspire/InteractionTerminalOptions.java
 .aspire/modules/aspire/JsonSerializable.java
 .aspire/modules/aspire/LogFacade.java
 .aspire/modules/aspire/MessageIntent.java
@@ -31603,6 +32250,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/PromptMessageBoxOptions.java
 .aspire/modules/aspire/PromptNotificationOptions.java
 .aspire/modules/aspire/PromptProgressOptions.java
+.aspire/modules/aspire/PromptTerminalOptions.java
 .aspire/modules/aspire/ProtocolType.java
 .aspire/modules/aspire/PublishResourceUpdateOptions.java
 .aspire/modules/aspire/ReferenceEnvironmentInjectionOptions.java
@@ -31624,8 +32272,15 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/ResourceUrlsCallbackContext.java
 .aspire/modules/aspire/ResourceUrlsEditor.java
 .aspire/modules/aspire/RunConfiguration.java
+.aspire/modules/aspire/SendKeyOptions.java
 .aspire/modules/aspire/SetValueAsyncOptions.java
+.aspire/modules/aspire/TerminalContext.java
+.aspire/modules/aspire/TerminalKeyModifiers.java
+.aspire/modules/aspire/TerminalKeyName.java
 .aspire/modules/aspire/TerminalOptions.java
+.aspire/modules/aspire/TerminalOwner.java
+.aspire/modules/aspire/TerminalPlacement.java
+.aspire/modules/aspire/TerminalService.java
 .aspire/modules/aspire/TestCallbackContext.java
 .aspire/modules/aspire/TestCollectionContext.java
 .aspire/modules/aspire/TestConfigDto.java
@@ -31645,6 +32300,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/UpdateCommandStateResourceSnapshot.java
 .aspire/modules/aspire/UrlDisplayLocation.java
 .aspire/modules/aspire/WaitBehavior.java
+.aspire/modules/aspire/WaitForTextOptions.java
 .aspire/modules/aspire/WellKnownPipelineSteps.java
 .aspire/modules/aspire/WellKnownPipelineTags.java
 .aspire/modules/aspire/WireValueEnum.java

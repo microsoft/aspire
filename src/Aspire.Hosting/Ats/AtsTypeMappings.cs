@@ -1,5 +1,6 @@
 #pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPROJECTS001
+#pragma warning disable ASPIRETERMINAL001
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -60,6 +61,9 @@ using Microsoft.Extensions.Logging;
 [assembly: AspireExport(typeof(ResourceCommandService))]
 [assembly: AspireExport(typeof(IInteractionService))]
 [assembly: AspireExport(typeof(ProgressContext), ExposeProperties = true)]
+[assembly: AspireExport(typeof(TerminalService))]
+[assembly: AspireExport(typeof(AspireTerminal), ExposeProperties = true)]
+[assembly: AspireExport(typeof(TerminalContext), ExposeProperties = true)]
 
 // Additional framework and hosting types we reference
 [assembly: AspireExport(typeof(IConfiguration))]

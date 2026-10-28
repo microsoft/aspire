@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Ats;
 using Aspire.TypeSystem;
 using Xunit;
 
@@ -14,6 +15,42 @@ namespace Aspire.Hosting.RemoteHost.Tests;
 
 public class AtsCapabilityScannerTests
 {
+#pragma warning disable ASPIRETERMINAL001 // Tests for the experimental terminal ATS surface.
+    [Fact]
+    public void ScanAssembly_TerminalCapabilitiesUseHandlesAndTypedOptions()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(DistributedApplication).Assembly);
+        var terminalTypeId = AtsTypeMapping.DeriveTypeId(typeof(AspireTerminal));
+        var create = Assert.Single(result.Capabilities, c => c.CapabilityId == "Aspire.Hosting/createTerminal");
+        Assert.Equal(terminalTypeId, create.ReturnType?.TypeId);
+        Assert.Equal(AtsTypeCategory.Handle, create.ReturnType?.Category);
+        var lookup = Assert.Single(result.Capabilities, c => c.CapabilityId == "Aspire.Hosting/getTerminal");
+        Assert.True(lookup.ReturnType?.IsNullable);
+        var prompt = Assert.Single(result.Capabilities, c => c.CapabilityId == "Aspire.Hosting/promptTerminal");
+        Assert.Equal(terminalTypeId, Assert.Single(prompt.Parameters, p => p.Name == "terminal").Type?.TypeId);
+        Assert.True(prompt.RunSyncOnBackgroundThread);
+
+        var launch = Assert.Single(result.DtoTypes, d => d.ClrType == typeof(CreateTerminalOptions));
+        Assert.False(Assert.Single(launch.Properties, p => p.Name == nameof(CreateTerminalOptions.Title)).IsOptional);
+        Assert.False(Assert.Single(launch.Properties, p => p.Name == nameof(CreateTerminalOptions.Executable)).IsOptional);
+        Assert.True(Assert.Single(launch.Properties, p => p.Name == nameof(CreateTerminalOptions.Placement)).IsOptional);
+        var options = Assert.Single(result.DtoTypes, d => d.ClrType == typeof(InteractionTerminalOptions));
+        var work = Assert.Single(options.Properties, p => p.Name == nameof(InteractionTerminalOptions.Work));
+        Assert.True(work.IsCallback);
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(TerminalContext)), Assert.Single(work.CallbackParameters!).Type.TypeId);
+        Assert.Equal(AtsConstants.CancellationToken,
+            Assert.Single(result.Capabilities, c => c.CapabilityId == "Aspire.Hosting/TerminalContext.cancellationToken").ReturnType?.TypeId);
+        var key = Assert.Single(result.Capabilities, c => c.CapabilityId == "Aspire.Hosting/AspireTerminal.sendKey");
+        Assert.Equal(AtsTypeCategory.Enum, Assert.Single(key.Parameters, p => p.Name == "key").Type?.Category);
+        Assert.Equal(AtsConstants.TimeSpan, Assert.Single(
+            Assert.Single(result.Capabilities, c => c.CapabilityId == "Aspire.Hosting/AspireTerminal.waitForText").Parameters,
+            p => p.Name == "timeout").Type?.TypeId);
+        Assert.Equal(["createTerminal", "getTerminal"],
+            result.Capabilities.Where(c => c.TargetTypeId == AtsTypeMapping.DeriveTypeId(typeof(TerminalService)))
+                .Select(c => c.MethodName).Order(StringComparer.Ordinal));
+    }
+#pragma warning restore ASPIRETERMINAL001
+
     #region MapToAtsTypeId Tests
 
     [Fact]
@@ -734,6 +771,7 @@ public class AtsCapabilityScannerTests
         string[] expectedCapabilityIds =
         [
             "Aspire.Hosting/promptProgress",
+            "Aspire.Hosting/promptTerminal",
             "Aspire.Hosting/promptInput",
             "Aspire.Hosting/promptInputs"
         ];

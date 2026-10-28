@@ -416,7 +416,7 @@ internal sealed partial class TypeScriptApiProjector
     /// </summary>
     private string ResolveTypeClassReturnType(BuilderModel builder, AtsCapabilityInfo capability)
     {
-        if (capability.ReturnType is { } returnType && _typesWithPromiseWrappers.Contains(returnType.TypeId))
+        if (capability.ReturnType is { IsNullable: not true } returnType && _typesWithPromiseWrappers.Contains(returnType.TypeId))
         {
             return GetPublicPromiseInterfaceName(returnType.TypeId);
         }
@@ -1683,7 +1683,7 @@ internal sealed partial class TypeScriptApiProjector
         // Check for wrapper class first (handles custom types like resource builders)
         if (_wrapperClassNames.TryGetValue(typeRef.TypeId, out var wrapperClassName))
         {
-            return GetInterfaceName(wrapperClassName);
+            return ApplyNullableType(typeRef, GetInterfaceName(wrapperClassName));
         }
 
         var mappedType = typeRef.Category switch
@@ -1707,7 +1707,7 @@ internal sealed partial class TypeScriptApiProjector
 
     internal static string ApplyNullableType(AtsTypeRef typeRef, string mappedType)
     {
-        if (typeRef.IsNullable != true || typeRef.Category is not (AtsTypeCategory.Primitive or AtsTypeCategory.Enum))
+        if (typeRef.IsNullable != true || typeRef.Category is not (AtsTypeCategory.Primitive or AtsTypeCategory.Enum or AtsTypeCategory.Handle))
         {
             return mappedType;
         }
@@ -2483,7 +2483,7 @@ internal sealed partial class TypeScriptApiProjector
 
     internal bool TryGetPromiseWrapperType(AtsTypeRef? typeRef, out string promiseInterfaceName, out string promiseImplementationClassName)
     {
-        if (typeRef?.TypeId is { } typeId && _typesWithPromiseWrappers.Contains(typeId))
+        if (typeRef is { IsNullable: not true, TypeId: { } typeId } && _typesWithPromiseWrappers.Contains(typeId))
         {
             var className = GetConcreteClassName(typeId);
             promiseInterfaceName = GetPromiseInterfaceName(className);
@@ -3076,7 +3076,8 @@ internal sealed partial class TypeScriptApiProjector
 
     internal string? GetPromiseWrapperForReturnType(AtsTypeRef? returnType)
     {
-        if (returnType == null)
+        // Nullable handles must be awaited before member access; a fluent wrapper would hide a null result.
+        if (returnType is null || returnType.IsNullable == true)
         {
             return null;
         }

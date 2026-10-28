@@ -110,6 +110,23 @@ type TestVaultResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.
 type AfterResourcesCreatedEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent'>;
 
 /**
+ * An Aspire-owned terminal handle for dashboard interaction and automation from AppHost code.
+ *
+ * Obtain a handle from `CreateTerminal` or
+ * `TryGetTerminal`. Handles cannot be constructed or extended by callers;
+ * Aspire manages their registration and connection to the underlying terminal implementation.
+ * What disposal means depends on `Owner`. For `AppHost` the AppHost
+ * owns the workload, so disposing stops it and removes the terminal from the dashboard; whoever creates
+ * such a terminal owns it and must dispose it, and showing one in an interaction does not transfer that
+ * ownership, so the terminal survives the dialog it was displayed in. For
+ * `Resource` the workload belongs to the resource, so disposing only releases
+ * Aspire's handle and leaves the workload running.
+ * When an AppHost-owned workload ends, its terminal remains in the dashboard until disposed, but no longer
+ * accepts input or automation. Reopening an ended terminal displays its ended state rather than replaying output.
+ */
+type AspireTerminalHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.AspireTerminal'>;
+
+/**
  * This event is raised by orchestrators before they have started a new resource.
  *
  * Resources that are created by orchestrators may not yet be ready to handle requests.
@@ -356,6 +373,25 @@ type ResourceUrlsCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.A
 /** Provides an ATS-first editor for resource URLs within polyglot callbacks. */
 type ResourceUrlsEditorHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor'>;
 
+/**
+ * Manages terminals created and owned by the AppHost.
+ *
+ * Two experiences share this service: terminals displayed by `PromptTerminalAsync`
+ * and terminals shown as tabs in the dashboard's terminal dock. They differ only in
+ * `TerminalPlacement`; the lifetime, transport, and automation machinery is identical.
+ * This is distinct from the terminal host, which exists solely to surface terminals for DCP-owned processes.
+ * Those are owned by the resource, reachable over a Unix domain socket, and are not tracked here.
+ * Resolve it from the built AppHost's service provider:
+ * `app.Services.GetRequiredService<TerminalService>()`. Only creation and lookup are public;
+ * the members the dashboard uses to attach transports and watch the dock's tab list are internal, because
+ * they are transport plumbing rather than something an AppHost author calls.
+ * Each dashboard metadata watcher buffers up to 64 updates by default. Set
+ * `ASPIRE_TERMINAL_WATCH_BUFFER_CAPACITY` to a positive integer in the AppHost's configuration
+ * before starting the application to tune this limit. Overflow replaces queued changes with a current
+ * snapshot while preserving the latest pending request to show the dock.
+ */
+type TerminalServiceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.TerminalService'>;
+
 /** Context for {@link ResourceCommandAnnotation.UpdateState}. */
 type UpdateCommandStateContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext'>;
 
@@ -483,6 +519,9 @@ type AfterPublishEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Publishing.
 
 /** This event is published before the distributed application is published. */
 type BeforePublishEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent'>;
+
+/** Provides cancellation to the work callback of a terminal interaction. */
+type TerminalContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.TerminalContext'>;
 
 /** Handle to IConfiguration */
 type IConfigurationHandle = Handle<'Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration'>;
@@ -739,6 +778,130 @@ export enum ResourceCommandVisibility {
     Api = "Api",
 }
 
+/** Named terminal keys using the US keyboard layout. Use text input for arbitrary Unicode. */
+export enum TerminalKeyName {
+    A = "A",
+    B = "B",
+    C = "C",
+    D = "D",
+    E = "E",
+    F = "F",
+    G = "G",
+    H = "H",
+    I = "I",
+    J = "J",
+    K = "K",
+    L = "L",
+    M = "M",
+    N = "N",
+    O = "O",
+    P = "P",
+    Q = "Q",
+    R = "R",
+    S = "S",
+    T = "T",
+    U = "U",
+    V = "V",
+    W = "W",
+    X = "X",
+    Y = "Y",
+    Z = "Z",
+    D0 = "D0",
+    D1 = "D1",
+    D2 = "D2",
+    D3 = "D3",
+    D4 = "D4",
+    D5 = "D5",
+    D6 = "D6",
+    D7 = "D7",
+    D8 = "D8",
+    D9 = "D9",
+    F1 = "F1",
+    F2 = "F2",
+    F3 = "F3",
+    F4 = "F4",
+    F5 = "F5",
+    F6 = "F6",
+    F7 = "F7",
+    F8 = "F8",
+    F9 = "F9",
+    F10 = "F10",
+    F11 = "F11",
+    F12 = "F12",
+    Enter = "Enter",
+    Tab = "Tab",
+    Escape = "Escape",
+    Backspace = "Backspace",
+    Delete = "Delete",
+    Insert = "Insert",
+    Space = "Space",
+    Up = "Up",
+    Down = "Down",
+    Left = "Left",
+    Right = "Right",
+    Home = "Home",
+    End = "End",
+    PageUp = "PageUp",
+    PageDown = "PageDown",
+    Comma = "Comma",
+    Period = "Period",
+    Minus = "Minus",
+    EqualsSign = "EqualsSign",
+    Slash = "Slash",
+    Semicolon = "Semicolon",
+    LeftBracket = "LeftBracket",
+    Backslash = "Backslash",
+    RightBracket = "RightBracket",
+    Apostrophe = "Apostrophe",
+    Backtick = "Backtick",
+}
+
+/**
+ * Identifies whether the AppHost or an application resource controls a terminal's workload lifetime.
+ *
+ * Ownership is fixed when a terminal is created. It is distinct from `TerminalPlacement`,
+ * which describes where the terminal is displayed and is also fixed at creation.
+ */
+export enum TerminalOwner {
+    /**
+     * The terminal is created by AppHost code, and its lifetime is controlled by whoever created it.
+     *
+     * Commands run as child processes of the AppHost. Ownership does not imply in-process execution.
+     */
+    AppHost = "AppHost",
+    /**
+     * The workload belongs to a resource in the application model, and its lifetime follows that resource.
+     *
+     * The resource's workload is orchestrated by DCP and exposed through a per-replica terminal host.
+     * Disposing the `AspireTerminal` releases Aspire's handle on the terminal without stopping
+     * that workload.
+     */
+    Resource = "Resource",
+}
+
+/**
+ * Identifies where a terminal is displayed in the dashboard.
+ *
+ * Placement is fixed when a terminal is created. It describes where the terminal is displayed,
+ * while `TerminalOwner` identifies which component owns its workload.
+ */
+export enum TerminalPlacement {
+    /** The terminal is a tab in the dashboard's terminal dock, and is listed by the terminal watch stream. */
+    Dock = "Dock",
+    /** The terminal can be displayed by `PromptTerminalAsync`. It remains caller-owned and is addressed directly by the dialog, not listed in the terminal dock. */
+    Dialog = "Dialog",
+    /** The terminal is displayed on the terminal view of the resource it belongs to. */
+    ResourceView = "ResourceView",
+    /**
+     * The terminal is not displayed anywhere.
+     *
+     * Terminals driven purely through the automation members of `AspireTerminal` never need a
+     * viewer. Giving that case its own value keeps it out of the dock's tab list without having to pretend it
+     * belongs to a dialog or a resource.
+     */
+    None = "None",
+}
+
 /** Test persistence mode enum. */
 export enum TestPersistenceMode {
     None = "None",
@@ -957,6 +1120,26 @@ export interface CreateInteractionInputOptions {
     allowMultipleFiles?: boolean | null;
     /** Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute. The CLI validates only dot-prefixed extension filters and does not validate MIME type patterns such as "image/*". */
     fileFilter?: string | null;
+}
+
+/** Process settings for an AppHost-owned terminal. Placement defaults to Dock, and the initial grid to 80 by 24. */
+export interface CreateTerminalOptions {
+    /** Gets the terminal title. */
+    title?: string;
+    /** Gets the executable, resolved against the AppHost's PATH when not fully qualified. */
+    executable?: string;
+    /** Gets the process arguments. */
+    arguments?: string[];
+    /** Gets the working directory. Defaults to the AppHost's working directory. */
+    workingDirectory?: string | null;
+    /** Gets environment overrides layered over the AppHost's inherited environment. */
+    environmentVariables?: Record<string, string>;
+    /** Gets the initial number of columns. Defaults to 80. */
+    columns?: number | null;
+    /** Gets the initial number of rows. Defaults to 24. */
+    rows?: number | null;
+    /** Gets the placement: Dock (default), Dialog, or None. ResourceView is not valid for creation. */
+    placement?: TerminalPlacement | null;
 }
 
 /** Options controlling when a dynamic-loading callback runs. */
@@ -1198,6 +1381,18 @@ export interface InteractionProgressOptions {
     work?: (arg: ProgressContext) => Promise<void>;
 }
 
+/** Options for a dialog that borrows a caller-owned terminal. */
+export interface InteractionTerminalOptions {
+    /** Gets the optional dialog title. */
+    title?: string | null;
+    /** Gets the cancel-button text. No cancel button is shown when omitted. */
+    primaryButtonText?: string | null;
+    /** Gets whether the message is rendered as Markdown. */
+    enableMessageMarkdown?: boolean | null;
+    /** Gets optional work that runs while the dialog is displayed. Successful completion closes the dialog. Cancellation signals the context token and the prompt waits for work to finish before returning. */
+    work?: (arg: TerminalContext) => Promise<void>;
+}
+
 /** Options for customizing parameter inputs from polyglot app hosts. */
 export interface ParameterCustomInputOptions {
     /** Gets or sets the type of the input. */
@@ -1315,7 +1510,7 @@ export interface ResourceUrlAnnotation {
     /** The name of the URL. When rendered as a link this will be used as the linked text. */
     displayText?: string | null;
     /** The endpoint associated with this URL. Can be `null` if this URL is not associated with an endpoint. */
-    endpoint?: EndpointReference;
+    endpoint?: EndpointReference | null;
     /** Gets or sets the display order of the URL. Higher values mean sort higher in the list. */
     displayOrder?: number | null;
     /** Locations where this URL should be shown on the dashboard. Defaults to `SummaryAndDetails`. */
@@ -1336,6 +1531,16 @@ export interface RunConfiguration {
      * This is a hint: integrations that cannot watch their resources should start them in normal fashion.
      */
     watchEnabled?: boolean;
+}
+
+/** Modifiers applied to a named terminal keypress. */
+export interface TerminalKeyModifiers {
+    /** Gets whether Control is applied. */
+    ctrl?: boolean;
+    /** Gets whether Alt is applied. */
+    alt?: boolean;
+    /** Gets whether Shift is applied. */
+    shift?: boolean;
 }
 
 /** Options for configuring a terminal session. */
@@ -1708,6 +1913,15 @@ export interface SaveStateJsonOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
+export interface SendKeyOptions {
+    modifiers?: TerminalKeyModifiers;
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface SendTextOptions {
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
 export interface SetValueAsyncOptions {
     /** The value to use for this parameter. */
     value?: string;
@@ -1742,6 +1956,11 @@ export interface WaitForResourceStateOptions {
 
 export interface WaitForStartOptions {
     waitBehavior?: WaitBehavior | null;
+}
+
+export interface WaitForTextOptions {
+    timeout?: number | null;
+    cancellationToken?: AbortSignal | CancellationToken;
 }
 
 export interface WithBindMountOptions {
@@ -2125,6 +2344,306 @@ class AfterResourcesCreatedEventImpl implements AfterResourcesCreatedEvent {
 const AfterResourcesCreatedEventPromiseImpl = $aspireCreateFluentPromiseClass<AfterResourcesCreatedEvent, AfterResourcesCreatedEventPromise>((): $aspireFluentPromiseTransitions => ({
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
     ["model"]: [() => DistributedApplicationModelPromiseImpl, false] as const,
+}));
+
+// ============================================================================
+// AspireTerminal
+// ============================================================================
+
+/**
+ * An Aspire-owned terminal handle for dashboard interaction and automation from AppHost code.
+ *
+ * Obtain a handle from `CreateTerminal` or
+ * `TryGetTerminal`. Handles cannot be constructed or extended by callers;
+ * Aspire manages their registration and connection to the underlying terminal implementation.
+ * What disposal means depends on `Owner`. For `AppHost` the AppHost
+ * owns the workload, so disposing stops it and removes the terminal from the dashboard; whoever creates
+ * such a terminal owns it and must dispose it, and showing one in an interaction does not transfer that
+ * ownership, so the terminal survives the dialog it was displayed in. For
+ * `Resource` the workload belongs to the resource, so disposing only releases
+ * Aspire's handle and leaves the workload running.
+ * When an AppHost-owned workload ends, its terminal remains in the dashboard until disposed, but no longer
+ * accepts input or automation. Reopening an ended terminal displays its ended state rather than replaying output.
+ */
+export interface AspireTerminal {
+    toJSON(): MarshalledHandle;
+    /**
+     * Gets the opaque identifier used to address this terminal over the dashboard connection.
+     * @experimental
+     */
+    id(): Promise<string>;
+    /**
+     * Gets the title shown on the terminal's dock tab.
+     * @experimental
+     */
+    title(): Promise<string>;
+    /**
+     * Gets the process that owns this terminal's workload.
+     * @experimental
+     */
+    owner(): Promise<TerminalOwner>;
+    /**
+     * Gets where this terminal is displayed in the dashboard.
+     * @experimental
+     */
+    placement(): Promise<TerminalPlacement>;
+    /** Starts the terminal workload. Resource-owned workloads are started by their resource. */
+    start(): AspireTerminalPromise;
+    /** Reveals a dock terminal and selects its tab. Other placements are unaffected. */
+    show(): AspireTerminalPromise;
+    /**
+     * Sends text as though it had been typed into the terminal.
+     * @param options Additional options.
+     */
+    sendText(text: string, options?: SendTextOptions): AspireTerminalPromise;
+    /**
+     * Sends a named key with optional Control, Alt, and Shift modifiers.
+     * @param options Additional options.
+     */
+    sendKey(key: TerminalKeyName, options?: SendKeyOptions): AspireTerminalPromise;
+    /**
+     * Waits for text on the terminal screen. Timeout is in milliseconds and defaults to 30 seconds.
+     * @param options Additional options.
+     */
+    waitForText(text: string, options?: WaitForTextOptions): AspireTerminalPromise;
+    /** Gets the current terminal screen text, with lines separated by newlines. */
+    getScreenText(): Promise<string>;
+    /** Releases the terminal handle, stopping the workload only when the AppHost owns it. */
+    dispose(): AspireTerminalPromise;
+}
+
+export interface AspireTerminalPromise extends PromiseLike<AspireTerminal> {
+    /**
+     * Gets the opaque identifier used to address this terminal over the dashboard connection.
+     * @experimental
+     */
+    id(): Promise<string>;
+    /**
+     * Gets the title shown on the terminal's dock tab.
+     * @experimental
+     */
+    title(): Promise<string>;
+    /**
+     * Gets the process that owns this terminal's workload.
+     * @experimental
+     */
+    owner(): Promise<TerminalOwner>;
+    /**
+     * Gets where this terminal is displayed in the dashboard.
+     * @experimental
+     */
+    placement(): Promise<TerminalPlacement>;
+    /** Starts the terminal workload. Resource-owned workloads are started by their resource. */
+    start(): AspireTerminalPromise;
+    /** Reveals a dock terminal and selects its tab. Other placements are unaffected. */
+    show(): AspireTerminalPromise;
+    /**
+     * Sends text as though it had been typed into the terminal.
+     * @param options Additional options.
+     */
+    sendText(text: string, options?: SendTextOptions): AspireTerminalPromise;
+    /**
+     * Sends a named key with optional Control, Alt, and Shift modifiers.
+     * @param options Additional options.
+     */
+    sendKey(key: TerminalKeyName, options?: SendKeyOptions): AspireTerminalPromise;
+    /**
+     * Waits for text on the terminal screen. Timeout is in milliseconds and defaults to 30 seconds.
+     * @param options Additional options.
+     */
+    waitForText(text: string, options?: WaitForTextOptions): AspireTerminalPromise;
+    /** Gets the current terminal screen text, with lines separated by newlines. */
+    getScreenText(): Promise<string>;
+    /** Releases the terminal handle, stopping the workload only when the AppHost owns it. */
+    dispose(): AspireTerminalPromise;
+}
+
+// ============================================================================
+// AspireTerminalImpl
+// ============================================================================
+
+/**
+ * An Aspire-owned terminal handle for dashboard interaction and automation from AppHost code.
+ *
+ * Obtain a handle from `CreateTerminal` or
+ * `TryGetTerminal`. Handles cannot be constructed or extended by callers;
+ * Aspire manages their registration and connection to the underlying terminal implementation.
+ * What disposal means depends on `Owner`. For `AppHost` the AppHost
+ * owns the workload, so disposing stops it and removes the terminal from the dashboard; whoever creates
+ * such a terminal owns it and must dispose it, and showing one in an interaction does not transfer that
+ * ownership, so the terminal survives the dialog it was displayed in. For
+ * `Resource` the workload belongs to the resource, so disposing only releases
+ * Aspire's handle and leaves the workload running.
+ * When an AppHost-owned workload ends, its terminal remains in the dashboard until disposed, but no longer
+ * accepts input or automation. Reopening an ended terminal displays its ended state rather than replaying output.
+ */
+class AspireTerminalImpl implements AspireTerminal {
+    constructor(private _handle: AspireTerminalHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async id(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/AspireTerminal.id',
+            { context: this._handle }
+        );
+    }
+
+    async title(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/AspireTerminal.title',
+            { context: this._handle }
+        );
+    }
+
+    async owner(): Promise<TerminalOwner> {
+        return await this._client.invokeCapability<TerminalOwner>(
+            'Aspire.Hosting.ApplicationModel/AspireTerminal.owner',
+            { context: this._handle }
+        );
+    }
+
+    async placement(): Promise<TerminalPlacement> {
+        return await this._client.invokeCapability<TerminalPlacement>(
+            'Aspire.Hosting.ApplicationModel/AspireTerminal.placement',
+            { context: this._handle }
+        );
+    }
+
+    /** @internal */
+    async _startInternal(): Promise<AspireTerminal> {
+        const rpcArgs: Record<string, unknown> = { terminal: this._handle };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/AspireTerminal.start',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /** Starts the terminal workload. Resource-owned workloads are started by their resource. */
+    start(): AspireTerminalPromise {
+        return new AspireTerminalPromiseImpl(this._startInternal(), this._client);
+    }
+
+    /** @internal */
+    async _showInternal(): Promise<AspireTerminal> {
+        const rpcArgs: Record<string, unknown> = { terminal: this._handle };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/AspireTerminal.show',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /** Reveals a dock terminal and selects its tab. Other placements are unaffected. */
+    show(): AspireTerminalPromise {
+        return new AspireTerminalPromiseImpl(this._showInternal(), this._client);
+    }
+
+    /** @internal */
+    async _sendTextInternal(text: string, cancellationToken?: AbortSignal | CancellationToken): Promise<AspireTerminal> {
+        const rpcArgs: Record<string, unknown> = { terminal: this._handle, text };
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/AspireTerminal.sendText',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /**
+     * Sends text as though it had been typed into the terminal.
+     * @param options Additional options.
+     */
+    sendText(text: string, options?: SendTextOptions): AspireTerminalPromise {
+        const cancellationToken = options?.cancellationToken;
+        return new AspireTerminalPromiseImpl(this._sendTextInternal(text, cancellationToken), this._client);
+    }
+
+    /** @internal */
+    async _sendKeyInternal(key: TerminalKeyName, modifiers?: TerminalKeyModifiers, cancellationToken?: AbortSignal | CancellationToken): Promise<AspireTerminal> {
+        const rpcArgs: Record<string, unknown> = { terminal: this._handle, key };
+        if (modifiers !== undefined) rpcArgs.modifiers = modifiers;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/AspireTerminal.sendKey',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /**
+     * Sends a named key with optional Control, Alt, and Shift modifiers.
+     * @param options Additional options.
+     */
+    sendKey(key: TerminalKeyName, options?: SendKeyOptions): AspireTerminalPromise {
+        const modifiers = options?.modifiers;
+        const cancellationToken = options?.cancellationToken;
+        return new AspireTerminalPromiseImpl(this._sendKeyInternal(key, modifiers, cancellationToken), this._client);
+    }
+
+    /** @internal */
+    async _waitForTextInternal(text: string, timeout?: number | null, cancellationToken?: AbortSignal | CancellationToken): Promise<AspireTerminal> {
+        const rpcArgs: Record<string, unknown> = { terminal: this._handle, text };
+        if (timeout !== undefined) rpcArgs.timeout = timeout;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/AspireTerminal.waitForText',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /**
+     * Waits for text on the terminal screen. Timeout is in milliseconds and defaults to 30 seconds.
+     * @param options Additional options.
+     */
+    waitForText(text: string, options?: WaitForTextOptions): AspireTerminalPromise {
+        const timeout = options?.timeout;
+        const cancellationToken = options?.cancellationToken;
+        return new AspireTerminalPromiseImpl(this._waitForTextInternal(text, timeout, cancellationToken), this._client);
+    }
+
+    /** Gets the current terminal screen text, with lines separated by newlines. */
+    async getScreenText(): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { terminal: this._handle };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/AspireTerminal.getScreenText',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    async _disposeInternal(): Promise<AspireTerminal> {
+        const rpcArgs: Record<string, unknown> = { terminal: this._handle };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/AspireTerminal.dispose',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /** Releases the terminal handle, stopping the workload only when the AppHost owns it. */
+    dispose(): AspireTerminalPromise {
+        return new AspireTerminalPromiseImpl(this._disposeInternal(), this._client);
+    }
+
+}
+
+/** @internal */
+const AspireTerminalPromiseImpl = $aspireCreateFluentPromiseClass<AspireTerminal, AspireTerminalPromise>((): $aspireFluentPromiseTransitions => ({
+    ["id"]: null,
+    ["title"]: null,
+    ["owner"]: null,
+    ["placement"]: null,
+    ["start"]: () => AspireTerminalPromiseImpl,
+    ["show"]: () => AspireTerminalPromiseImpl,
+    ["sendText"]: () => AspireTerminalPromiseImpl,
+    ["sendKey"]: () => AspireTerminalPromiseImpl,
+    ["waitForText"]: () => AspireTerminalPromiseImpl,
+    ["getScreenText"]: null,
+    ["dispose"]: () => AspireTerminalPromiseImpl,
 }));
 
 // ============================================================================
@@ -3642,7 +4161,7 @@ export interface DistributedApplicationModel {
      * @param name The resource name.
      * @returns The matching resource, or `null` when not found.
      */
-    findResourceByName(name: string): ResourcePromise;
+    findResourceByName(name: string): Promise<Resource | null>;
 }
 
 export interface DistributedApplicationModelPromise extends PromiseLike<DistributedApplicationModel> {
@@ -3656,7 +4175,7 @@ export interface DistributedApplicationModelPromise extends PromiseLike<Distribu
      * @param name The resource name.
      * @returns The matching resource, or `null` when not found.
      */
-    findResourceByName(name: string): ResourcePromise;
+    findResourceByName(name: string): Promise<Resource | null>;
 }
 
 // ============================================================================
@@ -3682,23 +4201,18 @@ class DistributedApplicationModelImpl implements DistributedApplicationModel {
         );
     }
 
-    /** @internal */
-    async _findResourceByNameInternal(name: string): Promise<Resource> {
-        const rpcArgs: Record<string, unknown> = { model: this._handle, name };
-        const result = await this._client.invokeCapability<IResourceHandle>(
-            'Aspire.Hosting/findResourceByName',
-            rpcArgs
-        );
-        return new ResourceImpl(result, this._client);
-    }
-
     /**
      * Finds a resource by name.
      * @param name The resource name.
      * @returns The matching resource, or `null` when not found.
      */
-    findResourceByName(name: string): ResourcePromise {
-        return new ResourcePromiseImpl(this._findResourceByNameInternal(name), this._client);
+    async findResourceByName(name: string): Promise<Resource | null> {
+        const rpcArgs: Record<string, unknown> = { model: this._handle, name };
+        const result = await this._client.invokeCapability<IResourceHandle | null>(
+            'Aspire.Hosting/findResourceByName',
+            rpcArgs
+        );
+        return result === null ? null : new ResourceImpl(result, this._client);
     }
 
 }
@@ -3706,7 +4220,7 @@ class DistributedApplicationModelImpl implements DistributedApplicationModel {
 /** @internal */
 const DistributedApplicationModelPromiseImpl = $aspireCreateFluentPromiseClass<DistributedApplicationModel, DistributedApplicationModelPromise>((): $aspireFluentPromiseTransitions => ({
     ["getResources"]: null,
-    ["findResourceByName"]: () => ResourcePromiseImpl,
+    ["findResourceByName"]: null,
 }));
 
 // ============================================================================
@@ -8548,7 +9062,7 @@ export interface ResourceUrlsCallbackContext {
      * Gets an endpoint reference from the associated resource
      * @param name The name of the endpoint.
      */
-    getEndpoint(name: string): EndpointReferencePromise;
+    getEndpoint(name: string): Promise<EndpointReference | null>;
 }
 
 export interface ResourceUrlsCallbackContextPromise extends PromiseLike<ResourceUrlsCallbackContext> {
@@ -8564,7 +9078,7 @@ export interface ResourceUrlsCallbackContextPromise extends PromiseLike<Resource
      * Gets an endpoint reference from the associated resource
      * @param name The name of the endpoint.
      */
-    getEndpoint(name: string): EndpointReferencePromise;
+    getEndpoint(name: string): Promise<EndpointReference | null>;
 }
 
 // ============================================================================
@@ -8622,22 +9136,17 @@ class ResourceUrlsCallbackContextImpl implements ResourceUrlsCallbackContext {
         return new DistributedApplicationExecutionContextPromiseImpl(promise, this._client, false);
     }
 
-    /** @internal */
-    async _getEndpointInternal(name: string): Promise<EndpointReference> {
-        const rpcArgs: Record<string, unknown> = { context: this._handle, name };
-        const result = await this._client.invokeCapability<EndpointReferenceHandle>(
-            'Aspire.Hosting.ApplicationModel/getEndpoint',
-            rpcArgs
-        );
-        return new EndpointReferenceImpl(result, this._client);
-    }
-
     /**
      * Gets an endpoint reference from the associated resource
      * @param name The name of the endpoint.
      */
-    getEndpoint(name: string): EndpointReferencePromise {
-        return new EndpointReferencePromiseImpl(this._getEndpointInternal(name), this._client);
+    async getEndpoint(name: string): Promise<EndpointReference | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, name };
+        const result = await this._client.invokeCapability<EndpointReferenceHandle | null>(
+            'Aspire.Hosting.ApplicationModel/getEndpoint',
+            rpcArgs
+        );
+        return result === null ? null : new EndpointReferenceImpl(result, this._client);
     }
 
 }
@@ -8648,7 +9157,7 @@ const ResourceUrlsCallbackContextPromiseImpl = $aspireCreateFluentPromiseClass<R
     ["urls"]: [() => ResourceUrlsEditorPromiseImpl, false] as const,
     ["log"]: [() => LogFacadePromiseImpl, false] as const,
     ["executionContext"]: [() => DistributedApplicationExecutionContextPromiseImpl, false] as const,
-    ["getEndpoint"]: () => EndpointReferencePromiseImpl,
+    ["getEndpoint"]: null,
 }));
 
 // ============================================================================
@@ -8766,6 +9275,156 @@ const ResourceUrlsEditorPromiseImpl = $aspireCreateFluentPromiseClass<ResourceUr
     ["executionContext"]: [() => DistributedApplicationExecutionContextPromiseImpl, false] as const,
     ["add"]: () => ResourceUrlsEditorPromiseImpl,
     ["addForEndpoint"]: () => ResourceUrlsEditorPromiseImpl,
+}));
+
+// ============================================================================
+// TerminalContext
+// ============================================================================
+
+/** Provides cancellation to the work callback of a terminal interaction. */
+export interface TerminalContext {
+    toJSON(): MarshalledHandle;
+    /**
+     * Gets the token signaled when the user requests cancellation or the interaction is externally canceled.
+     *
+     * Observe this token in automation calls and other asynchronous work. Cancellation does not stop the terminal;
+     * its caller remains responsible for disposing it when no longer needed.
+     * @experimental
+     */
+    cancellationToken(): Promise<CancellationToken>;
+}
+
+export interface TerminalContextPromise extends PromiseLike<TerminalContext> {
+    /**
+     * Gets the token signaled when the user requests cancellation or the interaction is externally canceled.
+     *
+     * Observe this token in automation calls and other asynchronous work. Cancellation does not stop the terminal;
+     * its caller remains responsible for disposing it when no longer needed.
+     * @experimental
+     */
+    cancellationToken(): Promise<CancellationToken>;
+}
+
+// ============================================================================
+// TerminalContextImpl
+// ============================================================================
+
+/** Provides cancellation to the work callback of a terminal interaction. */
+class TerminalContextImpl implements TerminalContext {
+    constructor(private _handle: TerminalContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting/TerminalContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
+
+}
+
+/** @internal */
+const TerminalContextPromiseImpl = $aspireCreateFluentPromiseClass<TerminalContext, TerminalContextPromise>((): $aspireFluentPromiseTransitions => ({
+    ["cancellationToken"]: null,
+}));
+
+// ============================================================================
+// TerminalService
+// ============================================================================
+
+/**
+ * Manages terminals created and owned by the AppHost.
+ *
+ * Two experiences share this service: terminals displayed by `PromptTerminalAsync`
+ * and terminals shown as tabs in the dashboard's terminal dock. They differ only in
+ * `TerminalPlacement`; the lifetime, transport, and automation machinery is identical.
+ * This is distinct from the terminal host, which exists solely to surface terminals for DCP-owned processes.
+ * Those are owned by the resource, reachable over a Unix domain socket, and are not tracked here.
+ * Resolve it from the built AppHost's service provider:
+ * `app.Services.GetRequiredService<TerminalService>()`. Only creation and lookup are public;
+ * the members the dashboard uses to attach transports and watch the dock's tab list are internal, because
+ * they are transport plumbing rather than something an AppHost author calls.
+ * Each dashboard metadata watcher buffers up to 64 updates by default. Set
+ * `ASPIRE_TERMINAL_WATCH_BUFFER_CAPACITY` to a positive integer in the AppHost's configuration
+ * before starting the application to tune this limit. Overflow replaces queued changes with a current
+ * snapshot while preserving the latest pending request to show the dock.
+ */
+export interface TerminalService {
+    toJSON(): MarshalledHandle;
+    /** Creates a terminal without starting it. The caller owns its lifetime; dock terminals can be left running until AppHost shutdown, and showing a terminal in a dialog does not transfer ownership. */
+    createTerminal(options: CreateTerminalOptions): AspireTerminalPromise;
+    /** Gets an existing terminal by ID, or null if it is not found. */
+    getTerminal(terminalId: string): Promise<AspireTerminal | null>;
+}
+
+export interface TerminalServicePromise extends PromiseLike<TerminalService> {
+    /** Creates a terminal without starting it. The caller owns its lifetime; dock terminals can be left running until AppHost shutdown, and showing a terminal in a dialog does not transfer ownership. */
+    createTerminal(options: CreateTerminalOptions): AspireTerminalPromise;
+    /** Gets an existing terminal by ID, or null if it is not found. */
+    getTerminal(terminalId: string): Promise<AspireTerminal | null>;
+}
+
+// ============================================================================
+// TerminalServiceImpl
+// ============================================================================
+
+/**
+ * Manages terminals created and owned by the AppHost.
+ *
+ * Two experiences share this service: terminals displayed by `PromptTerminalAsync`
+ * and terminals shown as tabs in the dashboard's terminal dock. They differ only in
+ * `TerminalPlacement`; the lifetime, transport, and automation machinery is identical.
+ * This is distinct from the terminal host, which exists solely to surface terminals for DCP-owned processes.
+ * Those are owned by the resource, reachable over a Unix domain socket, and are not tracked here.
+ * Resolve it from the built AppHost's service provider:
+ * `app.Services.GetRequiredService<TerminalService>()`. Only creation and lookup are public;
+ * the members the dashboard uses to attach transports and watch the dock's tab list are internal, because
+ * they are transport plumbing rather than something an AppHost author calls.
+ * Each dashboard metadata watcher buffers up to 64 updates by default. Set
+ * `ASPIRE_TERMINAL_WATCH_BUFFER_CAPACITY` to a positive integer in the AppHost's configuration
+ * before starting the application to tune this limit. Overflow replaces queued changes with a current
+ * snapshot while preserving the latest pending request to show the dock.
+ */
+class TerminalServiceImpl implements TerminalService {
+    constructor(private _handle: TerminalServiceHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** @internal */
+    async _createTerminalInternal(options: CreateTerminalOptions): Promise<AspireTerminal> {
+        const rpcArgs: Record<string, unknown> = { terminalService: this._handle, options };
+        const result = await this._client.invokeCapability<AspireTerminalHandle>(
+            'Aspire.Hosting/createTerminal',
+            rpcArgs
+        );
+        return new AspireTerminalImpl(result, this._client);
+    }
+
+    /** Creates a terminal without starting it. The caller owns its lifetime; dock terminals can be left running until AppHost shutdown, and showing a terminal in a dialog does not transfer ownership. */
+    createTerminal(options: CreateTerminalOptions): AspireTerminalPromise {
+        return new AspireTerminalPromiseImpl(this._createTerminalInternal(options), this._client);
+    }
+
+    /** Gets an existing terminal by ID, or null if it is not found. */
+    async getTerminal(terminalId: string): Promise<AspireTerminal | null> {
+        const rpcArgs: Record<string, unknown> = { terminalService: this._handle, terminalId };
+        const result = await this._client.invokeCapability<AspireTerminalHandle | null>(
+            'Aspire.Hosting/getTerminal',
+            rpcArgs
+        );
+        return result === null ? null : new AspireTerminalImpl(result, this._client);
+    }
+
+}
+
+/** @internal */
+const TerminalServicePromiseImpl = $aspireCreateFluentPromiseClass<TerminalService, TerminalServicePromise>((): $aspireFluentPromiseTransitions => ({
+    ["createTerminal"]: () => AspireTerminalPromiseImpl,
+    ["getTerminal"]: null,
 }));
 
 // ============================================================================
@@ -11563,6 +12222,11 @@ export interface InteractionService {
      */
     promptProgress(message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
     /**
+     * Displays a Dialog-placement terminal without taking ownership of it. Completion, cancellation, and callback failure leave the terminal alive; the caller must explicitly dispose it when finished.
+     * @param options Additional options.
+     */
+    promptTerminal(message: string, terminal: Awaitable<AspireTerminal>, options?: InteractionTerminalOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
+    /**
      * Prompts the user for a single input.
      * @param options Additional options.
      */
@@ -11631,6 +12295,11 @@ export interface InteractionServicePromise extends PromiseLike<InteractionServic
      * @param options Additional options.
      */
     promptProgress(message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
+    /**
+     * Displays a Dialog-placement terminal without taking ownership of it. Completion, cancellation, and callback failure leave the terminal alive; the caller must explicitly dispose it when finished.
+     * @param options Additional options.
+     */
+    promptTerminal(message: string, terminal: Awaitable<AspireTerminal>, options?: InteractionTerminalOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
     /**
      * Prompts the user for a single input.
      * @param options Additional options.
@@ -11762,6 +12431,34 @@ class InteractionServiceImpl implements InteractionService {
         if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
         return await this._client.invokeCapability<BoolInteractionResult>(
             'Aspire.Hosting/promptProgress',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Displays a Dialog-placement terminal without taking ownership of it. Completion, cancellation, and callback failure leave the terminal alive; the caller must explicitly dispose it when finished.
+     * @param options Additional options.
+     */
+    async promptTerminal(message: string, terminal: Awaitable<AspireTerminal>, options?: InteractionTerminalOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
+        terminal = isPromiseLike(terminal) ? await terminal : terminal;
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcWork = __optionsForRpc.work;
+            if (____optionsForRpcWork !== undefined) {
+                const ____optionsForRpcWorkId = ____optionsForRpcWork ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as TerminalContextHandle;
+                    const arg = new TerminalContextImpl(argHandle, this._client);
+                    await ____optionsForRpcWork(arg);
+                }) : undefined;
+                __optionsForRpcData["work"] = ____optionsForRpcWorkId;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, message, terminal };
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<BoolInteractionResult>(
+            'Aspire.Hosting/promptTerminal',
             rpcArgs
         );
     }
@@ -11954,6 +12651,7 @@ const InteractionServicePromiseImpl = $aspireCreateFluentPromiseClass<Interactio
     ["promptMessageBox"]: null,
     ["promptNotification"]: null,
     ["promptProgress"]: null,
+    ["promptTerminal"]: null,
     ["promptInput"]: null,
     ["promptInputs"]: () => InputsInteractionResultPromiseImpl,
     ["createTextInput"]: () => InteractionInputBuilderPromiseImpl,
@@ -12554,6 +13252,8 @@ export interface ServiceProvider {
      * @returns A resource command service handle.
      */
     getResourceCommandService(): ResourceCommandServicePromise;
+    /** Gets the terminal service from the AppHost service provider. */
+    getTerminalService(): TerminalServicePromise;
     /**
      * Gets the user secrets manager from the service provider.
      * @returns A user secrets manager handle.
@@ -12602,6 +13302,8 @@ export interface ServiceProviderPromise extends PromiseLike<ServiceProvider> {
      * @returns A resource command service handle.
      */
     getResourceCommandService(): ResourceCommandServicePromise;
+    /** Gets the terminal service from the AppHost service provider. */
+    getTerminalService(): TerminalServicePromise;
     /**
      * Gets the user secrets manager from the service provider.
      * @returns A user secrets manager handle.
@@ -12765,6 +13467,21 @@ class ServiceProviderImpl implements ServiceProvider {
     }
 
     /** @internal */
+    async _getTerminalServiceInternal(): Promise<TerminalService> {
+        const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
+        const result = await this._client.invokeCapability<TerminalServiceHandle>(
+            'Aspire.Hosting/getTerminalService',
+            rpcArgs
+        );
+        return new TerminalServiceImpl(result, this._client);
+    }
+
+    /** Gets the terminal service from the AppHost service provider. */
+    getTerminalService(): TerminalServicePromise {
+        return new TerminalServicePromiseImpl(this._getTerminalServiceInternal(), this._client);
+    }
+
+    /** @internal */
     async _getUserSecretsManagerInternal(): Promise<UserSecretsManager> {
         const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
         const result = await this._client.invokeCapability<IUserSecretsManagerHandle>(
@@ -12794,6 +13511,7 @@ const ServiceProviderPromiseImpl = $aspireCreateFluentPromiseClass<ServiceProvid
     ["getDistributedApplicationModel"]: () => DistributedApplicationModelPromiseImpl,
     ["getResourceNotificationService"]: () => ResourceNotificationServicePromiseImpl,
     ["getResourceCommandService"]: () => ResourceCommandServicePromiseImpl,
+    ["getTerminalService"]: () => TerminalServicePromiseImpl,
     ["getUserSecretsManager"]: () => UserSecretsManagerPromiseImpl,
 }));
 
@@ -58708,6 +59426,7 @@ process.on('uncaughtException', (error: Error) => {
 // Register wrapper factories for typed handle wrapping in callbacks
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent', (handle, client) => new AfterPublishEventImpl(handle as AfterPublishEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent', (handle, client) => new AfterResourcesCreatedEventImpl(handle as AfterResourcesCreatedEventHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.AspireTerminal', (handle, client) => new AspireTerminalImpl(handle as AspireTerminalHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent', (handle, client) => new BeforePublishEventImpl(handle as BeforePublishEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent', (handle, client) => new BeforeResourceStartedEventImpl(handle as BeforeResourceStartedEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent', (handle, client) => new BeforeStartEventImpl(handle as BeforeStartEventHandle, client));
@@ -58765,6 +59484,8 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceRe
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent', (handle, client) => new ResourceStoppedEventImpl(handle as ResourceStoppedEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext', (handle, client) => new ResourceUrlsCallbackContextImpl(handle as ResourceUrlsCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor', (handle, client) => new ResourceUrlsEditorImpl(handle as ResourceUrlsEditorHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.TerminalContext', (handle, client) => new TerminalContextImpl(handle as TerminalContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.TerminalService', (handle, client) => new TerminalServiceImpl(handle as TerminalServiceHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext', (handle, client) => new TestCallbackContextImpl(handle as TestCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext', (handle, client) => new TestCollectionContextImpl(handle as TestCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext', (handle, client) => new TestEnvironmentContextImpl(handle as TestEnvironmentContextHandle, client));

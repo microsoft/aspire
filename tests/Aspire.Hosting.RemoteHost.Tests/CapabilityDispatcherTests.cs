@@ -2405,6 +2405,21 @@ internal static class TestCapabilities
         throw new InvalidOperationException("Async error: " + value);
     }
 
+    [AspireExport]
+    public static void CanceledSync() => throw new OperationCanceledException(new CancellationToken(canceled: true));
+
+    [AspireExport]
+    public static Task CanceledTask() => Task.FromCanceled(new CancellationToken(canceled: true));
+
+    [AspireExport]
+    public static Task<string> CanceledTaskWithResult() => Task.FromCanceled<string>(new CancellationToken(canceled: true));
+
+    [AspireExport]
+    public static ValueTask CanceledValueTask() => ValueTask.FromCanceled(new CancellationToken(canceled: true));
+
+    [AspireExport]
+    public static ValueTask<string> CanceledValueTaskWithResult() => ValueTask.FromCanceled<string>(new CancellationToken(canceled: true));
+
     /// <ats-summary>Tests cancellation token round-tripping</ats-summary>
     [AspireExport]
     public static bool CanObserveCancellation(CancellationToken cancellationToken)

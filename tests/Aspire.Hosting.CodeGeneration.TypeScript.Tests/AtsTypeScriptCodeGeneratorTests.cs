@@ -1829,6 +1829,22 @@ public class AtsTypeScriptCodeGeneratorTests
         new(@"invokeCapability<(\w+)>\([^;]*?\);\s*return new (\w+)\(", RegexOptions.Compiled);
 
     [Fact]
+    public void TerminalLookup_ProjectsNullableHandleWithoutFluentWrapper()
+    {
+        var context = CreateContextFromBothAssemblies();
+        var projector = new TypeScriptApiProjector(context);
+        var lookup = Assert.Single(context.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting/getTerminal");
+        var create = Assert.Single(context.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting/createTerminal");
+        var terminalService = Assert.Single(projector.Resolved.TypeClasses, model => model.TypeId == lookup.TargetTypeId);
+
+        Assert.Equal("Promise<AspireTerminal | null>", projector.ResolveMethodSignature(terminalService, lookup).ReturnType);
+        Assert.False(projector.TryGetPromiseWrapperType(lookup.ReturnType, out _, out _));
+        Assert.Null(projector.GetPromiseWrapperForReturnType(lookup.ReturnType));
+        Assert.Equal("AspireTerminalPromise", projector.ResolveMethodSignature(terminalService, create).ReturnType);
+        Assert.True(projector.TryGetPromiseWrapperType(create.ReturnType, out _, out _));
+    }
+
+    [Fact]
     public async Task TwoPassScanning_GeneratesWithEnvironmentOnTestRedisBuilder()
     {
         // End-to-end test: verify that withEnvironment appears on TestRedisResourceBuilder

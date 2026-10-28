@@ -789,7 +789,10 @@ class AspireClient {
                 error = createError(-32601, "Unknown method: " + method);
             }
         } catch (Exception e) {
-            error = createError(-32603, e.getMessage());
+            // Preserve StreamJsonRpc cancellation when a callback re-enters a canceled capability.
+            int code = e instanceof CapabilityError capabilityError && "-32800".equals(capabilityError.getCode())
+                ? -32800 : -32603;
+            error = createError(code, e.getMessage());
         }
 
         if (!request.containsKey("id")) {

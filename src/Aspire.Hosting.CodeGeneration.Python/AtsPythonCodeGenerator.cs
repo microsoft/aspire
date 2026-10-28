@@ -243,7 +243,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
 
     private static bool ShouldApplyNullableType(AtsTypeRef typeRef) =>
         typeRef.IsNullable == true
-        && typeRef.Category is AtsTypeCategory.Primitive or AtsTypeCategory.Enum
+        && typeRef.Category is AtsTypeCategory.Primitive or AtsTypeCategory.Enum or AtsTypeCategory.Handle
         && typeRef.TypeId is not (AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken);
 
     /// <summary>

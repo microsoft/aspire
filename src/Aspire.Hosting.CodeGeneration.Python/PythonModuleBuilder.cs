@@ -1014,7 +1014,9 @@ internal sealed class PythonModuleBuilder
                                 if request_id in self._pending_requests:
                                     event = self._pending_requests[request_id]
                                     if "error" in message:
-                                        self._pending_results[request_id] = (None, Exception(message["error"]["message"]))
+                                        error = message["error"]
+                                        exception = OperationCancelled(error["message"]) if error.get("code") == -32800 else Exception(error["message"])
+                                        self._pending_results[request_id] = (None, exception)
                                     else:
                                         self._pending_results[request_id] = (message.get("result"), None)
                                     event.set()
@@ -1082,7 +1084,9 @@ internal sealed class PythonModuleBuilder
                             error = {"code": -32601, "message": f"Callback not found: {callback_id}"}
                     except OperationCancelled as e:
                         _logger.debug("Callback cancelled: %s", e)
-                        return
+                        # Acknowledge cancellation with StreamJsonRpc's RequestCanceled code.
+                        # Returning without a response would leave the host waiting for work to exit.
+                        error = {"code": -32800, "message": str(e)}
 
                     except Exception as e:
                         _logger.warning("Exception in callback: %s", e)

@@ -358,8 +358,44 @@ public class AtsPythonCodeGeneratorTests
     [Fact]
     [RequiresTools(["python3"])]
     [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedCallback_AcknowledgesCancellationOnUnix()
+        => GeneratedCallback_AcknowledgesCancellation("python3");
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
     public Task GeneratedTerminalCallback_ReturnsMutatedDtoOnUnix()
         => GeneratedTerminalCallback_ReturnsMutatedDto("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedCallback_AcknowledgesCancellationOnWindows()
+        => GeneratedCallback_AcknowledgesCancellation("python");
+
+    private Task GeneratedCallback_AcknowledgesCancellation(string pythonExecutable)
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import aspire_app
+
+            client = aspire_app.AspireClient("unused")
+            responses = []
+            client._send_message = responses.append
+
+            def canceled(*args):
+                raise aspire_app.OperationCancelled("canceled")
+
+            callback = client.register_callback(canceled)
+            client._execute_callback_thread(callback, None, 42, "test-thread")
+            assert responses == [{
+                "jsonrpc": "2.0",
+                "id": 42,
+                "error": {"code": -32800, "message": "canceled"},
+            }], responses
+            """);
+    }
 
     [Fact]
     [RequiresTools(["python"])]

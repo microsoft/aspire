@@ -605,8 +605,16 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             if (IsHandleType(returnTypeRef))
             {
                 var wrappedType = MapHandleType(returnTypeRef.TypeId);
-                WriteLine($"        let handle: Handle = serde_json::from_value(result)?;");
-                WriteLine($"        Ok({wrappedType}::new(handle, self.client.clone()))");
+                if (returnTypeRef.IsNullable == true)
+                {
+                    WriteLine("        let handle: Option<Handle> = serde_json::from_value(result)?;");
+                    WriteLine($"        Ok(handle.map(|handle| {wrappedType}::new(handle, self.client.clone())))");
+                }
+                else
+                {
+                    WriteLine($"        let handle: Handle = serde_json::from_value(result)?;");
+                    WriteLine($"        Ok({wrappedType}::new(handle, self.client.clone()))");
+                }
             }
             else if (returnTypeRef?.TypeId == AtsConstants.CancellationToken)
             {
@@ -1060,7 +1068,7 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
 
     private static bool ShouldApplyNullableType(AtsTypeRef typeRef) =>
         typeRef.IsNullable == true
-        && typeRef.Category is AtsTypeCategory.Primitive or AtsTypeCategory.Enum
+        && typeRef.Category is AtsTypeCategory.Primitive or AtsTypeCategory.Enum or AtsTypeCategory.Handle
         && typeRef.TypeId is not (AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken);
 
     private static bool IsHandleType(AtsTypeRef? typeRef) =>

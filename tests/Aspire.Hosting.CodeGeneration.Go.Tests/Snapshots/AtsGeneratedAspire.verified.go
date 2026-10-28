@@ -4402,6 +4402,10 @@ func (c *client) onConnectionClose(_ error) {
 func extractResult(response map[string]any) (any, error) {
 	if errObj, hasErr := response["error"]; hasErr {
 		errMap, _ := errObj.(map[string]any)
+		// Preserve StreamJsonRpc's RequestCanceled error as Go cancellation.
+		if code, ok := jsonRPCID(errMap["code"]); ok && code == -32800 {
+			return nil, context.Canceled
+		}
 		return nil, errors.New(getString(errMap, "message"))
 	}
 	return response["result"], nil

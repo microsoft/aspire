@@ -949,7 +949,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
 
         WriteCapabilityDocComment("    ", capability, signature.RequiredParameters, signature.OptionsParameter?.Name);
-        if (capability.ReturnType != null && _projector.TypesWithPromiseWrappers.Contains(capability.ReturnType.TypeId))
+        if (capability.ReturnType is { IsNullable: not true } && _projector.TypesWithPromiseWrappers.Contains(capability.ReturnType.TypeId))
         {
             WriteLine($"    {signature.MethodName}({signature.ParameterList}): {_projector.GetPublicPromiseInterfaceName(capability.ReturnType.TypeId)};");
         }
@@ -1230,6 +1230,11 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 WriteLine("            rpcArgs");
                 WriteLine("        );");
                 WriteLine("        return CancellationToken.fromValue(result);");
+            }
+            else if (capability.ReturnType is { Category: AtsTypeCategory.Handle, IsNullable: true } nullableHandle &&
+                _projector.WrapperClassNames.TryGetValue(nullableHandle.TypeId, out var nullableWrapperClass))
+            {
+                GenerateNullableHandleReturn(capability, nullableWrapperClass);
             }
             else
             {
@@ -2092,6 +2097,19 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 process.exit(1);
             });
             """);
+    }
+
+    /// <summary>
+    /// Emits a nullable handle result without constructing a wrapper for null.
+    /// </summary>
+    private void GenerateNullableHandleReturn(AtsCapabilityInfo capability, string wrapperClass)
+    {
+        var handleType = _projector.GetConcreteHandleTypeName(capability.ReturnType!.TypeId);
+        WriteLine($"        const result = await this._client.invokeCapability<{handleType} | null>(");
+        WriteLine($"            '{capability.CapabilityId}',");
+        WriteLine("            rpcArgs");
+        WriteLine("        );");
+        WriteLine($"        return result === null ? null : new {TypeScriptApiProjector.GetImplementationClassName(wrapperClass)}(result, this._client);");
     }
 
     /// <summary>
@@ -3068,6 +3086,11 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 WriteLine("            rpcArgs");
                 WriteLine("        );");
                 WriteLine("        return CancellationToken.fromValue(result);");
+            }
+            else if (capability.ReturnType is { Category: AtsTypeCategory.Handle, IsNullable: true } nullableHandle &&
+                _projector.WrapperClassNames.TryGetValue(nullableHandle.TypeId, out var nullableWrapperClass))
+            {
+                GenerateNullableHandleReturn(capability, nullableWrapperClass);
             }
             else
             {

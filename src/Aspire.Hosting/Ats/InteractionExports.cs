@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Aspire.Hosting.Ats;
 
 #pragma warning disable ASPIREINTERACTION001 // IInteractionService and related types are experimental.
+#pragma warning disable ASPIRETERMINAL001 // ATS adapter for terminal dialogs.
 
 /// <summary>
 /// ATS exports for the interaction service.
@@ -113,6 +114,25 @@ internal static class InteractionExports
         ArgumentNullException.ThrowIfNull(interactionService);
 
         var result = await interactionService.PromptProgressAsync(message, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
+        return BoolInteractionResult.From(result);
+    }
+
+    /// <summary>
+    /// Displays a Dialog-placement terminal without taking ownership of it. Completion, cancellation, and
+    /// callback failure leave the terminal alive; the caller must explicitly dispose it when finished.
+    /// </summary>
+    // Work can re-enter ATS to drive the terminal, including from synchronous guest SDKs.
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static async Task<BoolInteractionResult> PromptTerminal(
+        this IInteractionService interactionService,
+        string message,
+        ApplicationModel.AspireTerminal terminal,
+        InteractionTerminalOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(interactionService);
+
+        var result = await interactionService.PromptTerminalAsync(message, terminal, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
         return BoolInteractionResult.From(result);
     }
 
@@ -793,6 +813,36 @@ internal sealed class InteractionProgressOptions
             Work = Work,
         };
     }
+}
+
+/// <summary>
+/// Options for a dialog that borrows a caller-owned terminal.
+/// </summary>
+[AspireDto]
+internal sealed class InteractionTerminalOptions
+{
+    /// <summary>Gets the optional dialog title.</summary>
+    public string? Title { get; init; }
+
+    /// <summary>Gets the cancel-button text. No cancel button is shown when omitted.</summary>
+    public string? PrimaryButtonText { get; init; }
+
+    /// <summary>Gets whether the message is rendered as Markdown.</summary>
+    public bool? EnableMessageMarkdown { get; init; }
+
+    /// <summary>
+    /// Gets optional work that runs while the dialog is displayed. Successful completion closes the dialog.
+    /// Cancellation signals the context token and the prompt waits for work to finish before returning.
+    /// </summary>
+    public Func<TerminalContext, Task>? Work { get; init; }
+
+    internal TerminalInteractionOptions ToOptions() => new()
+    {
+        Title = Title,
+        PrimaryButtonText = PrimaryButtonText,
+        EnableMessageMarkdown = EnableMessageMarkdown,
+        Work = Work
+    };
 }
 
 /// <summary>

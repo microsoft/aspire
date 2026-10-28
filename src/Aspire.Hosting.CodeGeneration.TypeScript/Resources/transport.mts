@@ -664,6 +664,10 @@ export async function invokeRegisteredCallback(callbackId: string, args: unknown
     try {
         return await Promise.resolve(callback(args, client));
     } catch (error) {
+        // Preserve StreamJsonRpc's RequestCanceled error (-32800) across callback reentry.
+        if (error instanceof rpc.ResponseError && error.code === -32800) {
+            throw error;
+        }
         const message = error instanceof Error ? error.message : String(error);
         throw new Error(`Callback execution failed: ${message}`);
     }

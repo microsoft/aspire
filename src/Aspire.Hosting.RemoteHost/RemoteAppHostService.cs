@@ -157,6 +157,13 @@ internal sealed class RemoteAppHostService
             activity.SetError(ex);
             throw;
         }
+        catch (OperationCanceledException ex)
+        {
+            // Preserve JSON-RPC cancellation so guests can propagate it back through work callbacks.
+            activity.SetError(ex);
+            _logger.LogDebug("   invokeCapability({CapabilityId}) canceled", capabilityId);
+            throw;
+        }
         catch (Exception ex)
         {
             activity.SetError(ex);

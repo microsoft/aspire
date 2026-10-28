@@ -123,6 +123,75 @@ The dashboard's `CloseTerminal` RPC accepts only AppHost-owned dock terminals.
 It rejects `Dialog`, `None`, and resource-owned handles with `InvalidArgument`,
 preserving caller-owned lifetimes and shared resource automation peers.
 
+### Polyglot AppHosts
+
+Generated SDKs expose the same AppHost-owned terminals through
+`services().getTerminalService()`. For example, inside a TypeScript resource command:
+
+```typescript
+const terminals = await context.services().getTerminalService();
+const terminal = await terminals.createTerminal({
+    title: "Setup",
+    executable: process.execPath,
+    arguments: [setupScriptPath],
+    placement: TerminalPlacement.Dialog
+});
+try {
+    await terminal.start();
+    const interactions = await context.services().getInteractionService();
+    const result = await interactions.promptTerminal("Running setup.", terminal, {
+        title: "Setup",
+        primaryButtonText: "Cancel",
+        work: async workContext => {
+            const cancellationToken = await workContext.cancellationToken();
+            await terminal.waitForText("Name: ", { timeout: 10000, cancellationToken });
+            await terminal.sendText("Aspire", { cancellationToken });
+            await terminal.sendKey(TerminalKeyName.Enter, { cancellationToken });
+            await terminal.waitForText("Hello, Aspire!", { timeout: 10000, cancellationToken });
+        }
+    }, await context.cancellationToken());
+} finally {
+    await terminal.dispose();
+}
+```
+
+Import `TerminalPlacement` and `TerminalKeyName` from the generated SDK alongside
+`createBuilder`. Terminal handles remain in the AppHost; no Hex1b object or terminal
+implementation crosses the ATS boundary. The process executable and working directory
+are resolved on the AppHost host, not in the dashboard.
+
+Launch options support arguments, working directory, environment overrides, initial
+columns/rows, and placement. Defaults match .NET: an 80-by-24 grid and `Dock` placement.
+Use `Dialog` with `promptTerminal`, or `None` for automation without a viewer.
+`ResourceView` is not valid when creating an AppHost-owned terminal.
+
+For a persistent dock tab, create a `Dock` terminal, call `start()` and `show()`,
+and do not dispose it when the command returns. The tab remains until explicitly
+closed or the AppHost shuts down. `show()` has no effect on other placements.
+
+The handle exposes `id()`, `title()`, `owner()`, `placement()`, and `getScreenText()`.
+`terminals.getTerminal(id)` returns an existing handle or `null` if it is missing.
+Looking up a resource-owned terminal preserves its existing lifetime contract:
+disposing that handle does not stop its resource.
+
+`sendKey` uses a typed key name and separate modifier flags, for example:
+
+```typescript
+await terminal.sendKey(TerminalKeyName.C, { modifiers: { ctrl: true } });
+await terminal.sendKey(TerminalKeyName.Tab, { modifiers: { shift: true } });
+```
+
+Timeouts use the ATS duration convention of milliseconds; `waitForText` defaults
+to 30 seconds. Pass the work context's cancellation token to automation calls so
+canceling the dialog interrupts work. Completion or cancellation of a terminal
+interaction does not dispose the terminal, and process exit does not automatically
+complete the interaction. The prompt awaits its work callback before returning.
+
+`playground/TypeScriptAppHost` includes **Open AppHost terminal** and **Run terminal
+interaction** resource commands, backed by a portable Node workload. The former
+keeps a dock terminal alive; the latter automates a dialog and disposes its terminal
+in `finally`. Neither changes resource `WithTerminal()` behavior.
+
 ### Sending keys from AppHost code
 
 `AspireTerminal.SendKeyAsync` accepts an immutable `AspireTerminalKey` value.

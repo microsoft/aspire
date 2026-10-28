@@ -779,7 +779,9 @@ class AspireClient:
                         if request_id in self._pending_requests:
                             event = self._pending_requests[request_id]
                             if "error" in message:
-                                self._pending_results[request_id] = (None, Exception(message["error"]["message"]))
+                                error = message["error"]
+                                exception = OperationCancelled(error["message"]) if error.get("code") == -32800 else Exception(error["message"])
+                                self._pending_results[request_id] = (None, exception)
                             else:
                                 self._pending_results[request_id] = (message.get("result"), None)
                             event.set()
@@ -847,7 +849,9 @@ class AspireClient:
                     error = {"code": -32601, "message": f"Callback not found: {callback_id}"}
             except OperationCancelled as e:
                 _logger.debug("Callback cancelled: %s", e)
-                return
+                # Acknowledge cancellation with StreamJsonRpc's RequestCanceled code.
+                # Returning without a response would leave the host waiting for work to exit.
+                error = {"code": -32800, "message": str(e)}
 
             except Exception as e:
                 _logger.warning("Exception in callback: %s", e)
@@ -1615,6 +1619,12 @@ ResourceCommandState = typing.Literal["Enabled", "Disabled", "Hidden"]
 
 ResourceCommandVisibility = typing.Literal["None", "UI", "Api"]
 
+TerminalKeyName = typing.Literal["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "Enter", "Tab", "Escape", "Backspace", "Delete", "Insert", "Space", "Up", "Down", "Left", "Right", "Home", "End", "PageUp", "PageDown", "Comma", "Period", "Minus", "EqualsSign", "Slash", "Semicolon", "LeftBracket", "Backslash", "RightBracket", "Apostrophe", "Backtick"]
+
+TerminalOwner = typing.Literal["AppHost", "Resource"]
+
+TerminalPlacement = typing.Literal["Dock", "Dialog", "ResourceView", "None"]
+
 TestPersistenceMode = typing.Literal["None", "Volume", "Bind"]
 
 TestResourceStatus = typing.Literal["Pending", "Running", "Stopped", "Failed"]
@@ -1922,6 +1932,16 @@ class CreateInteractionInputOptions(typing.TypedDict, total=False):
     allowMultipleFiles: bool | None
     fileFilter: str | None
 
+class CreateTerminalOptions(typing.TypedDict, total=False):
+    title: str
+    executable: str
+    arguments: typing.Iterable[str]
+    workingDirectory: str | None
+    environmentVariables: typing.Mapping[str, str]
+    columns: int | None
+    rows: int | None
+    placement: TerminalPlacement | None
+
 class DynamicLoadingOptions(typing.TypedDict, total=False):
     alwaysLoadOnStart: bool | None
     dependsOnInputs: typing.Iterable[str]
@@ -2046,6 +2066,12 @@ class InteractionProgressOptions(typing.TypedDict, total=False):
     enableMessageMarkdown: bool | None
     work: typing.Callable[[ProgressContext], None]
 
+class InteractionTerminalOptions(typing.TypedDict, total=False):
+    title: str | None
+    primaryButtonText: str | None
+    enableMessageMarkdown: bool | None
+    work: typing.Callable[[TerminalContext], None]
+
 class ParameterCustomInputOptions(typing.TypedDict, total=False):
     inputType: InputType | None
     label: str | None
@@ -2104,12 +2130,17 @@ class ResourceEventDto(typing.TypedDict, total=False):
 class ResourceUrlAnnotation(typing.TypedDict, total=False):
     url: str
     displayText: str | None
-    endpoint: EndpointReference
+    endpoint: EndpointReference | None
     displayOrder: int | None
     displayLocation: UrlDisplayLocation
 
 class RunConfiguration(typing.TypedDict, total=False):
     watchEnabled: bool
+
+class TerminalKeyModifiers(typing.TypedDict, total=False):
+    ctrl: bool
+    alt: bool
+    shift: bool
 
 class TerminalOptions(typing.TypedDict, total=False):
     columns: int
@@ -3126,6 +3157,21 @@ class AbstractInteractionService:
         )
         return typing.cast(BoolInteractionResult, result)
 
+    def prompt_terminal(self, message: str, terminal: AspireTerminal, *, options: InteractionTerminalOptions | None = None, timeout: int | None = None) -> BoolInteractionResult:
+        """Displays a Dialog-placement terminal without taking ownership of it. Completion, cancellation, and callback failure leave the terminal alive; the caller must explicitly dispose it when finished."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['message'] = message
+        rpc_args['terminal'] = terminal
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptTerminal',
+            rpc_args,
+        )
+        return typing.cast(BoolInteractionResult, result)
+
     def prompt_input(self, title: str, message: str, input: InteractionInputBuilder, *, options: InteractionInputsDialogOptions | None = None, timeout: int | None = None) -> InputInteractionResult:
         """Prompts the user for a single input."""
         rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
@@ -3571,6 +3617,15 @@ class AbstractServiceProvider:
         )
         return typing.cast(ResourceCommandService, result)
 
+    def get_terminal_service(self) -> TerminalService:
+        """Gets the terminal service from the AppHost service provider."""
+        rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getTerminalService',
+            rpc_args,
+        )
+        return typing.cast(TerminalService, result)
+
     def get_user_secrets_manager(self) -> AbstractUserSecretsManager:
         """Gets the user secrets manager from the service provider."""
         rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
@@ -3724,6 +3779,126 @@ class AfterResourcesCreatedEvent:
             {'context': self._handle}
         )
         return typing.cast(DistributedApplicationModel, result)
+
+
+class AspireTerminal:
+    """Type class for AspireTerminal."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"AspireTerminal(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def id(self) -> str:
+        """Gets the opaque identifier used to address this terminal over the dashboard connection."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/AspireTerminal.id',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @_cached_property
+    def title(self) -> str:
+        """Gets the title shown on the terminal's dock tab."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/AspireTerminal.title',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @_cached_property
+    def owner(self) -> TerminalOwner:
+        """Gets the process that owns this terminal's workload."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/AspireTerminal.owner',
+            {'context': self._handle}
+        )
+        return typing.cast(TerminalOwner, result)
+
+    @_cached_property
+    def placement(self) -> TerminalPlacement:
+        """Gets where this terminal is displayed in the dashboard."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/AspireTerminal.placement',
+            {'context': self._handle}
+        )
+        return typing.cast(TerminalPlacement, result)
+
+    def start(self) -> None:
+        """Starts the terminal workload. Resource-owned workloads are started by their resource."""
+        rpc_args: dict[str, typing.Any] = {'terminal': self._handle}
+        self._client.invoke_capability(
+            'Aspire.Hosting/AspireTerminal.start',
+            rpc_args
+        )
+
+    def show(self) -> None:
+        """Reveals a dock terminal and selects its tab. Other placements are unaffected."""
+        rpc_args: dict[str, typing.Any] = {'terminal': self._handle}
+        self._client.invoke_capability(
+            'Aspire.Hosting/AspireTerminal.show',
+            rpc_args
+        )
+
+    def send_text(self, text: str, *, timeout: int | None = None) -> None:
+        """Sends text as though it had been typed into the terminal."""
+        rpc_args: dict[str, typing.Any] = {'terminal': self._handle}
+        rpc_args['text'] = text
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        self._client.invoke_capability(
+            'Aspire.Hosting/AspireTerminal.sendText',
+            rpc_args
+        )
+
+    def send_key(self, key: TerminalKeyName, *, modifiers: TerminalKeyModifiers | None = None, timeout: int | None = None) -> None:
+        """Sends a named key with optional Control, Alt, and Shift modifiers."""
+        rpc_args: dict[str, typing.Any] = {'terminal': self._handle}
+        rpc_args['key'] = key
+        if modifiers is not None:
+            rpc_args['modifiers'] = modifiers
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        self._client.invoke_capability(
+            'Aspire.Hosting/AspireTerminal.sendKey',
+            rpc_args
+        )
+
+    def wait_for_text(self, text: str, *, timeout: float | None = None) -> None:
+        """Waits for text on the terminal screen. Timeout is in milliseconds and defaults to 30 seconds."""
+        rpc_args: dict[str, typing.Any] = {'terminal': self._handle}
+        rpc_args['text'] = text
+        if timeout is not None:
+            rpc_args['timeout'] = timeout
+        self._client.invoke_capability(
+            'Aspire.Hosting/AspireTerminal.waitForText',
+            rpc_args
+        )
+
+    def get_screen_text(self) -> str:
+        """Gets the current terminal screen text, with lines separated by newlines."""
+        rpc_args: dict[str, typing.Any] = {'terminal': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/AspireTerminal.getScreenText',
+            rpc_args,
+        )
+        return result
+
+    def dispose(self) -> None:
+        """Releases the terminal handle, stopping the workload only when the AppHost owns it."""
+        rpc_args: dict[str, typing.Any] = {'terminal': self._handle}
+        self._client.invoke_capability(
+            'Aspire.Hosting/AspireTerminal.dispose',
+            rpc_args
+        )
 
 
 class BeforePublishEvent:
@@ -7049,7 +7224,7 @@ class ResourceUrlsCallbackContext:
         )
         return typing.cast(DistributedApplicationExecutionContext, result)
 
-    def get_endpoint(self, name: str) -> EndpointReference:
+    def get_endpoint(self, name: str) -> EndpointReference | None:
         """Gets an endpoint reference from the associated resource"""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['name'] = name
@@ -7057,7 +7232,7 @@ class ResourceUrlsCallbackContext:
             'Aspire.Hosting.ApplicationModel/getEndpoint',
             rpc_args,
         )
-        return typing.cast(EndpointReference, result)
+        return typing.cast(EndpointReference | None, result)
 
 
 class ResourceUrlsEditor:
@@ -7106,6 +7281,66 @@ class ResourceUrlsEditor:
             'Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.addForEndpoint',
             rpc_args
         )
+
+
+class TerminalContext:
+    """Type class for TerminalContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"TerminalContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting/TerminalContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
+
+
+class TerminalService:
+    """Type class for TerminalService."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"TerminalService(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def create_terminal(self, options: CreateTerminalOptions) -> AspireTerminal:
+        """Creates a terminal without starting it. The caller owns its lifetime; dock terminals can be left running until AppHost shutdown, and showing a terminal in a dialog does not transfer ownership."""
+        rpc_args: dict[str, typing.Any] = {'terminalService': self._handle}
+        rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/createTerminal',
+            rpc_args,
+        )
+        return typing.cast(AspireTerminal, result)
+
+    def get_terminal(self, terminal_id: str) -> AspireTerminal | None:
+        """Gets an existing terminal by ID, or null if it is not found."""
+        rpc_args: dict[str, typing.Any] = {'terminalService': self._handle}
+        rpc_args['terminalId'] = terminal_id
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getTerminal',
+            rpc_args,
+        )
+        return typing.cast(AspireTerminal | None, result)
 
 
 class TestCallbackContext:
@@ -13563,6 +13798,7 @@ _register_handle_wrapper("System.ComponentModel/System.IServiceProvider", Abstra
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.IUserSecretsManager", AbstractUserSecretsManager)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent", AfterPublishEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent", AfterResourcesCreatedEvent)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AspireTerminal", AspireTerminal)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent", BeforePublishEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent", BeforeResourceStartedEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent", BeforeStartEvent)
@@ -13623,6 +13859,8 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Resourc
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent", ResourceStoppedEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext", ResourceUrlsCallbackContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor", ResourceUrlsEditor)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.TerminalContext", TerminalContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TerminalService", TerminalService)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", TestCallbackContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", TestCollectionContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", TestEnvironmentContext)

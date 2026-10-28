@@ -39,6 +39,50 @@ impl std::fmt::Display for ContainerMountType {
     }
 }
 
+/// TerminalOwner
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TerminalOwner {
+    #[default]
+    #[serde(rename = "AppHost")]
+    AppHost,
+    #[serde(rename = "Resource")]
+    Resource,
+}
+
+impl std::fmt::Display for TerminalOwner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AppHost => write!(f, "AppHost"),
+            Self::Resource => write!(f, "Resource"),
+        }
+    }
+}
+
+/// TerminalPlacement
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TerminalPlacement {
+    #[default]
+    #[serde(rename = "Dock")]
+    Dock,
+    #[serde(rename = "Dialog")]
+    Dialog,
+    #[serde(rename = "ResourceView")]
+    ResourceView,
+    #[serde(rename = "None")]
+    None,
+}
+
+impl std::fmt::Display for TerminalPlacement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Dock => write!(f, "Dock"),
+            Self::Dialog => write!(f, "Dialog"),
+            Self::ResourceView => write!(f, "ResourceView"),
+            Self::None => write!(f, "None"),
+        }
+    }
+}
+
 /// ContainerLifetime
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ContainerLifetime {
@@ -293,6 +337,241 @@ impl std::fmt::Display for ProbeType {
             Self::Startup => write!(f, "Startup"),
             Self::Readiness => write!(f, "Readiness"),
             Self::Liveness => write!(f, "Liveness"),
+        }
+    }
+}
+
+/// TerminalKeyName
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TerminalKeyName {
+    #[default]
+    #[serde(rename = "A")]
+    A,
+    #[serde(rename = "B")]
+    B,
+    #[serde(rename = "C")]
+    C,
+    #[serde(rename = "D")]
+    D,
+    #[serde(rename = "E")]
+    E,
+    #[serde(rename = "F")]
+    F,
+    #[serde(rename = "G")]
+    G,
+    #[serde(rename = "H")]
+    H,
+    #[serde(rename = "I")]
+    I,
+    #[serde(rename = "J")]
+    J,
+    #[serde(rename = "K")]
+    K,
+    #[serde(rename = "L")]
+    L,
+    #[serde(rename = "M")]
+    M,
+    #[serde(rename = "N")]
+    N,
+    #[serde(rename = "O")]
+    O,
+    #[serde(rename = "P")]
+    P,
+    #[serde(rename = "Q")]
+    Q,
+    #[serde(rename = "R")]
+    R,
+    #[serde(rename = "S")]
+    S,
+    #[serde(rename = "T")]
+    T,
+    #[serde(rename = "U")]
+    U,
+    #[serde(rename = "V")]
+    V,
+    #[serde(rename = "W")]
+    W,
+    #[serde(rename = "X")]
+    X,
+    #[serde(rename = "Y")]
+    Y,
+    #[serde(rename = "Z")]
+    Z,
+    #[serde(rename = "D0")]
+    D0,
+    #[serde(rename = "D1")]
+    D1,
+    #[serde(rename = "D2")]
+    D2,
+    #[serde(rename = "D3")]
+    D3,
+    #[serde(rename = "D4")]
+    D4,
+    #[serde(rename = "D5")]
+    D5,
+    #[serde(rename = "D6")]
+    D6,
+    #[serde(rename = "D7")]
+    D7,
+    #[serde(rename = "D8")]
+    D8,
+    #[serde(rename = "D9")]
+    D9,
+    #[serde(rename = "F1")]
+    F1,
+    #[serde(rename = "F2")]
+    F2,
+    #[serde(rename = "F3")]
+    F3,
+    #[serde(rename = "F4")]
+    F4,
+    #[serde(rename = "F5")]
+    F5,
+    #[serde(rename = "F6")]
+    F6,
+    #[serde(rename = "F7")]
+    F7,
+    #[serde(rename = "F8")]
+    F8,
+    #[serde(rename = "F9")]
+    F9,
+    #[serde(rename = "F10")]
+    F10,
+    #[serde(rename = "F11")]
+    F11,
+    #[serde(rename = "F12")]
+    F12,
+    #[serde(rename = "Enter")]
+    Enter,
+    #[serde(rename = "Tab")]
+    Tab,
+    #[serde(rename = "Escape")]
+    Escape,
+    #[serde(rename = "Backspace")]
+    Backspace,
+    #[serde(rename = "Delete")]
+    Delete,
+    #[serde(rename = "Insert")]
+    Insert,
+    #[serde(rename = "Space")]
+    Space,
+    #[serde(rename = "Up")]
+    Up,
+    #[serde(rename = "Down")]
+    Down,
+    #[serde(rename = "Left")]
+    Left,
+    #[serde(rename = "Right")]
+    Right,
+    #[serde(rename = "Home")]
+    Home,
+    #[serde(rename = "End")]
+    End,
+    #[serde(rename = "PageUp")]
+    PageUp,
+    #[serde(rename = "PageDown")]
+    PageDown,
+    #[serde(rename = "Comma")]
+    Comma,
+    #[serde(rename = "Period")]
+    Period,
+    #[serde(rename = "Minus")]
+    Minus,
+    #[serde(rename = "EqualsSign")]
+    EqualsSign,
+    #[serde(rename = "Slash")]
+    Slash,
+    #[serde(rename = "Semicolon")]
+    Semicolon,
+    #[serde(rename = "LeftBracket")]
+    LeftBracket,
+    #[serde(rename = "Backslash")]
+    Backslash,
+    #[serde(rename = "RightBracket")]
+    RightBracket,
+    #[serde(rename = "Apostrophe")]
+    Apostrophe,
+    #[serde(rename = "Backtick")]
+    Backtick,
+}
+
+impl std::fmt::Display for TerminalKeyName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::A => write!(f, "A"),
+            Self::B => write!(f, "B"),
+            Self::C => write!(f, "C"),
+            Self::D => write!(f, "D"),
+            Self::E => write!(f, "E"),
+            Self::F => write!(f, "F"),
+            Self::G => write!(f, "G"),
+            Self::H => write!(f, "H"),
+            Self::I => write!(f, "I"),
+            Self::J => write!(f, "J"),
+            Self::K => write!(f, "K"),
+            Self::L => write!(f, "L"),
+            Self::M => write!(f, "M"),
+            Self::N => write!(f, "N"),
+            Self::O => write!(f, "O"),
+            Self::P => write!(f, "P"),
+            Self::Q => write!(f, "Q"),
+            Self::R => write!(f, "R"),
+            Self::S => write!(f, "S"),
+            Self::T => write!(f, "T"),
+            Self::U => write!(f, "U"),
+            Self::V => write!(f, "V"),
+            Self::W => write!(f, "W"),
+            Self::X => write!(f, "X"),
+            Self::Y => write!(f, "Y"),
+            Self::Z => write!(f, "Z"),
+            Self::D0 => write!(f, "D0"),
+            Self::D1 => write!(f, "D1"),
+            Self::D2 => write!(f, "D2"),
+            Self::D3 => write!(f, "D3"),
+            Self::D4 => write!(f, "D4"),
+            Self::D5 => write!(f, "D5"),
+            Self::D6 => write!(f, "D6"),
+            Self::D7 => write!(f, "D7"),
+            Self::D8 => write!(f, "D8"),
+            Self::D9 => write!(f, "D9"),
+            Self::F1 => write!(f, "F1"),
+            Self::F2 => write!(f, "F2"),
+            Self::F3 => write!(f, "F3"),
+            Self::F4 => write!(f, "F4"),
+            Self::F5 => write!(f, "F5"),
+            Self::F6 => write!(f, "F6"),
+            Self::F7 => write!(f, "F7"),
+            Self::F8 => write!(f, "F8"),
+            Self::F9 => write!(f, "F9"),
+            Self::F10 => write!(f, "F10"),
+            Self::F11 => write!(f, "F11"),
+            Self::F12 => write!(f, "F12"),
+            Self::Enter => write!(f, "Enter"),
+            Self::Tab => write!(f, "Tab"),
+            Self::Escape => write!(f, "Escape"),
+            Self::Backspace => write!(f, "Backspace"),
+            Self::Delete => write!(f, "Delete"),
+            Self::Insert => write!(f, "Insert"),
+            Self::Space => write!(f, "Space"),
+            Self::Up => write!(f, "Up"),
+            Self::Down => write!(f, "Down"),
+            Self::Left => write!(f, "Left"),
+            Self::Right => write!(f, "Right"),
+            Self::Home => write!(f, "Home"),
+            Self::End => write!(f, "End"),
+            Self::PageUp => write!(f, "PageUp"),
+            Self::PageDown => write!(f, "PageDown"),
+            Self::Comma => write!(f, "Comma"),
+            Self::Period => write!(f, "Period"),
+            Self::Minus => write!(f, "Minus"),
+            Self::EqualsSign => write!(f, "EqualsSign"),
+            Self::Slash => write!(f, "Slash"),
+            Self::Semicolon => write!(f, "Semicolon"),
+            Self::LeftBracket => write!(f, "LeftBracket"),
+            Self::Backslash => write!(f, "Backslash"),
+            Self::RightBracket => write!(f, "RightBracket"),
+            Self::Apostrophe => write!(f, "Apostrophe"),
+            Self::Backtick => write!(f, "Backtick"),
         }
     }
 }
@@ -1217,6 +1496,38 @@ impl InteractionProgressOptions {
     }
 }
 
+/// InteractionTerminalOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InteractionTerminalOptions {
+    #[serde(rename = "title", alias = "Title", skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(rename = "primaryButtonText", alias = "PrimaryButtonText", skip_serializing_if = "Option::is_none")]
+    pub primary_button_text: Option<String>,
+    #[serde(rename = "enableMessageMarkdown", alias = "EnableMessageMarkdown", skip_serializing_if = "Option::is_none")]
+    pub enable_message_markdown: Option<bool>,
+    #[serde(rename = "work", alias = "Work", skip_serializing_if = "Option::is_none")]
+    pub work: Option<Value>,
+}
+
+impl InteractionTerminalOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.title {
+            map.insert("title".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.primary_button_text {
+            map.insert("primaryButtonText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.enable_message_markdown {
+            map.insert("enableMessageMarkdown".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.work {
+            map.insert("work".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
 /// BoolInteractionResult
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BoolInteractionResult {
@@ -1367,6 +1678,81 @@ impl ReferenceEnvironmentInjectionOptions {
         map.insert("connectionProperties".to_string(), serde_json::to_value(&self.connection_properties).unwrap_or(Value::Null));
         map.insert("serviceDiscovery".to_string(), serde_json::to_value(&self.service_discovery).unwrap_or(Value::Null));
         map.insert("endpoints".to_string(), serde_json::to_value(&self.endpoints).unwrap_or(Value::Null));
+        map
+    }
+}
+
+/// CreateTerminalOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CreateTerminalOptions {
+    #[serde(rename = "title", alias = "Title")]
+    pub title: String,
+    #[serde(rename = "executable", alias = "Executable")]
+    pub executable: String,
+    #[serde(rename = "arguments", alias = "Arguments", skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<Vec<String>>,
+    #[serde(rename = "workingDirectory", alias = "WorkingDirectory", skip_serializing_if = "Option::is_none")]
+    pub working_directory: Option<String>,
+    #[serde(rename = "environmentVariables", alias = "EnvironmentVariables", skip_serializing_if = "Option::is_none")]
+    pub environment_variables: Option<HashMap<String, String>>,
+    #[serde(rename = "columns", alias = "Columns", skip_serializing_if = "Option::is_none")]
+    pub columns: Option<f64>,
+    #[serde(rename = "rows", alias = "Rows", skip_serializing_if = "Option::is_none")]
+    pub rows: Option<f64>,
+    #[serde(rename = "placement", alias = "Placement", skip_serializing_if = "Option::is_none")]
+    pub placement: Option<TerminalPlacement>,
+}
+
+impl CreateTerminalOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("title".to_string(), serde_json::to_value(&self.title).unwrap_or(Value::Null));
+        map.insert("executable".to_string(), serde_json::to_value(&self.executable).unwrap_or(Value::Null));
+        if let Some(ref v) = self.arguments {
+            map.insert("arguments".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.working_directory {
+            map.insert("workingDirectory".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.environment_variables {
+            map.insert("environmentVariables".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.columns {
+            map.insert("columns".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.rows {
+            map.insert("rows".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.placement {
+            map.insert("placement".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
+/// TerminalKeyModifiers
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TerminalKeyModifiers {
+    #[serde(rename = "ctrl", alias = "Ctrl", skip_serializing_if = "Option::is_none")]
+    pub ctrl: Option<bool>,
+    #[serde(rename = "alt", alias = "Alt", skip_serializing_if = "Option::is_none")]
+    pub alt: Option<bool>,
+    #[serde(rename = "shift", alias = "Shift", skip_serializing_if = "Option::is_none")]
+    pub shift: Option<bool>,
+}
+
+impl TerminalKeyModifiers {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.ctrl {
+            map.insert("ctrl".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.alt {
+            map.insert("alt".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.shift {
+            map.insert("shift".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -2159,6 +2545,141 @@ impl AfterResourcesCreatedEvent {
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/AfterResourcesCreatedEvent.model", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DistributedApplicationModel::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.AspireTerminal
+pub struct AspireTerminal {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for AspireTerminal {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl AspireTerminal {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the opaque identifier used to address this terminal over the dashboard connection.
+    pub fn id(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/AspireTerminal.id", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets the title shown on the terminal's dock tab.
+    pub fn title(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/AspireTerminal.title", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets the process that owns this terminal's workload.
+    pub fn owner(&self) -> Result<TerminalOwner, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/AspireTerminal.owner", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets where this terminal is displayed in the dashboard.
+    pub fn placement(&self) -> Result<TerminalPlacement, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/AspireTerminal.placement", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Starts the terminal workload. Resource-owned workloads are started by their resource.
+    pub fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("terminal".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/AspireTerminal.start", args)?;
+        Ok(())
+    }
+
+    /// Reveals a dock terminal and selects its tab. Other placements are unaffected.
+    pub fn show(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("terminal".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/AspireTerminal.show", args)?;
+        Ok(())
+    }
+
+    /// Sends text as though it had been typed into the terminal.
+    pub fn send_text(&self, text: &str, cancellation_token: Option<&CancellationToken>) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("terminal".to_string(), self.handle.to_json());
+        args.insert("text".to_string(), serde_json::to_value(&text).unwrap_or(Value::Null));
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/AspireTerminal.sendText", args)?;
+        Ok(())
+    }
+
+    /// Sends a named key with optional Control, Alt, and Shift modifiers.
+    pub fn send_key(&self, key: TerminalKeyName, modifiers: Option<TerminalKeyModifiers>, cancellation_token: Option<&CancellationToken>) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("terminal".to_string(), self.handle.to_json());
+        args.insert("key".to_string(), serde_json::to_value(&key).unwrap_or(Value::Null));
+        if let Some(ref v) = modifiers {
+            args.insert("modifiers".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/AspireTerminal.sendKey", args)?;
+        Ok(())
+    }
+
+    /// Waits for text on the terminal screen. Timeout is in milliseconds and defaults to 30 seconds.
+    pub fn wait_for_text(&self, text: &str, timeout: Option<f64>, cancellation_token: Option<&CancellationToken>) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("terminal".to_string(), self.handle.to_json());
+        args.insert("text".to_string(), serde_json::to_value(&text).unwrap_or(Value::Null));
+        if let Some(ref v) = timeout {
+            args.insert("timeout".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/AspireTerminal.waitForText", args)?;
+        Ok(())
+    }
+
+    /// Gets the current terminal screen text, with lines separated by newlines.
+    pub fn get_screen_text(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("terminal".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/AspireTerminal.getScreenText", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Releases the terminal handle, stopping the workload only when the AppHost owns it.
+    pub fn dispose(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("terminal".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/AspireTerminal.dispose", args)?;
+        Ok(())
     }
 }
 
@@ -6749,13 +7270,13 @@ impl DistributedApplicationModel {
     }
 
     /// Finds a resource by name.
-    pub fn find_resource_by_name(&self, name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn find_resource_by_name(&self, name: &str) -> Result<Option<IResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("model".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/findResourceByName", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
+        let handle: Option<Handle> = serde_json::from_value(result)?;
+        Ok(handle.map(|handle| IResource::new(handle, self.client.clone())))
     }
 }
 
@@ -12615,6 +13136,23 @@ impl IInteractionService {
         Ok(serde_json::from_value(result)?)
     }
 
+    /// Displays a Dialog-placement terminal without taking ownership of it. Completion, cancellation, and callback failure leave the terminal alive; the caller must explicitly dispose it when finished.
+    pub fn prompt_terminal(&self, message: &str, terminal: &AspireTerminal, options: Option<InteractionTerminalOptions>, cancellation_token: Option<&CancellationToken>) -> Result<BoolInteractionResult, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("interactionService".to_string(), self.handle.to_json());
+        args.insert("message".to_string(), serde_json::to_value(&message).unwrap_or(Value::Null));
+        args.insert("terminal".to_string(), terminal.handle().to_json());
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/promptTerminal", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
     /// Prompts the user for a single input.
     pub fn prompt_input(&self, title: &str, message: &str, input: &InteractionInputBuilder, options: Option<InteractionInputsDialogOptions>, cancellation_token: Option<&CancellationToken>) -> Result<InputInteractionResult, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -13357,6 +13895,15 @@ impl IServiceProvider {
         let result = self.client.invoke_capability("Aspire.Hosting/getResourceCommandService", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ResourceCommandService::new(handle, self.client.clone()))
+    }
+
+    /// Gets the terminal service from the AppHost service provider.
+    pub fn get_terminal_service(&self) -> Result<TerminalService, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("serviceProvider".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/getTerminalService", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TerminalService::new(handle, self.client.clone()))
     }
 
     /// Gets the user secrets manager from the service provider.
@@ -17251,13 +17798,13 @@ impl ResourceUrlsCallbackContext {
     }
 
     /// Gets an endpoint reference from the associated resource
-    pub fn get_endpoint(&self, name: &str) -> Result<EndpointReference, Box<dyn std::error::Error>> {
+    pub fn get_endpoint(&self, name: &str) -> Result<Option<EndpointReference>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/getEndpoint", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(EndpointReference::new(handle, self.client.clone()))
+        let handle: Option<Handle> = serde_json::from_value(result)?;
+        Ok(handle.map(|handle| EndpointReference::new(handle, self.client.clone())))
     }
 }
 
@@ -17318,6 +17865,87 @@ impl ResourceUrlsEditor {
         }
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.addForEndpoint", args)?;
         Ok(())
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.TerminalContext
+pub struct TerminalContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for TerminalContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl TerminalContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the token signaled when the user requests cancellation or the interaction is externally canceled.
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/TerminalContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.TerminalService
+pub struct TerminalService {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for TerminalService {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl TerminalService {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Creates a terminal without starting it. The caller owns its lifetime; dock terminals can be left running until AppHost shutdown, and showing a terminal in a dialog does not transfer ownership.
+    pub fn create_terminal(&self, options: CreateTerminalOptions) -> Result<AspireTerminal, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("terminalService".to_string(), self.handle.to_json());
+        args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/createTerminal", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(AspireTerminal::new(handle, self.client.clone()))
+    }
+
+    /// Gets an existing terminal by ID, or null if it is not found.
+    pub fn get_terminal(&self, terminal_id: &str) -> Result<Option<AspireTerminal>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("terminalService".to_string(), self.handle.to_json());
+        args.insert("terminalId".to_string(), serde_json::to_value(&terminal_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/getTerminal", args)?;
+        let handle: Option<Handle> = serde_json::from_value(result)?;
+        Ok(handle.map(|handle| AspireTerminal::new(handle, self.client.clone())))
     }
 }
 

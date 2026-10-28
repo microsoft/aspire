@@ -14,6 +14,22 @@ namespace Aspire.Hosting.RemoteHost.Tests;
 public class JsonRpcCallbackInvokerTests
 {
     [Fact]
+    public async Task CanceledCallbackPreservesCancellationWithoutCancelingItsInvocation()
+    {
+        using var connection = new IntegrationHostTestConnection(
+            JsonSerializer.SerializeToElement(Array.Empty<object>()),
+            (_, _, _) => Task.FromCanceled<JsonNode?>(new CancellationToken(canceled: true)));
+        await using var invoker = new JsonRpcCallbackInvoker(NullLogger<JsonRpcCallbackInvoker>.Instance);
+        invoker.SetConnection(connection.ServerRpc);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            invoker.InvokeAsync<JsonNode?>("canceled", null, TestContext.Current.CancellationToken));
+
+        Assert.True(invoker.IsConnected);
+        Assert.False(invoker.LifetimeToken.IsCancellationRequested);
+    }
+
+    [Fact]
     public async Task ConfiguredCallbackDeadlineUsesTheInjectedClock()
     {
         var clock = new FakeTimeProvider();

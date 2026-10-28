@@ -14,14 +14,21 @@ internal sealed class TestTerminalBackend(string id) : ITerminalBackend
     public bool IsDisposed { get; private set; }
     public Func<ValueTask>? OnDispose { get; set; }
     public Func<AspireTerminalKey, CancellationToken, Task>? OnSendKey { get; set; }
+    public Action? OnStart { get; set; }
+    public Action? OnShow { get; set; }
+    public Func<string, CancellationToken, Task>? OnSendText { get; set; }
+    public Func<string, TimeSpan?, CancellationToken, Task>? OnWaitForText { get; set; }
+    public Func<string>? OnGetScreenText { get; set; }
 
-    public void Start() => throw new NotSupportedException();
-    public void Show() => throw new NotSupportedException();
-    public Task SendTextAsync(string text, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public void Start() => (OnStart ?? throw new NotSupportedException())();
+    public void Show() => (OnShow ?? throw new NotSupportedException())();
+    public Task SendTextAsync(string text, CancellationToken cancellationToken = default)
+        => OnSendText?.Invoke(text, cancellationToken) ?? throw new NotSupportedException();
     public Task SendKeyAsync(AspireTerminalKey key, CancellationToken cancellationToken = default)
         => OnSendKey?.Invoke(key, cancellationToken) ?? throw new NotSupportedException();
-    public Task WaitForTextAsync(string text, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public string GetScreenText() => throw new NotSupportedException();
+    public Task WaitForTextAsync(string text, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        => OnWaitForText?.Invoke(text, timeout, cancellationToken) ?? throw new NotSupportedException();
+    public string GetScreenText() => OnGetScreenText?.Invoke() ?? throw new NotSupportedException();
 
     // Backend equality must not make distinct public handles interchangeable.
     public override bool Equals(object? obj) => obj is ITerminalBackend other && string.Equals(Id, other.Id, StringComparison.Ordinal);

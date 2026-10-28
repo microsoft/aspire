@@ -8,6 +8,7 @@ import {
     CancellationToken,
     registerCallback,
     unregisterCallback,
+    invokeRegisteredCallback,
     getCallbackCount,
     wrapIfHandle,
     registerHandleWrapper,
@@ -338,6 +339,18 @@ describe('CapabilityError', () => {
 // ============================================================================
 
 describe('registerCallback / unregisterCallback / getCallbackCount', () => {
+    it('preserves cancellation errors from reentrant capabilities', async () => {
+        const cancellation = new rpc.ResponseError(-32800, 'The operation was canceled.');
+        const id = registerCallback(() => { throw cancellation; });
+        const client = new AspireClient('unused');
+
+        try {
+            await expect(invokeRegisteredCallback(id, null, client)).rejects.toBe(cancellation);
+        } finally {
+            unregisterCallback(id);
+        }
+    });
+
     let initialCount: number;
     const registeredIds: string[] = [];
 
