@@ -160,6 +160,88 @@ public class TracesTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(-1)]
+    [InlineData(1)]
+    [InlineData(10)]
+    public async Task Render_StaleOverflowIndex_RendersOnlyCurrentResources(int staleIndex)
+    {
+        SetupTracesServices();
+
+        var timestamp = DateTime.UnixEpoch;
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { CreateSpan(traceId: "trace", spanId: "span", startTime: timestamp, endTime: timestamp.AddSeconds(1)) }
+                    }
+                }
+            }
+        });
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var cut = Render<Traces>(builder => builder.AddCascadingValue(viewport));
+        var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
+        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        var overflow = cut.FindComponent<FluentOverflow<TraceResourceSummary>>();
+
+        // A delayed browser measurement can reference resources that are no longer in the row.
+        await overflow.InvokeAsync(() => overflow.Instance.OverflowRaisedAsync(
+        [
+            new OverflowItem { Index = 0, Text = "TestService (1)" },
+            new OverflowItem { Index = staleIndex, Text = "RemovedService (1)" }
+        ]));
+
+        cut.WaitForAssertion(() =>
+        {
+            var tooltip = cut.Find(".trace-overflow-tooltip");
+            Assert.Equal("TestService (1)", tooltip.GetAttribute("aria-label"));
+            Assert.Equal("TestService (1)", Assert.Single(tooltip.QuerySelectorAll(".trace-service-tag")).TextContent.Trim());
+            Assert.Equal("+1", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
+        });
+
+        await overflow.InvokeAsync(() => overflow.Instance.OverflowRaisedAsync(
+        [
+            new OverflowItem { Index = staleIndex, Text = "RemovedService (1)" }
+        ]));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll(".trace-overflow-tooltip"));
+            Assert.Equal("+0", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
+        });
+
+        await overflow.InvokeAsync(() => overflow.Instance.OverflowRaisedAsync(
+        [
+            new OverflowItem { Index = 0, Text = "TestService (1)" }
+        ]));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".trace-overflow-tooltip .trace-service-tag")));
+
+        overflow.Render(builder => builder.Add(p => p.Items, Array.Empty<TraceResourceSummary>()));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll(".trace-overflow-tooltip"));
+            Assert.Equal("+0", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
+        });
+
+        await overflow.InvokeAsync(() => overflow.Instance.OverflowRaisedAsync(
+        [
+            new OverflowItem { Index = 0, Text = "TestService (1)" }
+        ]));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll(".trace-overflow-tooltip"));
+            Assert.Equal("+0", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
+        });
+    }
+
+    [Theory]
     [InlineData(false, 1)]
     [InlineData(true, 0)]
     public async Task Render_AtTraceLimit_LimitMessageOnlyDisplayedForLiveRun(bool isReadOnly, int expectedMessageCount)
