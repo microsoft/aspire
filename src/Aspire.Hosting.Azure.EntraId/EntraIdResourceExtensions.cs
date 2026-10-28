@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREAZURE003 // The managed identity annotation is experimental.
 
 using System.Collections.Immutable;
-using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Microsoft.Extensions.DependencyInjection;
@@ -1544,6 +1543,509 @@ public static class EntraIdResourceExtensions
     }
 
     /// <summary>
+    /// Exposes the registration as an API identified by the default application ID URI, <c>api://{clientId}</c>.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// The client ID exists only after Microsoft Graph creates the registration, so the URI is set by a second update of the
+    /// registration in the same deployment. <c>api://{clientId}</c> contains the application ID, a form that the tenant's default
+    /// identifier URI policy accepts, so it needs no verified domain. Adding a scope with
+    /// <see cref="WithScope"/> uses this URI unless <see cref="WithApplicationIdUri(IResourceBuilder{EntraIdApplicationResource}, string)"/> sets another one.
+    /// </para>
+    /// <para>
+    /// This setting only affects registrations created by Aspire. For an existing registration, call
+    /// <see cref="WithApplicationIdUri(IResourceBuilder{EntraIdApplicationResource}, string)"/> with the URI it already has.
+    /// </para>
+    /// </remarks>
+    public static IResourceBuilder<EntraIdApplicationResource> WithApplicationIdUri(
+        this IResourceBuilder<EntraIdApplicationResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.UsesDefaultApplicationIdUri = true;
+
+        // A custom URI would take precedence over the default. For an existing registration the URI is configuration only and stays.
+        if (!builder.Resource.IsExistingApplication)
+        {
+            builder.Resource.ApplicationIdUri = null;
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Exposes the registration as an API identified by a custom application ID URI.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="applicationIdUri">The URI, such as <c>api://contoso-orders</c> or <c>https://contoso.onmicrosoft.com/orders</c>.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentException"><paramref name="applicationIdUri"/> is not an absolute URI without a query string or fragment.</exception>
+    /// <remarks>
+    /// <para>
+    /// For a registration created by Aspire, the URI is written to the registration. The URI must be unique in the tenant. A tenant's
+    /// default policy requires a new URI to contain a verified domain, the tenant ID or the application ID, but it doesn't apply
+    /// when the registration's <c>requestedAccessTokenVersion</c> is 2, which Aspire always sets, so a name such as <c>api://contoso-orders</c>
+    /// is normally accepted. A tenant can configure a stricter policy, and a deployment fails when the policy rejects the URI. See
+    /// <see href="https://aka.ms/identifier-uri-formatting-error"/>.
+    /// </para>
+    /// <para>
+    /// For an existing registration, the URI is only configuration: Aspire does not modify the registration, and
+    /// <see cref="EntraIdApplicationResource.GetScopeUri(string)"/> uses the URI to build scope names for callers.
+    /// </para>
+    /// </remarks>
+    public static IResourceBuilder<EntraIdApplicationResource> WithApplicationIdUri(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        string applicationIdUri)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(applicationIdUri);
+
+        if (EntraIdValidation.ValidateApplicationIdUri(applicationIdUri) is { } error)
+        {
+            throw new ArgumentException($"'{applicationIdUri}' is not a valid application ID URI. {error}", nameof(applicationIdUri));
+        }
+
+        builder.Resource.ApplicationIdUri = applicationIdUri;
+        builder.Resource.UsesDefaultApplicationIdUri = false;
+        return builder;
+    }
+
+    /// <summary>
+    /// Exposes a delegated permission scope that clients can request to call this registration as an API.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="name">The scope's name, which appears in the token's <c>scp</c> claim, such as <c>access_as_user</c>.</param>
+    /// <param name="description">What the scope allows, shown on the consent page.</param>
+    /// <param name="configure">An optional callback that sets the scope's other options.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentException">
+    /// The name is invalid or already used by another scope, or the explicit <see cref="EntraIdScope.Id"/> is already used by another scope.
+    /// </exception>
+    /// <remarks>
+    /// <para>
+    /// Scopes are declared explicitly. Aspire does not derive them from the permissions that callers request.
+    /// Unless an application ID URI is set with <see cref="WithApplicationIdUri(IResourceBuilder{EntraIdApplicationResource}, string)"/>,
+    /// the registration uses <c>api://{clientId}</c>.
+    /// </para>
+    /// <para>
+    /// The scope's ID stays the same across deployments. Microsoft Graph does not let a deployment remove an enabled scope or change its name.
+    /// To retire a scope, set <see cref="EntraIdScope.IsEnabled"/> to <see langword="false"/> and deploy, and remove the scope in a later deployment.
+    /// </para>
+    /// <para>
+    /// For an existing registration, the scope is only configuration, which lets callers declare permissions to it.
+    /// Set <see cref="EntraIdScope.Id"/> to the ID of the scope that the registration defines.
+    /// </para>
+    /// <example>
+    /// <code lang="csharp">
+    /// var entraApi = builder.AddEntraIdApplication("entra-api")
+    ///     .WithScope("access_as_user", "Allows the app to call the API on behalf of the signed-in user.");
+    /// </code>
+    /// </example>
+    /// </remarks>
+    public static IResourceBuilder<EntraIdApplicationResource> WithScope(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        string name,
+        string description,
+        Action<EntraIdScope>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(description);
+
+        if (EntraIdValidation.ValidateScopeName(name) is { } error)
+        {
+            throw new ArgumentException($"'{name}' is not a valid scope name. {error}", nameof(name));
+        }
+
+        var resource = builder.Resource;
+        if (resource.Scopes.Any(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new ArgumentException($"'{resource.Name}' already exposes a scope named '{name}'.", nameof(name));
+        }
+
+        var scope = new EntraIdScope(name, description);
+        configure?.Invoke(scope);
+
+        if (scope.Id is { } id && resource.Scopes.Any(s => s.Id == id))
+        {
+            throw new ArgumentException($"'{resource.Name}' already exposes a scope with the ID '{id:D}'.", nameof(configure));
+        }
+
+        resource.AddScope(scope);
+        return builder;
+    }
+
+    /// <summary>
+    /// Pre-authorizes a client application to request some of this registration's scopes without any consent prompt.
+    /// </summary>
+    /// <param name="builder">The registration that exposes the scopes, which must be created by Aspire.</param>
+    /// <param name="client">The client application to pre-authorize.</param>
+    /// <param name="scopeNames">The names of the scopes, added with <see cref="WithScope"/>, that the client may request.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentException">A scope is not exposed or is disabled, or no scope was given.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// <paramref name="client"/> already declares permissions for this registration, or depends on it in another way. Pre-authorization needs the client's ID
+    /// and a declaration needs this registration's ID, so each registration would wait for the other.
+    /// </exception>
+    /// <remarks>
+    /// <para>
+    /// Pre-authorization is separate from the client's declaration of the permission (<see cref="WithApiPermissions(IResourceBuilder{EntraIdApplicationResource}, IResourceBuilder{EntraIdApplicationResource}, string[])"/>)
+    /// and from consent (<see cref="WithAdminConsent(IResourceBuilder{EntraIdApplicationResource}, IResourceBuilder{EntraIdApplicationResource}, string[])"/>).
+    /// It lets a trusted client skip the consent prompt, which is intended for first-party clients of the same organization.
+    /// </para>
+    /// <para>
+    /// Aspire deploys each registration as its own module. Pre-authorization makes this registration wait for the client's ID, while
+    /// the client's declaration waits for this registration's ID, so two registrations cannot use both. Use a declaration with
+    /// <c>WithAdminConsent</c> on the client, or pre-authorization alone. This setting only affects registrations created by Aspire.
+    /// </para>
+    /// </remarks>
+    public static IResourceBuilder<EntraIdApplicationResource> WithPreAuthorizedApplication(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<EntraIdApplicationResource> client,
+        params string[] scopeNames)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(scopeNames);
+
+        var scopes = FindScopes(builder.Resource, scopeNames, nameof(scopeNames));
+        EnsureNoDependencyCycle(builder.Resource, client.Resource);
+
+        var existing = builder.Resource.PreAuthorizedClients.FirstOrDefault(p => ReferenceEquals(p.Client, client.Resource));
+        if (existing is not null)
+        {
+            builder.Resource.PreAuthorizedClients.Remove(existing);
+            scopes = [.. existing.Scopes.Union(scopes)];
+        }
+
+        builder.Resource.PreAuthorizedClients.Add(new EntraIdPreAuthorizedClient(client.Resource, scopes));
+        return builder;
+    }
+
+    /// <summary>
+    /// Declares that this registration requires delegated permissions to scopes of another registration in the AppHost.
+    /// </summary>
+    /// <param name="builder">The calling registration, which must be created by Aspire.</param>
+    /// <param name="api">The registration that exposes the scopes.</param>
+    /// <param name="scopeNames">The names of the scopes, added with <see cref="WithScope"/> to <paramref name="api"/>.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentException">A scope is not exposed or is disabled, or no scope was given.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// <paramref name="api"/> already pre-authorizes this registration, or depends on it in another way. See
+    /// <see cref="WithPreAuthorizedApplication"/>.
+    /// </exception>
+    /// <remarks>
+    /// <para>
+    /// This adds the scopes to the registration's <em>API permissions</em>, the list shown in the portal. It grants nothing:
+    /// users are prompted to consent the first time they sign in unless an administrator consents
+    /// (<see cref="WithAdminConsent(IResourceBuilder{EntraIdApplicationResource}, IResourceBuilder{EntraIdApplicationResource}, string[])"/>)
+    /// or <paramref name="api"/> pre-authorizes the caller (<see cref="WithPreAuthorizedApplication"/>).
+    /// </para>
+    /// <para>
+    /// A token request can cover the scopes of only one API. Request the scopes of each API in a separate token request.
+    /// </para>
+    /// <example>
+    /// <code lang="csharp">
+    /// var entraApi = builder.AddEntraIdApplication("entra-api")
+    ///     .WithScope("access_as_user", "Allows the app to call the API on behalf of the signed-in user.");
+    ///
+    /// var entraWeb = builder.AddEntraIdApplication("entra-web")
+    ///     .WithApiPermissions(entraApi, "access_as_user");
+    /// </code>
+    /// </example>
+    /// </remarks>
+    public static IResourceBuilder<EntraIdApplicationResource> WithApiPermissions(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<EntraIdApplicationResource> api,
+        params string[] scopeNames)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(api);
+        ArgumentNullException.ThrowIfNull(scopeNames);
+
+        var apiResource = api.Resource;
+        if (ReferenceEquals(apiResource, builder.Resource))
+        {
+            throw new ArgumentException("A registration cannot require permissions to its own scopes.", nameof(api));
+        }
+
+        var scopes = FindScopes(apiResource, scopeNames, nameof(scopeNames));
+        EnsureNoDependencyCycle(builder.Resource, apiResource);
+
+        var resolved = scopes.Select(s => EntraIdResolvedPermission.ForScope(apiResource, s)).ToArray();
+        var access = GetOrAddApiAccess(builder.Resource, a => a.IsFor(apiResource), () => EntraIdApiAccess.ForApplication(apiResource));
+        foreach (var permission in resolved)
+        {
+            AddDistinct(access.Declared, permission);
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Declares that this registration requires permissions to an API that is not an Aspire resource, such as Microsoft Graph.
+    /// </summary>
+    /// <param name="builder">The calling registration, which must be created by Aspire.</param>
+    /// <param name="api">The API, for example <see cref="EntraIdApi.MicrosoftGraph"/>.</param>
+    /// <param name="permissions">The permissions to require.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentException">A permission is unknown for the API and has no ID, or no permission was given.</exception>
+    /// <remarks>
+    /// <para>
+    /// This adds the permissions to the registration's <em>API permissions</em>, the list shown in the portal. It grants nothing, and it does
+    /// not grant tenant-wide consent as a side effect. Use
+    /// <see cref="WithAdminConsent(IResourceBuilder{EntraIdApplicationResource}, EntraIdApi, EntraIdApiPermission[])"/> to opt in to consent.
+    /// </para>
+    /// <para>
+    /// Delegated permissions (<see cref="EntraIdApiPermission.Delegated(string)"/>) let the application act for a signed-in user.
+    /// Application permissions (<see cref="EntraIdApiPermission.Application(string)"/>) let it act as itself and always need an administrator's
+    /// consent. The two kinds are separate permissions, even when they have the same name.
+    /// </para>
+    /// <example>
+    /// <code lang="csharp">
+    /// var entraWeb = builder.AddEntraIdApplication("entra-web")
+    ///     .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read"));
+    /// </code>
+    /// </example>
+    /// </remarks>
+    public static IResourceBuilder<EntraIdApplicationResource> WithApiPermissions(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        EntraIdApi api,
+        params EntraIdApiPermission[] permissions)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(api);
+        ArgumentNullException.ThrowIfNull(permissions);
+
+        if (permissions.Length == 0)
+        {
+            throw new ArgumentException("Specify at least one permission.", nameof(permissions));
+        }
+
+        var resolved = permissions.Select(api.Resolve).ToArray();
+        var access = GetOrAddApiAccess(builder.Resource, a => a.IsFor(api), () => EntraIdApiAccess.ForApi(api));
+        foreach (var permission in resolved)
+        {
+            AddDistinct(access.Declared, permission);
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Grants tenant-wide consent to delegated permissions that this registration declared for another registration in the AppHost.
+    /// </summary>
+    /// <param name="builder">The calling registration, which must be created by Aspire.</param>
+    /// <param name="api">The registration that exposes the scopes.</param>
+    /// <param name="scopeNames">The names of scopes already declared with <see cref="WithApiPermissions(IResourceBuilder{EntraIdApplicationResource}, IResourceBuilder{EntraIdApplicationResource}, string[])"/>.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentException">A scope is not exposed or is disabled, or no scope was given.</exception>
+    /// <exception cref="InvalidOperationException">A scope was not declared first.</exception>
+    /// <remarks>
+    /// <para>
+    /// This creates a delegated permission grant for all users (<c>consentType: AllPrincipals</c>) from this registration to
+    /// <paramref name="api"/>, so nobody is prompted to consent. The identity that deploys needs a directory role such as
+    /// Privileged Role Administrator, Cloud Application Administrator or Application Administrator, or a privileged
+    /// Microsoft Graph permission such as <c>DelegatedPermissionGrant.ReadWrite.All</c>. Deployment fails without it.
+    /// See <see href="https://learn.microsoft.com/entra/identity/enterprise-apps/grant-admin-consent#prerequisites"/>.
+    /// </para>
+    /// <para>
+    /// A grant is neither a declaration nor a pre-authorization. This only affects registrations created by Aspire.
+    /// </para>
+    /// <para>
+    /// The grant is declared in full: it is set to exactly the scopes passed to <c>WithAdminConsent</c> for this registration and
+    /// <paramref name="api"/>. A scope that was granted to the pair outside Aspire, or that is removed from the calls while others remain,
+    /// is revoked by the next deployment. When no call remains for the pair, nothing is sent and the existing grant stays.
+    /// </para>
+    /// </remarks>
+    public static IResourceBuilder<EntraIdApplicationResource> WithAdminConsent(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<EntraIdApplicationResource> api,
+        params string[] scopeNames)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(api);
+        ArgumentNullException.ThrowIfNull(scopeNames);
+
+        var apiResource = api.Resource;
+        var scopes = FindScopes(apiResource, scopeNames, nameof(scopeNames));
+        var access = builder.Resource.ApiAccess.FirstOrDefault(a => a.IsFor(apiResource));
+        foreach (var scope in scopes)
+        {
+            ConsentToDeclared(access, apiResource.Name, EntraIdResolvedPermission.ForScope(apiResource, scope));
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Grants tenant-wide consent to permissions that this registration declared for an API that is not an Aspire resource.
+    /// </summary>
+    /// <param name="builder">The calling registration, which must be created by Aspire.</param>
+    /// <param name="api">The API, for example <see cref="EntraIdApi.MicrosoftGraph"/>.</param>
+    /// <param name="permissions">Permissions already declared with <see cref="WithApiPermissions(IResourceBuilder{EntraIdApplicationResource}, EntraIdApi, EntraIdApiPermission[])"/>.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="InvalidOperationException">A permission was not declared first.</exception>
+    /// <remarks>
+    /// <para>
+    /// A delegated permission becomes a delegated permission grant for all users (<c>consentType: AllPrincipals</c>).
+    /// An application permission becomes an app role assignment to this registration's service principal, so the application can
+    /// call the API as itself without a user.
+    /// </para>
+    /// <para>
+    /// The delegated grant is declared in full: it is set to exactly the delegated permissions passed to <c>WithAdminConsent</c> for this
+    /// registration and <paramref name="api"/>. A permission that was granted to the pair outside Aspire, or that is removed from the calls while
+    /// others remain, is revoked by the next deployment. When no delegated call remains for the pair, nothing is sent and the existing grant stays.
+    /// Each application permission is a separate app role assignment: Aspire creates it, but doesn't delete it when its consent is removed
+    /// from the AppHost, so remove it in the Microsoft Entra admin center.
+    /// </para>
+    /// <para>
+    /// The identity that deploys needs one of the following, and deployment fails without it. For delegated permissions, a directory role such as
+    /// Privileged Role Administrator, Cloud Application Administrator or Application Administrator, or the
+    /// <c>DelegatedPermissionGrant.ReadWrite.All</c> Microsoft Graph permission. For Microsoft Graph application permissions, Cloud Application
+    /// Administrator and Application Administrator are not enough: use Privileged Role Administrator or a custom role, or the
+    /// <c>AppRoleAssignment.ReadWrite.All</c> Microsoft Graph permission when deploying as an application. See
+    /// <see href="https://learn.microsoft.com/entra/identity/enterprise-apps/grant-admin-consent#prerequisites"/>. Application permissions to broad
+    /// scopes such as <c>Directory.Read.All</c> give the application access to the whole tenant, so grant only what the application needs.
+    /// This only affects registrations created by Aspire.
+    /// </para>
+    /// <example>
+    /// <code lang="csharp">
+    /// var entraWeb = builder.AddEntraIdApplication("entra-web")
+    ///     .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Application("User.Read.All"))
+    ///     .WithAdminConsent(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Application("User.Read.All"));
+    /// </code>
+    /// </example>
+    /// </remarks>
+    public static IResourceBuilder<EntraIdApplicationResource> WithAdminConsent(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        EntraIdApi api,
+        params EntraIdApiPermission[] permissions)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(api);
+        ArgumentNullException.ThrowIfNull(permissions);
+
+        if (permissions.Length == 0)
+        {
+            throw new ArgumentException("Specify at least one permission.", nameof(permissions));
+        }
+
+        var resolved = permissions.Select(api.Resolve).ToArray();
+        var access = builder.Resource.ApiAccess.FirstOrDefault(a => a.IsFor(api));
+        foreach (var permission in resolved)
+        {
+            ConsentToDeclared(access, api.DisplayName, permission);
+        }
+
+        return builder;
+    }
+
+    private static EntraIdScope[] FindScopes(EntraIdApplicationResource api, string[] scopeNames, string parameterName)
+    {
+        if (scopeNames.Length == 0)
+        {
+            throw new ArgumentException("Specify at least one scope.", parameterName);
+        }
+
+        var scopes = new List<EntraIdScope>(scopeNames.Length);
+        foreach (var name in scopeNames)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(name, parameterName);
+
+            var scope = api.Scopes.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.Ordinal))
+                ?? throw new ArgumentException(
+                    $"'{api.Name}' does not expose a scope named '{name}'. Add it with WithScope first. " +
+                    $"Exposed scopes: {(api.Scopes.Count == 0 ? "none" : string.Join(", ", api.Scopes.Select(s => s.Name)))}.",
+                    parameterName);
+
+            if (!scope.IsEnabled)
+            {
+                throw new ArgumentException($"The scope '{name}' of '{api.Name}' is disabled, so clients cannot request it.", parameterName);
+            }
+
+            if (!scopes.Contains(scope))
+            {
+                scopes.Add(scope);
+            }
+        }
+
+        return [.. scopes];
+    }
+
+    private static EntraIdApiAccess GetOrAddApiAccess(
+        EntraIdApplicationResource caller,
+        Func<EntraIdApiAccess, bool> matches,
+        Func<EntraIdApiAccess> create)
+    {
+        var access = caller.ApiAccess.FirstOrDefault(matches);
+        if (access is null)
+        {
+            access = create();
+            caller.ApiAccess.Add(access);
+            caller.EnsureApiAccessValidation();
+        }
+
+        return access;
+    }
+
+    private static void AddDistinct(List<EntraIdResolvedPermission> permissions, EntraIdResolvedPermission permission)
+    {
+        if (!permissions.Contains(permission))
+        {
+            permissions.Add(permission);
+        }
+    }
+
+    private static void ConsentToDeclared(EntraIdApiAccess? access, string apiName, EntraIdResolvedPermission permission)
+    {
+        if (access is null || !access.Declared.Contains(permission))
+        {
+            throw new InvalidOperationException(
+                $"The {permission.Type} permission '{permission.Name}' of '{apiName}' must be declared with WithApiPermissions before consent is granted. " +
+                "A grant for a permission that the registration does not declare shows up as an unconfigured permission in the portal.");
+        }
+
+        AddDistinct(access.Consented, permission);
+    }
+
+    // The client's module needs the API's outputs, and the API's module needs the client's output when it pre-authorizes the client.
+    // Two modules that wait for each other can never be deployed, so reject the model before it is built.
+    private static void EnsureNoDependencyCycle(EntraIdApplicationResource dependent, EntraIdApplicationResource dependency)
+    {
+        if (ReferenceEquals(dependent, dependency) || (!dependent.IsExistingApplication && DependsOn(dependency, dependent, [])))
+        {
+            throw new InvalidOperationException(
+                $"'{dependent.Name}' cannot depend on '{dependency.Name}' because '{dependency.Name}' already depends on '{dependent.Name}'. " +
+                "A registration's module needs the other's outputs: declared permissions need the API's client ID, and pre-authorization needs the client's client ID. " +
+                "Use either WithPreAuthorizedApplication or WithApiPermissions between the two registrations, not both.");
+        }
+
+        static bool DependsOn(EntraIdApplicationResource from, EntraIdApplicationResource target, HashSet<EntraIdApplicationResource> visited)
+        {
+            // An existing registration deploys nothing, so it waits for nothing.
+            if (from.IsExistingApplication || !visited.Add(from))
+            {
+                return false;
+            }
+
+            var dependencies = from.ApiAccess.Select(a => a.Application).OfType<EntraIdApplicationResource>()
+                .Concat(from.PreAuthorizedClients.Select(p => p.Client));
+            foreach (var dependency in dependencies)
+            {
+                if (ReferenceEquals(dependency, target) || DependsOn(dependency, target, visited))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Injects Entra ID authentication configuration into a consuming resource.
     /// </summary>
     /// <typeparam name="T">The type of the destination resource.</typeparam>
@@ -1554,6 +2056,13 @@ public static class EntraIdResourceExtensions
     /// otherwise, uses the source resource's name encoded as a portable environment variable name and uppercased.
     /// When empty, omits the prefix and its separator, producing <c>ClientId</c> for .NET program resources and <c>CLIENT_ID</c> for other resources.
     /// For .NET program resources, <c>:</c> in the name is replaced by <c>__</c>.
+    /// </param>
+    /// <param name="downstreamApisPrefix">
+    /// The configuration prefix of the <c>DownstreamApis</c> entries for the APIs that the application declared permissions to
+    /// (see <c>WithApiPermissions</c>). When <see langword="null"/>, uses <c>"DownstreamApis"</c>.
+    /// For .NET program resources, <c>:</c> in the prefix is replaced by <c>__</c>. A .NET program's <c>DownstreamApis</c> section doesn't depend on
+    /// <paramref name="connectionName"/>, so when a resource references several registrations that declare permissions to the same API,
+    /// give all but one of them their own prefix, or the model is rejected.
     /// </param>
     /// <returns>The resource builder for chaining.</returns>
     /// <remarks>
@@ -1572,6 +2081,11 @@ public static class EntraIdResourceExtensions
     /// builder.Services.AddAuthentication()
     ///     .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
     /// </code>
+    /// <para>
+    /// When the application declared permissions to other APIs, the consumer also receives one entry per API under the
+    /// <paramref name="downstreamApisPrefix"/> prefix: <c>{prefix}__{name}__Scopes__{index}</c>. For an API registration in the AppHost,
+    /// <c>{name}</c> is the name of each resource that references that registration, like the name used for service discovery.
+    /// </para>
     /// <example>
     /// <code lang="csharp">
     /// var entraApi = builder.AddExistingEntraApplication("entra-api",
@@ -1586,30 +2100,38 @@ public static class EntraIdResourceExtensions
     public static IResourceBuilder<T> WithReference<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<EntraIdApplicationResource> source,
-        string? connectionName = null)
+        string? connectionName = null,
+        string? downstreamApisPrefix = null)
         where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(source);
+        if (downstreamApisPrefix is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(downstreamApisPrefix);
+        }
 
         // Inspect the resource itself so .NET defaults also apply when the builder's type has been erased.
 #pragma warning disable ASPIREPROJECTS001
         var isDotnetProgram = builder.Resource is IDotnetProgramResource;
 #pragma warning restore ASPIREPROJECTS001
         connectionName ??= isDotnetProgram ? "AzureAd" : EnvironmentVariableNameEncoder.Encode(source.Resource.Name);
+        downstreamApisPrefix ??= "DownstreamApis";
 
         if (isDotnetProgram)
         {
             connectionName = connectionName.Replace(":", "__", StringComparison.Ordinal);
+            downstreamApisPrefix = downstreamApisPrefix.Replace(":", "__", StringComparison.Ordinal);
         }
 
-        return WithReferenceCore(builder, source, connectionName, isDotnetProgram);
+        return WithReferenceCore(builder, source, connectionName, downstreamApisPrefix, isDotnetProgram);
     }
 
     private static IResourceBuilder<T> WithReferenceCore<T>(
         IResourceBuilder<T> builder,
         IResourceBuilder<EntraIdApplicationResource> source,
         string connectionName,
+        string downstreamApisPrefix,
         bool isDotnetProgram)
         where T : IResourceWithEnvironment
     {
@@ -1620,6 +2142,10 @@ public static class EntraIdResourceExtensions
         // Create a reference relationship so the dashboard shows the connection
         builder.WithReferenceRelationship(entra);
         entra.Consumers.Add(builder.Resource);
+
+        // That section is a sibling of AzureAd, not part of it, so a .NET program's entries ignore the connection name.
+        var environmentVariablePrefix = isDotnetProgram ? $"{downstreamApisPrefix}__" : $"{keyPrefix}{downstreamApisPrefix}_";
+        builder.Resource.Annotations.Add(new EntraIdReferenceAnnotation(entra, downstreamApisPrefix, environmentVariablePrefix, isDotnetProgram));
 
         if (entra.ClientCredentials.OfType<EntraIdFederatedIdentityCredential>().Any(c => c.UsesConsumerIdentity))
         {
@@ -1696,6 +2222,37 @@ public static class EntraIdResourceExtensions
                 environmentVariables[$"{keyPrefix}AllowWebApiToBeAuthorizedByACL"] = "true";
             }
 
+            // The scopes that this registration exposes, in the space-separated form that Microsoft.Identity.Web's
+            // RequiredScope attribute reads from AzureAd:Scopes. A disabled scope can't be requested, so it isn't required.
+            var exposedScopes = entra.Scopes.Where(static s => s.IsEnabled).Select(static s => s.Name).ToArray();
+            if (exposedScopes.Length > 0)
+            {
+                environmentVariables[$"{keyPrefix}Scopes"] = string.Join(' ', exposedScopes);
+            }
+
+            // The APIs that this registration declares permissions to, as Microsoft.Identity.Web DownstreamApis entries.
+            // The startup pipeline validates this too, but a consumer's environment can be resolved without it, such as in tests.
+            entra.ValidateApiAccess();
+            EntraIdApplicationResource.ValidateConsumerReferences(builder.Resource);
+            foreach (var downstreamApi in entra.ApiAccess.SelectMany(static a => a.GetDownstreamApis()))
+            {
+                var apiPrefix = $"{environmentVariablePrefix}{downstreamApi.Name}{separator}";
+                for (var i = 0; i < downstreamApi.Scopes.Count; i++)
+                {
+                    environmentVariables[$"{apiPrefix}Scopes{separator}{i}"] = downstreamApi.Scopes[i];
+                }
+
+                if (downstreamApi.BaseUrl is not null)
+                {
+                    environmentVariables[$"{apiPrefix}BaseUrl"] = downstreamApi.BaseUrl;
+                }
+
+                if (downstreamApi.RequestAppToken)
+                {
+                    environmentVariables[$"{apiPrefix}RequestAppToken"] = "true";
+                }
+            }
+
             // Extra query parameters
             foreach (var kvp in entra.ExtraQueryParameters)
             {
@@ -1705,7 +2262,7 @@ public static class EntraIdResourceExtensions
             if (!isDotnetProgram)
             {
                 environmentVariables = environmentVariables.ToDictionary(
-                    kvp => JsonNamingPolicy.SnakeCaseUpper.ConvertName(EnvironmentVariableNameEncoder.Encode(kvp.Key)),
+                    kvp => EntraIdReferenceAnnotation.ToEnvironmentVariableName(isDotnetProgram, kvp.Key),
                     kvp => kvp.Value);
             }
 

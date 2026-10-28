@@ -4,6 +4,8 @@
 #pragma warning disable ASPIREPIPELINES001 // Existing registrations remove the framework's provisioning annotations.
 #pragma warning disable ASPIREAZURE003 // Tenant-scoped resource annotations are experimental.
 
+using System.IO.Hashing;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.EntraId.Provisioning;
 using Aspire.Hosting.Pipelines;
@@ -76,6 +78,31 @@ public class EntraIdApplicationResource : AzureProvisioningResource
         }));
 
         _provisioningAnnotations = [.. Annotations.Where(annotation => annotation is PipelineStepAnnotation or PipelineConfigurationAnnotation)];
+    }
+
+    private bool _hasApiAccessValidation;
+
+    // Consumers and API permissions are only complete once the model is built, so the check runs before anything starts. The step is added
+    // with the first declaration, not up front, so a registration that declares nothing keeps no pipeline steps, as an existing one must.
+    internal void EnsureApiAccessValidation()
+    {
+        if (_hasApiAccessValidation)
+        {
+            return;
+        }
+
+        _hasApiAccessValidation = true;
+        Annotations.Add(new PipelineStepAnnotation(_ => new PipelineStep
+        {
+            Name = $"validate-{Name}-api-access",
+            Description = $"Validates the API permissions that Entra ID application {Name} declares.",
+            Action = _ =>
+            {
+                ValidateApiAccess();
+                return Task.CompletedTask;
+            },
+            RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+        }));
     }
 
     internal bool IsExistingApplication { get; private set; }
@@ -178,6 +205,110 @@ public class EntraIdApplicationResource : AzureProvisioningResource
 
     // Consumers are recorded as they reference the registration so that each one's own identity can be trusted.
     internal List<IResource> Consumers { get; } = [];
+
+    // A scope can still be disabled after WithApiPermissions or WithPreAuthorizedApplication accepted it, because EntraIdScope.IsEnabled is settable.
+    // Emitting such a reference would leave a client requesting a scope that the API no longer lets anyone request, so the references are checked
+    // again once the model is complete. Only the registration's own declarations are checked: each registration checks the ones it makes.
+    internal void ValidateScopeReferences()
+    {
+        foreach (var access in ApiAccess.Where(static a => a.Application is not null))
+        {
+            foreach (var scope in access.Declared.Select(static p => p.Scope).OfType<EntraIdScope>().Where(static s => !s.IsEnabled))
+            {
+                throw new InvalidOperationException(
+                    $"'{Name}' declares permissions to the scope '{scope.Name}' of '{access.DisplayName}', but the scope is disabled, so clients can't request it. " +
+                    $"Remove it from WithApiPermissions (and WithAdminConsent) on '{Name}', or enable the scope.");
+            }
+        }
+
+        foreach (var preAuthorized in PreAuthorizedClients)
+        {
+            foreach (var scope in preAuthorized.Scopes.Where(static s => !s.IsEnabled))
+            {
+                throw new InvalidOperationException(
+                    $"'{Name}' pre-authorizes '{preAuthorized.Client.Name}' for the scope '{scope.Name}', but the scope is disabled, so clients can't request it. " +
+                    $"Remove it from WithPreAuthorizedApplication on '{Name}', or enable the scope.");
+            }
+        }
+    }
+
+    // Checks that the DownstreamApis entries that the registration's consumers receive can be built and are distinct. Only the
+    // resources that reference this registration get entries, and an entry is named after a resource that references the API, so
+    // this can only be checked once the whole model exists. Both the startup pipeline and the consumers' environment run it.
+    internal void ValidateApiAccess()
+    {
+        ValidateScopeReferences();
+
+        if (Consumers.Count == 0)
+        {
+            return;
+        }
+
+        var entries = new Dictionary<string, EntraIdApiAccess>(StringComparer.OrdinalIgnoreCase);
+        foreach (var access in ApiAccess)
+        {
+            if (access.Application is { IsExistingApplication: true, ApplicationIdUri: null } existingApi)
+            {
+                throw new InvalidOperationException(
+                    $"'{Name}' declares permissions to the existing registration '{existingApi.Name}', but its application ID URI is not configured, " +
+                    $"so the scope names to request can't be built. Call WithApplicationIdUri on '{existingApi.Name}' with the URI that it defines.");
+            }
+
+            foreach (var entry in access.GetDownstreamApis())
+            {
+                if (entries.TryAdd(entry.Name, access))
+                {
+                    continue;
+                }
+
+                var other = entries[entry.Name];
+                throw new InvalidOperationException(access.Application is not null && other.Application is not null
+                    ? $"'{Name}' declares permissions to the registrations '{other.DisplayName}' and '{access.DisplayName}', and both would be configured as the " +
+                      $"DownstreamApis entry '{entry.Name}', the name of a resource that references both. An entry holds the scopes of one API, so the consumer " +
+                      $"couldn't tell them apart, and one token request can't cover both. Reference '{other.DisplayName}' and '{access.DisplayName}' from different resources."
+                    : $"'{Name}' declares permissions to '{other.DisplayName}' and '{access.DisplayName}', which would both be configured as the DownstreamApis entry " +
+                      $"'{entry.Name}'. An entry is named after a resource that references the API's registration, or after the display name of an API created with " +
+                      $"EntraIdApi.FromApplicationId. Rename the resource, or give the API a different display name.");
+            }
+        }
+
+        foreach (var consumer in Consumers)
+        {
+            ValidateConsumerReferences(consumer);
+        }
+    }
+
+    // A resource can reference several registrations. Entries that different registrations write to the same environment variable
+    // would overwrite each other's scopes one by one, and leave behind the higher indexes of the longer list, mixing the permissions
+    // of two identities. The check compares the names that the consumer receives, because a non-.NET resource gets encoded, upper snake
+    // case names: the prefixes "A"/"B-C" and "A_B"/"C", or the entries "orders-api" and "ordersApi", become the same variable. A .NET
+    // program's DownstreamApis section is the same whatever the connection name, so references clash there most easily.
+    internal static void ValidateConsumerReferences(IResource consumer)
+    {
+        var owners = new Dictionary<string, (EntraIdApplicationResource Source, string Entry, string Prefix)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var reference in consumer.Annotations.OfType<EntraIdReferenceAnnotation>())
+        {
+            var separator = reference.IsDotnetProgram ? "__" : "_";
+            foreach (var entry in reference.Source.ApiAccess.SelectMany(static a => a.GetDownstreamApis()))
+            {
+                // Every variable of an entry starts with this name, so a clash of the first scope is a clash of the entry.
+                var key = reference.GetEnvironmentVariableName($"{reference.EnvironmentVariablePrefix}{entry.Name}{separator}Scopes{separator}0");
+                if (!owners.TryGetValue(key, out var other) || (ReferenceEquals(other.Source, reference.Source) && other.Entry == entry.Name))
+                {
+                    owners[key] = (reference.Source, entry.Name, reference.DownstreamApisPrefix);
+                    continue;
+                }
+
+                throw new InvalidOperationException(other.Entry == entry.Name
+                    ? $"'{consumer.Name}' references the Entra ID applications '{other.Source.Name}' and '{reference.Source.Name}', and both declare permissions to an API that is configured as " +
+                      $"the DownstreamApis entry '{entry.Name}' under '{reference.DownstreamApisPrefix}', so their scopes would be mixed. Pass a different downstreamApisPrefix " +
+                      $"to WithReference for one of them."
+                    : $"'{consumer.Name}' would receive the DownstreamApis entries '{other.Entry}' (of '{other.Source.Name}') and '{entry.Name}' (of '{reference.Source.Name}') as the same " +
+                      $"environment variable, '{key}', so their scopes would be mixed. Rename a resource that references the API, give an API created with " +
+                      $"EntraIdApi.FromApplicationId a different display name, or pass a different downstreamApisPrefix to WithReference for one of the references.");
+            }
+        }
+    }
 
     internal void ValidateComputeTargets()
     {
@@ -357,7 +488,15 @@ public class EntraIdApplicationResource : AzureProvisioningResource
         {
             application.AppRoles = [.. resource.AppRoles.Select(role => CreateAppRole(resource, role))];
         }
+
+        resource.ValidateScopeReferences();
+
+        // Names for the API access settings are allocated against everything that the template already declares.
+        var symbolNames = new EntraIdSymbolNames(infrastructure);
+        EntraIdApiProvisioning.ConfigureRequiredResourceAccess(resource, infrastructure, symbolNames, application);
         infrastructure.Add(application);
+
+        var applicationIdUri = EntraIdApiProvisioning.ConfigureExposedApi(resource, infrastructure, symbolNames, application, registrationName);
 
         var servicePrincipal = new MicrosoftGraphServicePrincipal("servicePrincipal")
         {
@@ -369,6 +508,8 @@ public class EntraIdApplicationResource : AzureProvisioningResource
             servicePrincipal.Owners = CreateOwnerList(infrastructure, resource.ServicePrincipalOwners, "servicePrincipalOwner");
         }
         infrastructure.Add(servicePrincipal);
+
+        EntraIdApiProvisioning.ConfigureGrants(resource, infrastructure, symbolNames, servicePrincipal);
 
         // A symbol name must not collide with another symbol in the template, such as a user-supplied redirect URI
         // parameter named "web-identity-principalId" and an identity named "web-identity". Parameters and resources share
@@ -411,6 +552,10 @@ public class EntraIdApplicationResource : AzureProvisioningResource
         infrastructure.Add(new ProvisioningOutput(EntraIdBicepConstants.ObjectIdOutputName, typeof(string)) { Value = application.Id.ToBicepExpression() });
         infrastructure.Add(new ProvisioningOutput(EntraIdBicepConstants.ServicePrincipalIdOutputName, typeof(string)) { Value = servicePrincipal.Id.ToBicepExpression() });
         infrastructure.Add(new ProvisioningOutput(EntraIdBicepConstants.UniqueNameOutputName, typeof(string)) { Value = application.UniqueName.ToBicepExpression() });
+        if (applicationIdUri is not null)
+        {
+            infrastructure.Add(new ProvisioningOutput(EntraIdBicepConstants.ApplicationIdUriOutputName, typeof(string)) { Value = applicationIdUri });
+        }
     }
 
     private static string AllocateSymbolName(HashSet<string> usedSymbolNames, string name)
@@ -633,6 +778,105 @@ public class EntraIdApplicationResource : AzureProvisioningResource
     /// allowing client credentials flow callers to be authorized by an Access Control List.
     /// </remarks>
     public bool AllowWebApiToBeAuthorizedByACL { get; set; }
+
+    // ── Exposed API ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Gets the application ID URI that identifies this registration as an API, when one was set explicitly.
+    /// </summary>
+    /// <remarks>
+    /// This is <see langword="null"/> when the registration uses the default <c>api://{clientId}</c> URI, which is known only after
+    /// the registration is created. Use <see cref="GetScopeUri(string)"/> to refer to a scope's full URI in either case.
+    /// </remarks>
+    public string? ApplicationIdUri { get; internal set; }
+
+    internal bool UsesDefaultApplicationIdUri { get; set; }
+
+    /// <summary>
+    /// Gets the delegated permission scopes that this registration exposes.
+    /// </summary>
+    public IReadOnlyList<EntraIdScope> Scopes => _scopes;
+
+    private readonly List<EntraIdScope> _scopes = [];
+
+    internal List<EntraIdPreAuthorizedClient> PreAuthorizedClients { get; } = [];
+
+    internal List<EntraIdApiAccess> ApiAccess { get; } = [];
+
+    internal bool HasApplicationIdUri => ApplicationIdUri is not null || UsesDefaultApplicationIdUri || _scopes.Count > 0;
+
+    /// <summary>
+    /// Gets the application ID URI produced when the registration is provisioned with an application ID URI.
+    /// </summary>
+    public BicepOutputReference ApplicationIdUriOutputReference => new(EntraIdBicepConstants.ApplicationIdUriOutputName, this);
+
+    internal BicepOutputReference ServicePrincipalIdOutputReference => new(EntraIdBicepConstants.ServicePrincipalIdOutputName, this);
+
+    internal object? ApplicationIdUriValue => ApplicationIdUri is { } uri
+        ? uri
+        : IsExistingApplication
+            ? null
+            : ApplicationIdUriOutputReference;
+
+    /// <summary>
+    /// Gets an expression for the full URI of one of this registration's scopes, such as <c>api://{clientId}/access_as_user</c>.
+    /// </summary>
+    /// <param name="scopeName">The name of a scope added with <c>WithScope</c>.</param>
+    /// <returns>An expression that resolves when the registration's application ID URI is known.</returns>
+    /// <exception cref="ArgumentException">The registration does not expose a scope with that name.</exception>
+    /// <exception cref="InvalidOperationException">The registration is an existing registration without an application ID URI.</exception>
+    /// <remarks>
+    /// Clients request the full URI as the token scope, for example in Microsoft.Identity.Web's <c>DownstreamApis</c> configuration.
+    /// </remarks>
+    public ReferenceExpression GetScopeUri(string scopeName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(scopeName);
+
+        if (!_scopes.Any(s => string.Equals(s.Name, scopeName, StringComparison.Ordinal)))
+        {
+            throw new ArgumentException($"'{Name}' does not expose a scope named '{scopeName}'. Add it with WithScope first.", nameof(scopeName));
+        }
+
+        return CreateScopeValue(scopeName);
+    }
+
+    internal void AddScope(EntraIdScope scope) => _scopes.Add(scope);
+
+    // The scope's full name, as a client requests it in a token request. An existing registration can use any application ID URI,
+    // so one that isn't configured can't be guessed: a made-up URI would only fail later, as a token error.
+    internal ReferenceExpression CreateScopeValue(string scope) => ApplicationIdUriValue switch
+    {
+        string uri => ReferenceExpression.Create($"{EntraIdApi.CreateScope(uri, scope)}"),
+        BicepOutputReference output => ReferenceExpression.Create($"{output}/{scope}"),
+        _ => throw CreateMissingApplicationIdUriException()
+    };
+
+    internal InvalidOperationException CreateMissingApplicationIdUriException() =>
+        new($"The application ID URI of '{Name}' is not configured. Call WithApplicationIdUri with the URI that the registration defines.");
+
+    // Scope IDs must not change between deployments, and Graph rejects a request that drops an enabled scope, so a
+    // random ID is not an option. Deriving the ID from the registration and scope names also gives every tenant the same IDs.
+    internal Guid GetScopeId(EntraIdScope scope)
+    {
+        if (scope.Id is { } id)
+        {
+            return id;
+        }
+
+        if (IsExistingApplication)
+        {
+            throw new InvalidOperationException(
+                $"The ID of scope '{scope.Name}' of the existing registration '{Name}' is unknown. Set EntraIdScope.Id to the ID that the registration defines.");
+        }
+
+        Span<byte> hash = stackalloc byte[16];
+        XxHash128.Hash(Encoding.UTF8.GetBytes($"{Name}/{scope.Name}"), hash);
+
+        // Mark the GUID as RFC 9562 version 8 (custom) with the standard variant.
+        hash[6] = (byte)((hash[6] & 0x0F) | 0x80);
+        hash[8] = (byte)((hash[8] & 0x3F) | 0x80);
+        return new Guid(hash, bigEndian: true);
+    }
 
     // ── Query parameters ───────────────────────────────────────────────────
 
