@@ -1,4 +1,4 @@
-import { createBuilder, DeploymentScope, EntraIdSignInAudience, refExpr } from './.aspire/modules/aspire.mjs';
+import { createBuilder, DeploymentScope, EntraIdPermissionType, EntraIdSignInAudience, EntraIdWellKnownApi, refExpr } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
@@ -172,5 +172,42 @@ await container.withReference(createdEntra);
 await createdEntra.publishWithFederatedManagedIdentityCredential();
 await createdEntra.publishWithFederatedManagedIdentityCredential({ identity: container });
 await createdEntra.publishWithFederatedManagedIdentityCredential({ identity });
+
+const apiEntra = await builder.addEntraIdApplication("api-entra");
+await apiEntra.withApplicationIdUri();
+await apiEntra.withApplicationIdUri({ applicationIdUri: "api://contoso-orders" });
+await apiEntra.withScope("access_as_user", "Allows the app to call the API.");
+await apiEntra.withScope("admin", "Allows the app to administer the API.", {
+    displayName: "Administer",
+    userConsentDisplayName: "Administer on your behalf",
+    userConsentDescription: "Allows the app to administer the API for you.",
+    requiresAdminConsent: true,
+    isEnabled: false,
+    id: "11112222-aaaa-3333-bbbb-4444cccc5555",
+});
+const scopeUri = await apiEntra.getScopeUri("access_as_user");
+await container.withEnvironment("API_SCOPE", scopeUri);
+const preAuthorizedEntra = await builder.addEntraIdApplication("pre-authorized-entra");
+await apiEntra.withPreAuthorizedApplication(preAuthorizedEntra, ["access_as_user"]);
+
+await createdEntra.withApiPermissions(apiEntra, ["access_as_user"]);
+await createdEntra.withAdminConsent(apiEntra, ["access_as_user"]);
+await createdEntra.withExternalApiPermissions(EntraIdWellKnownApi.MicrosoftGraph, [
+    { name: "User.Read" },
+    { name: "User.Read.All", type: EntraIdPermissionType.Application },
+]);
+await createdEntra.withExternalApiPermissions(
+    {
+        displayName: "Contoso API",
+        applicationId: "99998888-aaaa-7777-bbbb-6666cccc5555",
+        resourceUri: "api://contoso",
+        baseUrl: "https://contoso.example",
+    },
+    [{ name: "items.read", id: "22223333-aaaa-4444-bbbb-5555cccc6666" }]);
+await createdEntra.withExternalApiAdminConsent(EntraIdWellKnownApi.MicrosoftGraph, [
+    { name: "User.Read" },
+    { name: "User.Read.All", type: EntraIdPermissionType.Application },
+]);
+await executable.withEntraIdReference(createdEntra, { connectionName: "AUTH", downstreamApisPrefix: "Apis" });
 
 await builder.build().run();

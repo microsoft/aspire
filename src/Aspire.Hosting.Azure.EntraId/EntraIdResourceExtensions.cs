@@ -1610,6 +1610,7 @@ public static partial class EntraIdResourceExtensions
     /// <see cref="WithApplicationIdUri(IResourceBuilder{EntraIdApplicationResource}, string)"/> with the URI it already has.
     /// </para>
     /// </remarks>
+    [AspireExportIgnore(Reason = "The withApplicationIdUri export accepts an optional URI.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithApplicationIdUri(
         this IResourceBuilder<EntraIdApplicationResource> builder)
     {
@@ -1646,6 +1647,7 @@ public static partial class EntraIdResourceExtensions
     /// <see cref="EntraIdApplicationResource.GetScopeUri(string)"/> uses the URI to build scope names for callers.
     /// </para>
     /// </remarks>
+    [AspireExportIgnore(Reason = "The withApplicationIdUri export accepts an optional URI.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithApplicationIdUri(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string applicationIdUri)
@@ -1695,6 +1697,7 @@ public static partial class EntraIdResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "The withScope export takes the scope options as a DTO instead of a callback.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithScope(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string name,
@@ -1752,6 +1755,7 @@ public static partial class EntraIdResourceExtensions
     /// <c>WithAdminConsent</c> on the client, or pre-authorization alone. This setting only affects registrations created by Aspire.
     /// </para>
     /// </remarks>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithPreAuthorizedApplication(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         IResourceBuilder<EntraIdApplicationResource> client,
@@ -1807,6 +1811,7 @@ public static partial class EntraIdResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithApiPermissions(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         IResourceBuilder<EntraIdApplicationResource> api,
@@ -1861,6 +1866,7 @@ public static partial class EntraIdResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "EntraIdApi and EntraIdApiPermission are C# types. The withExternalApiPermissions export takes DTOs.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithApiPermissions(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         EntraIdApi api,
@@ -1911,6 +1917,7 @@ public static partial class EntraIdResourceExtensions
     /// is revoked by the next deployment. When no call remains for the pair, nothing is sent and the existing grant stays.
     /// </para>
     /// </remarks>
+    [AspireExport]
     public static IResourceBuilder<EntraIdApplicationResource> WithAdminConsent(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         IResourceBuilder<EntraIdApplicationResource> api,
@@ -1970,6 +1977,7 @@ public static partial class EntraIdResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "EntraIdApi and EntraIdApiPermission are C# types. The withExternalApiAdminConsent export takes DTOs.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithAdminConsent(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         EntraIdApi api,

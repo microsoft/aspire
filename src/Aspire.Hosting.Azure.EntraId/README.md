@@ -237,6 +237,37 @@ Each registration deploys as its own module. Pre-authorization makes the API's m
 
 Existing registrations are configuration only. On one, call `WithApplicationIdUri` and `WithScope` (with `EntraIdScope.Id` set to the ID the registration defines) so callers can declare permissions to it and build scope names with `GetScopeUri`. An existing client registration's declarations and consent aren't deployed.
 
+#### TypeScript
+
+The generated SDK exposes the same scopes, permissions, consent and pre-authorization. Optional arguments use an options object, and scope and permission names are passed as arrays:
+
+```typescript
+import { EntraIdPermissionType, EntraIdWellKnownApi } from './.aspire/modules/aspire.mjs';
+
+const entraApi = await builder.addEntraIdApplication("entra-api")
+    .withApplicationIdUri()
+    .withScope("Weather.Read", "Allows the app to read weather forecasts on behalf of the signed-in user.")
+    .withScope("Weather.Read.All", "Allows the app to read the forecasts of all users.", { requiresAdminConsent: true });
+
+const entraWeb = await builder.addEntraIdApplication("entra-web")
+    .withApiPermissions(entraApi, ["Weather.Read"])
+    .withAdminConsent(entraApi, ["Weather.Read"])
+    .withExternalApiPermissions(EntraIdWellKnownApi.MicrosoftGraph, [
+        { name: "User.Read" },
+        { name: "User.Read.All", type: EntraIdPermissionType.Application },
+    ])
+    .withExternalApiAdminConsent(EntraIdWellKnownApi.MicrosoftGraph, [{ name: "User.Read" }]);
+
+const entraDaemon = await builder.addEntraIdApplication("entra-daemon");
+await entraApi.withPreAuthorizedApplication(entraDaemon, ["Weather.Read"]);
+
+const scopeUri = await entraApi.getScopeUri("Weather.Read");
+```
+
+`withExternalApiPermissions` and `withExternalApiAdminConsent` take a well-known API (`EntraIdWellKnownApi`) or a custom API, given as `{ displayName, applicationId, resourceUri, baseUrl }`. A permission is delegated unless its `type` is `EntraIdPermissionType.Application`. A permission that a well-known API doesn't list by name, and every permission of a custom API, needs its `id`. `withScope` takes `{ displayName, userConsentDisplayName, userConsentDescription, requiresAdminConsent, isEnabled, id }` as options.
+
+`withReference` uses the default `DownstreamApis` prefix. To change it, reference the registration with `withEntraIdReference(entraWeb, { connectionName, downstreamApisPrefix })` instead.
+
 ### Assign explicit owners
 
 By default Aspire assigns no owners, so Microsoft Entra's default ownership behavior applies. To opt in, pass directory object IDs (users or service principals) as literals or parameters. Application and service principal ownership are configured separately:

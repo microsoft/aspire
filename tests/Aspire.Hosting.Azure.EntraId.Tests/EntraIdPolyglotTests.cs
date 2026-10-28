@@ -240,6 +240,159 @@ public class EntraIdPolyglotTests
     }
 
     [Fact]
+    public void ApiExports_MatchTheCSharpModel()
+    {
+        var scopeId = new Guid("11112222-aaaa-3333-bbbb-4444cccc5555");
+        var permissionId = new Guid("22223333-aaaa-4444-bbbb-5555cccc6666");
+        var customApi = new EntraIdCustomApi
+        {
+            DisplayName = "Contoso API",
+            ApplicationId = "99998888-aaaa-7777-bbbb-6666cccc5555",
+            ResourceUri = "api://contoso",
+            BaseUrl = "https://contoso.example"
+        };
+
+        using var exported = TestDistributedApplicationBuilder.Create();
+        var exportedApi = exported.AddEntraIdApplication("entra-api")
+            .WithApplicationIdUriForExport()
+            .WithScopeForExport("access_as_user", "Allows the app to call the API.")
+            .WithScopeForExport("admin", "Administer the API.", new EntraIdScopeOptions
+            {
+                DisplayName = "Administer",
+                UserConsentDisplayName = "Administer for you",
+                UserConsentDescription = "Administer on your behalf.",
+                RequiresAdminConsent = true,
+                IsEnabled = false,
+                Id = scopeId.ToString()
+            });
+        var exportedClient = exported.AddEntraIdApplication("entra-client");
+        var exportedWeb = exported.AddEntraIdApplication("entra-web")
+            .WithApiPermissions(exportedApi, "access_as_user")
+            .WithExternalApiPermissionsForExport(EntraIdWellKnownApi.MicrosoftGraph,
+            [
+                new EntraIdExternalApiPermission { Name = "User.Read" },
+                new EntraIdExternalApiPermission { Name = "User.Read.All", Type = EntraIdPermissionType.Application }
+            ])
+            .WithExternalApiPermissionsForExport(customApi,
+            [
+                new EntraIdExternalApiPermission { Name = "items.read", Id = permissionId.ToString() },
+                new EntraIdExternalApiPermission { Name = "items.write", Type = EntraIdPermissionType.Application, Id = permissionId.ToString() }
+            ])
+            .WithAdminConsent(exportedApi, "access_as_user")
+            .WithExternalApiAdminConsentForExport(EntraIdWellKnownApi.MicrosoftGraph,
+            [
+                new EntraIdExternalApiPermission { Name = "User.Read" },
+                new EntraIdExternalApiPermission { Name = "User.Read.All", Type = EntraIdPermissionType.Application }
+            ]);
+        exportedApi.WithPreAuthorizedApplication(exportedClient, "access_as_user");
+
+        using var native = TestDistributedApplicationBuilder.Create();
+        var nativeApi = native.AddEntraIdApplication("entra-api")
+            .WithApplicationIdUri()
+            .WithScope("access_as_user", "Allows the app to call the API.")
+            .WithScope("admin", "Administer the API.", scope =>
+            {
+                scope.DisplayName = "Administer";
+                scope.UserConsentDisplayName = "Administer for you";
+                scope.UserConsentDescription = "Administer on your behalf.";
+                scope.RequiresAdminConsent = true;
+                scope.IsEnabled = false;
+                scope.Id = scopeId;
+            });
+        var nativeClient = native.AddEntraIdApplication("entra-client");
+        var nativeCustomApi = EntraIdApi.FromApplicationId("Contoso API", customApi.ApplicationId, "api://contoso", "https://contoso.example");
+        var nativeWeb = native.AddEntraIdApplication("entra-web")
+            .WithApiPermissions(nativeApi, "access_as_user")
+            .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read"), EntraIdApiPermission.Application("User.Read.All"))
+            .WithApiPermissions(nativeCustomApi,
+                EntraIdApiPermission.Delegated("items.read", permissionId),
+                EntraIdApiPermission.Application("items.write", permissionId))
+            .WithAdminConsent(nativeApi, "access_as_user")
+            .WithAdminConsent(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read"), EntraIdApiPermission.Application("User.Read.All"));
+        nativeApi.WithPreAuthorizedApplication(nativeClient, "access_as_user");
+
+        Assert.Equal(nativeApi.Resource.GetBicepTemplateString(), exportedApi.Resource.GetBicepTemplateString());
+        Assert.Equal(nativeWeb.Resource.GetBicepTemplateString(), exportedWeb.Resource.GetBicepTemplateString());
+    }
+
+    [Fact]
+    public async Task ApiExports_ExistingRegistrationsFlowToConsumerConfiguration()
+    {
+        static async Task<Dictionary<string, string>> Evaluate(bool export)
+        {
+            using var builder = TestDistributedApplicationBuilder.Create();
+            var scopeId = new Guid("11112222-aaaa-3333-bbbb-4444cccc5555");
+            var api = builder.AddExistingEntraApplicationForExport("entra-api", TenantId, ClientId);
+            var web = builder.AddExistingEntraApplicationForExport("entra-web", TenantId, "22223333-aaaa-4444-bbbb-5555cccc6666");
+            var consumer = builder.AddContainer("consumer", "image");
+            var permission = new EntraIdExternalApiPermission { Name = "User.Read" };
+
+            if (export)
+            {
+                api.WithApplicationIdUriForExport("api://contoso-orders")
+                    .WithScopeForExport("orders.read", "Read orders.", new EntraIdScopeOptions { Id = scopeId.ToString() });
+                web.WithApiPermissions(api, "orders.read")
+                    .WithExternalApiPermissionsForExport(EntraIdWellKnownApi.MicrosoftGraph, [permission]);
+                consumer.WithEntraIdReferenceForExport(web, "AUTH", "Apis");
+            }
+            else
+            {
+                api.WithApplicationIdUri("api://contoso-orders")
+                    .WithScope("orders.read", "Read orders.", scope => scope.Id = scopeId);
+                web.WithApiPermissions(api, "orders.read")
+                    .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read"));
+                consumer.WithReference(web, "AUTH", "Apis");
+            }
+
+            return await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+                consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+        }
+
+        var exported = await Evaluate(export: true);
+        Assert.Equal(await Evaluate(export: false), exported);
+        Assert.Contains(exported, e => e.Value == "api://contoso-orders/orders.read");
+        Assert.Contains(exported, e => e.Value == "https://graph.microsoft.com/User.Read");
+        Assert.DoesNotContain(exported.Keys, k => k.Contains("DOWNSTREAM", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ApiExports_GetScopeUriReturnsTheDeferredScopeName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var api = builder.AddExistingEntraApplicationForExport("entra-api", TenantId, ClientId)
+            .WithApplicationIdUriForExport("api://contoso-orders")
+            .WithScopeForExport("orders.read", "Read orders.", new EntraIdScopeOptions { Id = "11112222-aaaa-3333-bbbb-4444cccc5555" });
+
+        Assert.Equal("api://contoso-orders/orders.read", await api.GetScopeUriForExport("orders.read").GetValueAsync(default));
+        Assert.Throws<ArgumentException>(() => api.GetScopeUriForExport("unknown"));
+    }
+
+    [Fact]
+    public void ApiExports_RejectInvalidInputsWithoutMutation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var api = builder.AddEntraIdApplication("entra-api").WithScopeForExport("access_as_user", "Allows access.");
+        var web = builder.AddEntraIdApplication("entra-web");
+        var permission = new EntraIdExternalApiPermission { Name = "User.Read" };
+
+        Assert.Throws<ArgumentException>(() => api.WithScopeForExport("other", "Other.", new EntraIdScopeOptions { Id = "not-a-guid" }));
+        Assert.Throws<ArgumentException>(() => api.WithScopeForExport("access_as_user", "Duplicate."));
+        Assert.Throws<ArgumentException>(() => api.WithApplicationIdUriForExport("not a uri"));
+        Assert.Single(api.Resource.Scopes);
+
+        Assert.Throws<ArgumentException>(() => web.WithExternalApiPermissionsForExport(42, [permission]));
+        Assert.Throws<ArgumentException>(() => web.WithExternalApiPermissionsForExport(EntraIdWellKnownApi.MicrosoftGraph, []));
+        Assert.Throws<ArgumentException>(() => web.WithExternalApiPermissionsForExport(EntraIdWellKnownApi.MicrosoftGraph, [new EntraIdExternalApiPermission { Name = "Unknown.Permission" }]));
+        Assert.Throws<ArgumentException>(() => web.WithExternalApiPermissionsForExport(EntraIdWellKnownApi.MicrosoftGraph, [new EntraIdExternalApiPermission { Name = "User.Read", Id = "not-a-guid" }]));
+        Assert.Throws<ArgumentException>(() => web.WithExternalApiPermissionsForExport(
+            new EntraIdCustomApi { DisplayName = "Contoso", ApplicationId = "not-a-guid", ResourceUri = "api://contoso" }, [permission]));
+        Assert.Empty(web.Resource.ApiAccess);
+
+        Assert.Throws<InvalidOperationException>(() => web.WithExternalApiAdminConsentForExport(EntraIdWellKnownApi.MicrosoftGraph, [permission]));
+        Assert.Throws<ArgumentException>(() => web.WithApiPermissions(api, "unknown"));
+    }
+
+    [Fact]
     public void RedirectsAndOwners_RejectInvalidUnionInputs()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
