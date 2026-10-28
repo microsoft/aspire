@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Test/CI-only change",
+  "mergedAt": "2026-10-28T16:36:25Z",
+  "number": 21189,
+  "runDate": "2026-10-28T18:05:00Z",
+  "status": "excluded",
+  "title": "Add Go AppHost CLI end-to-end tests and a PolyglotGo image"
+}

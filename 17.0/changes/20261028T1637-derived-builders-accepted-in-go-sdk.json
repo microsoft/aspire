@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The generated Go SDK now accepts builders of derived resource types where a base resource type is expected.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\uddec",
+  "firstMergedAt": "2026-10-28T16:37:30Z",
+  "lastMergedAt": "2026-10-28T16:37:30Z",
+  "name": "Derived builders accepted in Go SDK",
+  "owner": "IEvangelist",
+  "prs": [
+    21199
+  ]
+}

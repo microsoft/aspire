@@ -1,0 +1,19 @@
+{
+  "area": "Templates",
+  "areaEmoji": "\ud83d\udcc4",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "New Go AppHosts are gofmt-clean, the generated .aspire SDK is git-ignored, line endings are consistent on Windows, and launch profile ports avoid the Windows dynamic port range.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\uddf9",
+  "firstMergedAt": "2026-10-28T16:37:14Z",
+  "lastMergedAt": "2026-10-28T16:37:14Z",
+  "name": "Cleaner Go AppHost scaffolding",
+  "owner": "IEvangelist",
+  "prs": [
+    21193
+  ]
+}

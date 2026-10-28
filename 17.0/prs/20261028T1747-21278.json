@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Entra API scopes",
+  "mergedAt": "2026-10-28T17:47:31Z",
+  "number": 21278,
+  "runDate": "2026-10-28T18:05:00Z",
+  "status": "included",
+  "title": "Provision Entra API identifier URIs, scopes, and caller permissions"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Go callback panic fix",
+  "mergedAt": "2026-10-28T16:37:27Z",
+  "number": 21188,
+  "runDate": "2026-10-28T18:05:00Z",
+  "status": "included",
+  "title": "Fix Go AppHost panic on callback options and accept Go numbers in unions"
+}

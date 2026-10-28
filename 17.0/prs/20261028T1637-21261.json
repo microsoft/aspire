@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Go nil builder fix",
+  "mergedAt": "2026-10-28T16:37:34Z",
+  "number": 21261,
+  "runDate": "2026-10-28T18:05:00Z",
+  "status": "included",
+  "title": "Fix nil resource builder in Go AppHost callbacks"
+}

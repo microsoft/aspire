@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Go derived builders",
+  "mergedAt": "2026-10-28T16:37:30Z",
+  "number": 21199,
+  "runDate": "2026-10-28T18:05:00Z",
+  "status": "included",
+  "title": "Accept derived builders where the Go SDK takes a base resource type"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "WithAzureFrontDoorPrivateLink lets an AppHost reach an Azure Container Apps environment through an Azure Front Door Private Link, disabling public network access on the environment.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udd17",
+  "firstMergedAt": "2026-10-28T15:58:25Z",
+  "lastMergedAt": "2026-10-28T15:58:25Z",
+  "name": "Front Door Private Link for Container Apps",
+  "owner": "eerhardt",
+  "prs": [
+    21228
+  ]
+}

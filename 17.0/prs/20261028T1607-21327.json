@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Test/CI-only change",
+  "mergedAt": "2026-10-28T16:07:30Z",
+  "number": 21327,
+  "runDate": "2026-10-28T18:05:00Z",
+  "status": "excluded",
+  "title": "Fix Azure Functions Node debugger E2E startup race"
+}

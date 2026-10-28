@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Front Door Private Link",
+  "mergedAt": "2026-10-28T15:58:25Z",
+  "number": 21228,
+  "runDate": "2026-10-28T18:05:00Z",
+  "status": "included",
+  "title": "Add Azure Front Door Private Link support for Azure Container Apps"
+}

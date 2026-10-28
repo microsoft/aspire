@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Provision Entra API application ID URIs, delegated scopes and caller permissions so a web app can call a protected API through generated Graph Bicep.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udee1\ufe0f",
+  "firstMergedAt": "2026-10-28T17:47:31Z",
+  "lastMergedAt": "2026-10-28T17:47:31Z",
+  "name": "Entra API identifier URIs, scopes and caller permissions",
+  "owner": "eerhardt",
+  "prs": [
+    21278
+  ]
+}

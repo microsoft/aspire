@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Entra app roles",
+  "mergedAt": "2026-10-28T15:31:53Z",
+  "number": 21357,
+  "runDate": "2026-10-28T18:05:00Z",
+  "status": "included",
+  "title": "Declare Entra application roles on provisioned registrations"
+}
