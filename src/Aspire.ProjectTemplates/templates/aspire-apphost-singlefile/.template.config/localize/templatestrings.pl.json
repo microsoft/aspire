@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Host AppHost z jednym plikiem platformy Aspire",
   "description": "Minimalna wersja hosta Aspire AppHost dla scenariuszy z pojedynczym plikiem (co najmniej .NET 10).",

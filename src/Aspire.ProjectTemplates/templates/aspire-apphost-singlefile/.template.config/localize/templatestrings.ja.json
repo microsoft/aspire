@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire 単一ファイル アプリ ホスト",
   "description": "単一ファイル シナリオ向けの最小構成の Aspire AppHost (.NET 10 以降)。",
