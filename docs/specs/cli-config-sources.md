@@ -186,7 +186,6 @@ For example, after applying a source that supplies named skill sources:
     "appliedVersion": "<source-file-version>"
   },
   "skillSources": {
-    "default": {},
     "platform": {
       "repository": "https://git.acme.example/platform-skills",
       "ref": "main"
@@ -415,7 +414,6 @@ Skills and integrations are acquired according to the application's saved config
 ```json
 {
   "skillSources": {
-    "default": {},
     "aspire1p": {
       "repository": "https://git.example.com/platform/skills.git",
       "marketplace": "aspire1p",

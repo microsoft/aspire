@@ -3,7 +3,7 @@
 
 using System.ComponentModel;
 using System.Text.Json.Serialization;
-using Aspire.Cli.Configuration;
+using Aspire.Cli.Git;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 
@@ -113,11 +113,7 @@ internal sealed class SkillSource
             {
                 throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.repository");
             }
-            try
-            {
-                new ConfigSource { Repository = source.RepositoryUrl, Path = "marketplace.json", Ref = source.Ref }.Validate();
-            }
-            catch (ConfigSourceException)
+            if (!GitSourceValidator.IsValidRepository(source.RepositoryUrl) || !GitSourceValidator.IsValidRef(source.Ref))
             {
                 throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.repository/ref");
             }

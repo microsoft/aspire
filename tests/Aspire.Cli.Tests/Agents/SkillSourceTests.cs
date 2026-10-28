@@ -58,6 +58,51 @@ public class SkillSourceTests(ITestOutputHelper output)
     }
 
     [Theory]
+    [InlineData("example/team", null)]
+    [InlineData("https://git.example.com/team/skills", "main")]
+    [InlineData("ssh://git@git.example.com/team/skills", "teams/preview")]
+    [InlineData("git@git.example.com:team/skills", "refs/heads/teams/preview")]
+    [InlineData("example/team", "0123456789abcdef0123456789abcdef01234567")]
+    [InlineData("example/team", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123")]
+    public void Resolve_AcceptsGitRepositoryAndRef(string repository, string? reference)
+    {
+        using var configuration = new ConfigurationManager();
+        configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["skillSources:default:repository"] = repository,
+            ["skillSources:default:ref"] = reference
+        });
+
+        var source = Assert.Single(SkillSource.Resolve(configuration));
+
+        Assert.Equal(repository, source.Repository);
+        Assert.Equal(reference, source.Ref);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("--upload-pack=command")]
+    [InlineData("HEAD")]
+    [InlineData("main~1")]
+    [InlineData("main:other")]
+    [InlineData("main..other")]
+    [InlineData("main@{1}")]
+    [InlineData("refs/tags/release")]
+    [InlineData("branch.lock")]
+    [InlineData("branch//child")]
+    [InlineData(".hidden/branch")]
+    [InlineData("branch\nother")]
+    public void Resolve_RejectsInvalidRefs(string reference)
+    {
+        using var configuration = new ConfigurationManager();
+        configuration["skillSources:default:ref"] = reference;
+
+        var error = Assert.Throws<InvalidOperationException>(() => SkillSource.Resolve(configuration));
+
+        Assert.Equal(AspireSkillsRemoteConfiguration.ExistingConfiguration("skillSources.default.repository/ref").Message, error.Message);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
