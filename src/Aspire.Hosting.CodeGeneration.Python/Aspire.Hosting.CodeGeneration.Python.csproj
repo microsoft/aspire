@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.Python.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
   </ItemGroup>
 
   <ItemGroup>

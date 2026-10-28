@@ -9,12 +9,12 @@
       </trans-unit>
       <trans-unit id="AllArgumentDescription">
         <source>Include all integrations, even those not marked compatible with the AppHost language</source>
-        <target state="new">Include all integrations, even those not marked compatible with the AppHost language</target>
+        <target state="translated">Incluir todas as integrações, mesmo aquelas não marcadas como compatíveis com a linguagem AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Add a hosting integration to the AppHost</source>
-        <target state="needs-review-translation">Adicione uma integração de hosting ao Aspire AppHost.</target>
+        <target state="translated">Adicione uma integração de hospedagem ao AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="ErrorOccurredWhileAddingPackage">
@@ -24,72 +24,72 @@
       </trans-unit>
       <trans-unit id="ErrorOccurredWhileSearchingIntegrations">
         <source>An error occurred while searching integrations: {0}</source>
-        <target state="new">An error occurred while searching integrations: {0}</target>
+        <target state="translated">Erro ao pesquisar integrações: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="new">Output format (Table or Json)</target>
+        <target state="translated">Formato de saída (Tabela ou Json)</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundIntegrationPackages">
         <source>Found {0} integration package(s).</source>
-        <target state="new">Found {0} integration package(s).</target>
+        <target state="translated">Pacotes {0} de integração encontrados.</target>
         <note>{0} is the number of integration packages found.</note>
       </trans-unit>
       <trans-unit id="FoundIntegrationPackagesMatchingSearchTerm">
         <source>Found {0} integration package(s) matching '{1}'.</source>
-        <target state="new">Found {0} integration package(s) matching '{1}'.</target>
+        <target state="translated">Foram {0} encontrados pacotes de integração correspondentes a '{1}'.</target>
         <note>{0} is the number of integration packages found, {1} is the search term provided by the user.</note>
       </trans-unit>
       <trans-unit id="HeaderName">
         <source>Name</source>
-        <target state="new">Name</target>
+        <target state="translated">Nome</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderPackage">
         <source>Package</source>
-        <target state="new">Package</target>
+        <target state="translated">Pacote</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderVersion">
         <source>Version</source>
-        <target state="new">Version</target>
+        <target state="translated">Versão</target>
         <note />
       </trans-unit>
       <trans-unit id="IntegrationArgumentDescription">
         <source>The name of the integration to add (e.g. redis, postgres)</source>
-        <target state="needs-review-translation">O nome da integração a ser adicionada (por exemplo, redis, postgres).</target>
+        <target state="translated">O nome da integração a ser adicionada (por exemplo, redis, postgres)</target>
         <note />
       </trans-unit>
       <trans-unit id="IntegrationCommandDescription">
         <source>Manage Aspire hosting integrations</source>
-        <target state="new">Manage Aspire hosting integrations</target>
+        <target state="translated">Gerenciar integrações de hospedagem do Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="IntegrationListDescription">
         <source>List available Aspire hosting integrations</source>
-        <target state="new">List available Aspire hosting integrations</target>
+        <target state="translated">Listar integrações de hospedagem do Aspire disponíveis</target>
         <note />
       </trans-unit>
       <trans-unit id="IntegrationNotPolyglotCompatible">
         <source>The '{0}' integration is not available for {1} AppHosts because it does not expose a compatible API surface. Use --all to add it anyway.</source>
-        <target state="new">The '{0}' integration is not available for {1} AppHosts because it does not expose a compatible API surface. Use --all to add it anyway.</target>
+        <target state="translated">A integração '{0}' não está disponível para {1} AppHosts porque não expõe uma superfície de API compatível. Use --all para adicioná-lo de qualquer maneira.</target>
         <note>{0} is the integration name, {1} is the AppHost language identifier.</note>
       </trans-unit>
       <trans-unit id="IntegrationSearchAppHostOptionDescription">
         <source>The Aspire AppHost project file, or a directory to search, for channel-aware integration discovery</source>
-        <target state="new">The Aspire AppHost project file, or a directory to search, for channel-aware integration discovery</target>
+        <target state="translated">O arquivo de projeto do Aspire AppHost ou um diretório a ser pesquisado para descobrir integrações compatíveis com o canal</target>
         <note />
       </trans-unit>
       <trans-unit id="IntegrationSearchDescription">
         <source>Search available Aspire hosting integrations</source>
-        <target state="new">Search available Aspire hosting integrations</target>
+        <target state="translated">Pesquisar integrações de hospedagem do Aspire disponíveis</target>
         <note />
       </trans-unit>
       <trans-unit id="IntegrationSearchQueryArgumentDescription">
         <source>The integration search query.</source>
-        <target state="new">The integration search query.</target>
+        <target state="translated">A consulta de pesquisa de integração.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
@@ -99,7 +99,7 @@
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesMatchedSearchTerm">
         <source>No integration packages matched '{0}'.</source>
-        <target state="new">No integration packages matched '{0}'.</target>
+        <target state="translated">Nenhum pacote de integração correspondeu a '{0}'.</target>
         <note>{0} is the search term provided by the user.</note>
       </trans-unit>
       <trans-unit id="NoPackagesFound">
@@ -114,12 +114,12 @@
       </trans-unit>
       <trans-unit id="NoPolyglotCompatibleIntegrationsFound">
         <source>No integrations compatible with this AppHost language were found. Use --all to list all integrations.</source>
-        <target state="new">No integrations compatible with this AppHost language were found. Use --all to list all integrations.</target>
+        <target state="translated">Nenhuma integração compatível com essa linguagem AppHost foi encontrada. Use --all para listar todas as integrações.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveRequiresExactPackageMatch">
         <source>No exact match was found for '{0}'. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package.</source>
-        <target state="new">No exact match was found for '{0}'. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package.</target>
+        <target state="translated">Nenhuma correspondência exata foi encontrada para '{0}'. No modo não interativo, o nome da integração deve corresponder exatamente a uma ID de pacote ou a um nome amigável; O fallback difuso está desabilitado para impedir a seleção silenciosa do pacote errado.</target>
         <note>{0} is the integration name provided by the user.</note>
       </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">
@@ -129,17 +129,17 @@
       </trans-unit>
       <trans-unit id="PackageInstallationFailed">
         <source>The package installation failed with exit code {0}.</source>
-        <target state="new">The package installation failed with exit code {0}.</target>
+        <target state="translated">A instalação do pacote falhou com o código de saída {0}.</target>
         <note>{0} is a number</note>
       </trans-unit>
       <trans-unit id="PolyglotIntegrationsHidden">
         <source>{0} integration(s) not compatible with this AppHost language were hidden. Use --all to show them.</source>
-        <target state="new">{0} integration(s) not compatible with this AppHost language were hidden. Use --all to show them.</target>
+        <target state="translated">{0} integração(s) não compatível com esta linguagem AppHost estavam ocultas. Use --all para exibi-los.</target>
         <note>{0} is the number of hidden integrations.</note>
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The Aspire AppHost project file, or a directory to search, to add the integration to</source>
-        <target state="needs-review-translation">O caminho para o arquivo de projeto ao qual adicionar a integração.</target>
+        <target state="translated">O arquivo de projeto do Aspire AppHost ou um diretório a ser pesquisado para adicionar a integração</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingForAspirePackages">
@@ -149,7 +149,7 @@
       </trans-unit>
       <trans-unit id="SearchingForSpecifiedPackageVersion">
         <source>Searching for version '{1}' of {0}...</source>
-        <target state="new">Searching for version '{1}' of {0}...</target>
+        <target state="translated">Procurando a versão '{1}' de {0}...</target>
         <note>{0} is the package name, {1} is the requested version.</note>
       </trans-unit>
       <trans-unit id="SelectAVersionOfPackage">
@@ -164,31 +164,31 @@
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
         <source>The NuGet source to use for the integration</source>
-        <target state="needs-review-translation">A fonte do NuGet a ser usada para a integração.</target>
+        <target state="translated">A fonte do NuGet a ser usada para a integração</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceWithCredentialsNotSupported">
         <source>The --source URL includes credentials, a query string, or a fragment. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
-        <target state="new">The --source URL includes credentials, a query string, or a fragment. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
+        <target state="translated">A URL --source inclui credenciais, uma cadeia de caracteres de consulta ou um fragmento. Configure credenciais com provedores de credenciais NuGet ou configuração NuGet no nível do usuário e, em seguida, passe a URL do feed sem segredos incorporados.</target>
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedVersionNotFoundForPackage">
         <source>The requested version '{1}' was not found for package '{0}'.</source>
-        <target state="new">The requested version '{1}' was not found for package '{0}'.</target>
+        <target state="translated">A versão solicitada '{1}' não foi encontrada para o pacote '{0}'.</target>
         <note>{0} is the package name, {1} is the requested version.</note>
       </trans-unit>
       <trans-unit id="SpecifiedVersionRequiresExactPackageMatch">
         <source>When --version is specified in non-interactive mode, the integration name must exactly match a package or friendly name. No exact match was found for '{0}'.</source>
-        <target state="new">When --version is specified in non-interactive mode, the integration name must exactly match a package or friendly name. No exact match was found for '{0}'.</target>
+        <target state="translated">Quando --version é especificado no modo não interativo, o nome da integração deve corresponder exatamente a um pacote ou a um nome amigável. Nenhuma correspondência exata foi encontrada para '{0}'.</target>
         <note>{0} is the integration name provided by the user.</note>
       </trans-unit>
       <trans-unit id="StoppedRunningInstance" translate="yes" xml:space="preserve">
           <source>Stopped a running Aspire AppHost instance to allow package modification.</source>
-          <target state="new">Stopped a running Aspire AppHost instance to allow package modification.</target><note />
+          <target state="translated">Uma instância do Aspire AppHost em execução foi interrompida para permitir a modificação do pacote.</target><note />
         </trans-unit>
       <trans-unit id="UnableToStopRunningInstances">
         <source>Unable to stop one or more running Aspire AppHost instances. Please stop the application and try again.</source>
-        <target state="new">Unable to stop one or more running Aspire AppHost instances. Please stop the application and try again.</target>
+        <target state="translated">Não foi possível parar uma ou mais instâncias do Aspire AppHost em execução. Pare o aplicativo e tente novamente.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedNumberOfPackagesFound">
@@ -203,7 +203,7 @@
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
         <source>The version of the integration to add</source>
-        <target state="needs-review-translation">A versão da integração a ser adicionada.</target>
+        <target state="translated">A versão da integração a ser adicionada</target>
         <note />
       </trans-unit>
     </body>

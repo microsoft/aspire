@@ -64,41 +64,41 @@
        properties below; update these Net10 properties together when servicing .NET 10. -->
   <PropertyGroup Label="Net10">
     <!-- EF -->
-    <MicrosoftEntityFrameworkCoreCosmosNet10Version>10.0.12</MicrosoftEntityFrameworkCoreCosmosNet10Version>
-    <MicrosoftEntityFrameworkCoreDesignNet10Version>10.0.12</MicrosoftEntityFrameworkCoreDesignNet10Version>
-    <MicrosoftEntityFrameworkCoreSqlServerNet10Version>10.0.12</MicrosoftEntityFrameworkCoreSqlServerNet10Version>
-    <MicrosoftEntityFrameworkCoreToolsNet10Version>10.0.12</MicrosoftEntityFrameworkCoreToolsNet10Version>
+    <MicrosoftEntityFrameworkCoreCosmosNet10Version>10.0.13</MicrosoftEntityFrameworkCoreCosmosNet10Version>
+    <MicrosoftEntityFrameworkCoreDesignNet10Version>10.0.13</MicrosoftEntityFrameworkCoreDesignNet10Version>
+    <MicrosoftEntityFrameworkCoreSqlServerNet10Version>10.0.13</MicrosoftEntityFrameworkCoreSqlServerNet10Version>
+    <MicrosoftEntityFrameworkCoreToolsNet10Version>10.0.13</MicrosoftEntityFrameworkCoreToolsNet10Version>
     <!-- ASP.NET Core -->
-    <MicrosoftAspNetCoreAuthenticationCertificateNet10Version>10.0.12</MicrosoftAspNetCoreAuthenticationCertificateNet10Version>
-    <MicrosoftAspNetCoreAuthenticationJwtBearerNet10Version>10.0.12</MicrosoftAspNetCoreAuthenticationJwtBearerNet10Version>
-    <MicrosoftAspNetCoreAuthenticationOpenIdConnectNet10Version>10.0.12</MicrosoftAspNetCoreAuthenticationOpenIdConnectNet10Version>
-    <MicrosoftAspNetCoreOpenApiNet10Version>10.0.12</MicrosoftAspNetCoreOpenApiNet10Version>
-    <MicrosoftAspNetCoreOutputCachingStackExchangeRedisNet10Version>10.0.12</MicrosoftAspNetCoreOutputCachingStackExchangeRedisNet10Version>
-    <MicrosoftAspNetCoreTestHostNet10Version>10.0.12</MicrosoftAspNetCoreTestHostNet10Version>
-    <MicrosoftExtensionsCachingStackExchangeRedisNet10Version>10.0.12</MicrosoftExtensionsCachingStackExchangeRedisNet10Version>
-    <MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreNet10Version>10.0.12</MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreNet10Version>
-    <MicrosoftExtensionsDiagnosticsHealthChecksNet10Version>10.0.12</MicrosoftExtensionsDiagnosticsHealthChecksNet10Version>
-    <MicrosoftExtensionsFileProvidersEmbeddedNet10Version>10.0.12</MicrosoftExtensionsFileProvidersEmbeddedNet10Version>
-    <MicrosoftExtensionsFeaturesNet10Version>10.0.12</MicrosoftExtensionsFeaturesNet10Version>
-    <MicrosoftAspNetCoreSignalRClientNet10Version>10.0.12</MicrosoftAspNetCoreSignalRClientNet10Version>
+    <MicrosoftAspNetCoreAuthenticationCertificateNet10Version>10.0.13</MicrosoftAspNetCoreAuthenticationCertificateNet10Version>
+    <MicrosoftAspNetCoreAuthenticationJwtBearerNet10Version>10.0.13</MicrosoftAspNetCoreAuthenticationJwtBearerNet10Version>
+    <MicrosoftAspNetCoreAuthenticationOpenIdConnectNet10Version>10.0.13</MicrosoftAspNetCoreAuthenticationOpenIdConnectNet10Version>
+    <MicrosoftAspNetCoreOpenApiNet10Version>10.0.13</MicrosoftAspNetCoreOpenApiNet10Version>
+    <MicrosoftAspNetCoreOutputCachingStackExchangeRedisNet10Version>10.0.13</MicrosoftAspNetCoreOutputCachingStackExchangeRedisNet10Version>
+    <MicrosoftAspNetCoreTestHostNet10Version>10.0.13</MicrosoftAspNetCoreTestHostNet10Version>
+    <MicrosoftExtensionsCachingStackExchangeRedisNet10Version>10.0.13</MicrosoftExtensionsCachingStackExchangeRedisNet10Version>
+    <MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreNet10Version>10.0.13</MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreNet10Version>
+    <MicrosoftExtensionsDiagnosticsHealthChecksNet10Version>10.0.13</MicrosoftExtensionsDiagnosticsHealthChecksNet10Version>
+    <MicrosoftExtensionsFileProvidersEmbeddedNet10Version>10.0.13</MicrosoftExtensionsFileProvidersEmbeddedNet10Version>
+    <MicrosoftExtensionsFeaturesNet10Version>10.0.13</MicrosoftExtensionsFeaturesNet10Version>
+    <MicrosoftAspNetCoreSignalRClientNet10Version>10.0.13</MicrosoftAspNetCoreSignalRClientNet10Version>
     <!-- Runtime -->
-    <MicrosoftBclMemoryNet10Version>10.0.12</MicrosoftBclMemoryNet10Version>
-    <MicrosoftExtensionsHostingAbstractionsNet10Version>10.0.12</MicrosoftExtensionsHostingAbstractionsNet10Version>
-    <MicrosoftExtensionsHostingNet10Version>10.0.12</MicrosoftExtensionsHostingNet10Version>
-    <MicrosoftExtensionsCachingMemoryNet10Version>10.0.12</MicrosoftExtensionsCachingMemoryNet10Version>
-    <MicrosoftExtensionsConfigurationAbstractionsNet10Version>10.0.12</MicrosoftExtensionsConfigurationAbstractionsNet10Version>
-    <MicrosoftExtensionsConfigurationBinderNet10Version>10.0.12</MicrosoftExtensionsConfigurationBinderNet10Version>
-    <MicrosoftExtensionsConfigurationEnvironmentVariablesNet10Version>10.0.12</MicrosoftExtensionsConfigurationEnvironmentVariablesNet10Version>
-    <MicrosoftExtensionsDependencyInjectionAbstractionsNet10Version>10.0.12</MicrosoftExtensionsDependencyInjectionAbstractionsNet10Version>
-    <MicrosoftExtensionsFileSystemGlobbingNet10Version>10.0.12</MicrosoftExtensionsFileSystemGlobbingNet10Version>
-    <MicrosoftExtensionsLoggingAbstractionsNet10Version>10.0.12</MicrosoftExtensionsLoggingAbstractionsNet10Version>
-    <MicrosoftExtensionsLoggingNet10Version>10.0.12</MicrosoftExtensionsLoggingNet10Version>
-    <MicrosoftExtensionsOptionsNet10Version>10.0.12</MicrosoftExtensionsOptionsNet10Version>
-    <MicrosoftExtensionsPrimitivesNet10Version>10.0.12</MicrosoftExtensionsPrimitivesNet10Version>
-    <MicrosoftExtensionsHttpNet10Version>10.0.12</MicrosoftExtensionsHttpNet10Version>
-    <SystemFormatsAsn1Net10Version>10.0.12</SystemFormatsAsn1Net10Version>
-    <SystemSecurityCryptographyPkcsNet10Version>10.0.12</SystemSecurityCryptographyPkcsNet10Version>
-    <SystemTextJsonNet10Version>10.0.12</SystemTextJsonNet10Version>
+    <MicrosoftBclMemoryNet10Version>10.0.13</MicrosoftBclMemoryNet10Version>
+    <MicrosoftExtensionsHostingAbstractionsNet10Version>10.0.13</MicrosoftExtensionsHostingAbstractionsNet10Version>
+    <MicrosoftExtensionsHostingNet10Version>10.0.13</MicrosoftExtensionsHostingNet10Version>
+    <MicrosoftExtensionsCachingMemoryNet10Version>10.0.13</MicrosoftExtensionsCachingMemoryNet10Version>
+    <MicrosoftExtensionsConfigurationAbstractionsNet10Version>10.0.13</MicrosoftExtensionsConfigurationAbstractionsNet10Version>
+    <MicrosoftExtensionsConfigurationBinderNet10Version>10.0.13</MicrosoftExtensionsConfigurationBinderNet10Version>
+    <MicrosoftExtensionsConfigurationEnvironmentVariablesNet10Version>10.0.13</MicrosoftExtensionsConfigurationEnvironmentVariablesNet10Version>
+    <MicrosoftExtensionsDependencyInjectionAbstractionsNet10Version>10.0.13</MicrosoftExtensionsDependencyInjectionAbstractionsNet10Version>
+    <MicrosoftExtensionsFileSystemGlobbingNet10Version>10.0.13</MicrosoftExtensionsFileSystemGlobbingNet10Version>
+    <MicrosoftExtensionsLoggingAbstractionsNet10Version>10.0.13</MicrosoftExtensionsLoggingAbstractionsNet10Version>
+    <MicrosoftExtensionsLoggingNet10Version>10.0.13</MicrosoftExtensionsLoggingNet10Version>
+    <MicrosoftExtensionsOptionsNet10Version>10.0.13</MicrosoftExtensionsOptionsNet10Version>
+    <MicrosoftExtensionsPrimitivesNet10Version>10.0.13</MicrosoftExtensionsPrimitivesNet10Version>
+    <MicrosoftExtensionsHttpNet10Version>10.0.13</MicrosoftExtensionsHttpNet10Version>
+    <SystemFormatsAsn1Net10Version>10.0.13</SystemFormatsAsn1Net10Version>
+    <SystemSecurityCryptographyPkcsNet10Version>10.0.13</SystemSecurityCryptographyPkcsNet10Version>
+    <SystemTextJsonNet10Version>10.0.13</SystemTextJsonNet10Version>
   </PropertyGroup>
   <!-- .NET 11 package versions use Darc's package-name-without-punctuation + Version convention. -->
   <PropertyGroup Label="Net11">

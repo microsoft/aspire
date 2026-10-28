@@ -101,9 +101,17 @@ internal sealed class MicrosoftGraphApplication(string bicepIdentifier)
     }
     private BicepList<MicrosoftGraphRequiredResourceAccess>? _requiredResourceAccess;
 
+    public BicepList<MicrosoftGraphAppRole> AppRoles
+    {
+        get { Initialize(); return _appRoles!; }
+        set { Initialize(); _appRoles!.Assign(value); }
+    }
+    private BicepList<MicrosoftGraphAppRole>? _appRoles;
+
     protected override void DefineProvisionableProperties()
     {
         base.DefineProvisionableProperties();
+        _appRoles = DefineListProperty<MicrosoftGraphAppRole>(nameof(AppRoles), ["appRoles"]);
         _id = DefineProperty<string>(nameof(Id), ["id"], isOutput: true);
         _appId = DefineProperty<string>(nameof(AppId), ["appId"], isOutput: true);
         _displayName = DefineProperty<string>(nameof(DisplayName), ["displayName"], isRequired: true);

@@ -33,6 +33,48 @@ internal sealed class TemplateNuGetConfigService(
     public const string TemplatesPackageName = "Aspire.ProjectTemplates";
 
     /// <summary>
+    /// Applies explicitly requested template NuGet policy without overwriting template-owned configuration.
+    /// </summary>
+    /// <remarks>
+    /// The template engine calls this only after a createNuGetConfig host opt-in. The opt-in
+    /// requests channel policy, not unconditional file creation: nuget.org-only sources still
+    /// use ambient configuration, while custom sources can require a new output-root file.
+    /// This source-based decision is specific to template-engine generation; built-in
+    /// scaffolding retains its channel-based policy.
+    /// </remarks>
+    public Task CreateNuGetConfigIfMissingAsync(PackageChannel channel, string outputPath, CancellationToken cancellationToken)
+        => CreateNuGetConfigIfMissingAsync(channel, outputPath, outputPath, cancellationToken);
+
+    /// <summary>
+    /// Creates staged policy using the final output's workload identity, not a temporary path's.
+    /// </summary>
+    internal async Task CreateNuGetConfigIfMissingAsync(
+        PackageChannel channel, string outputPath, string logicalOutputPath, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var outputDirectory = new DirectoryInfo(outputPath);
+        // Templates can own private-package routing, including exact Aspire.Hosting.* mappings
+        // that override the CLI's broader Aspire* feed. Never merge over their generated config.
+        if (outputDirectory.Exists &&
+            DotNetAppHostNuGetConfigMerger.TryFindNuGetConfigInDirectory(outputDirectory, out _))
+        {
+            return;
+        }
+
+        if (channel.Mappings is { } mappings &&
+            mappings.Any(static mapping =>
+                !PackageSourceIdentity.Comparer.Equals(mapping.Source, PackageSources.NuGetOrg)))
+        {
+            if (mappings.Any(static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source)))
+            {
+                throw new ArgumentException(Resources.NewCommandStrings.SourceWithCredentialsCannotBePersisted);
+            }
+
+            await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride: null, outputDirectory, logicalOutputPath, cancellationToken);
+        }
+    }
+
+    /// <summary>
     /// Creates initial template NuGet configuration when the selected channel requires it.
     /// </summary>
     public async Task PromptToCreateNuGetConfigAsync(PackageChannel channel, string outputPath, CancellationToken cancellationToken)
@@ -52,7 +94,7 @@ internal sealed class TemplateNuGetConfigService(
             return;
         }
 
-        await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride: null, outputDir, cancellationToken);
+        await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride: null, outputDir, outputPath, cancellationToken);
         interactionService.DisplayMessage(KnownEmojis.Package, Resources.TemplatingStrings.NuGetConfigCreatedConfirmationMessage);
     }
 
@@ -176,7 +218,7 @@ internal sealed class TemplateNuGetConfigService(
             throw new ArgumentException("Credential-bearing HTTP sources cannot be persisted.", nameof(sourceOverride));
         }
 
-        await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride, new DirectoryInfo(outputPath), cancellationToken);
+        await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride, new DirectoryInfo(outputPath), outputPath, cancellationToken);
         return true;
     }
 
@@ -184,6 +226,7 @@ internal sealed class TemplateNuGetConfigService(
         PackageChannel? channel,
         string? sourceOverride,
         DirectoryInfo outputDirectory,
+        string logicalOutputPath,
         CancellationToken cancellationToken)
     {
         outputDirectory.Create();
@@ -196,7 +239,7 @@ internal sealed class TemplateNuGetConfigService(
 
         var configuration = nuGetService.BuildChannelConfiguration(
             outputDirectory,
-            AppHostWorkloadId.Create(outputDirectory.FullName),
+            AppHostWorkloadId.Create(Path.GetFullPath(logicalOutputPath)),
             channel,
             sourceOverride,
             executionContext.NuGetServiceIndexOverride,

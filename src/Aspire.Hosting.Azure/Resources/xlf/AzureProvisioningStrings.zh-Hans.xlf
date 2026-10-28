@@ -4,311 +4,311 @@
     <body>
       <trans-unit id="CancelCommandConfirmation">
         <source>This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?</source>
-        <target state="new">This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?</target>
+        <target state="translated">此操作会请求取消包含此资源的活动 Azure 操作，或取消此资源的活动 Azure 部署。如果该操作包含其他 Azure 资源，则它们也将被取消。Azure 可能会继续执行无法立即取消的工作，并且不会删除已创建的资源。是否要继续?</target>
         <note />
       </trans-unit>
       <trans-unit id="CancelCommandDescription">
         <source>Requests cancellation of the active Azure operation or deployment for this resource.</source>
-        <target state="new">Requests cancellation of the active Azure operation or deployment for this resource.</target>
+        <target state="translated">请求取消此资源的活动 Azure 操作或部署。</target>
         <note />
       </trans-unit>
       <trans-unit id="CancelCommandName">
         <source>Cancel</source>
-        <target state="new">Cancel</target>
+        <target state="translated">取消</target>
         <note />
       </trans-unit>
       <trans-unit id="CancelCommandSuccess">
         <source>Azure cancellation requested.</source>
-        <target state="new">Azure cancellation requested.</target>
+        <target state="translated">已请求 Azure 取消。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandConfirmation">
         <source>This updates the Azure context for this AppHost and reprovisions all Azure resources using the values you enter next.</source>
-        <target state="new">This updates the Azure context for this AppHost and reprovisions all Azure resources using the values you enter next.</target>
+        <target state="translated">此操作将更新此 AppHost 的 Azure 上下文，并使用下一步输入的值重新预配所有 Azure 资源。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandDescription">
         <source>Updates the Azure tenant, subscription, resource group, or location for this AppHost and reprovisions all Azure resources.</source>
-        <target state="new">Updates the Azure tenant, subscription, resource group, or location for this AppHost and reprovisions all Azure resources.</target>
+        <target state="translated">更新此 AppHost 的 Azure 租户、订阅、资源组或位置，并重新预配所有 Azure 资源。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandName">
         <source>Change Azure context</source>
-        <target state="new">Change Azure context</target>
+        <target state="translated">更改 Azure 上下文</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandSuccess">
         <source>Azure context updated and resources reprovisioned.</source>
-        <target state="new">Azure context updated and resources reprovisioned.</target>
+        <target state="translated">已更新 Azure 上下文且已重新预配资源。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandDescription">
         <source>Changes the Azure location for this resource. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</source>
-        <target state="new">Changes the Azure location for this resource. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</target>
+        <target state="translated">更改此资源的 Azure 位置。如果 Aspire 必须删除并重新创建现有 Azure 资源，则其中的任何数据都可能会永久丢失。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandName">
         <source>Change location</source>
-        <target state="new">Change location</target>
+        <target state="translated">更改位置</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandSuccess">
         <source>Azure resource location updated and reprovisioning completed.</source>
-        <target state="new">Azure resource location updated and reprovisioning completed.</target>
+        <target state="translated">已更新 Azure 资源位置且已完成重新预配。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationConfirmDeleteDescription">
         <source>Allow Aspire to delete and recreate the existing Azure resource when changing its location. Any data in the deleted resource may be permanently lost.</source>
-        <target state="new">Allow Aspire to delete and recreate the existing Azure resource when changing its location. Any data in the deleted resource may be permanently lost.</target>
+        <target state="translated">允许 Aspire 在更改其位置时删除并重新创建现有 Azure 资源。已删除资源中的任何数据都可能永久丢失。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationConfirmDeleteLabel">
         <source>Allow deletion and possible permanent data loss</source>
-        <target state="new">Allow deletion and possible permanent data loss</target>
+        <target state="translated">允许删除和可能的永久数据丢失</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationDeleteConfirmationRequiredFormat">
         <source>Changing the location of Azure resource '{0}' requires deleting and recreating it. Any data in the deleted resource may be permanently lost. Set the '{1}' command argument to true to continue.</source>
-        <target state="new">Changing the location of Azure resource '{0}' requires deleting and recreating it. Any data in the deleted resource may be permanently lost. Set the '{1}' command argument to true to continue.</target>
+        <target state="translated">更改Azure资源 '{0}' 的位置需要删除并重新创建它。已删除资源中的任何数据都可能永久丢失。将 '{1}' 命令参数设置为 true 以继续。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationKeyVaultUnsupported">
         <source>Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</source>
-        <target state="new">Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</target>
+        <target state="translated">Azure 密钥保管库资源无法更改位置，因为软删除的保管库名称仍处于全局保留状态。使用删除、重新预配或忘记状态来恢复此资源。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationPromptMessage">
         <source>Select or enter a new Azure location for '{0}'. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</source>
-        <target state="new">Select or enter a new Azure location for '{0}'. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</target>
+        <target state="translated">选择或输入“{0}”的新 Azure 位置。如果 Aspire 必须删除并重新创建现有 Azure 资源，则其中的任何数据都可能会永久丢失。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationPromptTitle">
         <source>Change Azure resource location</source>
-        <target state="new">Change Azure resource location</target>
+        <target state="translated">更改 Azure 资源位置</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyLocationDisplayName">
         <source>Azure location</source>
-        <target state="new">Azure location</target>
+        <target state="translated">Azure 位置</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyResourceGroupDisplayName">
         <source>Azure resource group</source>
-        <target state="new">Azure resource group</target>
+        <target state="translated">Azure 资源组</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertySubscriptionIdDisplayName">
         <source>Azure subscription ID</source>
-        <target state="new">Azure subscription ID</target>
+        <target state="translated">Azure 订阅 ID</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyTenantDomainDisplayName">
         <source>Azure tenant domain</source>
-        <target state="new">Azure tenant domain</target>
+        <target state="translated">Azure 租户域</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyTenantIdDisplayName">
         <source>Azure tenant ID</source>
-        <target state="new">Azure tenant ID</target>
+        <target state="translated">Azure 租户 ID</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandConfirmation">
         <source>This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?</source>
-        <target state="new">This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?</target>
+        <target state="translated">此操作将取消缓存的 Azure 部署，删除此资源的部署所面向的 Azure 资源，清除可恢复的密钥保管库以便可以重用其名称，以及清除缓存的部署状态。是否要继续?</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandDescription">
         <source>Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource.</source>
-        <target state="new">Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource.</target>
+        <target state="translated">取消缓存的 Azure 部署，删除部署所面向的 Azure 资源，清除可恢复的密钥保管库以便可以重用其名称，以及清除此资源的缓存部署状态。</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandName">
         <source>Delete Azure resource</source>
-        <target state="new">Delete Azure resource</target>
+        <target state="translated">删除 Azure 资源</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandSuccess">
         <source>Azure resources deleted and provisioning state reset.</source>
-        <target state="new">Azure resources deleted and provisioning state reset.</target>
+        <target state="translated">已删除 Azure 资源并重置预配状态。</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandConfirmation">
         <source>This deletes the current Azure resource group and every Azure resource inside it for this AppHost, then clears the cached deployment state. Do you want to continue?</source>
-        <target state="new">This deletes the current Azure resource group and every Azure resource inside it for this AppHost, then clears the cached deployment state. Do you want to continue?</target>
+        <target state="translated">此操作将为此 AppHost 删除当前 Azure 资源组及其内部的每个 Azure 资源，然后清除缓存的部署状态。是否要继续?</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandDescription">
         <source>Deletes the current Azure resource group for this AppHost, clears cached deployment state, and leaves the Azure context intact for reprovisioning.</source>
-        <target state="new">Deletes the current Azure resource group for this AppHost, clears cached deployment state, and leaves the Azure context intact for reprovisioning.</target>
+        <target state="translated">删除此 AppHost 的当前 Azure 资源组，清除缓存的部署状态，并保留完整的 Azure 上下文以进行重新预配。</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandName">
         <source>Delete Azure resources</source>
-        <target state="new">Delete Azure resources</target>
+        <target state="translated">删除 Azure 资源</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandSuccess">
         <source>Azure resources deleted and provisioning state reset.</source>
-        <target state="new">Azure resources deleted and provisioning state reset.</target>
+        <target state="translated">已删除 Azure 资源并重置预配状态。</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesRemainingResourcesFormat">
         <source>Resource-group deletion completed. These resources were not deleted: {0}.</source>
-        <target state="new">Resource-group deletion completed. These resources were not deleted: {0}.</target>
+        <target state="translated">资源组删除已完成。未删除这些资源： {0}。</target>
         <note>{0} is a list of resource names, provider types, and object IDs.</note>
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesRemainingResourcesWarning">
         <source>The listed resources were not deleted because they exist outside the resource group. Delete them separately using their service's portal or API.</source>
-        <target state="new">The listed resources were not deleted because they exist outside the resource group. Delete them separately using their service's portal or API.</target>
+        <target state="translated">列出的资源未被删除，因为它们位于该资源组之外。请通过相应服务的门户或 API 单独删除这些资源。</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationCanceledResourcesFormat">
         <source>Canceled Azure resources: {0}</source>
-        <target state="new">Canceled Azure resources: {0}</target>
+        <target state="translated">已取消 Azure 资源: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationFailedResourcesFormat">
         <source>Failed Azure resources: {0}</source>
-        <target state="new">Failed Azure resources: {0}</target>
+        <target state="translated">失败的 Azure 资源: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationRunningResourcesFormat">
         <source>Provisioning Azure resources: {0}</source>
-        <target state="new">Provisioning Azure resources: {0}</target>
+        <target state="translated">预配 Azure 资源: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationSummaryDisplayName">
         <source>Azure deployment diagnostics</source>
-        <target state="new">Azure deployment diagnostics</target>
+        <target state="translated">Azure 部署诊断</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyCodeDisplayName">
         <source>Azure error code</source>
-        <target state="new">Azure error code</target>
+        <target state="translated">Azure 错误代码</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyCorrelationIdDisplayName">
         <source>Azure correlation ID</source>
-        <target state="new">Azure correlation ID</target>
+        <target state="translated">Azure 相关 ID</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyCurrentLocationDisplayName">
         <source>Azure current location</source>
-        <target state="new">Azure current location</target>
+        <target state="translated">Azure 当前位置</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyFailedResourcesDisplayName">
         <source>Failed Azure resources</source>
-        <target state="new">Failed Azure resources</target>
+        <target state="translated">失败的 Azure 资源</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyHttpStatusDisplayName">
         <source>Azure HTTP status</source>
-        <target state="new">Azure HTTP status</target>
+        <target state="translated">Azure HTTP 状态</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyMessageDisplayName">
         <source>Azure error message</source>
-        <target state="new">Azure error message</target>
+        <target state="translated">Azure 错误消息</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyOperationDisplayName">
         <source>Azure operation</source>
-        <target state="new">Azure operation</target>
+        <target state="translated">Azure 操作</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyProviderDisplayName">
         <source>Azure provider</source>
-        <target state="new">Azure provider</target>
+        <target state="translated">Azure 提供程序</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyRecommendedActionsDisplayName">
         <source>Azure recommended actions</source>
-        <target state="new">Azure recommended actions</target>
+        <target state="translated">Azure 建议的操作</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyRequestIdDisplayName">
         <source>Azure request ID</source>
-        <target state="new">Azure request ID</target>
+        <target state="translated">Azure 请求 ID</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyResourceNameDisplayName">
         <source>Azure resource name</source>
-        <target state="new">Azure resource name</target>
+        <target state="translated">Azure 资源名称</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyResourceTypeDisplayName">
         <source>Azure resource type</source>
-        <target state="new">Azure resource type</target>
+        <target state="translated">Azure 资源类型</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertySupportedLocationsDisplayName">
         <source>Azure supported locations</source>
-        <target state="new">Azure supported locations</target>
+        <target state="translated">Azure 支持的位置</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyTargetResourceIdDisplayName">
         <source>Azure target resource ID</source>
-        <target state="new">Azure target resource ID</target>
+        <target state="translated">Azure 目标资源 ID</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandConfirmation">
         <source>This clears the cached Azure deployment state for this resource and resets its provisioning snapshot.</source>
-        <target state="new">This clears the cached Azure deployment state for this resource and resets its provisioning snapshot.</target>
+        <target state="translated">此操作将清除此资源的缓存 Azure 部署状态，并重置其预配快照。</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandDescription">
         <source>Clears the cached Azure deployment state for this resource so it can be provisioned again using the current Azure context.</source>
-        <target state="new">Clears the cached Azure deployment state for this resource so it can be provisioned again using the current Azure context.</target>
+        <target state="translated">清除此资源的缓存 Azure 部署状态，以便可以使用当前 Azure 上下文再次预配它。</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandName">
         <source>Forget state</source>
-        <target state="new">Forget state</target>
+        <target state="translated">忘记状态</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandSuccess">
         <source>Azure resource provisioning state reset.</source>
-        <target state="new">Azure resource provisioning state reset.</target>
+        <target state="translated">已重置 Azure 资源预配状态。</target>
         <note />
       </trans-unit>
       <trans-unit id="GetAzureResourceCommandDescription">
         <source>Returns cached deployment state and live Azure existence information for this resource.</source>
-        <target state="new">Returns cached deployment state and live Azure existence information for this resource.</target>
+        <target state="translated">返回此资源的缓存部署状态和实时 Azure 存在信息。</target>
         <note />
       </trans-unit>
       <trans-unit id="GetAzureResourceCommandName">
         <source>Get Azure resource</source>
-        <target state="new">Get Azure resource</target>
+        <target state="translated">获取 Azure 资源</target>
         <note />
       </trans-unit>
       <trans-unit id="GetAzureResourceCommandSuccess">
         <source>Azure resource information retrieved.</source>
-        <target state="new">Azure resource information retrieved.</target>
+        <target state="translated">检索到 Azure 资源信息。</target>
         <note />
       </trans-unit>
       <trans-unit id="InputsMessage">
         <source>Select the Azure tenant, subscription, resource group, and location Aspire should use for provisioning.
 
 To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning).</source>
-        <target state="needs-review-translation">该模型包含需要 Azure 订阅的 Azure 资源。
+        <target state="translated">选择 Aspire 应用于预配的 Azure 租户、订阅、资源组和位置。
 
 要了解详细信息，请参阅 [Azure 预配文档](https://aka.ms/aspire/azure/provisioning)。</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="InputsPrimaryButtonText">
         <source>Save</source>
-        <target state="new">Save</target>
+        <target state="translated">保存</target>
         <note />
       </trans-unit>
       <trans-unit id="InputsSecondaryButtonText">
         <source>Cancel</source>
-        <target state="new">Cancel</target>
+        <target state="translated">取消</target>
         <note />
       </trans-unit>
       <trans-unit id="InputsTitle">
         <source>Configure Azure context</source>
-        <target state="needs-review-translation">Azure 预配</target>
+        <target state="translated">配置 Azure 上下文</target>
         <note />
       </trans-unit>
       <trans-unit id="LocationDialogTitle">
@@ -338,7 +338,7 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
       </trans-unit>
       <trans-unit id="NotificationPrimaryButtonText">
         <source>Configure</source>
-        <target state="needs-review-translation">输入值</target>
+        <target state="translated">配置</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationTitle">
@@ -348,157 +348,157 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
       </trans-unit>
       <trans-unit id="OperationAlreadyRunningOrQueued">
         <source>Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'.</source>
-        <target state="new">Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'.</target>
+        <target state="translated">Azure操作 '{0}' 已在同一资源范围内运行或排队。请等待它完成或运行 '{2}'，然后再开始 '{1}'。</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseApplyingAzureContext">
         <source>Applying Azure context</source>
-        <target state="new">Applying Azure context</target>
+        <target state="translated">正在应用 Azure 上下文</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseChangingAzureContext">
         <source>Changing Azure context</source>
-        <target state="new">Changing Azure context</target>
+        <target state="translated">正在更改 Azure 上下文</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseChangingLocationToFormat">
         <source>Changing location to {0}</source>
-        <target state="new">Changing location to {0}</target>
+        <target state="translated">正在将位置更改为 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseDeletingAzureResource">
         <source>Deleting Azure resource</source>
-        <target state="new">Deleting Azure resource</target>
+        <target state="translated">正在删除 Azure 资源</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseDeletingAzureResources">
         <source>Deleting Azure resources</source>
-        <target state="new">Deleting Azure resources</target>
+        <target state="translated">正在删除 Azure 资源</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat">
         <source>Deleting existing Azure resource before changing location to {0}</source>
-        <target state="new">Deleting existing Azure resource before changing location to {0}</target>
+        <target state="translated">在将位置更改为 {0} 之前删除现有Azure资源</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseProvisioningAzureResources">
         <source>Provisioning Azure resources</source>
-        <target state="new">Provisioning Azure resources</target>
+        <target state="translated">预配 Azure 资源</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhasePurgingDeletedKeyVault">
         <source>Purging deleted Key Vault</source>
-        <target state="new">Purging deleted Key Vault</target>
+        <target state="translated">正在清除已删除的密钥保管库</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhasePurgingRecoverableKeyVaultFormat">
         <source>Purging recoverable Key Vault {0}</source>
-        <target state="new">Purging recoverable Key Vault {0}</target>
+        <target state="translated">正在清除可恢复密钥保管库 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseReprovisioning">
         <source>Reprovisioning</source>
-        <target state="new">Reprovisioning</target>
+        <target state="translated">正在重新预配</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseReprovisioningAzureResources">
         <source>Reprovisioning Azure resources</source>
-        <target state="new">Reprovisioning Azure resources</target>
+        <target state="translated">正在重新预配 Azure 资源</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseReprovisioningInLocationFormat">
         <source>Reprovisioning in {0}</source>
-        <target state="new">Reprovisioning in {0}</target>
+        <target state="translated">正在 {0} 中重新预配</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseResettingProvisioningState">
         <source>Resetting provisioning state</source>
-        <target state="new">Resetting provisioning state</target>
+        <target state="translated">正在重置预配状态</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyNameDisplayName">
         <source>Azure operation</source>
-        <target state="new">Azure operation</target>
+        <target state="translated">Azure 操作</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyPhaseDisplayName">
         <source>Azure operation phase</source>
-        <target state="new">Azure operation phase</target>
+        <target state="translated">Azure 操作阶段</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyStartedAtDisplayName">
         <source>Azure operation started</source>
-        <target state="new">Azure operation started</target>
+        <target state="translated">已启动 Azure 操作...</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyStatusDisplayName">
         <source>Azure operation status</source>
-        <target state="new">Azure operation status</target>
+        <target state="translated">Azure 操作状态</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyTargetLocationDisplayName">
         <source>Azure operation target location</source>
-        <target state="new">Azure operation target location</target>
+        <target state="translated">Azure 操作目标位置</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandConfirmation">
         <source>This clears the cached Azure deployment state for this AppHost and reprovisions all Azure resources again using the current Azure tenant, subscription, resource group, and location.</source>
-        <target state="new">This clears the cached Azure deployment state for this AppHost and reprovisions all Azure resources again using the current Azure tenant, subscription, resource group, and location.</target>
+        <target state="translated">这将清除此 AppHost 的缓存 Azure 部署状态，并使用当前 Azure 租户、订阅、资源组和位置再次重新预配所有 Azure 资源。</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandDescription">
         <source>Clears the cached Azure deployment state for this AppHost and provisions all Azure resources again using the current Azure context.</source>
-        <target state="new">Clears the cached Azure deployment state for this AppHost and provisions all Azure resources again using the current Azure context.</target>
+        <target state="translated">清除此 AppHost 的缓存 Azure 部署状态，并使用当前 Azure 上下文再次预配所有 Azure 资源。</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandName">
         <source>Reprovision all</source>
-        <target state="new">Reprovision all</target>
+        <target state="translated">全部重新预配</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandSuccess">
         <source>Azure reprovisioning completed.</source>
-        <target state="new">Azure reprovisioning completed.</target>
+        <target state="translated">已完成 Azure 重新预配。</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandConfirmation">
         <source>This clears the cached Azure deployment state for this resource and reprovisions it again using the current Azure tenant, subscription, resource group, and location.</source>
-        <target state="new">This clears the cached Azure deployment state for this resource and reprovisions it again using the current Azure tenant, subscription, resource group, and location.</target>
+        <target state="translated">此操作将清除此资源的缓存 Azure 部署状态，并使用当前 Azure 租户、订阅、资源组和位置再次重新预配它。</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandDescription">
         <source>Clears the cached Azure deployment state for this resource and provisions it again using the current Azure context.</source>
-        <target state="new">Clears the cached Azure deployment state for this resource and provisions it again using the current Azure context.</target>
+        <target state="translated">清除此资源的缓存 Azure 部署状态，并使用当前 Azure 上下文再次预配它。</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandName">
         <source>Reprovision</source>
-        <target state="new">Reprovision</target>
+        <target state="translated">重新预配</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandSuccess">
         <source>Azure resource reprovisioning completed.</source>
-        <target state="new">Azure resource reprovisioning completed.</target>
+        <target state="translated">已完成 Azure 资源重新预配。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandConfirmation">
         <source>This only clears the cached Azure tenant, subscription, resource group, location, and deployment state stored for this AppHost. Live Azure resources are not deleted and may be left orphaned. Do you want to continue?</source>
-        <target state="new">This only clears the cached Azure tenant, subscription, resource group, location, and deployment state stored for this AppHost. Live Azure resources are not deleted and may be left orphaned. Do you want to continue?</target>
+        <target state="translated">此操作仅清除为此 AppHost 存储的缓存 Azure 租户、订阅、资源组、位置和部署状态。实时 Azure 资源不会被删除，并且可能会处于孤立状态。是否要继续?</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandDescription">
         <source>Clears the cached Azure context and deployment state for this AppHost. This does not delete live Azure resources and may leave them orphaned.</source>
-        <target state="new">Clears the cached Azure context and deployment state for this AppHost. This does not delete live Azure resources and may leave them orphaned.</target>
+        <target state="translated">清除此 AppHost 的缓存 Azure 上下文和部署状态。这不会删除实时 Azure 资源，并且可能会将其孤立。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandName">
         <source>Reset provisioning state</source>
-        <target state="new">Reset provisioning state</target>
+        <target state="translated">重置预配状态</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandSuccess">
         <source>Azure provisioning state reset.</source>
-        <target state="new">Azure provisioning state reset.</target>
+        <target state="translated">已重置 Azure 预配状态。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceGroupDialogTitle">
@@ -523,102 +523,102 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
       </trans-unit>
       <trans-unit id="ResourceStateAzureDeploymentCanceled">
         <source>Azure deployment canceled</source>
-        <target state="new">Azure deployment canceled</target>
+        <target state="translated">已取消 Azure 部署</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateAzureDeploymentFailed">
         <source>Azure deployment failed</source>
-        <target state="new">Azure deployment failed</target>
+        <target state="translated">Azure 部署失败</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCanceled">
         <source>Canceled</source>
-        <target state="new">Canceled</target>
+        <target state="translated">已取消</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCanceling">
         <source>Canceling</source>
-        <target state="new">Canceling</target>
+        <target state="translated">正在取消</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateChangingLocation">
         <source>Changing location</source>
-        <target state="new">Changing location</target>
+        <target state="translated">正在更改位置</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCompilingArmTemplate">
         <source>Compiling ARM template</source>
-        <target state="new">Compiling ARM template</target>
+        <target state="translated">正在编译 ARM 模板</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCreatingArmDeployment">
         <source>Creating ARM Deployment</source>
-        <target state="new">Creating ARM Deployment</target>
+        <target state="translated">正在创建 ARM 部署</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateDeleting">
         <source>Deleting</source>
-        <target state="new">Deleting</target>
+        <target state="translated">正在删除</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateDrifted">
         <source>Drifted</source>
-        <target state="new">Drifted</target>
+        <target state="translated">已偏移</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateFailedToDelete">
         <source>Failed to Delete</source>
-        <target state="new">Failed to Delete</target>
+        <target state="translated">未能删除</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateFailedToProvision">
         <source>Failed to Provision</source>
-        <target state="new">Failed to Provision</target>
+        <target state="translated">未能预配</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateMissingInAzure">
         <source>Missing in Azure</source>
-        <target state="new">Missing in Azure</target>
+        <target state="translated">Azure 中缺少</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateMissingSubscriptionConfiguration">
         <source>Missing subscription configuration</source>
-        <target state="new">Missing subscription configuration</target>
+        <target state="translated">缺少订阅配置</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioned">
         <source>Provisioned</source>
-        <target state="new">Provisioned</target>
+        <target state="translated">已预配</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisionedMultipleAzureResourcesFormat">
         <source>Provisioned {0} Azure resources</source>
-        <target state="new">Provisioned {0} Azure resources</target>
+        <target state="translated">已预配 {0} 个 Azure 资源</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioningMultipleAzureResourcesFormat">
         <source>Provisioning {0} Azure resources</source>
-        <target state="new">Provisioning {0} Azure resources</target>
+        <target state="translated">正在预配 {0} 个 Azure 资源</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioningPrefix">
         <source>Provisioning </source>
-        <target state="new">Provisioning </target>
+        <target state="translated">正在预配 </target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioningResourceFormat">
         <source>Provisioning {0}</source>
-        <target state="new">Provisioning {0}</target>
+        <target state="translated">正在预配 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateStarting">
         <source>Starting</source>
-        <target state="new">Starting</target>
+        <target state="translated">正在启动</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateWaitingForDeployment">
         <source>Waiting for Deployment</source>
-        <target state="new">Waiting for Deployment</target>
+        <target state="translated">正在等待部署</target>
         <note />
       </trans-unit>
       <trans-unit id="SubscriptionDialogTitle">
@@ -668,17 +668,17 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
       </trans-unit>
       <trans-unit id="TenantResourceSuffixDescription">
         <source>Optional. Appended to the names of tenant-wide resources created by this AppHost. Leave empty to use the names from AppHost code unchanged. Changing the suffix targets different resources; previous resources are not renamed or deleted.</source>
-        <target state="new">Optional. Appended to the names of tenant-wide resources created by this AppHost. Leave empty to use the names from AppHost code unchanged. Changing the suffix targets different resources; previous resources are not renamed or deleted.</target>
+        <target state="translated">可选。追加到此 AppHost 创建的租户范围资源的名称。留空以使用不变的 AppHost 代码中的名称。更改后缀针对不同的资源;不会重命名或删除以前的资源。</target>
         <note />
       </trans-unit>
       <trans-unit id="TenantResourceSuffixLabel">
         <source>Tenant-scoped resource suffix</source>
-        <target state="new">Tenant-scoped resource suffix</target>
+        <target state="translated">租户范围的资源后缀</target>
         <note />
       </trans-unit>
       <trans-unit id="TenantResourceSuffixSelectionMessage">
         <source>Add a suffix to tenant-wide resources created by this AppHost (optional).</source>
-        <target state="new">Add a suffix to tenant-wide resources created by this AppHost (optional).</target>
+        <target state="translated">请为此 AppHost 创建的租户级资源添加后缀(可选)。</target>
         <note />
       </trans-unit>
       <trans-unit id="TenantSelectionMessage">

@@ -1,10 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-namespace Aspire.Cli.Agents.AspireSkills;
+namespace Aspire.Cli.Utils;
 
 /// <summary>
-/// Owns a leased temporary directory under a CLI-managed cache root.
+/// Owns a leased temporary directory under a caller-selected root.
 /// </summary>
 internal sealed class TemporaryCacheDirectory : IDisposable
 {
@@ -46,7 +46,8 @@ internal sealed class TemporaryCacheDirectory : IDisposable
             // Acquire the sibling lease before making the directory visible. A concurrent stale-directory
             // sweep can therefore never claim and remove a directory between its creation and lease acquisition.
             lease = OpenLease(fullName);
-            Directory.CreateDirectory(fullName);
+            // Staging can contain generated NuGet credentials even when its parent is public.
+            Aspire.Shared.DirectoryHelper.CreateWithOwnerOnlyPermissions(fullName);
             return new TemporaryCacheDirectory(
                 fullName,
                 leasePath,

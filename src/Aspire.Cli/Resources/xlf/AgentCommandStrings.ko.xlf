@@ -1,85 +1,85 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ko" original="../AgentCommandStrings.resx">
     <body>
       <trans-unit id="AgentTelemetryCommand_ClientNameDescription">
         <source>The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</source>
-        <target state="new">The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</target>
+        <target state="translated">이벤트를 생성한 AI 에이전트 클라이언트(예: copilot-cli, claude-code 또는 vscode)</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_Description">
         <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
-        <target state="new">Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</target>
+        <target state="translated">AI 에이전트 기술 및 도구 사용 원격 분석을 기록합니다. Aspire 에이전트 원격 분석 후크 스크립트에서 호출되며, 직접 실행하도록 설계되지 않았습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
         <source>The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</source>
-        <target state="new">The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</target>
+        <target state="translated">원격 분석 이벤트 유형(skill_invocation, tool_invocation 또는 reference_file_read)</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_FileReferenceDescription">
         <source>The Aspire skills-relative reference file path for a reference_file_read event</source>
-        <target state="new">The Aspire skills-relative reference file path for a reference_file_read event</target>
+        <target state="translated">reference_file_read 이벤트에 대한 Aspire 기술 상대 참조 파일 경로</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
         <source>The opaque AI agent session identifier</source>
-        <target state="new">The opaque AI agent session identifier</target>
+        <target state="translated">불투명한 AI 에이전트 세션 식별자</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SkillNameDescription">
         <source>The Aspire skill name for a skill_invocation event</source>
-        <target state="new">The Aspire skill name for a skill_invocation event</target>
+        <target state="translated">skill_invocation 이벤트에 대한 Aspire 기술 이름</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_TimestampDescription">
         <source>The timestamp recorded for the event</source>
-        <target state="new">The timestamp recorded for the event</target>
+        <target state="translated">이벤트에 대해 기록된 타임스탬프</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_ToolNameDescription">
         <source>The Aspire MCP tool name for a tool_invocation event</source>
-        <target state="new">The Aspire MCP tool name for a tool_invocation event</target>
+        <target state="translated">tool_invocation 이벤트에 대한 Aspire MCP 도구 이름</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
         <source>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</source>
-        <target state="new">Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</target>
+        <target state="translated">포함된 Aspire 기술 보관함이 SHA-512 확인에 실패했습니다. '{0}' 필요한데 '{1}' 받았습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_GitHubUnavailable">
         <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</source>
-        <target state="new">Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</target>
+        <target state="translated">확인된 GitHub 릴리스 자산에서 Aspire 기술을 다운로드할 수 없으며, 유효한 캐시 번들이나 포함된 번들도 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InvalidMetadata">
         <source>Embedded Aspire skills bundle metadata is invalid: {0}</source>
-        <target state="new">Embedded Aspire skills bundle metadata is invalid: {0}</target>
+        <target state="translated">포함된 Aspire 기술 번들 메타데이터가 유효하지 않음: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MetadataRepositoryMismatch">
         <source>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</source>
-        <target state="new">Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</target>
+        <target state="translated">포함된 Aspire 기술 메타데이터 리포지토리 '{0}'이(가) 필요한 리포지토리 '{1}'와(과) 일치하지 않습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataAssetName">
         <source>Embedded Aspire skills metadata must specify a release asset name.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a release asset name.</target>
+        <target state="translated">포함된 Aspire 기술 메타데이터에 릴리스 자산 이름을 지정해야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataSha512">
         <source>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</source>
-        <target state="new">Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</target>
+        <target state="translated">포함된 Aspire 기술 메타데이터에 릴리스 자산 SHA-512 해시를 지정해야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataTag">
         <source>Embedded Aspire skills metadata must specify a GitHub release tag.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a GitHub release tag.</target>
+        <target state="translated">포함된 Aspire 기술 메타데이터는 GitHub 릴리스 태그를 지정해야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataVersion">
         <source>Embedded Aspire skills metadata must specify a version.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a version.</target>
+        <target state="translated">포함된 Aspire 기술 메타데이터에 버전을 지정해야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">
@@ -87,9 +87,14 @@
         <target state="translated">다음 에이전트 구성에서 더 이상 사용되지 않는 'mcp start' 명령을 사용하고 있습니다. 업데이트하시겠습니까?</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConfigurationWriteRefused">
+        <source>Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</source>
+        <target state="new">Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeprecatedConfigFix">
         <source>Run 'aspire agent init' to update configuration</source>
-        <target state="translated">구성을 업데이트하도록 'agent init' 명령 실행</target>
+        <target state="translated">구성을 업데이트하도록 'aspire agent init' 명령 실행</target>
         <note />
       </trans-unit>
       <trans-unit id="DeprecatedConfigUpdate_Description">
@@ -104,277 +109,364 @@
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage AI agent environment configuration</source>
-        <target state="needs-review-translation">AI 에이전트 통합을 관리합니다.</target>
+        <target state="translated">AI 에이전트 환경 구성 관리</target>
         <note />
       </trans-unit>
       <trans-unit id="Environment_ClaudeCode">
         <source>Claude Code</source>
-        <target state="new">Claude Code</target>
+        <target state="translated">Claude 코드</target>
         <note />
       </trans-unit>
       <trans-unit id="Environment_Copilot">
         <source>GitHub Copilot</source>
-        <target state="new">GitHub Copilot</target>
+        <target state="translated">GitHub Copilot</target>
         <note />
       </trans-unit>
       <trans-unit id="Environment_OpenCode">
         <source>OpenCode</source>
-        <target state="new">OpenCode</target>
+        <target state="translated">OpenCode</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_AspireSkillChoice">
+        <source>Agent assets from microsoft/aspire-skills</source>
+        <target state="new">Agent assets from microsoft/aspire-skills</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_AspireSourceOptionDescription">
+        <source>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</source>
+        <target state="new">Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigurationTarget">
+        <source>{0}: {1}</source>
+        <target state="new">{0}: {1}</target>
+        <note>{0} is the agent name, and {1} lists its configuration paths separated by commas.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigureAspireSourcePrompt">
+        <source>Which source do you want to use for Aspire?</source>
+        <target state="new">Which source do you want to use for Aspire?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
-        <target state="new">Install Aspire MCP server</target>
+        <target state="translated">Aspire MCP 서버 설치</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServerPrompt">
         <source>Configure the Aspire MCP server for selected agent environments?</source>
-        <target state="new">Configure the Aspire MCP server for selected agent environments?</target>
+        <target state="translated">선택한 에이전트 환경에 대해 Aspire MCP 서버를 구성하시겠습니까?</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfiguredTargets">
+        <source>Configured Aspire plugin:
+  {0}</source>
+        <target state="new">Configured Aspire plugin:
+  {0}</target>
+        <note>{0} lists one agent per line, with that agent's configuration paths comma-separated.</note>
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
-        <target state="needs-review-translation">감지된 에이전트에 대한 에이전트 환경 구성을 초기화합니다.</target>
+        <target state="translated">선택한 에이전트 클라이언트의 구성 및 기술 초기화</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_EmbeddedSkillsChoice">
+        <source>Embedded (bundled skill files)</source>
+        <target state="new">Embedded (bundled skill files)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentLocationDescription">
         <source>{0}: {1}</source>
-        <target state="new">{0}: {1}</target>
+        <target state="translated">{0}: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentsOptionDescription">
         <source>Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</source>
-        <target state="new">Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</target>
+        <target state="translated">쉼표로 구분된 에이전트 ID({0}), '{1}' 또는 '{2}'입니다. 검색된 에이전트를 기본값으로 사용하거나, 에이전트가 검색되지 않으면 Copilot을 기본값으로 사용합니다.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ExistingConfigurationConflict">
+        <source>Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</source>
+        <target state="new">Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</target>
+        <note>{0} identifies the conflicting JSON setting or environment override.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_FailedTarget">
+        <source>Failed to configure Aspire plugin:
+  {0}</source>
+        <target state="new">Failed to configure Aspire plugin:
+  {0}</target>
+        <note>{0} lists each agent's configuration path and failure details, one target per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_FailedToInstallSkill">
         <source>Failed to install {0} skill at {1}: {2}</source>
-        <target state="new">Failed to install {0} skill at {1}: {2}</target>
+        <target state="translated">{1}에서 {0} 기술을 설치하지 못했습니다. {2}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_GlobalScope">
         <source>Global (Install in your home directory; available across all projects)</source>
-        <target state="new">Global (Install in your home directory; available across all projects)</target>
+        <target state="translated">전역(홈 디렉터리에 설치, 모든 프로젝트에서 사용 가능)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallationLocations">
         <source>Installation locations:</source>
-        <target state="new">Installation locations:</target>
+        <target state="translated">설치 위치:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledPlaywrightCli">
         <source>Installed Playwright CLI.</source>
-        <target state="new">Installed Playwright CLI.</target>
+        <target state="translated">Playwright CLI를 설치했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummary">
         <source>Installed Aspire agent skills:</source>
-        <target state="new">Installed Aspire agent skills:</target>
+        <target state="translated">설치된 Aspire 에이전트 기술:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
         <source>Locations: {0}</source>
-        <target state="new">Locations: {0}</target>
+        <target state="translated">위치: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummarySkills">
         <source>Skills: {0}</source>
-        <target state="new">Skills: {0}</target>
+        <target state="translated">기술: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InvalidAspireSource">
+        <source>Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</source>
+        <target state="new">Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InvalidEnvironments">
         <source>Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
-        <target state="new">Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <target state="translated">에이전트 선택 '{0}'이 잘못되었습니다. {1}, '{2}' 또는 '{3}'를 사용합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InvalidScope">
         <source>Invalid scope '{0}'. Use 'project' or 'global'.</source>
-        <target state="new">Invalid scope '{0}'. Use 'project' or 'global'.</target>
+        <target state="translated">범위 '{0}'이(가) 잘못되었습니다. 'project' 또는 'global'을 사용하세요.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InvalidSkills">
+        <source>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
+        <target state="new">Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_LocalSkillsConflict">
+        <source>Local Aspire skill files may override plugin skills:
+{0}</source>
+        <target state="new">Local Aspire skill files may override plugin skills:
+{0}</target>
+        <note>{0} lists the local skill entry-point paths, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_McpConfigurationDescription">
         <source>Configure Aspire MCP for {0} at {1}</source>
-        <target state="new">Configure Aspire MCP for {0} at {1}</target>
+        <target state="translated">{1}에서 {0}용 Aspire MCP 구성</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_McpLocationHint">
         <source>MCP: {0}</source>
-        <target state="new">MCP: {0}</target>
+        <target state="translated">MCP: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_McpOptionDescription">
         <source>Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</source>
-        <target state="new">Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</target>
+        <target state="translated">선택한 에이전트 환경에 대해 Aspire MCP 서버를 구성합니다. MCP를 구성하지 않은 상태로 두려면 생략합니다. 옵트인하려면 '--mcp'를 전달하고, 명시적으로 옵트아웃하려면 '--mcp=false'를 전달합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_NoConfigurationSelected">
         <source>No agent configuration selected. Existing configuration was left unchanged.</source>
-        <target state="new">No agent configuration selected. Existing configuration was left unchanged.</target>
+        <target state="translated">에이전트 구성을 선택하지 않았습니다. 기존 구성이 변경되지 않은 상태로 남아 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
         <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
-        <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
+        <target state="translated">Playwright CLI에 npm이 필요하지만 PATH에서 npm을 찾을 수 없습니다. 설치를 건너뛰는 중입니다.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_PluginRiskWarning">
+        <source>Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from {0}.</source>
+        <target state="new">Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from {0}.</target>
+        <note>{0} is the official Aspire skills repository URL.</note>
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>
-        <target state="new">Project (Install in your workspace root; committed with your project)</target>
+        <target state="translated">프로젝트(작업 영역 루트에 설치, 프로젝트와 함께 커밋됨)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoteSkillsChoice">
+        <source>Remote (plugin)</source>
+        <target state="new">Remote (plugin)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoteSkillsConflict">
+        <source>The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</source>
+        <target state="new">The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
         <source>Configuration and skill scope: project or global (default: project)</source>
-        <target state="new">Configuration and skill scope: project or global (default: project)</target>
+        <target state="translated">구성 및 기술 범위: 프로젝트 또는 전역(기본값: 프로젝트)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectAgentsPrompt">
         <source>Which agents do you use?</source>
-        <target state="new">Which agents do you use?</target>
+        <target state="translated">어떤 에이전트를 사용하시나요?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectScopePrompt">
         <source>Installation scope</source>
-        <target state="new">Installation scope</target>
+        <target state="translated">설치 범위</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocation">
         <source>{0} (shared: {1})</source>
-        <target state="new">{0} (shared: {1})</target>
+        <target state="translated">{0}(공유: {1})</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocationNotice">
         <source>Shared files may be discovered by agents that aren't selected.</source>
-        <target state="new">Shared files may be discovered by agents that aren't selected.</target>
+        <target state="translated">선택되지 않은 에이전트가 공유 파일을 검색할 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>
-        <target state="new">Skills: {0}</target>
+        <target state="translated">기술: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
-        <source>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</source>
-        <target state="new">Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</target>
+        <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</source>
+        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
         <source>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</target>
+        <target state="translated">해당 구성 파일에 잘못된 JSON이 포함되어 있기 때문에 {0}에 대한 원격 분석 후크를 건너뛰었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedUnexpectedShape">
         <source>Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</target>
+        <target state="translated">해당 구성에 예기치 않은 모양이 있기 때문에 {0}에 대한 원격 분석 후크를 건너뛰었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookWriteFailed">
         <source>Skipped the telemetry hook for {0} because its configuration could not be written.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration could not be written.</target>
+        <target state="translated">해당 구성을 쓸 수 없기 때문에 {0}에 대한 원격 분석 후크를 건너뛰었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
         <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
+        <target state="translated">다음에 대한 Aspire 에이전트 원격 분석 후크를 설치했습니다. {0}. Aspire 기술, MCP 도구 및 참조 파일 사용만 기록됩니다. ASPIRE_CLI_TELEMETRY_OPTOUT=true로 설정하면 언제든지 옵트아웃할 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
-        <target state="new">Path to the workspace root directory</target>
+        <target state="translated">작업 영역 루트 디렉터리의 경로</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InstallingStatus">
         <source>Installing Aspire skills...</source>
-        <target state="new">Installing Aspire skills...</target>
+        <target state="translated">Aspire 기술을 설치하는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InvalidBundle">
         <source>The Aspire skills bundle is invalid: {0}</source>
-        <target state="new">The Aspire skills bundle is invalid: {0}</target>
+        <target state="translated">Aspire 기술 번들이 유효하지 않음: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalSkills_ReadFailed">
+        <source>Could not check local Aspire skills at '{0}': {1}</source>
+        <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="McpServerContainerMustBeJsonObject">
         <source>The MCP server container '{0}' in '{1}' must be a JSON object.</source>
-        <target state="new">The MCP server container '{0}' in '{1}' must be a JSON object.</target>
+        <target state="translated">'{1}'에서 '{0}' MCP 서버 컨테이너는 JSON 개체여야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToDownload">
         <source>Failed to download {0}.</source>
-        <target state="new">Failed to download {0}.</target>
+        <target state="translated">{0}을(를) 다운로드하지 못했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToGenerateSkillFiles">
         <source>Failed to generate Playwright CLI skill files.</source>
-        <target state="new">Failed to generate Playwright CLI skill files.</target>
+        <target state="translated">Playwright CLI 기술 파일을 생성하지 못했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToInstallGlobally">
         <source>Failed to install {0} globally via npm.</source>
-        <target state="new">Failed to install {0} globally via npm.</target>
+        <target state="translated">{0}을(를) npm을 통해 전역으로 설치하지 못했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToMirrorSkillFiles">
         <source>Failed to copy Playwright CLI skill files to the selected locations.</source>
-        <target state="new">Failed to copy Playwright CLI skill files to the selected locations.</target>
+        <target state="translated">선택한 위치에 Playwright CLI 기술 파일을 복사하지 못했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToResolvePackage">
         <source>Failed to resolve {0} from the npm registry.</source>
-        <target state="new">Failed to resolve {0} from the npm registry.</target>
+        <target state="translated">npm 레지스트리에서 {0}을(를) 확인하지 못했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_InstalledWithMirrorWarnings">
         <source>Installed Playwright CLI (some locations failed to mirror).</source>
-        <target state="new">Installed Playwright CLI (some locations failed to mirror).</target>
+        <target state="translated">Playwright CLI를 설치했습니다(일부 위치는 미러하지 못함).</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_InstallingStatus">
         <source>Installing Playwright CLI...</source>
-        <target state="new">Installing Playwright CLI...</target>
+        <target state="translated">Playwright CLI를 설치하는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_IntegrityVerificationFailed">
         <source>Integrity verification failed for {0}. The downloaded package may have been tampered with.</source>
-        <target state="new">Integrity verification failed for {0}. The downloaded package may have been tampered with.</target>
+        <target state="translated">{0}에 대한 무결성 확인에 실패했습니다. 다운로드한 패키지가 변조되었을 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_InvalidVersionOverride">
         <source>The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</source>
-        <target state="new">The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</target>
+        <target state="translated">구성 설정 '{0}'('{1}')의 값이 유효한 SemVer 2.0 버전이 아닙니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_ProvenanceVerificationFailed">
         <source>Provenance verification failed for {0}: {1}</source>
-        <target state="new">Provenance verification failed for {0}: {1}</target>
+        <target state="translated">{0}의 출처 확인이 실패함: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_Aspire">
         <source>Aspire CLI commands and workflows for distributed apps</source>
-        <target state="new">Aspire CLI commands and workflows for distributed apps</target>
+        <target state="translated">분산 앱을 위한 Aspire CLI 명령 및 워크플로</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_AspireDeployment">
         <source>Aspire deployment target selection, preflight, publish, and deploy workflows</source>
-        <target state="new">Aspire deployment target selection, preflight, publish, and deploy workflows</target>
+        <target state="translated">Aspire 배포 대상 선택, 사전 점검, 게시 및 배포 워크플로</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_Aspireify">
         <source>One-time setup: wire up AppHost with discovered projects</source>
-        <target state="new">One-time setup: wire up AppHost with discovered projects</target>
+        <target state="translated">일회성 설정: 검색된 프로젝트를 AppHost와 연결</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_DotnetInspect">
         <source>Query .NET API surfaces across NuGet packages and platform libraries</source>
-        <target state="new">Query .NET API surfaces across NuGet packages and platform libraries</target>
+        <target state="translated">NuGet 패키지 및 플랫폼 라이브러리에서 .NET API 표면 쿼리</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_PlaywrightCli">
         <source>Browser automation and functional testing</source>
-        <target state="new">Browser automation and functional testing</target>
+        <target state="translated">브라우저 자동화 및 기능 테스트</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectSkills">
-        <source>Which skills should be installed?</source>
-        <target state="new">Which skills should be installed?</target>
+        <source>Which skills and tools do you want to configure?</source>
+        <target state="new">Which skills and tools do you want to configure?</target>
         <note />
       </trans-unit>
       <trans-unit id="MalformedConfigFileError">
@@ -384,12 +476,12 @@
       </trans-unit>
       <trans-unit id="McpCommand_Description">
         <source>Start the MCP (Model Context Protocol) server</source>
-        <target state="needs-review-translation">MCP(모델 컨텍스트 프로토콜) 서버를 시작합니다.</target>
+        <target state="translated">MCP(모델 컨텍스트 프로토콜) 서버 시작</target>
         <note />
       </trans-unit>
       <trans-unit id="SkipNoneDescription">
         <source>None — skip</source>
-        <target state="new">None — skip</target>
+        <target state="translated">없음 – 건너뛰기</target>
         <note />
       </trans-unit>
       <trans-unit id="SkippedMalformedConfigFile">

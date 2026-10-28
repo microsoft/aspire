@@ -133,7 +133,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The experimental Aspire tray is ready..
+        ///   Looks up a localized string similar to The Aspire Tray is starting..
         /// </summary>
         internal static string Started {
             get {

@@ -636,10 +636,15 @@ suite('E2E launch profile', () => {
         }
     });
 
-    test('preflights locked ExTester dependency graph before starting the E2E matrix', () => {
+    test('packages the VSIX and preflights locked ExTester before starting the E2E matrix', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const unitWorkflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-unit-tests.yml'), 'utf8');
+        const prerequisiteStart = workflow.indexOf('verify_prerequisites:');
+        const matrixStart = workflow.indexOf('extension_e2e:');
+        assert.ok(prerequisiteStart >= 0 && matrixStart > prerequisiteStart);
+        const prerequisiteJob = workflow.slice(prerequisiteStart, matrixStart);
 
         assert.ok(runner.includes('--verify-extester-feed'));
         assert.ok(runner.includes('Verifying vscode-extension-tester@'));
@@ -648,9 +653,16 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('const matchedTestSpecs = verifyExtesterFeedOnly ? [] : findSpecMatches(testSpec);'));
         assert.ok(!runner.includes('ASPIRE_EXTENSION_E2E_EXTESTER_VERSION'));
         assert.ok(workflow.includes('Verify locked ExTester'));
-        assert.ok(workflow.includes('verify_extester_feed:'));
         assert.ok(workflow.includes('run: node scripts/run-e2e.js --verify-extester-feed'));
-        assert.ok(workflow.includes('needs: verify_extester_feed'));
+        assert.ok(prerequisiteJob.includes('- name: Package VSIX'));
+        const createOutputDirectory = prerequisiteJob.indexOf('mkdir -p out');
+        const packageVsix = prerequisiteJob.indexOf('corepack yarn run vsce package --pre-release -o out/aspire-extension.vsix');
+        assert.ok(createOutputDirectory >= 0 && packageVsix > createOutputDirectory);
+        assert.ok(prerequisiteJob.includes('- name: Upload VSIX'));
+        assert.ok(prerequisiteJob.includes('if-no-files-found: error'));
+        assert.ok(!prerequisiteJob.includes('- name: Download VSIX'));
+        assert.ok(!unitWorkflow.includes('- name: Package VSIX'));
+        assert.ok(workflow.includes('needs: verify_prerequisites'));
         assert.ok(!workflow.includes('extester_feed_unavailable:'));
         assert.ok(!workflow.includes('VS Code extension E2E matrix skipped'));
     });

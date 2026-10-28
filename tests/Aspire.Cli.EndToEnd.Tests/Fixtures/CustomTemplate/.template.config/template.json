@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "identity": "Aspire.Tests.CustomTemplate",
+  "name": "Custom template E2E fixture",
+  "shortName": "custom-template-fixture",
+  "sourceName": "TemplateApp",
+  "symbols": {
+    "Greeting": {
+      "type": "parameter",
+      "datatype": "string",
+      "displayName": "Greeting text",
+      "isRequired": true,
+      "replaces": "GreetingValue"
+    },
+    "IncludeReadme": {
+      "type": "parameter",
+      "datatype": "bool",
+      "displayName": "Include readme",
+      "defaultValue": "true"
+    },
+    "ServiceKind": {
+      "type": "parameter",
+      "datatype": "choice",
+      "displayName": "Service kind",
+      "defaultValue": "api",
+      "replaces": "ServiceKindValue",
+      "choices": [
+        { "choice": "worker", "displayName": "Background worker" },
+        { "choice": "api", "displayName": "HTTP API" }
+      ]
+    },
+    "Features": {
+      "type": "parameter",
+      "datatype": "choice",
+      "description": "Included features",
+      "allowMultipleValues": true,
+      "defaultValue": "web",
+      "replaces": "FeaturesValue",
+      "choices": [
+        { "choice": "worker", "displayName": "Worker support" },
+        { "choice": "web", "displayName": "Web support" }
+      ]
+    }
+  },
+  "sources": [
+    {
+      "modifiers": [
+        { "condition": "(!IncludeReadme)", "exclude": [ "README.txt" ] }
+      ]
+    }
+  ]
+}
