@@ -82,6 +82,11 @@ internal abstract class PipelineCommandBase : BaseCommand
         Description = SharedCommandStrings.PipelineListStepsOptionDescription
     };
 
+    protected static readonly Option<OutputFormat> s_listStepsFormatOption = new("--format")
+    {
+        Description = SharedCommandStrings.PipelineFormatOptionDescription
+    };
+
     protected abstract string OperationCompletedPrefix { get; }
     protected abstract string OperationFailedPrefix { get; }
 
@@ -620,6 +625,13 @@ internal abstract class PipelineCommandBase : BaseCommand
         if (!TryExtractListStepsFormat(unmatchedTokens, out outputFormat, out unmatchedTokens))
         {
             return false;
+        }
+
+        // Strict commands register --format so the parser can reject other unknown arguments.
+        // Forwarding commands leave it unmatched for the list-only extraction above.
+        if (parseResult.GetResult(s_listStepsFormatOption) is not null)
+        {
+            outputFormat = parseResult.GetValue(s_listStepsFormatOption);
         }
 
         if (formatTokenParsedAsTarget)

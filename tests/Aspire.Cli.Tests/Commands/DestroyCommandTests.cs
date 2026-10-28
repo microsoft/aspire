@@ -31,6 +31,41 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
     }
 
+    [Theory]
+    [InlineData("destroy --yes --force", "--force")]
+    [InlineData("destroy --yes --unknown=value", "--unknown=value")]
+    [InlineData("destroy --yes unexpected", "unexpected")]
+    [InlineData("destroy --list-steps --force", "--force")]
+    public async Task DestroyCommandRejectsUnknownArgumentsBeforeStartingAppHost(string commandLine, string unknownArgument)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostStarted = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                {
+                    appHostStarted = true;
+                    return Task.FromResult(0);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        var error = Assert.Single(result.Errors);
+        Assert.Contains(unknownArgument, error.Message);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.False(appHostStarted);
+    }
+
     [Fact]
     public async Task DestroyCommandFailsWithInvalidProjectFile()
     {

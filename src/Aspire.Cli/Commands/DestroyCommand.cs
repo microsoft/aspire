@@ -24,6 +24,9 @@ internal sealed class DestroyCommand : PipelineCommandBase
         CommonCommandServices services)
         : base("destroy", DestroyCommandStrings.Description, runner, projectLocator, features, hostEnvironment, projectFactory, configuration, environment, aspireSecretsStoreResolver, logger, ansiConsole, services)
     {
+        TreatUnmatchedTokensAsErrors = true;
+        Options.Add(s_listStepsFormatOption);
+
         _yesOption = new Option<bool>("--yes", "-y")
         {
             Description = DestroyCommandStrings.YesOptionDescription
