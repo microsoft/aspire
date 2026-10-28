@@ -220,6 +220,51 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Theory]
+    [InlineData("repository", "ref", "path")]
+    [InlineData("Repository", "Ref", "Path")]
+    public async Task TemplateSourceConfig_EditsTypedSourcesWithNullFieldsWithoutDuplicatingKeys(
+        string repositoryField, string refField, string pathField)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CreateServices(workspace, new TestInteractionService(), interactive: true).BuildServiceProvider();
+        var configuration = provider.GetRequiredService<IConfigurationService>();
+        var path = configuration.GetSettingsFilePath(true);
+        var settings = new JsonObject
+        {
+            ["templates"] = new JsonObject
+            {
+                ["company"] = new JsonObject
+                {
+                    [repositoryField] = "https://example.test/repo",
+                    [refField] = null,
+                    [pathField] = null
+                }
+            }
+        };
+        await File.WriteAllTextAsync(path, settings.ToJsonString());
+        var sources = provider.GetRequiredService<ConfiguredTemplateSourceService>();
+        Assert.Equal(new TemplateSource(".", "https://example.test/repo", null),
+            Assert.Single(await sources.GetSourcesAsync(default)).Value.Template);
+
+        var result = await provider.GetRequiredService<RootCommand>()
+            .Parse("config set templates.company.path templates/api --global").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result);
+        var edited = JsonNode.Parse(await File.ReadAllTextAsync(path))!["templates"]!["company"]!.AsObject();
+        Assert.Equal([repositoryField, refField, pathField], edited.Select(property => property.Key));
+        Assert.Equal("templates/api", edited[pathField]!.GetValue<string>());
+        Assert.Null(edited[refField]);
+        Assert.Equal(new TemplateSource("templates/api", "https://example.test/repo", null),
+            Assert.Single(await sources.GetSourcesAsync(default)).Value.Template);
+
+        Assert.True(await configuration.DeleteConfigurationAsync("templates.company.PATH", isGlobal: true));
+        var deleted = JsonNode.Parse(await File.ReadAllTextAsync(path))!["templates"]!["company"]!.AsObject();
+        Assert.Equal([repositoryField, refField], deleted.Select(property => property.Key));
+        Assert.Equal(new TemplateSource(".", "https://example.test/repo", null),
+            Assert.Single(await sources.GetSourcesAsync(default)).Value.Template);
+    }
+
+    [Theory]
     [InlineData("{}")]
     [InlineData("""{"templates":{"company":{"ref":"main"}}}""")]
     [InlineData("""{"Templates":{"Company":{"ref":"main"}}}""")]

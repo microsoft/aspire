@@ -18,21 +18,34 @@ internal static class TemplateSourceConfiguration
             throw new TemplateSourceConfigurationException(settingPath, NewCommandStrings.InvalidConfiguredTemplateSource);
         }
 
+        string? path = null;
+        string? repository = null;
+        string? reference = null;
         foreach (var property in value.EnumerateObject())
         {
-            if (property.Name is not ("repository" or "ref" or "path"))
+            var field = property.Name.ToLowerInvariant();
+            if (field is not ("repository" or "ref" or "path"))
             {
                 throw new TemplateSourceConfigurationException($"{settingPath}.{property.Name}", NewCommandStrings.TemplateSourceUnknownField);
             }
-            ReadString(property.Value, $"{settingPath}.{property.Name}");
+            var text = property.Value.ValueKind is JsonValueKind.Null
+                ? null
+                : ReadString(property.Value, $"{settingPath}.{property.Name}");
+            switch (field)
+            {
+                case "path":
+                    path = text;
+                    break;
+                case "repository":
+                    repository = text;
+                    break;
+                case "ref":
+                    reference = text;
+                    break;
+            }
         }
 
-        return Parse(
-            ReadOptionalString(value, "path", settingPath),
-            ReadOptionalString(value, "repository", settingPath),
-            ReadOptionalString(value, "ref", settingPath),
-            settingPath,
-            requireComplete);
+        return Parse(path, repository, reference, settingPath, requireComplete);
     }
 
     public static ConfiguredTemplateSource Parse(
@@ -88,9 +101,6 @@ internal static class TemplateSourceConfiguration
         }
     }
 
-    private static string? ReadOptionalString(JsonElement value, string field, string settingPath) =>
-        value.TryGetProperty(field, out var property) ? ReadString(property, $"{settingPath}.{field}") : null;
-
     public static void ValidateRepository(string repository, string settingPath)
     {
         if (!GitHelpers.IsValidRepositoryUrl(repository))
@@ -133,6 +143,10 @@ internal static class TemplateSourceConfiguration
         if (parts.Length > 1 && settings[parts[0]] is JsonObject sources)
         {
             parts[1] = GetPropertyName(sources, parts[1], StringComparisons.TemplateSourceName);
+            if (parts.Length > 2 && sources[parts[1]] is JsonObject source)
+            {
+                parts[2] = GetPropertyName(source, parts[2], StringComparison.OrdinalIgnoreCase);
+            }
         }
 
         return string.Join('.', parts);
@@ -151,7 +165,7 @@ internal static class TemplateSourceConfiguration
             throw new TemplateSourceConfigurationException("templates", NewCommandStrings.TemplateSourcesMustBeObject);
         }
         ValidateName(parts[1]);
-        if (parts.Length > 3 || (parts.Length == 3 && parts[2] is not ("repository" or "ref" or "path")))
+        if (parts.Length > 3 || (parts.Length == 3 && parts[2].ToLowerInvariant() is not ("repository" or "ref" or "path")))
         {
             throw new TemplateSourceConfigurationException(key.Replace(':', '.'), NewCommandStrings.TemplateSourceUnknownField);
         }

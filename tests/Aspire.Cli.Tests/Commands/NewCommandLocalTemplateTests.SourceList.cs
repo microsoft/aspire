@@ -73,6 +73,7 @@ public partial class NewCommandLocalTemplateTests
             Assert.Empty(interaction.DisplayedRawText);
             using var writer = new StringWriter(CultureInfo.InvariantCulture);
             var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(writer), Ansi = AnsiSupport.No });
+            console.Profile.Capabilities.Ansi = false;
             console.Profile.Width = 160;
             console.Write(Assert.Single(interaction.DisplayedRenderables));
             await Verify(writer.ToString()).UseParameters(json);

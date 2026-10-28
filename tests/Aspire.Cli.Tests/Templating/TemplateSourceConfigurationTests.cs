@@ -63,7 +63,6 @@ public class TemplateSourceConfigurationTests(ITestOutputHelper outputHelper)
     [InlineData("""{"repository":"https://example.test/repo","ref":42}""", "templates.example.ref")]
     [InlineData("""{"repository":"https://example.test/repo","extra":"value"}""", "templates.example.extra")]
     [InlineData("""{"repository":"https://example.test/repo","path":"../escape"}""", "templates.example.path")]
-    [InlineData("""{"Repository":"https://example.test/repo"}""", "templates.example.Repository")]
     public void ParseRejectsInvalidCompleteSourceWithSettingPath(string json, string settingPath)
     {
         using var document = JsonDocument.Parse(json);
@@ -93,6 +92,18 @@ public class TemplateSourceConfigurationTests(ITestOutputHelper outputHelper)
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { path = directory }));
         var source = TemplateSourceConfiguration.Parse(document.RootElement, "templates.example", requireComplete: true);
         Assert.Equal(new TemplateSource(directory, null, null), source.Template);
+    }
+
+    [Theory]
+    [InlineData("""{"repository":"https://example.test/repo","ref":null,"path":null}""")]
+    [InlineData("""{"Repository":"https://example.test/repo","Ref":null,"Path":null}""")]
+    public void ParseAcceptsPropertyCasingAndUnsetOptionalValues(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+
+        var source = TemplateSourceConfiguration.Parse(document.RootElement, "templates.example", requireComplete: true);
+
+        Assert.Equal(new TemplateSource(".", "https://example.test/repo", null), source.Template);
     }
 
     [Theory]
