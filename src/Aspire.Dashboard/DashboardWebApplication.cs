@@ -154,23 +154,13 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(TerminalWindow))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(TraceDetail))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Traces))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Layout.LegacyMainLayout))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.ConsoleLogs))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.Error))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.Login))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.Metrics))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.NotFound))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.Resources))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.StructuredLogs))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.Terminals))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.TerminalWindow))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.TraceDetail))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.Traces))]
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "AddRazorComponents and AddInteractiveServerComponents still warn that Blazor does not support trimming. Routed components and MainLayout are explicitly preserved, and circuit serialization uses generated Dashboard and Fluent UI contexts. Remove when Blazor supports trimming: https://aka.ms/aspnet/nativeaot.")]
     public DashboardWebApplication(
         Action<WebApplicationBuilder>? preConfigureBuilder = null,
         WebApplicationOptions? options = null)
     {
+        DashboardExperienceComponents.PreserveLegacyComponents();
+
         var startupTimestamp = Stopwatch.GetTimestamp();
 
         // Workaround MaxItemCount regression. In .NET 8 the value is set via AppContext.
@@ -243,7 +233,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Telemetry must be available before options validation so failed startup attempts
         // can be recorded even though the host never starts.
         builder.Services.TryAddScoped<ComponentTelemetryContextProvider>();
-        builder.Services.TryAddScoped<Components.Legacy.Pages.ComponentTelemetryContextProvider>();
         builder.Services.TryAddSingleton<DashboardTelemetryService>();
         builder.Services.TryAddSingleton(services => DashboardTelemetryConfiguration.Create(
             services.GetRequiredService<IConfiguration>()));

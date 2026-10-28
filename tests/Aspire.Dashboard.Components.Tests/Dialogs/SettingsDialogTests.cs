@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Components.Legacy.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Telemetry;
@@ -45,33 +44,6 @@ public sealed class SettingsDialogTests : DashboardTestContext
         Assert.Equal(
             ["System", "Light", "Dark", "Spacious", "Comfortable", "Compact", "Cards", "Home", "Graph", "System", "12-hour", "24-hour", "New dashboard", "Previous dashboard"],
             cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
-    }
-
-    [Fact]
-    public async Task LegacyDashboardExperience_UsesRadioOptionsWithoutIcons()
-    {
-        var themeManager = new ThemeManager(new TestThemeResolver());
-        await themeManager.EnsureInitializedAsync();
-        FluentUISetupHelpers.AddCommonDashboardServices(this, themeManager: themeManager);
-        FluentUISetupHelpers.SetupFluentList(this);
-
-        var cut = Render<LegacySettingsDialog>();
-
-        Assert.Empty(cut.FindAll(".icon-toggle"));
-        Assert.Collection(
-            cut.FindAll(".legacy-dashboard-experience-select fluent-radio[role='radio']"),
-            radio =>
-            {
-                Assert.Equal("modern", radio.GetAttribute("value"));
-                Assert.Equal("false", radio.GetAttribute("aria-checked"));
-            },
-            radio =>
-            {
-                Assert.Equal("legacy", radio.GetAttribute("value"));
-                Assert.Equal("true", radio.GetAttribute("aria-checked"));
-            });
-        Assert.Contains("New dashboard", cut.Find(".legacy-dashboard-experience-select").ParentElement!.TextContent);
-        Assert.Contains("Previous dashboard", cut.Find(".legacy-dashboard-experience-select").ParentElement!.TextContent);
     }
 
     [Fact]

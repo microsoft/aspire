@@ -151,6 +151,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
             new PageWaitForSelectorOptions { State = WaitForSelectorState.Attached }).DefaultTimeout();
         await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "frontend", Exact = true }).Last).ToBeVisibleAsync();
         await WaitForComponentsAndFontsAsync(page);
+        await WaitForThemeStylesAsync(page, theme);
 
         await page.EvaluateAsync(
             """
@@ -192,6 +193,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
             "html[data-theme='dark']",
             new PageWaitForSelectorOptions { State = WaitForSelectorState.Attached }).DefaultTimeout();
         await WaitForComponentsAndFontsAsync(page);
+        await WaitForThemeStylesAsync(page, "Dark");
 
         await page.EvaluateAsync("""
             async () => {
@@ -456,6 +458,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         // page is treated as scannable (see WaitForComponentsAndFontsAsync). This settles the base
         // page's comboboxes/buttons so the open click below and the scan don't race hydration.
         await WaitForComponentsAndFontsAsync(page);
+        await WaitForThemeStylesAsync(page, theme);
 
         // Open an interactive surface (dialog, flyout panel) when requested. The caller's delegate both
         // triggers the surface and waits for it to render, so the scan below audits the page with that
@@ -526,6 +529,19 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
             }
             """).DefaultTimeout();
     }
+
+    private static Task WaitForThemeStylesAsync(IPage page, string theme) =>
+        page.WaitForFunctionAsync(
+            """
+            theme => {
+                const background = getComputedStyle(document.documentElement)
+                    .getPropertyValue('--aspire-page-background')
+                    .trim()
+                    .toLowerCase();
+                return background === (theme === 'Dark' ? '#221e2d' : '#f7f7f7');
+            }
+            """,
+            theme);
 
     private static Task WaitForPageContentAsync(IPage page, string relativeUrl)
     {

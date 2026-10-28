@@ -78,7 +78,7 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal(TelemetryEventKeys.ParametersSet, log.Message);
         fixture.AssertAttributes(log.Attributes,
             new(TelemetryPropertyKeys.DashboardComponentId, TelemetryComponentIds.Resources),
-            new(TelemetryPropertyKeys.DashboardComponentType, nameof(Components.Pages.ComponentType.Page)),
+            new(TelemetryPropertyKeys.DashboardComponentType, nameof(Components.ComponentType.Page)),
             new(TelemetryPropertyKeys.ResourceView, expectedView),
             new("microsoft.operation_name", TelemetryEventKeys.ParametersSet),
             new("{OriginalFormat}", TelemetryEventKeys.ParametersSet));

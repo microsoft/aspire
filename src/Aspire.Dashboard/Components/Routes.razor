@@ -19,10 +19,13 @@
         </Found>
         <NotFound>
             <PageTitle>@Loc[nameof(Resources.Routes.NotFoundPageTitle)]</PageTitle>
-            @if (IsLegacyLocation)
+            @if (DashboardExperienceComponents.TryGetLegacyNotFound(
+                NavigationManager,
+                out var legacyLayout,
+                out var legacyNotFound))
             {
-                <LayoutView Layout="@typeof(Legacy.Layout.LegacyMainLayout)">
-                    <Aspire.Dashboard.Components.Legacy.Pages.NotFound />
+                <LayoutView Layout="@legacyLayout">
+                    <DynamicComponent Type="@legacyNotFound" />
                 </LayoutView>
             }
             else
@@ -38,18 +41,6 @@
 @code {
     private ViewportInformation? _viewportInformation;
 
-    private bool IsLegacyLocation
-    {
-        get
-        {
-            var path = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
-            return string.Equals(path, "legacy", StringComparison.OrdinalIgnoreCase) ||
-                path.StartsWith("legacy/", StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
     private static Type GetDefaultLayout(RouteData routeData) =>
-        routeData.PageType.Namespace?.StartsWith("Aspire.Dashboard.Components.Legacy.", StringComparison.Ordinal) == true
-            ? typeof(Legacy.Layout.LegacyMainLayout)
-            : typeof(Layout.MainLayout);
+        DashboardExperienceComponents.GetDefaultLayout(routeData.PageType);
 }
