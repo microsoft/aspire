@@ -84,7 +84,20 @@ internal abstract class PipelineCommandBase : BaseCommand
 
     protected static readonly Option<OutputFormat> s_listStepsFormatOption = new("--format")
     {
-        Description = SharedCommandStrings.PipelineFormatOptionDescription
+        Description = SharedCommandStrings.PipelineFormatOptionDescription,
+        CustomParser = result =>
+        {
+            // Enum binding also accepts numbers ("1") and composite names ("table,json").
+            // Use the same name-only parsing as forwarding commands' unmatched --format tokens.
+            if (result.Tokens.Count != 1 ||
+                !TryExtractListStepsFormat(["--format", result.Tokens[0].Value], out var format, out _))
+            {
+                result.AddError(InvalidListStepsFormatMessage);
+                return OutputFormat.Table;
+            }
+
+            return format;
+        }
     };
 
     protected abstract string OperationCompletedPrefix { get; }

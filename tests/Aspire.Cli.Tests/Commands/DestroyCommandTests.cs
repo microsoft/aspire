@@ -36,7 +36,13 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
     [InlineData("destroy --yes --unknown=value", "--unknown=value")]
     [InlineData("destroy --yes unexpected", "unexpected")]
     [InlineData("destroy --list-steps --force", "--force")]
-    public async Task DestroyCommandRejectsUnknownArgumentsBeforeStartingAppHost(string commandLine, string unknownArgument)
+    [InlineData("destroy --list-steps --format 0", "either 'table' or 'json'")]
+    [InlineData("destroy --list-steps --format=0", "either 'table' or 'json'")]
+    [InlineData("destroy --list-steps --format 1", "either 'table' or 'json'")]
+    [InlineData("destroy --list-steps --format=1", "either 'table' or 'json'")]
+    [InlineData("destroy --list-steps --format=2", "either 'table' or 'json'")]
+    [InlineData("destroy --list-steps --format=table,json", "either 'table' or 'json'")]
+    public async Task DestroyCommandRejectsInvalidArgumentsBeforeStartingAppHost(string commandLine, string expectedError)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostStarted = false;
@@ -59,7 +65,7 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse(commandLine);
 
         var error = Assert.Single(result.Errors);
-        Assert.Contains(unknownArgument, error.Message);
+        Assert.Contains(expectedError, error.Message);
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);

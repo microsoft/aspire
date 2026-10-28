@@ -323,6 +323,8 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [InlineData("deploy --list-steps --format=json --operation run", "deploy", "deploy")]
     [InlineData("destroy --list-steps --format=json", "destroy", null)]
     [InlineData("destroy --list-steps --format json", "destroy", null)]
+    [InlineData("destroy --list-steps --format=JSON", "destroy", null)]
+    [InlineData("destroy --list-steps --format JsOn", "destroy", null)]
     public async Task PipelineCommandWithListStepsUsesInspectOperation(string commandLine, string commandName, string? expectedStep)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
