@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire 測試專案 (NUnit)",
   "description": "包含 Aspire AppHost 專案之 NUnit 整合測試的專案。",

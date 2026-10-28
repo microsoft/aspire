@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aplicación Aspire Starter (ASP.NET Core/Blazor)",
   "description": "Plantilla de proyecto para crear una aplicación Aspire con una interfaz web Blazor y un servicio backend API web, con almacenamiento en caché Redis opcional.",

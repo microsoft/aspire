@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire テスト プロジェクト (NUnit)",
   "description": "Aspire AppHost プロジェクトの NUnit 統合テストを含むプロジェクト。",
