@@ -41,6 +41,41 @@
     width: 250px;
 }
 
+.toolbar-organize {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+::deep .toolbar-organize .metrics-organize-button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding-inline: 0;
+}
+
+.toolbar-organize ::deep .aspire-menu-container fluent-menu-list {
+    min-width: 220px;
+    padding: 4px;
+    border: 1px solid var(--colorNeutralStroke1);
+}
+
+.toolbar-organize ::deep fluent-menu-item.metrics-organize-menu-item {
+    width: calc(100% - 8px);
+    height: 34px;
+    min-height: 34px;
+}
+
+.toolbar-organize ::deep fluent-menu-item.metrics-organize-menu-item[checked] {
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground1);
+}
+
+.toolbar-organize ::deep fluent-menu-item.metrics-organize-menu-item > .aspire-menu-item-indicator {
+    color: var(--colorBrandForeground1);
+}
+
 /* Metrics chart SVG */
 ::deep .yaxislayer-above {
     transform: translate(-10px,0px);
@@ -268,6 +303,52 @@
     color: var(--colorNeutralForeground2);
     font-size: 14px;
     font-weight: 600;
+}
+
+.metrics-section-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 24px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: 20px;
+    text-align: start;
+    cursor: pointer;
+}
+
+.metrics-section-toggle:hover {
+    background: light-dark(
+        var(--colorNeutralBackground3),
+        color-mix(in srgb, var(--aspire-control-background) 96%, var(--colorNeutralForeground1)));
+}
+
+.metrics-section-toggle:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+.metrics-section-count {
+    color: var(--colorNeutralForeground3);
+    font-size: 12px;
+    font-weight: 400;
+}
+
+/* The dotted rule runs to the chevron at the end, so the header reads as one collapsible row. */
+.metrics-section-rule {
+    flex: 1 1 auto;
+    min-width: 16px;
+    border-top: 2px dotted var(--colorNeutralStroke2);
+}
+
+.metrics-section-toggle ::deep .metrics-section-chevron {
+    flex: 0 0 auto;
+    color: var(--colorNeutralForeground3);
 }
 
 ::deep .metrics-content {

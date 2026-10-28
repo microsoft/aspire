@@ -181,6 +181,9 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
             }
         }
 
+        // The probing above leaves the last candidate in place. Restore the current width so a fit that changes
+        // nothing doesn't leave the pane at a probed width.
+        layoutElement.style.setProperty('--resource-pane-expanded-width', `${width}px`);
         return fittedWidth;
     };
 
@@ -254,14 +257,20 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
         }
     };
 
+    // Returns false when there were no row actions to fit to yet, so the caller can try again once rows render.
     const fitToActions = (expandOnly = false) => {
+        if (pane.querySelector('.resource-row-action-priority-0') === null) {
+            return false;
+        }
+
         const actionsWidth = getActionsWidth();
         if (expandOnly && actionsWidth <= width) {
-            return;
+            return true;
         }
         if (resizeTo(actionsWidth) || actionsWidth === width) {
             commit();
         }
+        return true;
     };
 
     // Double-clicking fits the pane to the action disclosure rules instead of duplicating their breakpoints here.
@@ -296,7 +305,11 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
 }
 
 export function fitPaneToActions(layoutElement) {
-    registrations.get(layoutElement)?.fitToActions(true);
+    const registration = registrations.get(layoutElement);
+    if (!registration) {
+        return false;
+    }
+    return registration.fitToActions(true);
 }
 
 export function setTabListAriaLabel(tabId, label) {

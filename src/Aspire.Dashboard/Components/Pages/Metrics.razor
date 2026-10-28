@@ -100,15 +100,7 @@
                                         }
                                         @foreach (var resultGroup in resultGroups)
                                         {
-                                            <section @key="resultGroup.Key" class="metrics-filter-results-group" aria-label="@resultGroup.Key">
-                                                <h4 class="metrics-filter-results-meter">@resultGroup.Key</h4>
-                                                <MeterOverview ResourceKey="@OverviewResourceKey"
-                                                               GetResourceLabel="@ResourceLabelProvider"
-                                                               Instruments="@resultGroup.ToList()"
-                                                               Duration="@PageViewModel.SelectedDuration.Id"
-                                                               ShowMeterName="false"
-                                                               GetInstrumentUrl="@GetInstrumentUrl" />
-                                            </section>
+                                            @RenderSection(resultGroup, IsAggregate && _groupBy != MetricGroupBy.Meter)
                                         }
                                     }
                                     else if (PageViewModel.SelectedResource.Id?.ReplicaSetName != null && PageViewModel is { SelectedMeter: not null, SelectedInstrument: not null })
@@ -132,12 +124,10 @@
                                         <h3 class="meter-name-title">@Loc[nameof(Dashboard.Resources.Metrics.MetricsPinnedHeader)]</h3>
                                         @if (pinnedInstruments.Count > 0)
                                         {
-                                            <MeterOverview ResourceKey="@OverviewResourceKey"
-                                                           GetResourceLabel="@ResourceLabelProvider"
-                                                           Instruments="@pinnedInstruments"
-                                                           Duration="@PageViewModel.SelectedDuration.Id"
-                                                           ShowMeterName="true"
-                                                           GetInstrumentUrl="@GetInstrumentUrl" />
+                                            @foreach (var section in GetSections(pinnedInstruments, splitByMeterByDefault: false))
+                                            {
+                                                @RenderSection(section, !IsAggregate || _groupBy != MetricGroupBy.Meter)
+                                            }
                                         }
                                         else
                                         {
@@ -147,12 +137,10 @@
                                     else if (PageViewModel.SelectedMeter is not null && (PageViewModel.SelectedResource.Id is not null || IsAggregate))
                                     {
                                         <h3 class="meter-name-title">@PageViewModel.SelectedMeter</h3>
-                                        <MeterOverview ResourceKey="@OverviewResourceKey"
-                                                       GetResourceLabel="@ResourceLabelProvider"
-                                                       Instruments="@GetOverviewInstruments()"
-                                                       Duration="@PageViewModel.SelectedDuration.Id"
-                                                       ShowMeterName="false"
-                                                       GetInstrumentUrl="@GetInstrumentUrl" />
+                                        @foreach (var section in GetSections(GetOverviewInstruments(), splitByMeterByDefault: false))
+                                        {
+                                            @RenderSection(section, false)
+                                        }
                                     }
                                     else
                                     {
@@ -213,6 +201,42 @@
 </div>
 
 @code {
+    private RenderFragment RenderSection(IGrouping<string, OtlpInstrumentSummary> section, bool showMeterName) => __builder =>
+    {
+        var hasTitle = section.Key.Length > 0;
+        var isCollapsed = hasTitle && _collapsedSections.Contains(section.Key);
+        var instruments = section.ToList();
+        var sectionKey = section.Key;
+
+        <section @key="sectionKey" class="metrics-filter-results-group" aria-label="@(hasTitle ? sectionKey : null)">
+            @if (hasTitle)
+            {
+                @* The dotted rule fills the header so the whole row reads as a target for collapsing the group. *@
+                <h4 class="metrics-filter-results-meter">
+                    <button type="button"
+                            class="metrics-section-toggle"
+                            aria-expanded="@(isCollapsed ? "false" : "true")"
+                            @onclick="@(() => ToggleSection(sectionKey))">
+                        <span class="metrics-section-title">@sectionKey</span>
+                        <span class="metrics-section-count">@instruments.Count</span>
+                        <span class="metrics-section-rule" aria-hidden="true"></span>
+                        <FluentIcon Class="metrics-section-chevron" Value="@(isCollapsed ? (Icon)new Icons.Regular.Size16.ChevronDown() : new Icons.Regular.Size16.ChevronUp())" Color="Color.Custom" CustomColor="currentColor" />
+                    </button>
+                </h4>
+            }
+            @if (!isCollapsed)
+            {
+                <MeterOverview ResourceKey="@OverviewResourceKey"
+                               GetResourceLabel="@ResourceLabelProvider"
+                               SortBy="@OverviewSortBy"
+                               Instruments="@instruments"
+                               Duration="@PageViewModel.SelectedDuration.Id"
+                               ShowMeterName="@showMeterName"
+                               GetInstrumentUrl="@GetInstrumentUrl" />
+            }
+        </section>
+    };
+
     private void RenderToolbar(RenderTreeBuilder __builder)
     {
         @if (ResourcesLayout is null)
@@ -223,6 +247,27 @@
                             @bind-SelectedResource:after="HandleSelectedResourceChangedAsync"
                             CanSelectGrouping="true"
                             LabelClass="toolbar-left" />
+        }
+
+        @if (IsAggregate)
+        {
+            @* Shown for lists of several resources, where the same instrument can appear once per resource. *@
+            <div class="toolbar-organize" role="group" aria-label="@Loc[nameof(Dashboard.Resources.Metrics.MetricsOrganizeLandmark)]">
+                <AspireMenuButton ButtonClass="toolbar-button metrics-organize-button"
+                                  ButtonAppearance="ButtonAppearance.Default"
+                                  Icon="@(new Icons.Regular.Size20.GroupList())"
+                                  IconColor="Color.Custom"
+                                  IconCustomColor="currentColor"
+                                  ItemsProvider="GetGroupByMenuItems"
+                                  Title="@GetGroupByTooltip()" />
+                <AspireMenuButton ButtonClass="toolbar-button metrics-organize-button"
+                                  ButtonAppearance="ButtonAppearance.Default"
+                                  Icon="@(new Icons.Regular.Size20.ArrowSort())"
+                                  IconColor="Color.Custom"
+                                  IconCustomColor="currentColor"
+                                  ItemsProvider="GetSortByMenuItems"
+                                  Title="@GetSortByTooltip()" />
+            </div>
         }
 
         <SignalsActionsDisplay IsPaused="@PauseManager.AreMetricsPaused(out _)"

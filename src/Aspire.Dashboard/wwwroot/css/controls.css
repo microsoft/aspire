@@ -680,6 +680,13 @@ body {
     position: relative;
 }
 
+.aspire-menu-button > fluent-button > svg[slot="end"] {
+    flex: 0 0 16px;
+    width: 16px !important;
+    height: 16px !important;
+    margin-inline-start: auto;
+}
+
 .aspire-menu-button > .aspire-menu-container {
     position: absolute;
 }
@@ -731,6 +738,20 @@ body {
     grid-row: 1;
     position: relative;
     inset-inline-start: 8px;
+}
+
+/* Selection indicators use one trailing axis across radio and checkbox menus. This leaves the
+   leading edge for the option icon and keeps labels aligned whether or not an item is selected. */
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item > .aspire-menu-item-indicator {
+    grid-column: 4;
+    grid-row: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    inset-inline-start: auto;
+    justify-self: center;
+    color: var(--colorNeutralForeground1);
 }
 
 [cell-type="columnheader"] > fluent-menu fluent-menu-item {

@@ -14,6 +14,7 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Pages;
 
@@ -211,6 +212,12 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             return;
         }
 
+        if (IsAggregate && !_organizeStateLoaded)
+        {
+            _organizeStateLoaded = true;
+            await LoadOrganizeStateAsync();
+        }
+
         UpdateSubscription();
         UpdateTelemetryProperties();
     }
@@ -358,6 +365,143 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     private string GetInstrumentResourceLabel(OtlpInstrumentSummary instrument) =>
         OtlpHelpers.GetResourceName(instrument.ResourceView.Resource, _resources);
+
+    private const string OrganizeStorageKey = "Aspire_Metrics_Organize";
+
+    private readonly HashSet<string> _collapsedSections = new(StringComparer.OrdinalIgnoreCase);
+    private bool _organizeStateLoaded;
+
+    private void ToggleSection(string key)
+    {
+        if (!_collapsedSections.Remove(key))
+        {
+            _collapsedSections.Add(key);
+        }
+    }
+
+    private MetricGroupBy _groupBy;
+    private MetricSortBy _sortBy;
+
+    private sealed record OrganizeState(MetricGroupBy GroupBy, MetricSortBy SortBy);
+
+    private async Task LoadOrganizeStateAsync()
+    {
+        var stored = await SessionStorage.GetAsync<OrganizeState>(OrganizeStorageKey);
+        if (stored.Success && stored.Value is { } state)
+        {
+            _groupBy = Enum.IsDefined(state.GroupBy) ? state.GroupBy : MetricGroupBy.None;
+            _sortBy = Enum.IsDefined(state.SortBy) ? state.SortBy : MetricSortBy.Instrument;
+        }
+    }
+
+    private async Task SetGroupByAsync(MetricGroupBy groupBy)
+    {
+        _groupBy = groupBy;
+        await SessionStorage.SetAsync(OrganizeStorageKey, new OrganizeState(_groupBy, _sortBy));
+    }
+
+    private async Task SetSortByAsync(MetricSortBy sortBy)
+    {
+        _sortBy = sortBy;
+        await SessionStorage.SetAsync(OrganizeStorageKey, new OrganizeState(_groupBy, _sortBy));
+    }
+
+    private string GetGroupByName(MetricGroupBy value) => Loc[value switch
+    {
+        MetricGroupBy.Resource => nameof(Dashboard.Resources.Metrics.MetricsOrganizeResource),
+        MetricGroupBy.Meter => nameof(Dashboard.Resources.Metrics.MetricsOrganizeMeter),
+        MetricGroupBy.Instrument => nameof(Dashboard.Resources.Metrics.MetricsOrganizeInstrument),
+        _ => nameof(Dashboard.Resources.Metrics.MetricsGroupNone)
+    }];
+
+    private string GetSortByName(MetricSortBy value) => Loc[value switch
+    {
+        MetricSortBy.Resource => nameof(Dashboard.Resources.Metrics.MetricsOrganizeResource),
+        MetricSortBy.ValueDescending => nameof(Dashboard.Resources.Metrics.MetricsSortValueDescending),
+        MetricSortBy.ValueAscending => nameof(Dashboard.Resources.Metrics.MetricsSortValueAscending),
+        _ => nameof(Dashboard.Resources.Metrics.MetricsOrganizeInstrument)
+    }];
+
+    private string GetGroupByTooltip() => string.Format(
+        CultureInfo.CurrentCulture,
+        Loc[nameof(Dashboard.Resources.Metrics.MetricsGroupByTooltip)],
+        GetGroupByName(_groupBy));
+
+    private string GetSortByTooltip() => string.Format(
+        CultureInfo.CurrentCulture,
+        Loc[nameof(Dashboard.Resources.Metrics.MetricsSortByTooltip)],
+        GetSortByName(_sortBy));
+
+    private IList<MenuButtonItem> GetGroupByMenuItems() =>
+        new[]
+        {
+            new MenuButtonItem
+            {
+                IsHeader = true,
+                Text = Loc[nameof(Dashboard.Resources.Metrics.MetricsGroupMenuTitle)],
+                Icon = new Icons.Regular.Size20.GroupList(),
+                RenderKey = "group-header"
+            }
+        }
+        .Concat(new[] { MetricGroupBy.None, MetricGroupBy.Resource, MetricGroupBy.Meter, MetricGroupBy.Instrument }
+            .Select(value => new MenuButtonItem
+            {
+                Class = "metrics-organize-menu-item",
+                Text = GetGroupByName(value),
+                Role = MenuItemRole.Radio,
+                Checked = value == _groupBy,
+                OnClick = () => SetGroupByAsync(value),
+                RenderKey = value
+            }))
+        .ToList();
+
+    private IList<MenuButtonItem> GetSortByMenuItems() =>
+        new[]
+        {
+            new MenuButtonItem
+            {
+                IsHeader = true,
+                Text = Loc[nameof(Dashboard.Resources.Metrics.MetricsSortMenuTitle)],
+                Icon = new Icons.Regular.Size16.ArrowSort(),
+                RenderKey = "sort-header"
+            }
+        }
+        .Concat(new[] { MetricSortBy.Instrument, MetricSortBy.Resource, MetricSortBy.ValueDescending, MetricSortBy.ValueAscending }
+            .Select(value => new MenuButtonItem
+            {
+                Class = "metrics-organize-menu-item",
+                Text = GetSortByName(value),
+                Role = MenuItemRole.Radio,
+                Checked = value == _sortBy,
+                OnClick = () => SetSortByAsync(value),
+                RenderKey = value
+            }))
+        .ToList();
+
+    /// <summary>
+    /// Splits instruments into titled sections for the selected grouping. Only lists of several resources can be
+    /// grouped. Where the list already spans meters (all instruments, filter results) an ungrouped list is split by meter.
+    /// </summary>
+    private List<IGrouping<string, OtlpInstrumentSummary>> GetSections(IEnumerable<OtlpInstrumentSummary> instruments, bool splitByMeterByDefault)
+    {
+        var groupBy = IsAggregate ? _groupBy : MetricGroupBy.None;
+        if (groupBy == MetricGroupBy.None && splitByMeterByDefault)
+        {
+            groupBy = MetricGroupBy.Meter;
+        }
+
+        Func<OtlpInstrumentSummary, string> keySelector = groupBy switch
+        {
+            MetricGroupBy.Resource => GetInstrumentResourceLabel,
+            MetricGroupBy.Meter => i => i.Parent.Name,
+            MetricGroupBy.Instrument => i => i.Name,
+            _ => _ => string.Empty
+        };
+
+        return [.. instruments.GroupBy(keySelector).OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    private MetricSortBy? OverviewSortBy => IsAggregate ? _sortBy : null;
 
     private string? CurrentResourceName => PageViewModel.SelectedResource.Id is null ? null : PageViewModel.SelectedResource.Name;
 
@@ -700,11 +844,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     /// </summary>
     private List<IGrouping<string, OtlpInstrumentSummary>> GetFilterResultGroups()
     {
-        return [.. (PageViewModel.Instruments ?? [])
-            .Where(i => MetricFilter.Matches(i, PageViewModel.TextFilter))
-            .OrderBy(i => i.Name, StringComparer.Ordinal)
-            .GroupBy(i => i.Parent.Name)
-            .OrderBy(g => g.Key, StringComparer.Ordinal)];
+        return GetSections((PageViewModel.Instruments ?? []).Where(i => MetricFilter.Matches(i, PageViewModel.TextFilter)).OrderBy(i => i.Name, StringComparer.Ordinal), splitByMeterByDefault: true);
     }
 
     private string GetInstrumentUrl(OtlpInstrumentSummary instrument)

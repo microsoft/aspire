@@ -12,7 +12,7 @@ export function registerMetricsSplitter(element, dotNetRef) {
 
     let disposed = false;
 
-    const onDoubleClick = event => {
+    const fitGroupsPane = event => {
         event.preventDefault();
 
         const currentWidth = groupsPane.getBoundingClientRect().width;
@@ -32,11 +32,24 @@ export function registerMetricsSplitter(element, dotNetRef) {
         });
     };
 
-    bar.addEventListener('dblclick', onDoubleClick);
+    const onDoubleClick = event => {
+        const barBounds = bar.getBoundingClientRect();
+        // Fluent's draggable bar is only a few pixels wide and can be covered at either edge by a pane.
+        // Handle the whole visible gutter from the stable wrapper so a normal double-click does not have
+        // to land on one particular internal shadow/overlay element.
+        const hitPadding = 6;
+        if (event.clientX < barBounds.left - hitPadding || event.clientX > barBounds.right + hitPadding) {
+            return;
+        }
+
+        fitGroupsPane(event);
+    };
+
+    element.addEventListener('dblclick', onDoubleClick, true);
 
     registrations.set(element, () => {
         disposed = true;
-        bar.removeEventListener('dblclick', onDoubleClick);
+        element.removeEventListener('dblclick', onDoubleClick, true);
     });
 
     return true;
