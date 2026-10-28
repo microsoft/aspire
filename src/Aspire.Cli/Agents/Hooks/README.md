@@ -1,16 +1,17 @@
 # Telemetry hooks
 
-The Aspire CLI owns the two embedded `track-telemetry` scripts. `aspire agent
-init` installs them under `~/.aspire/hooks` and writes supported client hook
-registrations that execute the CLI's telemetry command.
-
-Update the scripts through a normal Aspire pull request. Keep the Bash and
-PowerShell implementations behaviorally aligned, and update their focused tests
-when the recognized Aspire skills, MCP tools, or reference files change.
+The Aspire CLI owns telemetry classification, delivery, and the embedded
+`track-telemetry.sh` and `track-telemetry.ps1` compatibility scripts. Plugins
+provide skills and references; they do not register telemetry hooks.
 
 The release-driven
 [Aspire skills update workflow](https://github.com/microsoft/aspire-skills/blob/dev/.github/workflows/update-aspire.md)
-reviews released skill changes and opens draft pull requests against this
-repository when telemetry needs to adapt. It must propose changes to these
-Aspire-owned files rather than copy hook implementations from `aspire-skills`
-or depend on the retired embedded-bundle maintenance scripts.
+reviews released skills source and proposes telemetry code, script, and test
+changes in this repository. Updates ship through normal Aspire pull requests
+and CLI releases, without relying on Aspire-skills bundles or caches.
+
+Keep the managed classifier and both scripts behaviorally aligned, with focused
+tests for recognized skills, references, and first-party MCP tools.
+
+See [Agent usage telemetry](../../../../docs/specs/aspire-product-telemetry.md#agent-usage-telemetry)
+for registration, classification, privacy, and delivery behavior.
