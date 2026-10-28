@@ -220,9 +220,9 @@ public partial class NewCommandLocalTemplateTests
         await CreateSearchTemplateAsync(workspace, "valid", "valid", "Valid", "valid");
         var empty = workspace.CreateDirectory("empty");
         var interaction = new TestInteractionService();
-        var git = new TestGitRunner();
+        var git = new TestGitCommandRunner();
         var services = CreateServices(workspace, interaction, interactive: true);
-        services.AddSingleton<IGitRunner>(git);
+        services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new()
         {
@@ -248,8 +248,8 @@ public partial class NewCommandLocalTemplateTests
                 Assert.StartsWith(string.Format(CultureInfo.CurrentCulture,
                     NewCommandStrings.TemplateSourceSearchFailed, "empty", ""), message.Message);
             });
-        Assert.Empty(git.CloneCalls);
-        Assert.Empty(git.ResolveCalls);
+        Assert.Empty(GetGitFetches(git));
+        Assert.Empty(GetGitResolutions(git));
     }
 
     [Fact]

@@ -27,7 +27,7 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("""{ "repository": "https://example.test/templates", "path": ".", "ref": "HEAD" }""", ".", "HEAD")]
     [InlineData("""{ "repository": "https://example.test/templates", "path": "templates with spaces", "ref": "v17.0" }""", "templates with spaces", "v17.0")]
     [InlineData("""{ "repository": "https://example.test/templates", "path": "templates", "ref": "refs/tags/v17.0" }""", "templates", "refs/tags/v17.0")]
-    [InlineData("""{ "repository": "https://example.test/templates", "ref": "0123456789abcdef0123456789abcdef01234567" }""", ".", TestGitRunner.DefaultCommitSha)]
+    [InlineData("""{ "repository": "https://example.test/templates", "ref": "0123456789abcdef0123456789abcdef01234567" }""", ".", TestGitCommandRunner.DefaultCommitSha)]
     public async Task ConfiguredGitSourceObjects_ParsesDefaultsAndSelectors(string json, string expectedPath, string? expectedRef)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -49,9 +49,9 @@ public partial class NewCommandLocalTemplateTests
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
-        var git = new TestGitRunner();
+        var git = new TestGitCommandRunner();
         var services = CreateServices(workspace, interaction, interactive: true);
-        services.AddSingleton<IGitRunner>(git);
+        services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
@@ -65,8 +65,8 @@ public partial class NewCommandLocalTemplateTests
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
         Assert.Equal("company", source.Key);
         Assert.Equal(new TemplateSource("templates", repository, "release/17.0"), source.Value.Template);
-        Assert.Empty(git.ResolveCalls);
-        Assert.Empty(git.CloneCalls);
+        Assert.Empty(GetGitResolutions(git));
+        Assert.Empty(GetGitFetches(git));
         Assert.Empty(interaction.DisplayedMessages);
     }
 
@@ -79,24 +79,21 @@ public partial class NewCommandLocalTemplateTests
         var interaction = new TestInteractionService();
         interaction.SetupStringPromptResponse("");
         interaction.SetupStringPromptResponse("Welcome");
-        var git = new TestGitRunner
+        var git = TestGitCommandRunner.CreateForTemplateCheckout(async (_, destination, _, _) =>
         {
-            CloneAsyncCallback = async (_, destination, _, _) =>
-            {
-                destination.CreateSubdirectory(".git");
-                var root = Path.GetRelativePath(workspace.Path, destination.FullName);
-                await CreateSearchTemplateAsync(workspace, $"{root}/templates/first", "one", "First template", "First");
-                await CreateSearchTemplateAsync(workspace, $"{root}/templates/second", "two", "Second template", "Second");
-            }
-        };
+            destination.CreateSubdirectory(".git");
+            var root = Path.GetRelativePath(workspace.Path, destination.FullName);
+            await CreateSearchTemplateAsync(workspace, $"{root}/templates/first", "one", "First template", "First");
+            await CreateSearchTemplateAsync(workspace, $"{root}/templates/second", "two", "Second template", "Second");
+        });
         var selections = 0;
         interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
         {
             var options = choices.Cast<object>().ToArray();
             if (++selections == 1)
             {
-                Assert.Empty(git.ResolveCalls);
-                Assert.Empty(git.CloneCalls);
+                Assert.Empty(GetGitResolutions(git));
+                Assert.Empty(GetGitFetches(git));
                 return options[^1];
             }
 
@@ -108,7 +105,7 @@ public partial class NewCommandLocalTemplateTests
             return options[4];
         };
         var services = CreateServices(workspace, interaction, interactive: true);
-        services.AddSingleton<IGitRunner>(git);
+        services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new()
         {
@@ -123,8 +120,8 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(2, selections);
-        Assert.Equal([(repository, (string?)null), (repository, "release/17.0"), (repository, "v17.0")], git.ResolveCalls);
-        Assert.Equal(TestGitRunner.DefaultCommitSha, Assert.Single(git.CloneCalls).CommitSha);
+        Assert.Equal([(repository, "HEAD^{}"), (repository, "refs/heads/release/17.0"), (repository, "refs/heads/v17.0")], GetGitResolutions(git));
+        Assert.Equal(TestGitCommandRunner.DefaultCommitSha, Assert.Single(GetGitFetches(git)).CommitSha);
         Assert.Empty(interaction.DisplayedMessages);
         Assert.Empty(interaction.DisplayedErrors);
         await Verify(ReadOutput(workspace));
@@ -140,9 +137,9 @@ public partial class NewCommandLocalTemplateTests
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateSearchTemplateAsync(workspace, "local", "local", "Local template", "Local");
         var interaction = new TestInteractionService();
-        var git = new TestGitRunner();
+        var git = new TestGitCommandRunner();
         var services = CreateServices(workspace, interaction, interactive: true);
-        services.AddSingleton<IGitRunner>(git);
+        services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new()
         {
@@ -157,8 +154,8 @@ public partial class NewCommandLocalTemplateTests
         var result = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().SearchAsync("", default));
 
         Assert.Equal("working", result.SourceName);
-        Assert.Empty(git.ResolveCalls);
-        Assert.Empty(git.CloneCalls);
+        Assert.Empty(GetGitResolutions(git));
+        Assert.Empty(GetGitFetches(git));
         var warning = Assert.Single(interaction.DisplayedMessages);
         Assert.Equal(KnownEmojis.Warning, warning.Emoji);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
@@ -184,17 +181,14 @@ public partial class NewCommandLocalTemplateTests
         }
 
         var interaction = new TestInteractionService();
-        var git = new TestGitRunner
+        var git = TestGitCommandRunner.CreateForTemplateCheckout((_, destination, _, _) =>
         {
-            CloneAsyncCallback = (_, destination, _, _) =>
-            {
-                destination.CreateSubdirectory(".git");
-                Directory.Move(link, Path.Combine(destination.FullName, "templates"));
-                return Task.CompletedTask;
-            }
-        };
+            destination.CreateSubdirectory(".git");
+            Directory.Move(link, Path.Combine(destination.FullName, "templates"));
+            return Task.CompletedTask;
+        });
         var services = CreateServices(workspace, interaction, interactive: true);
-        services.AddSingleton<IGitRunner>(git);
+        services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new()
         {
@@ -210,7 +204,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
             NewCommandStrings.TemplateSourceSearchFailed, "broken", NewCommandStrings.TemplateRepositoryPathInvalid),
             warning.Message);
-        Assert.Single(git.CloneCalls);
+        Assert.Single(GetGitFetches(git));
         Assert.Empty(Directory.GetFileSystemEntries(
             Path.Combine(provider.GetRequiredService<CliExecutionContext>().CacheDirectory.FullName, "git")));
         Assert.True(File.Exists(Path.Combine(workspace.Path, "local", "TemplateApp.txt")));
@@ -222,18 +216,15 @@ public partial class NewCommandLocalTemplateTests
         const string repository = "https://example.test/templates";
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
-        var git = new TestGitRunner
+        var git = TestGitCommandRunner.CreateForTemplateCheckout(async (_, destination, _, _) =>
         {
-            CloneAsyncCallback = async (_, destination, _, _) =>
-            {
-                destination.CreateSubdirectory(".git");
-                await CreateSearchTemplateAsync(workspace,
-                    Path.GetRelativePath(workspace.Path, Path.Combine(destination.FullName, "templates/sample")),
-                    "sample", "Sample template", "Working");
-            }
-        };
+            destination.CreateSubdirectory(".git");
+            await CreateSearchTemplateAsync(workspace,
+                Path.GetRelativePath(workspace.Path, Path.Combine(destination.FullName, "templates/sample")),
+                "sample", "Sample template", "Working");
+        });
         var services = CreateServices(workspace, interaction, interactive: true);
-        services.AddSingleton<IGitRunner>(git);
+        services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new()
         {
@@ -245,8 +236,8 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal("working", result.SourceName);
         Assert.Equal("sample", result.Template.Name);
-        Assert.Equal(2, git.CloneCalls.Count);
-        var missingPath = Path.Combine(git.CloneCalls.First().Destination.FullName, "templates", "missing");
+        Assert.Equal(2, GetGitFetches(git).Count);
+        var missingPath = Path.Combine(GetGitFetches(git)[0].Destination.FullName, "templates", "missing");
         var warning = Assert.Single(interaction.DisplayedMessages);
         Assert.Equal(KnownEmojis.Warning, warning.Emoji);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
@@ -263,15 +254,19 @@ public partial class NewCommandLocalTemplateTests
         const string repository = "https://example.test/templates";
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
-        var git = new TestGitRunner
+        var git = TestGitCommandRunner.CreateForTemplateCheckout((_, destination, _, _) =>
+            CreateClonedSearchTemplateAsync(workspace, destination, "Working"));
+        var run = Assert.IsType<Func<GitCommandInvocation, CancellationToken, Task<string>>>(git.RunCallback);
+        git.RunCallback = (command, token) =>
         {
-            ResolveReferenceAsyncCallback = (_, reference, _) => reference == "missing"
-                ? throw new GitReferenceException(reference)
-                : Task.FromResult(TestGitRunner.DefaultCommitSha),
-            CloneAsyncCallback = (_, destination, _, _) => CreateClonedSearchTemplateAsync(workspace, destination, "Working")
+            if (command.Arguments[0] == "ls-remote" && command.Arguments[3] == "refs/heads/missing")
+            {
+                throw new GitReferenceException("missing");
+            }
+            return run(command, token);
         };
         var services = CreateServices(workspace, interaction, interactive: true);
-        services.AddSingleton<IGitRunner>(git);
+        services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new()
         {
@@ -282,8 +277,8 @@ public partial class NewCommandLocalTemplateTests
         var result = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().SearchAsync("", default));
 
         Assert.Equal("working", result.SourceName);
-        Assert.Equal([(repository, "missing"), (repository, "v17.0")], git.ResolveCalls);
-        Assert.Single(git.CloneCalls);
+        Assert.Equal([(repository, "refs/heads/missing"), (repository, "refs/heads/v17.0")], GetGitResolutions(git));
+        Assert.Single(GetGitFetches(git));
         var warning = Assert.Single(interaction.DisplayedMessages);
         Assert.Equal(KnownEmojis.Warning, warning.Emoji);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
@@ -340,23 +335,20 @@ public partial class NewCommandLocalTemplateTests
                     NewCommandStrings.BackToDefaultTemplates], options.Select(formatter));
                 return options[0];
             };
-            var git = new TestGitRunner();
+            var git = new TestGitCommandRunner();
             var services = CreateServices(workspace, interaction, interactive: true);
             services.AddSingleton<IProcessExecutionFactory>(
                 new ProcessExecutionFactory(new HostEnvironment(), NullLogger<ProcessExecutionFactory>.Instance));
-            services.AddSingleton<IGitRunner>(git);
+            services.AddSingleton<IGitCommandRunner>(git);
             using var provider = services.BuildServiceProvider();
-            var realGit = ActivatorUtilities.CreateInstance<GitRunner>(provider);
+            var realGit = ActivatorUtilities.CreateInstance<GitCommandRunner>(provider);
             var fixtureUrl = new Uri(repository.FullName).AbsoluteUri;
             // Resolve/fetch a local fixture through real Git, while configuration still
             // goes through the HTTPS object parser and the normal source-search flow.
-            git.ResolveReferenceAsyncCallback = (url, requestedRef, token) =>
-            {
-                Assert.Equal(repositoryUrl, url);
-                return realGit.ResolveReferenceAsync(fixtureUrl, requestedRef, token);
-            };
-            git.CloneAsyncCallback = (_, destination, commit, token) =>
-                realGit.CloneAsync(fixtureUrl, destination, commit, token);
+            git.RunCallback = (command, token) => realGit.RunAsync(
+                command.WorkingDirectory,
+                command.Arguments.Select(argument => argument == repositoryUrl ? fixtureUrl : argument).ToArray(),
+                command.Mode, token);
             Dictionary<string, object> source = new()
             {
                 ["repository"] = repositoryUrl,
@@ -373,7 +365,17 @@ public partial class NewCommandLocalTemplateTests
                 .InvokeAsync().DefaultTimeout();
 
             Assert.Equal(CliExitCodes.Success, exitCode);
-            Assert.Equal((repositoryUrl, reference), Assert.Single(git.ResolveCalls));
+            if (label == "commit")
+            {
+                Assert.Empty(GetGitResolutions(git));
+            }
+            else
+            {
+                var expectedPattern = reference is null or "HEAD" || reference.StartsWith("refs/", StringComparison.Ordinal)
+                    ? $"{reference ?? "HEAD"}^{{}}"
+                    : $"refs/heads/{reference}";
+                Assert.Equal((repositoryUrl, expectedPattern), Assert.Single(GetGitResolutions(git)));
+            }
             Assert.Empty(interaction.DisplayedMessages);
             Assert.Empty(interaction.DisplayedErrors);
             outputs[label] = ReadOutput(Path.Combine(workspace.Path, "out", label));

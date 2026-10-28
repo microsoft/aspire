@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.DotNet;
@@ -50,7 +51,11 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             return Path.Combine(dotnetRoot, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
         }
 
-        return "dotnet";
+        // Direct test-executable invocation may set neither variable. Resolve the host from
+        // the loaded runtime so SDK paths derived from it remain absolute, not relative to a workspace.
+        return Path.GetFullPath(Path.Combine(
+            RuntimeEnvironment.GetRuntimeDirectory(), "..", "..", "..",
+            OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet"));
     }
 
     [Theory]

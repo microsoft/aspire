@@ -38,11 +38,11 @@ public partial class NewCommandLocalTemplateTests
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
-        var git = new TestGitRunner();
+        var git = new TestGitCommandRunner();
         using var handler = new MockHttpMessageHandler(new InvalidOperationException("Listing must not make HTTP requests."));
         var services = CreateServices(workspace, interaction, interactive: true);
         services.AddSingleton<IHttpClientFactory>(new MockHttpClientFactory(handler));
-        services.AddSingleton<IGitRunner>(git);
+        services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
         var settings = provider.GetRequiredService<IConfigurationService>();
         await File.WriteAllTextAsync(settings.GetSettingsFilePath(true), SourceListSettings);
@@ -55,8 +55,8 @@ public partial class NewCommandLocalTemplateTests
             .Parse(json ? "template source list --format json" : "template source list").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result);
-        Assert.Empty(git.ResolveCalls);
-        Assert.Empty(git.CloneCalls);
+        Assert.Empty(GetGitResolutions(git));
+        Assert.Empty(GetGitFetches(git));
         Assert.Empty(interaction.ShownStatuses);
         Assert.Empty(interaction.DisplayedErrors);
         Assert.Empty(interaction.DisplayedMessages);

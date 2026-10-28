@@ -332,7 +332,6 @@ public class Program
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
         ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !deferSettingsWrites);
-        builder.Services.AddSingleton<IConfigSourceGitClient, ConfigSourceGitClient>();
         builder.Services.AddSingleton<ConfigSourceService>();
 
         if (configurationValues is not null)
@@ -584,7 +583,8 @@ public class Program
 
         // Git repository operations.
         builder.Services.AddSingleton<IGitRepository, GitRepository>();
-        builder.Services.AddSingleton<IGitRunner, GitRunner>();
+        builder.Services.AddSingleton<IGitCommandRunner, GitCommandRunner>();
+        builder.Services.AddSingleton<IGitClient, GitClient>();
 
         // OpenCode CLI operations.
         builder.Services.AddSingleton<IOpenCodeCliRunner, OpenCodeCliRunner>();
@@ -636,6 +636,9 @@ public class Program
         builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
         builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
         builder.Services.AddSingleton<PlaywrightCliInstaller>();
+        builder.Services.AddSingleton<IAgentClient, CopilotAgentClient>();
+        builder.Services.AddSingleton<IAgentClient, ClaudeCodeAgentClient>();
+        builder.Services.AddSingleton<IAgentClient, OpenCodeAgentClient>();
 
         // Agent environment detection.
         builder.Services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();

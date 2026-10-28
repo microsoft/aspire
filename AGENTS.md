@@ -605,6 +605,7 @@ The following specialized skills are available in `.agents/skills/`:
 - **reviewing-aspire-architecture**: Use only when explicitly asked for deep architectural or pattern review of an existing PR or diff, or for a concrete Aspire-domain question escalated by a generic reviewer that cannot resolve it. Do not use for design or explanation requests, ordinary reviews, or based on changed file paths.
 - **vscode-extension**: Guide for developing, building, testing, and debugging the Aspire VS Code extension under `extension/`. Use when investigating an issue in, debugging, or working on a feature for the VS Code extension.
 - **deprecate-integration**: Soft-sunsets a shipped hosting integration: marks its API `[Obsolete]`, adds a README warning, hides the package from `aspire add`, removes integration-specific automation, suppresses the resulting warnings in first-party consumers, and ships one final obsolete release. Use when deprecating, sunsetting, or retiring an integration.
+- **create-video**: Produces narrated Aspire videos (feature walkthroughs, dashboard tours, integration overviews, pull request demos) with the aspire.dev branding: a chosen neural voice, captions, slight dynamic zooms on recorded demos, and renditions for GitHub, aspire.dev, YouTube or chat apps. Also makes silent or unbranded videos when asked.
 
 ## Pattern-Based Instructions
 

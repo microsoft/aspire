@@ -110,6 +110,12 @@ aspire init --use-config-source false
 
 Use the user's Git installation and normal credential helpers or SSH authentication. Do not introduce a separate login flow or reuse credentials from employee detection.
 
+Configuration sources and repository templates share [GitClient](../../src/Aspire.Cli/Git/GitClient.cs) for repository initialization, shallow fetches, commit identification, and Git object access. [GitCommandRunner](../../src/Aspire.Cli/Git/GitCommandRunner.cs) owns process capture, environment isolation, failure classification, and lifecycle diagnostics. It reuses the existing tree-aware process-capture infrastructure; lifecycle logs contain no repository addresses, command arguments, or captured output. Callers retain their operation-wide timeout budgets and explicitly select interaction policy. Configuration sources use bare repositories and validate blobs without checkout; templates retain their ref-resolution rules, detached checkouts, and immutable cache publication. Template acquisition continues disabling terminal prompts without changing its existing credential-helper policy.
+
+[ConfigSourceService](../../src/Aspire.Cli/Configuration/ConfigSourceService.cs) owns configuration acquisition and version-check policy directly: each operation has a 30-second budget, versions are blob IDs, and acquisition validates regular-file modes, the 4 MiB size limit, and configuration content before publishing a snapshot.
+
+Resolve the configured selector before initializing the bare acquisition repository, and explicitly select SHA-1 or SHA-256 from the resolved commit ID. This also supports SHA-256 repositories selected by branch or default ref, rather than only by a pinned commit. Ref resolution shares the operation's timeout and interactive or unattended authentication policy. Interactive ref resolution captures the advertised refs on stdout but inherits stderr so Git authentication instructions remain visible immediately.
+
 When the CLI host supports interactive input, fetch with inherited terminal input and output so Git and credential helpers can display instructions immediately and handle credentials directly. Keep local Git queries captured, including configuration-file contents. Do not copy interactive Git diagnostics into Aspire logs or telemetry; report a failed interactive fetch as an inaccessible repository after Git displays its own diagnostics.
 
 Disable terminal prompts and Git Credential Manager interaction for `--non-interactive`, `ASPIRE_NON_INTERACTIVE`, and CI environments where the host disables input; those invocations need authentication configured beforehand. Other credential helpers must also be configured for unattended use. Keep the existing acquisition timeout and cancellation behavior, including while waiting for credentials.
@@ -317,7 +323,7 @@ Skills, templates, and integrations are acquired according to the application's 
 
 | Content | Acquisition today | Possible configuration customizations |
 |---|---|---|
-| Skills | `aspire agent init` installs the embedded Aspire bundle by default, with existing optional remote-bundle support | Additional validated bundles, selected/default skills, and workspace installation destinations |
+| Skills | `aspire agent init` registers remote Aspire agent assets by default; `--aspire-source embedded` installs bundled skill files | Additional validated bundles, selected/default skills, and workspace installation destinations |
 | Templates | .NET templates are installed from NuGet; CLI-native starters use embedded files or scaffolding | Template catalogs, package identities, versions, and feeds; external starter content could follow later |
 | Integrations | Templates declare dependencies; `aspire add` and integration list/search discover NuGet packages | Additional catalog entries, package versions, feeds, and package-source mappings |
 

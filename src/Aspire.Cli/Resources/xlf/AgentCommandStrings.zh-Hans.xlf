@@ -87,6 +87,11 @@
         <target state="translated">以下智能体配置使用已弃用的 "mcp start" 命令。是否更新它们?</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConfigurationWriteRefused">
+        <source>Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</source>
+        <target state="new">Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeprecatedConfigFix">
         <source>Run 'aspire agent init' to update configuration</source>
         <target state="translated">运行 "aspire agent init" 以更新配置</target>
@@ -122,6 +127,26 @@
         <target state="new">OpenCode</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_AspireSkillChoice">
+        <source>Agent assets from microsoft/aspire-skills</source>
+        <target state="new">Agent assets from microsoft/aspire-skills</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_AspireSourceOptionDescription">
+        <source>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</source>
+        <target state="new">Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigurationTarget">
+        <source>{0}: {1}</source>
+        <target state="new">{0}: {1}</target>
+        <note>{0} is the agent name, and {1} lists its configuration paths separated by commas.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigureAspireSourcePrompt">
+        <source>Which source do you want to use for Aspire?</source>
+        <target state="new">Which source do you want to use for Aspire?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
         <target state="new">Install Aspire MCP server</target>
@@ -132,9 +157,21 @@
         <target state="new">Configure the Aspire MCP server for selected agent environments?</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_ConfiguredTargets">
+        <source>Configured Aspire plugin:
+  {0}</source>
+        <target state="new">Configured Aspire plugin:
+  {0}</target>
+        <note>{0} lists one agent per line, with that agent's configuration paths comma-separated.</note>
+      </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
         <target state="needs-review-translation">初始化检测到的智能体的智能体环境配置。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_EmbeddedSkillsChoice">
+        <source>Embedded (bundled skill files)</source>
+        <target state="new">Embedded (bundled skill files)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentLocationDescription">
@@ -146,6 +183,18 @@
         <source>Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</source>
         <target state="new">Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ExistingConfigurationConflict">
+        <source>Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</source>
+        <target state="new">Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</target>
+        <note>{0} identifies the conflicting JSON setting or environment override.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_FailedTarget">
+        <source>Failed to configure Aspire plugin:
+  {0}</source>
+        <target state="new">Failed to configure Aspire plugin:
+  {0}</target>
+        <note>{0} lists each agent's configuration path and failure details, one target per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_FailedToInstallSkill">
         <source>Failed to install {0} skill at {1}: {2}</source>
@@ -182,6 +231,11 @@
         <target state="new">Skills: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_InvalidAspireSource">
+        <source>Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</source>
+        <target state="new">Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_InvalidEnvironments">
         <source>Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
         <target state="new">Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
@@ -191,6 +245,18 @@
         <source>Invalid scope '{0}'. Use 'project' or 'global'.</source>
         <target state="new">Invalid scope '{0}'. Use 'project' or 'global'.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InvalidSkills">
+        <source>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
+        <target state="new">Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_LocalSkillsConflict">
+        <source>Local Aspire skill files may override plugin skills:
+{0}</source>
+        <target state="new">Local Aspire skill files may override plugin skills:
+{0}</target>
+        <note>{0} lists the local skill entry-point paths, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_McpConfigurationDescription">
         <source>Configure Aspire MCP for {0} at {1}</source>
@@ -217,9 +283,30 @@
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_PluginRiskWarning">
+        <source>Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from {0}.</source>
+        <target state="new">Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from {0}.</target>
+        <note>{0} is the official Aspire skills repository URL.</note>
+      </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>
         <target state="new">Project (Install in your workspace root; committed with your project)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoteSkillsChoice">
+        <source>Remote (plugin)</source>
+        <target state="new">Remote (plugin)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoteSkillsConflict">
+        <source>The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</source>
+        <target state="new">The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -253,8 +340,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
-        <source>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</source>
-        <target state="new">Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</target>
+        <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</source>
+        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
@@ -290,6 +377,11 @@
       <trans-unit id="AspireSkillsInstaller_InvalidBundle">
         <source>The Aspire skills bundle is invalid: {0}</source>
         <target state="new">The Aspire skills bundle is invalid: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalSkills_ReadFailed">
+        <source>Could not check local Aspire skills at '{0}': {1}</source>
+        <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="McpServerContainerMustBeJsonObject">
@@ -373,8 +465,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectSkills">
-        <source>Which skills should be installed?</source>
-        <target state="new">Which skills should be installed?</target>
+        <source>Which skills and tools do you want to configure?</source>
+        <target state="new">Which skills and tools do you want to configure?</target>
         <note />
       </trans-unit>
       <trans-unit id="MalformedConfigFileError">

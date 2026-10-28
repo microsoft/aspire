@@ -34,11 +34,11 @@ public partial class NewCommandLocalTemplateTests
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
-        var git = new TestGitRunner();
+        var git = new TestGitCommandRunner();
         using var handler = new MockHttpMessageHandler(_ => new(HttpStatusCode.OK) { Content = new StringContent(CatalogJson) });
         var services = CreateServices(workspace, interaction, interactive: true);
         services.AddSingleton<IHttpClientFactory>(new MockHttpClientFactory(handler));
-        services.AddSingleton<IGitRunner>(git);
+        services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new() { ["catalog"] = new { href = "https://example.test/templates.json" } });
 
@@ -46,8 +46,8 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(expected, results.Count);
         Assert.All(results, result => Assert.Equal("catalog", result.SourceName));
-        Assert.Empty(git.ResolveCalls);
-        Assert.Empty(git.CloneCalls);
+        Assert.Empty(GetGitResolutions(git));
+        Assert.Empty(GetGitFetches(git));
         Assert.Empty(interaction.DisplayedMessages);
     }
 
@@ -208,22 +208,20 @@ public partial class NewCommandLocalTemplateTests
         var interaction = new TestInteractionService();
         interaction.SetupStringPromptResponse("");
         interaction.SetupStringPromptResponse("Welcome");
-        var git = new TestGitRunner
-        {
-            CloneAsyncCallback = (_, destination, _, _) => CreateClonedSearchTemplateAsync(workspace, destination, "Catalog")
-        };
+        var git = TestGitCommandRunner.CreateForTemplateCheckout((_, destination, _, _) =>
+            CreateClonedSearchTemplateAsync(workspace, destination, "Catalog"));
         var selectionCount = 0;
         interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
         {
             var options = choices.Cast<object>().ToArray();
-            Assert.Empty(git.ResolveCalls);
-            Assert.Empty(git.CloneCalls);
+            Assert.Empty(GetGitResolutions(git));
+            Assert.Empty(GetGitFetches(git));
             return ++selectionCount == 1 ? options[^1] : options[1];
         };
         using var handler = new MockHttpMessageHandler(_ => new(HttpStatusCode.OK) { Content = new StringContent(CatalogJson) });
         var services = CreateServices(workspace, interaction, interactive: true);
         services.AddSingleton<IHttpClientFactory>(new MockHttpClientFactory(handler));
-        services.AddSingleton<IGitRunner>(git);
+        services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new() { ["catalog"] = new { href = "https://example.test/index" } });
 
@@ -231,8 +229,8 @@ public partial class NewCommandLocalTemplateTests
             .Parse("new --name Demo --output out --suppress-agent-init").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result);
-        Assert.Equal(("https://example.test/worker", (string?)"release/17.0"), Assert.Single(git.ResolveCalls));
-        Assert.Single(git.CloneCalls);
+        Assert.Equal(("https://example.test/worker", "refs/heads/release/17.0"), Assert.Single(GetGitResolutions(git)));
+        Assert.Single(GetGitFetches(git));
         Assert.Equal([NewCommandStrings.TemplateSearchPrompt, "Greeting text"], interaction.StringPromptCalls.Select(call => call.PromptText));
         Assert.Empty(interaction.DisplayedErrors);
         await Verify(ReadOutput(workspace));
@@ -245,27 +243,24 @@ public partial class NewCommandLocalTemplateTests
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
-        var git = new TestGitRunner
+        var git = TestGitCommandRunner.CreateForTemplateCheckout(async (_, destination, _, _) =>
         {
-            CloneAsyncCallback = async (_, destination, _, _) =>
+            destination.CreateSubdirectory(".git");
+            for (var index = 0; index < count; index++)
             {
-                destination.CreateSubdirectory(".git");
-                for (var index = 0; index < count; index++)
-                {
-                    await CreateSearchTemplateAsync(workspace,
-                        Path.GetRelativePath(workspace.Path, Path.Combine(destination.FullName, $"template{index}")),
-                        $"template{index}", $"Template {index}", "Unused");
-                }
+                await CreateSearchTemplateAsync(workspace,
+                    Path.GetRelativePath(workspace.Path, Path.Combine(destination.FullName, $"template{index}")),
+                    $"template{index}", $"Template {index}", "Unused");
             }
-        };
+        });
         using var handler = new MockHttpMessageHandler(_ => new(HttpStatusCode.OK) { Content = new StringContent(CatalogJson) });
         var services = CreateServices(workspace, interaction, interactive: true);
         services.AddSingleton<IHttpClientFactory>(new MockHttpClientFactory(handler));
-        services.AddSingleton<IGitRunner>(git);
+        services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
         var template = Assert.Single(await provider.GetRequiredService<TemplateCatalogService>()
             .SearchAsync("https://example.test/index", "templates.catalog", "Worker", default));
-        Assert.Empty(git.ResolveCalls);
+        Assert.Empty(GetGitResolutions(git));
         var parseResult = provider.GetRequiredService<RootCommand>().Parse("new --name Demo --output out --suppress-agent-init");
 
         var exception = await Assert.ThrowsAsync<TemplateDiscoveryException>(() =>
@@ -275,8 +270,8 @@ public partial class NewCommandLocalTemplateTests
         {
             Assert.Equal(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateCatalogRequiresSingleTemplate, "Worker"), exception.Message);
         }
-        Assert.Single(git.ResolveCalls);
-        Assert.Single(git.CloneCalls);
+        Assert.Single(GetGitResolutions(git));
+        Assert.Single(GetGitFetches(git));
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
         Assert.Empty(interaction.StringPromptCalls);
     }

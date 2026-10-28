@@ -51,17 +51,17 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             }, workspace.WorkspaceRoot, CancellationToken.None);
             originalParent = await File.ReadAllTextAsync(parentPath);
         }
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Acquire = (source, _) =>
+            ReadConfiguration = (source, _) =>
             {
                 Assert.True(ConfigSource.HasSameIdentity(s_appliedSource, source));
-                return Task.FromResult(("commit-2", "version-2", new JsonObject()));
+                return Task.FromResult(("version-2", new JsonObject()));
             },
-            Check = (source, _) =>
+            InspectConfiguration = (source, _) =>
             {
                 Assert.True(ConfigSource.HasSameIdentity(s_appliedSource, source));
-                return Task.FromResult(("commit-2", "version-2"));
+                return Task.FromResult("version-2");
             }
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, globalSettingsFile: globalFile);
@@ -99,10 +99,10 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var globalFile = new FileInfo(Path.Combine(workspace.Path, AspireConfigFile.FileName));
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", new JsonObject())),
-            Check = (_, _) => Task.FromResult(("commit-2", "version-2"))
+            ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject())),
+            InspectConfiguration = (_, _) => Task.FromResult("version-2")
         };
         var interaction = new TestInteractionService();
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, interaction: interaction, globalSettingsFile: globalFile);
@@ -178,17 +178,17 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 Interlocked.Decrement(ref active);
             }
         }
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Acquire = async (source, token) =>
+            ReadConfiguration = async (source, token) =>
             {
                 await RecordAsync(source, token);
-                return ("commit-2", "version-2", new JsonObject { ["docs"] = new JsonObject { ["llmsTxtUrl"] = "https://updated.example/llms.txt" } });
+                return ("version-2", new JsonObject { ["docs"] = new JsonObject { ["llmsTxtUrl"] = "https://updated.example/llms.txt" } });
             },
-            Check = async (source, token) =>
+            InspectConfiguration = async (source, token) =>
             {
                 await RecordAsync(source, token);
-                return ("commit-2", "version-2");
+                return "version-2";
             }
         };
         var interaction = new TestInteractionService();
@@ -277,17 +277,17 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 throw new ConfigSourceException("Source unavailable");
             }
         }
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Acquire = (source, _) =>
+            ReadConfiguration = (source, _) =>
             {
                 Record(source);
-                return Task.FromResult(("commit-2", "version-2", new JsonObject()));
+                return Task.FromResult(("version-2", new JsonObject()));
             },
-            Check = (source, _) =>
+            InspectConfiguration = (source, _) =>
             {
                 Record(source);
-                return Task.FromResult(("commit-2", "version-2"));
+                return Task.FromResult("version-2");
             }
         };
         var interaction = new TestInteractionService();
@@ -329,7 +329,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var global = workspace.CreateDirectory("global");
         var globalFile = new FileInfo(Path.Combine(global.FullName, AspireConfigFile.FileName));
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, project, CancellationToken.None);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var context = workspace.CreateExecutionContext();
         var clock = new AdjustableTimeProvider();
         using (var first = TestConfigSourceServices.Create(context, git: git, clock: clock, globalSettingsFile: globalFile))
@@ -343,7 +343,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             Ref = s_appliedSource.Ref,
             AppliedVersion = "version-2"
         }, global, CancellationToken.None);
-        git.Check = (_, _) => Task.FromResult(("commit-3", "version-3"));
+        git.InspectConfiguration = (_, _) => Task.FromResult("version-3");
         var interaction = new TestInteractionService();
         using (var service = TestConfigSourceServices.Create(context, git: git, clock: clock, interaction: interaction, globalSettingsFile: globalFile))
         {
@@ -373,15 +373,15 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var interaction = new TestInteractionService();
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Check = async (_, token) =>
+            InspectConfiguration = async (_, token) =>
             {
                 started.SetResult();
                 try
                 {
                     await Task.Delay(Timeout.InfiniteTimeSpan, token);
-                    return ("commit-2", "version-2");
+                    return "version-2";
                 }
                 finally
                 {
@@ -413,17 +413,24 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     public async Task BackgroundCheck_UnexpectedFailuresAreObserved(bool cancel)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cancellation = new CancellationTokenSource();
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Check = (_, _) => cancel
-                ? throw new OperationCanceledException()
-                : throw new InvalidOperationException("Unexpected failure")
+            InspectConfiguration = (_, token) =>
+            {
+                if (cancel)
+                {
+                    cancellation.Cancel();
+                    token.ThrowIfCancellationRequested();
+                }
+                throw new InvalidOperationException("Unexpected failure");
+            }
         };
         var interaction = new TestInteractionService();
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, interaction: interaction);
 
-        service.CheckForConfigSourceUpdates(workspace.WorkspaceRoot, CancellationToken.None);
+        service.CheckForConfigSourceUpdates(workspace.WorkspaceRoot, cancellation.Token);
         await service.WaitForChecksAsync().DefaultTimeout();
         await service.StopChecksAsync().DefaultTimeout();
         service.NotifyIfUpdateAvailable();
@@ -437,7 +444,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
 
         service.CheckForConfigSourceUpdates(workspace.WorkspaceRoot, CancellationToken.None);
@@ -463,7 +470,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         }
         var other = workspace.CreateDirectory("other-app");
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
 
         service.CheckForConfigSourceUpdates(workspace.WorkspaceRoot, CancellationToken.None);
@@ -479,7 +486,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     public async Task Materialize_DifferentProjectIsRejectedBeforeAcquisition()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
         await service.MaterializeAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
         var other = workspace.CreateDirectory("other-app");
@@ -529,9 +536,9 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             }
             """ + trailingNewlines;
         await File.WriteAllTextAsync(path, content);
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", new JsonObject
+            ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject
             {
                 ["docs"] = new JsonObject { ["llmsTxtUrl"] = "https://shared.example/llms.txt" }
             }))
@@ -678,7 +685,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var detector = new TestConfigSourceDetector { IsInternal = detected };
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var expected = new ConfigSource { Repository = s_source.Repository, Path = s_source.Path, Ref = "preview" };
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, detector: detector,
             environment: new TestEnvironment(new Dictionary<string, string?>
@@ -700,7 +707,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     public async Task SelectForCreation_PathAndRefWithoutExplicitUrlAreIgnored(bool detected)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
             detector: new TestConfigSourceDetector { IsInternal = detected },
             environment: new TestEnvironment(new Dictionary<string, string?>
@@ -724,7 +731,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     public async Task SelectForCreation_InconclusiveDetectionDoesNotProposeSource(string outcome)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
             detector: new TestConfigSourceDetector { IsInternal = true, Outcome = outcome });
 
@@ -736,7 +743,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     public async Task SelectForCreation_NoCandidateErrorIncludesSourceEnvironmentVariable()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
 
         var error = await Assert.ThrowsAsync<ConfigSourceException>(() =>
@@ -763,7 +770,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     public async Task SelectForCreation_InteractiveChoiceControlsAcquisition(bool accepted)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var interaction = new TestInteractionService
         {
             PromptForSelectionCallback = (_, choices, _, _) =>
@@ -784,7 +791,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     public async Task SelectForCreation_CancelledPromptDoesNotAcquireOrBind()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var interaction = new TestInteractionService();
         interaction.SetupCancellationResponse();
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
@@ -804,9 +811,9 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(path, """
             {"appHost":{"path":"apphost.mts"},"sdk":{"version":"17.0.0"},"profiles":{"default":{"applicationUrl":"https://localhost:1234"}},"docs":{"llmsTxtUrl":"https://local.example/old","custom":"local"},"custom":"local"}
             """);
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Acquire = (_, _) => Task.FromResult(("commit-1", "version-1", JsonNode.Parse("""
+            ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
                 {"DOCS":{"LLMSTXTURL":"https://docs.example/llms.txt","API":{"SITEMAPURL":null,"excluded":"remote"}},"sdk":{"version":"99.0.0"},"features":{"remote":true},"custom":"remote"}
                 """)!.AsObject()))
         };
@@ -827,9 +834,9 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await ConfigurationService.SetConfigurationInFileAsync(path, "docs.llmsTxtUrl", "https://local.example/docs");
         await ConfigurationService.SetConfigurationInFileAsync(path, "docs.api.sitemapUrl", "https://local.example/api");
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", JsonNode.Parse("""
+            ReadConfiguration = (_, _) => Task.FromResult(("version-2", JsonNode.Parse("""
                 {"docs:llmsTxtUrl":"https://remote.example/docs","docs:arbitrary":"excluded"}
                 """)!.AsObject()))
         };
@@ -863,9 +870,9 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             """);
         configuration["custom:setting"] = "root-flat";
         await File.WriteAllTextAsync(path, configuration.ToJsonString());
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", JsonNode.Parse(flattenedSource
+            ReadConfiguration = (_, _) => Task.FromResult(("version-2", JsonNode.Parse(flattenedSource
                 ? """{"docs":{"api:sitemapUrl":"https://remote.example/sitemap.xml"}}"""
                 : """{"docs":{"api":{"sitemapUrl":"https://remote.example/sitemap.xml"}}}""")!.AsObject()))
         };
@@ -897,9 +904,9 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         configuration["docs"] = JsonNode.Parse("""{"api:sitemapUrl":"https://local.example/sitemap.xml"}""");
         var original = configuration.ToJsonString();
         await File.WriteAllTextAsync(path, original);
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", JsonNode.Parse("""
+            ReadConfiguration = (_, _) => Task.FromResult(("version-2", JsonNode.Parse("""
                 {"docs":{"api":{"sitemapUrl":"https://remote.example/sitemap.xml"}}}
                 """)!.AsObject()))
         };
@@ -925,9 +932,9 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             {"api":{"SITEMAPURL":"https://local.example/sitemap.xml"}}
             """);
         await File.WriteAllTextAsync(path, configuration.ToJsonString());
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", JsonNode.Parse("""
+            ReadConfiguration = (_, _) => Task.FromResult(("version-2", JsonNode.Parse("""
                 {"DOCS":{"llmsTxtUrl":"https://remote.example/llms.txt"},"docs":{"api":{"sitemapUrl":null,"excluded":"remote"}}}
                 """)!.AsObject()))
         };
@@ -955,7 +962,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var context = workspace.CreateExecutionContext();
         var clock = new AdjustableTimeProvider();
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         await TestConfigSourceServices.Create(context, git: git, clock: clock).CheckProjectAsync(workspace.WorkspaceRoot, false, CancellationToken.None);
         clock.UtcNow += TimeSpan.FromHours(hours) + TimeSpan.FromMinutes(minutes);
 
@@ -972,7 +979,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var previous = await File.ReadAllTextAsync(path);
-        var git = new TestConfigSourceGitClient { Check = (_, _) => Task.FromResult(("commit-2", "version-2")) };
+        var git = new TestConfigSourceRepository { InspectConfiguration = (_, _) => Task.FromResult("version-2") };
         var interaction = new TestInteractionService();
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, interaction: interaction);
 
@@ -1000,7 +1007,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var context = workspace.CreateExecutionContext();
-        var git = new TestConfigSourceGitClient { Check = (_, _) => Task.FromResult(("commit-2", "version-2")) };
+        var git = new TestConfigSourceRepository { InspectConfiguration = (_, _) => Task.FromResult("version-2") };
         await TestConfigSourceServices.Create(context, git: git).CheckProjectAsync(workspace.WorkspaceRoot, false, CancellationToken.None);
         var interaction = new TestInteractionService();
 
@@ -1021,7 +1028,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var context = workspace.CreateExecutionContext();
         var clock = new AdjustableTimeProvider();
-        var git = new TestConfigSourceGitClient { Check = (_, _) => Task.FromResult(("commit-2", "version-2")) };
+        var git = new TestConfigSourceRepository { InspectConfiguration = (_, _) => Task.FromResult("version-2") };
         using var first = TestConfigSourceServices.Create(context, git: git, clock: clock);
         await first.CheckProjectAsync(workspace.WorkspaceRoot, false, CancellationToken.None);
         var checkPath = Path.Combine(first.GetCacheDirectory(s_source), "check.json");
@@ -1068,7 +1075,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var context = workspace.CreateExecutionContext();
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         if (revalidateCachedObservation)
         {
             using var first = TestConfigSourceServices.Create(context, git: git);
@@ -1077,7 +1084,8 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 new ConfigSource { Repository = s_source.Repository, Path = s_source.Path, AppliedVersion = "version-2" },
                 workspace.WorkspaceRoot, CancellationToken.None);
         }
-        git.Check = (_, _) => Task.FromResult(("unrelated-commit", revalidateCachedObservation ? "version-2" : "version-1"));
+        git.Commit = "unrelated-commit";
+        git.InspectConfiguration = (_, _) => Task.FromResult(revalidateCachedObservation ? "version-2" : "version-1");
         var interaction = new TestInteractionService();
         using var service = TestConfigSourceServices.Create(context, git: git, interaction: interaction);
         await service.CheckProjectAsync(workspace.WorkspaceRoot, false, CancellationToken.None);
@@ -1097,7 +1105,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var context = workspace.CreateExecutionContext();
         var clock = new AdjustableTimeProvider();
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var first = TestConfigSourceServices.Create(context, git: git, clock: clock);
         await first.CheckProjectAsync(workspace.WorkspaceRoot, false, CancellationToken.None);
         var checkPath = Path.Combine(first.GetCacheDirectory(s_source), "check.json");
@@ -1107,7 +1115,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         }
         var original = await File.ReadAllTextAsync(checkPath);
         clock.UtcNow += TimeSpan.FromDays(1);
-        git.Check = (_, _) => throw new ConfigSourceException(ConfigSourceStrings.AuthenticationFailed);
+        git.InspectConfiguration = (_, _) => throw new ConfigSourceException(ConfigSourceStrings.AuthenticationFailed);
         var interaction = new TestInteractionService();
         var next = TestConfigSourceServices.Create(context, git: git, clock: clock, interaction: interaction);
 
@@ -1137,7 +1145,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(Path.Combine(directory, "current"), "invalid pointer");
         using var heldFile = File.Open(Path.Combine(snapshot, AspireConfigFile.FileName), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
         var interaction = new TestInteractionService();
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
 
         using var service = TestConfigSourceServices.Create(context, git: git, clock: clock, interaction: interaction);
         await service.CheckProjectAsync(workspace.WorkspaceRoot, false, CancellationToken.None);
@@ -1152,7 +1160,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     public async Task Acquire_ReusesSnapshotForSameIdentityWithDifferentAppliedVersions()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
 
         var first = await service.AcquireAsync(s_source, force: false, CancellationToken.None);
@@ -1176,7 +1184,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             Path = s_appliedSource.Path,
             AppliedVersion = "version-2"
         }, other, CancellationToken.None);
-        var git = new TestConfigSourceGitClient { Check = (_, _) => Task.FromResult(("commit-3", "version-3")) };
+        var git = new TestConfigSourceRepository { InspectConfiguration = (_, _) => Task.FromResult("version-3") };
         var interaction = new TestInteractionService();
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, interaction: interaction);
 
@@ -1196,7 +1204,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var context = workspace.CreateExecutionContext();
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
 
         await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
             TestConfigSourceServices.Create(context, git: git).CheckProjectAsync(workspace.WorkspaceRoot, false, CancellationToken.None))).DefaultTimeout();
@@ -1210,18 +1218,27 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     public async Task Update_FailedOrCancelledAcquisitionPreservesAppAndFetchedSnapshot(bool cancel)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var git = new TestConfigSourceGitClient();
+        using var cancellation = new CancellationTokenSource();
+        var git = new TestConfigSourceRepository();
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
         await service.MaterializeAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var app = await File.ReadAllTextAsync(path);
         var pointer = Path.Combine(service.GetCacheDirectory(s_source), "current");
         var previousPointer = await File.ReadAllTextAsync(pointer);
-        git.Acquire = (_, _) => throw (cancel ? new OperationCanceledException() : new ConfigSourceException("Test acquisition failed"));
+        git.ReadConfiguration = (_, token) =>
+        {
+            if (cancel)
+            {
+                cancellation.Cancel();
+                token.ThrowIfCancellationRequested();
+            }
+            throw new ConfigSourceException("Test acquisition failed");
+        };
 
         if (cancel)
         {
-            await Assert.ThrowsAsync<OperationCanceledException>(() => service.CheckProjectAsync(workspace.WorkspaceRoot, true, CancellationToken.None));
+            await Assert.ThrowsAsync<OperationCanceledException>(() => service.CheckProjectAsync(workspace.WorkspaceRoot, true, cancellation.Token));
         }
         else
         {
@@ -1240,12 +1257,12 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(path, "{}");
         var fetched = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Acquire = (_, _) =>
+            ReadConfiguration = (_, _) =>
             {
                 fetched.SetResult();
-                return Task.FromResult(("commit-1", "version-1", new JsonObject
+                return Task.FromResult(("version-1", new JsonObject
                 {
                     ["docs"] = new JsonObject { ["llmsTxtUrl"] = "https://docs.example/llms.txt" }
                 }));
@@ -1282,12 +1299,12 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             Ref = "different-branch",
             AppliedVersion = s_appliedSource.AppliedVersion
         };
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Acquire = async (_, token) =>
+            ReadConfiguration = async (_, token) =>
             {
                 await TestConfigSourceServices.SaveBindingAsync(changed, workspace.WorkspaceRoot, token);
-                return ("commit-2", "version-2", new JsonObject());
+                return ("version-2", new JsonObject());
             }
         };
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
@@ -1306,12 +1323,12 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var previous = await File.ReadAllTextAsync(path);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
-        git.Acquire = (_, _) =>
+        git.ReadConfiguration = (_, _) =>
         {
             Directory.CreateDirectory(Path.Combine(service.GetCacheDirectory(s_source), "current"));
-            return Task.FromResult(("commit-2", "version-2", new JsonObject()));
+            return Task.FromResult(("version-2", new JsonObject()));
         };
 
         var error = await Record.ExceptionAsync(() =>
@@ -1329,13 +1346,13 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var previous = await File.ReadAllTextAsync(path);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository { Commit = "commit-2" };
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
         FileStream? appLock = null;
-        git.Acquire = (_, _) =>
+        git.ReadConfiguration = (_, _) =>
         {
             appLock = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
-            return Task.FromResult(("commit-2", "version-2", new JsonObject()));
+            return Task.FromResult(("version-2", new JsonObject()));
         };
         try
         {
@@ -1364,7 +1381,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await ConfigurationService.SetConfigurationInFileAsync(path, "docs.llmsTxtUrl", "https://local.example/llms.txt");
         var original = await File.ReadAllTextAsync(path);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var detector = new TestConfigSourceDetector { IsInternal = true };
         var environment = new TestEnvironment(new Dictionary<string, string?>
         {
@@ -1396,7 +1413,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             var modernPath = Path.Combine(project.FullName, AspireConfigFile.FileName);
             await File.WriteAllTextAsync(modernPath, "{}");
         }
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var environment = new TestEnvironment(new Dictionary<string, string?>
         {
             [CliConfigNames.InitSourceUrl] = s_source.Repository,
@@ -1421,7 +1438,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var invalid = new ConfigSource { Repository = repository, Path = s_source.Path, Ref = gitRef, AppliedVersion = "version-1" };
         await TestConfigSourceServices.SaveBindingAsync(invalid, workspace.WorkspaceRoot, CancellationToken.None);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var interaction = new TestInteractionService();
         var detector = new TestConfigSourceDetector { IsInternal = true };
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
@@ -1447,7 +1464,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var context = workspace.CreateExecutionContext();
         var clock = new AdjustableTimeProvider();
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         using var first = TestConfigSourceServices.Create(context, git: git, clock: clock);
         await first.MaterializeAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
         var retained = await first.AcquireAsync(s_source, force: false, CancellationToken.None);
@@ -1457,7 +1474,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         File.SetAttributes(Path.Combine(stale.FullName, "stale.txt"), FileAttributes.ReadOnly);
         if (changed)
         {
-            git.Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", new JsonObject()));
+            git.ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject()));
         }
         clock.UtcNow += TimeSpan.FromSeconds(1);
         var interaction = new TestInteractionService();
@@ -1485,9 +1502,9 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var other = workspace.CreateDirectory("other-app");
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, other, CancellationToken.None);
-        var git = new TestConfigSourceGitClient
+        var git = new TestConfigSourceRepository
         {
-            Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", new JsonObject()))
+            ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject()))
         };
         var context = workspace.CreateExecutionContext();
         await TestConfigSourceServices.Create(context, git: git).CheckProjectAsync(workspace.WorkspaceRoot, true, CancellationToken.None);
@@ -1508,7 +1525,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var interaction = new TestInteractionService();
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, interaction: interaction);
 
@@ -1528,7 +1545,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     public async Task CheckProject_NoBindingDoesNotDetectOrAcquire(bool force)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var git = new TestConfigSourceGitClient();
+        var git = new TestConfigSourceRepository();
         var detector = new TestConfigSourceDetector { IsInternal = true };
         var interaction = new TestInteractionService();
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, detector: detector, interaction: interaction);
