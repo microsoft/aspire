@@ -4,127 +4,127 @@
     <body>
       <trans-unit id="AllOptionDescription">
         <source>Stop all running AppHosts</source>
-        <target state="new">Stop all running AppHosts</target>
+        <target state="translated">Остановить все запущенные узлы приложений</target>
         <note />
       </trans-unit>
       <trans-unit id="AmbiguousAppHostPid">
         <source>Multiple AppHost connections match PID {0}. No AppHosts were stopped.</source>
-        <target state="new">Multiple AppHost connections match PID {0}. No AppHosts were stopped.</target>
+        <target state="translated">Несколько подключений AppHost соответствуют PID {0}. AppHost не остановлены.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostIdentifierWithProcessId">
         <source>{0} (PID {1})</source>
-        <target state="new">{0} (PID {1})</target>
+        <target state="translated">{0} (идентификатор процесса {1})</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotRunningAtPathWithPid">
         <source>No running AppHost at '{0}' with PID {1} was found. No AppHosts were stopped.</source>
-        <target state="new">No running AppHost at '{0}' with PID {1} was found. No AppHosts were stopped.</target>
+        <target state="translated">Не найден запущенный AppHost в "{0}" с pid {1}. AppHost не остановлены.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotRunningWithPid">
         <source>No running AppHost with PID {0} was found. No AppHosts were stopped.</source>
-        <target state="new">No running AppHost with PID {0} was found. No AppHosts were stopped.</target>
+        <target state="translated">Запущенный AppHost с PID {0} не найден. AppHost не остановлены.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStoppedSuccessfully">
         <source>{0} stopped successfully.</source>
-        <target state="new">{0} stopped successfully.</target>
+        <target state="translated">{0}: успешно остановлено.</target>
         <note />
       </trans-unit>
       <trans-unit id="CleaningPersistentResources">
         <source>Cleaning up persistent resources for {0}...</source>
-        <target state="new">Cleaning up persistent resources for {0}...</target>
+        <target state="translated">Очистка постоянных ресурсов для {0}...</target>
         <note />
       </trans-unit>
       <trans-unit id="CouldNotDetermineAppHostPath">
         <source>Could not determine the AppHost project path.</source>
-        <target state="new">Could not determine the AppHost project path.</target>
+        <target state="translated">Не удалось определить путь к проекту AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupCompatibilityCheckFailed">
         <source>Could not inspect the AppHost project to verify persistent resource cleanup compatibility. Persistent resource cleanup will still be attempted.</source>
-        <target state="new">Could not inspect the AppHost project to verify persistent resource cleanup compatibility. Persistent resource cleanup will still be attempted.</target>
+        <target state="translated">Не удалось проверить проект AppHost для определения совместимости очистки постоянных ресурсов. Очистка постоянных ресурсов все равно будет предпринята.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupExitCode">
         <source>DCP cleanup exited with code {0}.</source>
-        <target state="new">DCP cleanup exited with code {0}.</target>
+        <target state="translated">Очистка DCP завершилась с кодом {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupFailed">
         <source>Failed to clean up persistent resources for {0}. {1}</source>
-        <target state="new">Failed to clean up persistent resources for {0}. {1}</target>
+        <target state="translated">Не удалось очистить постоянные ресурсы для {0}. {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupUnavailable">
         <source>Could not find the DCP executable needed to clean up persistent resources.</source>
-        <target state="new">Could not find the DCP executable needed to clean up persistent resources.</target>
+        <target state="translated">Не удалось найти исполняемый файл DCP, необходимый для очистки постоянных ресурсов.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupUnsupportedAppHostVersion">
         <source>This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted.</source>
-        <target state="new">This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted.</target>
+        <target state="translated">Этот AppHost использует Aspire.Hosting {0}, который, возможно, не поддерживает очистку постоянных ресурсов. Для очистки постоянных ресурсов требуется Aspire.Hosting {1} и более поздних версий или AppHost, настроенный на использование пакета Aspire CLI. Очистка постоянных ресурсов все равно будет предпринята.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpVolumeCleanupUnsupportedAppHostVersion">
         <source>This AppHost uses Aspire.Hosting {0}, which might not support persistent volume cleanup. Persistent volume cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent volume cleanup will still be attempted.</source>
-        <target state="new">This AppHost uses Aspire.Hosting {0}, which might not support persistent volume cleanup. Persistent volume cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent volume cleanup will still be attempted.</target>
+        <target state="translated">Этот AppHost использует Aspire.Hosting {0}, который, возможно, не поддерживает очистку постоянных томов. Для очистки постоянных томов требуется Aspire.Hosting {1} и более поздних версий или AppHost, настроенный на использование пакета Aspire CLI. Очистка постоянных томов все равно будет предпринята.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Stop a running AppHost</source>
-        <target state="needs-review-translation">Остановить запущенный хост приложений Aspire.</target>
+        <target state="translated">Остановить работающий узел приложения</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToStopAppHost">
         <source>Failed to stop {0}.</source>
-        <target state="new">Failed to stop {0}.</target>
+        <target state="translated">Не удалось остановить {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="ForceOptionDescription">
         <source>Stop the AppHost and clean up its persistent resources, preserving volumes by default</source>
-        <target state="new">Stop the AppHost and clean up its persistent resources, preserving volumes by default</target>
+        <target state="translated">Остановить AppHost и очистить его постоянные ресурсы, по умолчанию сохраняя тома</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundRunningAppHost">
         <source>Found running AppHost: {0}</source>
-        <target state="new">Found running AppHost: {0}</target>
+        <target state="translated">Обнаружено, запущено приложение AppHost: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsNonInteractive">
         <source>Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</source>
-        <target state="new">Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</target>
+        <target state="translated">Запущено несколько экземпляров AppHost. Используйте {0}, чтобы указать, какой из них остановить, или {1}, чтобы остановить все.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsRunning">
         <source>Multiple AppHosts are running. Use --apphost to specify which one to stop, or select one:</source>
-        <target state="needs-review-translation">Запущено несколько хостов приложений. Используйте параметр --apphost, чтобы указать, какой остановить, или выберите один из них:</target>
+        <target state="translated">Запущено несколько хостов приложений. Используйте параметр --apphost, чтобы указать, какой из них следует остановить, или выберите один из них:</target>
         <note />
       </trans-unit>
       <trans-unit id="PersistentResourcesCleaned">
         <source>Persistent resources for {0} cleaned up.</source>
-        <target state="new">Persistent resources for {0} cleaned up.</target>
+        <target state="translated">Постоянные ресурсы для очистки {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="PidMustBePositive">
         <source>The --pid option must be a positive integer.</source>
-        <target state="new">The --pid option must be a positive integer.</target>
+        <target state="translated">Параметр --pid должен быть положительным целым числом.</target>
         <note />
       </trans-unit>
       <trans-unit id="PidOptionDescription">
         <source>Stop only the AppHost with this positive process ID (not the CLI process ID). With --apphost, the project file path must also match exactly. Cannot be combined with --all or --force.</source>
-        <target state="new">Stop only the AppHost with this positive process ID (not the CLI process ID). With --apphost, the project file path must also match exactly. Cannot be combined with --all or --force.</target>
+        <target state="translated">Остановить только AppHost с этим положительным идентификатором процесса (не идентификатор процесса CLI). С --apphost путь к файлу проекта также должен полностью совпадать. Нельзя сочетать с --all или --force.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file or a directory to search</source>
-        <target state="needs-review-translation">Путь к файлу проекта Aspire AppHost.</target>
+        <target state="translated">Путь к файлу проекта Aspire AppHost или каталогу для поиска</target>
         <note />
       </trans-unit>
       <trans-unit id="ProtocolRequiresExactIdentity">
         <source>The experimental tray protocol requires --protocol-version 1 --format json --apphost with an absolute file path, a positive --pid, and a positive --started-at in Unix milliseconds. --all and --force are not allowed.</source>
-        <target state="new">The experimental tray protocol requires --protocol-version 1 --format json --apphost with an absolute file path, a positive --pid, and a positive --started-at in Unix milliseconds. --all and --force are not allowed.</target>
+        <target state="translated">Для экспериментального протокола трея требуются --protocol-version 1 --format json --apphost с абсолютным путем к файлу, положительное значение --pid и положительное значение --started-at в миллисекундах Unix. Параметры --all и --force не допускаются.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -134,12 +134,12 @@
       </trans-unit>
       <trans-unit id="SendingStopSignal">
         <source>Sending stop signal to {0}...</source>
-        <target state="new">Sending stop signal to {0}...</target>
+        <target state="translated">Отправка сигнала остановки для {0}...</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
         <source>Stopping {0}...</source>
-        <target state="new">Stopping {0}...</target>
+        <target state="translated">Остановка {0}...</target>
         <note />
       </trans-unit>
       <trans-unit id="AllAndProjectMutuallyExclusive">
@@ -149,17 +149,17 @@
       </trans-unit>
       <trans-unit id="UnknownAspireHostingVersion">
         <source>an unknown version</source>
-        <target state="new">an unknown version</target>
+        <target state="translated">неизвестная версия</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumesOptionDescription">
         <source>Also remove persistent volumes created by Aspire (requires --force)</source>
-        <target state="new">Also remove persistent volumes created by Aspire (requires --force)</target>
+        <target state="translated">Также удалить постоянные тома, созданные Aspire (требуется --force)</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumesRequiresForce">
         <source>The {0} option requires the {1} option.</source>
-        <target state="new">The {0} option requires the {1} option.</target>
+        <target state="translated">Для параметра {0} требуется параметр {1}.</target>
         <note />
       </trans-unit>
     </body>
