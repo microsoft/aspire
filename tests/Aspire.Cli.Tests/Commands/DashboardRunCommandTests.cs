@@ -657,7 +657,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
 
         var interactionService = new ConsoleInteractionService(
-            new ConsoleEnvironment(console, console),
+            new ConsoleEnvironment(console, console, TextReader.Null),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
             new EnvironmentProcessPathProvider(),

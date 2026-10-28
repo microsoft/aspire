@@ -6,7 +6,7 @@ using Spectre.Console;
 namespace Aspire.Cli;
 
 /// <summary>
-/// Provides access to console output streams for the CLI.
+/// Provides access to console input and output streams for the CLI.
 /// </summary>
 internal sealed class ConsoleEnvironment
 {
@@ -15,13 +15,16 @@ internal sealed class ConsoleEnvironment
     /// </summary>
     /// <param name="output">The console for standard output.</param>
     /// <param name="error">The console for standard error.</param>
-    public ConsoleEnvironment(IAnsiConsole output, IAnsiConsole error)
+    /// <param name="input">The reader for standard input.</param>
+    public ConsoleEnvironment(IAnsiConsole output, IAnsiConsole error, TextReader input)
     {
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(error);
+        ArgumentNullException.ThrowIfNull(input);
 
         Out = output;
         Error = error;
+        Input = input;
     }
 
     /// <summary>
@@ -33,4 +36,9 @@ internal sealed class ConsoleEnvironment
     /// Gets the console for standard error.
     /// </summary>
     public IAnsiConsole Error { get; }
+
+    /// <summary>
+    /// Gets the reader for standard input.
+    /// </summary>
+    public TextReader Input { get; }
 }

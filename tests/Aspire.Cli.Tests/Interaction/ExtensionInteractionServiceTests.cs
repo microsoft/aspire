@@ -35,7 +35,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [extension].log");
         var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
         var consoleInteractionService = new ConsoleInteractionService(
-            new ConsoleEnvironment(console, console),
+            new ConsoleEnvironment(console, console, TextReader.Null),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
             new EnvironmentProcessPathProvider(),
@@ -278,7 +278,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = workspace.CreateExecutionContext();
         var consoleInteractionService = new ConsoleInteractionService(
-            new ConsoleEnvironment(console, console),
+            new ConsoleEnvironment(console, console, TextReader.Null),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
             new EnvironmentProcessPathProvider(),
@@ -461,7 +461,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [extension].log");
         var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
         var consoleInteractionService = new ConsoleInteractionService(
-            new ConsoleEnvironment(console, console),
+            new ConsoleEnvironment(console, console, TextReader.Null),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
             new EnvironmentProcessPathProvider(),
@@ -493,7 +493,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         console.Profile.Width = int.MaxValue;
 
         var consoleInteractionService = new ConsoleInteractionService(
-            new ConsoleEnvironment(console, console),
+            new ConsoleEnvironment(console, console, TextReader.Null),
             workspace.CreateExecutionContext(),
             TestHelpers.CreateInteractiveHostEnvironment(),
             new EnvironmentProcessPathProvider(),
