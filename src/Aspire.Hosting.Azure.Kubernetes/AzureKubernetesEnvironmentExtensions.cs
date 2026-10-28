@@ -139,21 +139,8 @@ public static class AzureKubernetesEnvironmentExtensions
                             registry,
                             ownerResource: null,
                             identityResource: null,
-                            infrastructure =>
-                            {
-                                var acr = (ContainerRegistryService)registry.AddAsExistingResource(infrastructure);
-                                var roleId = BicepFunction.GetSubscriptionResourceId(
-                                    "Microsoft.Authorization/roleDefinitions",
-                                    ContainerRegistryBuiltInRole.AcrPull.ToString());
-                                infrastructure.Add(new RoleAssignment("acrPullRole")
-                                {
-                                    Name = BicepFunction.CreateGuid(acr.Id, resource.Id.AsProvisioningParameter(infrastructure, "clusterId"), roleId),
-                                    Scope = new IdentifierExpression(acr.BicepIdentifier),
-                                    RoleDefinitionId = roleId,
-                                    PrincipalId = resource.KubeletIdentityObjectId.AsProvisioningParameter(infrastructure, "principalId"),
-                                    PrincipalType = RoleManagementPrincipalType.ServicePrincipal
-                                });
-                            });
+                            infrastructure => registry.AddRoleAssignments(
+                                new KubeletRoleAssignmentsContext(infrastructure, resource, builder.ExecutionContext)));
                         roles.References.Add(resource);
                         context.Model.Resources.Add(roles);
                     }
@@ -1113,5 +1100,27 @@ public static class AzureKubernetesEnvironmentExtensions
                 await annotation.Callback(context).ConfigureAwait(false);
             }
         }));
+    }
+
+    private sealed class KubeletRoleAssignmentsContext(
+        AzureResourceInfrastructure infrastructure,
+        AzureKubernetesEnvironmentResource cluster,
+        DistributedApplicationExecutionContext executionContext) : IAddRoleAssignmentsContext
+    {
+        public AzureResourceInfrastructure Infrastructure { get; } = infrastructure;
+
+        public IEnumerable<RoleDefinition> Roles { get; } =
+        [
+            new(ContainerRegistryBuiltInRole.AcrPull.ToString(),
+                ContainerRegistryBuiltInRole.GetBuiltInRoleName(ContainerRegistryBuiltInRole.AcrPull))
+        ];
+
+        public BicepValue<RoleManagementPrincipalType> PrincipalType => RoleManagementPrincipalType.ServicePrincipal;
+
+        public BicepValue<Guid> PrincipalId => cluster.KubeletIdentityObjectId.AsProvisioningParameter(Infrastructure, "principalId");
+
+        public BicepValue<string> PrincipalName => throw new NotSupportedException("The existing AKS kubelet identity does not expose a principal name.");
+
+        public DistributedApplicationExecutionContext ExecutionContext { get; } = executionContext;
     }
 }

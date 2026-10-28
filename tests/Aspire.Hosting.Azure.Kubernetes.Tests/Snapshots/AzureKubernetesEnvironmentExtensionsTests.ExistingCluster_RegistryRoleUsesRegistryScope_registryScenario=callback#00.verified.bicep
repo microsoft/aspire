@@ -41,7 +41,6 @@ module aks_kubelet_roles_registry 'aks-kubelet-roles-registry/aks-kubelet-roles-
   scope: resourceGroup('00000000-0000-0000-0000-000000000002', 'registry-rg')
   params: {
     location: location
-    clusterId: aks.outputs.id
     principalId: aks.outputs.kubeletIdentityObjectId
   }
 }

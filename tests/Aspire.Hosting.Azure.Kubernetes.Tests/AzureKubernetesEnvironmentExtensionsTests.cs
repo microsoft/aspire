@@ -931,6 +931,7 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
         Assert.Contains(registry.Resource, roles.References);
         Assert.Equal(aks.Resource.KubeletIdentityObjectId.ValueExpression,
             Assert.IsType<BicepOutputReference>(roles.Parameters["principalId"]).ValueExpression);
+        Assert.False(roles.Parameters.ContainsKey("clusterId"));
         Assert.False(aks.Resource.Parameters.ContainsKey("acrName"));
 
         var mainBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "main.bicep"));
