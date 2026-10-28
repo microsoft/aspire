@@ -10,6 +10,7 @@ using Aspire.Cli.Processes;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Cli.Tests.TestServices.ProcessTestHelpers;
 
@@ -225,7 +226,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         WindowsProcessInterop.SetConsoleCtrlHandler(nint.Zero, add: false);
 
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var execution = TestProcessExecutionFactory.CreateForCliGuardian(new TestEnvironment()).CreateExecution(
+        using var loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddXunit(outputHelper));
+        await using var execution = TestProcessExecutionFactory.CreateForCliGuardian(
+            new TestEnvironment(), loggerFactory.CreateLogger<ProcessExecutionFactory>()).CreateExecution(
             "ping.exe",
             ["-n", "120", "127.0.0.1"],
             env: null,

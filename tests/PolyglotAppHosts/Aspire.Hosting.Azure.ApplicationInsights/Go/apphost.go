@@ -20,7 +20,7 @@ func main() {
 		identity := infrastructure.AddApplicationInsightsUserAssignedIdentity("validationIdentity")
 		principalID, err := identity.PrincipalId()
 		if err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		role := infrastructure.GetApplicationInsightsBuiltInRoleMonitoringMetricsPublisher()
 		roleAssignment := component.CreateRoleAssignment(
@@ -31,11 +31,11 @@ func main() {
 		roleAssignment.SetDescription("Polyglot provisioning validation")
 		_ = roleAssignment.RoleDefinitionId()
 		if err := roleAssignment.AddTo(infrastructure); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	if err := appInsights.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// AddAzureLogAnalyticsWorkspace — from the OperationalInsights dependency
@@ -45,20 +45,20 @@ func main() {
 		workspace.Tags().Set("provisioning-proxy", "go")
 	})
 	if err := logAnalytics.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	appInsightsWithWorkspace := builder.AddAzureApplicationInsights("insights-with-workspace").
 		WithLogAnalyticsWorkspace(logAnalytics)
 	if err = appInsightsWithWorkspace.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

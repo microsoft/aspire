@@ -4,112 +4,112 @@
     <body>
       <trans-unit id="ApiNotFound">
         <source>API item '{0}' not found. Use 'aspire docs api search' or 'aspire docs api list &lt;scope&gt;' to find available identifiers.</source>
-        <target state="new">API item '{0}' not found. Use 'aspire docs api search' or 'aspire docs api list &lt;scope&gt;' to find available identifiers.</target>
+        <target state="translated">Položka rozhraní API {0} se nenašla. Dostupné identifikátory najdete pomocí příkazu aspire docs api search nebo aspire docs api list &lt;scope&gt;.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Browse and search Aspire API reference documentation from aspire.dev</source>
-        <target state="new">Browse and search Aspire API reference documentation from aspire.dev</target>
+        <target state="translated">Procházet a prohledávat referenční dokumentaci k rozhraní API Aspire z webu aspire.dev</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="new">Output format (Table or Json)</target>
+        <target state="translated">Výstupní formát (tabulka nebo JSON)</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundApiEntries">
         <source>Found {0} API entries under '{1}'.</source>
-        <target state="new">Found {0} API entries under '{1}'.</target>
+        <target state="translated">V oboru {1} se našel tento počet položek rozhraní API: {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundSearchResults">
         <source>Found {0} API results for '{1}'.</source>
-        <target state="new">Found {0} API results for '{1}'.</target>
+        <target state="translated">Pro {1} se našel tento počet výsledků hledání v rozhraní API: {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetDescription">
         <source>Get the markdown for an API reference item by its identifier</source>
-        <target state="new">Get the markdown for an API reference item by its identifier</target>
+        <target state="translated">Získat položku referenci k rozhraní API ve formátu Markdown podle jejího identifikátoru</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderGroup">
         <source>Group</source>
-        <target state="new">Group</target>
+        <target state="translated">Skupina</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderId">
         <source>Id</source>
-        <target state="new">Id</target>
+        <target state="translated">ID</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderKind">
         <source>Kind</source>
-        <target state="new">Kind</target>
+        <target state="translated">Druh</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderLanguage">
         <source>Language</source>
-        <target state="new">Language</target>
+        <target state="translated">Jazyk</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderName">
         <source>Name</source>
-        <target state="new">Name</target>
+        <target state="translated">Název</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderScore">
         <source>Score</source>
-        <target state="new">Score</target>
+        <target state="translated">Skóre</target>
         <note />
       </trans-unit>
       <trans-unit id="IdArgumentDescription">
         <source>The API identifier (for example, 'csharp/aspire.azure.ai.inference/aspireazureaiinferenceextensions')</source>
-        <target state="new">The API identifier (for example, 'csharp/aspire.azure.ai.inference/aspireazureaiinferenceextensions')</target>
+        <target state="translated">Identifikátor rozhraní API (například csharp/aspire.azure.ai.inference/aspireazureaiinferenceextensions)</target>
         <note />
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
         <source>Limit results to a specific API language</source>
-        <target state="new">Limit results to a specific API language</target>
+        <target state="translated">Omezit výsledky na konkrétní jazyk rozhraní API</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
         <source>Maximum number of search results to return (default: 5, max: 10)</source>
-        <target state="new">Maximum number of search results to return (default: 5, max: 10)</target>
+        <target state="translated">Maximální počet výsledků hledání, které se mají vrátit (výchozí: 5, max.: 10)</target>
         <note />
       </trans-unit>
       <trans-unit id="ListDescription">
         <source>List API entries under a parent scope</source>
-        <target state="new">List API entries under a parent scope</target>
+        <target state="translated">Vypsat položky rozhraní API v nadřazeném oboru</target>
         <note />
       </trans-unit>
       <trans-unit id="LoadingApiDocumentation">
         <source>Loading API documentation...</source>
-        <target state="new">Loading API documentation...</target>
+        <target state="translated">Načítá se dokumentace k rozhraní API...</target>
         <note />
       </trans-unit>
       <trans-unit id="NoApiEntriesFound">
         <source>No API entries found under '{0}'.</source>
-        <target state="new">No API entries found under '{0}'.</target>
+        <target state="translated">V oboru {0} se nenašly žádné položky rozhraní API.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResultsFound">
         <source>No API results found for '{0}'. Try different search terms.</source>
-        <target state="new">No API results found for '{0}'. Try different search terms.</target>
+        <target state="translated">Pro {0} se nenašly žádné výsledky hledání v rozhraní API. Zkuste použít jiné hledané termíny.</target>
         <note />
       </trans-unit>
       <trans-unit id="QueryArgumentDescription">
         <source>The search query</source>
-        <target state="new">The search query</target>
+        <target state="translated">Vyhledávací dotaz</target>
         <note />
       </trans-unit>
       <trans-unit id="ScopeArgumentDescription">
         <source>The parent API scope to browse (for example, 'csharp' or 'typescript/aspire.hosting.azure.appconfiguration')</source>
-        <target state="new">The parent API scope to browse (for example, 'csharp' or 'typescript/aspire.hosting.azure.appconfiguration')</target>
+        <target state="translated">Nadřazený obor rozhraní API, který chcete procházet (například csharp nebo typescript/aspire.hosting.azure.appconfiguration)</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchDescription">
         <source>Search Aspire API reference documentation by keywords</source>
-        <target state="new">Search Aspire API reference documentation by keywords</target>
+        <target state="translated">Prohledat referenční dokumentaci k rozhraní API Aspire podle klíčových slov</target>
         <note />
       </trans-unit>
     </body>

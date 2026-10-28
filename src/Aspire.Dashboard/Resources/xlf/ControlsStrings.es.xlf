@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Table tab</source>
-        <target state="needs-review-translation">Graph. Para obtener una vista accesible, vaya a la pestaña Recursos</target>
+        <target state="translated">Gráfico. Para obtener una vista accesible, vaya a la pestaña Tabla.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphTab">
@@ -54,7 +54,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerIncompatibleHistogramBounds">
         <source>Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts.</source>
-        <target state="new">Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts.</target>
+        <target state="translated">Algunos histogramas no tienen límites de cubo compartido. No se pueden calcular percentiles para esos intervalos. Use Mostrar recuento para ver los recuentos de observaciones.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerOptionsHeader">
@@ -84,7 +84,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerTableTab">
         <source>Table</source>
-        <target state="needs-review-translation">Recursos</target>
+        <target state="translated">Tabla</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerUnableToDisplay">
@@ -94,17 +94,17 @@
       </trans-unit>
       <trans-unit id="ClearAllResources">
         <source>Remove all telemetry</source>
-        <target state="needs-review-translation">Quitar todo</target>
+        <target state="translated">Quitar toda la telemetría</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearPendingSelectedResource">
         <source>Remove telemetry for resource</source>
-        <target state="needs-review-translation">Quitar para el recurso</target>
+        <target state="translated">Eliminación de la telemetría del recurso</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSelectedResource">
         <source>Remove telemetry for {0}</source>
-        <target state="needs-review-translation">Quitar para {0}</target>
+        <target state="translated">Quitar telemetría para {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSignalsButtonTitle">
@@ -159,37 +159,37 @@
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Resources tab</source>
-        <target state="new">Graph. For an accessible view please navigate to the Resources tab</target>
+        <target state="translated">Graph. Para obtener una vista accesible, vaya a la pestaña Recursos</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphTab">
         <source>Graph</source>
-        <target state="new">Graph</target>
+        <target state="translated">Graph</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerParametersTab">
         <source>Parameters</source>
-        <target state="new">Parameters</target>
+        <target state="translated">Parámetros</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerTableTab">
         <source>Resources</source>
-        <target state="new">Resources</target>
+        <target state="translated">Recursos</target>
         <note />
       </trans-unit>
       <trans-unit id="ScrollToBottom">
         <source>Scroll to bottom</source>
-        <target state="new">Scroll to bottom</target>
+        <target state="translated">Desplazarse hacia abajo</target>
         <note>Accessible name and tooltip for the floating button that jumps a large scroll region to the bottom.</note>
       </trans-unit>
       <trans-unit id="TextVisualizerContentLabel">
         <source>Text content</source>
-        <target state="new">Text content</target>
+        <target state="translated">Contenido de texto</target>
         <note>Accessible name for the scrollable text/code region in the text visualizer.</note>
       </trans-unit>
       <trans-unit id="ViewJson">
         <source>View JSON</source>
-        <target state="new">View JSON</target>
+        <target state="translated">Ver JSON</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterPlaceholder">
@@ -389,7 +389,7 @@
       </trans-unit>
       <trans-unit id="ParameterSetValueAction">
         <source>Click to set parameter value</source>
-        <target state="new">Click to set parameter value</target>
+        <target state="translated">Haga clic para establecer el valor del parámetro</target>
         <note />
       </trans-unit>
       <trans-unit id="ParameterValueNotSet">
@@ -474,7 +474,7 @@
       </trans-unit>
       <trans-unit id="ResourceDetailsStateDescriptionHeader">
         <source>State details</source>
-        <target state="new">State details</target>
+        <target state="translated">Detalles del estado</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceDetailsTypeHeader">
@@ -544,7 +544,7 @@
       </trans-unit>
       <trans-unit id="SpanDetailsDurationLabel">
         <source>Duration</source>
-        <target state="new">Duration</target>
+        <target state="translated">Duración</target>
         <note />
       </trans-unit>
       <trans-unit id="SpanDetailsEventsHeader">
@@ -564,7 +564,7 @@
       </trans-unit>
       <trans-unit id="SpanDetailsResourceLabel">
         <source>Resource</source>
-        <target state="new">Resource</target>
+        <target state="translated">Recurso</target>
         <note />
       </trans-unit>
       <trans-unit id="SpanDetailsSpanColumnHeader">
@@ -584,7 +584,7 @@
       </trans-unit>
       <trans-unit id="SpanDetailsStartTimeLabel">
         <source>Start time</source>
-        <target state="new">Start time</target>
+        <target state="translated">Hora de inicio</target>
         <note />
       </trans-unit>
       <trans-unit id="SpanTypeCloud">
@@ -644,12 +644,12 @@
       </trans-unit>
       <trans-unit id="StructuredLogsDetailsResourceLabel">
         <source>Resource</source>
-        <target state="new">Resource</target>
+        <target state="translated">Recurso</target>
         <note />
       </trans-unit>
       <trans-unit id="StructuredLogsDetailsTimestampLabel">
         <source>Timestamp</source>
-        <target state="new">Timestamp</target>
+        <target state="translated">Marca de tiempo</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeOffsetColumnHeader">

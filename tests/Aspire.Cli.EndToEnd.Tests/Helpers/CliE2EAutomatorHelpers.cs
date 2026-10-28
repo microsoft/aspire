@@ -275,6 +275,37 @@ internal static class CliE2EAutomatorHelpers
             effectiveTimeout);
     }
 
+    /// <summary>
+    /// Creates a Go empty AppHost using the direct <c>aspire new aspire-go-empty</c> command.
+    /// Requires <see cref="EnableExperimentalGoSupportAsync"/> to have run first.
+    /// </summary>
+    internal static async Task AspireNewGoEmptyAppHostAsync(
+        this Hex1bTerminalAutomator auto,
+        string projectName,
+        SequenceCounter counter,
+        string? outputPath = null,
+        string? channel = null,
+        bool useLocalhostTld = false,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(2);
+        var command = BuildAspireNewEmptyAppHostCommand(
+            "aspire-go-empty",
+            projectName,
+            outputPath,
+            channel,
+            useLocalhostTld);
+
+        await auto.TypeAsync(command);
+        await auto.EnterAsync();
+        await auto.WaitForAspireNewEmptyAppHostCompletionAsync(
+            projectName,
+            "Go",
+            counter,
+            AppHostLanguagePromptSelection.Go,
+            effectiveTimeout);
+    }
+
     private static string BuildAspireNewEmptyAppHostCommand(
         string templateName,
         string projectName,
@@ -386,6 +417,16 @@ internal static class CliE2EAutomatorHelpers
                 await auto.EnterAsync();
                 return;
 
+            case AppHostLanguagePromptSelection.Go:
+                // Search by text so the selection does not depend on which other languages the picker lists.
+                await auto.TypeAsync("Go");
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("> Go").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(5),
+                    description: "Go AppHost language selected");
+                await auto.EnterAsync();
+                return;
+
             default:
                 throw new InvalidOperationException($"Unexpected AppHost language prompt selection: {languagePromptSelection}.");
         }
@@ -427,6 +468,19 @@ internal static class CliE2EAutomatorHelpers
         }
 
         counter.Increment();
+    }
+
+    /// <summary>
+    /// Runs <c>aspire add &lt;packageName&gt;</c> and waits for it to finish, answering the version picker when it appears.
+    /// </summary>
+    internal static async Task AspireAddPackageAsync(
+        this Hex1bTerminalAutomator auto,
+        string packageName,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync($"aspire add {packageName}");
+        await auto.EnterAsync();
+        await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromMinutes(2));
     }
 
     /// <summary>
@@ -746,6 +800,39 @@ internal static class CliE2EAutomatorHelpers
         await auto.TypeAsync("aspire config set features:experimentalPolyglotJava true --global --non-interactive");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Enables experimental Go polyglot support for CLI tests.
+    /// </summary>
+    /// <remarks>
+    /// Go AppHosts are gated behind the <c>experimentalPolyglotGo</c> feature, which hides both the Go starter template
+    /// and the Go entry in the language picker. Every Go test goes through this helper so that dropping the gate only
+    /// requires turning this method into a no-op like <see cref="EnablePolyglotSupportAsync"/>.
+    /// </remarks>
+    internal static async Task EnableExperimentalGoSupportAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync("aspire config set features:experimentalPolyglotGo true --global --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Creates a Go AppHost in the current directory through the interactive <c>aspire init</c> language picker.
+    /// Requires <see cref="EnableExperimentalGoSupportAsync"/> to have run first.
+    /// </summary>
+    internal static async Task AspireInitGoAppHostAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync("aspire init");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
+        await auto.SelectAppHostLanguageAsync(AppHostLanguagePromptSelection.Go);
+        await auto.WaitUntilTextAsync("Created apphost.go", timeout: TimeSpan.FromMinutes(2));
+        await auto.DeclineAgentInitPromptAsync(counter);
     }
 
     /// <summary>
@@ -1239,6 +1326,7 @@ internal static class CliE2EAutomatorHelpers
     private enum AppHostLanguagePromptSelection
     {
         DefaultCSharp,
-        TypeScript
+        TypeScript,
+        Go
     }
 }

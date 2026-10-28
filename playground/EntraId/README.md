@@ -99,6 +99,12 @@ The AppHost calls `WithIdTokenIssuance()` because both front ends use ID-token-o
 client secret, expose API scopes, or grant API permissions. Both front ends wait for `entra-web` and receive its provisioned
 tenant/client IDs through `WithReference`.
 
+The AppHost also declares two application roles, `User` and `Admin`, with `WithAppRole`. Aspire only declares them; it doesn't
+assign them. To see a role in the .NET front end, open the `entra-web` enterprise application in the Entra admin center, select
+**Users and groups**, assign yourself a role, and sign in again: the page lists the roles in your ID token's `roles` claim.
+Without an assignment it shows none. To retire a role later, set `isEnabled: false` on it and redeploy before removing it; see the
+integration's README for the removal rules.
+
 Unchanged restarts reuse deployment state. Configuration updates preserve the registration's identity while the tenant,
 resource name, and suffix stay unchanged, independently of the resource group. Different developers should choose distinct
 suffixes to avoid sharing and overwriting the same registration. Changing the name or suffix targets another registration
@@ -125,8 +131,9 @@ that pins it to `https://localhost:7251`, whichever profile the AppHost runs wit
 forwards to the app. The Node front end uses `https://localhost:7252` for the same reason; Aspire supplies its HTTPS
 certificate and private key.
 
-Use a non-isolated run in either mode. `--isolated` randomizes endpoint ports, so it requires updating the callbacks in the
-existing registration or the creation-mode `WithRedirectUris` call to match the actual URLs.
+Use a non-isolated run in existing mode. `--isolated` randomizes endpoint ports, so it requires updating the callbacks in the
+existing registration. In creation mode the AppHost derives the callback hosts and ports from each front end's endpoint, so
+isolated runs register the actual URLs; the callback paths remain fixed in the AppHost's `WithRedirectUris` calls.
 
 From this directory, run `aspire run`, or `dotnet run --project EntraId.AppHost`. In the dashboard, open
 `webfrontend` at `https://localhost:7251`, select **Sign in with Microsoft Entra ID**, and view your signed-in identity.

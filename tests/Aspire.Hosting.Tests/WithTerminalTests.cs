@@ -29,7 +29,6 @@ public class WithTerminalTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData(typeof(TerminalOptions))]
     [InlineData(typeof(TerminalService))]
     [InlineData(typeof(AspireTerminal))]
     [InlineData(typeof(AspireTerminalKey))]
@@ -47,7 +46,6 @@ public class WithTerminalTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData(typeof(TerminalResourceBuilderExtensions), nameof(TerminalResourceBuilderExtensions.WithTerminal))]
     [InlineData(typeof(IInteractionService), nameof(IInteractionService.PromptTerminalAsync))]
     public void TerminalMethodsUseSharedExperimentalDiagnostic(Type declaringType, string methodName)
     {
@@ -60,6 +58,20 @@ public class WithTerminalTests : IAsyncLifetime
 
             Assert.Equal("ASPIRETERMINAL001", attribute.DiagnosticId);
             Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+        }
+    }
+
+    [Fact]
+    public void WithTerminalApiIsNotExperimental()
+    {
+        Assert.Empty(typeof(TerminalOptions).GetCustomAttributes<ExperimentalAttribute>());
+        Assert.Empty(typeof(TerminalResourceBuilderExtensions).GetCustomAttributes<ExperimentalAttribute>());
+        var methods = typeof(TerminalResourceBuilderExtensions).GetMethods()
+            .Where(method => method.Name == nameof(TerminalResourceBuilderExtensions.WithTerminal)).ToArray();
+        Assert.NotEmpty(methods);
+        foreach (var method in methods)
+        {
+            Assert.Empty(method.GetCustomAttributes<ExperimentalAttribute>());
         }
     }
 

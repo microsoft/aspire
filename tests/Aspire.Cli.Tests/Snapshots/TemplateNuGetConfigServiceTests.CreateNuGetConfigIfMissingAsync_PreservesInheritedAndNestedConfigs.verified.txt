@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="aspire-apphost-source" value="https://daily.example/v3/index.json" />
+  </packageSources>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="public">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="enterprise">
+      <package pattern="Company.*" />
+    </packageSource>
+    <packageSource key="aspire-apphost-source">
+      <package pattern="Aspire*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>

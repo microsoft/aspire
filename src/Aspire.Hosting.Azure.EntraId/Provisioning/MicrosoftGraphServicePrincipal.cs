@@ -32,11 +32,19 @@ internal sealed class MicrosoftGraphServicePrincipal(string bicepIdentifier)
     }
     private BicepList<string>? _owners;
 
+    public BicepList<string> Tags
+    {
+        get { Initialize(); return _tags!; }
+        set { Initialize(); _tags!.Assign(value); }
+    }
+    private BicepList<string>? _tags;
+
     protected override void DefineProvisionableProperties()
     {
         base.DefineProvisionableProperties();
         _id = DefineProperty<string>(nameof(Id), ["id"], isOutput: true);
         _appId = DefineProperty<string>(nameof(AppId), ["appId"], isRequired: true);
+        _tags = DefineListProperty<string>(nameof(Tags), ["tags"]);
         _owners = DefineListProperty<string>(nameof(Owners), ["owners", "relationships"]);
     }
 }

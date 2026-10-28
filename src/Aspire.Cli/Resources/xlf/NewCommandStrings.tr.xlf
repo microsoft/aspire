@@ -12,24 +12,29 @@
         <target state="translated">Şablonlar için kullanılacak kanal (kararlı, hazırlama, günlük)</target>
         <note />
       </trans-unit>
+      <trans-unit id="CloningTemplateRepository">
+        <source>Cloning template repository...</source>
+        <target state="new">Cloning template repository...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
         <source>Directly in the selected folder</source>
-        <target state="new">Directly in the selected folder</target>
+        <target state="translated">Doğrudan seçili klasöre</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectNameSubdirectoryChoice">
         <source>In a subdirectory named '{0}' in the selected folder</source>
-        <target state="new">In a subdirectory named '{0}' in the selected folder</target>
+        <target state="translated">Seçili klasördeki '{0}' adlı bir alt dizine</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Create a new app from an Aspire starter template</source>
-        <target state="needs-review-translation">Yeni bir Aspire projesi oluşturun.</target>
+        <target state="translated">Aspire başlangıç şablonundan yeni bir uygulama oluşturun</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
         <source>Enter the output path</source>
-        <target state="new">Enter the output path</target>
+        <target state="translated">Çıkış yolunu girin</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheProjectName">
@@ -44,57 +49,82 @@
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
         <source>The programming language for the AppHost</source>
-        <target state="new">The programming language for the AppHost</target>
+        <target state="translated">AppHost için programlama dili</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalTemplateCreationFailed">
+        <source>Could not create the local template ({0}): {1}</source>
+        <target state="new">Could not create the local template ({0}): {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalTemplateLoadFailed">
+        <source>Could not load the local template: {0}</source>
+        <target state="new">Could not load the local template: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalTemplateSelectionRequiresInteraction">
+        <source>The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</source>
+        <target state="new">The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
         <source>The name of the project to create</source>
-        <target state="needs-review-translation">Oluşturulacak projenin adı.</target>
+        <target state="translated">Oluşturulacak projenin adı</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChannelFoundMatching">
         <source>No channel found matching '{0}'. Valid options are: {1}.</source>
-        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <target state="translated">'{0}' eşleşen kanal bulunamadı. Geçerli seçenekler şunlardır: {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoLocalTemplatesFound">
+        <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
+        <target state="new">No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
         <source>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</source>
-        <target state="new">No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</target>
+        <target state="translated">Eşleşen yerel yok AspireAspire. Aspire CLI sürüm '{0}' için ProjectTemplates paketi bulundu. localhive.sh (macOS/Linux) veya localhive.ps1 (Windows) ile eşleşen paketler oluşturun ve hazırlayın, ASPIRE_CLI_PACKAGES paketi içeren bir dizine ayarlayın veya --channel, --source veya --version ile akış destekli şablonları açıkça seçin.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoPackageChannelsAvailable">
         <source>No package channels are available.</source>
-        <target state="new">No package channels are available.</target>
+        <target state="translated">Kullanılabilir paket kanalı yok.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTemplateVersionsFoundInChannel">
         <source>No template versions found in channel '{0}'.</source>
-        <target state="new">No template versions found in channel '{0}'.</target>
+        <target state="translated">'{0}' kanalında şablon sürümü bulunamadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveTemplateRequired">
         <source>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</source>
-        <target state="new">A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</target>
+        <target state="translated">Etkileşimsiz modda çalışırken bir şablon belirtilmelidir. 'aspire new &lt;template&gt;' kullanın.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
         <source>The output path for the project</source>
-        <target state="needs-review-translation">Projenin çıkış yolu.</target>
+        <target state="translated">Projenin çıkış yolu</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyNonInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify --output with a different location.</target>
+        <target state="translated">Çıkış dizini '{0}' zaten var ve boş değil. Farklı bir konumla --output belirtin.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify a different location.</target>
+        <target state="translated">Çıkış dizini '{0}' zaten var ve boş değil. Farklı bir konum belirtin.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputPathContainsInvalidCharacters">
         <source>The output path '{0}' contains invalid characters.</source>
-        <target state="new">The output path '{0}' contains invalid characters.</target>
+        <target state="translated">'{0}' çıkış yolu geçersiz karakterler içeriyor.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResolvingTemplateRepository">
+        <source>Resolving template repository ref...</source>
+        <target state="new">Resolving template repository ref...</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
@@ -114,22 +144,77 @@
       </trans-unit>
       <trans-unit id="SelectProjectCreationLocation">
         <source>Where do you want the project to be created?</source>
-        <target state="new">Where do you want the project to be created?</target>
+        <target state="translated">Projenin nerede oluşturulmasını istiyorsunuz?</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
         <source>The NuGet source to use for the project templates</source>
-        <target state="needs-review-translation">Proje şablonları için kullanılacak NuGet kaynağı.</target>
+        <target state="translated">Proje şablonları için kullanılacak NuGet kaynağı</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceDirectoryNotFound">
         <source>The local NuGet source directory '{0}' does not exist.</source>
-        <target state="new">The local NuGet source directory '{0}' does not exist.</target>
+        <target state="translated">Yerel NuGet kaynak dizini '{0}' mevcut değil.</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceWithCredentialsCannotBePersisted">
         <source>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
-        <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
+        <target state="translated">--source URL'si kimlik bilgileri, sorgu dizesi veya parça içerdiği için projenin NuGet.config dosyasına yazılamıyor. NuGet kimlik bilgisi sağlayıcıları veya kullanıcı düzeyinde NuGet yapılandırması kullanarak kimlik bilgilerini yapılandırın, ardından gizli bilgileri içermeyen besleme URL’sini aktarın.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateDirectoryNotFound">
+        <source>The template directory '{0}' does not exist.</source>
+        <target state="new">The template directory '{0}' does not exist.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplatePathConflictingOptions">
+        <source>--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</source>
+        <target state="new">--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplatePathOptionDescription">
+        <source>Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</source>
+        <target state="new">Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryGitExited">
+        <source>Git failed with exit code {0}: {1}</source>
+        <target state="new">Git failed with exit code {0}: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryGitFailed">
+        <source>Could not access the template repository: {0}</source>
+        <target state="new">Could not access the template repository: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryGitUnavailable">
+        <source>Git could not be started. Install Git and ensure it is on PATH.</source>
+        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryOptionDescription">
+        <source>Clone a Git repository containing templates; --template-path is relative to its root</source>
+        <target state="new">Clone a Git repository containing templates; --template-path is relative to its root</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryPathInvalid">
+        <source>When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</source>
+        <target state="new">When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryRefNotFound">
+        <source>Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</source>
+        <target state="new">Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryRefOptionDescription">
+        <source>Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</source>
+        <target state="new">Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryRefRequiresRepository">
+        <source>--template-repository-ref requires --template-repository and a non-empty ref value.</source>
+        <target state="new">--template-repository-ref requires --template-repository and a non-empty ref value.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
@@ -139,7 +224,7 @@
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
         <source>The version of the project templates to use</source>
-        <target state="needs-review-translation">Kullanılacak proje şablonlarının sürümü.</target>
+        <target state="translated">Kullanılacak proje şablonlarının sürümü</target>
         <note />
       </trans-unit>
     </body>

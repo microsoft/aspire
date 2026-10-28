@@ -236,7 +236,7 @@ public class Program
             ((args[0] == "mcp" && args[1] == "start") || (args[0] == "agent" && args[1] == "mcp"));
 
         // Create file logger provider from pre-computed path info
-        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, errorWriter);
+        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter);
 
         var factory = LoggerFactory.Create(builder =>
         {
@@ -317,6 +317,7 @@ public class Program
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
         ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !isCompletion);
+        builder.Services.AddSingleton<ConfigSourceService>();
 
         if (configurationValues is not null)
         {
@@ -567,6 +568,8 @@ public class Program
 
         // Git repository operations.
         builder.Services.AddSingleton<IGitRepository, GitRepository>();
+        builder.Services.AddSingleton<IGitCommandRunner, GitCommandRunner>();
+        builder.Services.AddSingleton<IGitClient, GitClient>();
 
         // OpenCode CLI operations.
         builder.Services.AddSingleton<IOpenCodeCliRunner, OpenCodeCliRunner>();
@@ -618,6 +621,9 @@ public class Program
         builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
         builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
         builder.Services.AddSingleton<PlaywrightCliInstaller>();
+        builder.Services.AddSingleton<IAgentClient, CopilotAgentClient>();
+        builder.Services.AddSingleton<IAgentClient, ClaudeCodeAgentClient>();
+        builder.Services.AddSingleton<IAgentClient, OpenCodeAgentClient>();
 
         // Agent environment detection.
         builder.Services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();
@@ -637,6 +643,7 @@ public class Program
         builder.Services.AddSingleton<ITemplateProvider, TemplateProvider>();
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, DotNetTemplateFactory>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, CliTemplateFactory>());
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, TemplateEngineFactory>());
 
         // Language discovery for polyglot support.
         builder.Services.AddSingleton<ILanguageDiscovery, DefaultLanguageDiscovery>();
@@ -655,6 +662,7 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostToolingCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, GoAppHostToolingCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();

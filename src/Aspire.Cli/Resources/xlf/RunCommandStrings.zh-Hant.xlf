@@ -34,22 +34,22 @@
       </trans-unit>
       <trans-unit id="AppHostConnectionLostWaitingForExit">
         <source>The connection to the child AppHost was lost. Waiting for the AppHost process to exit. Press Ctrl+C to stop waiting.</source>
-        <target state="new">The connection to the child AppHost was lost. Waiting for the AppHost process to exit. Press Ctrl+C to stop waiting.</target>
+        <target state="translated">已失去與子 AppHost 的連線。正在等待 AppHost 流程結束。按 Ctrl+C 以停止等待。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostExitedWithCode">
         <source>AppHost process exited with code {0}.</source>
-        <target state="needs-review-translation">AppHost 程序以返回碼 {0} 結束。</target>
+        <target state="translated">AppHost 程序以返回碼 {0} 結束。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostFailedToBuild">
         <source>AppHost failed to build.</source>
-        <target state="new">AppHost failed to build.</target>
+        <target state="translated">無法建置 AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStartedSuccessfully">
         <source>AppHost started successfully.</source>
-        <target state="needs-review-translation">已成功啟動 AppHost。</target>
+        <target state="translated">已成功啟動 AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckLogsForDetails">
@@ -59,7 +59,7 @@
       </trans-unit>
       <trans-unit id="ConnectingToAppHost">
         <source>Connecting to AppHost...</source>
-        <target state="needs-review-translation">正線連線到 AppHost...</target>
+        <target state="translated">正在線連至 AppHost...</target>
         <note />
       </trans-unit>
       <trans-unit id="CopyingUserSecrets">
@@ -74,17 +74,17 @@
       </trans-unit>
       <trans-unit id="DashboardFailedToStart">
         <source>Aspire Dashboard failed to start or is disabled.</source>
-        <target state="needs-review-translation">Aspire 儀表板啟動失敗。</target>
+        <target state="translated">Aspire 儀表板無法啟動或已停用。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Run an Aspire AppHost interactively for development</source>
-        <target state="needs-review-translation">在開發模式中執行 Aspire AppHost。</target>
+        <target state="translated">以互動方式執行 Aspire AppHost 以進行開發</target>
         <note />
       </trans-unit>
       <trans-unit id="DetachArgumentDescription">
         <source>Run the AppHost in the background and exit after it starts</source>
-        <target state="needs-review-translation">在背景執行 AppHost，啟動後即退出。</target>
+        <target state="translated">在背景執行 AppHost，啟動後即退出</target>
         <note />
       </trans-unit>
       <trans-unit id="Endpoints">
@@ -94,12 +94,12 @@
       </trans-unit>
       <trans-unit id="FailedToStartAppHost">
         <source>Failed to start the AppHost.</source>
-        <target state="needs-review-translation">無法啟動 AppHost。</target>
+        <target state="translated">無法啟動 AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="ForceArgumentDescription">
         <source>Stop any running instance of the AppHost without prompting</source>
-        <target state="needs-review-translation">停止任何正在執行的 AppHost 執行個體，且不顯示提示。</target>
+        <target state="translated">停止任何正在執行的 AppHost 執行個體，且不顯示提示</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatRequiresDetach">
@@ -114,7 +114,7 @@
       </trans-unit>
       <trans-unit id="InvalidAppHostStartupTimeoutEnvironmentVariable">
         <source>The {0} environment variable must be a positive number of seconds.</source>
-        <target state="new">The {0} environment variable must be a positive number of seconds.</target>
+        <target state="translated">{0} 環境變數必須是正的秒數。</target>
         <note>Do not localize the {0} placeholder. It is an environment variable name.</note>
       </trans-unit>
       <trans-unit id="IsCompatibleAppHostIsNull">
@@ -124,17 +124,17 @@
       </trans-unit>
       <trans-unit id="JsonArgumentDescription">
         <source>Output format for detached AppHost results</source>
-        <target state="needs-review-translation">輸出結果為 JSON (僅於使用 --detach 時有效)。</target>
+        <target state="translated">中斷連接 AppHost 結果的輸出格式</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedArgumentDescription">
         <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
-        <target state="needs-review-translation">在隔離模式中搭配隨機化連接埠和隔離的使用者袐密執行，允許同時執行多個執行個體。</target>
+        <target state="translated">在隔離模式中搭配隨機化連接埠和隔離的使用者袐密執行，允許同時執行多個執行個體</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedModeRunningInstanceWarning">
         <source>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
-        <target state="needs-review-translation">找到此 AppHost 的一個執行中執行個體，將會停止。若要同時執行多個隔離的執行個體，請從 git worktree 目錄等不同目錄執行。</target>
+        <target state="translated">找到此 AppHost 的一個執行中執行個體，將會停止。若要同時執行多個隔離的執行個體，請從 git worktree 目錄等不同目錄執行。</target>
         <note />
       </trans-unit>
       <trans-unit id="Logs">
@@ -144,7 +144,7 @@
       </trans-unit>
       <trans-unit id="NoBuildArgumentDescription">
         <source>Do not build or restore the project before running</source>
-        <target state="new">Do not build or restore the project before running</target>
+        <target state="translated">請勿在執行之前組建或還原專案</target>
         <note />
       </trans-unit>
       <trans-unit id="NoBuildNotSupportedWithWatchMode">
@@ -154,7 +154,7 @@
       </trans-unit>
       <trans-unit id="PressCtrlCToStopAppHost">
         <source>Press [bold]CTRL+C[/] to stop the AppHost and exit.</source>
-        <target state="needs-review-translation">按 [bold]CTRL+C[/] 停止 apphost 並結束。</target>
+        <target state="translated">按 [bold]CTRL+C[/] 以停止 AppHost 並結束。</target>
         <note>[bold] should not be localized</note>
       </trans-unit>
       <trans-unit id="ProcessId">
@@ -164,7 +164,7 @@
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file or a directory to search</source>
-        <target state="needs-review-translation">Aspire AppHost 專案檔案的路徑。</target>
+        <target state="translated">要搜尋的 Aspire AppHost 專案檔案或目錄路徑</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeRun">
@@ -174,7 +174,7 @@
       </trans-unit>
       <trans-unit id="RecentAppHostStartupOutput">
         <source>Recent AppHost startup output</source>
-        <target state="new">Recent AppHost startup output</target>
+        <target state="translated">最近的 AppHost 啟動輸出</target>
         <note />
       </trans-unit>
       <trans-unit id="Resource">
@@ -189,17 +189,17 @@
       </trans-unit>
       <trans-unit id="StartDebugSessionArgumentDescription">
         <source>Whether to start a debug session, if running in an Aspire Terminal</source>
-        <target state="needs-review-translation">是否要啟動偵測工作階段 (當在 Aspire 終端機中執行時)。</target>
+        <target state="translated">是否要啟動偵測工作階段 (當在 Aspire 終端機中執行時)</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHost">
         <source>Starting Aspire AppHost...</source>
-        <target state="needs-review-translation">正在啟動 Aspire AppHost...</target>
+        <target state="translated">正在啟動 Aspire AppHost...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHostInBackground">
         <source>Starting Aspire AppHost in the background...</source>
-        <target state="needs-review-translation">正在背景啟動 Aspire apphost...</target>
+        <target state="translated">正在背景啟動 Aspire AppHost...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingDashboard">
@@ -209,12 +209,12 @@
       </trans-unit>
       <trans-unit id="StartingDebugSessionInExtension">
         <source>Detected aspire {0} inside the Aspire extension, starting a debug session in VS Code...</source>
-        <target state="new">Detected aspire {0} inside the Aspire extension, starting a debug session in VS Code...</target>
+        <target state="translated">偵測到 Aspire 在 Aspire 延伸模組中 {0}，正在 VS Code 中啟動偵錯工作階段...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingRunSessionInExtension">
         <source>Detected aspire {0} inside the Aspire extension, running app in VS Code. To start a debug session, add --start-debug-session.</source>
-        <target state="new">Detected aspire {0} inside the Aspire extension, running app in VS Code. To start a debug session, add --start-debug-session.</target>
+        <target state="translated">在 Aspire 延伸模組內偵測到 Aspire {0}，並以 VS Code 執行應用程式。若要啟動偵錯工作階段，請新增 --start-debug-session。</target>
         <note />
       </trans-unit>
       <trans-unit id="State">
@@ -224,7 +224,7 @@
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
         <source>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</source>
-        <target state="new">Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</target>
+        <target state="translated">等候 {0} 秒時讓 AppHost 啟動時逾時。如果 AppHost 仍在建置或啟動，請將 {1} 設定為較高的值，然後再試一次。</target>
         <note>Do not localize the {1} placeholder. It is an environment variable name.</note>
       </trans-unit>
       <trans-unit id="Type">
@@ -234,12 +234,12 @@
       </trans-unit>
       <trans-unit id="WaitingForAppHostToStart">
         <source>Waiting for AppHost to start...</source>
-        <target state="needs-review-translation">正在等待 apphost 啟動...</target>
+        <target state="translated">正在等待 AppHost 啟動...</target>
         <note />
       </trans-unit>
       <trans-unit id="WatchArgumentDescription">
         <source>Start project resources in watch mode</source>
-        <target state="needs-review-translation">以監視模式啟動專案資源。</target>
+        <target state="translated">以監視模式啟動專案資源</target>
         <note />
       </trans-unit>
     </body>

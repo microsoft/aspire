@@ -1160,7 +1160,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
 
     public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
     {
-        StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret));
+        StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret, required));
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
             throw new OperationCanceledException();

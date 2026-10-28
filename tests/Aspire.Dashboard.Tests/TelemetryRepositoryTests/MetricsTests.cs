@@ -1702,6 +1702,184 @@ public sealed class SqliteMetricsTests : MetricsTests
     private static readonly DateTime s_queryTestTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     [Theory]
+    [InlineData(59_999_999_900L, 60_000_000_100L, false)]
+    [InlineData(59_999_999_900L, 60_000_000_100L, true)]
+    [InlineData(60_100_000_000L, 60_900_000_000L, false)]
+    [InlineData(60_100_000_000L, 60_900_000_000L, true)]
+    [InlineData(60_000_000_100L, 59_999_999_900L, false)]
+    [InlineData(60_000_000_100L, 59_999_999_900L, true)]
+    public async Task Numeric_Repeats_PreserveExactTimesAcrossTimeBucketsAfterReopening(long firstEnd, long secondEnd, bool rollup)
+    {
+        using var context = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var exemplar = CreateExemplar(s_queryTestTime.AddSeconds(59), 1);
+        var metric = CreateSumMetric("test", s_queryTestTime.AddSeconds(59), value: 42, exemplars: [exemplar]);
+        var point = metric.Sum.DataPoints[0];
+        point.TimeUnixNano = checked((ulong)firstEnd);
+        var addContext = new AddContext();
+        await context.Repository.AddMetricsAsync(addContext, [CreateResourceMetrics(metric)]);
+        using (var writer = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(context.Database.DatabasePath))
+        {
+            point.TimeUnixNano = checked((ulong)secondEnd);
+            await writer.Repository.AddMetricsAsync(addContext, [CreateResourceMetrics(metric)]);
+        }
+        Assert.Equal(2, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+
+        using (var connection = context.Database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT end_time_unix_nano, end_time_bucket, repeat_count FROM telemetry_metric_points;";
+            using var reader = command.ExecuteReader();
+            Assert.True(reader.Read());
+            Assert.Equal(secondEnd, reader.GetInt64(0));
+            Assert.Equal(secondEnd / SqliteTelemetryRepository.MetricTimeBucketWidthUnixNano, reader.GetInt64(1));
+            Assert.Equal(2, reader.GetInt64(2));
+            Assert.False(reader.Read());
+        }
+
+        using var readOnly = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(context.Database.DatabasePath, readOnly: true);
+        var request = new GetInstrumentRequest
+        {
+            ResourceKey = CreateResource().GetResourceKey(),
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = s_queryTestTime.AddSeconds(59),
+            EndTime = s_queryTestTime.AddSeconds(61),
+            DataPointInterval = rollup ? TimeSpan.FromSeconds(1) : null
+        };
+        var instrument = await readOnly.Repository.GetInstrumentAsync(request, CancellationToken.None);
+        Assert.NotNull(instrument);
+        var value = Assert.IsType<MetricValue<long>>(Assert.Single(Assert.Single(instrument.Dimensions).Values));
+        Assert.Equal(42, value.Value);
+        Assert.Equal(2UL, value.Count);
+        Assert.Equal(s_queryTestTime.AddTicks(secondEnd / 100), value.End);
+        Assert.Equal(exemplar.TimeUnixNano, Assert.Single(value.Exemplars).TimeUnixNano);
+        Assert.Equal(value.End, readOnly.Repository.GetInstrumentLatestEndTime(request.ResourceKey, request.MeterName, request.InstrumentName));
+
+        // A bucket match must not include intervals whose exact end precedes the window.
+        var after = await readOnly.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = request.ResourceKey,
+            MeterName = request.MeterName,
+            InstrumentName = request.InstrumentName,
+            StartTime = value.End.AddTicks(1),
+            EndTime = request.EndTime,
+            DataPointInterval = request.DataPointInterval
+        }, CancellationToken.None);
+        Assert.NotNull(after);
+        Assert.All(after.Dimensions, dimension => Assert.Empty(dimension.Values));
+    }
+
+    [Theory]
+    [InlineData(60_000_000_100L, 61_000_000_100L)]
+    [InlineData(60_000_000_100L, 59_999_999_900L)]
+    [InlineData(59_999_999_950L, 60_000_000_100L)]
+    public async Task Numeric_RepeatsInOneExport_CompareOriginalTimeBucket(long intermediateEnd, long finalEnd)
+    {
+        using var context = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var metric = CreateSumMetric("test", s_queryTestTime, value: 42);
+        var point = metric.Sum.DataPoints[0];
+        point.TimeUnixNano = 59_999_999_900;
+        var addContext = new AddContext();
+        await context.Repository.AddMetricsAsync(addContext, [CreateResourceMetrics(metric)]);
+        point.TimeUnixNano = checked((ulong)intermediateEnd);
+        var last = point.Clone();
+        last.TimeUnixNano = checked((ulong)finalEnd);
+        metric.Sum.DataPoints.Add(last);
+        await context.Repository.AddMetricsAsync(addContext, [CreateResourceMetrics(metric)]);
+        Assert.Equal(3, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+
+        using var connection = context.Database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT end_time_unix_nano, end_time_bucket, repeat_count FROM telemetry_metric_points;";
+        using var reader = command.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal(finalEnd, reader.GetInt64(0));
+        Assert.Equal(finalEnd / SqliteTelemetryRepository.MetricTimeBucketWidthUnixNano, reader.GetInt64(1));
+        Assert.Equal(3, reader.GetInt64(2));
+        Assert.False(reader.Read());
+    }
+
+    [Theory]
+    [InlineData(120_100_000_000L)]
+    [InlineData(60_000_000_000L)]
+    public async Task Numeric_LatestEndTime_UsesMaximumTimeNotNewestPoint(long lastEnd)
+    {
+        using var context = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var metric = CreateSumMetric("test", s_queryTestTime, value: 42);
+        var point = metric.Sum.DataPoints[0];
+        point.TimeUnixNano = 120_900_000_000;
+        var addContext = new AddContext();
+        await context.Repository.AddMetricsAsync(addContext, [CreateResourceMetrics(metric)]);
+        point.AsInt = 43;
+        point.TimeUnixNano = checked((ulong)lastEnd);
+        await context.Repository.AddMetricsAsync(addContext, [CreateResourceMetrics(metric)]);
+        Assert.Equal(2, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+
+        using var readOnly = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(context.Database.DatabasePath, readOnly: true);
+        Assert.Equal(
+            s_queryTestTime.AddMilliseconds(120_900),
+            readOnly.Repository.GetInstrumentLatestEndTime(CreateResource().GetResourceKey(), "test-meter", "test"));
+    }
+
+    [Fact]
+    public async Task Numeric_MixedRepeatBatches_AssignTimeBucketOnlyForCrossings()
+    {
+        using var context = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var metric = new Metric { Name = "test", Sum = new Sum { AggregationTemporality = AggregationTemporality.Cumulative } };
+        for (var index = 0; index < 202; index++)
+        {
+            metric.Sum.DataPoints.Add(new NumberDataPoint
+            {
+                StartTimeUnixNano = 59_000_000_000,
+                TimeUnixNano = index < 101 ? 59_900_000_000UL : 60_100_000_000UL,
+                AsInt = 42,
+                Attributes = { new KeyValue { Key = "dimension", Value = new AnyValue { IntValue = index } } }
+            });
+        }
+        var addContext = new AddContext();
+        await context.Repository.AddMetricsAsync(addContext, [CreateResourceMetrics(metric)]);
+
+        using var connection = context.Database.OpenConnection();
+        using var command = connection.CreateCommand();
+        // UPDATE OF fires whenever the column is assigned, even if its value does not change.
+        command.CommandText = """
+            CREATE TABLE metric_bucket_updates(point_id INTEGER NOT NULL);
+            CREATE TRIGGER record_metric_bucket_update AFTER UPDATE OF end_time_bucket ON telemetry_metric_points
+            BEGIN
+                INSERT INTO metric_bucket_updates(point_id) VALUES (NEW.point_id);
+            END;
+            """;
+        command.ExecuteNonQuery();
+        foreach (var point in metric.Sum.DataPoints)
+        {
+            point.TimeUnixNano = 60_900_000_000;
+        }
+        await context.Repository.AddMetricsAsync(addContext, [CreateResourceMetrics(metric)]);
+        Assert.Equal(404, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+
+        command.CommandText = """
+            SELECT COUNT(*), MIN(end_time_unix_nano), MAX(end_time_unix_nano),
+                   MIN(end_time_bucket), MAX(end_time_bucket), SUM(repeat_count),
+                   (SELECT COUNT(*) FROM metric_bucket_updates)
+            FROM telemetry_metric_points;
+            """;
+        using var reader = command.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal(202, reader.GetInt64(0));
+        Assert.Equal(60_900_000_000, reader.GetInt64(1));
+        Assert.Equal(60_900_000_000, reader.GetInt64(2));
+        Assert.Equal(1, reader.GetInt64(3));
+        Assert.Equal(1, reader.GetInt64(4));
+        Assert.Equal(404, reader.GetInt64(5));
+        Assert.Equal(101, reader.GetInt64(6));
+        Assert.False(reader.Read());
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]

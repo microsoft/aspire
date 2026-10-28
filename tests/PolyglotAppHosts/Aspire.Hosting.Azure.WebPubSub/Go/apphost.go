@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	webpubsub := builder.AddAzureWebPubSub("webpubsub")
@@ -18,12 +18,12 @@ func main() {
 		service.Tags().Set("provisioning-proxy", "go")
 	})
 	if webpubsub.Err() != nil {
-		log.Fatalf(aspire.FormatError(webpubsub.Err()))
+		log.Fatal(aspire.FormatError(webpubsub.Err()))
 	}
 
 	hub := webpubsub.AddHub("myhub")
 	if hub.Err() != nil {
-		log.Fatalf(aspire.FormatError(hub.Err()))
+		log.Fatal(aspire.FormatError(hub.Err()))
 	}
 
 	_ = webpubsub.AddHub("hub2", &aspire.AddHubOptions{HubName: aspire.StringPtr("customhub")})
@@ -39,7 +39,7 @@ func main() {
 
 	container := builder.AddContainer("mycontainer", "mcr.microsoft.com/dotnet/samples:aspnetapp")
 	if container.Err() != nil {
-		log.Fatalf(aspire.FormatError(container.Err()))
+		log.Fatal(aspire.FormatError(container.Err()))
 	}
 
 	container.WithWebPubSubRoleAssignments(webpubsub, []aspire.AzureWebPubSubRole{
@@ -56,20 +56,20 @@ func main() {
 	container.WithReference(hub)
 
 	if hub.Err() != nil {
-		log.Fatalf(aspire.FormatError(hub.Err()))
+		log.Fatal(aspire.FormatError(hub.Err()))
 	}
 	if container.Err() != nil {
-		log.Fatalf(aspire.FormatError(container.Err()))
+		log.Fatal(aspire.FormatError(container.Err()))
 	}
 	if webpubsub.Err() != nil {
-		log.Fatalf(aspire.FormatError(webpubsub.Err()))
+		log.Fatal(aspire.FormatError(webpubsub.Err()))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

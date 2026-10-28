@@ -79,7 +79,27 @@ Changing the name or suffix targets another registration and leaves the previous
 Existing registrations with different `uniqueName` values are not automatically adopted: reference their IDs with
 `AddExistingEntraApplication` or explicitly clean them up when migrating.
 
-Configure callback URIs with `WithRedirectUris`; Aspire does not discover them automatically. To supply the externally visible
+Configure callback URIs with `WithRedirectUris`. To derive the scheme, host, and port from a resource's endpoint, pass the endpoint and the
+callback paths. When running locally the allocated endpoint URL is used; when publishing or deploying, the host comes from the resource's
+compute environment. The callback path can't be discovered, so it must match the path configured in the consuming app:
+
+```csharp
+entraWeb.WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc", "/signout-callback-oidc");
+```
+
+When running locally, the endpoint's primary URL is used, so a friendly `*.dev.localhost` name is registered when the dashboard uses one.
+That URL is read when the registration's URL callback runs, so a `WithUrlForEndpoint` or `WithUrls` callback added after this call that changes
+the endpoint's host isn't reflected. Add such callbacks before calling `WithRedirectUris`.
+
+When only the host name varies per environment (for example, a custom domain supplied at deployment time), pass a parameter for the host
+and the fixed callback paths. Each URI is `https://{host}{path}`:
+
+```csharp
+var host = builder.AddParameter("web-host");
+entraWeb.WithRedirectUris(host, "/signin-oidc", "/signout-callback-oidc");
+```
+
+To supply the externally visible
 URIs per environment at deployment time (for example, behind a gateway or custom domain), pass parameters instead of literals.
 Each parameter value may contain several URIs separated by commas (split in the generated Bicep, so URIs can't contain commas
 and entries must not have surrounding whitespace). Literal and parameter-backed URIs can be mixed and are registered in call order:
@@ -113,6 +133,23 @@ var entraWeb = builder.AddEntraIdApplication("entra-web")
 `WithOwners` sets both; use `WithApplicationOwners` / `WithServicePrincipalOwners` to configure them independently.
 
 Owners are appended; existing owners are never removed. Owners can manage the registration, and the deploying identity needs permission to manage owners (for example `Application.ReadWrite.All`). Existing registrations are not modified.
+
+### Declare application roles
+
+Application roles (for example `User` and `Admin`) appear in the `roles` claim of tokens issued for the API. They are distinct from delegated scopes, consent, and Azure RBAC roles. `WithAppRole` only declares roles on registrations created by Aspire; it does not assign them to any user, group, or application:
+
+```csharp
+var entraApi = builder.AddEntraIdApplication("entra-api")
+                      .WithAppRole(new EntraIdAppRole("User", "User", "Can use the API."))
+                      .WithAppRole(new EntraIdAppRole("Admin", "Administrator", "Can administer the API.",
+                          ["User", "Application"]));
+```
+
+Role IDs are derived from the resource name and role value (or supplied with the `id` argument), so they stay stable across deployments. Changing a role's value or ID creates a different role. A role's value can be at most 120 characters, can't start with a period, and can contain only ASCII letters, digits and the punctuation that [Microsoft Graph allows](https://learn.microsoft.com/graph/api/resources/approle), so spaces and quotation marks are rejected when you write the AppHost.
+
+Whenever the application declares at least one role, Aspire sends the complete `appRoles` collection and Microsoft Graph replaces what is stored, so include every role you want to keep, including ones that were added outside the AppHost. A role that is left out fails the deployment if it is still enabled (`CannotDeleteOrUpdateEnabledEntitlement`) and is deleted if it is already disabled. When the application declares no roles, Aspire doesn't send `appRoles`, so roles that the AppHost never declared are left alone.
+
+To retire a role, deploy it with `isEnabled: false` and leave it declared. A disabled role can't be assigned to anyone new, but Microsoft Entra [keeps issuing it in tokens for existing assignments](https://learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps#app-roles-ui), so disabling isn't access revocation; remove the existing assignments separately. A role can be removed from the AppHost only after a deployment has disabled it, and only while other roles remain declared. Existing registrations are never modified, and role assignments are not provisioned yet.
 
 ### Clean up created registrations
 
@@ -223,17 +260,50 @@ The parameter must be created with `secret: true`.
 
 ### Federated identity credential with managed identity
 
-For deployed applications, use a federated identity credential so that no secret is stored:
+For deployed applications, use a federated managed identity credential so that no secret is stored. Aspire creates the registration, and the registration trusts the managed identity of each workload that references it:
+
+```csharp
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .PublishWithFederatedManagedIdentityCredential();
+
+builder.AddProject<Projects.Web>("web")
+       .WithReference(entraWeb);
+```
+
+Referencing the registration makes the workload need a user-assigned managed identity when published, the same way referencing an Azure resource does. The workload uses the identity it already has (for example from `WithAzureUserAssignedIdentity`), or the Azure environment creates one. The federated credential uses the tenant's v2.0 issuer, the identity's **object (principal) ID** as the subject, and the token-exchange audience of the application's cloud (Azure public, US Government and China are supported; other clouds fail with an error). The workload receives the identity's **client ID** as `ManagedIdentityClientId`. Deployment order is identity, then registration, then workload.
+
+To trust only specific workloads, or a specific identity, pass them. A workload passed this way must also reference the registration, and only it receives the credential:
+
+```csharp
+var entraWeb = builder.AddEntraIdApplication("entra-web");
+var web = builder.AddProject<Projects.Web>("web").WithReference(entraWeb);
+
+entraWeb.PublishWithFederatedManagedIdentityCredential(web);
+```
+
+```csharp
+var identity = builder.AddAzureUserAssignedIdentity("web-identity");
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .PublishWithFederatedManagedIdentityCredential(identity);
+
+builder.AddProject<Projects.Web>("web")
+       .WithAzureUserAssignedIdentity(identity)
+       .WithReference(entraWeb);
+```
+The federated credential only changes how the app authenticates as itself. Interactive user sign-in still needs a redirect URI registered on the app registration. Derive it from the web app's endpoint with `WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc")`, which uses the compute environment's host when deployed, so it does not make the registration depend on the web app.
+
+Managed identities exist only in Azure, so `PublishWithFederatedManagedIdentityCredential` is not used when running locally; add another credential, such as a client secret, for local development.
+
+#### Existing registrations
+
+Aspire never modifies an existing registration, so `PublishWithFederatedManagedIdentityCredential` throws for `AddExistingEntraApplication`. Create the trust yourself, then use `WithFederatedManagedIdentityCredential` with the managed identity's client ID. It only configures the app, and applies when running locally as well as when publishing:
 
 ```csharp
 var entraWeb = builder.AddExistingEntraApplication("entra-web", tenantId: tenantId, clientId: webClientId)
-                      .WithFicMsi("00001111-aaaa-2222-bbbb-3333cccc4444");
+                      .WithFederatedManagedIdentityCredential("00001111-aaaa-2222-bbbb-3333cccc4444");
 ```
 
-Pass the **Client ID of a user-assigned managed identity**, not its object (principal) ID or Azure resource ID. The identity must be assigned to the workload and belong to the same tenant as the registration. Entra's managed-identity federation scenario supports user-assigned identities only; a system-assigned identity is not a supported replacement.
-
-`WithFicMsi` configures Microsoft.Identity.Web; it does **not** create the managed identity, assign it to the workload, or add a federated credential to the registration. Configure that trust first, using the identity's **object (principal) ID** as the subject, the tenant's v2 issuer, and the token-exchange audience for the cloud. See [Configure an application to trust a managed identity](https://learn.microsoft.com/entra/workload-id/workload-identity-federation-config-app-trust-managed-identity).
-
+Add a federated credential to the registration with the tenant's v2.0 issuer (`https://login.microsoftonline.com/<tenant-id>/v2.0` in the Azure public cloud), the identity's **principal (object) ID** as the subject, and `api://AzureADTokenExchange` as the audience. Pass the identity's **client ID**, not its principal ID, to `WithFederatedManagedIdentityCredential`. See [Configure an application to trust a managed identity](https://learn.microsoft.com/entra/workload-id/workload-identity-federation-config-app-trust-managed-identity).
 Federation authenticates as the app registration using a managed identity assertion. It is different from acquiring a token directly as the managed identity. It also does not enable mTLS proof-of-possession: that requires downstream API `ProtocolScheme = "MTLS_POP"` and the transport/certificate support described in Microsoft's [bound-credentials guidance](https://github.com/AzureAD/microsoft-identity-web/tree/master/.github/skills/boundcredentials).
 
 ### Certificate from Azure Key Vault
@@ -276,6 +346,8 @@ The integration can reference existing registrations or create registrations and
 
 * Automatically add the referencing resources' URLs as redirect URIs.
 * Expose API scopes or grant API permissions.
+* Assign application roles to users, groups, or applications (not yet supported).
+* Delete the last application role. When no roles are declared, Aspire doesn't send `appRoles`, so keep the last role declared with `isEnabled: false`, or delete it in the Microsoft Entra admin center.
 * Create, store, or rotate client secrets and certificates.
 
 Existing registrations are never modified. Continue configuring their redirect URIs, API permissions, and credentials in the [Microsoft Entra admin center](https://entra.microsoft.com).

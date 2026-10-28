@@ -25,6 +25,27 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task EnvironmentVariableWithBicepOutputReferenceProviderIsPublishedAsItsOutput()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+
+        builder.AddAzureContainerAppEnvironment("env");
+        var identity = builder.AddAzureUserAssignedIdentity("identity");
+
+        var api = builder.AddContainer("api", "myimage")
+            .WithEnvironment(context => context.EnvironmentVariables["CLIENT_ID"] = new TestBicepOutputReferenceProvider(identity.Resource.ClientId));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var resource = Assert.IsAssignableFrom<AzureProvisioningResource>(api.Resource.GetDeploymentTargetAnnotation()?.DeploymentTarget);
+        var (_, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
     public async Task AddContainerAppsInfrastructureAddsDeploymentTargetWithContainerAppToContainerResources()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);

@@ -241,6 +241,12 @@ Cumulative bucket layouts must remain stable within an aggregation. Charts combi
 
 Indexes support instrument lookup, dimension matching, time-window queries, retention, and exemplar lookup.
 
+Repeated metric values extend the latest point's end time without inserting a new point. The single time-window index is ordered by dimension, a persisted 60-second end-time bucket, interval start, and point ID. Repeats update the indexed bucket only when their exact end time crosses a bucket boundary, reducing index writes and the resulting WAL/checkpoint work. An expression index over the exact end time would still be maintained on every repeat, even when its computed bucket is unchanged.
+
+Time buckets only prefilter candidate points. Queries still compare exact interval bounds, and exemplar window queries explicitly use the time-window index before loading points and exemplars. Latest-time queries seek the highest bucket in each dimension and take the maximum exact end time within it; point insertion order does not determine the latest timestamp.
+
+Every export still commits its exact timestamps and counts before ingestion completes. Transaction boundaries, checkpoint policy, and retention are unchanged. Bucket crossings still re-key the index, and new points still maintain it. Coarser index ordering can trade some full-history read and append/retention performance for lower repeat-ingestion cost; it does not eliminate all SQLite write work or change timestamp precision.
+
 ## Repository behavior
 
 `DashboardDataSourcePool` owns the current writable database and pools selected historical databases across Blazor circuits. `DashboardDataSource` is scoped to a circuit and exposes the resource and telemetry repositories for that circuit's selected run.
@@ -306,6 +312,8 @@ The Dashboard applies these default ingestion limits:
 The oldest logs, traces, and metric points are removed when their limits are exceeded. Fixed limits of 10,000 also apply to resource views per resource, scopes per database, instruments per resource, and dimensions per instrument; additional identities are rejected.
 
 The `AddHistogramMetricsAtCapacity` benchmark in [TelemetryRepositoryMetricsBenchmarks](../../benchmarks/Aspire.Dashboard.Benchmarks/TelemetryRepositoryMetricsBenchmarks.cs) measures steady-state ingestion with one or five dimensions already at the default retention limit. Each invocation adds one cumulative histogram point per dimension with four replayed exemplars, exercising eviction and cascading exemplar deletes. Payload construction and history population are outside the measured operation.
+
+The `AddRepeatedMetrics` benchmark in [TelemetryRepositoryMetricRepeatsBenchmarks](../../benchmarks/Aspire.Dashboard.Benchmarks/TelemetryRepositoryMetricRepeatsBenchmarks.cs) measures unchanged numeric values across 1,000 dimensions, with 100 or 4,600 stored points per dimension. Each invocation extends the latest points by one second through ten exports of 100 dimensions, exercising time-index updates and commits without new points or retention deletes. History population and payload construction are outside the measured operation.
 
 Console logs are persisted only after their stream is viewed or exported. The frontend keeps up to `Dashboard:Frontend:MaxConsoleLogCount` entries in memory, which defaults to 100,000. The same limit applies across all console logs in the database, with the oldest entries removed when the limit is exceeded. Historical runs can therefore omit uncaptured logs.
 

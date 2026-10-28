@@ -1,0 +1,26 @@
+﻿{
+  "appHost": {
+    "path": "apphost.mts"
+  },
+  "sdk": {
+    "version": "17.0.0"
+  },
+  "profiles": {
+    "default": {
+      "applicationUrl": "https://localhost:1234"
+    }
+  },
+  "docs": {
+    "llmsTxtUrl": "https://docs.example/llms.txt",
+    "custom": "local",
+    "api": {
+      "sitemapUrl": null
+    }
+  },
+  "custom": "local",
+  "configSource": {
+    "repository": "https://git.example/organization/config",
+    "path": "teams/platform.json",
+    "appliedVersion": "version-1"
+  }
+}

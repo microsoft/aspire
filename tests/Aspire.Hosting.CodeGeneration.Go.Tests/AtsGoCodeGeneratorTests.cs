@@ -51,6 +51,90 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WritesFilesWithLfLineEndings()
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+
+        // The files mix raw string literals, StringWriter output and embedded resources, which take the line endings
+        // of the machine that built or runs the generator (CRLF on Windows), while gofmt reports CRLF as a
+        // formatting difference.
+        Assert.Empty(files.Where(file => file.Value.Contains('\r')).Select(file => file.Key));
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedTerminalDto_RoundTripsCallbackWireNames()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "terminal_test.go"), """
+                package aspire
+
+                import (
+                    "encoding/json"
+                    "reflect"
+                    "testing"
+                )
+
+                func TestTerminalDto(t *testing.T) {
+                    var payload map[string]any
+                    if err := json.Unmarshal([]byte(`{"p0":{"columns":132,"rows":50}}`), &payload); err != nil {
+                        t.Fatal(err)
+                    }
+                    options := callbackArg[*TerminalOptions]([]any{payload["p0"]}, 0)
+                    if options == nil || options.Columns != 132 || options.Rows != 50 {
+                        t.Fatalf("unexpected callback argument: %#v", options)
+                    }
+                    options.Columns = 200
+                    result := map[string]any{"p0": serializeValue(options)}
+                    expected := map[string]any{"p0": map[string]any{"columns": float64(200), "rows": float64(50)}}
+                    if !reflect.DeepEqual(expected, result) {
+                        t.Fatalf("expected %#v, got %#v", expected, result)
+                    }
+                }
+                """, timeout.Token);
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo("go")
+                {
+                    WorkingDirectory = directory.FullName,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    ArgumentList = { "test", "-timeout", "30s", "-run", "^TestTerminalDto$", "." }
+                }
+            };
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go terminal callback test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     [RequiresTools(["go"])]
     public async Task GeneratedTransport_SupportsDuplexCommunication()
     {
@@ -952,6 +1036,169 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedRuntime_PassesGoTests()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "runtime_test.go"), """
+                package aspire
+
+                import (
+                    "reflect"
+                    "strings"
+                    "testing"
+                )
+
+                func TestDeepUpdateKeepsCallback(t *testing.T) {
+                    calls := 0
+                    merged := deepUpdate(&WithOptionalCallbackOptions{}, &WithOptionalCallbackOptions{
+                        Callback: func(TestCallbackContext) { calls++ },
+                    })
+                    if merged.Callback == nil {
+                        t.Fatal("callback was dropped")
+                    }
+                    merged.Callback(nil)
+                    if calls != 1 {
+                        t.Fatalf("expected the callback to run once, ran %d times", calls)
+                    }
+                }
+
+                func TestDeepUpdateAcceptsNilCallback(t *testing.T) {
+                    merged := deepUpdate(&WithOptionalCallbackOptions{}, &WithOptionalCallbackOptions{})
+                    if merged.Callback != nil {
+                        t.Fatal("unexpected callback")
+                    }
+                }
+
+                func TestDeepUpdateKeepsCancellationToken(t *testing.T) {
+                    token := NewCancellationToken()
+                    merged := deepUpdate(&GetStatusAsyncOptions{}, &GetStatusAsyncOptions{CancellationToken: token})
+                    if merged.CancellationToken != token {
+                        t.Fatal("cancellation token was replaced")
+                    }
+                }
+
+                func TestDeepUpdateMergesNestedValuesWithoutModifyingInputs(t *testing.T) {
+                    dst := &TestNestedDto{Id: "dst", Config: &TestConfigDto{Name: "dst"}, Counts: map[string]float64{"a": 1, "b": 2}}
+                    src := &TestNestedDto{Id: "src", Config: &TestConfigDto{Name: "src"}, Counts: map[string]float64{"b": 3, "c": 4}}
+
+                    merged := deepUpdate(dst, src)
+
+                    want := &TestNestedDto{Id: "src", Config: &TestConfigDto{Name: "src"}, Counts: map[string]float64{"a": 1, "b": 3, "c": 4}}
+                    if !reflect.DeepEqual(merged, want) {
+                        t.Fatalf("got %+v, want %+v", merged, want)
+                    }
+                    if len(dst.Counts) != 2 || len(src.Counts) != 2 || dst.Id != "dst" || dst.Config.Name != "dst" {
+                        t.Fatal("merge modified its inputs")
+                    }
+                }
+
+                type namedHandle interface{ Name() string }
+
+                type namedValue string
+
+                func (n namedValue) Name() string { return string(n) }
+
+                // workDto and nestedCallbackOptions mirror generated DTOs with callback
+                // properties and optional handle parameters, which the test types do not have.
+                type workDto struct {
+                    Label *string `json:"label,omitempty"`
+                    Work  func()  `json:"work,omitempty"`
+                }
+
+                type nestedCallbackOptions struct {
+                    Progress *workDto     `json:"progress,omitempty"`
+                    Handle   *namedHandle `json:"handle,omitempty"`
+                }
+
+                func TestDeepUpdateKeepsCallbacksAndHandlesInNestedValues(t *testing.T) {
+                    label := "step"
+                    ran := false
+                    var handle namedHandle = namedValue("resource")
+                    src := &nestedCallbackOptions{
+                        Progress: &workDto{Label: &label, Work: func() { ran = true }},
+                        Handle:   &handle,
+                    }
+
+                    merged := deepUpdate(&nestedCallbackOptions{Progress: &workDto{}}, src)
+
+                    merged.Progress.Work()
+                    if !ran || *merged.Progress.Label != label || (*merged.Handle).Name() != "resource" {
+                        t.Fatalf("nested callback or handle was lost: %+v", merged)
+                    }
+                }
+
+                // The client has no connection, so a value that passes the union guard fails later with
+                // a transport error, while a value that does not pass it fails with the guard's error.
+                func scalarFieldError(value any) error {
+                    resource := newTestRedisResourceFromHandle(&handle{HandleID: "1", TypeID: "type"}, newClient(""))
+                    resource.WithScalarField("spec.maxReplicaCount", value)
+                    return resource.Err()
+                }
+
+                func TestUnionGuardAcceptsEveryGoNumericType(t *testing.T) {
+                    values := []any{
+                        "text", true, 1.5, float32(1.5), 3, int8(3), int16(3), int32(3), int64(3),
+                        uint(3), uint8(3), uint16(3), uint32(3), uint64(3),
+                    }
+                    for _, value := range values {
+                        err := scalarFieldError(value)
+                        if err == nil || !strings.Contains(err.Error(), "not connected to AppHost") {
+                            t.Errorf("%T: got %v, want the transport error", value, err)
+                        }
+                    }
+                }
+
+                func TestUnionGuardRejectsOtherTypes(t *testing.T) {
+                    for _, value := range []any{nil, []string{"a"}, map[string]any{"a": 1}} {
+                        err := scalarFieldError(value)
+                        if err == nil || !strings.Contains(err.Error(), "must be one of [string, float64, bool]") {
+                            t.Errorf("%T: got %v, want the guard error", value, err)
+                        }
+                    }
+                }
+                """, timeout.Token);
+
+            using var process = Process.Start(new ProcessStartInfo("go")
+            {
+                WorkingDirectory = directory.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                ArgumentList = { "test", "-timeout", "30s", "." }
+            })!;
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go runtime test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_NullablePrimitiveArrayElementsUsePointers()
     {
         var nullableNumbers = Assert.IsType<AtsTypeRef>(AtsCapabilityScanner.CreateTypeRef(typeof(double?[])));
@@ -1274,6 +1521,196 @@ public class AtsGoCodeGeneratorTests
         Assert.Contains("arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)", aspireGo);
         Assert.Contains("cb(arg0)", aspireGo);
         Assert.Contains("\"p0\": serializeValue(arg0)", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_CallbackShimsBuildTheDeclaredResourceBuilderWrapper()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"].ReplaceLineEndings("\n");
+        var shim = ExtractGeneratedMethod(
+            aspireGo,
+            "func (s *executableResource) PublishAsDockerFile(configure func(obj ContainerResource))");
+
+        Assert.Contains(
+            "cb(callbackHandleArg(s.client, args, 0, newContainerResourceFromHandle))",
+            shim,
+            StringComparison.Ordinal);
+        Assert.Contains("func callbackHandleArg[T any](", files["base.go"], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedCallbacks_ReceiveResourceBuilderWrapper()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var process = new Process();
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "callback_test.go"), """
+                package aspire
+
+                import (
+                    "bufio"
+                    "net"
+                    "os"
+                    "testing"
+                )
+
+                // recordedCall is a capability invoked by the callback under test.
+                type recordedCall struct {
+                    capability string
+                    builder    any
+                }
+
+                // connectFakeAppHost connects a client to an in-memory AppHost. When the SDK
+                // invokes publishAsDockerFile, the AppHost calls the registered callback with a
+                // resource builder handle that carries callbackHandleType, and completes the
+                // capability once the callback returns. Every other capability is recorded and
+                // answered with its builder argument.
+                func connectFakeAppHost(t *testing.T, callbackHandleType string) (*client, <-chan recordedCall) {
+                    t.Helper()
+                    clientEnd, serverEnd := net.Pipe()
+                    c := newClient("")
+                    registerWrappers(c)
+                    conn := newConnection(clientEnd, c, c.onConnectionClose)
+                    c.mu.Lock()
+                    c.conn = conn
+                    c.mu.Unlock()
+                    conn.start()
+                    t.Cleanup(c.disconnect)
+
+                    calls := make(chan recordedCall, 8)
+                    go func() {
+                        defer serverEnd.Close()
+                        reader := bufio.NewReader(serverEnd)
+                        var publishID, publishBuilder any
+                        for {
+                            msg, err := readMessage(reader)
+                            if err != nil {
+                                return
+                            }
+                            if _, isRequest := msg["method"]; !isRequest {
+                                // The callback returned, so the capability that invoked it can complete.
+                                writeMessage(serverEnd, map[string]any{"jsonrpc": "2.0", "id": publishID, "result": publishBuilder})
+                                continue
+                            }
+                            params := msg["params"].([]any)
+                            capability := params[0].(string)
+                            args := params[1].(map[string]any)
+                            if capability != "Aspire.Hosting/publishAsDockerFile" {
+                                calls <- recordedCall{capability, args["builder"]}
+                                writeMessage(serverEnd, map[string]any{"jsonrpc": "2.0", "id": msg["id"], "result": args["builder"]})
+                                continue
+                            }
+                            publishID, publishBuilder = msg["id"], args["builder"]
+                            writeMessage(serverEnd, map[string]any{
+                                "jsonrpc": "2.0",
+                                "id":      1000,
+                                "method":  "invokeCallback",
+                                "params": []any{
+                                    args["configure"],
+                                    map[string]any{"p0": map[string]any{"$handle": "callback-resource", "$type": callbackHandleType}},
+                                },
+                            })
+                        }
+                    }()
+                    return c, calls
+                }
+
+                func TestCallbackReceivesResourceBuilderWrapper(t *testing.T) {
+                    // The AppHost marshals an IResourceBuilder<T> callback argument with its closed
+                    // generic CLR type as the $type, and no wrapper is registered under that id.
+                    // An argument whose $type is registered arrives already wrapped.
+                    handleTypes := map[string]string{
+                        "closed generic type": os.Getenv("TEST_RESOURCE_BUILDER_TYPE"),
+                        "registered type":     "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource",
+                    }
+                    for name, handleType := range handleTypes {
+                        t.Run(name, func(t *testing.T) {
+                            if handleType == "" {
+                                t.Fatal("TEST_RESOURCE_BUILDER_TYPE is not set")
+                            }
+                            c, calls := connectFakeAppHost(t, handleType)
+                            root := newExecutableResourceFromHandle(&handle{
+                                HandleID: "root-resource",
+                                TypeID:   "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource",
+                            }, c)
+
+                            received := make(chan ContainerResource, 1)
+                            root.PublishAsDockerFile(func(obj ContainerResource) {
+                                received <- obj
+                                if obj != nil {
+                                    obj.WithEntrypoint("/bin/app")
+                                }
+                            })
+                            if err := root.Err(); err != nil {
+                                t.Fatalf("PublishAsDockerFile failed: %v", err)
+                            }
+
+                            // PublishAsDockerFile returns only after the callback has returned.
+                            select {
+                            case obj := <-received:
+                                if obj == nil {
+                                    t.Fatal("the callback received a nil ContainerResource")
+                                }
+                            default:
+                                t.Fatal("the callback was not invoked")
+                            }
+                            select {
+                            case call := <-calls:
+                                builder, _ := call.builder.(map[string]any)
+                                if call.capability != "Aspire.Hosting/withEntrypoint" || builder["$handle"] != "callback-resource" {
+                                    t.Fatalf("unexpected follow-up call %s on %v", call.capability, call.builder)
+                                }
+                            default:
+                                t.Fatal("the callback wrapper did not invoke a capability")
+                            }
+                        })
+                    }
+                }
+                """, timeout.Token);
+
+            process.StartInfo = new ProcessStartInfo("go")
+            {
+                WorkingDirectory = directory.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                ArgumentList = { "test", "-timeout", "30s", "." },
+                // The same id the AppHost derives for an IResourceBuilder<T> callback parameter.
+                Environment = { ["TEST_RESOURCE_BUILDER_TYPE"] = AtsTypeMapping.DeriveTypeId(typeof(IResourceBuilder<ContainerResource>)) }
+            };
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go callback test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     [Fact]

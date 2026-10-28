@@ -57,6 +57,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private TaskCompletionSource<int>? _completion;
     private ProfilingTelemetry.ActivityScope _activity;
     private IAppHostRpcClient? _rpcClient;
+    private readonly bool _ownsProject;
 
     public AppHostServerSession(
         IAppHostServerProject project,
@@ -68,6 +69,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler,
         IGracefulShutdownWindow? shutdownService,
         bool isolateConsole,
+        bool ownsProject,
         CancellationToken stopRequested)
     {
         _project = project ?? throw new ArgumentNullException(nameof(project));
@@ -80,6 +82,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _gracefulShutdownSignaler = gracefulShutdownSignaler;
         _shutdownService = shutdownService;
         _isolateConsole = isolateConsole;
+        _ownsProject = ownsProject;
 
         // Linked CTS so caller-initiated cancellation AND DisposeAsync both flow through the same
         // stop trigger. The drive loop (DriveAsync) passes _stopCts.Token to WaitForExitAsync, and
@@ -212,7 +215,10 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             {
                 _activity.SetError(ex.Message);
                 _activity.Dispose();
-                (_project as IDisposable)?.Dispose();
+                if (_ownsProject)
+                {
+                    (_project as IDisposable)?.Dispose();
+                }
                 // Trip the completion so DisposeAsync (which awaits it unconditionally) doesn't hang.
                 completion.TrySetException(ex);
                 throw;
@@ -441,7 +447,10 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         }
 
         _stopCts.Dispose();
-        (_project as IDisposable)?.Dispose();
+        if (_ownsProject)
+        {
+            (_project as IDisposable)?.Dispose();
+        }
         _activity.Dispose();
     }
 
@@ -485,6 +494,7 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
         IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler,
         IGracefulShutdownWindow? shutdownService,
         bool isolateConsole,
+        bool ownsProject,
         CancellationToken stopRequested) =>
         new AppHostServerSession(
             appHostServerProject,
@@ -496,5 +506,6 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
             gracefulShutdownSignaler,
             shutdownService,
             isolateConsole,
+            ownsProject,
             stopRequested);
 }
