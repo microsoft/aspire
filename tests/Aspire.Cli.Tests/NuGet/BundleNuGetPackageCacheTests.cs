@@ -16,6 +16,36 @@ namespace Aspire.Cli.Tests.NuGet;
 public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task FilteredSearchDoesNotLimitResultsBeforeApplyingAllowedPatterns()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var calls = 0;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NuGetClientFactory = _ => new FakeNuGetClient
+            {
+                SearchCallback = (query, _, take, _, _, _, _) =>
+                {
+                    calls++;
+                    Assert.Equal("", query);
+                    Assert.Equal(int.MaxValue, take);
+                    return Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
+                        [new("Unapproved.Package", "1.0.0", "feed", ["1.0.0"]),
+                         new("Acme.Hosting.Redis", "1.0.0", "feed", ["1.0.0"])]);
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var packages = await CreateCache(provider).GetPackagesAsync(
+            workspace.WorkspaceRoot, "", id => id.StartsWith("Acme.", StringComparison.OrdinalIgnoreCase),
+            prerelease: true, nugetConfigFile: null, useCache: true, TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, calls);
+        Assert.Equal("Acme.Hosting.Redis", Assert.Single(packages).Id);
+    }
+
+    [Fact]
     public async Task NonAspireCliPackagesWillNotBeConsidered()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

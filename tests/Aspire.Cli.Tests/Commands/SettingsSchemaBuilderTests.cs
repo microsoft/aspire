@@ -16,7 +16,7 @@ public class SettingsSchemaBuilderTests
 
         Assert.Equal(
             ["appHost", "certificates", "channel", "configSource", "containerTunnel", "docs", "features",
-                "packages", "profiles", "sdk", "skillSources", "templateSources"],
+                "integrationSources", "packages", "profiles", "sdk", "skillSources", "templateSources"],
             schema.Properties.Select(property => property.Name));
         var configSource = Assert.Single(schema.Properties, property => property.Name == "configSource");
         Assert.NotNull(configSource.SubProperties);
@@ -26,6 +26,23 @@ public class SettingsSchemaBuilderTests
         var optOut = Assert.Single(configSource.SubProperties, property => property.Name == "optOut");
         Assert.Equal("boolean", optOut.Type);
         Assert.False(optOut.Required);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildSchema_IncludesNamedIntegrationSources(bool global)
+    {
+        foreach (var schema in new[]
+        {
+            SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: global),
+            SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global)
+        })
+        {
+            var sources = Assert.Single(schema.Properties, property => property.Name == "integrationSources");
+            Assert.Equal("object", sources.AdditionalPropertiesType);
+            Assert.Equal(["enabled", "source", "patterns"], sources.SubProperties!.Select(property => property.Name));
+        }
     }
 
     [Theory]

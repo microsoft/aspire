@@ -63,8 +63,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     public bool ConfigureGlobalPackagesFolder { get; } = configureGlobalPackagesFolder;
     public string? CliDownloadBaseUrl { get; } = cliDownloadBaseUrl;
     public string? PinnedVersion { get; } = pinnedVersion;
+    public IntegrationSourceConfiguration? IntegrationSource { get; init; }
 
-    public string SourceDetails { get; } = ComputeSourceDetails(mappings);
+    public string SourceDetails => IntegrationSource?.Source ?? ComputeSourceDetails(Mappings);
 
     public bool ShouldPersistChannelName() =>
         Type is PackageChannelType.Explicit && !string.Equals(Name, PackageChannelNames.Stable, StringComparisons.ChannelName);
@@ -274,7 +275,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         bool hasExplicitSourceOverride,
         CancellationToken cancellationToken)
     {
-        if (GetLocalAspirePackageSource(mappings) is { } localPackageSource)
+        if (GetLocalIntegrationPackageSource(mappings) is { } localPackageSource)
         {
             return GetIntegrationPackagesFromLocalPackageSource(
                 localPackageSource.Source,
@@ -291,14 +292,26 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             hasExplicitSourceOverride,
             cancellationToken);
 
-        if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
+        if (IntegrationSource is { } integrationSource)
         {
-            tasks.Add(nuGetPackageCache.GetIntegrationPackagesAsync(searchConfiguration, false, cancellationToken));
+            // NuGet feeds do not consistently support OR queries. Search the common prefix
+            // once (or all packages for disjoint prefixes), then enforce the union of patterns.
+            tasks.Add(nuGetPackageCache.GetPackagesAsync(searchConfiguration, integrationSource.SearchTerm,
+                id => integrationSource.AllowsPackage(id) &&
+                    (_features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false) || !DeprecatedPackages.IsDeprecated(id)),
+                prerelease: true, useCache: true, cancellationToken));
         }
-
-        if (Quality is PackageChannelQuality.Prerelease || Quality is PackageChannelQuality.Both)
+        else
         {
-            tasks.Add(nuGetPackageCache.GetIntegrationPackagesAsync(searchConfiguration, true, cancellationToken));
+            if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
+            {
+                tasks.Add(nuGetPackageCache.GetIntegrationPackagesAsync(searchConfiguration, false, cancellationToken));
+            }
+
+            if (Quality is PackageChannelQuality.Prerelease || Quality is PackageChannelQuality.Both)
+            {
+                tasks.Add(nuGetPackageCache.GetIntegrationPackagesAsync(searchConfiguration, true, cancellationToken));
+            }
         }
 
         var packageResults = await Task.WhenAll(tasks);
@@ -326,6 +339,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         return filteredPackages;
     }
+
+    private (string Source, DirectoryInfo PackageSource)? GetLocalIntegrationPackageSource(PackageMapping[]? mappings)
+        => IntegrationSource?.Source is { } source && PackageSourceOverrideMappings.GetNormalizedLocalDirectory(source) is { } directory
+            ? (source, new DirectoryInfo(directory))
+            : GetLocalAspirePackageSource(mappings);
 
     private static (string Source, DirectoryInfo PackageSource)? GetLocalAspirePackageSource(PackageMapping[]? mappings)
     {
@@ -403,7 +421,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         var packageMetadata = EnumerateLocalPackageFiles(packageSource, cancellationToken)
             .Select(file => GetPackageFileMetadata(file.FullName))
             .OfType<PackageFileMetadata>()
-            .Where(metadata => PackageIdFilters.IsIntegrationPackageId(metadata.PackageId))
+            .Where(metadata => IntegrationSource is { } source ? source.AllowsPackage(metadata.PackageId) : PackageIdFilters.IsIntegrationPackageId(metadata.PackageId))
             .Where(metadata => showDeprecatedPackages || !DeprecatedPackages.IsDeprecated(metadata.PackageId))
             .Where(IsAllowedByQuality);
 
@@ -478,7 +496,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         bool hasExplicitSourceOverride,
         CancellationToken cancellationToken)
     {
-        if (GetLocalAspirePackageSource(mappings) is { } localPackageSource)
+        if (GetLocalIntegrationPackageSource(mappings) is { } localPackageSource)
         {
             return GetPolyglotCompatiblePackageIdsFromLocalPackageSource(
                 localPackageSource.PackageSource,
@@ -496,12 +514,12 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         if (Quality is PackageChannelQuality.Stable or PackageChannelQuality.Both)
         {
-            tasks.Add(nuGetPackageCache.GetPackagesAsync(searchConfiguration, PolyglotTagSearchTerm, filter: null, prerelease: false, useCache: true, cancellationToken));
+            tasks.Add(nuGetPackageCache.GetPackagesAsync(searchConfiguration, PolyglotTagSearchTerm, filter: IntegrationSource is { } source ? source.AllowsPackage : null, prerelease: false, useCache: true, cancellationToken));
         }
 
         if (Quality is PackageChannelQuality.Prerelease or PackageChannelQuality.Both)
         {
-            tasks.Add(nuGetPackageCache.GetPackagesAsync(searchConfiguration, PolyglotTagSearchTerm, filter: null, prerelease: true, useCache: true, cancellationToken));
+            tasks.Add(nuGetPackageCache.GetPackagesAsync(searchConfiguration, PolyglotTagSearchTerm, filter: IntegrationSource is { } source ? source.AllowsPackage : null, prerelease: true, useCache: true, cancellationToken));
         }
 
         var results = await Task.WhenAll(tasks);
@@ -522,7 +540,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         foreach (var file in EnumerateLocalPackageFiles(packageSource, cancellationToken))
         {
             if (GetPackageFileMetadata(file.FullName) is not { } metadata ||
-                !PackageIdFilters.IsIntegrationPackageId(metadata.PackageId) ||
+                !(IntegrationSource is { } source ? source.AllowsPackage(metadata.PackageId) : PackageIdFilters.IsIntegrationPackageId(metadata.PackageId)) ||
                 packageVersion is not null &&
                 !string.Equals(metadata.Version.ToString(), packageVersion, StringComparison.OrdinalIgnoreCase))
             {
@@ -722,7 +740,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         bool hasExplicitSourceOverride,
         CancellationToken cancellationToken)
     {
-        if (GetLocalAspirePackageSource(mappings) is { } localPackageSource)
+        if (IntegrationSource is { } source && !source.AllowsPackage(packageId))
+        {
+            return [];
+        }
+        if (GetLocalIntegrationPackageSource(mappings) is { } localPackageSource)
         {
             return GetPackageVersionsFromLocalPackageSource(
                 localPackageSource.Source,
@@ -826,7 +848,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         bool hasExplicitSourceOverride,
         CancellationToken cancellationToken)
     {
-        return hasExplicitSourceOverride
+        return hasExplicitSourceOverride || IntegrationSource is not null
             ? nuGetPackageCache.CreateSourceRestrictedConfigurationAsync(
                 workingDirectory,
                 mappings ?? [],

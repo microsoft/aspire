@@ -1,6 +1,6 @@
 # Aspire CLI config sources
 
-**Status:** Configuration acquisition, allowlisted app-file materialization, named agent skill sources, and runtime named template-source inheritance are implemented in the CLI. Other content-acquisition customizations remain proposed.
+**Status:** Configuration acquisition, allowlisted app-file materialization, named agent skill sources, runtime named template-source inheritance, and named integration sources are implemented in the CLI. Other content-acquisition customizations remain proposed.
 
 For example developer journeys, see [Microsoft first-party config-source scenarios](cli-config-sources-1p-scenarios.md).
 
@@ -195,6 +195,7 @@ Only explicitly allowlisted top-level settings may be copied. Each supplied sect
 | Setting | Purpose |
 |---|---|
 | `skillSources` | Named agent skill sources and all their settings |
+| `integrationSources` | Named NuGet integration feeds and allowed package patterns |
 
 Use the same root-only normalization for local settings and source files before matching the allowlist, and match top-level names case-insensitively like other CLI settings. Root-level flat colon-separated keys merge into existing nested sections regardless of casing. Normalize source files before configuration-provider validation; genuine duplicate nested leaves remain validation errors. Nested colon keys remain literal, including profile names, environment-variable names, and custom skill-source keys such as `{"skillSources":{"team":{"custom:key":"..."}}}`. These keys are copied unchanged when their top-level section is allowed. There is no source-specific normalization.
 
@@ -477,6 +478,32 @@ The allowlist copies the entire supplied `skillSources` section, including arbit
 |---|---|---|
 | Skills | `aspire agent init` registers all configured native sources; independently selected CLI-defined skills are installed into the chosen client destinations | Additional validated remote catalogs, selected/default CLI-defined skills, and workspace installation destinations |
 | Templates | Built-in templates and named global/runtime-inherited sources support local directories and Git repositories | Additional catalogs, package identities, versions, and feeds |
-| Integrations | Templates declare dependencies; `aspire add` and integration list/search discover NuGet packages | Additional catalog entries, package versions, feeds, and package-source mappings |
+| Integrations | Templates declare dependencies; `aspire add` and integration list/search discover packages from all configured NuGet integration sources | Additional catalog metadata and package-version constraints |
+
+### Named integration sources
+
+Configure integration discovery independently of the AppHost's SDK channel:
+
+```json
+{
+  "integrationSources": {
+    "default": {},
+    "team": {
+      "source": "https://packages.example.com/v3/index.json",
+      "patterns": ["Contoso.Hosting.*", "Contoso.SpecialIntegration"]
+    }
+  }
+}
+```
+
+The implicit `default` entry retains existing channel and ambient NuGet discovery, including official and Community Toolkit packages. Set `default.enabled` to `false` to search only explicitly configured sources. An entry with a `source` can omit `patterns` to discover all packages from that feed, equivalent to `["*"]`; an explicitly supplied array must be non-empty. Override `default.source` to replace built-in discovery with a different feed, optionally specifying `default.patterns` to restrict its packages.
+
+Each enabled source is searched for matching package IDs, regardless of their namespace. Patterns use case-insensitive NuGet matching: an exact ID, a prefix ending in `*`, or `*` for every package. Other wildcard positions are invalid. Sources may be HTTP(S) NuGet service indexes or local package directories; relative directories resolve against the selected AppHost directory. Embedded credentials are rejected. Configure private-feed credentials using NuGet's existing credential mechanisms.
+
+Named entries referring to the same feed identity are combined before discovery. Their allowed patterns are unioned case-insensitively, disabled entries do not contribute patterns, and the first entry supplies the display name and source spelling. Integration discovery performs one search per feed using the patterns' common prefix (an empty query for unrelated prefixes), following pagination as needed, then filters results against the merged patterns. Local feeds are likewise enumerated once. The implicit built-in discovery entry remains separate.
+
+`aspire add`, `aspire integration list`, `aspire integration search`, and MCP integration discovery use the same configured sources. Stable and prerelease packages are included for custom sources, and the existing deprecated-package and optional polyglot-compatibility filters still apply. The selected source is used for version lookup. Adding a package persists an exact package-to-feed mapping in the AppHost's NuGet configuration, preserving ambient SDK and dependency feeds so subsequent restores can resolve the package. This does not change the AppHost's SDK channel. An explicit `aspire add --source` continues to override discovery.
+
+Sources and their fields merge case-insensitively across global and selected-app settings. As with `skillSources`, `configSource` can supply the entire `integrationSources` section. Materialization replaces a supplied section in full and preserves an omitted section. Refreshing configuration does not add packages or remove previously persisted NuGet mappings.
 
 Keep standard content available initially and preserve explicit user selections and suppression options. Future source-driven content settings must be explicitly added to the materialization allowlist or have a separately defined runtime inheritance contract before they affect acquisition choices. An availability notice never changes those choices. An explicit configuration update does not automatically regenerate applications or reinstall skills. Git access does not grant access to private package feeds, and all acquired content must retain its existing validation and authentication requirements.

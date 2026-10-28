@@ -679,24 +679,29 @@ internal sealed class NuGetClient(
             return [];
         }
 
-        // The helper requested a single page starting at the first result; it never paged further.
-        var results = await searchResource.SearchAsync(
-            query,
-            filter,
-            skip: 0,
-            take,
-            nuGetLogger,
-            cancellationToken).ConfigureAwait(false);
-
         var packages = new List<NuGetSearchResult>();
-        foreach (var result in results)
+        var skip = 0;
+        while (skip < take)
         {
-            var versions = await result.GetVersionsAsync().ConfigureAwait(false);
-            packages.Add(new NuGetSearchResult(
-                result.Identity.Id,
-                result.Identity.Version.ToString(),
-                source.Source,
-                versions?.Select(version => version.Version.ToString()).ToArray() ?? []));
+            // Merged integration patterns can require an empty search term. Page through that
+            // broader result set so unrelated packages cannot crowd out allowed integrations.
+            var pageSize = Math.Min(1000, take - skip);
+            var results = (await searchResource.SearchAsync(
+                query, filter, skip, pageSize, nuGetLogger, cancellationToken).ConfigureAwait(false)).ToArray();
+            foreach (var result in results)
+            {
+                var versions = await result.GetVersionsAsync().ConfigureAwait(false);
+                packages.Add(new NuGetSearchResult(
+                    result.Identity.Id,
+                    result.Identity.Version.ToString(),
+                    source.Source,
+                    versions?.Select(version => version.Version.ToString()).ToArray() ?? []));
+            }
+            if (results.Length < pageSize)
+            {
+                break;
+            }
+            skip += results.Length;
         }
 
         return packages;

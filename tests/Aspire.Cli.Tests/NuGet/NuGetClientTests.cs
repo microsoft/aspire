@@ -21,6 +21,25 @@ namespace Aspire.Cli.Tests.NuGet;
 public class NuGetClientTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task SearchAsync_ReturnsAllRequestedPages()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feed = workspace.CreateDirectory("feed");
+        var ids = Enumerable.Range(0, 1001).Select(index => $"Paging.Package{index:D4}").ToArray();
+        foreach (var id in ids)
+        {
+            NuGetTestHelper.CreatePackage(feed, id, "1.0.0", new Dictionary<string, string>());
+        }
+
+        var results = await NuGetTestHelper.CreateClient().SearchAsync(
+            "Paging.Package", prerelease: true, take: int.MaxValue,
+            explicitSources: [feed.FullName], nugetConfigPath: null,
+            workingDirectory: workspace.Path, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ids, results.Select(package => package.Id));
+    }
+
+    [Fact]
     public async Task GetPackageVersionsAsync_CombinesEveryEligibleFeedsVersionsInSemanticOrder()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
