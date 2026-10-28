@@ -421,6 +421,11 @@ public class EntraIdPolyglotTests
             new EntraIdCustomApi { DisplayName = "Contoso", ApplicationId = "not-a-guid", ResourceUri = "api://contoso" }, [permission]));
         Assert.Empty(web.Resource.ApiAccess);
 
+        var undefinedType = new EntraIdExternalApiPermission { Name = "User.Read.All", Type = (EntraIdPermissionType)2 };
+        Assert.Throws<ArgumentOutOfRangeException>(() => web.WithExternalApiPermissionsForExport(EntraIdWellKnownApi.MicrosoftGraph, [undefinedType]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => web.WithExternalApiAdminConsentForExport(EntraIdWellKnownApi.MicrosoftGraph, [undefinedType]));
+        Assert.Empty(web.Resource.ApiAccess);
+
         Assert.Throws<InvalidOperationException>(() => web.WithExternalApiAdminConsentForExport(EntraIdWellKnownApi.MicrosoftGraph, [permission]));
         Assert.Throws<ArgumentException>(() => web.WithApiPermissions(api, "unknown"));
     }

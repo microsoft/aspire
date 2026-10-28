@@ -445,6 +445,7 @@ public static class EntraIdResourceExtensions
         };
         return ConfigureExistingApplication(builder, resource);
     }
+
     /// <summary>
     /// References an existing registration without enabling Azure provisioning or querying Microsoft Graph.
     /// </summary>
@@ -580,6 +581,7 @@ public static class EntraIdResourceExtensions
         builder.Resource.ClientId = clientId;
         return ConfigureExistingApplication(builder);
     }
+
     /// <summary>
     /// References an existing registration without undoing the Azure provisioning setup enabled when this resource was added.
     /// </summary>
@@ -726,6 +728,7 @@ public static class EntraIdResourceExtensions
 
         return builder;
     }
+
     /// <summary>
     /// Configures a pre-existing managed identity trust for token acquisition, without provisioning or assigning an identity.
     /// </summary>
@@ -922,6 +925,7 @@ public static class EntraIdResourceExtensions
 
         return builder;
     }
+
     /// <summary>
     /// Publishes managed identity federation trust for a registration created by Aspire.
     /// </summary>
@@ -1047,6 +1051,7 @@ public static class EntraIdResourceExtensions
 
         return builder;
     }
+
     /// <summary>
     /// Appends a certificate file credential. The file path is on the consuming resource, not the AppHost.
     /// </summary>
@@ -1399,6 +1404,7 @@ public static class EntraIdResourceExtensions
 
         return builder;
     }
+
     /// <summary>
     /// Appends web redirect URIs supplied as a literal, a parameter, or an endpoint.
     /// </summary>
@@ -1491,6 +1497,7 @@ public static class EntraIdResourceExtensions
         builder.Resource.ApplicationOwners.AddRange(ownerObjectIds.Select(p => (object)p.Resource));
         return builder;
     }
+
     /// <summary>
     /// Appends an application owner supplied as a literal directory object GUID or a parameter.
     /// </summary>
@@ -1553,6 +1560,7 @@ public static class EntraIdResourceExtensions
         builder.Resource.ServicePrincipalOwners.AddRange(ownerObjectIds.Select(p => (object)p.Resource));
         return builder;
     }
+
     /// <summary>
     /// Appends a service principal owner supplied as a literal directory object GUID or a parameter.
     /// </summary>
@@ -1606,6 +1614,7 @@ public static class EntraIdResourceExtensions
     {
         return builder.WithApplicationOwners(ownerObjectIds).WithServicePrincipalOwners(ownerObjectIds);
     }
+
     /// <summary>
     /// Appends an owner to both the application registration and service principal.
     /// </summary>
@@ -1710,6 +1719,7 @@ public static class EntraIdResourceExtensions
         builder.Resource.AddAppRole(role);
         return builder;
     }
+
     /// <summary>
     /// Declares an application role on a registration created by Aspire.
     /// </summary>
@@ -1952,6 +1962,7 @@ public static class EntraIdResourceExtensions
         builder.Resource.UsesDefaultApplicationIdUri = false;
         return builder;
     }
+
     /// <summary>
     /// Exposes the registration as an API identified by an application ID URI.
     /// </summary>
@@ -2040,6 +2051,7 @@ public static class EntraIdResourceExtensions
         resource.AddScope(scope);
         return builder;
     }
+
     /// <summary>
     /// Exposes a delegated permission scope that clients can request to call this registration as an API.
     /// </summary>
@@ -2266,15 +2278,18 @@ public static class EntraIdResourceExtensions
 
         return builder;
     }
+
     /// <summary>
     /// Declares permissions to a Microsoft first-party or other API that is not an Aspire resource, such as Microsoft Graph.
     /// </summary>
-    /// <param name="builder">The calling registration, which must be created by Aspire.</param>
+    /// <param name="builder">The calling registration.</param>
     /// <param name="api">A well-known API, or an API identified by its application ID and application ID URI.</param>
     /// <param name="permissions">The permissions to declare. Each is delegated unless its type is Application.</param>
     /// <returns>The registration builder.</returns>
     /// <remarks>
-    /// This adds the permissions to the registration's API permissions list. It grants nothing; use withExternalApiAdminConsent to opt in to consent.
+    /// For a registration created by Aspire, this adds the permissions to the registration's API permissions list. It grants nothing;
+    /// use withExternalApiAdminConsent to opt in to consent. For an existing registration, nothing is deployed: the declaration only
+    /// configures the DownstreamApis entries that resources referencing the registration receive.
     /// Delegated permissions let the application act for a signed-in user. Application permissions let it act as itself and always need administrator consent.
     /// The two kinds are separate permissions, even when they share a name. Well-known APIs resolve common permission names to their IDs;
     /// other permissions, and every permission of a custom API, need an explicit id.
@@ -2399,10 +2414,11 @@ public static class EntraIdResourceExtensions
 
         return builder;
     }
+
     /// <summary>
     /// Grants tenant-wide consent to permissions that this registration declared for an API that is not an Aspire resource.
     /// </summary>
-    /// <param name="builder">The calling registration, which must be created by Aspire.</param>
+    /// <param name="builder">The calling registration.</param>
     /// <param name="api">A well-known API, or an API identified by its application ID and application ID URI.</param>
     /// <param name="permissions">Permissions already declared with withExternalApiPermissions.</param>
     /// <returns>The registration builder.</returns>
@@ -2410,7 +2426,11 @@ public static class EntraIdResourceExtensions
     /// A delegated permission becomes a delegated permission grant for all users. An application permission becomes an app role assignment
     /// to this registration's service principal. The deploying identity needs a directory role or Microsoft Graph permission that allows consent, and deployment fails without it.
     /// Application permissions to broad scopes such as Directory.Read.All give the application access to the whole tenant, so grant only what the application needs.
-    /// Throws when a permission was not declared first. This only affects registrations created by Aspire.
+    /// Throws when a permission was not declared first. This only affects registrations created by Aspire; consent is not deployed for an existing registration.
+    /// Consent is not additive. The delegated grant is declared in full: it is set to exactly the delegated permissions passed to withExternalApiAdminConsent
+    /// for this registration and API, so a permission granted to the pair outside Aspire, or removed from the calls while others remain, is revoked by the next deployment.
+    /// When no delegated call remains for the pair, nothing is sent and the existing grant stays. Each application permission is a separate app role assignment:
+    /// Aspire creates it but does not delete it when its consent is removed from the AppHost, so remove it in the Microsoft Entra admin center.
     /// </remarks>
     [AspireExport("withExternalApiAdminConsent")]
     internal static IResourceBuilder<EntraIdApplicationResource> WithExternalApiAdminConsentForExport(
@@ -2452,12 +2472,15 @@ public static class EntraIdResourceExtensions
                     : throw new ArgumentException($"'{permission.Id}' is not a valid permission ID. Permission IDs must be GUIDs.", nameof(permissions));
             }
 
+            // The ATS DTO deserializer accepts numeric enum values, so an undefined value must be rejected rather than
+            // treated as an application permission, which would request app-only access.
             return (permission.Type ?? EntraIdPermissionType.Delegated, id) switch
             {
                 (EntraIdPermissionType.Delegated, null) => EntraIdApiPermission.Delegated(permission.Name),
                 (EntraIdPermissionType.Delegated, { } permissionId) => EntraIdApiPermission.Delegated(permission.Name, permissionId),
-                (_, null) => EntraIdApiPermission.Application(permission.Name),
-                (_, { } permissionId) => EntraIdApiPermission.Application(permission.Name, permissionId)
+                (EntraIdPermissionType.Application, null) => EntraIdApiPermission.Application(permission.Name),
+                (EntraIdPermissionType.Application, { } permissionId) => EntraIdApiPermission.Application(permission.Name, permissionId),
+                _ => throw new ArgumentOutOfRangeException(nameof(permissions), permission.Type, $"'{permission.Type}' is not a defined {nameof(EntraIdPermissionType)} value.")
             };
         }
     }
@@ -2646,6 +2669,7 @@ public static class EntraIdResourceExtensions
 
         return WithReferenceCore(builder, source, connectionName, downstreamApisPrefix, isDotnetProgram);
     }
+
     /// <summary>
     /// Injects Entra ID authentication configuration into a consuming resource and sets the prefix of its DownstreamApis entries.
     /// </summary>
@@ -2883,17 +2907,17 @@ internal sealed class EntraIdCustomApi
     /// <summary>
     /// Gets a name for the API used in diagnostics and as the name of its DownstreamApis entry (its letters and digits).
     /// </summary>
-    public string DisplayName { get; init; } = "";
+    public required string DisplayName { get; init; }
 
     /// <summary>
     /// Gets the API's application (client) ID as a GUID.
     /// </summary>
-    public string ApplicationId { get; init; } = "";
+    public required string ApplicationId { get; init; }
 
     /// <summary>
     /// Gets the API's application ID URI, the prefix of its scopes in token requests. It is not derived from the application ID because an API can use any URI.
     /// </summary>
-    public string ResourceUri { get; init; } = "";
+    public required string ResourceUri { get; init; }
 
     /// <summary>
     /// Gets the API's root URL, which Aspire adds to the DownstreamApis entry as BaseUrl. When omitted, the caller must supply the address.
@@ -2910,7 +2934,7 @@ internal sealed class EntraIdExternalApiPermission
     /// <summary>
     /// Gets the permission's name, such as User.Read.
     /// </summary>
-    public string Name { get; init; } = "";
+    public required string Name { get; init; }
 
     /// <summary>
     /// Gets the kind of permission. Defaults to a delegated permission.

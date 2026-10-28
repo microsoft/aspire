@@ -117,11 +117,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     api_entra.with_pre_authorized_application(&pre_authorized_entra, vec!["access_as_user".into()])?;
 
     let read_permission = EntraIdExternalApiPermission {
-        name: Some("User.Read".into()),
+        name: "User.Read".into(),
         ..Default::default()
     };
     let read_all_permission = EntraIdExternalApiPermission {
-        name: Some("User.Read.All".into()),
+        name: "User.Read.All".into(),
         r#type: Some(EntraIdPermissionType::Application),
         ..Default::default()
     };
@@ -135,13 +135,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?
         .with_external_api_permissions(
             json!(EntraIdCustomApi {
-                display_name: Some("Contoso API".into()),
-                application_id: Some("99998888-aaaa-7777-bbbb-6666cccc5555".into()),
-                resource_uri: Some("api://contoso".into()),
+                display_name: "Contoso API".into(),
+                application_id: "99998888-aaaa-7777-bbbb-6666cccc5555".into(),
+                resource_uri: "api://contoso".into(),
                 base_url: Some("https://contoso.example".into()),
             }),
             vec![EntraIdExternalApiPermission {
-                name: Some("items.read".into()),
+                name: "items.read".into(),
                 id: Some("22223333-aaaa-4444-bbbb-5555cccc6666".into()),
                 ..Default::default()
             }],

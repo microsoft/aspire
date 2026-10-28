@@ -106,20 +106,20 @@ func main() {
 	createdEntra.WithAdminConsent(apiEntra, []string{"access_as_user"})
 	createdEntra.WithApiPermissions(existingApi, []string{"orders.read"})
 	createdEntra.WithExternalApiPermissions(aspire.EntraIdWellKnownApiMicrosoftGraph, []*aspire.EntraIdExternalApiPermission{
-		{Name: aspire.StringPtr("User.Read")},
-		{Name: aspire.StringPtr("User.Read.All"), Type: &applicationPermission},
+		{Name: "User.Read"},
+		{Name: "User.Read.All", Type: &applicationPermission},
 	})
 	createdEntra.WithExternalApiPermissions(&aspire.EntraIdCustomApi{
-		DisplayName:   aspire.StringPtr("Contoso API"),
-		ApplicationId: aspire.StringPtr("99998888-aaaa-7777-bbbb-6666cccc5555"),
-		ResourceUri:   aspire.StringPtr("api://contoso"),
+		DisplayName:   "Contoso API",
+		ApplicationId: "99998888-aaaa-7777-bbbb-6666cccc5555",
+		ResourceUri:   "api://contoso",
 		BaseUrl:       aspire.StringPtr("https://contoso.example"),
 	}, []*aspire.EntraIdExternalApiPermission{
-		{Name: aspire.StringPtr("items.read"), Id: aspire.StringPtr("22223333-aaaa-4444-bbbb-5555cccc6666")},
+		{Name: "items.read", Id: aspire.StringPtr("22223333-aaaa-4444-bbbb-5555cccc6666")},
 	})
 	createdEntra.WithExternalApiAdminConsent(aspire.EntraIdWellKnownApiMicrosoftGraph, []*aspire.EntraIdExternalApiPermission{
-		{Name: aspire.StringPtr("User.Read")},
-		{Name: aspire.StringPtr("User.Read.All"), Type: &applicationPermission},
+		{Name: "User.Read"},
+		{Name: "User.Read.All", Type: &applicationPermission},
 	})
 	executable.WithEntraIdReference(createdEntra, &aspire.WithEntraIdReferenceOptions{
 		ConnectionName:       aspire.StringPtr("AUTH"),
