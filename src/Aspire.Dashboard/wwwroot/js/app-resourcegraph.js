@@ -1,10 +1,12 @@
 import './d3.v7.min.js'
+import { attachGraphInteractions } from './app-resourcegraph-overlay.js'
 
 let resourceGraph = null;
 
 export function initializeResourcesGraph(resourcesInterop, graphIcons) {
     resourceGraph = new ResourceGraph(resourcesInterop, graphIcons);
     resourceGraph.resize();
+    attachGraphInteractions(resourceGraph);
 
     const observer = new ResizeObserver(function () {
         resourceGraph.resize();

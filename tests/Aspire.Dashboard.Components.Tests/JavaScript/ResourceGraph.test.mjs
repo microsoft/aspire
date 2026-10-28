@@ -28,10 +28,10 @@ function createGraph() {
         on() { return this; },
         force() { return this; },
     };
-    // The browser module imports D3 for its global side effect and exports interop entry points.
-    // Supply only the D3 construction API here; the actual selection/highlight logic runs unchanged.
+    // The browser module imports D3 for its global side effect, imports its overlay module and exports interop entry
+    // points. Supply only the D3 construction API here; the actual selection/highlight logic runs unchanged.
     const ResourceGraph = runInNewContext(
-        source.replace(/^import '\.\/d3\.v7\.min\.js'\r?$/m, "").replace(/^export /gm, "") + "\nResourceGraph;",
+        source.replace(/^import .*\r?$/gm, "").replace(/^export /gm, "") + "\nResourceGraph;",
         {
             d3: {
                 select: () => new Selection(),
