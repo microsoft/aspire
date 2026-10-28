@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Úvodní aplikace Aspire (ASP.NET Core/Blazor)",
   "description": "Šablona projektu pro vytvoření aplikace Aspire s webovým front-endem Blazoru a back-endovou službou webového rozhraní API s volitelným ukládáním do mezipaměti Redis",

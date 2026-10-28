@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire-Starter-App (ASP.NET Core/Blazor)",
   "description": "Eine Projektvorlage zum Erstellen einer Aspire-App mit einem Blazor-Web-Front-End- und einem Web-API-Back-End-Dienst, optional mit Redis-Zwischenspeicherung.",
