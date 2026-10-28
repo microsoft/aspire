@@ -739,6 +739,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Delete value.
+        /// </summary>
+        public static string ParameterDeleteValueAction {
+            get {
+                return ResourceManager.GetString("ParameterDeleteValueAction", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Value not set.
         /// </summary>
         public static string ParameterValueNotSet {

@@ -160,6 +160,39 @@ public sealed class DashboardFeedbackTests : DashboardTestContext
         Assert.True(switched);
     }
 
+    [Fact]
+    public async Task SkipAndSwitch_SwitchesWithoutSendingFeedbackAndIsOnlyOfferedWhenSwitching()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentList(this);
+        var switched = false;
+        var feedback = new DashboardFeedback
+        {
+            IsAppHost = true,
+            SwitchToLegacyAsync = () =>
+            {
+                switched = true;
+                return Task.CompletedTask;
+            }
+        };
+        var cut = Render<DashboardFeedbackDialog>(builder => builder
+            .Add(p => p.Content, feedback)
+            .AddCascadingValue(CreateDialogInstance()));
+
+        await cut.InvokeAsync(() => Assert.Single(
+            cut.FindAll("fluent-button"),
+            button => button.TextContent.Contains("Skip and switch", StringComparison.Ordinal)).Click());
+
+        Assert.True(switched);
+        Assert.DoesNotContain(JSInterop.Invocations, i => i.Identifier == "copyTextAndOpen");
+
+        var feedbackOnly = Render<DashboardFeedbackDialog>(builder => builder
+            .Add(p => p.Content, new DashboardFeedback { IsAppHost = true })
+            .AddCascadingValue(CreateDialogInstance()));
+        Assert.Equal(["Continue"], feedbackOnly.FindAll(".dashboard-feedback-actions fluent-button").Select(b => b.TextContent.Trim()));
+    }
+
     private static IDialogInstance CreateDialogInstance()
     {
         var dialogService = new Aspire.Tests.Shared.TestDialogService();

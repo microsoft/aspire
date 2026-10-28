@@ -119,6 +119,15 @@
 
     <ActionTemplate>
         <footer class="interaction-dialog-actions dashboard-feedback-actions">
+            @if (Content.SwitchToLegacyAsync is not null)
+            {
+                @* Feedback is optional when switching, so the switch never depends on filling in the form. *@
+                <FluentButton Appearance="ButtonAppearance.Transparent"
+                              Class="aspire-button dashboard-feedback-skip"
+                              OnClick="SkipAndSwitchAsync">
+                    @Loc[nameof(Dialogs.DashboardFeedbackSkipAndSwitch)]
+                </FluentButton>
+            }
             @if (_step == 1)
             {
                 <FluentButton Appearance="ButtonAppearance.Primary"

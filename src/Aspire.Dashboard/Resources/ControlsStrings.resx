@@ -195,6 +195,9 @@
   <data name="ParameterDeleteShortAction" xml:space="preserve">
     <value>Delete</value>
   </data>
+  <data name="ParameterDeleteValueAction" xml:space="preserve">
+    <value>Delete value</value>
+  </data>
   <data name="StateColumnHeader" xml:space="preserve">
     <value>State</value>
   </data>

@@ -365,6 +365,9 @@
   <data name="DashboardFeedbackCopyOpenAndSwitch" xml:space="preserve">
     <value>Open new discussion and switch</value>
   </data>
+  <data name="DashboardFeedbackSkipAndSwitch" xml:space="preserve">
+    <value>Skip and switch</value>
+  </data>
   <data name="DashboardFeedbackDurationLabel" xml:space="preserve">
     <value>How long have you used the new dashboard?</value>
   </data>

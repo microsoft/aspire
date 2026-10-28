@@ -4,6 +4,7 @@
 using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components;
@@ -32,6 +33,13 @@ public partial class AspireMenuItem
         {
             var attributes = new Dictionary<string, object>(Item.AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty);
             attributes["data-tooltip"] = ItemTooltip;
+            if (Item.Role is MenuItemRole.Radio)
+            {
+                // FluentMenuItem raises OnClick and CheckedChanged from the web component's change event, which a
+                // radio option that is already checked doesn't raise. Without a native click handler, choosing the
+                // current option would leave the menu open.
+                attributes["onclick"] = EventCallback.Factory.Create<MouseEventArgs>(this, HandleRadioClicked);
+            }
 
             return attributes;
         }
@@ -42,6 +50,13 @@ public partial class AspireMenuItem
         return Item.Role is MenuItemRole.Checkbox or MenuItemRole.Radio
             ? Task.CompletedTask
             : OnItemActivated.InvokeAsync(Item);
+    }
+
+    private Task HandleRadioClicked(MouseEventArgs args)
+    {
+        // Other radio options are activated by their change event (see HandleItemCheckedChanged). The menu ignores the
+        // click that follows it, since that activation already closed the menu.
+        return Item.Checked ? OnItemActivated.InvokeAsync(Item) : Task.CompletedTask;
     }
 
     private Task HandleItemCheckedChanged(bool? isChecked)

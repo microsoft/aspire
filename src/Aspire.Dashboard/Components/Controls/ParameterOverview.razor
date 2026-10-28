@@ -210,16 +210,29 @@
                                             aria-describedby="@input.DescriptionId" />
                         </InteractionInputField>
                     }
-                    @if (valueInput.Input.InputType != InputType.File)
+                    @if (valueInput.Input.InputType != InputType.File || DeleteCommand is not null)
                     {
                         <div class="parameter-value-actions">
-                            <FluentButton Class="aspire-button"
-                                          Appearance="ButtonAppearance.Primary"
-                                          Disabled="@IsValueSubmitDisabled"
-                                          OnClick="SetValueAsync"
-                                          IconStart="@(new Icons.Regular.Size16.Save())">
-                                @SetCommand.GetDisplayName()
-                            </FluentButton>
+                            @if (valueInput.Input.InputType != InputType.File)
+                            {
+                                <FluentButton Class="aspire-button"
+                                              Appearance="ButtonAppearance.Primary"
+                                              Disabled="@IsValueSubmitDisabled"
+                                              OnClick="SetValueAsync"
+                                              IconStart="@(new Icons.Regular.Size16.Save())">
+                                    @SetCommand.GetDisplayName()
+                                </FluentButton>
+                            }
+                            @if (DeleteCommand is not null)
+                            {
+                                <FluentButton Class="aspire-button parameter-delete-button"
+                                              Appearance="ButtonAppearance.Default"
+                                              Disabled="@IsDeleteCommandDisabled"
+                                              OnClick="DeleteValueAsync"
+                                              IconStart="@(new Icons.Regular.Size16.Delete())">
+                                    @ControlsStringsLoc[nameof(ControlsStrings.ParameterDeleteValueAction)]
+                                </FluentButton>
+                            }
                         </div>
                     }
                 </div>

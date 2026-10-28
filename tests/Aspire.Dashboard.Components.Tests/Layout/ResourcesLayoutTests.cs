@@ -600,6 +600,40 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task FilterPopover_TagGroupingShowsOnlyTheFilteredTags()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api"),
+                ModelTestHelpers.CreateResource("worker"),
+                ModelTestHelpers.CreateResource("cache")
+            ],
+            resourceChannelProvider: () => channel));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
+        var tags = Services.GetRequiredService<ResourceTagStore>();
+        tags.AddTag("api", "Backend");
+        tags.AddTag("api", "API");
+        tags.AddTag("worker", "Backend");
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(["Tags:API", "Tags:Backend", "Tags:"],
+            cut.FindAll(".resource-tag-group").Select(g => g.GetAttribute("data-resource-group-key"))));
+
+        var filter = OpenFilter(cut);
+        await SetAllFilterValuesAsync(cut, filter, "tags", isVisible: false);
+        await cut.InvokeAsync(() => GetFilterCheckboxes(filter, "tags").Single(box => box.Instance.Label == "Backend").Instance.ValueChanged.InvokeAsync(true));
+
+        // api also carries API, but only the filtered tag keeps a group.
+        cut.WaitForAssertion(() => Assert.Equal(["Tags:Backend"],
+            cut.FindAll(".resource-tag-group").Select(g => g.GetAttribute("data-resource-group-key"))));
+        Assert.Equal(["api", "worker"], cut.FindAll(".resource-tag-group .resource-row-name").Select(n => n.TextContent.Trim()));
+    }
+
+    [Fact]
     public async Task FilterPopover_ResetShowsEveryValueAgain()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -722,6 +756,33 @@ public class ResourcesLayoutTests : DashboardTestContext
         // Every row looks selected, since everything is. Only an explicit selection marks rows as the current ones.
         Assert.Equal(["api", "cache"], cut.FindAll(".resource-row.selected[data-resource-name]").Select(r => r.GetAttribute("data-resource-name")));
         Assert.Empty(cut.FindAll(".resource-row-link[aria-current]"));
+    }
+
+    [Fact]
+    public async Task Metrics_ChangingTheSelectionStaysOnMetricsEvenWithoutTelemetry()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: () => channel));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.MetricsUrl("api"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        // Neither resource sends telemetry, which would otherwise send a selection to the overview.
+        await cut.InvokeAsync(() => cut.FindAll(".resource-row-link").Single(link => link.GetAttribute("href") == DashboardUrls.MetricsUrl("cache")).Click());
+        Assert.Equal("http://localhost/metrics/resource/cache", navigation.Uri);
+        cut.Render();
+
+        await cut.InvokeAsync(() => cut.FindAll(".resource-row-link").Single(link => link.GetAttribute("href") == DashboardUrls.MetricsUrl("api"))
+            .Click(new Microsoft.AspNetCore.Components.Web.MouseEventArgs { CtrlKey = true }));
+        Assert.Equal("http://localhost/metrics/resource/cache?resource=cache&resource=api", navigation.Uri);
+        cut.Render();
+
+        await cut.InvokeAsync(() => cut.Find(".resource-select-all-toggle").Click());
+        Assert.Equal("http://localhost/metrics", navigation.Uri);
     }
 
     [Theory]

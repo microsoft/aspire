@@ -98,10 +98,7 @@
                                         {
                                             <p class="metrics-pinned-empty">@Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMatchingInstruments)]</p>
                                         }
-                                        @foreach (var resultGroup in resultGroups)
-                                        {
-                                            @RenderSection(resultGroup, IsAggregate && _groupBy != MetricGroupBy.Meter)
-                                        }
+                                        @RenderSections(resultGroups, IsAggregate && EffectiveGroupBy != MetricGroupBy.Meter)
                                     }
                                     else if (PageViewModel.SelectedResource.Id?.ReplicaSetName != null && PageViewModel is { SelectedMeter: not null, SelectedInstrument: not null })
                                     {
@@ -124,10 +121,7 @@
                                         <h3 class="meter-name-title">@Loc[nameof(Dashboard.Resources.Metrics.MetricsPinnedHeader)]</h3>
                                         @if (pinnedInstruments.Count > 0)
                                         {
-                                            @foreach (var section in GetSections(pinnedInstruments, splitByMeterByDefault: false))
-                                            {
-                                                @RenderSection(section, !IsAggregate || _groupBy != MetricGroupBy.Meter)
-                                            }
+                                            @RenderSections(GetSections(pinnedInstruments, splitByMeterByDefault: false), !IsAggregate || EffectiveGroupBy != MetricGroupBy.Meter)
                                         }
                                         else
                                         {
@@ -137,10 +131,7 @@
                                     else if (PageViewModel.SelectedMeter is not null && (PageViewModel.SelectedResource.Id is not null || IsAggregate))
                                     {
                                         <h3 class="meter-name-title">@PageViewModel.SelectedMeter</h3>
-                                        @foreach (var section in GetSections(GetOverviewInstruments(), splitByMeterByDefault: false))
-                                        {
-                                            @RenderSection(section, false)
-                                        }
+                                        @RenderSections(GetSections(GetOverviewInstruments(), splitByMeterByDefault: false), false)
                                     }
                                     else
                                     {
@@ -201,7 +192,33 @@
 </div>
 
 @code {
-    private RenderFragment RenderSection(IGrouping<string, OtlpInstrumentSummary> section, bool showMeterName) => __builder =>
+    private RenderFragment RenderSections(List<IGrouping<string, OtlpInstrumentSummary>> sections, bool showMeterName) => __builder =>
+    {
+        // Rendering thousands of cards, each with a live sparkline, makes the page unresponsive. Sections share one
+        // budget in their display order, and a notice asks to filter for the rest.
+        var total = sections.Sum(s => s.Count());
+        var remaining = MaxRenderedInstruments;
+        foreach (var section in sections)
+        {
+            if (remaining <= 0)
+            {
+                break;
+            }
+
+            var count = section.Count();
+            @RenderSection(section, showMeterName, count > remaining ? (int?)remaining : null)
+            remaining -= count;
+        }
+
+        if (total > MaxRenderedInstruments)
+        {
+            <p class="metrics-limit-notice" role="status">
+                @string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Metrics.MetricsInstrumentLimitReached)], MaxRenderedInstruments, total)
+            </p>
+        }
+    };
+
+    private RenderFragment RenderSection(IGrouping<string, OtlpInstrumentSummary> section, bool showMeterName, int? maxCount) => __builder =>
     {
         var hasTitle = section.Key.Length > 0;
         var isCollapsed = hasTitle && _collapsedSections.Contains(section.Key);
@@ -232,6 +249,7 @@
                                Instruments="@instruments"
                                Duration="@PageViewModel.SelectedDuration.Id"
                                ShowMeterName="@showMeterName"
+                               MaxCount="@maxCount"
                                GetInstrumentUrl="@GetInstrumentUrl" />
             }
         </section>
@@ -249,9 +267,9 @@
                             LabelClass="toolbar-left" />
         }
 
-        @if (IsAggregate)
+        @if (CanOrganize)
         {
-            @* Shown for lists of several resources, where the same instrument can appear once per resource. *@
+            @* Shown whenever instruments are listed. Lists of several resources also offer the resource options. *@
             <div class="toolbar-organize" role="group" aria-label="@Loc[nameof(Dashboard.Resources.Metrics.MetricsOrganizeLandmark)]">
                 <AspireMenuButton ButtonClass="toolbar-button metrics-organize-button"
                                   ButtonAppearance="ButtonAppearance.Default"

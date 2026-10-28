@@ -514,4 +514,38 @@ public class AspireMenuTests : DashboardTestContext
         Assert.Equal(["historical"], selectedItems);
         Assert.False(menuHost.Instance.Open);
     }
+
+    [Fact]
+    public async Task ClickCheckedRadioItem_InvokesItsCallbackAndClosesMenu()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var clicks = 0;
+        var item = new MenuButtonItem
+        {
+            Text = "None",
+            Role = MenuItemRole.Radio,
+            Checked = true,
+            OnClick = () =>
+            {
+                clicks++;
+                return Task.CompletedTask;
+            }
+        };
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, new[] { item });
+        });
+
+        // The option is already checked, so the web component raises only a click and no change.
+        await menuHost.InvokeAsync(() => menuHost.Find("fluent-menu-item").Click());
+
+        Assert.Equal(1, clicks);
+        Assert.False(menuHost.Instance.Open);
+    }
 }

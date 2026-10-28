@@ -452,8 +452,7 @@
    tray with icon buttons, where an on button is the raised one with a brand-colored icon. Every button is the same
    size in both states, so toggling never shifts the list. The name and count are in the tooltip. */
 /* The trays and buttons have the same sizes as the icon toggles in the settings and the layout switcher. */
-.resource-kind-toggles,
-.resource-select-all {
+.resource-kind-toggles {
     display: inline-flex;
     gap: 2px;
     padding: 2px;
@@ -462,8 +461,7 @@
     background: var(--colorNeutralBackground2);
 }
 
-.resource-kind-toggle,
-.resource-select-all-toggle {
+.resource-kind-toggle {
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;
@@ -478,21 +476,18 @@
     cursor: pointer;
 }
 
-.resource-kind-toggle:hover,
-.resource-select-all-toggle:hover {
+.resource-kind-toggle:hover {
     background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
     color: var(--colorNeutralForeground1);
 }
 
-.resource-kind-toggle.on,
-.resource-select-all-toggle.on {
+.resource-kind-toggle.on {
     background: var(--colorNeutralBackground1);
     box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
     color: var(--colorBrandForeground1);
 }
 
-.resource-kind-toggle.on:hover,
-.resource-select-all-toggle.on:hover {
+.resource-kind-toggle.on:hover {
     background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
     color: var(--colorBrandForeground1);
 }
@@ -501,6 +496,41 @@
 .resource-select-all-toggle:focus-visible {
     outline: 2px solid var(--colorStrokeFocus2);
     outline-offset: 1px;
+}
+
+/* Select all is an action next to the trays rather than one of them, so it looks like a plain toolbar icon button:
+   no border or tray, a hover background, and a brand-colored icon while everything is selected. */
+.resource-select-all {
+    display: inline-flex;
+}
+
+.resource-select-all-toggle {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--borderRadiusMedium);
+    background: transparent;
+    color: var(--colorNeutralForeground2);
+    cursor: pointer;
+}
+
+.resource-select-all-toggle:hover {
+    background: var(--colorSubtleBackgroundHover);
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-select-all-toggle:active {
+    background: var(--colorSubtleBackgroundPressed);
+}
+
+.resource-select-all-toggle.on,
+.resource-select-all-toggle.on:hover {
+    color: var(--colorBrandForeground1);
 }
 .resource-row-all::after {
     content: "";

@@ -41,13 +41,19 @@ public partial class MeterOverview : LiveSparklinesBase
     [Parameter]
     public MetricSortBy? SortBy { get; set; }
 
+    /// <summary>
+    /// Gets or sets the most cards to render, after ordering. Null renders every instrument.
+    /// </summary>
+    [Parameter]
+    public int? MaxCount { get; set; }
+
     private IEnumerable<OtlpInstrumentSummary> GetOrderedInstruments()
     {
         // OrderBy is stable, so each key keeps the order of the keys before it.
         var ordered = Instruments.OrderBy(i => GetSparkline(i).LatestValue is null);
         string ResourceLabel(OtlpInstrumentSummary i) => GetResourceLabel?.Invoke(i) ?? string.Empty;
 
-        return SortBy switch
+        IEnumerable<OtlpInstrumentSummary> sorted = SortBy switch
         {
             MetricSortBy.Instrument => ordered.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ThenBy(ResourceLabel, StringComparer.OrdinalIgnoreCase),
             MetricSortBy.Resource => ordered.ThenBy(ResourceLabel, StringComparer.OrdinalIgnoreCase).ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase),
@@ -56,6 +62,8 @@ public partial class MeterOverview : LiveSparklinesBase
             MetricSortBy.ValueAscending => ordered.ThenBy(i => GetSparkline(i).LatestValue).ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase),
             _ => ordered
         };
+
+        return MaxCount is { } maxCount ? sorted.Take(maxCount) : sorted;
     }
 
     private string? GetInstrumentTypeName(OtlpInstrumentType type) => type switch

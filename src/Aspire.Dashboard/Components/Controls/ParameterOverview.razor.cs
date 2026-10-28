@@ -47,6 +47,7 @@ public partial class ParameterOverview : ComponentBase
     private bool IsSensitive { get; set; }
     private bool IsUnresolved { get; set; }
     private CommandViewModel? SetCommand { get; set; }
+    private CommandViewModel? DeleteCommand { get; set; }
     private InputViewModel? ValueInputViewModel { get; set; }
     private InputViewModel? SaveInputViewModel { get; set; }
     private TextVisualizerViewModel JsonViewModel { get; set; } = null!;
@@ -55,6 +56,10 @@ public partial class ParameterOverview : ComponentBase
         SetCommand is null ||
         SetCommand.State == CommandViewModelState.Disabled ||
         IsCommandExecuting(Resource, SetCommand);
+    private bool IsDeleteCommandDisabled => DashboardClient.IsReadOnly ||
+        DeleteCommand is null ||
+        DeleteCommand.State == CommandViewModelState.Disabled ||
+        IsCommandExecuting(Resource, DeleteCommand);
     private bool IsValueSubmitDisabled => IsSetCommandDisabled ||
         ValueInputViewModel is null ||
         (ValueInputViewModel.Input.Required &&
@@ -76,6 +81,10 @@ public partial class ParameterOverview : ComponentBase
         IsSensitive = false;
         SetCommand = Resource.Commands.FirstOrDefault(command =>
             string.Equals(command.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName) &&
+            command.State != CommandViewModelState.Hidden);
+        // The host only shows the delete command while the parameter has a value.
+        DeleteCommand = Resource.Commands.FirstOrDefault(command =>
+            string.Equals(command.Name, CommandViewModel.DeleteParameterCommand, StringComparisons.CommandName) &&
             command.State != CommandViewModelState.Hidden);
         var valueInput = SetCommand?.ArgumentInputs.FirstOrDefault(input =>
             !string.Equals(input.Name, SaveToUserSecretsName, StringComparisons.InteractionInputName));
@@ -154,6 +163,18 @@ public partial class ParameterOverview : ComponentBase
             Arguments = arguments,
             NonInteractive = true
         });
+    }
+
+    private async Task DeleteValueAsync()
+    {
+        if (DeleteCommand is null || IsDeleteCommandDisabled)
+        {
+            return;
+        }
+
+        // The delete command asks whether to also remove the value from user secrets, so it runs through the
+        // regular command path, which prompts for its arguments.
+        await OnExecuteCommandAsync(Resource, DeleteCommand);
     }
 
     private static Value GetArgumentValue(InputViewModel input)
