@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire スターター アプリ (ASP.NET Core/Blazor)",
   "description": "Blazor Web フロントエンドと Web API バックエンド サービスを使用して Aspire アプリを作成するためのプロジェクト テンプレート。必要に応じて、Redis キャッシュを使用します。",

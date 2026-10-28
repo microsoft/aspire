@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire Starter-App (ASP.NET Core/React, C#-AppHost)",
   "description": "Eine Projektvorlage zum Erstellen einer Aspire-App mit einem React-Front-End und einem C# Minimal-API-Back-End-Dienst, optional mit Redis-Zwischenspeicherung.",
