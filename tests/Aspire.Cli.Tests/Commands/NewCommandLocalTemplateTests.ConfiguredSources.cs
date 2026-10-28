@@ -21,7 +21,8 @@ public partial class NewCommandLocalTemplateTests
 {
     [Theory]
     [InlineData("{}")]
-    [InlineData("""{ "templates": null }""")]
+    [InlineData("""{ "templateSources": null }""")]
+    [InlineData("""{ "templates": { "not-a-source": true } }""")]
     [InlineData("""{ "unrelated": true }""")]
     public async Task ConfiguredSources_AbsentSettingHasNoSources(string json)
     {
@@ -52,8 +53,8 @@ public partial class NewCommandLocalTemplateTests
 
     [Theory]
     [InlineData("[]")]
-    [InlineData("""{ "templates": [] }""")]
-    [InlineData("""{ "templates": "relative" }""")]
+    [InlineData("""{ "templateSources": [] }""")]
+    [InlineData("""{ "templateSources": "relative" }""")]
     [InlineData("{")]
     public async Task ConfiguredSources_InvalidConfigurationFailsDiscovery(string json)
     {
@@ -118,7 +119,6 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("""{ "repository": "https://example.test/templates", "path": "" }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "path": " " }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "path": "templates\u0000" }""")]
-    [InlineData("""{ "repository": "https://example.test/templates", "refs": "release/17.0" }""")]
     public async Task ConfiguredSources_InvalidEntryFailsDiscovery(string invalidValue)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -128,7 +128,7 @@ public partial class NewCommandLocalTemplateTests
         await File.WriteAllTextAsync(path, $$"""
             {
               // The global config permits comments and trailing commas.
-              "templates": {
+              "templateSources": {
                 "broken": {{invalidValue}},
                 "working": { "path": {{JsonSerializer.Serialize(workspace.Path)}} },
               }
@@ -146,13 +146,14 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("""{ "Repository": "https://example.test/templates" }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "ref": null }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "path": null }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "futureFeature": { "enabled": true } }""")]
     public async Task ConfiguredSources_UsesConfigurationDeserializationConventions(string definition)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
-        await File.WriteAllTextAsync(path, $$"""{"templates": { "company": {{definition}} } }""");
+        await File.WriteAllTextAsync(path, $$"""{"templateSources": { "company": {{definition}} } }""");
 
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
 
@@ -184,7 +185,7 @@ public partial class NewCommandLocalTemplateTests
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new() { ["company"] = workspace.Path });
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "aspire.config.json"),
-            """{ "templates": { "company": "project-override", "extra": "/project-only" } }""");
+            """{ "templateSources": { "company": "project-override", "extra": "/project-only" } }""");
 
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
 
@@ -440,7 +441,7 @@ public partial class NewCommandLocalTemplateTests
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         await File.WriteAllTextAsync(provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true),
-            """{ "templates": "invalid" }""");
+            """{ "templateSources": "invalid" }""");
 
         Assert.Equal(CliExitCodes.Success, await command.Parse("new --help").InvokeAsync().DefaultTimeout());
         Assert.Empty(interaction.DisplayedMessages);
@@ -449,10 +450,10 @@ public partial class NewCommandLocalTemplateTests
     [Theory]
     [InlineData(null, false)]
     [InlineData("{}", false)]
-    [InlineData("""{"templates":{}}""", false)]
+    [InlineData("""{"templateSources":{}}""", false)]
     [InlineData("""{"unrelated":true}""", false)]
-    [InlineData("""{"templates":{"unfinished":{"ref":"main"}}}""", true)]
-    [InlineData("""{"templates":"invalid"}""", true)]
+    [InlineData("""{"templateSources":{"unfinished":{"ref":"main"}}}""", true)]
+    [InlineData("""{"templateSources":"invalid"}""", true)]
     [InlineData("{", true)]
     public async Task ConfiguredSources_InitialPickerRejectsMalformedConfigurationOrHidesSearchWithoutSources(string? globalSettings, bool malformed)
     {
@@ -467,7 +468,7 @@ public partial class NewCommandLocalTemplateTests
         }
         var localPath = settings.GetSettingsFilePath(false);
         Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
-        await File.WriteAllTextAsync(localPath, """{"templates":{"project-only":{"repository":"https://example.test/templates"}}}""");
+        await File.WriteAllTextAsync(localPath, """{"templateSources":{"project-only":{"repository":"https://example.test/templates"}}}""");
         var selectionCount = 0;
         interaction.PromptForSelectionCallback = (_, choices, _, _) =>
         {
@@ -523,7 +524,7 @@ public partial class NewCommandLocalTemplateTests
         var interaction = new TestInteractionService();
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var exitCode = await provider.GetRequiredService<RootCommand>()
-            .Parse(["config", "set", "templates.company.path", workspace.Path, "--global"])
+            .Parse(["config", "set", "templateSources.company.path", workspace.Path, "--global"])
             .InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -638,7 +639,7 @@ public partial class NewCommandLocalTemplateTests
             JsonSerializer.Serialize(new
             {
                 // Strings are fixture shorthand only; persisted sources always use objects.
-                templates = sources.ToDictionary(entry => entry.Key, entry => entry.Value is string text
+                templateSources = sources.ToDictionary(entry => entry.Key, entry => entry.Value is string text
                     ? Path.IsPathFullyQualified(text) ? new { path = text } : (object)new { repository = text }
                     : entry.Value)
             }));

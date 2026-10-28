@@ -46,7 +46,7 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(path, """
             {
-              "Templates": {
+              "TemplateSources": {
                 "local": { "Path": "/templates" },
                 "git": { "repository": "https://example.test/templates", "ref": null, "path": null },
                 "unfinished": { "ref": "main" }
@@ -58,13 +58,13 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         var config = AspireConfigFile.Load(workspace.Path);
 
         Assert.NotNull(config);
-        Assert.NotNull(config.Templates);
-        Assert.Equal(["local", "git", "unfinished"], config.Templates.Keys);
-        Assert.Equal("/templates", config.Templates["local"]?.Path);
-        Assert.Equal("https://example.test/templates", config.Templates["git"]?.Repository);
-        Assert.Null(config.Templates["git"]?.Ref);
-        Assert.Null(config.Templates["git"]?.Path);
-        Assert.Equal("main", config.Templates["unfinished"]?.Ref);
+        Assert.NotNull(config.TemplateSources);
+        Assert.Equal(["local", "git", "unfinished"], config.TemplateSources.Keys);
+        Assert.Equal("/templates", config.TemplateSources["local"]?.Path);
+        Assert.Equal("https://example.test/templates", config.TemplateSources["git"]?.Repository);
+        Assert.Null(config.TemplateSources["git"]?.Ref);
+        Assert.Null(config.TemplateSources["git"]?.Path);
+        Assert.Equal("main", config.TemplateSources["unfinished"]?.Ref);
 
         config.Save(workspace.Path);
 

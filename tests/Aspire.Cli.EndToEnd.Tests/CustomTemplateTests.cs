@@ -81,7 +81,7 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
             await auto.RunCommandAsync("cp \"$HOME/.aspire/aspire.config.json\" before.json", counter);
             await auto.RunCommandAsync($"aspire template source add COMPANY --repository https://example.test/replacement --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
             await auto.RunCommandAsync("cmp before.json \"$HOME/.aspire/aspire.config.json\"", counter);
-            await auto.RunCommandAsync($"aspire config set templates.company.path ../escape --global --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
+            await auto.RunCommandAsync($"aspire config set templateSources.company.path ../escape --global --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
             await auto.RunCommandAsync("cmp before.json \"$HOME/.aspire/aspire.config.json\"", counter);
             await auto.RunCommandAsync("aspire template source remove git-example --nologo", counter);
         }

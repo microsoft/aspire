@@ -27,7 +27,7 @@ internal sealed class TemplateSourceStore(
     {
         TemplateSourceConfiguration.ValidateName(name);
         using var document = JsonDocument.Parse(source.ToJsonString());
-        TemplateSourceConfiguration.Parse(document.RootElement, $"templates.{name}", requireComplete: true);
+        TemplateSourceConfiguration.Parse(document.RootElement, $"templateSources.{name}", requireComplete: true);
 
         var path = GetSettingsFilePath();
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
@@ -40,7 +40,7 @@ internal sealed class TemplateSourceStore(
         // Do not create a global file that the configuration provider cannot load.
         if (sources.Any(entry => entry.Key.Equals(name, StringComparisons.TemplateSourceName)))
         {
-            throw new TemplateSourceConfigurationException($"templates.{name}", NewCommandStrings.TemplateSourceAlreadyExists);
+            throw new TemplateSourceConfigurationException($"templateSources.{name}", NewCommandStrings.TemplateSourceAlreadyExists);
         }
         sources[name] = source.DeepClone();
         await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, settings, cancellationToken, preserveOwnershipAndAcl: true);
@@ -64,7 +64,7 @@ internal sealed class TemplateSourceStore(
         sources.Remove(existing);
         if (sources.Count == 0)
         {
-            settings.Remove(TemplateSourceConfiguration.GetPropertyName(settings, "templates", StringComparison.OrdinalIgnoreCase));
+            settings.Remove(TemplateSourceConfiguration.GetPropertyName(settings, "templateSources", StringComparison.OrdinalIgnoreCase));
         }
         await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, settings, cancellationToken, preserveOwnershipAndAcl: true);
         return true;
@@ -75,21 +75,21 @@ internal sealed class TemplateSourceStore(
         var path = configurationService.GetSettingsFilePath(isGlobal: true);
         if (Path.GetFileName(path).Equals("globalsettings.json", StringComparison.OrdinalIgnoreCase))
         {
-            throw new TemplateSourceConfigurationException("templates", NewCommandStrings.TemplateSourceLegacyConfiguration);
+            throw new TemplateSourceConfigurationException("templateSources", NewCommandStrings.TemplateSourceLegacyConfiguration);
         }
         return path;
     }
 
     private static JsonObject GetSources(JsonObject settings)
     {
-        var key = TemplateSourceConfiguration.GetPropertyName(settings, "templates", StringComparison.OrdinalIgnoreCase);
+        var key = TemplateSourceConfiguration.GetPropertyName(settings, "templateSources", StringComparison.OrdinalIgnoreCase);
         if (settings.TryGetPropertyValue(key, out var value))
         {
             return value as JsonObject
-                ?? throw new TemplateSourceConfigurationException("templates", NewCommandStrings.TemplateSourcesMustBeObject);
+                ?? throw new TemplateSourceConfigurationException("templateSources", NewCommandStrings.TemplateSourcesMustBeObject);
         }
         var sources = new JsonObject();
-        settings["templates"] = sources;
+        settings["templateSources"] = sources;
         return sources;
     }
 
@@ -99,7 +99,7 @@ internal sealed class TemplateSourceStore(
         {
             var content = await File.ReadAllTextAsync(path, cancellationToken);
             var settings = JsonNode.Parse(content, nodeOptions: null, ConfigurationHelper.ParseOptions) as JsonObject
-                ?? throw new TemplateSourceConfigurationException("templates", NewCommandStrings.TemplateSourcesMustBeObject);
+                ?? throw new TemplateSourceConfigurationException("templateSources", NewCommandStrings.TemplateSourcesMustBeObject);
             ConfigurationHelper.NormalizeSettings(settings);
             return settings;
         }

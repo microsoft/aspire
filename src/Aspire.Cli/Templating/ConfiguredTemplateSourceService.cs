@@ -29,16 +29,16 @@ internal sealed class ConfiguredTemplateSourceService(
         }
 
         List<KeyValuePair<string, ConfiguredTemplateSource>> sources = [];
-        foreach (var (name, definition) in settings?.Templates ?? [])
+        foreach (var (name, definition) in settings?.TemplateSources ?? [])
         {
             cancellationToken.ThrowIfCancellationRequested();
             TemplateSourceConfiguration.ValidateName(name);
             if (definition is null)
             {
-                throw new TemplateSourceConfigurationException($"templates.{name}", NewCommandStrings.InvalidConfiguredTemplateSource);
+                throw new TemplateSourceConfigurationException($"templateSources.{name}", NewCommandStrings.InvalidConfiguredTemplateSource);
             }
             var source = TemplateSourceConfiguration.Parse(
-                definition.Path, definition.Repository, definition.Ref, $"templates.{name}", requireComplete: true);
+                definition.Path, definition.Repository, definition.Ref, $"templateSources.{name}", requireComplete: true);
             sources.Add(new(name, source));
         }
 

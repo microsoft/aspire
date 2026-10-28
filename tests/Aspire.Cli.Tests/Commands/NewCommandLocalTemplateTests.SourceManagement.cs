@@ -67,7 +67,7 @@ public partial class NewCommandLocalTemplateTests
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var configuration = provider.GetRequiredService<IConfigurationService>();
         var globalPath = configuration.GetSettingsFilePath(true);
-        await File.WriteAllTextAsync(globalPath, """{"unrelated":"preserved","templates":{"existing":{"repository":"https://example.test/other"}}}""");
+        await File.WriteAllTextAsync(globalPath, """{"unrelated":"preserved","templateSources":{"existing":{"repository":"https://example.test/other"}}}""");
         var localPath = configuration.GetSettingsFilePath(false);
         var localBefore = File.Exists(localPath) ? await File.ReadAllTextAsync(localPath) : null;
         var options = kind switch
@@ -83,19 +83,19 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, await root.Parse(["template", "source", "add", "company", .. options]).InvokeAsync().DefaultTimeout());
         var settings = JsonNode.Parse(await File.ReadAllTextAsync(globalPath))!;
-        var source = Assert.IsType<JsonObject>(settings["templates"]!["company"]);
+        var source = Assert.IsType<JsonObject>(settings["templateSources"]!["company"]);
         Assert.Equal(options.Length / 2, source.Count);
         for (var index = 0; index < options.Length; index += 2)
         {
             Assert.Equal(options[index + 1], source[options[index][2..]]!.GetValue<string>());
         }
         Assert.Equal("preserved", settings["unrelated"]!.GetValue<string>());
-        Assert.Equal(2, settings["templates"]!.AsObject().Count);
+        Assert.Equal(2, settings["templateSources"]!.AsObject().Count);
         Assert.Equal(localBefore, File.Exists(localPath) ? await File.ReadAllTextAsync(localPath) : null);
 
         Assert.Equal(CliExitCodes.Success, await root.Parse("template source remove COMPANY").InvokeAsync().DefaultTimeout());
         settings = JsonNode.Parse(await File.ReadAllTextAsync(globalPath))!;
-        Assert.Equal(["existing"], settings["templates"]!.AsObject().Select(entry => entry.Key));
+        Assert.Equal(["existing"], settings["templateSources"]!.AsObject().Select(entry => entry.Key));
         Assert.Equal("preserved", settings["unrelated"]!.GetValue<string>());
         Assert.Empty(interaction.DisplayedErrors);
     }
@@ -132,7 +132,7 @@ public partial class NewCommandLocalTemplateTests
         var interaction = new TestInteractionService();
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
-        const string original = """{ /*keep*/ "templates": { "Company": { "repository": "https://example.test/templates" } } }""";
+        const string original = """{ /*keep*/ "templateSources": { "Company": { "repository": "https://example.test/templates" } } }""";
         await File.WriteAllTextAsync(path, original);
         var root = provider.GetRequiredService<RootCommand>();
 
@@ -146,8 +146,8 @@ public partial class NewCommandLocalTemplateTests
     [Theory]
     [InlineData("{")]
     [InlineData("[]")]
-    [InlineData("""{"templates":null}""")]
-    [InlineData("""{"templates":42}""")]
+    [InlineData("""{"templateSources":null}""")]
+    [InlineData("""{"templateSources":42}""")]
     public async Task TemplateSourceCommands_DoNotOverwriteMalformedSettings(string original)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -165,18 +165,18 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Theory]
-    [InlineData("templates.company.unknown", "value")]
-    [InlineData("templates.company.path.child", "value")]
-    [InlineData("templates.company.path", "../escape")]
-    [InlineData("templates.company", "/some/path")]
-    [InlineData("templates", "value")]
+    [InlineData("templateSources.company.unknown", "value")]
+    [InlineData("templateSources.company.path.child", "value")]
+    [InlineData("templateSources.company.path", "../escape")]
+    [InlineData("templateSources.company", "/some/path")]
+    [InlineData("templateSources", "value")]
     public async Task TemplateSourceConfig_InvalidEditPreservesBytes(string key, string value)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
-        const string original = """{ /*keep*/ "templates": { "company": { "repository": "https://example.test/repo" } }, }""";
+        const string original = """{ /*keep*/ "templateSources": { "company": { "repository": "https://example.test/repo" } }, }""";
         await File.WriteAllTextAsync(path, original);
 
         var result = await provider.GetRequiredService<RootCommand>()
@@ -194,19 +194,19 @@ public partial class NewCommandLocalTemplateTests
         var interaction = new TestInteractionService();
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
-        var original = new JsonObject { ["Templates"] = new JsonObject { ["Company"] = new JsonObject { ["path"] = workspace.Path } } }.ToJsonString();
+        var original = new JsonObject { ["TemplateSources"] = new JsonObject { ["Company"] = new JsonObject { ["path"] = workspace.Path } } }.ToJsonString();
         await File.WriteAllTextAsync(path, original);
         var root = provider.GetRequiredService<RootCommand>();
 
         Assert.Equal(CliExitCodes.InvalidCommand, await root.Parse("template source add COMPANY --repository https://example.test/duplicate").InvokeAsync().DefaultTimeout());
         Assert.Equal(original, await File.ReadAllTextAsync(path));
-        Assert.Equal(CliExitCodes.Success, await root.Parse("config set templates.company.path templates/api --global").InvokeAsync().DefaultTimeout());
-        Assert.Equal(CliExitCodes.Success, await root.Parse("config set TEMPLATES.COMPANY.repository https://example.test/repo --global").InvokeAsync().DefaultTimeout());
-        Assert.Equal(CliExitCodes.Success, await root.Parse("config set templates.company.ref main --global").InvokeAsync().DefaultTimeout());
-        Assert.True(await provider.GetRequiredService<IConfigurationService>().DeleteConfigurationAsync("TEMPLATES.COMPANY.ref", isGlobal: true));
+        Assert.Equal(CliExitCodes.Success, await root.Parse("config set templateSources.company.path templates/api --global").InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.Success, await root.Parse("config set TEMPLATESOURCES.COMPANY.repository https://example.test/repo --global").InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.Success, await root.Parse("config set templateSources.company.ref main --global").InvokeAsync().DefaultTimeout());
+        Assert.True(await provider.GetRequiredService<IConfigurationService>().DeleteConfigurationAsync("TEMPLATESOURCES.COMPANY.ref", isGlobal: true));
         var settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
-        Assert.Equal(["Templates"], settings.Select(entry => entry.Key));
-        Assert.Equal(["Company"], settings["Templates"]!.AsObject().Select(entry => entry.Key));
+        Assert.Equal(["TemplateSources"], settings.Select(entry => entry.Key));
+        Assert.Equal(["Company"], settings["TemplateSources"]!.AsObject().Select(entry => entry.Key));
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
         Assert.Equal("Company", source.Key);
         Assert.Equal(new TemplateSource("templates/api", "https://example.test/repo", null), source.Value.Template);
@@ -214,7 +214,7 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, await root.Parse("template source add other --repository https://example.test/other").InvokeAsync().DefaultTimeout());
         Assert.Equal(CliExitCodes.Success, await root.Parse("template source remove company").InvokeAsync().DefaultTimeout());
-        Assert.Equal(["other"], JsonNode.Parse(await File.ReadAllTextAsync(path))!["Templates"]!.AsObject().Select(entry => entry.Key));
+        Assert.Equal(["other"], JsonNode.Parse(await File.ReadAllTextAsync(path))!["TemplateSources"]!.AsObject().Select(entry => entry.Key));
         Assert.Equal(CliExitCodes.Success, await root.Parse("template source remove OTHER").InvokeAsync().DefaultTimeout());
         Assert.Empty(JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject());
     }
@@ -222,7 +222,7 @@ public partial class NewCommandLocalTemplateTests
     [Theory]
     [InlineData("repository", "ref", "path")]
     [InlineData("Repository", "Ref", "Path")]
-    public async Task TemplateSourceConfig_EditsTypedSourcesWithNullFieldsWithoutDuplicatingKeys(
+    public async Task TemplateSourceConfig_EditsTypedSourcesPreservingUnknownFieldsAndExistingKeys(
         string repositoryField, string refField, string pathField)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -231,13 +231,14 @@ public partial class NewCommandLocalTemplateTests
         var path = configuration.GetSettingsFilePath(true);
         var settings = new JsonObject
         {
-            ["templates"] = new JsonObject
+            ["templateSources"] = new JsonObject
             {
                 ["company"] = new JsonObject
                 {
                     [repositoryField] = "https://example.test/repo",
                     [refField] = null,
-                    [pathField] = null
+                    [pathField] = null,
+                    ["futureFeature"] = new JsonObject { ["enabled"] = true }
                 }
             }
         };
@@ -247,27 +248,29 @@ public partial class NewCommandLocalTemplateTests
             Assert.Single(await sources.GetSourcesAsync(default)).Value.Template);
 
         var result = await provider.GetRequiredService<RootCommand>()
-            .Parse("config set templates.company.path templates/api --global").InvokeAsync().DefaultTimeout();
+            .Parse("config set templateSources.company.path templates/api --global").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result);
-        var edited = JsonNode.Parse(await File.ReadAllTextAsync(path))!["templates"]!["company"]!.AsObject();
-        Assert.Equal([repositoryField, refField, pathField], edited.Select(property => property.Key));
+        var edited = JsonNode.Parse(await File.ReadAllTextAsync(path))!["templateSources"]!["company"]!.AsObject();
+        Assert.Equal([repositoryField, refField, pathField, "futureFeature"], edited.Select(property => property.Key));
+        Assert.True(JsonNode.DeepEquals(settings["templateSources"]!["company"]!["futureFeature"], edited["futureFeature"]));
         Assert.Equal("templates/api", edited[pathField]!.GetValue<string>());
         Assert.Null(edited[refField]);
         Assert.Equal(new TemplateSource("templates/api", "https://example.test/repo", null),
             Assert.Single(await sources.GetSourcesAsync(default)).Value.Template);
 
-        Assert.True(await configuration.DeleteConfigurationAsync("templates.company.PATH", isGlobal: true));
-        var deleted = JsonNode.Parse(await File.ReadAllTextAsync(path))!["templates"]!["company"]!.AsObject();
-        Assert.Equal([repositoryField, refField], deleted.Select(property => property.Key));
+        Assert.True(await configuration.DeleteConfigurationAsync("templateSources.company.PATH", isGlobal: true));
+        var deleted = JsonNode.Parse(await File.ReadAllTextAsync(path))!["templateSources"]!["company"]!.AsObject();
+        Assert.Equal([repositoryField, refField, "futureFeature"], deleted.Select(property => property.Key));
+        Assert.True(JsonNode.DeepEquals(settings["templateSources"]!["company"]!["futureFeature"], deleted["futureFeature"]));
         Assert.Equal(new TemplateSource(".", "https://example.test/repo", null),
             Assert.Single(await sources.GetSourcesAsync(default)).Value.Template);
     }
 
     [Theory]
     [InlineData("{}")]
-    [InlineData("""{"templates":{"company":{"ref":"main"}}}""")]
-    [InlineData("""{"Templates":{"Company":{"ref":"main"}}}""")]
+    [InlineData("""{"templateSources":{"company":{"ref":"main"}}}""")]
+    [InlineData("""{"TemplateSources":{"Company":{"ref":"main"}}}""")]
     public async Task TemplateSourceConfig_IncompleteSourceRejectsEscapingPathWithoutWriting(string original)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -277,7 +280,7 @@ public partial class NewCommandLocalTemplateTests
         await File.WriteAllTextAsync(path, original);
 
         var result = await provider.GetRequiredService<RootCommand>()
-            .Parse("config set templates.company.path ../escape --global").InvokeAsync().DefaultTimeout();
+            .Parse("config set templateSources.company.path ../escape --global").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, result);
         Assert.Equal(original, await File.ReadAllTextAsync(path));
@@ -293,7 +296,7 @@ public partial class NewCommandLocalTemplateTests
         var interaction = new TestInteractionService();
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
-        const string original = """{"templates":{"company":{"repository":"https://example.test/templates"}}}""";
+        const string original = """{"templateSources":{"company":{"repository":"https://example.test/templates"}}}""";
         await File.WriteAllTextAsync(path, original);
         var cache = provider.GetRequiredService<CliExecutionContext>().CacheDirectory;
         cache.Create();
@@ -314,16 +317,16 @@ public partial class NewCommandLocalTemplateTests
         var interaction = new TestInteractionService();
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
-        await File.WriteAllTextAsync(path, """{"templates":{"broken":false}}""");
+        await File.WriteAllTextAsync(path, """{"templateSources":{"broken":false}}""");
         var root = provider.GetRequiredService<RootCommand>();
 
         foreach (var (field, value) in new[] { ("ref", "release/17.0"), ("path", "templates/api"), ("repository", "https://example.test/repo") })
         {
-            Assert.Equal(CliExitCodes.Success, await root.Parse(["config", "set", $"templates.company.{field}", value, "--global"]).InvokeAsync().DefaultTimeout());
+            Assert.Equal(CliExitCodes.Success, await root.Parse(["config", "set", $"templateSources.company.{field}", value, "--global"]).InvokeAsync().DefaultTimeout());
         }
         await Assert.ThrowsAsync<JsonException>(() =>
             provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
-        Assert.False(JsonNode.Parse(await File.ReadAllTextAsync(path))!["templates"]!["broken"]!.GetValue<bool>());
+        Assert.False(JsonNode.Parse(await File.ReadAllTextAsync(path))!["templateSources"]!["broken"]!.GetValue<bool>());
 
         Assert.Equal(CliExitCodes.Success, await root.Parse("template source remove broken").InvokeAsync().DefaultTimeout());
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));

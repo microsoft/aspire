@@ -23,7 +23,7 @@ public class TemplateSourceConfigurationTests(ITestOutputHelper outputHelper)
         using (RemoteExecutor.Invoke(static repositoryPath =>
         {
             Assert.Throws<TemplateSourceConfigurationException>(() =>
-                TemplateSourceConfiguration.ValidateRepositoryPath(repositoryPath, "templates.example.path"));
+                TemplateSourceConfiguration.ValidateRepositoryPath(repositoryPath, "templateSources.example.path"));
         }, path, options))
         {
         }
@@ -53,21 +53,20 @@ public class TemplateSourceConfigurationTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("\"/absolute/path\"", "templates.example")]
-    [InlineData("\"https://example.test/templates\"", "templates.example")]
-    [InlineData("{}", "templates.example")]
-    [InlineData("""{"path":"relative"}""", "templates.example")]
-    [InlineData("""{"ref":"main"}""", "templates.example")]
-    [InlineData("""{"repository":false}""", "templates.example.repository")]
-    [InlineData("""{"repository":"http://example.test/repo"}""", "templates.example.repository")]
-    [InlineData("""{"repository":"https://example.test/repo","ref":42}""", "templates.example.ref")]
-    [InlineData("""{"repository":"https://example.test/repo","extra":"value"}""", "templates.example.extra")]
-    [InlineData("""{"repository":"https://example.test/repo","path":"../escape"}""", "templates.example.path")]
+    [InlineData("\"/absolute/path\"", "templateSources.example")]
+    [InlineData("\"https://example.test/templates\"", "templateSources.example")]
+    [InlineData("{}", "templateSources.example")]
+    [InlineData("""{"path":"relative"}""", "templateSources.example")]
+    [InlineData("""{"ref":"main"}""", "templateSources.example")]
+    [InlineData("""{"repository":false}""", "templateSources.example.repository")]
+    [InlineData("""{"repository":"http://example.test/repo"}""", "templateSources.example.repository")]
+    [InlineData("""{"repository":"https://example.test/repo","ref":42}""", "templateSources.example.ref")]
+    [InlineData("""{"repository":"https://example.test/repo","path":"../escape"}""", "templateSources.example.path")]
     public void ParseRejectsInvalidCompleteSourceWithSettingPath(string json, string settingPath)
     {
         using var document = JsonDocument.Parse(json);
         var exception = Assert.Throws<TemplateSourceConfigurationException>(() =>
-            TemplateSourceConfiguration.Parse(document.RootElement, "templates.example", requireComplete: true));
+            TemplateSourceConfiguration.Parse(document.RootElement, "templateSources.example", requireComplete: true));
         Assert.Contains($"'{settingPath}'", exception.Message);
     }
 
@@ -79,10 +78,10 @@ public class TemplateSourceConfigurationTests(ITestOutputHelper outputHelper)
     public void ParsePermitsIncompleteObjectsOnlyDuringEditing(string json)
     {
         using var document = JsonDocument.Parse(json);
-        var source = TemplateSourceConfiguration.Parse(document.RootElement, "templates.example", requireComplete: false);
+        var source = TemplateSourceConfiguration.Parse(document.RootElement, "templateSources.example", requireComplete: false);
         Assert.Null(source.Template);
         Assert.Throws<TemplateSourceConfigurationException>(() =>
-            TemplateSourceConfiguration.Parse(document.RootElement, "templates.example", requireComplete: true));
+            TemplateSourceConfiguration.Parse(document.RootElement, "templateSources.example", requireComplete: true));
     }
 
     [Fact]
@@ -90,18 +89,19 @@ public class TemplateSourceConfigurationTests(ITestOutputHelper outputHelper)
     {
         var directory = Path.GetFullPath(".");
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { path = directory }));
-        var source = TemplateSourceConfiguration.Parse(document.RootElement, "templates.example", requireComplete: true);
+        var source = TemplateSourceConfiguration.Parse(document.RootElement, "templateSources.example", requireComplete: true);
         Assert.Equal(new TemplateSource(directory, null, null), source.Template);
     }
 
     [Theory]
     [InlineData("""{"repository":"https://example.test/repo","ref":null,"path":null}""")]
     [InlineData("""{"Repository":"https://example.test/repo","Ref":null,"Path":null}""")]
-    public void ParseAcceptsPropertyCasingAndUnsetOptionalValues(string json)
+    [InlineData("""{"repository":"https://example.test/repo","futureFeature":{"enabled":true}}""")]
+    public void ParseUsesConfigurationDeserializationConventions(string json)
     {
         using var document = JsonDocument.Parse(json);
 
-        var source = TemplateSourceConfiguration.Parse(document.RootElement, "templates.example", requireComplete: true);
+        var source = TemplateSourceConfiguration.Parse(document.RootElement, "templateSources.example", requireComplete: true);
 
         Assert.Equal(new TemplateSource(".", "https://example.test/repo", null), source.Template);
     }

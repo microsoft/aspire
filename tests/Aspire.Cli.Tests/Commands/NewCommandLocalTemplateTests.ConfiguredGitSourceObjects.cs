@@ -57,7 +57,7 @@ public partial class NewCommandLocalTemplateTests
 
         foreach (var (field, value) in new[] { ("repository", repository), ("ref", "release/17.0"), ("path", "templates") })
         {
-            var exitCode = await command.Parse(["config", "set", $"templates.company.{field}", value, "--global"])
+            var exitCode = await command.Parse(["config", "set", $"templateSources.company.{field}", value, "--global"])
                 .InvokeAsync().DefaultTimeout();
             Assert.Equal(CliExitCodes.Success, exitCode);
         }
@@ -158,7 +158,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Empty(GetGitFetches(git));
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
             NewCommandStrings.TemplateSourceSettingInvalid,
-            "templates.broken.path", NewCommandStrings.TemplateRepositoryPathInvalid), error.Message);
+            "templateSources.broken.path", NewCommandStrings.TemplateRepositoryPathInvalid), error.Message);
         Assert.Empty(interaction.DisplayedMessages);
     }
 

@@ -398,8 +398,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourcesMustBeObject">
-        <source>The global 'templates' setting must be an object containing named template sources.</source>
-        <target state="new">The global 'templates' setting must be an object containing named template sources.</target>
+        <source>The global 'templateSources' setting must be an object containing named template sources.</source>
+        <target state="new">The global 'templateSources' setting must be an object containing named template sources.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">

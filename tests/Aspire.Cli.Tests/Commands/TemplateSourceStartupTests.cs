@@ -48,7 +48,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         var home = workspace.CreateDirectory("aspire-home");
         var globalPath = Path.Combine(home.FullName, legacyGlobal ? "globalsettings.json" : AspireConfigFile.FileName);
         var projectPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        const string global = """{ /* global */ "features:defaultWatchEnabled": true, "templates": {}, }""";
+        const string global = """{ /* global */ "features:defaultWatchEnabled": true, "templateSources": {}, }""";
         const string project = """{ /* project */ "features:defaultWatchEnabled": false, }""";
         File.WriteAllText(globalPath, global);
         File.WriteAllText(projectPath, project);
@@ -74,7 +74,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         var home = workspace.CreateDirectory("aspire-home");
         var globalPath = Path.Combine(home.FullName, legacyGlobal ? "globalsettings.json" : AspireConfigFile.FileName);
         var projectPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        const string global = """{ /* global */ "features:defaultWatchEnabled": true, "templates:company:repository": "https://example.com/templates", }""";
+        const string global = """{ /* global */ "features:defaultWatchEnabled": true, "templateSources:company:repository": "https://example.com/templates", }""";
         const string project = """{ /* project */ "features:defaultWatchEnabled": false, }""";
         File.WriteAllText(globalPath, global);
         File.WriteAllText(projectPath, project);
@@ -98,7 +98,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         var home = workspace.CreateDirectory("aspire-home");
         var globalPath = Path.Combine(home.FullName, AspireConfigFile.FileName);
         var projectPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        const string global = """{ /* global */ "features:defaultWatchEnabled": true, "templates:company:repository": "https://example.com/templates", }""";
+        const string global = """{ /* global */ "features:defaultWatchEnabled": true, "templateSources:company:repository": "https://example.com/templates", }""";
         const string project = """{ /* project */ "features:defaultWatchEnabled": false, }""";
         File.WriteAllText(globalPath, global);
         File.WriteAllText(projectPath, project);
@@ -106,7 +106,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         {
             "add" => (
                 "template source add extra --repository https://example.com/other",
-                """{"features":{"defaultWatchEnabled":true},"templates":{"company":{"repository":"https://example.com/templates"},"extra":{"repository":"https://example.com/other"}}}"""),
+                """{"features":{"defaultWatchEnabled":true},"templateSources":{"company":{"repository":"https://example.com/templates"},"extra":{"repository":"https://example.com/other"}}}"""),
             "remove" => (
                 "template source remove company",
                 """{"features":{"defaultWatchEnabled":true}}"""),
@@ -143,7 +143,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(migratedPath));
         Assert.Equal(legacy, File.ReadAllText(legacyPath));
         Assert.Equal("https://example.com/templates",
-            JsonNode.Parse(File.ReadAllText(migratedPath))!["templates"]!["company"]!["repository"]!.GetValue<string>());
+            JsonNode.Parse(File.ReadAllText(migratedPath))!["templateSources"]!["company"]!["repository"]!.GetValue<string>());
     }
 
     [Fact]
@@ -153,7 +153,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         var home = workspace.CreateDirectory("aspire-home");
         var legacyPath = Path.Combine(home.FullName, "globalsettings.json");
         const string original = """
-            {"features":{"defaultWatchEnabled":true},"templates":{"company":{"repository":"https://example.com/templates"}}}
+            {"features":{"defaultWatchEnabled":true},"templateSources":{"company":{"repository":"https://example.com/templates"}}}
             """;
         File.WriteAllText(legacyPath, original);
         File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName),
@@ -176,7 +176,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("aspire-home");
         var legacyPath = Path.Combine(home.FullName, "globalsettings.json");
-        const string legacy = """{"templates":{"company":{"repository":"https://example.com/original"}}}""";
+        const string legacy = """{"templateSources":{"company":{"repository":"https://example.com/original"}}}""";
         File.WriteAllText(legacyPath, legacy);
         var options = new RemoteInvokeOptions();
         options.StartInfo.WorkingDirectory = workspace.Path;
@@ -207,7 +207,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
                     _ => store.AddAsync("extra", new JsonObject { ["repository"] = "https://example.com/extra" }, CancellationToken.None)
                 }).DefaultTimeout();
                 Assert.Equal(new TemplateSourceConfigurationException(
-                    "templates", NewCommandStrings.TemplateSourceLegacyConfiguration).Message, error.Message);
+                    "templateSources", NewCommandStrings.TemplateSourceLegacyConfiguration).Message, error.Message);
                 Assert.Equal(CliExitCodes.InvalidCommand,
                     await host.Services.GetRequiredService<RootCommand>().Parse(args).InvokeAsync().DefaultTimeout());
                 Assert.False(File.Exists(destination));
@@ -227,7 +227,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("aspire-home");
         var legacyPath = Path.Combine(home.FullName, "globalsettings.json");
-        const string original = """{"templates":{}}""";
+        const string original = """{"templateSources":{}}""";
         File.WriteAllText(legacyPath, original);
         var options = new RemoteInvokeOptions();
         options.StartInfo.WorkingDirectory = workspace.Path;

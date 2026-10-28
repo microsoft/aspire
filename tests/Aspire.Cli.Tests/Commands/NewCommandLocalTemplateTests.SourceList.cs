@@ -20,7 +20,7 @@ public partial class NewCommandLocalTemplateTests
         {
           // Management listing preserves the configured fields, including unfinished sources.
           "unrelated": "not listed",
-          "templates": {
+          "templateSources": {
             "z-git": { "repository": "https://example.test/templates", "path": "templates/api", "ref": "release/17.0" },
             "Local [red]": { "path": "/templates/with [brackets]" },
             "empty": {},
@@ -45,7 +45,7 @@ public partial class NewCommandLocalTemplateTests
         await File.WriteAllTextAsync(settings.GetSettingsFilePath(true), SourceListSettings);
         var localPath = settings.GetSettingsFilePath(false);
         Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
-        const string localSettings = """{"templates":{"project-only":{"repository":"https://example.test/project"}}}""";
+        const string localSettings = """{"templateSources":{"project-only":{"repository":"https://example.test/project"}}}""";
         await File.WriteAllTextAsync(localPath, localSettings);
 
         var result = await provider.GetRequiredService<RootCommand>()
@@ -83,7 +83,7 @@ public partial class NewCommandLocalTemplateTests
     [Theory]
     [InlineData(null)]
     [InlineData("{}")]
-    [InlineData("""{"templates":{}}""")]
+    [InlineData("""{"templateSources":{}}""")]
     [InlineData("""{"unrelated":true}""")]
     public async Task TemplateSourceList_EmptyJsonIsAnObjectWithoutCreatingOrChangingConfiguration(string? original)
     {
@@ -128,8 +128,8 @@ public partial class NewCommandLocalTemplateTests
     [Theory]
     [InlineData("{")]
     [InlineData("[]")]
-    [InlineData("""{"templates":null}""")]
-    [InlineData("""{"templates":42}""")]
+    [InlineData("""{"templateSources":null}""")]
+    [InlineData("""{"templateSources":42}""")]
     public async Task TemplateSourceList_JsonReadFailureDoesNotReturnEmptySuccess(string original)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

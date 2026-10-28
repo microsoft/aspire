@@ -269,7 +269,7 @@
     <value>Could not search template source '{0}': {1}</value>
   </data>
   <data name="TemplateSourcesMustBeObject" xml:space="preserve">
-    <value>The global 'templates' setting must be an object containing named template sources.</value>
+    <value>The global 'templateSources' setting must be an object containing named template sources.</value>
   </data>
   <data name="InvalidConfiguredTemplateSource" xml:space="preserve">
     <value>Expected a source object with an absolute 'path', or a 'repository' and optional 'ref'/'path'. Use 'aspire template source add' to configure a source.</value>

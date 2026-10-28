@@ -91,7 +91,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (service, _) = CreateService(workspace);
         var path = service.GetSettingsFilePath(isGlobal: true);
-        await File.WriteAllTextAsync(path, """{"custom":"original","templates":{"company":{"repository":"https://example.test/templates"}}}""");
+        await File.WriteAllTextAsync(path, """{"custom":"original","templateSources":{"company":{"repository":"https://example.test/templates"}}}""");
         // The ACL mask makes the group mode r--, but group::--- denies the owning group access.
         TestPosixAcl.Set(path, "user::rw-,user:65534:r--,group::---,mask::r--,other::---");
         var acl = TestPosixAcl.Get(path);
@@ -125,7 +125,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
             "source-add" => ["company", "added"],
             "source-remove" => [],
             _ => new[] { "company" }
-        }, settings["templates"]?.AsObject().Select(source => source.Key).ToArray() ?? []);
+        }, settings["templateSources"]?.AsObject().Select(source => source.Key).ToArray() ?? []);
     }
 
     [Theory]

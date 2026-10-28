@@ -34,7 +34,7 @@ public partial class NewCommandLocalTemplateTests
         using var provider = services.BuildServiceProvider();
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
-            .Parse(["config", "set", "templates.company.repository", repository, "--global"])
+            .Parse(["config", "set", "templateSources.company.repository", repository, "--global"])
             .InvokeAsync().DefaultTimeout();
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
 

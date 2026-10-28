@@ -114,7 +114,7 @@ This writes the following shape to the global `~/.aspire/aspire.config.json` fil
 
 ```json
 {
-  "templates": {
+  "templateSources": {
     "company": {
       "path": "/absolute/path/to/company-templates"
     },
@@ -130,12 +130,12 @@ This writes the following shape to the global `~/.aspire/aspire.config.json` fil
 Use an absolute path on your platform (for example, `C:\Templates` on Windows).
 Local directories and Git repositories can contain one or more .NET template-engine
 templates using `.template.config/template.json`, including templates in subdirectories.
-Project-level `templates` settings are not used.
+Project-level `templateSources` settings are not used.
 
 All sources must use objects; path and URL string shorthands are not accepted.
 Source names cannot contain dots, colons, or control characters. Adding a name
 that already exists (case-insensitively) fails without overwriting it.
-The `templates` section and source names are matched case-insensitively, preserving
+The `templateSources` section and source names are matched case-insensitively, preserving
 their existing spelling. Source add/remove fail rather than write without the
 global configuration lock.
 Source-management commands defer normalization until a validated update under the
@@ -145,7 +145,7 @@ Existing `config` commands retain their normal startup migration and normalizati
 
 `source list` displays source names and their configured fields in a table.
 `--format json` writes only a JSON object keyed by source name to stdout, matching
-the global `templates` object (without the surrounding `templates` property):
+the global `templateSources` object (without the surrounding `templateSources` property):
 
 ```json
 {
@@ -188,8 +188,10 @@ and omit `path` to search the repository root (`.`). Paths must stay inside the
 repository and must not traverse symbolic links. Git sources use
 `repository`, `ref`, and `path`; supplied values must
 be nonempty strings.
-Invalid combinations and unknown fields are rejected before saving. For stepwise
-editing with `aspire config set templates.<name>.<field> <value> --global`, incomplete
+Unknown source fields are ignored when reading configuration for compatibility
+with newer CLI versions. Invalid combinations and edits to unknown fields are
+rejected before saving. For stepwise
+editing with `aspire config set templateSources.<name>.<field> <value> --global`, incomplete
 Git objects are allowed until discovery, but supplied paths are still validated;
 `source add` always requires a complete source.
 
