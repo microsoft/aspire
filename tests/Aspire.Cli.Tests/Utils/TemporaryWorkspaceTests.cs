@@ -4,6 +4,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.TestUtilities;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -120,6 +121,7 @@ public class TemporaryWorkspaceTests(ITestOutputHelper outputHelper)
     [InlineData("started")]
     [InlineData("stdout")]
     [InlineData("stderr")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/21259", typeof(PlatformDetection), nameof(PlatformDetection.IsMacOS))]
     public async Task RunGitAsync_PostStartFailure_StopsProcessAndPreservesException(string failurePoint)
     {
         await GitTestHelper.EnsureGitAvailableAsync(outputHelper);
