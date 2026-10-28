@@ -168,6 +168,12 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
+        public static string MetricsInstrumentLimitReached {
+            get {
+                return ResourceManager.GetString("MetricsInstrumentLimitReached", resourceCulture);
+            }
+        }
+
         public static string MetricsOverviewNoData {
             get {
                 return ResourceManager.GetString("MetricsOverviewNoData", resourceCulture);

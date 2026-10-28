@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MetricsGroupByTooltip">
-        <source>Grouped by {0}. Select to change grouping.</source>
-        <target state="new">Grouped by {0}. Select to change grouping.</target>
+        <source>Group instruments</source>
+        <target state="new">Group instruments</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsGroupMenuTitle">
@@ -46,6 +46,11 @@
         <source>Metrics</source>
         <target state="translated">指标</target>
         <note />
+      </trans-unit>
+      <trans-unit id="MetricsInstrumentLimitReached">
+        <source>Showing the first {0} of {1} instruments. Filter to narrow the list.</source>
+        <target state="new">Showing the first {0} of {1} instruments. Filter to narrow the list.</target>
+        <note>{0} is the number of instruments shown, {1} is the number of instruments in the list.</note>
       </trans-unit>
       <trans-unit id="MetricsInstrumentNoDataTooltip">
         <source>No data has been recorded for this instrument yet</source>
@@ -193,8 +198,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MetricsSortByTooltip">
-        <source>Sorted by {0}. Select to change sorting.</source>
-        <target state="new">Sorted by {0}. Select to change sorting.</target>
+        <source>Sort instruments</source>
+        <target state="new">Sort instruments</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsSortMenuTitle">

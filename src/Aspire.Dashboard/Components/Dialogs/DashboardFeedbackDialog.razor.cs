@@ -83,6 +83,14 @@ public partial class DashboardFeedbackDialog
         _ => throw new ArgumentOutOfRangeException(nameof(duration))
     };
 
+    private async Task SkipAndSwitchAsync()
+    {
+        if (Content.SwitchToLegacyAsync is not null)
+        {
+            await Content.SwitchToLegacyAsync();
+        }
+    }
+
     private async Task CompleteAsync()
     {
         try

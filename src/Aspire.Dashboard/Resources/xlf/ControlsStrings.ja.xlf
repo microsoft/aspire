@@ -172,6 +172,11 @@
         <target state="new">Delete</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParameterDeleteValueAction">
+        <source>Delete value</source>
+        <target state="new">Delete value</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ParameterEditShortAction">
         <source>Edit</source>
         <target state="new">Edit</target>

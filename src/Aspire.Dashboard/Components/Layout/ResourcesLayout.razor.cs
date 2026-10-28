@@ -1007,6 +1007,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         var groups = new List<ResourceGroup>();
         foreach (var tag in TagStore.GetAllTags(resources))
         {
+            // A resource can carry several tags. When the tag filter hides a tag, its group stays hidden even though
+            // resources shown through another tag also carry it.
+            if (!IsTagVisible(tag))
+            {
+                continue;
+            }
+
             var tagMatchesFilter = textFilter.Length == 0 || tag.Contains(textFilter, StringComparisons.UserTextSearch);
             var taggedResources = resources
                 .Where(r => tagsByResource.TryGetValue(r.DisplayName, out var tags) && tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
@@ -1024,13 +1031,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             .Where(r => textFilter.Length == 0 || r.MatchesFilter(textFilter))
             .ToList();
 
-        if (untaggedResources.Count > 0)
+        if (untaggedResources.Count > 0 && IsTagVisible(string.Empty))
         {
             groups.Add(new ResourceGroup(Value: null, untaggedResources));
         }
 
         return groups;
     }
+
+    // The tag filter keys untagged resources by the empty string, and tags missing from it are visible.
+    private bool IsTagVisible(string tag) =>
+        !_filter.ResourceTagsToVisibility.TryGetValue(tag, out var visible) || visible;
 
     private bool IsGroupCollapsed(ResourceGroup group) => _collapsedGroups.Contains(GetGroupKey(group));
 
@@ -1693,7 +1704,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     /// <summary>
     /// Gets the URL that selects the given resources on the current tab, falling back to the overview when none of
-    /// the resources support the current tab.
+    /// the resources support the current tab. Metrics is kept for any selection but a single parameter.
     /// </summary>
     private string GetSelectionUrl(IReadOnlyList<string> resourceNames)
     {
@@ -1711,6 +1722,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (IsTabAvailable(CurrentTab, selection))
         {
             tab = CurrentTab;
+        }
+        else if (CurrentTab == ResourceTab.Metrics && selection is not [{ Resource: { IsParameter: true } }])
+        {
+            // Changing the selection on the metrics page never leaves it. The page reports resources without metrics.
+            tab = ResourceTab.Metrics;
         }
         else if (selection is [{ Resource: { IsParameter: true } }])
         {
@@ -1837,7 +1853,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         // Remember the cleared selection so entering the overview later doesn't select a resource again.
         await SetStoredSelectionAsync([]);
-        NavigationManager.NavigateTo(DashboardClient.IsEnabled ? DashboardUrls.ResourceListUrl() : GetSelectionUrl([]));
+
+        // On the overview, selecting everything shows the resource list. Other tabs stay where they are and list
+        // every resource.
+        NavigationManager.NavigateTo(DashboardClient.IsEnabled && CurrentTab == ResourceTab.Overview ? DashboardUrls.ResourceListUrl() : GetSelectionUrl([]));
     }
 
     /// <summary>

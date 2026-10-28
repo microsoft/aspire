@@ -1461,6 +1461,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Skip and switch.
+        /// </summary>
+        public static string DashboardFeedbackSkipAndSwitch {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackSkipAndSwitch", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Share dashboard feedback.
         /// </summary>
         public static string DashboardFeedbackDialogTitle {

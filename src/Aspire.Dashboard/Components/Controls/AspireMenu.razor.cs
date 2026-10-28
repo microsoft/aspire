@@ -158,6 +158,13 @@ public partial class AspireMenu : FluentComponentBase
 
     private async Task HandleItemActivatedAsync(MenuButtonItem item)
     {
+        // An item can report one choice through more than one event, e.g. a radio option's change and then its click.
+        // The first activation closes the menu, so later ones are ignored.
+        if (!Open)
+        {
+            return;
+        }
+
         await SetOpenAsync(false);
 
         if (RestoreFocusOnItemClick && !string.IsNullOrEmpty(Anchor))

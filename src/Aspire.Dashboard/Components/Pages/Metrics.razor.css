@@ -189,6 +189,11 @@
 }
 
 ::deep .metric-groups-empty,
+::deep .metrics-limit-notice {
+    padding: var(--spacingVerticalM) var(--spacingHorizontalS);
+    color: var(--colorNeutralForeground3);
+}
+
 ::deep .metrics-pinned-empty {
     padding: var(--spacingVerticalM) var(--spacingHorizontalS);
     color: var(--colorNeutralForeground3);

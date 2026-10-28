@@ -729,6 +729,10 @@ public partial class MetricsTests : DashboardTestContext
                     };
                     return (true, state);
                 }
+                else if (key == BrowserStorageKeys.MetricsOrganize)
+                {
+                    return (false, null);
+                }
                 else
                 {
                     throw new InvalidOperationException("Unexpected key: " + key);
@@ -1505,6 +1509,61 @@ public partial class MetricsTests : DashboardTestContext
             Assert.Equal("page", cut.Find(".metric-group-all").GetAttribute("aria-current"));
             Assert.Empty(cut.FindAll(".metric-group.selected:not(.metric-group-all)"));
             Assert.Contains("all=true", navigationManager.Uri);
+        });
+    }
+
+    [Fact]
+    public async Task SingleResource_OffersGroupingAndSortingWithoutResourceOptions()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        await AddTwoMetersAsync();
+
+        var cut = Render<Metrics>(builder =>
+        {
+            builder.Add(m => m.ResourceName, "TestApp");
+            builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        cut.WaitForState(() => cut.Instance.PageViewModel.Instruments?.Count == 3);
+
+        var menus = cut.FindComponents<AspireMenuButton>().Where(m => m.Instance.ButtonClass?.Contains("metrics-organize-button", StringComparison.Ordinal) == true).ToList();
+        Assert.Collection(menus,
+            group => Assert.Equal(["None", "Meter", "Instrument"], group.Instance.ItemsProvider().Where(i => !i.IsHeader).Select(i => i.Text)),
+            sort => Assert.Equal(["Instrument", "Value (high to low)", "Value (low to high)"], sort.Instance.ItemsProvider().Where(i => !i.IsHeader).Select(i => i.Text)));
+
+        cut.Find(".metric-group-all").Click();
+        await cut.InvokeAsync(() => menus[0].Instance.ItemsProvider().Single(i => i.Text == "Meter").OnClick!());
+
+        cut.WaitForAssertion(() => Assert.Equal(["test-meter1", "test-meter2"], cut.FindAll(".metrics-section-title").Select(t => t.TextContent)));
+    }
+
+    [Fact]
+    public async Task ShowAllInstruments_RendersAtMostTheLimitAndAsksToFilter()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        var scopeMetrics = new ScopeMetrics { Scope = CreateScope(name: "test-meter1") };
+        for (var i = 0; i < Metrics.MaxRenderedInstruments + 5; i++)
+        {
+            scopeMetrics.Metrics.Add(CreateSumMetric(metricName: $"instrument.{i:D3}", startTime: s_testTime.AddMinutes(1)));
+        }
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics { Resource = CreateResource(name: "TestApp"), ScopeMetrics = { scopeMetrics } }
+        });
+
+        var cut = Render<Metrics>(builder =>
+        {
+            builder.Add(m => m.ResourceName, "TestApp");
+            builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        cut.WaitForState(() => cut.Instance.PageViewModel.Instruments?.Count == Metrics.MaxRenderedInstruments + 5);
+
+        cut.Find(".metric-group-all").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(Metrics.MaxRenderedInstruments, cut.FindAll(".meter-card-name").Count);
+            Assert.Equal("Showing the first 200 of 205 instruments. Filter to narrow the list.", cut.Find(".metrics-limit-notice").TextContent.Trim());
         });
     }
 

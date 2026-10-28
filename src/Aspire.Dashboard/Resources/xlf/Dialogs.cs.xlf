@@ -278,6 +278,11 @@ For more information about using AI agents with the dashboard, including setting
         <target state="new">What made you go back? Select all that apply.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardFeedbackSkipAndSwitch">
+        <source>Skip and switch</source>
+        <target state="new">Skip and switch</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DashboardFeedbackStepOneTitle">
         <source>Why are you going back to the previous dashboard?</source>
         <target state="new">Why are you going back to the previous dashboard?</target>

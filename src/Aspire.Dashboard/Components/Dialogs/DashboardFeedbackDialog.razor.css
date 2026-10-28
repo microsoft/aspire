@@ -207,6 +207,11 @@
     justify-content: flex-end;
 }
 
+/* Skipping sits apart from the form's own buttons, at the start of the footer. */
+.dashboard-feedback-actions ::deep .dashboard-feedback-skip {
+    margin-inline-end: auto;
+}
+
 @media (max-width: 600px) {
     .dashboard-feedback-reason-grid {
         grid-template-columns: 1fr;
