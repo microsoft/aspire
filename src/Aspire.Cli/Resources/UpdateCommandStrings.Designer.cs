@@ -795,6 +795,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string ChannelFeedAlreadyConfiguredFormat {
+            get {
+                return ResourceManager.GetString("ChannelFeedAlreadyConfiguredFormat", resourceCulture);
+            }
+        }
+
         internal static string NuGetConfigOutsideHierarchyFormat {
             get {
                 return ResourceManager.GetString("NuGetConfigOutsideHierarchyFormat", resourceCulture);

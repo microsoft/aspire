@@ -117,11 +117,12 @@ internal static class DotNetAppHostNuGetConfigBuilder
             RetiredSourceKeys = retiredKeys
         };
 
-        return new DotNetAppHostNuGetConfig(sourceChanges, mappings, removedMappings);
+        return new DotNetAppHostNuGetConfig(workloadId, sourceChanges, mappings, removedMappings);
     }
 }
 
 internal sealed record DotNetAppHostNuGetConfig(
+    string WorkloadId,
     NuGetConfigOverlay SourceChanges,
     IReadOnlyList<NuGetPackageSourceMapping> PackageSourceMappings,
     IReadOnlyList<NuGetPackageSourceMapping> RemovedPackageSourceMappings);

@@ -5,6 +5,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Xml;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
@@ -108,8 +110,6 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
     {
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(targetFile);
-        var content = configuration.AppHostConfig
-            ?? throw new InvalidOperationException("The resolved configuration does not require a NuGet configuration change.");
         cancellationToken.ThrowIfCancellationRequested();
 
         var targetPath = PathNormalizer.ResolveToFilesystemPath(targetFile.FullName);
@@ -123,26 +123,88 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
 
         // NuGet's typed settings writer is file-backed. Persistence derives local edits
         // against the target's remaining hierarchy, rather than copying projection masks.
+        string? conflictingSourceKey = null;
         using var file = await TemporaryNuGetConfigFile.CreateAsync(
-            path => WriteConfig(
-                content, path, originalContent, globalPackagesFolder, inheritedPaths, cancellationToken)).ConfigureAwait(false);
-        return await File.ReadAllBytesAsync(file.ConfigFile.FullName, cancellationToken).ConfigureAwait(false);
+            path => conflictingSourceKey = WriteConfig(
+                configuration, targetFile, path, originalContent, globalPackagesFolder, inheritedPaths, cancellationToken)).ConfigureAwait(false);
+
+        var proposedContent = await File.ReadAllBytesAsync(file.ConfigFile.FullName, cancellationToken).ConfigureAwait(false);
+        // A discovery overlay can change without requiring any persisted configuration edit.
+        var hasChanges = originalContent is not { } original ||
+            !proposedContent.AsSpan().SequenceEqual(original.Span);
+        if (hasChanges && conflictingSourceKey is not null)
+        {
+            throw new ProjectUpdaterException(string.Format(
+                CultureInfo.CurrentCulture,
+                UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat,
+                targetFile.FullName,
+                conflictingSourceKey));
+        }
+
+        return proposedContent;
     }
 
-    private void WriteConfig(
-        DotNetAppHostNuGetConfig configuration,
+    private string? WriteConfig(
+        NuGetConfiguration sourceConfiguration,
+        FileInfo targetFile,
         string outputPath,
         ReadOnlyMemory<byte>? originalContent,
         string? globalPackagesFolder,
         IReadOnlyList<string> inheritedConfigPaths,
         CancellationToken cancellationToken)
     {
+        var configuration = sourceConfiguration.AppHostConfig
+            ?? throw new InvalidOperationException("The resolved configuration does not require a NuGet configuration change.");
         nuGetService.WriteNuGetConfig(
             configuration.SourceChanges with { GlobalPackagesFolder = globalPackagesFolder },
             outputPath, originalContent, omitRedundantDisabledSources: true, inheritedConfigPaths, cancellationToken);
 
         var outputFile = new FileInfo(outputPath);
         var settings = new Settings(outputFile.DirectoryName!, outputFile.Name, isMachineWide: false);
+        var localSources = settings.GetSection(ConfigurationConstants.PackageSources)?.Items.OfType<SourceItem>().ToArray() ?? [];
+        var localMappingItems = settings.GetSection(ConfigurationConstants.PackageSourceMapping)?.Items.ToArray() ?? [];
+        ISettings inheritedSettings = inheritedConfigPaths.Count == 0
+            ? NullSettings.Instance
+            : Settings.LoadSettingsGivenConfigPaths(inheritedConfigPaths.ToList());
+        var inheritedMappings = inheritedSettings.GetSection(ConfigurationConstants.PackageSourceMapping)?.Items
+            .OfType<PackageSourceMappingSourceItem>().ToArray() ?? [];
+        string? conflictingSourceKey = null;
+        foreach (var source in sourceConfiguration.ConfigSources.Where(static source => source.IsAmbient))
+        {
+            if (!configuration.PackageSourceMappings.Any(mapping =>
+                string.Equals(mapping.SourceKey, source.Key, StringComparison.OrdinalIgnoreCase) &&
+                mapping.Patterns.Any(static pattern => pattern != PackageMapping.AllPackages)))
+            {
+                continue;
+            }
+
+            var ambientSource = sourceConfiguration.Settings.Sources.Single(ambient =>
+                string.Equals(ambient.Name, source.Key, StringComparison.OrdinalIgnoreCase));
+            // Borrowing an alias can shadow inherited mappings and gives the CLI no
+            // reliable ownership for later cleanup. Only maintain our own local entry.
+            // NuGet replaces mapping entries by key, so a local source definition alone
+            // does not make an inherited mapping safe to extend.
+            var inheritsMapping = !localMappingItems.Any(static item => item is ClearItem) &&
+                !localMappingItems.OfType<PackageSourceMappingSourceItem>().Any(mapping =>
+                    string.Equals(mapping.Key, source.Key, StringComparison.OrdinalIgnoreCase)) &&
+                inheritedMappings.Any(mapping =>
+                    string.Equals(mapping.Key, source.Key, StringComparison.OrdinalIgnoreCase));
+            if (inheritsMapping ||
+                !NuGetConfigurationBuilder.IsCliManagedSourceKey(source.Key, configuration.WorkloadId) ||
+                !localSources.Any(local =>
+                    string.Equals(local.Key, source.Key, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(
+                        NuGetSourceIdentity.Compute(
+                            PackageSourceOverrideMappings.ResolveForWorkingDirectory(local.Value, targetFile.Directory!),
+                            sourceConfiguration.Settings.SourceIdentityKey),
+                        ambientSource.Identity,
+                        StringComparison.Ordinal)))
+            {
+                conflictingSourceKey = source.Key;
+                break;
+            }
+        }
+
         var changedKeys = configuration.PackageSourceMappings.Select(static mapping => mapping.SourceKey)
             .Concat(configuration.RemovedPackageSourceMappings.Select(static mapping => mapping.SourceKey))
             .Concat(configuration.SourceChanges.RetiredSourceKeys)
@@ -182,6 +244,8 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
             }
         }
         settings.SaveToDisk();
+
+        return conflictingSourceKey;
     }
 
     internal static Task ApplyAsync(

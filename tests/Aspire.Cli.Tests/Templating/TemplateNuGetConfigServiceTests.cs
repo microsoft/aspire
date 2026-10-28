@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Mcp;
@@ -24,6 +25,37 @@ namespace Aspire.Cli.Tests.Templating;
 /// </summary>
 public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateNuGetConfig_RefusesAmbientChannelFeed(bool builtInScaffolding)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = workspace.CreateDirectory("output");
+        var ambientPath = Path.Combine(workspace.Path, "nuget.config");
+        const string source = "https://selected.example/v3/index.json";
+        const string ambient = """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="company" value="https://selected.example/v3/index.json" />
+              </packageSources>
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(ambientPath, ambient);
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", source)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var service = CreateService(executionContext: workspace.CreateExecutionContext());
+
+        await Assert.ThrowsAsync<ProjectUpdaterException>(() => builtInScaffolding
+            ? service.PromptToCreateNuGetConfigAsync(channel, output.FullName, TestContext.Current.CancellationToken)
+            : service.CreateNuGetConfigIfMissingAsync(channel, output.FullName, TestContext.Current.CancellationToken));
+
+        Assert.Equal(ambient, await File.ReadAllTextAsync(ambientPath));
+        Assert.Empty(output.EnumerateFiles());
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
@@ -105,12 +137,21 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
         var service = CreateService(executionContext: workspace.CreateExecutionContext());
 
-        await service.PromptToCreateNuGetConfigAsync(channel, builtInOutput.FullName, CancellationToken.None);
+        var refusesAmbientFeed = builtInCreatesConfig && source == PackageSources.NuGetOrg;
+        if (refusesAmbientFeed)
+        {
+            await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+                service.PromptToCreateNuGetConfigAsync(channel, builtInOutput.FullName, TestContext.Current.CancellationToken));
+        }
+        else
+        {
+            await service.PromptToCreateNuGetConfigAsync(channel, builtInOutput.FullName, CancellationToken.None);
+        }
         await service.CreateNuGetConfigIfMissingAsync(channel, templateEngineOutput.FullName, CancellationToken.None);
 
-        Assert.Equal(builtInCreatesConfig, File.Exists(Path.Combine(builtInOutput.FullName, "nuget.config")));
+        Assert.Equal(builtInCreatesConfig && !refusesAmbientFeed, File.Exists(Path.Combine(builtInOutput.FullName, "nuget.config")));
         Assert.Equal(templateEngineCreatesConfig, File.Exists(Path.Combine(templateEngineOutput.FullName, "nuget.config")));
-        if (builtInCreatesConfig)
+        if (builtInCreatesConfig && !refusesAmbientFeed)
         {
             Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(builtInOutput.FullName, "Aspire.Hosting"),
                 PackageSourceIdentity.Comparer);

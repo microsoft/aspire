@@ -100,13 +100,15 @@ internal static class NuGetConfigurationBuilder
     }
 
     internal static bool IsCliManagedSource(NuGetSourceInfo source, string workloadId)
-        => source.IsCliManaged ||
-            string.Equals(source.Name, $"aspire-{PackageChannelNames.Daily}", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(source.Name, $"aspire-{PackageChannelNames.Staging}", StringComparison.OrdinalIgnoreCase) ||
-            source.Name.StartsWith("aspire-pr-", StringComparison.OrdinalIgnoreCase) ||
-            source.Name.StartsWith("aspire-apphost-", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(source.Name, $"aspire-{workloadId}", StringComparison.OrdinalIgnoreCase) ||
-            source.Name.StartsWith($"aspire-{workloadId}-", StringComparison.OrdinalIgnoreCase);
+        => source.IsCliManaged || IsCliManagedSourceKey(source.Name, workloadId);
+
+    internal static bool IsCliManagedSourceKey(string sourceKey, string workloadId)
+        => string.Equals(sourceKey, $"aspire-{PackageChannelNames.Daily}", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(sourceKey, $"aspire-{PackageChannelNames.Staging}", StringComparison.OrdinalIgnoreCase) ||
+            sourceKey.StartsWith("aspire-pr-", StringComparison.OrdinalIgnoreCase) ||
+            sourceKey.StartsWith("aspire-apphost-", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(sourceKey, $"aspire-{workloadId}", StringComparison.OrdinalIgnoreCase) ||
+            sourceKey.StartsWith($"aspire-{workloadId}-", StringComparison.OrdinalIgnoreCase);
 
     public static NuGetConfigSource[] ResolveSourceAliases(
         PackageMapping[]? mappings,

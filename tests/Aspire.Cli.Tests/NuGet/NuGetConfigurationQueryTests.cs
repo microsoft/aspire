@@ -91,7 +91,17 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
         Assert.Equal(aspireSources, NuGetTestHelper.GetEligiblePackageSources(previewDirectory, "Aspire.Hosting"));
         Assert.Equal(original, await File.ReadAllTextAsync(configPath));
 
-        var candidate = await new DotNetAppHostNuGetConfigMerger(service).PrepareAsync(
+        var merger = new DotNetAppHostNuGetConfigMerger(service);
+        if (channelName == PackageChannelNames.Daily)
+        {
+            await Assert.ThrowsAsync<Aspire.Cli.Projects.ProjectUpdaterException>(() =>
+                merger.PrepareAsync(workspace.WorkspaceRoot, configuration, createIfMissing: false,
+                    globalPackagesFolder: null, TestContext.Current.CancellationToken));
+            Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+            return;
+        }
+
+        var candidate = await merger.PrepareAsync(
             workspace.WorkspaceRoot, configuration, createIfMissing: false,
             globalPackagesFolder: null, TestContext.Current.CancellationToken);
         Assert.NotNull(candidate);
