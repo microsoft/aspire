@@ -27,14 +27,31 @@
 }
 
 .resource-filter-header {
-    padding: 12px 16px 8px;
-}
-
-.resource-filter-header strong {
-    color: var(--colorNeutralForeground1);
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: center;
+    box-sizing: border-box;
+    min-height: 36px;
+    margin-bottom: 4px;
+    padding: 0 8px 4px 4px;
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+    color: var(--colorNeutralForeground3);
     font-size: var(--fontSizeBase300);
     font-weight: var(--fontWeightSemibold);
     line-height: 20px;
+}
+
+.resource-filter-header ::deep .resource-filter-header-icon {
+    grid-column: 1;
+    justify-self: center;
+}
+
+.resource-filter-header-title {
+    grid-column: 2;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Reset and OK are always visible below the list, so closing the popover never needs a scroll. */

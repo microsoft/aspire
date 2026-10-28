@@ -114,15 +114,39 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
-        public static string MetricsOrganizeType {
+        public static string MetricsOrganizeInstrument {
             get {
-                return ResourceManager.GetString("MetricsOrganizeType", resourceCulture);
+                return ResourceManager.GetString("MetricsOrganizeInstrument", resourceCulture);
             }
         }
 
-        public static string MetricsSortName {
+        public static string MetricsOrganizeLandmark {
             get {
-                return ResourceManager.GetString("MetricsSortName", resourceCulture);
+                return ResourceManager.GetString("MetricsOrganizeLandmark", resourceCulture);
+            }
+        }
+
+        public static string MetricsGroupByTooltip {
+            get {
+                return ResourceManager.GetString("MetricsGroupByTooltip", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortByTooltip {
+            get {
+                return ResourceManager.GetString("MetricsSortByTooltip", resourceCulture);
+            }
+        }
+
+        public static string MetricsGroupMenuTitle {
+            get {
+                return ResourceManager.GetString("MetricsGroupMenuTitle", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortMenuTitle {
+            get {
+                return ResourceManager.GetString("MetricsSortMenuTitle", resourceCulture);
             }
         }
 

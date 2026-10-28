@@ -22,6 +22,16 @@
         <target state="new">Group by</target>
         <note />
       </trans-unit>
+      <trans-unit id="MetricsGroupByTooltip">
+        <source>Grouped by {0}. Select to change grouping.</source>
+        <target state="new">Grouped by {0}. Select to change grouping.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsGroupMenuTitle">
+        <source>Group metrics</source>
+        <target state="new">Group metrics</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MetricsGroupNone">
         <source>None</source>
         <target state="new">None</target>
@@ -117,6 +127,16 @@
         <target state="translated">Seçili kaynak için ölçüm yok</target>
         <note />
       </trans-unit>
+      <trans-unit id="MetricsOrganizeInstrument">
+        <source>Instrument</source>
+        <target state="new">Instrument</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeLandmark">
+        <source>Organize metrics</source>
+        <target state="new">Organize metrics</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MetricsOrganizeMeter">
         <source>Meter</source>
         <target state="new">Meter</target>
@@ -125,11 +145,6 @@
       <trans-unit id="MetricsOrganizeResource">
         <source>Resource</source>
         <target state="new">Resource</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="MetricsOrganizeType">
-        <source>Type</source>
-        <target state="new">Type</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsOverviewNoData">
@@ -177,9 +192,14 @@
         <target state="new">Sort by</target>
         <note />
       </trans-unit>
-      <trans-unit id="MetricsSortName">
-        <source>Name</source>
-        <target state="new">Name</target>
+      <trans-unit id="MetricsSortByTooltip">
+        <source>Sorted by {0}. Select to change sorting.</source>
+        <target state="new">Sorted by {0}. Select to change sorting.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortMenuTitle">
+        <source>Sort metrics</source>
+        <target state="new">Sort metrics</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsSortValueAscending">

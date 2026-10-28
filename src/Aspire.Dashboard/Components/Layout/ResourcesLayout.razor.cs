@@ -35,7 +35,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 {
     private const string FilterButtonId = "resourcePaneFilterButton";
     private const string GroupingButtonId = "resourcePaneGroupingButton";
-    private static readonly Icon s_checkmarkIcon = new Icons.Regular.Size16.Checkmark();
     internal const int MinimumPaneWidthPx = 200;
     internal const int MaximumPaneWidthPx = 560;
     internal const int DefaultPaneWidthPx = 290;
@@ -955,9 +954,20 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private static string GetGroupOrderKey(ResourceGroup group) => group.Value ?? string.Empty;
 
     private List<MenuButtonItem> GetGroupingMenuItems() =>
-        Enum.GetValues<ResourceGrouping>().Select(grouping => new MenuButtonItem
+        new[]
+        {
+            new MenuButtonItem
+            {
+                IsHeader = true,
+                Text = Loc[nameof(Resources.Layout.ResourcePaneGrouping)],
+                Icon = new Icons.Regular.Size20.GroupList(),
+                RenderKey = "resource-grouping-header"
+            }
+        }
+        .Concat(Enum.GetValues<ResourceGrouping>().Select(grouping => new MenuButtonItem
         {
             Id = $"resource-grouping-{grouping}",
+            Class = "resource-grouping-menu-item",
             Text = Loc[grouping switch
             {
                 ResourceGrouping.None => nameof(Resources.Layout.ResourcePaneGroupingNone),
@@ -967,10 +977,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             }],
             Tooltip = string.Empty,
             Role = MenuItemRole.Radio,
-            Icon = s_checkmarkIcon,
             Checked = _grouping == grouping,
             OnClick = () => SetGroupingAsync(grouping)
-        }).ToList();
+        }))
+        .ToList();
 
     private async Task SetGroupingAsync(ResourceGrouping grouping)
     {

@@ -252,26 +252,21 @@
         @if (IsAggregate)
         {
             @* Shown for lists of several resources, where the same instrument can appear once per resource. *@
-            <div class="toolbar-organize" role="group">
-                <label for="@_selectGroupById">@Loc[nameof(Dashboard.Resources.Metrics.MetricsGroupByLabel)]</label>
-                <FluentSelect TOption="SelectViewModel<MetricGroupBy>" TValue="SelectViewModel<MetricGroupBy>"
-                              Class="toolbar-select toolbar-select-compact"
-                              Id="@_selectGroupById"
-                              Items="@_groupByOptions"
-                              OptionText="@(c => c?.Name)"
-                              @bind-Value="_selectedGroupBy"
-                              @bind-Value:after="OnOrganizeChangedAsync"
-                              AriaLabel="@Loc[nameof(Dashboard.Resources.Metrics.MetricsGroupByLabel)]" />
-
-                <label for="@_selectSortById">@Loc[nameof(Dashboard.Resources.Metrics.MetricsSortByLabel)]</label>
-                <FluentSelect TOption="SelectViewModel<MetricSortBy>" TValue="SelectViewModel<MetricSortBy>"
-                              Class="toolbar-select toolbar-select-compact"
-                              Id="@_selectSortById"
-                              Items="@_sortByOptions"
-                              OptionText="@(c => c?.Name)"
-                              @bind-Value="_selectedSortBy"
-                              @bind-Value:after="OnOrganizeChangedAsync"
-                              AriaLabel="@Loc[nameof(Dashboard.Resources.Metrics.MetricsSortByLabel)]" />
+            <div class="toolbar-organize" role="group" aria-label="@Loc[nameof(Dashboard.Resources.Metrics.MetricsOrganizeLandmark)]">
+                <AspireMenuButton ButtonClass="toolbar-button metrics-organize-button"
+                                  ButtonAppearance="ButtonAppearance.Default"
+                                  Icon="@(new Icons.Regular.Size20.GroupList())"
+                                  IconColor="Color.Custom"
+                                  IconCustomColor="currentColor"
+                                  ItemsProvider="GetGroupByMenuItems"
+                                  Title="@GetGroupByTooltip()" />
+                <AspireMenuButton ButtonClass="toolbar-button metrics-organize-button"
+                                  ButtonAppearance="ButtonAppearance.Default"
+                                  Icon="@(new Icons.Regular.Size20.ArrowSort())"
+                                  IconColor="Color.Custom"
+                                  IconCustomColor="currentColor"
+                                  ItemsProvider="GetSortByMenuItems"
+                                  Title="@GetSortByTooltip()" />
             </div>
         }
 

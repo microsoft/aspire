@@ -33,7 +33,12 @@
             var counts = GetCounts(groups);
             <div class="resource-filter" role="group" aria-label="@Title">
                 <div class="resource-filter-header">
-                    <strong>@Title</strong>
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Filter())"
+                                Width="16px"
+                                Class="resource-filter-header-icon"
+                                Color="Color.Custom"
+                                CustomColor="currentColor" />
+                    <strong class="resource-filter-header-title">@Title</strong>
                 </div>
                 <div class="resource-filter-body">
                     @foreach (var group in groups)

@@ -44,24 +44,36 @@
 .toolbar-organize {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex: 0 0 auto;
 }
 
-.toolbar-organize > label {
-    white-space: nowrap;
-    color: var(--colorNeutralForeground2);
+::deep .toolbar-organize .metrics-organize-button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding-inline: 0;
 }
 
-.toolbar-organize > label:not(:first-child) {
-    margin-inline-start: 8px;
+.toolbar-organize ::deep .aspire-menu-container fluent-menu-list {
+    min-width: 220px;
+    padding: 4px;
+    border: 1px solid var(--colorNeutralStroke1);
 }
 
-::deep .main-toolbar.filter-toolbar .toolbar-organize .toolbar-select-compact,
-::deep .main-toolbar.filter-toolbar .toolbar-organize .toolbar-select-compact > fluent-dropdown {
-    --aspire-dropdown-min-width: 0px;
-    width: 8.5rem;
-    min-width: 0;
+.toolbar-organize ::deep fluent-menu-item.metrics-organize-menu-item {
+    width: calc(100% - 8px);
+    height: 34px;
+    min-height: 34px;
+}
+
+.toolbar-organize ::deep fluent-menu-item.metrics-organize-menu-item[checked] {
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground1);
+}
+
+.toolbar-organize ::deep fluent-menu-item.metrics-organize-menu-item > .aspire-menu-item-indicator {
+    color: var(--colorBrandForeground1);
 }
 
 /* Metrics chart SVG */

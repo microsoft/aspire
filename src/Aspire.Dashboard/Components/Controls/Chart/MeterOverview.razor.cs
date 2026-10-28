@@ -49,9 +49,8 @@ public partial class MeterOverview : LiveSparklinesBase
 
         return SortBy switch
         {
-            MetricSortBy.Name => ordered.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ThenBy(ResourceLabel, StringComparer.OrdinalIgnoreCase),
+            MetricSortBy.Instrument => ordered.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ThenBy(ResourceLabel, StringComparer.OrdinalIgnoreCase),
             MetricSortBy.Resource => ordered.ThenBy(ResourceLabel, StringComparer.OrdinalIgnoreCase).ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase),
-            MetricSortBy.Type => ordered.ThenBy(i => i.Type).ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ThenBy(ResourceLabel, StringComparer.OrdinalIgnoreCase),
             // Values of different units aren't comparable, but within a group they usually are, e.g. request counts.
             MetricSortBy.ValueDescending => ordered.ThenByDescending(i => GetSparkline(i).LatestValue).ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase),
             MetricSortBy.ValueAscending => ordered.ThenBy(i => GetSparkline(i).LatestValue).ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase),
@@ -81,11 +80,10 @@ public partial class MeterOverview : LiveSparklinesBase
 
 public enum MetricSortBy
 {
-    Name,
-    Resource,
-    Type,
-    ValueDescending,
-    ValueAscending
+    Instrument = 0,
+    Resource = 1,
+    ValueDescending = 3,
+    ValueAscending = 4
 }
 
 public enum MetricGroupBy
@@ -93,5 +91,5 @@ public enum MetricGroupBy
     None,
     Resource,
     Meter,
-    Type
+    Instrument
 }
