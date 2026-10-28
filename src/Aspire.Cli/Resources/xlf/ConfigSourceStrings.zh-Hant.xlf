@@ -4,22 +4,22 @@
     <body>
       <trans-unit id="Accept">
         <source>Yes</source>
-        <target state="new">Yes</target>
+        <target state="translated">是</target>
         <note />
       </trans-unit>
       <trans-unit id="AppliedVersionMissing">
         <source>A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</source>
-        <target state="new">A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</target>
+        <target state="translated">已儲存的設定來源沒有記錄已套用的版本。執行 `aspire update --config-source` 以儲存其允許的設定，並建立已套用的版本。</target>
         <note>Do not translate "aspire update --config-source".</note>
       </trans-unit>
       <trans-unit id="AuthenticationFailed">
         <source>Git could not authenticate to the configuration source. Configure your Git credential helper or SSH authentication and retry.</source>
-        <target state="new">Git could not authenticate to the configuration source. Configure your Git credential helper or SSH authentication and retry.</target>
+        <target state="translated">Git 無法向設定來源進行驗證。請設定 Git 認證協助程式或 SSH 驗證，然後重試。</target>
         <note />
       </trans-unit>
       <trans-unit id="BindingChanged">
         <source>The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</source>
-        <target state="new">The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</target>
+        <target state="translated">擷取期間，已儲存的設定來源有所變更。未套用任何來源設定。請使用已儲存的來源繫結重試。</target>
         <note />
       </trans-unit>
       <trans-unit id="Candidate">
@@ -27,152 +27,152 @@
 Configuration file: {1}
 Configuration ref: {2}
 Source origin: {3}</source>
-        <target state="new">Configuration source: {0}
-Configuration file: {1}
-Configuration ref: {2}
-Source origin: {3}</target>
+        <target state="translated">設定來源: {0}
+設定檔: {1}
+設定參考: {2}
+來源起點: {3}</target>
         <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the branch name, commit SHA, or default-branch label, and {3} is the source origin (an environment variable name or Microsoft employee default).</note>
       </trans-unit>
       <trans-unit id="CheckFailed">
         <source>The configuration source update check failed: {0} Continuing with the saved configuration.</source>
-        <target state="new">The configuration source update check failed: {0} Continuing with the saved configuration.</target>
+        <target state="translated">設定來源更新檢查失敗： {0} 繼續使用儲存的設定。</target>
         <note>{0} is the configuration source check failure message.</note>
       </trans-unit>
       <trans-unit id="CheckFailedWithoutDetails">
         <source>The configuration source update check failed. Continuing with the saved configuration.</source>
-        <target state="new">The configuration source update check failed. Continuing with the saved configuration.</target>
+        <target state="translated">設定來源更新檢查失敗。繼續使用已儲存的設定。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigLockFailed">
         <source>The settings file could not be locked. No source settings were applied. Retry when other configuration writers have finished.</source>
-        <target state="new">The settings file could not be locked. No source settings were applied. Retry when other configuration writers have finished.</target>
+        <target state="translated">無法鎖定設定檔。未套用任何來源設定。請等候其他設定寫入者完成後再重試。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsentRequired">
         <source>A configuration source is available. Specify --use-config-source true to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</source>
-        <target state="new">A configuration source is available. Specify --use-config-source true to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</target>
+        <target state="translated">有可用的設定來源。在非互動模式下，指定 --use-config-source true 以接受該來源，或指定 --use-config-source false 以使用標準 Aspire 設定。</target>
         <note>Do not translate "--use-config-source", "true", or "false".</note>
       </trans-unit>
       <trans-unit id="Decline">
         <source>No, use standard Aspire configuration</source>
-        <target state="new">No, use standard Aspire configuration</target>
+        <target state="translated">否，使用標準 Aspire 設定</target>
         <note />
       </trans-unit>
       <trans-unit id="DefaultBranch">
         <source>default branch</source>
-        <target state="new">default branch</target>
+        <target state="translated">預設分支</target>
         <note />
       </trans-unit>
       <trans-unit id="EmployeeOrigin">
         <source>Microsoft employee default</source>
-        <target state="new">Microsoft employee default</target>
+        <target state="translated">Microsoft 員工預設值</target>
         <note />
       </trans-unit>
       <trans-unit id="GitNotFound">
         <source>Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</source>
-        <target state="new">Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</target>
+        <target state="translated">無法啟動 Git。請確定已安裝 Git，且 Git 可在 PATH 中使用，以便使用此設定來源。</target>
         <note>Do not translate "PATH".</note>
       </trans-unit>
       <trans-unit id="GitTimeout">
         <source>The configuration source Git operation timed out. Check repository access and Git credentials, then retry.</source>
-        <target state="new">The configuration source Git operation timed out. Check repository access and Git credentials, then retry.</target>
+        <target state="translated">設定來源的 Git 作業逾時。請檢查存放庫存取權和 Git 認證，然後重試。</target>
         <note />
       </trans-unit>
       <trans-unit id="IncompatibleOptions">
         <source>--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</source>
-        <target state="new">--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</target>
+        <target state="translated">--config-source 不能與 --self、--migrate、--channel、--quality 或 --nuget-config-dir 搭配使用。</target>
         <note>Do not translate the command-line option names.</note>
       </trans-unit>
       <trans-unit id="InvalidBinding">
         <source>The configSource binding must contain a Git repository address and a repository-relative configuration file path.</source>
-        <target state="new">The configSource binding must contain a Git repository address and a repository-relative configuration file path.</target>
+        <target state="translated">configSource 繫結必須包含 Git 存放庫位址和存放庫相對的設定檔路徑。</target>
         <note>Do not translate "configSource".</note>
       </trans-unit>
       <trans-unit id="InvalidCache">
         <source>The configuration source cache is invalid. Restore or remove its cache entry and retry.</source>
-        <target state="new">The configuration source cache is invalid. Restore or remove its cache entry and retry.</target>
+        <target state="translated">設定來源快取無效。請還原或移除其快取項目，然後重試。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidConfiguration">
         <source>The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</source>
-        <target state="new">The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</target>
+        <target state="translated">來源設定必須是有效的 Aspire JSON 物件，大小不得超過 4 MiB。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidPath">
         <source>The configuration file must be a nonempty repository-relative path using '/' separators, without '.', '..', or empty path segments.</source>
-        <target state="new">The configuration file must be a nonempty repository-relative path using '/' separators, without '.', '..', or empty path segments.</target>
+        <target state="translated">設定檔必須是使用 '/' 分隔符號的非空存放庫相對路徑，且不得包含 '.'、'..' 或空的路徑區段。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidRef">
         <source>The configuration source ref must be a branch name or full commit SHA, not an empty value, tag, revision expression, or command option.</source>
-        <target state="new">The configuration source ref must be a branch name or full commit SHA, not an empty value, tag, revision expression, or command option.</target>
+        <target state="translated">設定來源 ref 必須是分支名稱或完整的認可 SHA，不得是空值、標籤、修訂版本運算式或命令選項。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidRepository">
         <source>The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments.</source>
-        <target state="new">The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments.</target>
+        <target state="translated">設定來源必須是絕對的本機存放庫路徑，或是不含密碼、權杖、查詢字串或片段的 HTTPS 或 SSH Git 存放庫位址。</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingFile">
         <source>The configuration file is missing or is not a regular file at the selected Git branch or commit.</source>
-        <target state="new">The configuration file is missing or is not a regular file at the selected Git branch or commit.</target>
+        <target state="translated">在選取的 Git 分支或認可中，找不到設定檔，或該檔案不是一般檔案。</target>
         <note />
       </trans-unit>
       <trans-unit id="NestedSource">
         <source>A source configuration file cannot declare another configSource.</source>
-        <target state="new">A source configuration file cannot declare another configSource.</target>
+        <target state="translated">來源設定檔不能宣告另一個 configSource。</target>
         <note>Do not translate "configSource".</note>
       </trans-unit>
       <trans-unit id="NoBinding">
         <source>No configuration source to update.</source>
-        <target state="new">No configuration source to update.</target>
+        <target state="translated">沒有可更新的設定來源。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoCandidate">
         <source>No configuration source is available. Set {0} to a Git repository address.</source>
-        <target state="new">No configuration source is available. Set {0} to a Git repository address.</target>
+        <target state="translated">沒有可用的設定來源。將 {0} 設定為 Git 存放庫位址。</target>
         <note>{0} is the environment variable name.</note>
       </trans-unit>
       <trans-unit id="RefreshOptionDescription">
         <source>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</source>
-        <target state="new">Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</target>
+        <target state="translated">套用最近的本機和全域已儲存 Git 設定來源中的允許設定，取代所提供設定的本機編輯內容；不更新套件或命令列介面。</target>
         <note />
       </trans-unit>
       <trans-unit id="Refreshed">
         <source>configuration updated</source>
-        <target state="new">configuration updated</target>
+        <target state="translated">已更新設定</target>
         <note />
       </trans-unit>
       <trans-unit id="RefreshedUnchanged">
         <source>configuration already up to date</source>
-        <target state="new">configuration already up to date</target>
+        <target state="translated">設定已是最新狀態</target>
         <note />
       </trans-unit>
       <trans-unit id="RepositoryUnavailable">
         <source>Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry.</source>
-        <target state="new">Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry.</target>
+        <target state="translated">Git 無法讀取設定來源存放庫。請檢查存放庫存取、網路連線能力及 Git 驗證，然後重試。</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateAvailable">
         <source>A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</source>
-        <target state="new">A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</target>
+        <target state="translated">有新版的設定來源可供使用。執行 `aspire update --config-source` 以套用更新。</target>
         <note>Do not translate "aspire update --config-source".</note>
       </trans-unit>
       <trans-unit id="UseNotice">
         <source>Configuration source {0} ({1}) at commit {2}: {3}.
 Settings file: {4}</source>
-        <target state="new">Configuration source {0} ({1}) at commit {2}: {3}.
-Settings file: {4}</target>
+        <target state="translated">設定來源 {0} ({1}) 位於認可 {2}: {3}。
+設定檔為: {4}</target>
         <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the resolved Git commit SHA, {3} is the localized configuration update result, and {4} is the destination settings file path.</note>
       </trans-unit>
       <trans-unit id="UseSourceOptionDescription">
         <source>Accept or decline the proposed Git configuration source for this project.</source>
-        <target state="new">Accept or decline the proposed Git configuration source for this project.</target>
+        <target state="translated">接受或拒絕針對此專案所建議的 Git 設定來源。</target>
         <note />
       </trans-unit>
       <trans-unit id="UseSourcePrompt">
         <source>Use configuration from this source?</source>
-        <target state="new">Use configuration from this source?</target>
+        <target state="translated">要使用此來源的設定嗎?</target>
         <note />
       </trans-unit>
     </body>

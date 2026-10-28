@@ -27,15 +27,15 @@
 Configuration file: {1}
 Configuration ref: {2}
 Source origin: {3}</source>
-        <target state="new">Configuration source: {0}
-Configuration file: {1}
-Configuration ref: {2}
-Source origin: {3}</target>
+        <target state="translated">構成ソース: {0}
+構成ファイル: {1}
+構成参照: {2}
+ソースの配信元: {3}</target>
         <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the branch name, commit SHA, or default-branch label, and {3} is the source origin (an environment variable name or Microsoft employee default).</note>
       </trans-unit>
       <trans-unit id="CheckFailed">
         <source>The configuration source update check failed: {0} Continuing with the saved configuration.</source>
-        <target state="new">The configuration source update check failed: {0} Continuing with the saved configuration.</target>
+        <target state="translated">構成ソースの更新チェックに失敗しました: {0} 保存した構成で続行します。</target>
         <note>{0} is the configuration source check failure message.</note>
       </trans-unit>
       <trans-unit id="CheckFailedWithoutDetails">
@@ -60,7 +60,7 @@ Source origin: {3}</target>
       </trans-unit>
       <trans-unit id="DefaultBranch">
         <source>default branch</source>
-        <target state="new">default branch</target>
+        <target state="translated">既定のブランチ</target>
         <note />
       </trans-unit>
       <trans-unit id="EmployeeOrigin">
@@ -100,7 +100,7 @@ Source origin: {3}</target>
       </trans-unit>
       <trans-unit id="InvalidPath">
         <source>The configuration file must be a nonempty repository-relative path using '/' separators, without '.', '..', or empty path segments.</source>
-        <target state="new">The configuration file must be a nonempty repository-relative path using '/' separators, without '.', '..', or empty path segments.</target>
+        <target state="translated">構成ファイルは、'.'、'..'、または空のパス セグメントを含まない、'/' 区切り記号を使用した空でないリポジトリ相対パスである必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidRef">
