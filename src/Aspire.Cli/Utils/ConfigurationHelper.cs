@@ -1,9 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using System.IO.Hashing;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -13,10 +17,12 @@ using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Win32.SafeHandles;
 
 namespace Aspire.Cli.Utils;
 
-internal static class ConfigurationHelper
+internal static partial class ConfigurationHelper
 {
     internal const string IntegrationCacheFolderName = "integrations";
     private static readonly TimeSpan s_workspaceConfigLockTimeout = TimeSpan.FromSeconds(30);
@@ -309,53 +315,64 @@ internal static class ConfigurationHelper
         await File.WriteAllTextAsync(filePath, jsonContent, cancellationToken);
     }
 
-    internal static async Task WriteSettingsFileAtomicallyAsync(string filePath, JsonObject settings, CancellationToken cancellationToken)
+    internal static async Task WriteSettingsFileAtomicallyAsync(
+        string filePath, JsonObject settings, CancellationToken cancellationToken,
+        bool rejectSymbolicLinks = false, bool preserveOwnershipAndAcl = false,
+        Func<CancellationToken, Task>? beforeReplace = null)
     {
+        ValidateSymbolicLinkPolicy(filePath, rejectSymbolicLinks);
         // Resolve before choosing the sibling so replacement updates the target, not the link.
         // This does not prevent filesystem races if links change during the write;
         // concurrent link changes are not expected during normal CLI usage.
-        if (!PathNormalizer.TryResolveSymlinks(filePath, out var resolvedPath))
+        if (!rejectSymbolicLinks)
         {
-            throw new IOException($"Unable to resolve symbolic links for settings file '{filePath}'.");
+            if (!PathNormalizer.TryResolveSymlinks(filePath, out var resolvedPath))
+            {
+                throw new IOException($"Unable to resolve symbolic links for settings file '{filePath}'.");
+            }
+            filePath = resolvedPath;
         }
-        filePath = resolvedPath;
 
         EnsureDirectoryExists(filePath);
         // A sibling is required for atomic replacement even when the workspace and
         // system temp directory are on different volumes. CreateNew rejects existing links/files.
-        var temporaryPath = $"{filePath}.{Guid.NewGuid():N}.tmp";
+        var temporaryPath = Path.Combine(Path.GetDirectoryName(filePath)!, $".{Path.GetFileName(filePath)}.{Guid.NewGuid():N}.tmp");
         var created = false;
+        var destinationExists = File.Exists(filePath);
+        string? unixMetadata = null;
         try
         {
-            var destinationExists = File.Exists(filePath);
-            var options = new FileStreamOptions
-            {
-                Mode = FileMode.CreateNew,
-                Access = FileAccess.Write,
-                Share = FileShare.None,
-                Options = FileOptions.Asynchronous
-            };
             UnixFileMode? destinationMode = null;
             if (!OperatingSystem.IsWindows())
             {
-                // Protect the temporary contents from creation, even in a shared directory.
-                options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
                 destinationMode = destinationExists ? File.GetUnixFileMode(filePath) : null;
             }
-            await using (var stream = OperatingSystem.IsWindows() && destinationExists
-                ? new FileInfo(temporaryPath).Create(FileMode.CreateNew, FileSystemRights.Write, FileShare.None,
-                    4096, FileOptions.Asynchronous, new FileInfo(filePath).GetAccessControl(AccessControlSections.Access))
-                : new FileStream(temporaryPath, options))
+            await using (var stream = CreateSettingsStagingFile(temporaryPath, filePath, destinationExists, preserveOwnershipAndAcl))
             {
                 created = true;
+                if (preserveOwnershipAndAcl && destinationExists && !OperatingSystem.IsWindows())
+                {
+                    unixMetadata = await ReadUnixMetadataAsync(filePath, cancellationToken);
+                    await PreserveUnixMetadataAsync(filePath, temporaryPath, stream, cancellationToken);
+                    stream.SetLength(0);
+                }
+
                 // Serialize to text rather than to the stream so the final newline is added the same way as in the
                 // other settings writers. Encoding.UTF8.GetBytes writes no byte order mark, like File.WriteAllText.
                 var jsonContent = EnsureFinalNewline(JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject));
                 await stream.WriteAsync(Encoding.UTF8.GetBytes(jsonContent), cancellationToken);
             }
-            if (!OperatingSystem.IsWindows() && destinationMode is { } mode)
+            if (!preserveOwnershipAndAcl && !OperatingSystem.IsWindows() && destinationMode is { } mode)
             {
                 File.SetUnixFileMode(temporaryPath, mode);
+            }
+            if (unixMetadata is not null && unixMetadata != await ReadUnixMetadataAsync(filePath, cancellationToken))
+            {
+                throw SettingsWriteRefused(filePath);
+            }
+            if (beforeReplace is not null)
+            {
+                await beforeReplace(cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();
             if (OperatingSystem.IsWindows() && destinationExists)
@@ -365,7 +382,9 @@ internal static class ConfigurationHelper
             }
             else
             {
-                File.Move(temporaryPath, filePath, overwrite: true);
+                // A tracked edit must not overwrite a new file created after validation.
+                // Untracked workspace writes retain their existing overwrite behavior.
+                File.Move(temporaryPath, filePath, overwrite: destinationExists || beforeReplace is null);
             }
         }
         finally
@@ -376,6 +395,198 @@ internal static class ConfigurationHelper
             }
         }
     }
+
+    private static FileStream CreateSettingsStagingFile(string temporary, string destination, bool existed, bool preserveOwnershipAndAcl)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            if (preserveOwnershipAndAcl)
+            {
+                return CreateWindowsStagingFile(temporary, destination, existed);
+            }
+            if (existed)
+            {
+                return new FileInfo(temporary).Create(FileMode.CreateNew, FileSystemRights.Write, FileShare.None,
+                    4096, FileOptions.Asynchronous, new FileInfo(destination).GetAccessControl(AccessControlSections.Access));
+            }
+        }
+
+        var options = new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew,
+            Access = preserveOwnershipAndAcl ? FileAccess.ReadWrite : FileAccess.Write,
+            Share = FileShare.None,
+            Options = FileOptions.Asynchronous
+        };
+        if (!OperatingSystem.IsWindows())
+        {
+            // Protect the temporary contents from creation, even in a shared directory.
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        return new FileStream(temporary, options);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static FileStream CreateWindowsStagingFile(string temporary, string destination, bool existed)
+    {
+        var security = existed
+            ? new FileInfo(destination).GetAccessControl(AccessControlSections.Access | AccessControlSections.Owner | AccessControlSections.Group)
+            : new FileSecurity();
+        if (!existed)
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            var owner = identity.User ?? throw new UnauthorizedAccessException();
+            security.SetOwner(owner);
+            security.AddAccessRule(new FileSystemAccessRule(owner, FileSystemRights.FullControl, AccessControlType.Allow));
+        }
+
+        // Freeze the original effective ACL before creating any credential-bearing copy.
+        // Parent inheritance must not grant readers access while validation awaits.
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: true);
+        return new FileInfo(temporary).Create(FileMode.CreateNew, FileSystemRights.Read | FileSystemRights.Write,
+            FileShare.None, 4096, FileOptions.Asynchronous, security);
+    }
+
+    [UnsupportedOSPlatform("windows")]
+    private static async Task PreserveUnixMetadataAsync(
+        string source, string destination, FileStream stream, CancellationToken cancellationToken)
+    {
+        if (OperatingSystem.IsLinux())
+        {
+            // BusyBox cp replaces the staging inode and drops ACLs. Set metadata on the
+            // open, still-empty file instead, before writing any credential-bearing JSON.
+            var owner = await RunMetadataToolAsync(StatPath, ["-c", "%u:%g", source], source, cancellationToken);
+            // stat emits numeric "uid:gid\n", for example "1000:1000\n".
+            var parts = owner.Split(':', StringSplitOptions.TrimEntries);
+            if (parts.Length != 2 ||
+                !uint.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var uid) ||
+                !uint.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var gid) ||
+                ChangeOwner(stream.SafeFileHandle, uid, gid) != 0)
+            {
+                throw SettingsWriteRefused(source);
+            }
+            File.SetUnixFileMode(stream.SafeFileHandle, File.GetUnixFileMode(source));
+            var acl = ReadLinuxAccessAcl(source);
+            if (acl.Length > 0 && SetExtendedAttribute(stream.SafeFileHandle, "system.posix_acl_access", acl, (nuint)acl.Length, 0) != 0)
+            {
+                throw SettingsWriteRefused(source);
+            }
+            // A source without an ACL must not inherit named entries from the staging directory.
+            if (acl.Length == 0 && RemoveExtendedAttribute(stream.SafeFileHandle, "system.posix_acl_access") != 0 &&
+                Marshal.GetLastPInvokeError() is not (61 or 95))
+            {
+                throw SettingsWriteRefused(source);
+            }
+
+            return;
+        }
+
+        // macOS cp -p preserves ACLs but can report success without preserving uid/gid.
+        // https://www.manpagez.com/man/1/cp/
+        await RunMetadataToolAsync("/bin/cp", ["-p", source, destination], source, cancellationToken);
+        var owners = await RunMetadataToolAsync(StatPath,
+            [OperatingSystem.IsMacOS() ? "-f" : "-c", "%u:%g", source, destination], source, cancellationToken);
+        var values = owners.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (values.Length != 2 || values[0] != values[1] || File.GetUnixFileMode(source) != File.GetUnixFileMode(destination))
+        {
+            throw SettingsWriteRefused(source);
+        }
+    }
+
+    private static async Task<string> ReadUnixMetadataAsync(string path, CancellationToken cancellationToken)
+    {
+        // Compare actual ACLs rather than ctime, which can have coarse filesystem precision.
+        if (OperatingSystem.IsMacOS())
+        {
+            // -e includes access ACL entries; -n includes numeric ownership alongside the mode.
+            // https://github.com/apple-oss-distributions/file_cmds/blob/main/ls/ls.1
+            return await RunMetadataToolAsync("/bin/ls", ["-lnde", path], path, cancellationToken);
+        }
+
+        var metadata = await RunMetadataToolAsync(StatPath, ["-c", "%u:%g:%a", path], path, cancellationToken);
+
+        return metadata + Convert.ToHexString(ReadLinuxAccessAcl(path));
+    }
+
+    private static byte[] ReadLinuxAccessAcl(string path)
+    {
+        const string aclAttribute = "system.posix_acl_access";
+        var size = GetExtendedAttribute(path, aclAttribute, null, 0);
+        if (size < 0)
+        {
+            // Linux ENODATA/EOPNOTSUPP mean there is no POSIX ACL to preserve.
+            // https://man7.org/linux/man-pages/man2/getxattr.2.html
+            if (Marshal.GetLastPInvokeError() is 61 or 95)
+            {
+                return [];
+            }
+            throw SettingsWriteRefused(path);
+        }
+
+        var acl = new byte[checked((int)size)];
+        if (GetExtendedAttribute(path, aclAttribute, acl, (nuint)acl.Length) != size)
+        {
+            throw SettingsWriteRefused(path);
+        }
+
+        return acl;
+    }
+
+    // BusyBox installs stat in /bin. Keep metadata tools independent of the caller's PATH.
+    private static string StatPath => File.Exists("/usr/bin/stat") ? "/usr/bin/stat" : "/bin/stat";
+
+    private static async Task<string> RunMetadataToolAsync(
+        string executable, string[] arguments, string source, CancellationToken cancellationToken)
+    {
+        var start = new ProcessStartInfo(executable)
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        var result = await ProcessCaptureRunner.RunAsync(start, TimeSpan.FromSeconds(10),
+            (process, token) => Task.WhenAll(process.StandardOutput.ReadToEndAsync(token), process.StandardError.ReadToEndAsync(token)),
+            () => [], NullLogger.Instance, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (result.FailureKind is not null || result.ExitCode != 0 ||
+            result.Capture.Length != 2 || !string.IsNullOrWhiteSpace(result.Capture[1]))
+        {
+            throw SettingsWriteRefused(source);
+        }
+
+        return result.Capture[0];
+    }
+
+    internal static void ValidateSymbolicLinkPolicy(string path, bool rejectSymbolicLinks)
+    {
+        if (rejectSymbolicLinks && new FileInfo(path).LinkTarget is not null)
+        {
+            throw SettingsWriteRefused(path);
+        }
+    }
+
+    private static IOException SettingsWriteRefused(string path)
+        => new(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.ConfigurationWriteRefused, path));
+
+    [LibraryImport("libc", EntryPoint = "getxattr", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    private static partial nint GetExtendedAttribute(
+        string path, string name, [Out, MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 3)] byte[]? value, nuint size);
+
+    [LibraryImport("libc", EntryPoint = "fsetxattr", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    private static partial int SetExtendedAttribute(
+        SafeFileHandle descriptor, string name, byte[] value, nuint size, int flags);
+
+    [LibraryImport("libc", EntryPoint = "fremovexattr", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    private static partial int RemoveExtendedAttribute(SafeFileHandle descriptor, string name);
+
+    [LibraryImport("libc", EntryPoint = "fchown", SetLastError = true)]
+    private static partial int ChangeOwner(SafeFileHandle descriptor, uint owner, uint group);
 
     /// <summary>
     /// Serializes a JsonObject and writes it to a settings file, creating the directory if needed.

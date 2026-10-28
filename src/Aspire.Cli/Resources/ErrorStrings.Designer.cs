@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class ErrorStrings {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal ErrorStrings() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,52 +59,7 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Git could not be started. Install Git and ensure it is on PATH..
-        /// </summary>
-        internal static string GitUnavailable {
-            get {
-                return ResourceManager.GetString("GitUnavailable", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled..
-        /// </summary>
-        internal static string GitAuthenticationFailed {
-            get {
-                return ResourceManager.GetString("GitAuthenticationFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The Git repository could not be accessed. Check its address, network connectivity, and your access permissions..
-        /// </summary>
-        internal static string GitRepositoryUnavailable {
-            get {
-                return ResourceManager.GetString("GitRepositoryUnavailable", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The Git command failed. Check the repository and selected reference..
-        /// </summary>
-        internal static string GitCommandFailed {
-            get {
-                return ResourceManager.GetString("GitCommandFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The Git operation timed out after two minutes..
-        /// </summary>
-        internal static string GitTimedOut {
-            get {
-                return ResourceManager.GetString("GitTimedOut", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Already connected to AppHost backchannel..
         /// </summary>
@@ -113,7 +68,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AlreadyConnectedToBackchannel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to AppHost is incompatible with the CLI. The AppHost must be updated to a version that supports the {0} capability..
         /// </summary>
@@ -122,7 +77,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppHostIncompatibleWithCli", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No buildable AppHosts were found, but there may have been unbuildable AppHosts..
         /// </summary>
@@ -131,7 +86,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppHostsMayNotBeBuildable", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to AppHost file was specified in &apos;{0}&apos; but it does not exist at &apos;{1}&apos;..
         /// </summary>
@@ -140,7 +95,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppHostWasSpecifiedButDoesntExist", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to AspireHostingVersion is null.
         /// </summary>
@@ -149,7 +104,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireHostingVersionNull", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The Aspire.Hosting package version {0} is not supported. Please update to the latest version..
         /// </summary>
@@ -158,7 +113,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireSDKVersionNotSupported", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Cannot use --watch and --no-build at the same time..
         /// </summary>
@@ -167,7 +122,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CantUseBothWatchAndNoBuild", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to generate HTTPS development certificate (result: {0})..
         /// </summary>
@@ -176,7 +131,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CertificateGenerationFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer certificates may not be fully trusted (trust exit code was: {0})..
         /// </summary>
@@ -185,7 +140,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CertificatesMayNotBeFullyTrusted", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer certificates are not trusted. Trust them interactively by running &apos;aspire certs trust&apos;..
         /// </summary>
@@ -194,7 +149,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CertificatesNotTrustedNonInteractive", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer certificates are only partially trusted. Trust them interactively by running &apos;aspire certs trust&apos;..
         /// </summary>
@@ -203,7 +158,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CertificatesPartiallyTrustedNonInteractive", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Diagnostic details:.
         /// </summary>
@@ -212,7 +167,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CodegenDebugHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Run with &apos;--debug&apos; for full diagnostic details..
         /// </summary>
@@ -221,7 +176,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CodegenDebugHint", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run &apos;aspire update&apos; to align the CLI and SDK and try again..
         /// </summary>
@@ -230,7 +185,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CodegenIncompatibleSdkSummary", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The installed Aspire CLI version ({0}) differs from the Aspire SDK version ({1}) used for code generation. If you run into errors, update the Aspire CLI to match or exceed the SDK version..
         /// </summary>
@@ -239,7 +194,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CodegenVersionSkewWarning", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to This command is not yet supported with single file AppHosts..
         /// </summary>
@@ -248,7 +203,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CommandNotSupportedWithSingleFileAppHost", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The configuration file &apos;{0}&apos; must contain a JSON object..
         /// </summary>
@@ -257,7 +212,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfigurationFileMustBeJsonObject", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Configuration key {0} not found..
         /// </summary>
@@ -266,7 +221,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfigurationKeyNotFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Configuration key is required..
         /// </summary>
@@ -275,7 +230,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfigurationKeyRequired", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Configuration value is required..
         /// </summary>
@@ -284,7 +239,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfigurationValueRequired", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The configured AppHost path in &apos;{0}&apos; (&apos;{1}&apos;) is empty or contains characters that are not allowed in a file path..
         /// </summary>
@@ -293,7 +248,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfiguredAppHostPathHasInvalidCharacters", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The configured AppHost path in &apos;{0}&apos; (&apos;{1}&apos;) must be a JSON string..
         /// </summary>
@@ -302,7 +257,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfiguredAppHostPathMustBeString", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not parse Aspire.Hosting package version..
         /// </summary>
@@ -311,7 +266,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CouldNotParseAspireSDKVersion", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results..
         /// </summary>
@@ -320,7 +275,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DotNetSdkUnavailableAppHostDiscoveryWarning", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Error deleting configuration: {0}.
         /// </summary>
@@ -329,7 +284,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ErrorDeletingConfiguration", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Error setting configuration: {0}.
         /// </summary>
@@ -338,7 +293,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ErrorSettingConfiguration", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Aspire Extension is incompatible with the CLI. The Extension must be updated to a version that supports the {0} capability..
         /// </summary>
@@ -347,7 +302,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ExtensionIncompatibleWithCli", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The Aspire extension token must be set if ASPIRE_EXTENSION_ENDPOINT is set. Please ensure that ASPIRE_EXTENSION_TOKEN is set.
         /// </summary>
@@ -356,7 +311,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ExtensionTokenMustBeSet", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to parse package search results..
         /// </summary>
@@ -365,7 +320,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FailedToParsePackageSearchResults", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to parse template version from stdout..
         /// </summary>
@@ -374,7 +329,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FailedToParseTemplateVersionFromStdout", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to retrieve all Aspire packages via cache..
         /// </summary>
@@ -383,7 +338,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FailedToRetrieveCachedAllAspirePackages", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to retrieve template packages via cache..
         /// </summary>
@@ -392,7 +347,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FailedToRetrieveCachedTemplatePackages", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to search for packages. Exit code: {0}..
         /// </summary>
@@ -401,7 +356,52 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FailedToSearchForPackages", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled..
+        /// </summary>
+        internal static string GitAuthenticationFailed {
+            get {
+                return ResourceManager.GetString("GitAuthenticationFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The Git command failed. Check the repository and selected reference..
+        /// </summary>
+        internal static string GitCommandFailed {
+            get {
+                return ResourceManager.GetString("GitCommandFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The Git repository could not be accessed. Check its address, network connectivity, and your access permissions..
+        /// </summary>
+        internal static string GitRepositoryUnavailable {
+            get {
+                return ResourceManager.GetString("GitRepositoryUnavailable", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The Git operation timed out after two minutes..
+        /// </summary>
+        internal static string GitTimedOut {
+            get {
+                return ResourceManager.GetString("GitTimedOut", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Git could not be started. Install Git and ensure it is on PATH..
+        /// </summary>
+        internal static string GitUnavailable {
+            get {
+                return ResourceManager.GetString("GitUnavailable", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to The AppHost path cannot be set in global settings. Use &apos;appHost.path&apos; in a local aspire.config.json file instead..
         /// </summary>
@@ -410,7 +410,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GlobalAppHostPathCannotBeSetWithConfigCommand", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Global settings file &apos;{0}&apos; contains &apos;{1}&apos;, which is not supported. AppHost paths must be configured locally..
         /// </summary>
@@ -419,16 +419,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GlobalAppHostPathIgnored", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Hosting integrations authored outside .NET are experimental and disabled by default. Run &apos;aspire config set features.experimentalHostingIntegrations true&apos; to enable them..
         /// </summary>
-        public static string HostingIntegrationsFeatureNotEnabled {
+        internal static string HostingIntegrationsFeatureNotEnabled {
             get {
                 return ResourceManager.GetString("HostingIntegrationsFeatureNotEnabled", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The integration project could not be built..
         /// </summary>
@@ -437,7 +437,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("IntegrationBuildFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The integration project could not be built because a referenced project requires a newer version of Aspire.Hosting than this Aspire CLI ({0}) provides. The AppHost server is the CLI itself, so project references in aspire.config.json must target the same version the CLI ships. Either use an Aspire CLI that matches the referenced projects, or reference published packages instead of local projects..
         /// </summary>
@@ -446,7 +446,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("IntegrationBuildPackageDowngradeFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The configuration file &apos;{0}&apos; contains invalid JSON: {1}.
         /// </summary>
@@ -455,7 +455,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidJsonInConfigFile", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Invalid locale {0} provided will not be used..
         /// </summary>
@@ -464,7 +464,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidLocaleProvided", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The provided extension socket path needs two valid parts..
         /// </summary>
@@ -473,7 +473,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidSocketPath", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The legacy AppHost path key &apos;appHostPath&apos; cannot be set with &apos;aspire config set&apos;. Use &apos;appHost.path&apos; in a local aspire.config.json file instead..
         /// </summary>
@@ -482,7 +482,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LegacyAppHostPathCannotBeSetWithConfigCommand", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to This project uses the legacy &apos;apphost.ts&apos; layout. Run &apos;aspire update --migrate&apos; to upgrade to the recommended &apos;apphost.mts&apos; format. The legacy layout continues to work — this is a non-blocking warning..
         /// </summary>
@@ -491,7 +491,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LegacyTypeScriptAppHostWarning", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to C# AppHost requires .NET SDK version {0} or later. Detected: {1}..
         /// </summary>
@@ -500,7 +500,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("MinimumSdkVersionNotMet", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Multiple project files found..
         /// </summary>
@@ -509,7 +509,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("MultipleProjectFilesFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No project file found..
         /// </summary>
@@ -518,7 +518,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoProjectFileFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Input was required for prompt &apos;{0}&apos; but not provided..
         /// </summary>
@@ -527,7 +527,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoSelectionMade", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The project could not be analyzed due to a build error. See logs at {0}.
         /// </summary>
@@ -536,7 +536,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ProjectCouldNotBeAnalyzed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Project file does not exist..
         /// </summary>
@@ -545,7 +545,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ProjectFileDoesntExist", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not build: {0}.
         /// </summary>
@@ -554,7 +554,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ProjectFileMayBeUnbuildableAppHost", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Project file is not an Aspire AppHost project..
         /// </summary>
@@ -563,7 +563,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ProjectFileNotAppHostProject", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Project files were created, but Aspire could not run &apos;{0}&apos; automatically because the required JavaScript tooling was not found on PATH. You may see missing package errors or red squiggles in your IDE until you install {1} and run &apos;{0}&apos; in the project directory..
         /// </summary>
@@ -572,7 +572,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ProjectFilesCreatedButNodeToolsNotFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Project is not supported in the current environment: {0}.
         /// </summary>
@@ -581,7 +581,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ProjectFileUnsupportedInCurrentEnvironment", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The project does not contain an Aspire AppHost..
         /// </summary>
@@ -590,7 +590,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ProjectIsNotAppHost", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to SDK API export cannot export {0} because that package supplies the selected language&apos;s code generator instead of an integration API surface..
         /// </summary>
@@ -599,7 +599,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SdkExportGeneratorPackageNotExportable", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to SDK API export is not supported for {0} because it does not use a code generator..
         /// </summary>
@@ -608,7 +608,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SdkExportLanguageDoesNotSupportCodeGeneration", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Single file AppHost feature is not enabled. To use .cs AppHost files, enable the feature using configuration..
         /// </summary>
@@ -617,7 +617,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SingleFileAppHostFeatureNotEnabled", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Unable to retrieve the assembly version..
         /// </summary>
@@ -626,7 +626,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UnableToRetrieveAssemblyVersion", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Unsupported locale {0} provided will not be used. Supported locales are: {1}..
         /// </summary>

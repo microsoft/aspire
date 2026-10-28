@@ -6,6 +6,8 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.ClaudeCode;
+using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -113,9 +115,10 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_fileBasedOption);
         Options.Add(ConfigSourceService.s_useSourceOption);
         Options.Add(NewCommand.s_suppressAgentInitOption);
-        Options.Add(AgentInitCommand.s_agentsOption);
+        Options.Add(_agentInitCommand.AgentsOption);
         Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
+        Options.Add(AgentInitCommand.s_aspireSourceOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -194,21 +197,20 @@ internal sealed class InitCommand : BaseCommand
         // MCP remains an explicit opt-in through standalone `aspire agent init`.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
-        // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
-        // (which includes aspireify as the natural follow-up wiring skill). This chained flow
-        // never registers `--mcp`, so MCP configuration is unavailable here by construction —
+        // aspire init creates an AppHost in an existing repo, so pre-select Aspire agent assets.
+        // This chained flow never registers `--mcp`, so MCP configuration is unavailable here by construction —
         // it remains reachable only through standalone `aspire agent init`.
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
             InteractionService,
             CliExitCodes.Success,
             workspaceRoot,
             agentInitBinding,
-            PromptBinding.Create(parseResult, AgentInitCommand.s_agentsOption),
-            PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption),
+            PromptBinding.Create(parseResult, _agentInitCommand.AgentsOption),
+            PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption, CommonAgentApplicators.AspireSkillName),
+            PromptBinding.Create(parseResult, AgentInitCommand.s_aspireSourceOption, AgentInitCommand.DefaultAspireSource),
             PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
             cancellationToken);
 
-        // Step 5: Print follow-up commands only when the user selected the one-time init skill.
         if (agentInitResult.ExitCode == CliExitCodes.Success &&
             agentInitResult.SelectedSkills.Any(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName)))
         {
@@ -250,16 +252,16 @@ internal sealed class InitCommand : BaseCommand
         }
     }
 
-    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<AgentClient> selectedClients)
+    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<IAgentClient> selectedClients)
     {
         var commands = new List<string>();
 
-        if (selectedClients.Contains(AgentClient.ClaudeCode))
+        if (selectedClients.Any(client => string.Equals(client.Id, ClaudeCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
         {
             commands.Add("claude \"run the aspireify skill\"");
         }
 
-        if (selectedClients.Contains(AgentClient.OpenCode))
+        if (selectedClients.Any(client => string.Equals(client.Id, OpenCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
         {
             commands.Add("opencode --prompt \"run the aspireify skill\"");
         }

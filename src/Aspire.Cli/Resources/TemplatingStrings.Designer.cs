@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class TemplatingStrings {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal TemplatingStrings() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to AppHost.
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireAppHost_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Empty AppHost.
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireAppHostSingleFile_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to AppHost and service defaults.
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireEmpty_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Empty (C# AppHost, dotnet template).
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireEmptyDotNetTemplate_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Starter App (Java AppHost/Express/React).
         /// </summary>
@@ -104,7 +104,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireJavaStarter_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Starter App (ASP.NET Core/React, C# AppHost).
         /// </summary>
@@ -113,7 +113,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireJsFrontendStarter_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to MSTest.
         /// </summary>
@@ -122,7 +122,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireMSTest_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to NUnit.
         /// </summary>
@@ -131,7 +131,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireNUnit_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Service defaults.
         /// </summary>
@@ -140,7 +140,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireServiceDefaults_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Starter App (ASP.NET Core/Blazor).
         /// </summary>
@@ -149,7 +149,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireStarter_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to xUnit.
         /// </summary>
@@ -158,7 +158,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireXUnit_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to At least one template factory must be provided..
         /// </summary>
@@ -167,7 +167,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AtLeastOneTemplateFactoryMustBeProvided", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Parameter &apos;{0}&apos; uses a NuGet-computed value in a prompting condition. Computed values are resolved after prompting and cannot control parameter conditions..
+        /// </summary>
+        internal static string ComputedTemplateParameterCondition {
+            get {
+                return ResourceManager.GetString("ComputedTemplateParameterCondition", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Create NuGet.config for selected channels?.
         /// </summary>
@@ -176,7 +185,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CreateNugetConfigConfirmation", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Creating new Aspire project....
         /// </summary>
@@ -185,7 +194,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CreatingNewProject", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The version of xUnit.net to use for the test project..
         /// </summary>
@@ -194,7 +203,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnterXUnitVersion_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Enter the xUnit.net version to use.
         /// </summary>
@@ -203,7 +212,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnterXUnitVersion_Prompt", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Getting templates....
         /// </summary>
@@ -212,7 +221,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GettingTemplates", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Integration tests.
         /// </summary>
@@ -221,88 +230,34 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("IntegrationTestsTemplate_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Could not load template host configuration '{0}': {1}.
+        ///   Looks up a localized string similar to Could not load template host configuration &apos;{0}&apos;: {1}.
         /// </summary>
         internal static string InvalidTemplateHostConfiguration {
             get {
                 return ResourceManager.GetString("InvalidTemplateHostConfiguration", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string..
+        ///   Looks up a localized string similar to Expected a JSON object. &apos;createNuGetConfig&apos; must be a Boolean, and &apos;symbolInfo&apos; must be an object. Symbol entries must be objects, &apos;isHidden&apos; must be true or false, and &apos;displayName&apos; must be a string..
         /// </summary>
         internal static string InvalidTemplateHostConfigurationFormat {
             get {
                 return ResourceManager.GetString("InvalidTemplateHostConfigurationFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Parameter '{0}' uses a NuGet-computed value in a prompting condition. Computed values are resolved after prompting and cannot control parameter conditions.
-        /// </summary>
-        internal static string ComputedTemplateParameterCondition {
-            get {
-                return ResourceManager.GetString("ComputedTemplateParameterCondition", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.
+        ///   Looks up a localized string similar to Computed value &apos;{0}&apos; must target a non-reserved string parameter and specify kind &apos;nugetPackageVersion&apos;, a valid &apos;packageId&apos; and &apos;versionRange&apos;, an optional Boolean &apos;allowPrerelease&apos;, and an optional output-relative &apos;workingDirectory&apos;..
         /// </summary>
         internal static string InvalidTemplateValueSource {
             get {
                 return ResourceManager.GetString("InvalidTemplateValueSource", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Could not query the effective NuGet sources for package '{0}' to compute parameter '{1}'. Check the NuGet configuration, connectivity, and credentials.
-        /// </summary>
-        internal static string TemplatePackageVersionLookupFailed {
-            get {
-                return ResourceManager.GetString("TemplatePackageVersionLookupFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No version of package '{0}' matches range '{1}' with allowPrerelease={2} in the effective NuGet sources for parameter '{3}'.
-        /// </summary>
-        internal static string TemplatePackageVersionNotFound {
-            get {
-                return ResourceManager.GetString("TemplatePackageVersionNotFound", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to A computed value changed the generated NuGet configuration. NuGet-computed values must not control configuration contents, locations, or whether configuration files are generated.
-        /// </summary>
-        internal static string TemplateNuGetConfigurationChanged {
-            get {
-                return ResourceManager.GetString("TemplateNuGetConfigurationChanged", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The computed value working directory '{0}' must name an existing directory within the generated output.
-        /// </summary>
-        internal static string TemplateValueSourceWorkingDirectoryInvalid {
-            get {
-                return ResourceManager.GetString("TemplateValueSourceWorkingDirectoryInvalid", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Templates with NuGet-computed values cannot generate symbolic links.
-        /// </summary>
-        internal static string TemplateStagingLinkNotSupported {
-            get {
-                return ResourceManager.GetString("TemplateStagingLinkNotSupported", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No.
         /// </summary>
@@ -311,7 +266,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("No", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No matching local Aspire.ProjectTemplates package was found for Aspire CLI version &apos;{0}&apos;. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version..
         /// </summary>
@@ -320,7 +275,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoMatchingLocalTemplatePackage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to None.
         /// </summary>
@@ -329,7 +284,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("None", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No template versions were found. Please check your internet connection or NuGet source configuration..
         /// </summary>
@@ -338,7 +293,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoTemplateVersionsFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Created NuGet.config for the selected package channel..
         /// </summary>
@@ -347,7 +302,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NuGetConfigCreatedConfirmationMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Created or updated NuGet.config in the project directory with required package sources..
         /// </summary>
@@ -356,7 +311,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NuGetConfigCreatedOrUpdatedConfirmationMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Updated NuGet.config with required package sources..
         /// </summary>
@@ -365,7 +320,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NuGetConfigUpdatedConfirmationMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The new project cannot be created because it would overwrite existing files in the output folder. Please remove or move the conflicting files, or choose a different location..
         /// </summary>
@@ -374,7 +329,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ProjectAlreadyExists", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Project created successfully in {0}..
         /// </summary>
@@ -383,7 +338,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ProjectCreatedSuccessfully", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Project creation failed with exit code {0}..
         /// </summary>
@@ -392,7 +347,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ProjectCreationFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Select a test framework.
         /// </summary>
@@ -401,7 +356,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PromptForTFM_Prompt", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Using {0} for testing..
         /// </summary>
@@ -410,7 +365,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PromptForTFM_UsingForTesting", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Configures whether to create a project for integration tests using MSTest, NUnit, or xUnit.net..
         /// </summary>
@@ -419,7 +374,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PromptForTFMOptions_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Do you want to create a test project?.
         /// </summary>
@@ -428,7 +383,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PromptForTFMOptions_Prompt", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Run &apos;aspire run&apos; to start your AppHost..
         /// </summary>
@@ -437,7 +392,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("RunAspireRun", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Run &apos;cd &quot;{0}&quot;&apos; and then &apos;aspire run&apos; to start your AppHost..
         /// </summary>
@@ -446,7 +401,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("RunCdThenAspireRun", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Searching for available project template versions....
         /// </summary>
@@ -455,7 +410,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SearchingForAvailableTemplateVersions", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Skip.
         /// </summary>
@@ -464,7 +419,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("Skip", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to [yellow]--source was used for the initial scaffold restore only and is not persisted. Later &apos;aspire restore&apos; / &apos;aspire add&apos; will use the channel feeds configured for this project.[/].
         /// </summary>
@@ -473,7 +428,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceOverrideNotPersistedWarning", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The template installation failed with exit code {0}..
         /// </summary>
@@ -482,7 +437,52 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateInstallationFailed", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to A computed value changed the generated NuGet configuration. NuGet-computed values must not control configuration contents, locations, or whether configuration files are generated..
+        /// </summary>
+        internal static string TemplateNuGetConfigurationChanged {
+            get {
+                return ResourceManager.GetString("TemplateNuGetConfigurationChanged", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Could not query the effective NuGet sources for package &apos;{0}&apos; to compute parameter &apos;{1}&apos;. Check the NuGet configuration, connectivity, and credentials..
+        /// </summary>
+        internal static string TemplatePackageVersionLookupFailed {
+            get {
+                return ResourceManager.GetString("TemplatePackageVersionLookupFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No version of package &apos;{0}&apos; matches range &apos;{1}&apos; with allowPrerelease={2} in the effective NuGet sources for parameter &apos;{3}&apos;..
+        /// </summary>
+        internal static string TemplatePackageVersionNotFound {
+            get {
+                return ResourceManager.GetString("TemplatePackageVersionNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Templates with NuGet-computed values cannot generate symbolic links..
+        /// </summary>
+        internal static string TemplateStagingLinkNotSupported {
+            get {
+                return ResourceManager.GetString("TemplateStagingLinkNotSupported", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The computed value working directory &apos;{0}&apos; must name an existing directory within the generated output..
+        /// </summary>
+        internal static string TemplateValueSourceWorkingDirectoryInvalid {
+            get {
+                return ResourceManager.GetString("TemplateValueSourceWorkingDirectoryInvalid", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Template version &apos;{0}&apos; was not found..
         /// </summary>
@@ -491,7 +491,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TemplateVersionNotFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Unknown.
         /// </summary>
@@ -500,7 +500,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("Unknown", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Update NuGet.config to add missing package sources for the selected channel?.
         /// </summary>
@@ -509,7 +509,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UpdateNuGetConfigConfirmation", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Configures whether to use *.dev.localhost URLs for local development..
         /// </summary>
@@ -518,7 +518,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UseLocalhostTld_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Use *.dev.localhost URLs.
         /// </summary>
@@ -527,7 +527,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UseLocalhostTld_Prompt", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Unexpected choice for *.dev.localhost option.
         /// </summary>
@@ -536,7 +536,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UseLocalhostTld_UnexpectedChoice", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Using *.dev.localhost URLs for local development..
         /// </summary>
@@ -545,7 +545,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UseLocalhostTld_UsingLocalhostTld", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Configures whether to setup the application to use Redis for caching..
         /// </summary>
@@ -554,7 +554,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UseRedisCache_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Use Redis Cache.
         /// </summary>
@@ -563,7 +563,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UseRedisCache_Prompt", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Unexpected choice for Redis Cache option.
         /// </summary>
@@ -572,7 +572,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UseRedisCache_UnexpectedChoice", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Using Redis Cache for caching..
         /// </summary>
@@ -581,7 +581,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UseRedisCache_UsingRedisCache", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Using project templates version: {0}.
         /// </summary>
@@ -590,7 +590,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UsingProjectTemplatesVersion", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Yes.
         /// </summary>

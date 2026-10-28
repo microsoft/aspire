@@ -13,46 +13,17 @@ namespace Aspire.Cli.Agents;
 /// </summary>
 internal static class McpConfigFileHelper
 {
-    public static async Task<(JsonObject Config, string Path)> ReadSelectedConfigAsync(
-        string configFilePath,
-        AgentClient client,
-        AgentConfigurationScope scope,
-        IEnvironment environment,
-        CancellationToken cancellationToken)
+    internal sealed record Configuration
     {
-        var config = await ReadConfigAsync(configFilePath, client.McpJsonDocumentOptions, cancellationToken);
-        if (client == AgentClient.OpenCode &&
-            Path.GetFileName(configFilePath) == "opencode.jsonc" &&
-            (scope is AgentConfigurationScope.Project ||
-                environment.GetEnvironmentVariable("OPENCODE_CONFIG") is not { Length: > 0 }))
+        public required string ServersPropertyName { get; init; }
+        public JsonDocumentOptions JsonDocumentOptions { get; init; }
+        public string? Schema { get; init; }
+        public JsonObject ServerConfiguration { get; init; } = new()
         {
-            var servers = GetServerContainer(config, client.McpServersPropertyName, configFilePath);
-            // Remote servers use their URL instead of an inherited local command.
-            if (servers is not null &&
-                servers.TryGetPropertyValue("aspire", out var server) &&
-                (server is not JsonObject aspire ||
-                    aspire.ContainsKey("command") ||
-                    (aspire["type"] is JsonValue type &&
-                        type.TryGetValue<string>(out var connectionType) &&
-                        connectionType == "remote")))
-            {
-                return (config, configFilePath);
-            }
-
-            // OpenCode merges JSON before JSONC, so JSONC {"mcp":{"aspire":{"enabled":true}}}
-            // inherits its command from opencode.json. Repair the command in its owning file
-            // without shadowing pins or rewriting the higher-precedence settings.
-            // Explicit OPENCODE_CONFIG files do not use sibling discovery.
-            // https://opencode.ai/docs/config/#locations
-            var jsonPath = Path.ChangeExtension(configFilePath, ".json");
-            var jsonConfig = await ReadConfigAsync(jsonPath, client.McpJsonDocumentOptions, cancellationToken);
-            if (GetServerContainer(jsonConfig, client.McpServersPropertyName, jsonPath)?.ContainsKey("aspire") is true)
-            {
-                return (jsonConfig, jsonPath);
-            }
-        }
-
-        return (config, configFilePath);
+            ["command"] = "aspire",
+            ["args"] = new JsonArray("agent", "mcp")
+        };
+        public JsonObject? GlobalServerConfiguration { get; init; }
     }
 
     /// <summary>
@@ -60,25 +31,30 @@ internal static class McpConfigFileHelper
     /// </summary>
     /// <param name="configFilePath">The path to the MCP configuration file.</param>
     /// <param name="documentOptions">The JSON parsing options for this configuration format.</param>
+    /// <param name="edit">Owns configuration inputs and publication for this update.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>The parsed <see cref="JsonObject"/> from the file, or a new empty <see cref="JsonObject"/> if the file doesn't exist.</returns>
     /// <exception cref="InvalidOperationException">
     /// Thrown when the file contains malformed JSON or its root is not an object.
     /// Malformed JSON exceptions wrap the underlying <see cref="JsonException"/>.
     /// </exception>
-    private static async Task<JsonObject> ReadConfigAsync(string configFilePath, JsonDocumentOptions documentOptions, CancellationToken cancellationToken)
+    public static async Task<JsonObject> ReadConfigAsync(
+        string configFilePath, JsonDocumentOptions documentOptions,
+        AgentConfiguration edit, CancellationToken cancellationToken)
     {
-        if (!File.Exists(configFilePath))
+        var content = await edit.ReadBytesForEditAsync(configFilePath, cancellationToken);
+        if (content is null)
         {
             return new JsonObject();
         }
-
-        var content = await File.ReadAllTextAsync(configFilePath, cancellationToken);
+        // Keep MCP's existing BOM/encoding detection and per-client JSON parsing rules.
+        using var reader = new StreamReader(new MemoryStream(content));
+        var text = await reader.ReadToEndAsync(cancellationToken);
 
         JsonNode? root;
         try
         {
-            root = JsonNode.Parse(content, documentOptions: documentOptions);
+            root = JsonNode.Parse(text, documentOptions: documentOptions);
         }
         catch (JsonException ex)
         {
@@ -93,17 +69,17 @@ internal static class McpConfigFileHelper
 
     public static bool ConfigureMcpServer(
         JsonObject config,
-        AgentClient client,
+        Configuration configuration,
         AgentConfigurationScope scope,
         string configFilePath)
     {
-        var servers = GetServerContainer(config, client.McpServersPropertyName, configFilePath);
+        var servers = GetServerContainer(config, configuration.ServersPropertyName, configFilePath);
         if (servers?.ContainsKey("aspire") is true)
         {
             return false;
         }
 
-        if (client.McpSchema is { } schema && !config.ContainsKey("$schema"))
+        if (configuration.Schema is { } schema && !config.ContainsKey("$schema"))
         {
             config["$schema"] = schema;
         }
@@ -111,19 +87,19 @@ internal static class McpConfigFileHelper
         if (servers is null)
         {
             servers = new JsonObject();
-            config[client.McpServersPropertyName] = servers;
+            config[configuration.ServersPropertyName] = servers;
         }
 
         var serverConfiguration = scope is AgentConfigurationScope.Global
-            ? client.GlobalMcpServerConfiguration ?? client.McpServerConfiguration
-            : client.McpServerConfiguration;
+            ? configuration.GlobalServerConfiguration ?? configuration.ServerConfiguration
+            : configuration.ServerConfiguration;
         // JsonNodes have single-parent ownership; each destination needs its own copy.
         servers["aspire"] = serverConfiguration.DeepClone();
 
         return true;
     }
 
-    private static JsonObject? GetServerContainer(JsonObject config, string serverContainerKey, string configFilePath)
+    public static JsonObject? GetServerContainer(JsonObject config, string serverContainerKey, string configFilePath)
     {
         var serverContainer = config[serverContainerKey];
         if (serverContainer is not null && serverContainer is not JsonObject)
