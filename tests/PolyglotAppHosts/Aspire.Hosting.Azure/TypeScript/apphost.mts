@@ -158,6 +158,12 @@ await createdEntra.withOwners(ownerId);
 await createdEntra.withApplicationOwners(ownerId);
 await createdEntra.withServicePrincipalOwners(exampleClient);
 await createdEntra.withIdTokenIssuance();
+await createdEntra.withAppRole("User", "User", "Can use the API.");
+await createdEntra.withAppRole("Admin", "Administrator", "Can administer the API.", {
+    allowedMemberTypes: ["User", "Application"],
+    id: "11112222-aaaa-3333-bbbb-4444cccc5555",
+    isEnabled: false,
+});
 await createdEntra.withRedirectUris("https://localhost/signin");
 await createdEntra.withRedirectUris(redirectUris);
 await createdEntra.withRedirectUris(redirectHost, { callbackPaths: ["/signin", "/signout"] });

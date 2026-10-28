@@ -224,6 +224,46 @@ public static partial class EntraIdResourceExtensions
     }
 
     /// <summary>
+    /// Declares an application role on a registration created by Aspire.
+    /// </summary>
+    /// <param name="builder">The registration builder.</param>
+    /// <param name="value">The value emitted in the roles claim, for example Admin. It must be unique for the application, at most 120 characters, must not start with a period, and may contain only ASCII letters, digits and the punctuation that Microsoft Graph allows.</param>
+    /// <param name="displayName">The display name shown in the Microsoft Entra admin center.</param>
+    /// <param name="description">The description shown in assignment and consent experiences.</param>
+    /// <param name="allowedMemberTypes">The member types the role can be assigned to, passed through to Microsoft Graph (for example User or Application). Defaults to User.</param>
+    /// <param name="id">An optional role GUID. When omitted, a stable ID is derived from the registration's resource name and value.</param>
+    /// <param name="isEnabled">Whether the role is enabled. Defaults to true. To retire a role, deploy it with false and leave it declared; disabling is not access revocation because existing assignments still receive the role in tokens.</param>
+    /// <returns>The registration builder.</returns>
+    /// <remarks>
+    /// Application roles are separate from delegated scopes and from Azure RBAC roles. This only declares the role; it does not assign it or grant consent.
+    /// Role IDs stay the same across deployments, and changing a role's value or ID creates a different role. Whenever at least one role is declared,
+    /// the complete appRoles collection is sent, so include every role to keep. Microsoft Graph rejects deleting an enabled role.
+    /// Existing registrations are never modified, so this throws for registrations created with addExistingEntraApplication.
+    /// </remarks>
+    [AspireExport("withAppRole")]
+    internal static IResourceBuilder<EntraIdApplicationResource> WithAppRoleForExport(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        string value,
+        string displayName,
+        string description,
+        string[]? allowedMemberTypes = null,
+        string? id = null,
+        bool? isEnabled = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        Guid? roleId = null;
+        if (id is not null)
+        {
+            roleId = Guid.TryParse(id, out var parsed)
+                ? parsed
+                : throw new ArgumentException($"'{id}' is not a valid role ID. Role IDs must be GUIDs.", nameof(id));
+        }
+
+        return builder.WithAppRole(new EntraIdAppRole(value, displayName, description, allowedMemberTypes, roleId, isEnabled ?? true));
+    }
+
+    /// <summary>
     /// Appends a certificate file credential. The file path is on the consuming resource, not the AppHost.
     /// </summary>
     /// <param name="builder">The registration builder.</param>

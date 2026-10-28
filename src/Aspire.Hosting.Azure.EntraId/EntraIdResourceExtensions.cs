@@ -1433,6 +1433,7 @@ public static partial class EntraIdResourceExtensions
     ///     .WithAppRole(new EntraIdAppRole("Admin", "Administrator", "Can administer the API.", ["User", "Application"]));
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "EntraIdAppRole is a C# type with a constructor. The withAppRole export takes its values as arguments.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithAppRole(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         EntraIdAppRole role)

@@ -41,6 +41,7 @@ export interface EntraIdApplicationResource extends ResourceBuilderBase {
     withOwners(ownerObjectId: string | ParameterResource | Awaitable<ParameterResource>): EntraIdApplicationResourcePromise;
     withFederatedManagedIdentityCredential(managedIdentityClientId: string, options?: EntraIdTokenExchangeOptions): EntraIdApplicationResourcePromise;
     publishWithFederatedManagedIdentityCredential(options?: PublishWithFederatedManagedIdentityCredentialOptions): EntraIdApplicationResourcePromise;
+    withAppRole(value: string, displayName: string, description: string, options?: WithAppRoleOptions): EntraIdApplicationResourcePromise;
     withCertificateFromFile(filePath: string, options?: WithCertificateFromFileOptions): EntraIdApplicationResourcePromise;
     withSignedAssertionFile(options?: WithSignedAssertionFileOptions): EntraIdApplicationResourcePromise;
 }
@@ -65,12 +66,19 @@ export interface EntraIdApplicationResourcePromise extends PromiseLike<EntraIdAp
     withOwners(ownerObjectId: string | ParameterResource | Awaitable<ParameterResource>): EntraIdApplicationResourcePromise;
     withFederatedManagedIdentityCredential(managedIdentityClientId: string, options?: EntraIdTokenExchangeOptions): EntraIdApplicationResourcePromise;
     publishWithFederatedManagedIdentityCredential(options?: PublishWithFederatedManagedIdentityCredentialOptions): EntraIdApplicationResourcePromise;
+    withAppRole(value: string, displayName: string, description: string, options?: WithAppRoleOptions): EntraIdApplicationResourcePromise;
     withCertificateFromFile(filePath: string, options?: WithCertificateFromFileOptions): EntraIdApplicationResourcePromise;
     withSignedAssertionFile(options?: WithSignedAssertionFileOptions): EntraIdApplicationResourcePromise;
 }
 
 export interface PublishWithFederatedManagedIdentityCredentialOptions {
     identity?: CSharpAppResource | ComputeResource | ContainerResource | DotnetToolResource | ExecutableResource | ProjectResource | AzureUserAssignedIdentityResource | Awaitable<CSharpAppResource | ComputeResource | ContainerResource | DotnetToolResource | ExecutableResource | ProjectResource | AzureUserAssignedIdentityResource>;
+}
+
+export interface WithAppRoleOptions {
+    allowedMemberTypes?: string[];
+    id?: string;
+    isEnabled?: boolean | null;
 }
 
 export interface WithCertificateFromFileOptions {

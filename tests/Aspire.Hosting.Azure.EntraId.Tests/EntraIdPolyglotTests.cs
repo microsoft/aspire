@@ -211,6 +211,35 @@ public class EntraIdPolyglotTests
     }
 
     [Fact]
+    public void AppRoles_ExportMatchesCSharpDeclarationAndValidatesInputs()
+    {
+        var roleId = new Guid("11112222-aaaa-3333-bbbb-4444cccc5555");
+        using var exported = TestDistributedApplicationBuilder.Create();
+        var exportedEntra = exported.AddEntraIdApplication("entra-api")
+            .WithAppRoleForExport("User", "User", "Can use the API.")
+            .WithAppRoleForExport("Admin", "Administrator", "Can administer the API.", ["User", "Application"])
+            .WithAppRoleForExport("Reader", "Reader", "Can read data.", ["Application"], roleId.ToString())
+            .WithAppRoleForExport("Retired", "Retired", "Being removed.", isEnabled: false);
+
+        using var native = TestDistributedApplicationBuilder.Create();
+        var nativeEntra = native.AddEntraIdApplication("entra-api")
+            .WithAppRole(new EntraIdAppRole("User", "User", "Can use the API."))
+            .WithAppRole(new EntraIdAppRole("Admin", "Administrator", "Can administer the API.", ["User", "Application"]))
+            .WithAppRole(new EntraIdAppRole("Reader", "Reader", "Can read data.", ["Application"], roleId))
+            .WithAppRole(new EntraIdAppRole("Retired", "Retired", "Being removed.", isEnabled: false));
+
+        Assert.Equal(nativeEntra.Resource.GetBicepTemplateString(), exportedEntra.Resource.GetBicepTemplateString());
+
+        Assert.Throws<ArgumentException>(() => exportedEntra.WithAppRoleForExport("Other", "Other", "Other role.", id: "not-a-guid"));
+        Assert.Throws<ArgumentException>(() => exportedEntra.WithAppRoleForExport("User", "Duplicate", "Duplicate value."));
+        Assert.Throws<ArgumentException>(() => exportedEntra.WithAppRoleForExport("Other", "Other", "Other role.", []));
+        Assert.Equal(4, exportedEntra.Resource.AppRoles.Count);
+
+        var existing = exported.AddExistingEntraApplicationForExport("existing", TenantId, ClientId);
+        Assert.Throws<InvalidOperationException>(() => existing.WithAppRoleForExport("Admin", "Admin", "Admin role."));
+    }
+
+    [Fact]
     public void RedirectsAndOwners_RejectInvalidUnionInputs()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
