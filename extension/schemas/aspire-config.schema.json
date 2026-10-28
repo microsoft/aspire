@@ -59,7 +59,7 @@
           "type": "object",
           "properties": {
             "sitemapUrl": {
-              "description": "Optional override for the API sitemap consumed by aspire docs api. Defaults to https://aspire.dev/sitemap-0.xml.",
+              "description": "Optional override for the API sitemap consumed by aspire docs api. Defaults to https://aspire.dev/sitemap-index.xml.",
               "type": "string"
             }
           },

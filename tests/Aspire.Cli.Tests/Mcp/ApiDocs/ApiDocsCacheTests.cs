@@ -13,7 +13,7 @@ namespace Aspire.Cli.Tests.Documentation.ApiDocs;
 
 public class ApiDocsCacheTests(ITestOutputHelper outputHelper)
 {
-    private const string DefaultSitemapUrl = "https://aspire.dev/sitemap-0.xml";
+    private const string DefaultSitemapUrl = "https://aspire.dev/sitemap-index.xml";
     private const string DefaultPageUrl = "https://aspire.dev/reference/api/csharp/aspire.test.package/testtype/methods";
 
     [Fact]
@@ -37,8 +37,8 @@ public class ApiDocsCacheTests(ITestOutputHelper outputHelper)
         _ = await fetcher.FetchSitemapAsync().DefaultTimeout();
 
         var cacheFiles = GetCacheFiles(workspace, "api-docs");
-        Assert.Contains("sitemap-0.txt", cacheFiles);
-        Assert.Contains("sitemap-0.etag.txt", cacheFiles);
+        Assert.Contains("sitemap-index.txt", cacheFiles);
+        Assert.Contains("sitemap-index.etag.txt", cacheFiles);
         Assert.DoesNotContain(cacheFiles, static file => file.StartsWith("https___aspire.dev_", StringComparison.Ordinal));
     }
 
@@ -99,8 +99,8 @@ public class ApiDocsCacheTests(ITestOutputHelper outputHelper)
         Assert.Equal("fingerprint", fingerprint);
 
         var cacheFiles = GetCacheFiles(workspace, "api-docs");
-        Assert.Contains("index_sitemap-0.json", cacheFiles);
-        Assert.Contains("index_sitemap-0_fingerprint.txt", cacheFiles);
+        Assert.Contains("index_sitemap-index.json", cacheFiles);
+        Assert.Contains("index_sitemap-index_fingerprint.txt", cacheFiles);
     }
 
     private static ApiDocsCache CreateCache(TemporaryWorkspace workspace, IMemoryCache memoryCache, IConfiguration configuration)
