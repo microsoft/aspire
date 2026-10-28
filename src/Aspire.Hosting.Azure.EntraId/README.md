@@ -384,6 +384,8 @@ repeatedly for multiple values:
 ```typescript
 import { EntraIdSignInAudience } from './.aspire/modules/aspire.mjs';
 
+// Assumes `entraWeb`, a registration created by Aspire with `addEntraIdApplication`, and `entraApi`,
+// an existing registration created with `addExistingEntraApplication`, as in the examples above.
 const ownerId = await builder.addParameter("entra-owner");
 const redirectUris = await builder.addParameter("redirect-uris");
 const redirectHost = await builder.addParameter("redirect-host");
