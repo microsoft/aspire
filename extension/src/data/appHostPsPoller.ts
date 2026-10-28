@@ -7,8 +7,7 @@ import { errorFetchingAppHosts, errorStoppingAppHostWatcher } from '../loc/strin
 import { AppHostCliRunner, LimitedOutputBuffer, oneShotOutputBufferLimit } from './appHostCliRunner';
 import { windowCliPathTarget } from '../utils/cliPathVariables';
 import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
-import { ConfigInfoProvider } from '../utils/configInfoProvider';
-import { EnvVar } from '../dcp/types';
+import { getBackgroundCliEnvironment } from '../utils/environment';
 
 export interface PsOutput {
     readonly stdout: string;
@@ -50,7 +49,6 @@ export class AppHostPsPoller implements vscode.Disposable {
     private _pollingInterval: ReturnType<typeof setInterval> | undefined;
     private readonly _psProcesses = new Set<ChildProcessWithoutNullStreams>();
     private readonly _psProcessTerminations = new Map<ChildProcessWithoutNullStreams, PsProcessTermination>();
-    private readonly _backgroundLogEnvironments = new Map<string, Promise<EnvVar[]>>();
     private _pollingRequested = false;
     private _disposed = false;
     private _shutdownPromise: Promise<void> | undefined;
@@ -71,7 +69,6 @@ export class AppHostPsPoller implements vscode.Disposable {
     constructor(
         private readonly _terminalProvider: AspireTerminalProvider,
         private readonly _cliRunner: AppHostCliRunner,
-        private readonly _configInfoProvider: ConfigInfoProvider,
         private readonly _isDataActive: () => boolean,
         private readonly _clearPostStopRefreshTimers: () => void) {
     }
@@ -132,12 +129,14 @@ export class AppHostPsPoller implements vscode.Disposable {
             clearInterval(this._pollingInterval);
         }
 
-        const intervalMs = this.getPollingIntervalMs();
+        // The long-lived stream is the fast path, but an AppHost can start while the CLI is
+        // transitioning from its initial scan to the follow subscription. Periodic authoritative
+        // snapshots close that missed-delta window without restarting the stream.
         this._pollingInterval = setInterval(() => {
             if (!this._disposed) {
                 this.refreshAppHostsFromAuthoritativeSnapshot();
             }
-        }, intervalMs);
+        }, this.getPollingIntervalMs());
     }
 
     private _startPsIntervalPolling(fetchImmediately = true): void {
@@ -163,7 +162,6 @@ export class AppHostPsPoller implements vscode.Disposable {
         this._pollingRequested = false;
         this._psPollingGeneration++;
         this._psFetchVersion++;
-        this._backgroundLogEnvironments.clear();
         this._fetchInProgress = false;
         this._authoritativeSnapshotInProgress = false;
         this._authoritativeSnapshotPending = false;
@@ -272,10 +270,6 @@ export class AppHostPsPoller implements vscode.Disposable {
             return;
         }
         reportCliResolvedForOperation(windowCliPathTarget, cliPath);
-        const logEnvironment = await this._getBackgroundLogEnvironment(cliPath);
-        if (!this._isCurrentPsFetch(fetchVersion)) {
-            return;
-        }
 
         let psProcess: ChildProcessWithoutNullStreams | undefined;
         let psProcessCompletedSynchronously = false;
@@ -297,7 +291,7 @@ export class AppHostPsPoller implements vscode.Disposable {
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
             createProcessGroup: true,
             noExtensionVariables: true,
-            env: logEnvironment,
+            env: getBackgroundCliEnvironment(),
             stdoutCallback: (data) => {
                 psFollowStdout.append(data);
             },
@@ -330,7 +324,7 @@ export class AppHostPsPoller implements vscode.Disposable {
                     }
 
                     this._supportsPsFollow = false;
-                    extensionLogOutputChannel.info('aspire ps --follow failed, falling back to aspire ps polling');
+                    extensionLogOutputChannel.warn(`aspire ps --follow failed (exit code ${code}): ${psFollowStderr.value.trim()}`);
                     this._startPsIntervalPolling();
                     return;
                 }
@@ -524,19 +518,6 @@ export class AppHostPsPoller implements vscode.Disposable {
         return !this._disposed && this._isDataActive() && fetchVersion === this._psFetchVersion;
     }
 
-    private _getBackgroundLogEnvironment(cliPath: string): Promise<EnvVar[]> {
-        let environment = this._backgroundLogEnvironments.get(cliPath);
-        if (!environment) {
-            // A failed capability probe must not become an extra process/log on every poll.
-            // Retry it when monitoring resumes or resolves a different CLI.
-            environment = this._configInfoProvider.getConfigInfo({ suppressErrors: true, cliPath, target: windowCliPathTarget })
-                .then(info => this._cliRunner.getBackgroundLogEnvironment(info, undefined));
-            this._backgroundLogEnvironments.set(cliPath, environment);
-        }
-
-        return environment;
-    }
-
     private async _runPsCommand(args: string[], callback: (code: number, stdout: string, stderr: string) => void, options?: { fetchVersion?: number; force?: boolean; isCurrent?: () => boolean; onFirstStdout?: () => void; onAttemptRestart?: () => void }): Promise<void> {
         const fetchVersion = options?.fetchVersion;
         const force = options?.force === true;
@@ -572,14 +553,10 @@ export class AppHostPsPoller implements vscode.Disposable {
             return;
         }
         reportCliResolvedForOperation(windowCliPathTarget, cliPath);
-        const logEnvironment = await this._getBackgroundLogEnvironment(cliPath);
-        if (!isCurrentPsCommand()) {
-            return;
-        }
         const invocationArgs = this._cliRunner.normalizeNoLogoArgs(cliPath, args);
 
         let stdout = '';
-        let stderr = '';
+        const stderr = new LimitedOutputBuffer(AppHostPsPoller._oneShotOutputBufferLimit);
         let callbackInvoked = false;
 
         let psProcess: ChildProcessWithoutNullStreams | undefined;
@@ -597,7 +574,7 @@ export class AppHostPsPoller implements vscode.Disposable {
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, invocationArgs, {
             createProcessGroup: true,
             noExtensionVariables: true,
-            env: logEnvironment,
+            env: getBackgroundCliEnvironment(),
             stdoutCallback: (data) => {
                 if (stdout.length === 0 && data.length > 0) {
                     options?.onFirstStdout?.();
@@ -605,12 +582,12 @@ export class AppHostPsPoller implements vscode.Disposable {
 
                 stdout += data;
             },
-            stderrCallback: (data) => { stderr += data; },
+            stderrCallback: (data) => { stderr.append(data); },
             exitCallback: (code) => {
                 removePsProcess();
                 if (!callbackInvoked) {
                     if ((code ?? 1) !== 0) {
-                        const retryArgs = this._cliRunner.tryGetNoLogoRetryArgs(cliPath, invocationArgs, stdout, stderr, 'aspire ps');
+                        const retryArgs = this._cliRunner.tryGetNoLogoRetryArgs(cliPath, invocationArgs, stdout, stderr.value, 'aspire ps');
                         if (retryArgs) {
                             // A rejected --nologo can report itself on stdout, which already fired
                             // onFirstStdout for an attempt that produced no snapshot. Let the caller
@@ -623,7 +600,7 @@ export class AppHostPsPoller implements vscode.Disposable {
 
                     callbackInvoked = true;
                     if (isCurrentPsCommand()) {
-                        callback(code ?? 1, stdout, stderr);
+                        callback(code ?? 1, stdout, stderr.value);
                     }
                 }
             },
@@ -638,7 +615,7 @@ export class AppHostPsPoller implements vscode.Disposable {
                 if (!callbackInvoked) {
                     callbackInvoked = true;
                     if (isCurrentPsCommand()) {
-                        callback(1, stdout, stderr || error.message);
+                        callback(1, stdout, stderr.value || error.message);
                     }
                 }
             }

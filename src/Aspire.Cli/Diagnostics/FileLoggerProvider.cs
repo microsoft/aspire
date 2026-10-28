@@ -22,10 +22,9 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     private const int MaxQueuedMessages = 1024;
 
     private readonly string _logFilePath;
-    private readonly TextWriter? _writer;
+    private readonly StreamWriter? _writer;
     private readonly Channel<string>? _channel;
     private readonly Task? _writerTask;
-    private readonly bool _sharedLogFile;
     private bool _disposed;
 
     private FileLoggerProvider(string logFilePath)
@@ -33,7 +32,7 @@ internal sealed class FileLoggerProvider : ILoggerProvider
         _logFilePath = logFilePath;
     }
 
-    // Completion builds the command model but must not create a log file for every Tab press.
+    // Completion and background probes can use the normal logging pipeline without creating files.
     internal static FileLoggerProvider CreateDisabled(string logFilePath) => new(logFilePath);
 
     /// <summary>
@@ -56,19 +55,6 @@ internal sealed class FileLoggerProvider : ILoggerProvider
             : $"cli_{timestamp}_{id}_{suffix}.log";
         return Path.Combine(logsDirectory, name);
     }
-
-    internal static string GetSharedLogFilePath(string logsDirectory, string name)
-    {
-        if (name.Length is 0 or > 128 || name.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('_' or '-')))
-        {
-            throw new ArgumentException("A shared diagnostic log name must contain 1-128 ASCII letters, digits, underscores, or hyphens.", nameof(name));
-        }
-
-        return Path.Combine(logsDirectory, $"cli_{name}.log");
-    }
-
-    internal static FileLoggerProvider CreateShared(string logFilePath, string logsDirectory, IStartupErrorWriter errorWriter) =>
-        new(logFilePath, logsDirectory, errorWriter, sharedLogFile: true);
 
     /// <summary>
     /// Creates a new FileLoggerProvider that writes to the specified directory.
@@ -95,14 +81,8 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     /// Creates a file logger and repairs permissions when its parent is the dedicated logs directory.
     /// </summary>
     internal FileLoggerProvider(string logFilePath, string? logsDirectory, IStartupErrorWriter errorWriter)
-        : this(logFilePath, logsDirectory, errorWriter, sharedLogFile: false)
-    {
-    }
-
-    private FileLoggerProvider(string logFilePath, string? logsDirectory, IStartupErrorWriter errorWriter, bool sharedLogFile)
     {
         _logFilePath = logFilePath;
-        _sharedLogFile = sharedLogFile;
 
         try
         {
@@ -125,14 +105,12 @@ internal sealed class FileLoggerProvider : ILoggerProvider
                 }
             }
 
-            _writer = sharedLogFile
-                ? new RollingLogFile(logFilePath, RollingLogFile.FileSizeLimit)
-                : CreateWriter(logFilePath);
+            _writer = CreateWriter(logFilePath);
 
             _channel = CreateChannel();
-            _writerTask = Task.Run(() => ProcessLogQueueAsync(errorWriter));
+            _writerTask = Task.Run(ProcessLogQueueAsync);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or TimeoutException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             WriteWarning(errorWriter, logFilePath, ex.Message);
             _writer = null;
@@ -190,7 +168,7 @@ internal sealed class FileLoggerProvider : ILoggerProvider
         errorWriter.WriteMarkup($"Could not create log file at [blue]{path.EscapeMarkup()}[/]: {message.EscapeMarkup()}", KnownEmojis.Warning);
     }
 
-    private async Task ProcessLogQueueAsync(IStartupErrorWriter errorWriter)
+    private async Task ProcessLogQueueAsync()
     {
         if (_channel is null || _writer is null)
         {
@@ -211,13 +189,6 @@ internal sealed class FileLoggerProvider : ILoggerProvider
         catch (ObjectDisposedException)
         {
             // Writer was disposed while writing - expected during shutdown
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or TimeoutException)
-        {
-            // Unblock producers as well as surfacing the failure. A stopped reader must not
-            // leave command execution waiting forever for space in the bounded log queue.
-            _channel.Writer.TryComplete();
-            WriteWarning(errorWriter, _logFilePath, ex.Message);
         }
     }
 
@@ -269,11 +240,10 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     {
         var ts = timestamp.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
         var lvl = GetLogLevelString(level);
-        var process = _sharedLogFile ? $"[PID:{Environment.ProcessId}] " : string.Empty;
 
         var logMessage = exception is not null
-            ? $"[{ts}] [{lvl}] [{category}] {process}{message}{Environment.NewLine}{exception}"
-            : $"[{ts}] [{lvl}] [{category}] {process}{message}";
+            ? $"[{ts}] [{lvl}] [{category}] {message}{Environment.NewLine}{exception}"
+            : $"[{ts}] [{lvl}] [{category}] {message}";
 
         WriteLog(logMessage);
     }

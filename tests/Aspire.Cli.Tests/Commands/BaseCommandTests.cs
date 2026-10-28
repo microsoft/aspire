@@ -225,30 +225,41 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectNotifyCalled, testNotifier.NotifyWasCalled);
     }
 
-    [Fact]
-    public async Task BaseCommand_OnFailure_DisplaysLogFilePathOnStderr()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BaseCommand_OnFailure_HonorsFileLoggingPolicy(bool fileLoggingEnabled)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
-        var projectLocator = new TestProjectLocator
+        var backchannelMonitor = new TestAuxiliaryBackchannelMonitor
         {
-            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
-                Task.FromResult(new AppHostProjectSearchResult(null, []))
+            ScanAsyncCallback = _ => throw new InvalidOperationException("Something went wrong")
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => testInteractionService;
-            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AuxiliaryBackchannelMonitorFactory = _ => backchannelMonitor;
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(fileLoggingEnabled: fileLoggingEnabled);
         });
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run");
+        var result = command.Parse("ps");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.NotEqual(CliExitCodes.Success, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, "Something went wrong"),
+            Assert.Single(testInteractionService.DisplayedErrors));
+
+        if (!fileLoggingEnabled)
+        {
+            Assert.Empty(testInteractionService.DisplayedMessages);
+            return;
+        }
 
         var executionContext = provider.GetRequiredService<CliExecutionContext>();
         var expectedLogMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, executionContext.LogFilePath);
@@ -298,8 +309,10 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ConsoleOutput.Error, appHostLogMessage.ConsoleOverride);
     }
 
-    [Fact]
-    public async Task BaseCommand_OnFailure_WithMessageActions_CombinesErrorAndDiagnosticLogs()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BaseCommand_OnFailure_WithMessageActions_HonorsFileLoggingPolicy(bool fileLoggingEnabled)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cliLogPath = Path.Combine(workspace.WorkspaceRoot.FullName, "current-cli.log");
@@ -324,7 +337,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
             options.AuxiliaryBackchannelMonitorFactory = _ => backchannelMonitor;
             options.CliExecutionContextFactory = _ =>
             {
-                var context = workspace.CreateExecutionContext(logFilePath: cliLogPath);
+                var context = workspace.CreateExecutionContext(logFilePath: cliLogPath, fileLoggingEnabled: fileLoggingEnabled);
                 context.AppHostCliLogFilePath = appHostLogPath;
                 return context;
             };
@@ -337,6 +350,17 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        if (!fileLoggingEnabled)
+        {
+            Assert.Null(capturedFailure);
+            Assert.Single(interactionService.DisplayedErrors);
+            var message = Assert.Single(interactionService.DisplayedMessages);
+            Assert.Equal(
+                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeAppHostLogsAt, appHostLogPath),
+                message.Message);
+            return;
+        }
+
         Assert.NotNull(capturedFailure);
         Assert.Contains("Something went wrong", capturedFailure.Value.ErrorMessage);
         Assert.Equal(cliLogPath, capturedFailure.Value.CliLogPath);

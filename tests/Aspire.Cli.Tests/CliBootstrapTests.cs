@@ -372,6 +372,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
             consoleLogLevel: null,
             logsDirectory: logsDirectory,
             logFilePath: logFilePath,
+            fileLoggingEnabled: true,
             identityResolver: resolver,
             processPath: binaryPath);
 
@@ -406,14 +407,17 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
             consoleLogLevel: null,
             logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
             logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "aspire.log"),
+            fileLoggingEnabled: true,
             identityResolver: resolver);
 
         Assert.True(context.IdentityOverridden);
         Assert.Equal("http://localhost:5000/v3/index.json", context.NuGetServiceIndexOverride);
     }
 
-    [Fact]
-    public void BuildCliExecutionContext_NoOverrides_DoesNotMarkIdentityOverridden()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildCliExecutionContext_NoOverrides_PreservesFileLoggingPolicy(bool fileLoggingEnabled)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var environment = new TestEnvironment();
@@ -428,10 +432,12 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
             consoleLogLevel: null,
             logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
             logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "aspire.log"),
+            fileLoggingEnabled: fileLoggingEnabled,
             identityResolver: resolver);
 
         Assert.False(context.IdentityOverridden);
         Assert.Null(context.NuGetServiceIndexOverride);
+        Assert.Equal(fileLoggingEnabled, context.FileLoggingEnabled);
     }
 
 #if DEBUG

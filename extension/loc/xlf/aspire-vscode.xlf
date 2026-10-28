@@ -356,7 +356,7 @@
       <source xml:lang="en">Enable Developer Control Plane (DCP) debug logging for Aspire applications. Logs will be stored in the workspace&apos;s .aspire/dcp/logs-{debugSessionId} folder.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.enableAspireCliDebugLogging">
-      <source xml:lang="en">Enable console debug logging for Aspire CLI commands executed by the extension. CLI log files are stored in the Aspire home directory&apos;s logs folder (~/.aspire/logs by default).</source>
+      <source xml:lang="en">Enable console debug logging for Aspire CLI commands and diagnostic files for background queries. Background queries do not create CLI log files by default. Diagnostic files are stored in the Aspire home directory&apos;s logs folder (~/.aspire/logs by default).</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.encounteredErrorStartingResource">
       <source xml:lang="en">Encountered an error starting resource: {0}.</source>

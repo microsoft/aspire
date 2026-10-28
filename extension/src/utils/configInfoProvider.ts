@@ -8,7 +8,7 @@ import { CapabilityStatus, ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema
 import * as strings from '../loc/strings';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
 import { CliPathResolutionTarget, windowCliPathTarget } from './cliPathVariables';
-import { nonInteractiveCliEnvironment } from './environment';
+import { getBackgroundCliEnvironment, nonInteractiveCliEnvironment } from './environment';
 
 const configInfoTimeoutMs = 30_000;
 const cliVersionProbeTimeoutMs = 30_000;
@@ -488,7 +488,7 @@ export class ConfigInfoProvider {
                 childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                     createProcessGroup: true,
                     workingDirectory: options.workingDirectory,
-                    env: options.env,
+                    env: [...getBackgroundCliEnvironment(), ...(options.env ?? [])],
                     noExtensionVariables: true,
                     stdoutCallback: value => {
                         if (stdout.length + value.length > options.maxStdoutLength) {
@@ -700,6 +700,7 @@ export class ConfigInfoProvider {
                 try {
                     childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                         createProcessGroup: true,
+                        env: getBackgroundCliEnvironment(),
                         stdoutCallback: (data) => {
                             output += data;
                         },

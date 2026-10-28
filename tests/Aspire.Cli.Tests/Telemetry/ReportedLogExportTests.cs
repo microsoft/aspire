@@ -118,7 +118,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
             Environment.SetEnvironmentVariable("OTEL_RESOURCE_ATTRIBUTES", null);
             var isEnabled = bool.Parse(enabledValue);
             var configuration = new TelemetryConfiguration { ReportedTelemetryEnabled = isEnabled };
-            var loggingOptions = new Program.CliLoggingOptions(LogLevel.Error, false, directory, Path.Combine(directory, "cli.log"), SharedLogFile: false);
+            var loggingOptions = new Program.CliLoggingOptions(LogLevel.Error, false, directory, Path.Combine(directory, "cli.log"), FileLoggingEnabled: true);
             var (factory, fileProvider) = Program.CreateLoggerFactory(
                 [], loggingOptions, new TestStartupErrorWriter(), new ConsoleLogBufferContext());
             using var loggerFactory = factory;

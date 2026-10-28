@@ -8,7 +8,7 @@ import { appHostDescribeMayNotBeSupported, appHostDiscoveryProgress, appHostPath
 import { AppHostCandidate, AppHostDiscoveryService, type AppHostDiscoveryStateChange, CandidateAppHostDisplayInfo, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
-import { nonInteractiveCliEnvironment } from '../utils/environment';
+import { getBackgroundCliEnvironment, nonInteractiveCliEnvironment } from '../utils/environment';
 import { getComparisonKey, isAppHostPathUnderFolder, isSameAppHostPath } from '../utils/paths/comparison';
 import { FileSystemEntryDescriptor, FileSystemEntryDescriptorIndex, getFileSystemEntryDescriptor } from '../utils/paths/fileSystemIdentity';
 import { shortenPath, shortenPaths } from '../utils/paths/shortening';
@@ -20,7 +20,6 @@ import { filterResourceCommandStatusOutput } from './resourceCommandStatusOutput
 import { getCliPathTargetForUri } from '../utils/cliPathVariables';
 import { createAppHostOperationTarget, getCliPathTargetForAppHostOperation, type AppHostOperationTarget } from '../utils/appHostOperationTarget';
 import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
-import { EnvVar } from '../dcp/types';
 
 export * from './appHostCliContracts';
 export { shortenPath, shortenPaths };
@@ -164,12 +163,10 @@ export class AppHostDataRepository {
     private readonly _cliRunner: AppHostCliRunner;
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService, configInfoProvider?: ConfigInfoProvider) {
-        this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
         this._cliRunner = new AppHostCliRunner(_terminalProvider);
         this._psPoller = new AppHostPsPoller(
             _terminalProvider,
             this._cliRunner,
-            this._configInfoProvider,
             () => this._dataActive,
             () => this._clearPostStopRefreshTimers());
         this._psPollerDisposable = vscode.Disposable.from(
@@ -182,6 +179,7 @@ export class AppHostDataRepository {
             this._psPoller.onDidChangePsCleanupError(message => this._setPsCleanupError(message)),
             this._psPoller.onDidRequestClearLoading(() => this._clearLoading()),
             this._psPoller.onDidStartPsFollow(() => this._handlePsFollowStarted()));
+        this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
         this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider, this._configInfoProvider);
         this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
         this._appHostDiscoveryChangeDisposable = vscode.Disposable.from(
@@ -216,8 +214,13 @@ export class AppHostDataRepository {
         });
         this._fetchWorkspaceAppHost();
         this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
-            if ((e.affectsConfiguration('aspire.appHostsPollingInterval') || e.affectsConfiguration('aspire.globalAppHostsPollingInterval')) && this._dataActive) {
+            const loggingChanged = e.affectsConfiguration('aspire.enableAspireCliDebugLogging');
+            if ((loggingChanged || e.affectsConfiguration('aspire.appHostsPollingInterval') || e.affectsConfiguration('aspire.globalAppHostsPollingInterval')) && this._dataActive) {
                 this._psPoller.startPsPolling();
+                if (loggingChanged) {
+                    this._stopAllDescribes();
+                    this._reconcileDescribes();
+                }
             }
         });
     }
@@ -1165,7 +1168,7 @@ export class AppHostDataRepository {
             }
             args.push('--apphost', appHostPath);
 
-            this._startResolvedDescribeProcess(stream, startVersion, cliPath, args, this._cliRunner.getBackgroundLogEnvironment(configInfo, appHostPath));
+            this._startResolvedDescribeProcess(stream, startVersion, cliPath, args);
         }).catch(error => {
             if (this._disposed || this._describeStreams.get(appHostPath) !== stream || startVersion !== stream.version) {
                 return;
@@ -1181,7 +1184,7 @@ export class AppHostDataRepository {
         });
     }
 
-    private _startResolvedDescribeProcess(stream: DescribeStream, startVersion: number, cliPath: string, args: string[], env: EnvVar[]): void {
+    private _startResolvedDescribeProcess(stream: DescribeStream, startVersion: number, cliPath: string, args: string[]): void {
         const appHostPath = stream.appHostPath;
         if (this._disposed || this._describeStreams.get(appHostPath) !== stream || startVersion !== stream.version) {
             return;
@@ -1195,7 +1198,7 @@ export class AppHostDataRepository {
         const describeProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
             createProcessGroup: true,
             noExtensionVariables: true,
-            env,
+            env: getBackgroundCliEnvironment(),
             lineCallback: (line) => {
                 if (this._describeStreams.get(appHostPath) !== stream || stream.process !== describeProcess) {
                     return;

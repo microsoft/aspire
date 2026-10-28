@@ -345,7 +345,10 @@ suite('configInfoProvider tests', () => {
         const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args, options) => {
             assert.strictEqual(command, '/exact/aspire');
             assert.deepStrictEqual(args, ['doctor', '--format', 'json', '--nologo']);
-            assert.deepStrictEqual(options?.env, [{ name: 'ASPIRE_NON_INTERACTIVE', value: 'true' }]);
+            assert.deepStrictEqual(options?.env, [
+                { name: 'ASPIRE_CLI_DISABLE_FILE_LOGGING', value: 'true' },
+                { name: 'ASPIRE_NON_INTERACTIVE', value: 'true' },
+            ]);
             assert.strictEqual(options?.workingDirectory, '/captured/workspace');
             const output = JSON.parse(createDoctorVersionOutput('13.5.0', '13.6.0'));
             output.checks.push({

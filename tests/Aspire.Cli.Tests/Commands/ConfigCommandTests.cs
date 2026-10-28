@@ -57,12 +57,6 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ConfigInfo_AdvertisesSharedFileLogging()
-    {
-        Assert.Contains(KnownCapabilities.SharedFileLogging, KnownCapabilities.GetAdvertisedCapabilities());
-    }
-
-    [Fact]
     public void ConfigInfoJson_UsesCamelCasePropertyNames()
     {
         var info = new Aspire.Cli.Commands.ConfigInfo(

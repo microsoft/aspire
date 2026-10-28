@@ -12,11 +12,12 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import * as cliModule from '../utils/process/cliProcess';
 import * as configInfoProvider from '../utils/configInfoProvider';
-import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability, sharedFileLoggingCapability } from '../types/configInfo';
+import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
 import { errorFetchingAppHosts, errorStoppingAppHostWatcher } from '../loc/strings';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { createAppHostOperationTarget } from '../utils/appHostOperationTarget';
 import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
+import { extensionLogOutputChannel } from '../utils/logging';
 
 import { createDeferred, isProcessAlive, removeDirectorySafely } from './testHelpers';
 class TestChildProcess extends EventEmitter {
@@ -7136,10 +7137,18 @@ setInterval(() => {}, 1000);
         repository.dispose();
     });
 
-    for (const supportsSharedLogs of [false, true]) {
-        test(`status snapshots preserve their cadence with ${supportsSharedLogs ? 'shared' : 'legacy'} diagnostics`, async () => {
+    for (const fileLoggingEnabled of [false, true]) {
+        test(`status snapshots preserve their cadence with file logging ${fileLoggingEnabled ? 'enabled' : 'disabled'}`, async () => {
             const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
-            getConfigInfoStub.resolves({ capabilities: supportsSharedLogs ? [sharedFileLoggingCapability] : [] });
+            const get = sinon.stub();
+            get.withArgs('appHostsPollingInterval', 30000).returns(30000);
+            get.withArgs('enableAspireCliDebugLogging', false).returns(fileLoggingEnabled);
+            const configuration = sinon.stub(vscode.workspace, 'getConfiguration');
+            configuration.withArgs('aspire').returns({
+                get,
+                inspect: () => ({}),
+            } as unknown as vscode.WorkspaceConfiguration);
+            getConfigInfoStub.resolves(null);
             spawnStub.callsFake((_terminalProvider, _command, args: string[], options: cliModule.SpawnProcessOptions) => {
                 const child = new TestChildProcess();
                 if (args[0] === 'ps' && !args.includes('--follow')) {
@@ -7161,71 +7170,26 @@ setInterval(() => {}, 1000);
                 assert.strictEqual(spawnStub.callCount, 2);
                 const snapshot = spawnStub.secondCall;
                 assert.deepStrictEqual(snapshot.args[3].env, follow.args[3].env);
-                assert.strictEqual(follow.args[3].env.length, supportsSharedLogs ? 1 : 0);
-                assert.strictEqual(getConfigInfoStub.callCount, 1);
+                assert.deepStrictEqual(follow.args[3].env, [
+                    { name: 'ASPIRE_CLI_DISABLE_FILE_LOGGING', value: String(!fileLoggingEnabled) },
+                ]);
+                assert.strictEqual(getConfigInfoStub.callCount, 0, 'File suppression must not require capability probes.');
 
                 repository.setPanelVisible(false);
                 await waitForMicrotasks();
                 repository.setPanelVisible(true);
                 await waitForMicrotasks();
-                assert.deepStrictEqual(spawnStub.thirdCall.args[3].env, follow.args[3].env,
-                    'Resuming must append to the same diagnostic group rather than create a new file.');
+                assert.deepStrictEqual(spawnStub.thirdCall.args[3].env, follow.args[3].env);
             } finally {
                 repository.dispose();
+                configuration.restore();
                 clock.restore();
             }
         });
     }
 
-    test('a failed logging capability probe does not add a probe on every status snapshot', async () => {
+    test('describe watchers suppress file logs across AppHosts and restarts', async () => {
         const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
-        getConfigInfoStub.resolves(null);
-        spawnStub.callsFake((_terminalProvider, _command, args: string[], options: cliModule.SpawnProcessOptions) => {
-            const child = new TestChildProcess();
-            if (args[0] === 'ps' && !args.includes('--follow')) {
-                options.stdoutCallback?.('[]');
-                child.markExited();
-                options.exitCallback?.(0);
-            }
-            return child;
-        });
-        const repository = new AppHostDataRepository(terminalProvider);
-        try {
-            repository.setViewMode('global');
-            repository.setPanelVisible(true);
-            await waitForMicrotasks();
-            await clock.tickAsync(90000);
-            assert.strictEqual(spawnStub.callCount, 4);
-            assert.strictEqual(getConfigInfoStub.callCount, 1);
-            assert.ok(spawnStub.getCalls().every(call => call.args[3].env.length === 0));
-        } finally {
-            repository.dispose();
-            clock.restore();
-        }
-    });
-
-    test('hiding the panel during logging capability resolution does not start a watcher', async () => {
-        const info = createDeferred<null>();
-        getConfigInfoStub.returns(info.promise);
-        const repository = new AppHostDataRepository(terminalProvider);
-        try {
-            repository.setViewMode('global');
-            repository.setPanelVisible(true);
-            await waitForMicrotasks();
-            assert.strictEqual(getConfigInfoStub.calledOnce, true);
-            repository.setPanelVisible(false);
-            info.resolve(null);
-            await waitForMicrotasks();
-            assert.strictEqual(spawnStub.called, false);
-        } finally {
-            info.resolve(null);
-            repository.dispose();
-        }
-    });
-
-    test('describe watchers reuse per-AppHost log groups across restarts', async () => {
-        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
-        getConfigInfoStub.resolves({ capabilities: [sharedFileLoggingCapability] });
         const repository = new AppHostDataRepository(terminalProvider);
         try {
             repository.setViewMode('global');
@@ -7241,10 +7205,9 @@ setInterval(() => {}, 1000);
             await waitForMicrotasks();
             const describes = spawnStub.getCalls().filter(call => call.args[2][0] === 'describe');
             assert.strictEqual(describes.length, 2);
-            assert.notDeepStrictEqual(describes[0].args[3].env, describes[1].args[3].env);
-            assert.notDeepStrictEqual(describes[0].args[3].env, follow.args[3].env);
-            assert.strictEqual(describes[0].args[3].env.length, 1);
-            assert.strictEqual(describes[1].args[3].env.length, 1);
+            for (const describe of describes) {
+                assert.deepStrictEqual(describe.args[3].env, [{ name: 'ASPIRE_CLI_DISABLE_FILE_LOGGING', value: 'true' }]);
+            }
 
             describes[0].returnValue.markExited(1);
             describes[0].args[3].exitCallback(1);
@@ -7256,6 +7219,78 @@ setInterval(() => {}, 1000);
         } finally {
             repository.dispose();
             clock.restore();
+        }
+    });
+
+    test('changing debug logging restarts status and resource watchers with the new file policy', async () => {
+        const changes = new vscode.EventEmitter<vscode.ConfigurationChangeEvent>();
+        const changeStub = sinon.stub(vscode.workspace, 'onDidChangeConfiguration').callsFake(listener => changes.event(listener));
+        const get = sinon.stub();
+        get.withArgs('appHostsPollingInterval', 30000).returns(30000);
+        get.withArgs('enableAspireCliDebugLogging', false).returns(false);
+        const configuration = sinon.stub(vscode.workspace, 'getConfiguration');
+        configuration.withArgs('aspire').returns({
+            get,
+            inspect: () => ({}),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const repository = new AppHostDataRepository(terminalProvider);
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            spawnStub.firstCall.args[3].lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj', appHostPid: 1, status: 'running',
+            }));
+            await waitForMicrotasks();
+            assert.strictEqual(spawnStub.callCount, 2);
+
+            for (const enabled of [true, false]) {
+                const initialCalls = spawnStub.callCount;
+                get.withArgs('enableAspireCliDebugLogging', false).returns(enabled);
+                changes.fire({ affectsConfiguration: section => section === 'aspire.enableAspireCliDebugLogging' });
+                await waitForMicrotasks();
+                const restarted = spawnStub.getCalls().slice(initialCalls);
+                assert.deepStrictEqual(restarted.map(call => call.args[2][0]).sort(), ['describe', 'ps']);
+                for (const call of restarted) {
+                    assert.deepStrictEqual(call.args[3].env, [{ name: 'ASPIRE_CLI_DISABLE_FILE_LOGGING', value: String(!enabled) }]);
+                }
+            }
+        } finally {
+            repository.dispose();
+            configuration.restore();
+            changeStub.restore();
+            changes.dispose();
+        }
+    });
+
+    test('failed status followers and snapshots report stderr in Aspire Output without dumping results', async () => {
+        const warning = sinon.spy(extensionLogOutputChannel, 'warn');
+        const repository = new AppHostDataRepository(terminalProvider);
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            const follow = spawnStub.firstCall;
+            follow.args[3].stdoutCallback('{"private":"status payload"}');
+            follow.args[3].stderrCallback('Follower connection failed');
+            follow.returnValue.markExited(1);
+            follow.args[3].exitCallback(1);
+            await waitForMicrotasks();
+
+            const snapshot = spawnStub.secondCall;
+            snapshot.args[3].stdoutCallback('{"private":"status payload"}');
+            snapshot.args[3].stderrCallback('Snapshot access denied');
+            snapshot.returnValue.markExited(2);
+            snapshot.args[3].exitCallback(2);
+
+            assert.deepStrictEqual(warning.getCalls().map(call => call.args[0]), [
+                'aspire ps --follow failed (exit code 1): Follower connection failed',
+                errorFetchingAppHosts('Snapshot access denied'),
+            ]);
+            assert.strictEqual(repository.errorMessage, errorFetchingAppHosts('Snapshot access denied'));
+        } finally {
+            repository.dispose();
+            warning.restore();
         }
     });
 
@@ -7294,7 +7329,7 @@ setInterval(() => {}, 1000);
                 await waitForMicrotasks();
                 assert.strictEqual(psCalls().length, 1);
                 assert.strictEqual(repository.isLoading, false);
-                assert.strictEqual(getConfigInfoStub.calledOnce, true, 'Logging support is probed once, not once per status query.');
+                assert.strictEqual(getConfigInfoStub.called, false, 'Status queries do not need a diagnostic capability probe.');
 
                 await clock.tickAsync(reconciliationInterval - 1);
                 assert.strictEqual(snapshotCalls().length, 0);
@@ -7410,9 +7445,6 @@ setInterval(() => {}, 1000);
     test('hiding and resuming resets the safety interval and uses the current CLI executable', async () => {
         const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         getCliPathStub.resolves('/current/aspire');
-        getConfigInfoStub.callsFake(async options => ({
-            capabilities: options?.cliPath === '/current/aspire' ? [sharedFileLoggingCapability] : [],
-        }));
         spawnStub.callsFake((_terminalProvider, _command, args: string[], options: cliModule.SpawnProcessOptions) => {
             const child = new TestChildProcess();
             if (args[0] === 'ps' && !args.includes('--follow')) {
@@ -7442,7 +7474,7 @@ setInterval(() => {}, 1000);
             repository.setPanelVisible(true);
             await waitForMicrotasks();
             assert.strictEqual(spawnStub.secondCall.args[1], '/older/aspire');
-            assert.deepStrictEqual(spawnStub.secondCall.args[3].env, []);
+            assert.deepStrictEqual(spawnStub.secondCall.args[3].env, [{ name: 'ASPIRE_CLI_DISABLE_FILE_LOGGING', value: 'true' }]);
 
             await clock.tickAsync(29999);
             assert.strictEqual(spawnStub.callCount, 2);

@@ -117,41 +117,46 @@ public class ProgramTests(ITestOutputHelper outputHelper)
         Assert.Null(result);
     }
 
-    [Fact]
-    public void ParseLoggingOptions_SharedNameUsesTheAspireLogsDirectory()
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("false", true)]
+    [InlineData("true", false)]
+    [InlineData("TRUE", false)]
+    public void ParseLoggingOptions_FileLoggingCanBeDisabled(string value, bool expectedEnabled)
     {
-        using var remote = RemoteExecutor.Invoke(static () =>
+        using var remote = RemoteExecutor.Invoke(static (value, expectedEnabled) =>
         {
-            Environment.SetEnvironmentVariable(KnownConfigNames.CliSharedLogName, "vscode_test_ps");
+            Environment.SetEnvironmentVariable(KnownConfigNames.CliDisableFileLogging, value);
             var options = Program.ParseLoggingOptions([]);
 
-            Assert.True(options.SharedLogFile);
-            Assert.Equal(Path.Combine(options.LogsDirectory, "cli_vscode_test_ps.log"), options.LogFilePath);
+            Assert.Equal(bool.Parse(expectedEnabled), options.FileLoggingEnabled);
+            Assert.Equal(options.LogsDirectory, Path.GetDirectoryName(options.LogFilePath));
             return RemoteExecutor.SuccessExitCode;
-        });
+        }, value, expectedEnabled.ToString());
     }
 
     [Fact]
-    public void ParseLoggingOptions_ExplicitLogFileOverridesTheSharedName()
+    public void ParseLoggingOptions_ExplicitLogFileOverridesSuppression()
     {
         using var remote = RemoteExecutor.Invoke(static () =>
         {
-            Environment.SetEnvironmentVariable(KnownConfigNames.CliSharedLogName, "../invalid");
+            Environment.SetEnvironmentVariable(KnownConfigNames.CliDisableFileLogging, "true");
             var options = Program.ParseLoggingOptions(["ps", "--log-file", "explicit.log"]);
 
-            Assert.False(options.SharedLogFile);
+            Assert.True(options.FileLoggingEnabled);
             Assert.Equal("explicit.log", options.LogFilePath);
             return RemoteExecutor.SuccessExitCode;
         });
     }
 
     [Fact]
-    public void ParseLoggingOptions_InvalidSharedNameIsRejected()
+    public void ParseLoggingOptions_ForwardedLogFileDoesNotOverrideSuppression()
     {
         using var remote = RemoteExecutor.Invoke(static () =>
         {
-            Environment.SetEnvironmentVariable(KnownConfigNames.CliSharedLogName, "../invalid");
-            Assert.Throws<ArgumentException>(() => Program.ParseLoggingOptions([]));
+            Environment.SetEnvironmentVariable(KnownConfigNames.CliDisableFileLogging, "true");
+            var options = Program.ParseLoggingOptions(["run", "--", "--log-file", "app.log"]);
+            Assert.False(options.FileLoggingEnabled);
             return RemoteExecutor.SuccessExitCode;
         });
     }

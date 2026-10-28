@@ -76,8 +76,8 @@ public class Program
     /// <param name="DebugMode">Whether --debug or -d was specified.</param>
     /// <param name="LogsDirectory">The directory where log files are stored.</param>
     /// <param name="LogFilePath">The full path to the current session's log file.</param>
-    /// <param name="SharedLogFile">Whether processes append to the same bounded diagnostic log.</param>
-    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string LogFilePath, bool SharedLogFile);
+    /// <param name="FileLoggingEnabled">Whether the CLI writes diagnostic logs to disk.</param>
+    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string LogFilePath, bool FileLoggingEnabled);
 
     /// <summary>
     /// Holds the objects created during early CLI startup, before DI is available.
@@ -137,15 +137,11 @@ public class Program
 
         var logsDirectory = Path.Combine(GetUsersAspirePath(processPath), "logs");
         var logFilePath = ParseLogFileOption(args);
-        var sharedLogFile = false;
-        if (logFilePath is null && Environment.GetEnvironmentVariable(KnownConfigNames.CliSharedLogName) is { Length: > 0 } sharedLogName)
-        {
-            logFilePath = FileLoggerProvider.GetSharedLogFilePath(logsDirectory, sharedLogName);
-            sharedLogFile = true;
-        }
+        var fileLoggingEnabled = logFilePath is not null
+            || !string.Equals(Environment.GetEnvironmentVariable(KnownConfigNames.CliDisableFileLogging), "true", StringComparison.OrdinalIgnoreCase);
         logFilePath ??= FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
 
-        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath, sharedLogFile);
+        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath, fileLoggingEnabled);
     }
 
     /// <summary>
@@ -244,9 +240,9 @@ public class Program
             ((args[0] == "mcp" && args[1] == "start") || (args[0] == "agent" && args[1] == "mcp"));
 
         // Create file logger provider from pre-computed path info
-        var fileLoggerProvider = loggingOptions.SharedLogFile
-            ? FileLoggerProvider.CreateShared(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter)
-            : new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter);
+        var fileLoggerProvider = loggingOptions.FileLoggingEnabled
+            ? new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter)
+            : FileLoggerProvider.CreateDisabled(loggingOptions.LogFilePath);
 
         var factory = LoggerFactory.Create(builder =>
         {
@@ -257,7 +253,7 @@ public class Program
                 logging.IncludeScopes = true;
             });
 
-            // Always capture complete CLI session details to disk for diagnostics
+            // Background probes can disable file logging without affecting console or telemetry output.
             builder.AddProvider(fileLoggerProvider);
 
             // Configure log-level filters based on --log-level or --debug
@@ -447,6 +443,7 @@ public class Program
                 startupContext.LoggingOptions.ConsoleLogLevel,
                 startupContext.LoggingOptions.LogsDirectory,
                 startupContext.LoggingOptions.LogFilePath,
+                startupContext.LoggingOptions.FileLoggingEnabled,
                 resolver);
         });
         builder.Services.AddSingleton(s => new ConsoleEnvironment(
@@ -791,7 +788,7 @@ public class Program
         return new DirectoryInfo(sdksPath);
     }
 
-    internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, LogLevel? consoleLogLevel, string logsDirectory, string logFilePath, IIdentityResolver identityResolver, string? processPath = null)
+    internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, LogLevel? consoleLogLevel, string logsDirectory, string logFilePath, bool fileLoggingEnabled, IIdentityResolver identityResolver, string? processPath = null)
     {
         ArgumentNullException.ThrowIfNull(identityResolver);
 
@@ -848,7 +845,10 @@ public class Program
             debugMode: debugMode,
             consoleLogLevel: consoleLogLevel,
             packagesDirectory: packagesDirectory,
-            aspireHomeDirectory: aspireHomeDirectory);
+            aspireHomeDirectory: aspireHomeDirectory)
+        {
+            FileLoggingEnabled = fileLoggingEnabled
+        };
     }
 
     private static DirectoryInfo GetCacheDirectory(string? processPath = null)
@@ -1194,7 +1194,10 @@ public class Program
         logger.LogInformation("Working directory: {WorkingDirectory}", Environment.CurrentDirectory);
         // Logging the log file path is useful so that when console logging is enabled (for example with --log-level debug),
         // the path is written to the console logger (stderr) for easier discovery.
-        logger.LogInformation("Log file: {LogFilePath}", loggingOptions.LogFilePath);
+        if (loggingOptions.FileLoggingEnabled)
+        {
+            logger.LogInformation("Log file: {LogFilePath}", loggingOptions.LogFilePath);
+        }
         logger.LogInformation("CLI process ID: {ProcessId}", Environment.ProcessId);
 
         IHost? app = null;

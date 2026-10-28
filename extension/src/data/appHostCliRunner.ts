@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
 import { ChildProcessWithoutNullStreams } from 'child_process';
-import { randomUUID } from 'crypto';
-import * as path from 'path';
 import { spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
@@ -11,10 +9,6 @@ import { AspireCliFailedError, AspireCliNotInstalledError } from './appHostCliCo
 import { normalizeResourceCommandStatusLine } from './resourceCommandStatusOutput';
 import { CliPathResolutionTarget, windowCliPathTarget } from '../utils/cliPathVariables';
 import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
-import { ConfigInfo, sharedFileLoggingCapability } from '../types/configInfo';
-import { EnvVar } from '../dcp/types';
-import { EnvironmentVariables } from '../utils/environment';
-import { getLexicalAppHostPathKey } from '../utils/paths/comparison';
 
 export const oneShotOutputBufferLimit = 64 * 1024;
 
@@ -32,31 +26,8 @@ export class AppHostCliRunner implements vscode.Disposable {
 
     private _noLogoUnsupportedCliPaths = new Set<string>();
     private _oneShotProcesses = new Set<ChildProcessWithoutNullStreams>();
-    private readonly _backgroundLogId = randomUUID().replace(/-/g, '');
-    private readonly _appHostLogNames = new Map<string, string>();
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider) {
-    }
-
-    getBackgroundLogEnvironment(configInfo: ConfigInfo | null, appHostPath: string | undefined): EnvVar[] {
-        if (!configInfo?.capabilities?.includes(sharedFileLoggingCapability)) {
-            return [];
-        }
-
-        let name = `vscode_${this._backgroundLogId}_ps`;
-        if (appHostPath !== undefined) {
-            const key = getLexicalAppHostPathKey(appHostPath);
-            const existing = this._appHostLogNames.get(key);
-            if (existing) {
-                name = existing;
-            } else {
-                const fileName = path.basename(appHostPath).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
-                name = `vscode_${this._backgroundLogId}_${this._appHostLogNames.size + 1}_${fileName}`;
-                this._appHostLogNames.set(key, name);
-            }
-        }
-
-        return [{ name: EnvironmentVariables.ASPIRE_CLI_SHARED_LOG_NAME, value: name }];
     }
 
     withNoLogo(args: string[], cliPath?: string): string[] {
