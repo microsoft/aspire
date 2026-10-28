@@ -1853,6 +1853,44 @@ type TestVaultResource interface {
 }
 
 // ============================================================================
+// Accepting interfaces (handle types with derived types)
+// ============================================================================
+// Go has no return-type covariance, so the interface of a derived handle type does not
+// satisfy the interface of its base type. Each Any<Type> below accepts <Type> or a handle
+// of any type derived from it, and is used wherever a method, options struct, or DTO takes
+// a <Type> as input. The unexported marker methods restrict it to that family of types.
+//
+// The set of Any<Type> interfaces depends on the integrations of the AppHost this SDK is
+// generated for: an Any<Type> exists only while some handle type in the SDK derives from <Type>.
+// Adding or removing an integration can add or remove an Any<Type> and change a method parameter
+// from <Type> to Any<Type>, so code that names an Any<Type> or such a parameter's type depends
+// on the integrations the AppHost includes.
+
+// AnyContainerResource accepts ContainerResource or a handle of any type derived from it.
+type AnyContainerResource interface {
+	handleReference
+	isContainerResource()
+}
+
+// AnyDistributedApplicationEventSubscription accepts DistributedApplicationEventSubscription or a handle of any type derived from it.
+type AnyDistributedApplicationEventSubscription interface {
+	handleReference
+	isDistributedApplicationEventSubscription()
+}
+
+// AnyExecutableResource accepts ExecutableResource or a handle of any type derived from it.
+type AnyExecutableResource interface {
+	handleReference
+	isExecutableResource()
+}
+
+// AnyProjectResource accepts ProjectResource or a handle of any type derived from it.
+type AnyProjectResource interface {
+	handleReference
+	isProjectResource()
+}
+
+// ============================================================================
 // Handle wrappers
 // ============================================================================
 
@@ -2067,6 +2105,7 @@ func (s *aspireStore) GetFileNameWithContent(filenameTemplate string, sourceFile
 // Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource.
 type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	handleReference
+	isContainerResource()
 
 	// AsHttp2Service configures a resource to mark all endpoints' transport as
 	// HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -3316,6 +3355,9 @@ func newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h *han
 	return &aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource implements the marker of each accepting interface for its own type and its base types.
+func (*aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) isContainerResource() {}
+
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsHttp2Service() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
@@ -3451,7 +3493,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnBeforeResour
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforeResourceStartedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforeResourceStartedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -3470,7 +3512,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnInitializeRe
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[InitializeResourceEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newInitializeResourceEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -3490,7 +3532,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceEndp
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceEndpointsAllocatedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceEndpointsAllocatedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -3509,7 +3551,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceRead
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceReadyEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceReadyEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -3528,7 +3570,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceStop
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceStoppedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceStoppedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -3574,7 +3616,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) SubscribeHttps
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsEndpointUpdateCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -3607,7 +3649,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWithEnviro
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[TestEnvironmentContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newTestEnvironmentContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -3701,7 +3743,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgsCallba
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[CommandLineArgsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newCommandLineArgsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -3855,7 +3897,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCommand(na
 	if executeCommand != nil {
 		cb := executeCommand
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["executeCommand"] = s.client.registerCallback(shim)
 	}
@@ -3907,7 +3949,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerB
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerBuildOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -3969,7 +4011,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerF
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			return cb(callbackArg[ContainerFileSystemCallbackContext](args, 0), callbackArg[*CancellationToken](args, 1))
+			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackArg[*CancellationToken](args, 1))
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -4147,7 +4189,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDockerfile
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[DockerfileBuilderCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newDockerfileBuilderCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -4175,7 +4217,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDockerfile
 	if dockerfileFactory != nil {
 		cb := dockerfileFactory
 		shim := func(args ...any) any {
-			return cb(callbackArg[DockerfileFactoryContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newDockerfileFactoryContextFromHandle))
 		}
 		reqArgs["dockerfileFactory"] = s.client.registerCallback(shim)
 	}
@@ -4219,7 +4261,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpointCa
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -4305,7 +4347,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmen
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EnvironmentCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEnvironmentCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -4440,7 +4482,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpEndpoi
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -4506,7 +4548,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpsCerti
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsCertificateConfigurationCallbackAnnotationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -4565,7 +4607,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpsEndpo
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -4643,7 +4685,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImagePushO
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerImagePushOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerImagePushOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -4895,7 +4937,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalCa
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -4990,7 +5032,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPipelineCo
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineConfigurationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineConfigurationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -5011,7 +5053,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPipelineSt
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineStepContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineStepContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -5055,7 +5097,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCom
 	if createProcessSpec != nil {
 		cb := createProcessSpec
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
@@ -5183,7 +5225,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCo
 	if validationCallback != nil {
 		cb := validationCallback
 		shim := func(args ...any) any {
-			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newRequiredCommandValidationContextFromHandle))
 		}
 		reqArgs["validationCallback"] = s.client.registerCallback(shim)
 	}
@@ -5345,7 +5387,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrls(callb
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceUrlsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceUrlsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -5364,7 +5406,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithValidator(
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
@@ -5615,6 +5657,7 @@ func (s *beforeStartEvent) Services() ServiceProvider {
 // CSharpAppResource is the public interface for handle type CSharpAppResource.
 type CSharpAppResource interface {
 	handleReference
+	isProjectResource()
 
 	// AsHttp2Service configures a resource to mark all endpoints' transport as
 	// HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -6640,6 +6683,9 @@ func newCSharpAppResourceFromHandle(h *handle, c *client) CSharpAppResource {
 	return &cSharpAppResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// cSharpAppResource implements the marker of each accepting interface for its own type and its base types.
+func (*cSharpAppResource) isProjectResource() {}
+
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *cSharpAppResource) AsHttp2Service() CSharpAppResource {
@@ -6787,7 +6833,7 @@ func (s *cSharpAppResource) OnBeforeResourceStarted(callback func(arg BeforeReso
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforeResourceStartedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforeResourceStartedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -6806,7 +6852,7 @@ func (s *cSharpAppResource) OnInitializeResource(callback func(arg InitializeRes
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[InitializeResourceEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newInitializeResourceEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -6826,7 +6872,7 @@ func (s *cSharpAppResource) OnResourceEndpointsAllocated(callback func(arg Resou
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceEndpointsAllocatedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceEndpointsAllocatedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -6845,7 +6891,7 @@ func (s *cSharpAppResource) OnResourceReady(callback func(arg ResourceReadyEvent
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceReadyEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceReadyEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -6864,7 +6910,7 @@ func (s *cSharpAppResource) OnResourceStopped(callback func(arg ResourceStoppedE
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceStoppedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceStoppedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -6890,7 +6936,7 @@ func (s *cSharpAppResource) PublishAsDockerFile(options ...*PublishAsDockerFileO
 		if merged.Configure != nil {
 			cb := merged.Configure
 			shim := func(args ...any) any {
-				cb(callbackArg[ContainerResource](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newContainerResourceFromHandle))
 				return nil
 			}
 			reqArgs["configure"] = s.client.registerCallback(shim)
@@ -6928,7 +6974,7 @@ func (s *cSharpAppResource) SubscribeHttpsEndpointsUpdate(callback func(obj Http
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsEndpointUpdateCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -6961,7 +7007,7 @@ func (s *cSharpAppResource) TestWithEnvironmentCallback(callback func(arg TestEn
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[TestEnvironmentContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newTestEnvironmentContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -7055,7 +7101,7 @@ func (s *cSharpAppResource) WithArgsCallback(callback func(obj CommandLineArgsCa
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[CommandLineArgsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newCommandLineArgsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -7153,7 +7199,7 @@ func (s *cSharpAppResource) WithCommand(name string, displayName string, execute
 	if executeCommand != nil {
 		cb := executeCommand
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["executeCommand"] = s.client.registerCallback(shim)
 	}
@@ -7205,7 +7251,7 @@ func (s *cSharpAppResource) WithContainerBuildOptions(callback func(arg Containe
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerBuildOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -7330,7 +7376,7 @@ func (s *cSharpAppResource) WithEndpointCallback(endpointName string, callback f
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -7417,7 +7463,7 @@ func (s *cSharpAppResource) WithEnvironmentCallback(callback func(arg Environmen
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EnvironmentCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEnvironmentCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -7552,7 +7598,7 @@ func (s *cSharpAppResource) WithHttpEndpointCallback(callback func(obj EndpointU
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -7618,7 +7664,7 @@ func (s *cSharpAppResource) WithHttpsCertificateConfiguration(callback func(arg 
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsCertificateConfigurationCallbackAnnotationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -7677,7 +7723,7 @@ func (s *cSharpAppResource) WithHttpsEndpointCallback(callback func(obj Endpoint
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -7724,7 +7770,7 @@ func (s *cSharpAppResource) WithImagePushOptions(callback func(arg ContainerImag
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerImagePushOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerImagePushOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -7928,7 +7974,7 @@ func (s *cSharpAppResource) WithOptionalCallback(options ...*WithOptionalCallbac
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -8023,7 +8069,7 @@ func (s *cSharpAppResource) WithPipelineConfiguration(callback func(obj Pipeline
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineConfigurationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineConfigurationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -8044,7 +8090,7 @@ func (s *cSharpAppResource) WithPipelineStepFactory(stepName string, callback fu
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineStepContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineStepContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -8088,7 +8134,7 @@ func (s *cSharpAppResource) WithProcessCommandFactory(commandName string, displa
 	if createProcessSpec != nil {
 		cb := createProcessSpec
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
@@ -8229,7 +8275,7 @@ func (s *cSharpAppResource) WithRequiredCommandValidation(command string, valida
 	if validationCallback != nil {
 		cb := validationCallback
 		shim := func(args ...any) any {
-			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newRequiredCommandValidationContextFromHandle))
 		}
 		reqArgs["validationCallback"] = s.client.registerCallback(shim)
 	}
@@ -8391,7 +8437,7 @@ func (s *cSharpAppResource) WithUrls(callback func(obj ResourceUrlsCallbackConte
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceUrlsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceUrlsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -8410,7 +8456,7 @@ func (s *cSharpAppResource) WithValidator(validator func(arg TestResourceContext
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
@@ -10603,7 +10649,7 @@ func (s *containerRegistryResource) OnBeforeResourceStarted(callback func(arg Be
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforeResourceStartedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforeResourceStartedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -10622,7 +10668,7 @@ func (s *containerRegistryResource) OnInitializeResource(callback func(arg Initi
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[InitializeResourceEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newInitializeResourceEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -10641,7 +10687,7 @@ func (s *containerRegistryResource) OnResourceReady(callback func(arg ResourceRe
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceReadyEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceReadyEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -10660,7 +10706,7 @@ func (s *containerRegistryResource) OnResourceStopped(callback func(arg Resource
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceStoppedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceStoppedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -10682,7 +10728,7 @@ func (s *containerRegistryResource) SubscribeHttpsEndpointsUpdate(callback func(
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsEndpointUpdateCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -10748,7 +10794,7 @@ func (s *containerRegistryResource) WithCommand(name string, displayName string,
 	if executeCommand != nil {
 		cb := executeCommand
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["executeCommand"] = s.client.registerCallback(shim)
 	}
@@ -10786,7 +10832,7 @@ func (s *containerRegistryResource) WithContainerBuildOptions(callback func(arg 
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerBuildOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -11126,7 +11172,7 @@ func (s *containerRegistryResource) WithOptionalCallback(options ...*WithOptiona
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -11203,7 +11249,7 @@ func (s *containerRegistryResource) WithPipelineConfiguration(callback func(obj 
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineConfigurationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineConfigurationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -11224,7 +11270,7 @@ func (s *containerRegistryResource) WithPipelineStepFactory(stepName string, cal
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineStepContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineStepContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -11268,7 +11314,7 @@ func (s *containerRegistryResource) WithProcessCommandFactory(commandName string
 	if createProcessSpec != nil {
 		cb := createProcessSpec
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
@@ -11332,7 +11378,7 @@ func (s *containerRegistryResource) WithRequiredCommandValidation(command string
 	if validationCallback != nil {
 		cb := validationCallback
 		shim := func(args ...any) any {
-			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newRequiredCommandValidationContextFromHandle))
 		}
 		reqArgs["validationCallback"] = s.client.registerCallback(shim)
 	}
@@ -11494,7 +11540,7 @@ func (s *containerRegistryResource) WithUrls(callback func(obj ResourceUrlsCallb
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceUrlsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceUrlsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -11513,7 +11559,7 @@ func (s *containerRegistryResource) WithValidator(validator func(arg TestResourc
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
@@ -11524,6 +11570,7 @@ func (s *containerRegistryResource) WithValidator(validator func(arg TestResourc
 // ContainerResource is a resource that represents a specified container.
 type ContainerResource interface {
 	handleReference
+	isContainerResource()
 
 	// AsHttp2Service configures a resource to mark all endpoints' transport as
 	// HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -12770,6 +12817,9 @@ func newContainerResourceFromHandle(h *handle, c *client) ContainerResource {
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// containerResource implements the marker of each accepting interface for its own type and its base types.
+func (*containerResource) isContainerResource() {}
+
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *containerResource) AsHttp2Service() ContainerResource {
@@ -12905,7 +12955,7 @@ func (s *containerResource) OnBeforeResourceStarted(callback func(arg BeforeReso
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforeResourceStartedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforeResourceStartedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -12924,7 +12974,7 @@ func (s *containerResource) OnInitializeResource(callback func(arg InitializeRes
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[InitializeResourceEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newInitializeResourceEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -12944,7 +12994,7 @@ func (s *containerResource) OnResourceEndpointsAllocated(callback func(arg Resou
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceEndpointsAllocatedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceEndpointsAllocatedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -12963,7 +13013,7 @@ func (s *containerResource) OnResourceReady(callback func(arg ResourceReadyEvent
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceReadyEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceReadyEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -12982,7 +13032,7 @@ func (s *containerResource) OnResourceStopped(callback func(arg ResourceStoppedE
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceStoppedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceStoppedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -13028,7 +13078,7 @@ func (s *containerResource) SubscribeHttpsEndpointsUpdate(callback func(obj Http
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsEndpointUpdateCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -13061,7 +13111,7 @@ func (s *containerResource) TestWithEnvironmentCallback(callback func(arg TestEn
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[TestEnvironmentContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newTestEnvironmentContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -13155,7 +13205,7 @@ func (s *containerResource) WithArgsCallback(callback func(obj CommandLineArgsCa
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[CommandLineArgsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newCommandLineArgsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -13309,7 +13359,7 @@ func (s *containerResource) WithCommand(name string, displayName string, execute
 	if executeCommand != nil {
 		cb := executeCommand
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["executeCommand"] = s.client.registerCallback(shim)
 	}
@@ -13361,7 +13411,7 @@ func (s *containerResource) WithContainerBuildOptions(callback func(arg Containe
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerBuildOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -13423,7 +13473,7 @@ func (s *containerResource) WithContainerFilesCallback(destinationPath string, c
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			return cb(callbackArg[ContainerFileSystemCallbackContext](args, 0), callbackArg[*CancellationToken](args, 1))
+			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackArg[*CancellationToken](args, 1))
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -13601,7 +13651,7 @@ func (s *containerResource) WithDockerfileBuilder(contextPath string, callback f
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[DockerfileBuilderCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newDockerfileBuilderCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -13629,7 +13679,7 @@ func (s *containerResource) WithDockerfileFactory(contextPath string, dockerfile
 	if dockerfileFactory != nil {
 		cb := dockerfileFactory
 		shim := func(args ...any) any {
-			return cb(callbackArg[DockerfileFactoryContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newDockerfileFactoryContextFromHandle))
 		}
 		reqArgs["dockerfileFactory"] = s.client.registerCallback(shim)
 	}
@@ -13673,7 +13723,7 @@ func (s *containerResource) WithEndpointCallback(endpointName string, callback f
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -13759,7 +13809,7 @@ func (s *containerResource) WithEnvironmentCallback(callback func(arg Environmen
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EnvironmentCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEnvironmentCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -13894,7 +13944,7 @@ func (s *containerResource) WithHttpEndpointCallback(callback func(obj EndpointU
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -13960,7 +14010,7 @@ func (s *containerResource) WithHttpsCertificateConfiguration(callback func(arg 
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsCertificateConfigurationCallbackAnnotationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -14019,7 +14069,7 @@ func (s *containerResource) WithHttpsEndpointCallback(callback func(obj Endpoint
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -14097,7 +14147,7 @@ func (s *containerResource) WithImagePushOptions(callback func(arg ContainerImag
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerImagePushOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerImagePushOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -14349,7 +14399,7 @@ func (s *containerResource) WithOptionalCallback(options ...*WithOptionalCallbac
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -14444,7 +14494,7 @@ func (s *containerResource) WithPipelineConfiguration(callback func(obj Pipeline
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineConfigurationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineConfigurationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -14465,7 +14515,7 @@ func (s *containerResource) WithPipelineStepFactory(stepName string, callback fu
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineStepContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineStepContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -14509,7 +14559,7 @@ func (s *containerResource) WithProcessCommandFactory(commandName string, displa
 	if createProcessSpec != nil {
 		cb := createProcessSpec
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
@@ -14637,7 +14687,7 @@ func (s *containerResource) WithRequiredCommandValidation(command string, valida
 	if validationCallback != nil {
 		cb := validationCallback
 		shim := func(args ...any) any {
-			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newRequiredCommandValidationContextFromHandle))
 		}
 		reqArgs["validationCallback"] = s.client.registerCallback(shim)
 	}
@@ -14799,7 +14849,7 @@ func (s *containerResource) WithUrls(callback func(obj ResourceUrlsCallbackConte
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceUrlsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceUrlsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -14818,7 +14868,7 @@ func (s *containerResource) WithValidator(validator func(arg TestResourceContext
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
@@ -15381,7 +15431,7 @@ func (s *distributedApplicationBuilder) AddDockerfileBuilder(name string, contex
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[DockerfileBuilderCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newDockerfileBuilderCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -15419,7 +15469,7 @@ func (s *distributedApplicationBuilder) AddDockerfileFactory(name string, contex
 	if dockerfileFactory != nil {
 		cb := dockerfileFactory
 		shim := func(args ...any) any {
-			return cb(callbackArg[DockerfileFactoryContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newDockerfileFactoryContextFromHandle))
 		}
 		reqArgs["dockerfileFactory"] = s.client.registerCallback(shim)
 	}
@@ -15474,7 +15524,7 @@ func (s *distributedApplicationBuilder) AddEventingSubscriber(subscribe func(arg
 	if subscribe != nil {
 		cb := subscribe
 		shim := func(args ...any) any {
-			cb(callbackArg[EventingSubscriberRegistrationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEventingSubscriberRegistrationContextFromHandle))
 			return nil
 		}
 		reqArgs["subscribe"] = s.client.registerCallback(shim)
@@ -15834,7 +15884,7 @@ func (s *distributedApplicationBuilder) SubscribeAfterPublish(callback func(arg 
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[AfterPublishEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newAfterPublishEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -15862,7 +15912,7 @@ func (s *distributedApplicationBuilder) SubscribeAfterResourcesCreated(callback 
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[AfterResourcesCreatedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newAfterResourcesCreatedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -15890,7 +15940,7 @@ func (s *distributedApplicationBuilder) SubscribeBeforePublish(callback func(arg
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforePublishEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforePublishEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -15918,7 +15968,7 @@ func (s *distributedApplicationBuilder) SubscribeBeforeStart(callback func(arg B
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforeStartEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforeStartEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -15946,7 +15996,7 @@ func (s *distributedApplicationBuilder) TryAddEventingSubscriber(subscribe func(
 	if subscribe != nil {
 		cb := subscribe
 		shim := func(args ...any) any {
-			cb(callbackArg[EventingSubscriberRegistrationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEventingSubscriberRegistrationContextFromHandle))
 			return nil
 		}
 		reqArgs["subscribe"] = s.client.registerCallback(shim)
@@ -15978,6 +16028,7 @@ func (s *distributedApplicationBuilder) UserSecretsManager() UserSecretsManager 
 // that is published during the lifecycle of the AppHost.
 type DistributedApplicationEventSubscription interface {
 	handleReference
+	isDistributedApplicationEventSubscription()
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
 	// resolved successfully and no chained operation has failed.
@@ -15994,6 +16045,9 @@ func newDistributedApplicationEventSubscriptionFromHandle(h *handle, c *client) 
 	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// distributedApplicationEventSubscription implements the marker of each accepting interface for its own type and its base types.
+func (*distributedApplicationEventSubscription) isDistributedApplicationEventSubscription() {}
+
 // DistributedApplicationEventing supports publishing and subscribing to events
 // which are executed during the AppHost lifecycle.
 type DistributedApplicationEventing interface {
@@ -16003,7 +16057,7 @@ type DistributedApplicationEventing interface {
 	//
 	// Parameters:
 	//   - subscription: The specific subscription to unsubscribe.
-	Unsubscribe(subscription DistributedApplicationEventSubscription) error
+	Unsubscribe(subscription AnyDistributedApplicationEventSubscription) error
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
 	// resolved successfully and no chained operation has failed.
@@ -16021,7 +16075,7 @@ func newDistributedApplicationEventingFromHandle(h *handle, c *client) Distribut
 }
 
 // Unsubscribe from an event.
-func (s *distributedApplicationEventing) Unsubscribe(subscription DistributedApplicationEventSubscription) error {
+func (s *distributedApplicationEventing) Unsubscribe(subscription AnyDistributedApplicationEventSubscription) error {
 	if s.err != nil { return s.err }
 	if subscription != nil { if err := subscription.Err(); err != nil { return err } }
 	ctx := context.Background()
@@ -16361,7 +16415,7 @@ func (s *distributedApplicationPipeline) AddStep(stepName string, callback func(
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineStepContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineStepContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -16388,7 +16442,7 @@ func (s *distributedApplicationPipeline) Configure(callback func(arg PipelineCon
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineConfigurationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineConfigurationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -16415,6 +16469,7 @@ func (s *distributedApplicationPipeline) DisableBuildOnlyContainerValidation() D
 // resource.
 type DistributedApplicationResourceEventSubscription interface {
 	handleReference
+	isDistributedApplicationEventSubscription()
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
 	// resolved successfully and no chained operation has failed.
@@ -16430,6 +16485,9 @@ type distributedApplicationResourceEventSubscription struct {
 func newDistributedApplicationResourceEventSubscriptionFromHandle(h *handle, c *client) DistributedApplicationResourceEventSubscription {
 	return &distributedApplicationResourceEventSubscription{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
+
+// distributedApplicationResourceEventSubscription implements the marker of each accepting interface for its own type and its base types.
+func (*distributedApplicationResourceEventSubscription) isDistributedApplicationEventSubscription() {}
 
 // DockerfileBuilder - Builder for creating Dockerfiles programmatically.
 type DockerfileBuilder interface {
@@ -16964,6 +17022,7 @@ func (s *dockerfileStage) WorkDir(path string) DockerfileStage {
 // DotnetToolResource.
 type DotnetToolResource interface {
 	handleReference
+	isExecutableResource()
 
 	// AsHttp2Service configures a resource to mark all endpoints' transport as
 	// HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -18057,6 +18116,9 @@ func newDotnetToolResourceFromHandle(h *handle, c *client) DotnetToolResource {
 	return &dotnetToolResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// dotnetToolResource implements the marker of each accepting interface for its own type and its base types.
+func (*dotnetToolResource) isExecutableResource() {}
+
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *dotnetToolResource) AsHttp2Service() DotnetToolResource {
@@ -18192,7 +18254,7 @@ func (s *dotnetToolResource) OnBeforeResourceStarted(callback func(arg BeforeRes
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforeResourceStartedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforeResourceStartedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -18211,7 +18273,7 @@ func (s *dotnetToolResource) OnInitializeResource(callback func(arg InitializeRe
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[InitializeResourceEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newInitializeResourceEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -18231,7 +18293,7 @@ func (s *dotnetToolResource) OnResourceEndpointsAllocated(callback func(arg Reso
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceEndpointsAllocatedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceEndpointsAllocatedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -18250,7 +18312,7 @@ func (s *dotnetToolResource) OnResourceReady(callback func(arg ResourceReadyEven
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceReadyEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceReadyEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -18269,7 +18331,7 @@ func (s *dotnetToolResource) OnResourceStopped(callback func(arg ResourceStopped
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceStoppedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceStoppedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -18288,7 +18350,7 @@ func (s *dotnetToolResource) PublishAsDockerFile(configure func(obj ContainerRes
 	if configure != nil {
 		cb := configure
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerResource](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerResourceFromHandle))
 			return nil
 		}
 		reqArgs["configure"] = s.client.registerCallback(shim)
@@ -18310,7 +18372,7 @@ func (s *dotnetToolResource) SubscribeHttpsEndpointsUpdate(callback func(obj Htt
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsEndpointUpdateCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -18343,7 +18405,7 @@ func (s *dotnetToolResource) TestWithEnvironmentCallback(callback func(arg TestE
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[TestEnvironmentContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newTestEnvironmentContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -18437,7 +18499,7 @@ func (s *dotnetToolResource) WithArgsCallback(callback func(obj CommandLineArgsC
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[CommandLineArgsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newCommandLineArgsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -18535,7 +18597,7 @@ func (s *dotnetToolResource) WithCommand(name string, displayName string, execut
 	if executeCommand != nil {
 		cb := executeCommand
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["executeCommand"] = s.client.registerCallback(shim)
 	}
@@ -18587,7 +18649,7 @@ func (s *dotnetToolResource) WithContainerBuildOptions(callback func(arg Contain
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerBuildOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -18712,7 +18774,7 @@ func (s *dotnetToolResource) WithEndpointCallback(endpointName string, callback 
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -18786,7 +18848,7 @@ func (s *dotnetToolResource) WithEnvironmentCallback(callback func(arg Environme
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EnvironmentCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEnvironmentCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -18954,7 +19016,7 @@ func (s *dotnetToolResource) WithHttpEndpointCallback(callback func(obj Endpoint
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -19020,7 +19082,7 @@ func (s *dotnetToolResource) WithHttpsCertificateConfiguration(callback func(arg
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsCertificateConfigurationCallbackAnnotationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -19079,7 +19141,7 @@ func (s *dotnetToolResource) WithHttpsEndpointCallback(callback func(obj Endpoin
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -19126,7 +19188,7 @@ func (s *dotnetToolResource) WithImagePushOptions(callback func(arg ContainerIma
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerImagePushOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerImagePushOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -19330,7 +19392,7 @@ func (s *dotnetToolResource) WithOptionalCallback(options ...*WithOptionalCallba
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -19425,7 +19487,7 @@ func (s *dotnetToolResource) WithPipelineConfiguration(callback func(obj Pipelin
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineConfigurationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineConfigurationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -19446,7 +19508,7 @@ func (s *dotnetToolResource) WithPipelineStepFactory(stepName string, callback f
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineStepContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineStepContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -19490,7 +19552,7 @@ func (s *dotnetToolResource) WithProcessCommandFactory(commandName string, displ
 	if createProcessSpec != nil {
 		cb := createProcessSpec
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
@@ -19618,7 +19680,7 @@ func (s *dotnetToolResource) WithRequiredCommandValidation(command string, valid
 	if validationCallback != nil {
 		cb := validationCallback
 		shim := func(args ...any) any {
-			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newRequiredCommandValidationContextFromHandle))
 		}
 		reqArgs["validationCallback"] = s.client.registerCallback(shim)
 	}
@@ -19852,7 +19914,7 @@ func (s *dotnetToolResource) WithUrls(callback func(obj ResourceUrlsCallbackCont
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceUrlsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceUrlsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -19871,7 +19933,7 @@ func (s *dotnetToolResource) WithValidator(validator func(arg TestResourceContex
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
@@ -21071,7 +21133,7 @@ func (s *eventingSubscriberRegistrationContext) OnAfterPublish(callback func(arg
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[AfterPublishEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newAfterPublishEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -21099,7 +21161,7 @@ func (s *eventingSubscriberRegistrationContext) OnAfterResourcesCreated(callback
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[AfterResourcesCreatedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newAfterResourcesCreatedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -21127,7 +21189,7 @@ func (s *eventingSubscriberRegistrationContext) OnBeforePublish(callback func(ar
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforePublishEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforePublishEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -21155,7 +21217,7 @@ func (s *eventingSubscriberRegistrationContext) OnBeforeStart(callback func(arg 
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforeStartEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforeStartEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -21182,6 +21244,7 @@ func (s *eventingSubscriberRegistrationContext) OnBeforeStart(callback func(arg 
 // path ./ to represent the current directory.
 type ExecutableResource interface {
 	handleReference
+	isExecutableResource()
 
 	// AsHttp2Service configures a resource to mark all endpoints' transport as
 	// HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -22202,6 +22265,9 @@ func newExecutableResourceFromHandle(h *handle, c *client) ExecutableResource {
 	return &executableResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// executableResource implements the marker of each accepting interface for its own type and its base types.
+func (*executableResource) isExecutableResource() {}
+
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *executableResource) AsHttp2Service() ExecutableResource {
@@ -22337,7 +22403,7 @@ func (s *executableResource) OnBeforeResourceStarted(callback func(arg BeforeRes
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforeResourceStartedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforeResourceStartedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -22356,7 +22422,7 @@ func (s *executableResource) OnInitializeResource(callback func(arg InitializeRe
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[InitializeResourceEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newInitializeResourceEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -22376,7 +22442,7 @@ func (s *executableResource) OnResourceEndpointsAllocated(callback func(arg Reso
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceEndpointsAllocatedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceEndpointsAllocatedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -22395,7 +22461,7 @@ func (s *executableResource) OnResourceReady(callback func(arg ResourceReadyEven
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceReadyEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceReadyEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -22414,7 +22480,7 @@ func (s *executableResource) OnResourceStopped(callback func(arg ResourceStopped
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceStoppedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceStoppedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -22433,7 +22499,7 @@ func (s *executableResource) PublishAsDockerFile(configure func(obj ContainerRes
 	if configure != nil {
 		cb := configure
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerResource](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerResourceFromHandle))
 			return nil
 		}
 		reqArgs["configure"] = s.client.registerCallback(shim)
@@ -22455,7 +22521,7 @@ func (s *executableResource) SubscribeHttpsEndpointsUpdate(callback func(obj Htt
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsEndpointUpdateCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -22488,7 +22554,7 @@ func (s *executableResource) TestWithEnvironmentCallback(callback func(arg TestE
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[TestEnvironmentContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newTestEnvironmentContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -22582,7 +22648,7 @@ func (s *executableResource) WithArgsCallback(callback func(obj CommandLineArgsC
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[CommandLineArgsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newCommandLineArgsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -22680,7 +22746,7 @@ func (s *executableResource) WithCommand(name string, displayName string, execut
 	if executeCommand != nil {
 		cb := executeCommand
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["executeCommand"] = s.client.registerCallback(shim)
 	}
@@ -22732,7 +22798,7 @@ func (s *executableResource) WithContainerBuildOptions(callback func(arg Contain
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerBuildOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -22857,7 +22923,7 @@ func (s *executableResource) WithEndpointCallback(endpointName string, callback 
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -22931,7 +22997,7 @@ func (s *executableResource) WithEnvironmentCallback(callback func(arg Environme
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EnvironmentCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEnvironmentCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -23099,7 +23165,7 @@ func (s *executableResource) WithHttpEndpointCallback(callback func(obj Endpoint
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -23165,7 +23231,7 @@ func (s *executableResource) WithHttpsCertificateConfiguration(callback func(arg
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsCertificateConfigurationCallbackAnnotationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -23224,7 +23290,7 @@ func (s *executableResource) WithHttpsEndpointCallback(callback func(obj Endpoin
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -23271,7 +23337,7 @@ func (s *executableResource) WithImagePushOptions(callback func(arg ContainerIma
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerImagePushOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerImagePushOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -23475,7 +23541,7 @@ func (s *executableResource) WithOptionalCallback(options ...*WithOptionalCallba
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -23570,7 +23636,7 @@ func (s *executableResource) WithPipelineConfiguration(callback func(obj Pipelin
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineConfigurationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineConfigurationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -23591,7 +23657,7 @@ func (s *executableResource) WithPipelineStepFactory(stepName string, callback f
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineStepContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineStepContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -23635,7 +23701,7 @@ func (s *executableResource) WithProcessCommandFactory(commandName string, displ
 	if createProcessSpec != nil {
 		cb := createProcessSpec
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
@@ -23763,7 +23829,7 @@ func (s *executableResource) WithRequiredCommandValidation(command string, valid
 	if validationCallback != nil {
 		cb := validationCallback
 		shim := func(args ...any) any {
-			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newRequiredCommandValidationContextFromHandle))
 		}
 		reqArgs["validationCallback"] = s.client.registerCallback(shim)
 	}
@@ -23925,7 +23991,7 @@ func (s *executableResource) WithUrls(callback func(obj ResourceUrlsCallbackCont
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceUrlsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceUrlsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -23944,7 +24010,7 @@ func (s *executableResource) WithValidator(validator func(arg TestResourceContex
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
@@ -24994,7 +25060,7 @@ func (s *externalServiceResource) OnBeforeResourceStarted(callback func(arg Befo
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforeResourceStartedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforeResourceStartedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -25013,7 +25079,7 @@ func (s *externalServiceResource) OnInitializeResource(callback func(arg Initial
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[InitializeResourceEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newInitializeResourceEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -25032,7 +25098,7 @@ func (s *externalServiceResource) OnResourceReady(callback func(arg ResourceRead
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceReadyEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceReadyEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -25051,7 +25117,7 @@ func (s *externalServiceResource) OnResourceStopped(callback func(arg ResourceSt
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceStoppedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceStoppedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -25073,7 +25139,7 @@ func (s *externalServiceResource) SubscribeHttpsEndpointsUpdate(callback func(ob
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsEndpointUpdateCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -25139,7 +25205,7 @@ func (s *externalServiceResource) WithCommand(name string, displayName string, e
 	if executeCommand != nil {
 		cb := executeCommand
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["executeCommand"] = s.client.registerCallback(shim)
 	}
@@ -25177,7 +25243,7 @@ func (s *externalServiceResource) WithContainerBuildOptions(callback func(arg Co
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerBuildOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -25536,7 +25602,7 @@ func (s *externalServiceResource) WithOptionalCallback(options ...*WithOptionalC
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -25613,7 +25679,7 @@ func (s *externalServiceResource) WithPipelineConfiguration(callback func(obj Pi
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineConfigurationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineConfigurationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -25634,7 +25700,7 @@ func (s *externalServiceResource) WithPipelineStepFactory(stepName string, callb
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineStepContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineStepContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -25678,7 +25744,7 @@ func (s *externalServiceResource) WithProcessCommandFactory(commandName string, 
 	if createProcessSpec != nil {
 		cb := createProcessSpec
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
@@ -25742,7 +25808,7 @@ func (s *externalServiceResource) WithRequiredCommandValidation(command string, 
 	if validationCallback != nil {
 		cb := validationCallback
 		shim := func(args ...any) any {
-			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newRequiredCommandValidationContextFromHandle))
 		}
 		reqArgs["validationCallback"] = s.client.registerCallback(shim)
 	}
@@ -25904,7 +25970,7 @@ func (s *externalServiceResource) WithUrls(callback func(obj ResourceUrlsCallbac
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceUrlsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceUrlsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -25923,7 +25989,7 @@ func (s *externalServiceResource) WithValidator(validator func(arg TestResourceC
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
@@ -27063,7 +27129,7 @@ func (s *interactionInputBuilder) WithDynamicLoading(callback func(arg Interacti
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[InteractionInputLoadContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newInteractionInputLoadContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -28749,7 +28815,7 @@ func (s *parameterResource) OnBeforeResourceStarted(callback func(arg BeforeReso
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforeResourceStartedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforeResourceStartedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -28768,7 +28834,7 @@ func (s *parameterResource) OnInitializeResource(callback func(arg InitializeRes
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[InitializeResourceEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newInitializeResourceEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -28787,7 +28853,7 @@ func (s *parameterResource) OnResourceReady(callback func(arg ResourceReadyEvent
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceReadyEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceReadyEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -28806,7 +28872,7 @@ func (s *parameterResource) OnResourceStopped(callback func(arg ResourceStoppedE
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceStoppedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceStoppedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -28852,7 +28918,7 @@ func (s *parameterResource) SubscribeHttpsEndpointsUpdate(callback func(obj Http
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsEndpointUpdateCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -28934,7 +29000,7 @@ func (s *parameterResource) WithCommand(name string, displayName string, execute
 	if executeCommand != nil {
 		cb := executeCommand
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["executeCommand"] = s.client.registerCallback(shim)
 	}
@@ -28972,7 +29038,7 @@ func (s *parameterResource) WithContainerBuildOptions(callback func(arg Containe
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerBuildOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -29355,7 +29421,7 @@ func (s *parameterResource) WithOptionalCallback(options ...*WithOptionalCallbac
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -29432,7 +29498,7 @@ func (s *parameterResource) WithPipelineConfiguration(callback func(obj Pipeline
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineConfigurationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineConfigurationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -29453,7 +29519,7 @@ func (s *parameterResource) WithPipelineStepFactory(stepName string, callback fu
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineStepContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineStepContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -29497,7 +29563,7 @@ func (s *parameterResource) WithProcessCommandFactory(commandName string, displa
 	if createProcessSpec != nil {
 		cb := createProcessSpec
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
@@ -29579,7 +29645,7 @@ func (s *parameterResource) WithRequiredCommandValidation(command string, valida
 	if validationCallback != nil {
 		cb := validationCallback
 		shim := func(args ...any) any {
-			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newRequiredCommandValidationContextFromHandle))
 		}
 		reqArgs["validationCallback"] = s.client.registerCallback(shim)
 	}
@@ -29741,7 +29807,7 @@ func (s *parameterResource) WithUrls(callback func(obj ResourceUrlsCallbackConte
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceUrlsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceUrlsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -29760,7 +29826,7 @@ func (s *parameterResource) WithValidator(validator func(arg TestResourceContext
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
@@ -30650,6 +30716,7 @@ func (s *progressContext) CancellationToken() (*CancellationToken, error) {
 // ProjectResource is a resource that represents a specified .NET project.
 type ProjectResource interface {
 	handleReference
+	isProjectResource()
 
 	// AsHttp2Service configures a resource to mark all endpoints' transport as
 	// HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -31675,6 +31742,9 @@ func newProjectResourceFromHandle(h *handle, c *client) ProjectResource {
 	return &projectResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// projectResource implements the marker of each accepting interface for its own type and its base types.
+func (*projectResource) isProjectResource() {}
+
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *projectResource) AsHttp2Service() ProjectResource {
@@ -31822,7 +31892,7 @@ func (s *projectResource) OnBeforeResourceStarted(callback func(arg BeforeResour
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforeResourceStartedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforeResourceStartedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -31841,7 +31911,7 @@ func (s *projectResource) OnInitializeResource(callback func(arg InitializeResou
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[InitializeResourceEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newInitializeResourceEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -31861,7 +31931,7 @@ func (s *projectResource) OnResourceEndpointsAllocated(callback func(arg Resourc
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceEndpointsAllocatedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceEndpointsAllocatedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -31880,7 +31950,7 @@ func (s *projectResource) OnResourceReady(callback func(arg ResourceReadyEvent))
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceReadyEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceReadyEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -31899,7 +31969,7 @@ func (s *projectResource) OnResourceStopped(callback func(arg ResourceStoppedEve
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceStoppedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceStoppedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -31925,7 +31995,7 @@ func (s *projectResource) PublishAsDockerFile(options ...*PublishAsDockerFileOpt
 		if merged.Configure != nil {
 			cb := merged.Configure
 			shim := func(args ...any) any {
-				cb(callbackArg[ContainerResource](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newContainerResourceFromHandle))
 				return nil
 			}
 			reqArgs["configure"] = s.client.registerCallback(shim)
@@ -31963,7 +32033,7 @@ func (s *projectResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsE
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsEndpointUpdateCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -31996,7 +32066,7 @@ func (s *projectResource) TestWithEnvironmentCallback(callback func(arg TestEnvi
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[TestEnvironmentContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newTestEnvironmentContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -32090,7 +32160,7 @@ func (s *projectResource) WithArgsCallback(callback func(obj CommandLineArgsCall
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[CommandLineArgsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newCommandLineArgsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -32188,7 +32258,7 @@ func (s *projectResource) WithCommand(name string, displayName string, executeCo
 	if executeCommand != nil {
 		cb := executeCommand
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["executeCommand"] = s.client.registerCallback(shim)
 	}
@@ -32240,7 +32310,7 @@ func (s *projectResource) WithContainerBuildOptions(callback func(arg ContainerB
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerBuildOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -32365,7 +32435,7 @@ func (s *projectResource) WithEndpointCallback(endpointName string, callback fun
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -32452,7 +32522,7 @@ func (s *projectResource) WithEnvironmentCallback(callback func(arg EnvironmentC
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EnvironmentCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEnvironmentCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -32587,7 +32657,7 @@ func (s *projectResource) WithHttpEndpointCallback(callback func(obj EndpointUpd
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -32653,7 +32723,7 @@ func (s *projectResource) WithHttpsCertificateConfiguration(callback func(arg Ht
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsCertificateConfigurationCallbackAnnotationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -32712,7 +32782,7 @@ func (s *projectResource) WithHttpsEndpointCallback(callback func(obj EndpointUp
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -32759,7 +32829,7 @@ func (s *projectResource) WithImagePushOptions(callback func(arg ContainerImageP
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerImagePushOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerImagePushOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -32963,7 +33033,7 @@ func (s *projectResource) WithOptionalCallback(options ...*WithOptionalCallbackO
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -33058,7 +33128,7 @@ func (s *projectResource) WithPipelineConfiguration(callback func(obj PipelineCo
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineConfigurationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineConfigurationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -33079,7 +33149,7 @@ func (s *projectResource) WithPipelineStepFactory(stepName string, callback func
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineStepContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineStepContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -33123,7 +33193,7 @@ func (s *projectResource) WithProcessCommandFactory(commandName string, displayN
 	if createProcessSpec != nil {
 		cb := createProcessSpec
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
@@ -33264,7 +33334,7 @@ func (s *projectResource) WithRequiredCommandValidation(command string, validati
 	if validationCallback != nil {
 		cb := validationCallback
 		shim := func(args ...any) any {
-			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newRequiredCommandValidationContextFromHandle))
 		}
 		reqArgs["validationCallback"] = s.client.registerCallback(shim)
 	}
@@ -33426,7 +33496,7 @@ func (s *projectResource) WithUrls(callback func(obj ResourceUrlsCallbackContext
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceUrlsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceUrlsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -33445,7 +33515,7 @@ func (s *projectResource) WithValidator(validator func(arg TestResourceContext) 
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
@@ -35533,6 +35603,7 @@ func (s *testCollectionContext) Metadata() *Dict[string, string] {
 // TestDatabaseResource.
 type TestDatabaseResource interface {
 	handleReference
+	isContainerResource()
 
 	// AsHttp2Service configures a resource to mark all endpoints' transport as
 	// HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -36779,6 +36850,9 @@ func newTestDatabaseResourceFromHandle(h *handle, c *client) TestDatabaseResourc
 	return &testDatabaseResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// testDatabaseResource implements the marker of each accepting interface for its own type and its base types.
+func (*testDatabaseResource) isContainerResource() {}
+
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *testDatabaseResource) AsHttp2Service() TestDatabaseResource {
@@ -36914,7 +36988,7 @@ func (s *testDatabaseResource) OnBeforeResourceStarted(callback func(arg BeforeR
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforeResourceStartedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforeResourceStartedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -36933,7 +37007,7 @@ func (s *testDatabaseResource) OnInitializeResource(callback func(arg Initialize
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[InitializeResourceEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newInitializeResourceEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -36953,7 +37027,7 @@ func (s *testDatabaseResource) OnResourceEndpointsAllocated(callback func(arg Re
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceEndpointsAllocatedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceEndpointsAllocatedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -36972,7 +37046,7 @@ func (s *testDatabaseResource) OnResourceReady(callback func(arg ResourceReadyEv
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceReadyEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceReadyEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -36991,7 +37065,7 @@ func (s *testDatabaseResource) OnResourceStopped(callback func(arg ResourceStopp
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceStoppedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceStoppedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -37037,7 +37111,7 @@ func (s *testDatabaseResource) SubscribeHttpsEndpointsUpdate(callback func(obj H
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsEndpointUpdateCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -37070,7 +37144,7 @@ func (s *testDatabaseResource) TestWithEnvironmentCallback(callback func(arg Tes
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[TestEnvironmentContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newTestEnvironmentContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -37164,7 +37238,7 @@ func (s *testDatabaseResource) WithArgsCallback(callback func(obj CommandLineArg
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[CommandLineArgsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newCommandLineArgsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -37318,7 +37392,7 @@ func (s *testDatabaseResource) WithCommand(name string, displayName string, exec
 	if executeCommand != nil {
 		cb := executeCommand
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["executeCommand"] = s.client.registerCallback(shim)
 	}
@@ -37370,7 +37444,7 @@ func (s *testDatabaseResource) WithContainerBuildOptions(callback func(arg Conta
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerBuildOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -37432,7 +37506,7 @@ func (s *testDatabaseResource) WithContainerFilesCallback(destinationPath string
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			return cb(callbackArg[ContainerFileSystemCallbackContext](args, 0), callbackArg[*CancellationToken](args, 1))
+			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackArg[*CancellationToken](args, 1))
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -37610,7 +37684,7 @@ func (s *testDatabaseResource) WithDockerfileBuilder(contextPath string, callbac
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[DockerfileBuilderCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newDockerfileBuilderCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -37638,7 +37712,7 @@ func (s *testDatabaseResource) WithDockerfileFactory(contextPath string, dockerf
 	if dockerfileFactory != nil {
 		cb := dockerfileFactory
 		shim := func(args ...any) any {
-			return cb(callbackArg[DockerfileFactoryContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newDockerfileFactoryContextFromHandle))
 		}
 		reqArgs["dockerfileFactory"] = s.client.registerCallback(shim)
 	}
@@ -37682,7 +37756,7 @@ func (s *testDatabaseResource) WithEndpointCallback(endpointName string, callbac
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -37768,7 +37842,7 @@ func (s *testDatabaseResource) WithEnvironmentCallback(callback func(arg Environ
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EnvironmentCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEnvironmentCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -37903,7 +37977,7 @@ func (s *testDatabaseResource) WithHttpEndpointCallback(callback func(obj Endpoi
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -37969,7 +38043,7 @@ func (s *testDatabaseResource) WithHttpsCertificateConfiguration(callback func(a
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsCertificateConfigurationCallbackAnnotationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -38028,7 +38102,7 @@ func (s *testDatabaseResource) WithHttpsEndpointCallback(callback func(obj Endpo
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -38106,7 +38180,7 @@ func (s *testDatabaseResource) WithImagePushOptions(callback func(arg ContainerI
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerImagePushOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerImagePushOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -38358,7 +38432,7 @@ func (s *testDatabaseResource) WithOptionalCallback(options ...*WithOptionalCall
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -38453,7 +38527,7 @@ func (s *testDatabaseResource) WithPipelineConfiguration(callback func(obj Pipel
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineConfigurationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineConfigurationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -38474,7 +38548,7 @@ func (s *testDatabaseResource) WithPipelineStepFactory(stepName string, callback
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineStepContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineStepContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -38518,7 +38592,7 @@ func (s *testDatabaseResource) WithProcessCommandFactory(commandName string, dis
 	if createProcessSpec != nil {
 		cb := createProcessSpec
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
@@ -38646,7 +38720,7 @@ func (s *testDatabaseResource) WithRequiredCommandValidation(command string, val
 	if validationCallback != nil {
 		cb := validationCallback
 		shim := func(args ...any) any {
-			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newRequiredCommandValidationContextFromHandle))
 		}
 		reqArgs["validationCallback"] = s.client.registerCallback(shim)
 	}
@@ -38808,7 +38882,7 @@ func (s *testDatabaseResource) WithUrls(callback func(obj ResourceUrlsCallbackCo
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceUrlsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceUrlsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -38827,7 +38901,7 @@ func (s *testDatabaseResource) WithValidator(validator func(arg TestResourceCont
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
@@ -39115,6 +39189,7 @@ func (s *testMutablePromiseCollisionResource) Value() (string, error) {
 // TestRedisResource is the public interface for handle type TestRedisResource.
 type TestRedisResource interface {
 	handleReference
+	isContainerResource()
 
 	// AddTestChildDatabase adds a child database to a test Redis resource
 	//
@@ -40362,6 +40437,12 @@ type TestRedisResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestRedisResource
 
+	// WithScalarField sets a scalar field value
+	//
+	// Allowed types for parameter value: string, float64, bool (float64 accepts any
+	// built-in Go numeric type).
+	WithScalarField(path string, value any) TestRedisResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -40485,6 +40566,9 @@ type testRedisResource struct {
 func newTestRedisResourceFromHandle(h *handle, c *client) TestRedisResource {
 	return &testRedisResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
+
+// testRedisResource implements the marker of each accepting interface for its own type and its base types.
+func (*testRedisResource) isContainerResource() {}
 
 // AddTestChildDatabase adds a child database to a test Redis resource
 func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTestChildDatabaseOptions) TestDatabaseResource {
@@ -40726,7 +40810,7 @@ func (s *testRedisResource) OnBeforeResourceStarted(callback func(arg BeforeReso
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[BeforeResourceStartedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newBeforeResourceStartedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -40746,7 +40830,7 @@ func (s *testRedisResource) OnConnectionStringAvailable(callback func(arg Connec
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ConnectionStringAvailableEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newConnectionStringAvailableEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -40765,7 +40849,7 @@ func (s *testRedisResource) OnInitializeResource(callback func(arg InitializeRes
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[InitializeResourceEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newInitializeResourceEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -40785,7 +40869,7 @@ func (s *testRedisResource) OnResourceEndpointsAllocated(callback func(arg Resou
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceEndpointsAllocatedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceEndpointsAllocatedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -40804,7 +40888,7 @@ func (s *testRedisResource) OnResourceReady(callback func(arg ResourceReadyEvent
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceReadyEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceReadyEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -40823,7 +40907,7 @@ func (s *testRedisResource) OnResourceStopped(callback func(arg ResourceStoppedE
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceStoppedEvent](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceStoppedEventFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -40869,7 +40953,7 @@ func (s *testRedisResource) SubscribeHttpsEndpointsUpdate(callback func(obj Http
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsEndpointUpdateCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -40902,7 +40986,7 @@ func (s *testRedisResource) TestWithEnvironmentCallback(callback func(arg TestEn
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[TestEnvironmentContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newTestEnvironmentContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -41025,7 +41109,7 @@ func (s *testRedisResource) WithArgsCallback(callback func(obj CommandLineArgsCa
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[CommandLineArgsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newCommandLineArgsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -41179,7 +41263,7 @@ func (s *testRedisResource) WithCommand(name string, displayName string, execute
 	if executeCommand != nil {
 		cb := executeCommand
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["executeCommand"] = s.client.registerCallback(shim)
 	}
@@ -41292,7 +41376,7 @@ func (s *testRedisResource) WithContainerBuildOptions(callback func(arg Containe
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerBuildOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -41354,7 +41438,7 @@ func (s *testRedisResource) WithContainerFilesCallback(destinationPath string, c
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			return cb(callbackArg[ContainerFileSystemCallbackContext](args, 0), callbackArg[*CancellationToken](args, 1))
+			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackArg[*CancellationToken](args, 1))
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -41550,7 +41634,7 @@ func (s *testRedisResource) WithDockerfileBuilder(contextPath string, callback f
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[DockerfileBuilderCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newDockerfileBuilderCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -41578,7 +41662,7 @@ func (s *testRedisResource) WithDockerfileFactory(contextPath string, dockerfile
 	if dockerfileFactory != nil {
 		cb := dockerfileFactory
 		shim := func(args ...any) any {
-			return cb(callbackArg[DockerfileFactoryContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newDockerfileFactoryContextFromHandle))
 		}
 		reqArgs["dockerfileFactory"] = s.client.registerCallback(shim)
 	}
@@ -41622,7 +41706,7 @@ func (s *testRedisResource) WithEndpointCallback(endpointName string, callback f
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -41708,7 +41792,7 @@ func (s *testRedisResource) WithEnvironmentCallback(callback func(arg Environmen
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EnvironmentCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEnvironmentCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -41843,7 +41927,7 @@ func (s *testRedisResource) WithHttpEndpointCallback(callback func(obj EndpointU
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -41909,7 +41993,7 @@ func (s *testRedisResource) WithHttpsCertificateConfiguration(callback func(arg 
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newHttpsCertificateConfigurationCallbackAnnotationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -41968,7 +42052,7 @@ func (s *testRedisResource) WithHttpsEndpointCallback(callback func(obj Endpoint
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[EndpointUpdateContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newEndpointUpdateContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -42046,7 +42130,7 @@ func (s *testRedisResource) WithImagePushOptions(callback func(arg ContainerImag
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ContainerImagePushOptionsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newContainerImagePushOptionsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -42280,7 +42364,7 @@ func (s *testRedisResource) WithMultiParamHandleCallback(callback func(arg1 Test
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[TestCallbackContext](args, 0), callbackArg[TestEnvironmentContext](args, 1))
+			cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle), callbackHandleArg(s.client, args, 1, newTestEnvironmentContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -42333,7 +42417,7 @@ func (s *testRedisResource) WithOptionalCallback(options ...*WithOptionalCallbac
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
+				cb(callbackHandleArg(s.client, args, 0, newTestCallbackContextFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
@@ -42446,7 +42530,7 @@ func (s *testRedisResource) WithPipelineConfiguration(callback func(obj Pipeline
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineConfigurationContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineConfigurationContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -42467,7 +42551,7 @@ func (s *testRedisResource) WithPipelineStepFactory(stepName string, callback fu
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[PipelineStepContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newPipelineStepContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -42511,7 +42595,7 @@ func (s *testRedisResource) WithProcessCommandFactory(commandName string, displa
 	if createProcessSpec != nil {
 		cb := createProcessSpec
 		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
 		}
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
@@ -42667,7 +42751,7 @@ func (s *testRedisResource) WithRequiredCommandValidation(command string, valida
 	if validationCallback != nil {
 		cb := validationCallback
 		shim := func(args ...any) any {
-			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newRequiredCommandValidationContextFromHandle))
 		}
 		reqArgs["validationCallback"] = s.client.registerCallback(shim)
 	}
@@ -42679,6 +42763,26 @@ func (s *testRedisResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithScalarField sets a scalar field value
+// Allowed types for parameter value: string, float64, bool (float64 accepts any built-in Go numeric type).
+func (s *testRedisResource) WithScalarField(path string, value any) TestRedisResource {
+	if s.err != nil { return s }
+	switch value.(type) {
+	case string, float64, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32:
+	default:
+		err := fmt.Errorf("aspire: WithScalarField: parameter %q must be one of [string, float64, bool], got %T", "value", value)
+		s.setErr(err); return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["path"] = serializeValue(path)
+	if !isNil(value) { reqArgs["value"] = serializeValue(value) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withScalarField", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -42829,7 +42933,7 @@ func (s *testRedisResource) WithUrls(callback func(obj ResourceUrlsCallbackConte
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[ResourceUrlsCallbackContext](args, 0))
+			cb(callbackHandleArg(s.client, args, 0, newResourceUrlsCallbackContextFromHandle))
 			return nil
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
@@ -42848,7 +42952,7 @@ func (s *testRedisResource) WithValidator(validator func(arg TestResourceContext
 	if validator != nil {
 		cb := validator
 		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
+			return cb(callbackHandleArg(s.client, args, 0, newTestResourceContextFromHandle))
 		}
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}

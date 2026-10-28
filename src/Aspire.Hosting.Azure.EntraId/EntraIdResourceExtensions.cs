@@ -1362,6 +1362,68 @@ public static class EntraIdResourceExtensions
     }
 
     /// <summary>
+    /// Declares an application role on the registration created by Aspire.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="role">The application role to declare.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="role"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when a role with the same value or ID is already declared.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the resource references an existing registration.</exception>
+    /// <remarks>
+    /// <para>
+    /// Application roles are different from delegated scopes and from Azure RBAC roles. This only declares the role;
+    /// it does not assign it to any user, group, or application, and it does not grant consent.
+    /// </para>
+    /// <para>
+    /// Role IDs stay the same across deployments. Changing a role's value, or its ID, creates a different role in
+    /// the directory; assignments of the previous role are not migrated.
+    /// </para>
+    /// <para>
+    /// Whenever at least one role is declared, the complete <c>appRoles</c> collection is sent and Microsoft Graph replaces what is
+    /// stored. Include every role to keep, including roles that were added outside the AppHost: a role that is left out fails the
+    /// deployment if it is still enabled and is deleted if it is already disabled.
+    /// </para>
+    /// <para>
+    /// Existing registrations are never modified, so this method cannot be used with <c>AddExistingEntraApplication</c>.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var entraApi = builder.AddEntraIdApplication("entra-api")
+    ///     .WithAppRole(new EntraIdAppRole("User", "User", "Can use the API."))
+    ///     .WithAppRole(new EntraIdAppRole("Admin", "Administrator", "Can administer the API.", ["User", "Application"]));
+    /// </code>
+    /// </example>
+    public static IResourceBuilder<EntraIdApplicationResource> WithAppRole(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        EntraIdAppRole role)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(role);
+
+        if (builder.Resource.IsExistingApplication)
+        {
+            throw new InvalidOperationException("Application roles can only be declared on registrations created by Aspire. Existing registrations are not modified.");
+        }
+
+        var roles = builder.Resource.AppRoles;
+        if (roles.Any(r => string.Equals(r.Value, role.Value, StringComparison.Ordinal)))
+        {
+            throw new ArgumentException($"An application role with the value '{role.Value}' is already declared.", nameof(role));
+        }
+
+        var id = role.GetStableId(builder.Resource.Name);
+        if (roles.Any(r => r.GetStableId(builder.Resource.Name) == id))
+        {
+            throw new ArgumentException($"The application role ID '{id}' is already used by another role.", nameof(role));
+        }
+
+        builder.Resource.AddAppRole(role);
+        return builder;
+    }
+
+    /// <summary>
     /// Enables ID-token issuance through implicit and hybrid flows for a registration created by Aspire.
     /// </summary>
     /// <param name="builder">The resource builder.</param>

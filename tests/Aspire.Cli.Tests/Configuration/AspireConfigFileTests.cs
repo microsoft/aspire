@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Configuration;
 
@@ -227,6 +228,22 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         config.Save(subDir);
 
         Assert.True(File.Exists(Path.Combine(subDir, AspireConfigFile.FileName)));
+    }
+
+    [Fact]
+    public void Save_WritesOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var config = new AspireConfigFile
+        {
+            AppHost = new AspireConfigAppHost { Path = "src/AppHost/AppHost.csproj" },
+            Channel = "daily"
+        };
+
+        config.Save(workspace.WorkspaceRoot.FullName);
+
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName));
     }
 
     [Fact]

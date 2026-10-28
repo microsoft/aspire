@@ -4,311 +4,311 @@
     <body>
       <trans-unit id="CancelCommandConfirmation">
         <source>This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?</source>
-        <target state="new">This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?</target>
+        <target state="translated">Hiermit wird der Abbruch des aktiven Azure-Vorgangs, der diese Ressource enthält, oder der aktiven Azure Bereitstellung für diese Ressource angefordert. Wenn der Vorgang andere Azure-Ressourcen umfasst, werden diese ebenfalls abgebrochen. Azure kann Arbeiten fortsetzen, die nicht sofort abgebrochen werden können, und bereits erstellte Ressourcen werden nicht gelöscht. Möchten Sie den Vorgang fortsetzen?</target>
         <note />
       </trans-unit>
       <trans-unit id="CancelCommandDescription">
         <source>Requests cancellation of the active Azure operation or deployment for this resource.</source>
-        <target state="new">Requests cancellation of the active Azure operation or deployment for this resource.</target>
+        <target state="translated">Fordert den Abbruch des aktiven Azure-Vorgangs oder der Bereitstellung für diese Ressource an.</target>
         <note />
       </trans-unit>
       <trans-unit id="CancelCommandName">
         <source>Cancel</source>
-        <target state="new">Cancel</target>
+        <target state="translated">Abbrechen</target>
         <note />
       </trans-unit>
       <trans-unit id="CancelCommandSuccess">
         <source>Azure cancellation requested.</source>
-        <target state="new">Azure cancellation requested.</target>
+        <target state="translated">Azure-Kündigung angefordert.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandConfirmation">
         <source>This updates the Azure context for this AppHost and reprovisions all Azure resources using the values you enter next.</source>
-        <target state="new">This updates the Azure context for this AppHost and reprovisions all Azure resources using the values you enter next.</target>
+        <target state="translated">Damit wird der Azure-Kontext für diesen AppHost aktualisiert und alle Azure-Ressourcen werden mit den anschließend eingegebenen Werten erneut bereitgestellt.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandDescription">
         <source>Updates the Azure tenant, subscription, resource group, or location for this AppHost and reprovisions all Azure resources.</source>
-        <target state="new">Updates the Azure tenant, subscription, resource group, or location for this AppHost and reprovisions all Azure resources.</target>
+        <target state="translated">Aktualisiert den Azure-Mandanten, das Abonnement, die Ressourcengruppe oder den Standort für diesen AppHost und stellt alle Azure-Ressourcen erneut bereit.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandName">
         <source>Change Azure context</source>
-        <target state="new">Change Azure context</target>
+        <target state="translated">Azure-Kontext ändern</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandSuccess">
         <source>Azure context updated and resources reprovisioned.</source>
-        <target state="new">Azure context updated and resources reprovisioned.</target>
+        <target state="translated">Der Azure-Kontext wurde aktualisiert und die Ressourcen wurden erneut bereitgestellt.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandDescription">
         <source>Changes the Azure location for this resource. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</source>
-        <target state="new">Changes the Azure location for this resource. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</target>
+        <target state="translated">Ändert den Azure-Standort für diese Ressource. Wenn Aspire die vorhandene Azure Ressource löschen und neu erstellen müssen, gehen alle darin enthaltenen Daten möglicherweise dauerhaft verloren.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandName">
         <source>Change location</source>
-        <target state="new">Change location</target>
+        <target state="translated">Standort ändern</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandSuccess">
         <source>Azure resource location updated and reprovisioning completed.</source>
-        <target state="new">Azure resource location updated and reprovisioning completed.</target>
+        <target state="translated">Azure-Ressourcenstandort aktualisiert und erneute Bereitstellung abgeschlossen.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationConfirmDeleteDescription">
         <source>Allow Aspire to delete and recreate the existing Azure resource when changing its location. Any data in the deleted resource may be permanently lost.</source>
-        <target state="new">Allow Aspire to delete and recreate the existing Azure resource when changing its location. Any data in the deleted resource may be permanently lost.</target>
+        <target state="translated">Erlauben Sie Aspire, die vorhandene Azure-Ressource zu löschen und neu zu erstellen, wenn Sie ihren Standort ändern. Alle Daten in der gelöschten Ressource gehen möglicherweise dauerhaft verloren.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationConfirmDeleteLabel">
         <source>Allow deletion and possible permanent data loss</source>
-        <target state="new">Allow deletion and possible permanent data loss</target>
+        <target state="translated">Löschen und möglichen dauerhaften Datenverlust zulassen</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationDeleteConfirmationRequiredFormat">
         <source>Changing the location of Azure resource '{0}' requires deleting and recreating it. Any data in the deleted resource may be permanently lost. Set the '{1}' command argument to true to continue.</source>
-        <target state="new">Changing the location of Azure resource '{0}' requires deleting and recreating it. Any data in the deleted resource may be permanently lost. Set the '{1}' command argument to true to continue.</target>
+        <target state="translated">Das Ändern des Standorts Azure Ressource '{0}' erfordert das Löschen und Neuerstellen der Ressource. Alle Daten in der gelöschten Ressource gehen möglicherweise dauerhaft verloren. Legen Sie das '{1}' Befehlsargument auf TRUE fest, um fortzufahren.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationKeyVaultUnsupported">
         <source>Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</source>
-        <target state="new">Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</target>
+        <target state="translated">Der Standort von Azure Key Vault-Ressourcen kann nicht geändert werden, da die Namen vorläufig gelöschter Tresore global reserviert bleiben. Verwenden Sie „Löschen“, „Erneut bereitstellen“ oder „Zustand verwerfen“, um diese Ressource wiederherzustellen.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationPromptMessage">
         <source>Select or enter a new Azure location for '{0}'. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</source>
-        <target state="new">Select or enter a new Azure location for '{0}'. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</target>
+        <target state="translated">Wählen Sie einen neuen Azure Speicherort für '{0}' aus, oder geben Sie einen neuen ein. Wenn Aspire die vorhandene Azure Ressource löschen und neu erstellen müssen, gehen alle darin enthaltenen Daten möglicherweise dauerhaft verloren.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationPromptTitle">
         <source>Change Azure resource location</source>
-        <target state="new">Change Azure resource location</target>
+        <target state="translated">Standort der Azure-Ressource ändern</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyLocationDisplayName">
         <source>Azure location</source>
-        <target state="new">Azure location</target>
+        <target state="translated">Azure-Standort</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyResourceGroupDisplayName">
         <source>Azure resource group</source>
-        <target state="new">Azure resource group</target>
+        <target state="translated">Azure-Ressourcengruppe</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertySubscriptionIdDisplayName">
         <source>Azure subscription ID</source>
-        <target state="new">Azure subscription ID</target>
+        <target state="translated">Azure-Abonnement-ID</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyTenantDomainDisplayName">
         <source>Azure tenant domain</source>
-        <target state="new">Azure tenant domain</target>
+        <target state="translated">Azure-Mandantendomäne</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyTenantIdDisplayName">
         <source>Azure tenant ID</source>
-        <target state="new">Azure tenant ID</target>
+        <target state="translated">Azure-Mandanten-ID</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandConfirmation">
         <source>This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?</source>
-        <target state="new">This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?</target>
+        <target state="translated">Damit wird die zwischengespeicherte Azure-Bereitstellung abgebrochen, es werden die für die Bereitstellung dieser Ressource vorgesehenen Azure-Ressourcen gelöscht, wiederherstellbare Key Vaults endgültig gelöscht, damit ihre Namen wiederverwendet werden können, und der zwischengespeicherte Bereitstellungsstatus wird geleert. Möchten Sie fortfahren?</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandDescription">
         <source>Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource.</source>
-        <target state="new">Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource.</target>
+        <target state="translated">Damit wird die zwischengespeicherte Azure-Bereitstellung abgebrochen, es werden die für die Bereitstellung vorgesehenen Azure-Ressourcen gelöscht, wiederherstellbare Key Vaults endgültig gelöscht, damit ihre Namen wiederverwendet werden können, und der zwischengespeicherte Bereitstellungsstatus wird geleert.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandName">
         <source>Delete Azure resource</source>
-        <target state="new">Delete Azure resource</target>
+        <target state="translated">Azure-Ressource löschen</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandSuccess">
         <source>Azure resources deleted and provisioning state reset.</source>
-        <target state="new">Azure resources deleted and provisioning state reset.</target>
+        <target state="translated">Azure-Ressourcen gelöscht und Bereitstellungsstatus zurückgesetzt.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandConfirmation">
         <source>This deletes the current Azure resource group and every Azure resource inside it for this AppHost, then clears the cached deployment state. Do you want to continue?</source>
-        <target state="new">This deletes the current Azure resource group and every Azure resource inside it for this AppHost, then clears the cached deployment state. Do you want to continue?</target>
+        <target state="translated">Dadurch werden die aktuelle Azure Ressourcengruppe und alle darin enthaltenen Azure Ressourcen für diesen AppHost gelöscht. Anschließend wird der zwischengespeicherte Bereitstellungsstatus gelöscht. Möchten Sie den Vorgang fortsetzen?</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandDescription">
         <source>Deletes the current Azure resource group for this AppHost, clears cached deployment state, and leaves the Azure context intact for reprovisioning.</source>
-        <target state="new">Deletes the current Azure resource group for this AppHost, clears cached deployment state, and leaves the Azure context intact for reprovisioning.</target>
+        <target state="translated">Löscht die aktuelle Azure-Ressourcengruppe für diesen AppHost, leert den zwischengespeicherten Bereitstellungsstatus und lässt den Azure-Kontext für eine erneute Bereitstellung intakt.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandName">
         <source>Delete Azure resources</source>
-        <target state="new">Delete Azure resources</target>
+        <target state="translated">Löschen von Azure-Ressourcen</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandSuccess">
         <source>Azure resources deleted and provisioning state reset.</source>
-        <target state="new">Azure resources deleted and provisioning state reset.</target>
+        <target state="translated">Azure-Ressourcen gelöscht und Bereitstellungsstatus zurückgesetzt.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesRemainingResourcesFormat">
         <source>Resource-group deletion completed. These resources were not deleted: {0}.</source>
-        <target state="new">Resource-group deletion completed. These resources were not deleted: {0}.</target>
+        <target state="translated">Das Löschen der Ressourcengruppe ist abgeschlossen. Diese Ressourcen wurden nicht gelöscht: {0}.</target>
         <note>{0} is a list of resource names, provider types, and object IDs.</note>
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesRemainingResourcesWarning">
         <source>The listed resources were not deleted because they exist outside the resource group. Delete them separately using their service's portal or API.</source>
-        <target state="new">The listed resources were not deleted because they exist outside the resource group. Delete them separately using their service's portal or API.</target>
+        <target state="translated">Die aufgelisteten Ressourcen wurden nicht gelöscht, da sie außerhalb der Ressourcengruppe vorhanden sind. Löschen Sie sie separat über das Portal oder die API des jeweiligen Diensts.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationCanceledResourcesFormat">
         <source>Canceled Azure resources: {0}</source>
-        <target state="new">Canceled Azure resources: {0}</target>
+        <target state="translated">Azure-Ressourcen abgebrochen: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationFailedResourcesFormat">
         <source>Failed Azure resources: {0}</source>
-        <target state="new">Failed Azure resources: {0}</target>
+        <target state="translated">Fehlerhafte Azure-Ressourcen: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationRunningResourcesFormat">
         <source>Provisioning Azure resources: {0}</source>
-        <target state="new">Provisioning Azure resources: {0}</target>
+        <target state="translated">Bereitstellen der Azure-Ressourcen: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationSummaryDisplayName">
         <source>Azure deployment diagnostics</source>
-        <target state="new">Azure deployment diagnostics</target>
+        <target state="translated">Azure-Bereitstellungsdiagnose</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyCodeDisplayName">
         <source>Azure error code</source>
-        <target state="new">Azure error code</target>
+        <target state="translated">Azure-Fehlercode</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyCorrelationIdDisplayName">
         <source>Azure correlation ID</source>
-        <target state="new">Azure correlation ID</target>
+        <target state="translated">Azure-Korrelations-ID</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyCurrentLocationDisplayName">
         <source>Azure current location</source>
-        <target state="new">Azure current location</target>
+        <target state="translated">Aktueller Azure-Standort</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyFailedResourcesDisplayName">
         <source>Failed Azure resources</source>
-        <target state="new">Failed Azure resources</target>
+        <target state="translated">Fehlerhafte Azure-Ressourcen</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyHttpStatusDisplayName">
         <source>Azure HTTP status</source>
-        <target state="new">Azure HTTP status</target>
+        <target state="translated">Azure HTTP – Status</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyMessageDisplayName">
         <source>Azure error message</source>
-        <target state="new">Azure error message</target>
+        <target state="translated">Azure-Fehlermeldung</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyOperationDisplayName">
         <source>Azure operation</source>
-        <target state="new">Azure operation</target>
+        <target state="translated">Azure-Vorgang</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyProviderDisplayName">
         <source>Azure provider</source>
-        <target state="new">Azure provider</target>
+        <target state="translated">Azure-Anbieter</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyRecommendedActionsDisplayName">
         <source>Azure recommended actions</source>
-        <target state="new">Azure recommended actions</target>
+        <target state="translated">Von Azure empfohlene Aktionen</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyRequestIdDisplayName">
         <source>Azure request ID</source>
-        <target state="new">Azure request ID</target>
+        <target state="translated">Azure-Anforderungs-ID</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyResourceNameDisplayName">
         <source>Azure resource name</source>
-        <target state="new">Azure resource name</target>
+        <target state="translated">Azure-Ressourcenname</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyResourceTypeDisplayName">
         <source>Azure resource type</source>
-        <target state="new">Azure resource type</target>
+        <target state="translated">Azure-Ressourcentyp</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertySupportedLocationsDisplayName">
         <source>Azure supported locations</source>
-        <target state="new">Azure supported locations</target>
+        <target state="translated">Von Azure unterstützte Standorte</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyTargetResourceIdDisplayName">
         <source>Azure target resource ID</source>
-        <target state="new">Azure target resource ID</target>
+        <target state="translated">Azure-Zielressourcen-ID</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandConfirmation">
         <source>This clears the cached Azure deployment state for this resource and resets its provisioning snapshot.</source>
-        <target state="new">This clears the cached Azure deployment state for this resource and resets its provisioning snapshot.</target>
+        <target state="translated">Dadurch wird der zwischengespeicherte Azure-Bereitstellungsstatus für diese Ressource gelöscht und die zugehörige Momentaufnahme zurückgesetzt.</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandDescription">
         <source>Clears the cached Azure deployment state for this resource so it can be provisioned again using the current Azure context.</source>
-        <target state="new">Clears the cached Azure deployment state for this resource so it can be provisioned again using the current Azure context.</target>
+        <target state="translated">Löscht den zwischengespeicherten Azure Bereitstellungsstatus für diese Ressource, damit sie mit dem aktuellen Azure Kontext erneut bereitgestellt werden kann.</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandName">
         <source>Forget state</source>
-        <target state="new">Forget state</target>
+        <target state="translated">Status verwerfen</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandSuccess">
         <source>Azure resource provisioning state reset.</source>
-        <target state="new">Azure resource provisioning state reset.</target>
+        <target state="translated">Der Azure-Ressourcenbereitstellungsstatus wurde zurückgesetzt.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetAzureResourceCommandDescription">
         <source>Returns cached deployment state and live Azure existence information for this resource.</source>
-        <target state="new">Returns cached deployment state and live Azure existence information for this resource.</target>
+        <target state="translated">Gibt den zwischengespeicherten Bereitstellungsstatus sowie Informationen darüber zurück, ob die Azure-Ressource tatsächlich vorhanden ist.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetAzureResourceCommandName">
         <source>Get Azure resource</source>
-        <target state="new">Get Azure resource</target>
+        <target state="translated">Azure-Ressource abrufen</target>
         <note />
       </trans-unit>
       <trans-unit id="GetAzureResourceCommandSuccess">
         <source>Azure resource information retrieved.</source>
-        <target state="new">Azure resource information retrieved.</target>
+        <target state="translated">Informationen zur Azure-Ressource wurden abgerufen.</target>
         <note />
       </trans-unit>
       <trans-unit id="InputsMessage">
         <source>Select the Azure tenant, subscription, resource group, and location Aspire should use for provisioning.
 
 To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning).</source>
-        <target state="needs-review-translation">Das Modell enthält Azure-Ressourcen, für die ein Azure-Abonnement erforderlich ist.
+        <target state="translated">Wählen Sie den Azure Mandanten, das Abonnement, die Ressourcengruppe und den Standort aus, die Aspire für die Bereitstellung verwenden sollen.
 
-Weitere Informationen finden Sie in der [Azure-Bereitstellungsdokumentation](https://aka.ms/aspire/azure/provisioning).</target>
+Weitere Informationen finden Sie im [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning).</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="InputsPrimaryButtonText">
         <source>Save</source>
-        <target state="new">Save</target>
+        <target state="translated">Speichern</target>
         <note />
       </trans-unit>
       <trans-unit id="InputsSecondaryButtonText">
         <source>Cancel</source>
-        <target state="new">Cancel</target>
+        <target state="translated">Abbrechen</target>
         <note />
       </trans-unit>
       <trans-unit id="InputsTitle">
         <source>Configure Azure context</source>
-        <target state="needs-review-translation">Azure-Bereitstellung</target>
+        <target state="translated">Azure-Kontext konfigurieren</target>
         <note />
       </trans-unit>
       <trans-unit id="LocationDialogTitle">
@@ -338,7 +338,7 @@ Weitere Informationen finden Sie in der [Azure-Bereitstellungsdokumentation](htt
       </trans-unit>
       <trans-unit id="NotificationPrimaryButtonText">
         <source>Configure</source>
-        <target state="needs-review-translation">Werte eingeben</target>
+        <target state="translated">Konfigurieren</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationTitle">
@@ -348,157 +348,157 @@ Weitere Informationen finden Sie in der [Azure-Bereitstellungsdokumentation](htt
       </trans-unit>
       <trans-unit id="OperationAlreadyRunningOrQueued">
         <source>Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'.</source>
-        <target state="new">Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'.</target>
+        <target state="translated">Azure Vorgang '{0}' wird bereits ausgeführt oder befindet sich für denselben Ressourcenbereich in der Warteschlange. Warten Sie, bis der Vorgang abgeschlossen ist, oder führen Sie '{2}' aus, bevor Sie '{1}' starten.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseApplyingAzureContext">
         <source>Applying Azure context</source>
-        <target state="new">Applying Azure context</target>
+        <target state="translated">Azure-Kontext wird angewendet</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseChangingAzureContext">
         <source>Changing Azure context</source>
-        <target state="new">Changing Azure context</target>
+        <target state="translated">Azure-Kontext wird geändert</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseChangingLocationToFormat">
         <source>Changing location to {0}</source>
-        <target state="new">Changing location to {0}</target>
+        <target state="translated">Standort wird geändert in {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseDeletingAzureResource">
         <source>Deleting Azure resource</source>
-        <target state="new">Deleting Azure resource</target>
+        <target state="translated">Löschen einer Azure-Ressource</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseDeletingAzureResources">
         <source>Deleting Azure resources</source>
-        <target state="new">Deleting Azure resources</target>
+        <target state="translated">Löschen der Azure-Ressourcen</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat">
         <source>Deleting existing Azure resource before changing location to {0}</source>
-        <target state="new">Deleting existing Azure resource before changing location to {0}</target>
+        <target state="translated">Vorhandene Azure-Ressource löschen, bevor der Standort in „{0}“ geändert wird</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseProvisioningAzureResources">
         <source>Provisioning Azure resources</source>
-        <target state="new">Provisioning Azure resources</target>
+        <target state="translated">Bereitstellen der Azure-Ressourcen</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhasePurgingDeletedKeyVault">
         <source>Purging deleted Key Vault</source>
-        <target state="new">Purging deleted Key Vault</target>
+        <target state="translated">Bereinigen des gelöschten Schlüsseltresors</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhasePurgingRecoverableKeyVaultFormat">
         <source>Purging recoverable Key Vault {0}</source>
-        <target state="new">Purging recoverable Key Vault {0}</target>
+        <target state="translated">Wiederherstellbaren Key Vault {0} bereinigen</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseReprovisioning">
         <source>Reprovisioning</source>
-        <target state="new">Reprovisioning</target>
+        <target state="translated">Erneute Bereitstellung</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseReprovisioningAzureResources">
         <source>Reprovisioning Azure resources</source>
-        <target state="new">Reprovisioning Azure resources</target>
+        <target state="translated">Erneute Bereitstellung der Azure-Ressourcen</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseReprovisioningInLocationFormat">
         <source>Reprovisioning in {0}</source>
-        <target state="new">Reprovisioning in {0}</target>
+        <target state="translated">Erneute Bereitstellung in {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseResettingProvisioningState">
         <source>Resetting provisioning state</source>
-        <target state="new">Resetting provisioning state</target>
+        <target state="translated">Bereitstellungsstatus wird zurückgesetzt</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyNameDisplayName">
         <source>Azure operation</source>
-        <target state="new">Azure operation</target>
+        <target state="translated">Azure-Vorgang</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyPhaseDisplayName">
         <source>Azure operation phase</source>
-        <target state="new">Azure operation phase</target>
+        <target state="translated">Status des Azure-Vorgangs</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyStartedAtDisplayName">
         <source>Azure operation started</source>
-        <target state="new">Azure operation started</target>
+        <target state="translated">Azure-Vorgang gestartet</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyStatusDisplayName">
         <source>Azure operation status</source>
-        <target state="new">Azure operation status</target>
+        <target state="translated">Azure-Vorgangsstatus</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyTargetLocationDisplayName">
         <source>Azure operation target location</source>
-        <target state="new">Azure operation target location</target>
+        <target state="translated">Zielstandort des Azure-Vorgangs</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandConfirmation">
         <source>This clears the cached Azure deployment state for this AppHost and reprovisions all Azure resources again using the current Azure tenant, subscription, resource group, and location.</source>
-        <target state="new">This clears the cached Azure deployment state for this AppHost and reprovisions all Azure resources again using the current Azure tenant, subscription, resource group, and location.</target>
+        <target state="translated">Hierdurch wird der zwischengespeicherte Azure Bereitstellungsstatus für diesen AppHost gelöscht, und alle Azure Ressourcen werden mit dem aktuellen Azure Mandant, Abonnement, Ressourcengruppe und Standort erneut bereitgestellt.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandDescription">
         <source>Clears the cached Azure deployment state for this AppHost and provisions all Azure resources again using the current Azure context.</source>
-        <target state="new">Clears the cached Azure deployment state for this AppHost and provisions all Azure resources again using the current Azure context.</target>
+        <target state="translated">Leert den zwischengespeicherten Azure-Bereitstellungsstatus für diesen AppHost und stellt alle Azure-Ressourcen mit dem aktuellen Azure-Kontext erneut bereit.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandName">
         <source>Reprovision all</source>
-        <target state="new">Reprovision all</target>
+        <target state="translated">Alle erneut bereitstellen</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandSuccess">
         <source>Azure reprovisioning completed.</source>
-        <target state="new">Azure reprovisioning completed.</target>
+        <target state="translated">Die erneute Bereitstellung von Azure wurde abgeschlossen.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandConfirmation">
         <source>This clears the cached Azure deployment state for this resource and reprovisions it again using the current Azure tenant, subscription, resource group, and location.</source>
-        <target state="new">This clears the cached Azure deployment state for this resource and reprovisions it again using the current Azure tenant, subscription, resource group, and location.</target>
+        <target state="translated">Dadurch wird der zwischengespeicherte Azure Bereitstellungsstatus für diese Ressource gelöscht und erneut mit dem aktuellen Azure Mandant, Abonnement, Ressourcengruppe und Standort bereitgestellt.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandDescription">
         <source>Clears the cached Azure deployment state for this resource and provisions it again using the current Azure context.</source>
-        <target state="new">Clears the cached Azure deployment state for this resource and provisions it again using the current Azure context.</target>
+        <target state="translated">Löscht den zwischengespeicherten Azure-Bereitstellungsstatus für diese Ressource und stellt sie mithilfe des aktuellen Azure-Kontexts erneut bereit.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandName">
         <source>Reprovision</source>
-        <target state="new">Reprovision</target>
+        <target state="translated">Erneut bereitstellen</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandSuccess">
         <source>Azure resource reprovisioning completed.</source>
-        <target state="new">Azure resource reprovisioning completed.</target>
+        <target state="translated">Die erneute Bereitstellung der Azure-Ressource wurde abgeschlossen.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandConfirmation">
         <source>This only clears the cached Azure tenant, subscription, resource group, location, and deployment state stored for this AppHost. Live Azure resources are not deleted and may be left orphaned. Do you want to continue?</source>
-        <target state="new">This only clears the cached Azure tenant, subscription, resource group, location, and deployment state stored for this AppHost. Live Azure resources are not deleted and may be left orphaned. Do you want to continue?</target>
+        <target state="translated">Dadurch werden nur der zwischengespeicherte Azure-Mandant, das Abonnement, die Ressourcengruppe, der Standort und der Bereitstellungsstatus gelöscht, die für diesen AppHost gespeichert sind. Live-Azure-Ressourcen werden nicht gelöscht und können verwaist sein. Möchten Sie den Vorgang fortsetzen?</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandDescription">
         <source>Clears the cached Azure context and deployment state for this AppHost. This does not delete live Azure resources and may leave them orphaned.</source>
-        <target state="new">Clears the cached Azure context and deployment state for this AppHost. This does not delete live Azure resources and may leave them orphaned.</target>
+        <target state="translated">Leert den zwischengespeicherten Azure-Kontext und Bereitstellungsstatus für diesen AppHost. Dabei werden keine tatsächlich vorhandenen Azure-Ressourcen gelöscht, und sie können verwaisen.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandName">
         <source>Reset provisioning state</source>
-        <target state="new">Reset provisioning state</target>
+        <target state="translated">Bereitstellungsstatus zurücksetzen</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandSuccess">
         <source>Azure provisioning state reset.</source>
-        <target state="new">Azure provisioning state reset.</target>
+        <target state="translated">Der Azure-Bereitstellungsstatus wurde zurückgesetzt.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceGroupDialogTitle">
@@ -523,102 +523,102 @@ Weitere Informationen finden Sie in der [Azure-Bereitstellungsdokumentation](htt
       </trans-unit>
       <trans-unit id="ResourceStateAzureDeploymentCanceled">
         <source>Azure deployment canceled</source>
-        <target state="new">Azure deployment canceled</target>
+        <target state="translated">Azure-Bereitstellung abgebrochen.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateAzureDeploymentFailed">
         <source>Azure deployment failed</source>
-        <target state="new">Azure deployment failed</target>
+        <target state="translated">Fehler bei der Azure-Bereitstellung</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCanceled">
         <source>Canceled</source>
-        <target state="new">Canceled</target>
+        <target state="translated">Abgebrochen</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCanceling">
         <source>Canceling</source>
-        <target state="new">Canceling</target>
+        <target state="translated">Wird abgebrochen</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateChangingLocation">
         <source>Changing location</source>
-        <target state="new">Changing location</target>
+        <target state="translated">Standort ändern</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCompilingArmTemplate">
         <source>Compiling ARM template</source>
-        <target state="new">Compiling ARM template</target>
+        <target state="translated">ARM-Vorlage wird kompiliert...</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCreatingArmDeployment">
         <source>Creating ARM Deployment</source>
-        <target state="new">Creating ARM Deployment</target>
+        <target state="translated">ARM-Bereitstellung wird erstellt</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateDeleting">
         <source>Deleting</source>
-        <target state="new">Deleting</target>
+        <target state="translated">Wird gelöscht</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateDrifted">
         <source>Drifted</source>
-        <target state="new">Drifted</target>
+        <target state="translated">Abweichung</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateFailedToDelete">
         <source>Failed to Delete</source>
-        <target state="new">Failed to Delete</target>
+        <target state="translated">Fehler beim Löschen</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateFailedToProvision">
         <source>Failed to Provision</source>
-        <target state="new">Failed to Provision</target>
+        <target state="translated">Fehler beim Bereitstellen.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateMissingInAzure">
         <source>Missing in Azure</source>
-        <target state="new">Missing in Azure</target>
+        <target state="translated">Fehlt in Azure</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateMissingSubscriptionConfiguration">
         <source>Missing subscription configuration</source>
-        <target state="new">Missing subscription configuration</target>
+        <target state="translated">Fehlende Abonnementkonfiguration</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioned">
         <source>Provisioned</source>
-        <target state="new">Provisioned</target>
+        <target state="translated">Bereitgestellt</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisionedMultipleAzureResourcesFormat">
         <source>Provisioned {0} Azure resources</source>
-        <target state="new">Provisioned {0} Azure resources</target>
+        <target state="translated">{0} Azure-Ressourcen bereitgestellt</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioningMultipleAzureResourcesFormat">
         <source>Provisioning {0} Azure resources</source>
-        <target state="new">Provisioning {0} Azure resources</target>
+        <target state="translated">Bereitstellen von {0} Azure-Ressourcen</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioningPrefix">
         <source>Provisioning </source>
-        <target state="new">Provisioning </target>
+        <target state="translated">Bereitstellung </target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioningResourceFormat">
         <source>Provisioning {0}</source>
-        <target state="new">Provisioning {0}</target>
+        <target state="translated">{0} wird bereitgestellt</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateStarting">
         <source>Starting</source>
-        <target state="new">Starting</target>
+        <target state="translated">Wird gestartet</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateWaitingForDeployment">
         <source>Waiting for Deployment</source>
-        <target state="new">Waiting for Deployment</target>
+        <target state="translated">Auf Bereitstellung wird gewartet</target>
         <note />
       </trans-unit>
       <trans-unit id="SubscriptionDialogTitle">
@@ -668,17 +668,17 @@ Weitere Informationen finden Sie in der [Azure-Bereitstellungsdokumentation](htt
       </trans-unit>
       <trans-unit id="TenantResourceSuffixDescription">
         <source>Optional. Appended to the names of tenant-wide resources created by this AppHost. Leave empty to use the names from AppHost code unchanged. Changing the suffix targets different resources; previous resources are not renamed or deleted.</source>
-        <target state="new">Optional. Appended to the names of tenant-wide resources created by this AppHost. Leave empty to use the names from AppHost code unchanged. Changing the suffix targets different resources; previous resources are not renamed or deleted.</target>
+        <target state="translated">Optional. Wird an die Namen mandantenweiter Ressourcen angefügt, die von diesem AppHost erstellt wurden. Leer lassen, um die Namen aus dem AppHost-Code unverändert zu verwenden. Das Ändern des Suffixes zielt auf verschiedene Ressourcen ab. vorherige Ressourcen werden nicht umbenannt oder gelöscht.</target>
         <note />
       </trans-unit>
       <trans-unit id="TenantResourceSuffixLabel">
         <source>Tenant-scoped resource suffix</source>
-        <target state="new">Tenant-scoped resource suffix</target>
+        <target state="translated">Mandantenspezifisches Ressourcen-Suffix</target>
         <note />
       </trans-unit>
       <trans-unit id="TenantResourceSuffixSelectionMessage">
         <source>Add a suffix to tenant-wide resources created by this AppHost (optional).</source>
-        <target state="new">Add a suffix to tenant-wide resources created by this AppHost (optional).</target>
+        <target state="translated">Fügen Sie den mandantenweiten Ressourcen, die von diesem AppHost erstellt werden, ein Suffix hinzu (optional).</target>
         <note />
       </trans-unit>
       <trans-unit id="TenantSelectionMessage">

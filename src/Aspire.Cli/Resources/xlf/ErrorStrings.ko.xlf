@@ -4,22 +4,22 @@
     <body>
       <trans-unit id="AlreadyConnectedToBackchannel">
         <source>Already connected to AppHost backchannel.</source>
-        <target state="needs-review-translation">AppHost 백채널에 이미 연결되었습니다.</target>
+        <target state="translated">AppHost 백채널에 이미 연결되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostIncompatibleWithCli">
         <source>AppHost is incompatible with the CLI. The AppHost must be updated to a version that supports the {0} capability.</source>
-        <target state="needs-review-translation">AppHost가 CLI와 호환되지 않습니다. AppHost를 {0} 기능을 지원하는 버전으로 업데이트해야 합니다.</target>
+        <target state="translated">AppHost가 CLI와 호환되지 않습니다. AppHost를 {0} 기능을 지원하는 버전으로 업데이트해야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostWasSpecifiedButDoesntExist">
         <source>AppHost file was specified in '{0}' but it does not exist at '{1}'.</source>
-        <target state="needs-review-translation">appHost 파일이 '{0}'에 지정되었지만, '{1}'에 존재하지 않습니다.</target>
+        <target state="translated">appHost 파일이 '{0}'에 지정되었지만, '{1}'에 존재하지 않습니다.</target>
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="AppHostsMayNotBeBuildable">
         <source>No buildable AppHosts were found, but there may have been unbuildable AppHosts.</source>
-        <target state="needs-review-translation">빌드 가능한 앱 호스트를 찾을 수 없지만, 빌드할 수 없는 앱 호스트가 있을 수 있습니다.</target>
+        <target state="translated">빌드 가능한 AppHost를 찾을 수 없지만, 빌드할 수 없는 AppHost가 있을 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingVersionNull">
@@ -39,7 +39,7 @@
       </trans-unit>
       <trans-unit id="CertificateGenerationFailed">
         <source>Failed to generate HTTPS development certificate (result: {0}).</source>
-        <target state="new">Failed to generate HTTPS development certificate (result: {0}).</target>
+        <target state="translated">HTTPS 개발 인증서를 생성하지 못했습니다(결과: {0}).</target>
         <note />
       </trans-unit>
       <trans-unit id="CertificatesMayNotBeFullyTrusted">
@@ -49,42 +49,42 @@
       </trans-unit>
       <trans-unit id="CertificatesNotTrustedNonInteractive">
         <source>Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</source>
-        <target state="new">Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <target state="translated">개발자 인증서를 신뢰할 수 없습니다. 'aspire certs trust'를 실행하여 대화형으로 신뢰하도록 설정하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="CertificatesPartiallyTrustedNonInteractive">
         <source>Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</source>
-        <target state="new">Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <target state="translated">개발자 인증서는 부분적으로만 신뢰할 수 있습니다. 'aspire certs trust'를 실행하여 대화형으로 신뢰하도록 설정하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="CodegenDebugHeader">
         <source>Diagnostic details:</source>
-        <target state="new">Diagnostic details:</target>
+        <target state="translated">진단 세부 정보:</target>
         <note />
       </trans-unit>
       <trans-unit id="CodegenDebugHint">
         <source>Run with '--debug' for full diagnostic details.</source>
-        <target state="new">Run with '--debug' for full diagnostic details.</target>
+        <target state="translated">전체 진단 세부 정보를 확인하려면 '--debug'로 실행하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="CodegenIncompatibleSdkSummary">
         <source>{0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again.</source>
-        <target state="new">{0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again.</target>
+        <target state="translated">{0} SDK 코드 생성에 실패했습니다. 설치된 Aspire CLI가 구성된 Aspire SDK와 호환되지 않는 것 같습니다. 'aspire update'를 실행하여 CLI와 SDK를 맞춘 후 다시 시도하세요.</target>
         <note>{0} is the AppHost language display name, e.g. 'TypeScript (Node.js)'.</note>
       </trans-unit>
       <trans-unit id="CodegenVersionSkewWarning">
         <source>The installed Aspire CLI version ({0}) differs from the Aspire SDK version ({1}) used for code generation. If you run into errors, update the Aspire CLI to match or exceed the SDK version.</source>
-        <target state="new">The installed Aspire CLI version ({0}) differs from the Aspire SDK version ({1}) used for code generation. If you run into errors, update the Aspire CLI to match or exceed the SDK version.</target>
+        <target state="translated">설치된 Aspire CLI 버전({0})이 코드 생성에 사용되는 Aspire SDK 버전({1})과 다릅니다. 오류가 발생하면 SDK 버전과 일치하거나 초과하도록 Aspire CLI를 업데이트하세요.</target>
         <note>{0} is the CLI version, {1} is the SDK version used for code generation, including the target version during aspire update.</note>
       </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
         <source>This command is not yet supported with single file AppHosts.</source>
-        <target state="needs-review-translation">이 명령은 단일 파일 AppHosts에서 아직 지원되지 않습니다.</target>
+        <target state="translated">이 명령은 단일 파일 AppHosts에서 아직 지원되지 않습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigurationFileMustBeJsonObject">
         <source>The configuration file '{0}' must contain a JSON object.</source>
-        <target state="new">The configuration file '{0}' must contain a JSON object.</target>
+        <target state="translated">구성 파일 '{0}'에는 JSON 개체가 포함되어야 합니다.</target>
         <note>{0} is the configuration file path that the user authored.</note>
       </trans-unit>
       <trans-unit id="ConfigurationKeyNotFound">
@@ -104,12 +104,12 @@
       </trans-unit>
       <trans-unit id="ConfiguredAppHostPathHasInvalidCharacters">
         <source>The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path.</source>
-        <target state="new">The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path.</target>
+        <target state="translated">'{0}'('{1}')에 구성된 AppHost 경로가 비어 있거나 파일 경로에 허용되지 않는 문자를 포함하고 있습니다.</target>
         <note>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</note>
       </trans-unit>
       <trans-unit id="ConfiguredAppHostPathMustBeString">
         <source>The configured AppHost path in '{0}' ('{1}') must be a JSON string.</source>
-        <target state="new">The configured AppHost path in '{0}' ('{1}') must be a JSON string.</target>
+        <target state="translated">'{0}'('{1}')에 구성된 AppHost 경로는 JSON 문자열이어야 합니다.</target>
         <note>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</note>
       </trans-unit>
       <trans-unit id="CouldNotParseAspireSDKVersion">
@@ -119,7 +119,7 @@
       </trans-unit>
       <trans-unit id="DotNetSdkUnavailableAppHostDiscoveryWarning">
         <source>Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</source>
-        <target state="new">Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</target>
+        <target state="translated">경고: 필수 .NET SDK를 찾을 수 없습니다. 결과에서 .NET AppHost 프로젝트가 누락되었을 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ErrorDeletingConfiguration">
@@ -139,12 +139,12 @@
       </trans-unit>
       <trans-unit id="ExtensionTokenMustBeSet">
         <source>The Aspire extension token must be set if ASPIRE_EXTENSION_ENDPOINT is set. Please ensure that ASPIRE_EXTENSION_TOKEN is set</source>
-        <target state="translated">ASPIRE_EXTENSION_ENDPOINT가 설정된 경우 ASPIRE_EXTENSION_TOKEN도 설정해야 합니다. ASPIRE_EXTENSION_TOKEN이 설정되어 있는지 확인하세요.</target>
+        <target state="translated">ASPIRE_EXTENSION_ENDPOINT가 설정된 경우 Aspire 확장 토큰도 설정해야 합니다. ASPIRE_EXTENSION_TOKEN이 설정되어 있는지 확인하세요.</target>
         <note>Do not localize ASPIRE_EXTENSION_TOKEN and ASPIRE_EXTENSION_ENDPOINT</note>
       </trans-unit>
       <trans-unit id="FailedToParsePackageSearchResults">
         <source>Failed to parse package search results.</source>
-        <target state="new">Failed to parse package search results.</target>
+        <target state="translated">패키지 검색 결과를 구문 분석하지 못했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToParseTemplateVersionFromStdout">
@@ -194,32 +194,32 @@
       </trans-unit>
       <trans-unit id="GlobalAppHostPathCannotBeSetWithConfigCommand">
         <source>The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</source>
-        <target state="new">The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</target>
+        <target state="translated">AppHost 경로는 전역 설정에서 설정할 수 없습니다. 대신 로컬 aspire.config.json 파일에서 'appHost.path'를 사용하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="GlobalAppHostPathIgnored">
         <source>Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</source>
-        <target state="new">Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</target>
+        <target state="translated">전역 설정 파일에 '{0}' 지원되지 않는 '{1}' 포함되어 있습니다. AppHost 경로는 로컬로 구성해야 합니다.</target>
         <note>{0} is the global settings file path, {1} is the configured key such as appHost.path or appHostPath.</note>
       </trans-unit>
       <trans-unit id="HostingIntegrationsFeatureNotEnabled">
         <source>Hosting integrations authored outside .NET are experimental and disabled by default. Run 'aspire config set features.experimentalHostingIntegrations true' to enable them.</source>
-        <target state="new">Hosting integrations authored outside .NET are experimental and disabled by default. Run 'aspire config set features.experimentalHostingIntegrations true' to enable them.</target>
+        <target state="translated">.NET 외부에서 작성된 호스팅 통합은 실험적이며 기본적으로 사용하지 않도록 설정됩니다. 'aspire config set features.experimentalHostingIntegrations true'를 실행하여 사용하도록 설정합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="IntegrationBuildFailed">
         <source>The integration project could not be built.</source>
-        <target state="new">The integration project could not be built.</target>
+        <target state="translated">통합 프로젝트를 빌드할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="IntegrationBuildPackageDowngradeFailed">
         <source>The integration project could not be built because a referenced project requires a newer version of Aspire.Hosting than this Aspire CLI ({0}) provides. The AppHost server is the CLI itself, so project references in aspire.config.json must target the same version the CLI ships. Either use an Aspire CLI that matches the referenced projects, or reference published packages instead of local projects.</source>
-        <target state="new">The integration project could not be built because a referenced project requires a newer version of Aspire.Hosting than this Aspire CLI ({0}) provides. The AppHost server is the CLI itself, so project references in aspire.config.json must target the same version the CLI ships. Either use an Aspire CLI that matches the referenced projects, or reference published packages instead of local projects.</target>
+        <target state="translated">참조된 프로젝트에서 이 Aspire CLI({0})가 제공하는 버전보다 최신 버전의 Aspire.Hosting을 요구하므로 통합 프로젝트를 빌드할 수 없습니다. AppHost 서버는 CLI 자체이므로 aspire.config.json의 프로젝트 참조는 CLI에 포함된 버전과 동일한 버전을 대상으로 해야 합니다. 참조된 프로젝트와 일치하는 Aspire CLI를 사용하거나 로컬 프로젝트 대신 게시된 패키지를 참조하세요.</target>
         <note>{0} is the version of the running Aspire CLI, for example "13.5.0".</note>
       </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
-        <target state="new">The configuration file '{0}' contains invalid JSON: {1}</target>
+        <target state="translated">구성 파일 '{0}'에 잘못된 JSON이 포함되어 있습니다. {1}</target>
         <note>{0} is the file path, {1} is the exception message</note>
       </trans-unit>
       <trans-unit id="InvalidLocaleProvided">
@@ -234,17 +234,17 @@
       </trans-unit>
       <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
         <source>The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</source>
-        <target state="new">The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</target>
+        <target state="translated">레거시 AppHost 경로 키 'appHostPath'는 'aspire config set'으로 설정할 수 없습니다. 대신 로컬 aspire.config.json 파일에서 'appHost.path'를 사용하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="LegacyTypeScriptAppHostWarning">
         <source>This project uses the legacy 'apphost.ts' layout. Run 'aspire update --migrate' to upgrade to the recommended 'apphost.mts' format. The legacy layout continues to work — this is a non-blocking warning.</source>
-        <target state="new">This project uses the legacy 'apphost.ts' layout. Run 'aspire update --migrate' to upgrade to the recommended 'apphost.mts' format. The legacy layout continues to work — this is a non-blocking warning.</target>
+        <target state="translated">이 프로젝트는 레거시 'apphost.ts' 레이아웃을 사용합니다. 'aspire update --migrate'를 실행하여 권장되는 'apphost.mts' 형식으로 업그레이드하세요. 레거시 레이아웃은 계속 작동하며, 이는 작업을 차단하지 않는 경고입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="MinimumSdkVersionNotMet">
         <source>C# AppHost requires .NET SDK version {0} or later. Detected: {1}.</source>
-        <target state="needs-review-translation">Aspire CLI를 사용하려면 .NET SDK 버전 {0} 이상이 필요합니다. 감지됨: {1}.</target>
+        <target state="translated">C# AppHost에는 .NET SDK 버전 {0} 이상이 필요합니다. 검색됨: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleProjectFilesFound">
@@ -279,37 +279,37 @@
       </trans-unit>
       <trans-unit id="ProjectFileNotAppHostProject">
         <source>Project file is not an Aspire AppHost project.</source>
-        <target state="needs-review-translation">프로젝트 파일이 Aspire AppHost 프로젝트가 아닙니다.</target>
+        <target state="translated">프로젝트 파일이 Aspire AppHost 프로젝트가 아닙니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectFileUnsupportedInCurrentEnvironment">
         <source>Project is not supported in the current environment: {0}</source>
-        <target state="new">Project is not supported in the current environment: {0}</target>
+        <target state="translated">현재 환경에서는 프로젝트가 지원되지 않습니다. {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectFilesCreatedButNodeToolsNotFound">
         <source>Project files were created, but Aspire could not run '{0}' automatically because the required JavaScript tooling was not found on PATH. You may see missing package errors or red squiggles in your IDE until you install {1} and run '{0}' in the project directory.</source>
-        <target state="new">Project files were created, but Aspire could not run '{0}' automatically because the required JavaScript tooling was not found on PATH. You may see missing package errors or red squiggles in your IDE until you install {1} and run '{0}' in the project directory.</target>
+        <target state="translated">프로젝트 파일이 생성되었지만, PATH에서 필요한 JavaScript 도구를 찾을 수 없으므로 Aspire가 '{0}'을(를) 자동으로 실행할 수 없습니다. {1}을(를) 설치하고 프로젝트 디렉터리에서 '{0}'을(를) 실행할 때까지 IDE에 패키지 누락 오류나 빨간 물결선이 표시될 수 있습니다.</target>
         <note>{0} is the install command, such as 'npm install', 'bun install', 'yarn install', or 'pnpm install'. {1} is the toolchain display name, such as 'Node.js', 'Bun', 'Yarn', or 'pnpm'. Do not translate 'PATH'.</note>
       </trans-unit>
       <trans-unit id="ProjectIsNotAppHost">
         <source>The project does not contain an Aspire AppHost.</source>
-        <target state="needs-review-translation">프로젝트에 Aspire AppHost가 포함되어 있지 않습니다.</target>
+        <target state="translated">프로젝트에 Aspire AppHost가 포함되어 있지 않습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkExportGeneratorPackageNotExportable">
         <source>SDK API export cannot export {0} because that package supplies the selected language's code generator instead of an integration API surface.</source>
-        <target state="new">SDK API export cannot export {0} because that package supplies the selected language's code generator instead of an integration API surface.</target>
+        <target state="translated">SDK API 내보내기에서는 {0}을(를) 내보낼 수 없습니다. 해당 패키지는 통합 API 표면이 아니라 선택한 언어의 코드 생성기를 제공하기 때문입니다.</target>
         <note>{0} is the code-generation package name.</note>
       </trans-unit>
       <trans-unit id="SdkExportLanguageDoesNotSupportCodeGeneration">
         <source>SDK API export is not supported for {0} because it does not use a code generator.</source>
-        <target state="new">SDK API export is not supported for {0} because it does not use a code generator.</target>
+        <target state="translated">SDK API 내보내기는 코드 생성기를 사용하지 않기 때문에 {0}에 대해 지원되지 않습니다.</target>
         <note>{0} is the AppHost language display name, for example "C# (.NET)".</note>
       </trans-unit>
       <trans-unit id="SingleFileAppHostFeatureNotEnabled">
         <source>Single file AppHost feature is not enabled. To use .cs AppHost files, enable the feature using configuration.</source>
-        <target state="needs-review-translation">단일 파일 AppHost 기능을 사용할 수 없습니다. .cs AppHost 파일을 사용하려면 설정을 사용하여 기능을 활성화해야 합니다.</target>
+        <target state="translated">단일 파일 AppHost 기능을 사용할 수 없습니다. .cs AppHost 파일을 사용하려면 설정을 사용하여 기능을 활성화해야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnableToRetrieveAssemblyVersion">

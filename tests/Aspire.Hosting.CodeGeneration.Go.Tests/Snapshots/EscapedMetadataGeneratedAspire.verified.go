@@ -100,7 +100,8 @@ type EscapedResource interface {
 	GetExpression() *ReferenceExpression
 	Reset(cal_lback func(con_text string)) error
 
-	// Allowed types for parameter un_ion: string, float64.
+	// Allowed types for parameter un_ion: string, float64 (float64 accepts any
+	// built-in Go numeric type).
 	//
 	// Parameters:
 	//   - na_me: The name.
@@ -235,11 +236,11 @@ func (s *escapedResource) Tags() *List[string] {
 	return s.tags
 }
 
-// Allowed types for parameter un_ion: string, float64.
+// Allowed types for parameter un_ion: string, float64 (float64 accepts any built-in Go numeric type).
 func (s *escapedResource) With_Quote(na_me string, un_ion any, options ...*With_QuoteOptions) EscapedResource {
 	if s.err != nil { return s }
 	switch un_ion.(type) {
-	case string, float64:
+	case string, float64, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32:
 	default:
 		err := fmt.Errorf("aspire: With_Quote: parameter %q must be one of [string, float64], got %T", "un\"ion", un_ion)
 		s.setErr(err); return s

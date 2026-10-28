@@ -1,501 +1,616 @@
-# Project v2 stage 1 — `Aspire.Hosting.Dotnet` language integration + `aspire run --watch`
+# Project V2 stage 1 - .NET language integration and `aspire run --watch`
 
----
+Implementation reviewed against repository commit `ef092af06f` on **2026-10-27**.
+Session status below describes implementation and coverage present in source, not a fresh execution of
+every historical manual check or deployment test. Watch integration is still future work.
 
-## 1. Goal
+Earlier session records report successful C# playground and VS Code F5 checks, TypeScript-first/C#-second
+coordinated-build runs, and package-backed TypeScript Blazor gateway validation. Those remain historical
+verification records, not newly executed checks in this review.
 
-Deliver a minimal-but-real vertical slice of Project v2 that establishes the **language integration
-package** as the unit that owns how a language's services are launched (run *and* watch):
+## 1. Goal and motivation
 
-1. A new experimental **`Aspire.Hosting.Dotnet`** package — the C# peer of `Aspire.Hosting.Go`,
-   `Aspire.Hosting.Python`, and `Aspire.Hosting.JavaScript`. It introduces a new **`ExecutableResource`-based**
-   **`DotnetProjectResource`** + **`AddDotnetProject`** (a C# project or file-based app added **by path**,
-   polyglot-friendly). The shipped **`CSharpAppResource` + `AddCSharpApp`** in core `Aspire.Hosting`
-   retain their existing runtime behavior and are out of scope for the watch work.
-   `AddCSharpApp` is obsolete in favor of `AddDotnetProject`, rather than experimental.
-2. **`aspire run --watch`** — a **sub-mode of `aspire run`**. In watch sub-mode the C# language
-   integration package launches each `DotnetProjectResource` via the watch tool's **`resource`** command, coordinated
-   by a hidden **watch `server`** system resource; the app host itself runs under the tool's **`host`**
-   command (delivered as its own session). C# services **hot-reload**; other languages run in watch mode
-   or normally depending on their own integration package's watch support.
-3. The Aspire app model performs **coordinated initial builds** of all `DotnetProjectResource` services
-   itself — using generated AppHost intermediate-output MSBuild traversal projects for compatible build contexts and
-   serialized direct builds otherwise — identically for watch and non-watch, because the watch tool only
-   does *incremental* builds.
+Project V2 makes a C# program an ordinary language-integrated Aspire resource, rather than coupling its
+build and launch to a C# AppHost's project-reference graph and generated `Projects.*` metadata. Services
+are added **by path**, just as Go, Python, and JavaScript services are. The language integration package
+owns how its services run and, eventually, watch; the same model works from C# and polyglot AppHosts.
 
-The design must not preclude the full Project v2 vision (partial runs, persistent execution, container
-execution, debugging-under-watch, programmatic build config, events/callbacks redesign), and must
-generalize cleanly so Go/Python/JavaScript can add watch support later.
+The broader [Project V2 vision][vision] must remain possible as this vertical slice is implemented:
 
----
+- **Programmatic build and launch configuration:** integration defaults and AppHost overrides can
+  influence builds, launch/debug behavior, and deployment.
+- **Reliable watch:** service edits and shared-library edits update the affected services, with the
+  watch infrastructure automatically managed as system resources.
+- **Partial runs:** select resources, compute their dependency closure, build that closure efficiently,
+  and allow additional resources to start on demand.
+- **Persistent execution:** services can survive an AppHost shutdown and be adopted by a later run.
+- **Container execution:** a project can run in a container instead of as a local OS process, potentially
+  initially limited to SDK-container-publishable programs.
+- **Debugging:** preserve non-watch F5/startup debugging and attachment; investigate combinations with
+  watch without assuming that watch itself supplies a debugger.
+- **Explicit event/callback contracts:** define ordering, concurrency, cardinality, and which callbacks
+  may execute during dependency analysis even for resources that will not run.
+- **Orthogonal capabilities:** do not unnecessarily prevent combinations such as partial, persistent,
+  watched runs.
+- **No major capability take-backs:** preserve publishing and top-tier framework support, including
+  Blazor and Azure Functions, before claiming the full migration complete.
 
-## 2. Decisions locked in with the requester (do not re-litigate)
+This plan delivers the initial vertical slice:
 
-| # | Decision |
-|---|----------|
-| **D1** | **New `Aspire.Hosting.Dotnet` language integration package**, structured as a peer of `Aspire.Hosting.Go` / `Aspire.Hosting.Python` / `Aspire.Hosting.JavaScript`. |
-| **D2** | **Introduce a new `DotnetProjectResource : ExecutableResource` + `AddDotnetProject` (+ the polyglot `addDotnetProject` export) in `Aspire.Hosting.Dotnet`.** Core `Aspire.Hosting` keeps `AddProject<T>` / `ProjectResource` and the implementations of `CSharpAppResource` / `AddCSharpApp` (still `: ProjectResource`). `AddCSharpApp` is obsolete in favor of `AddDotnetProject`. Project v2 mechanics (ExecutableResource launch, watch, coordinated build) target the **new** `DotnetProjectResource`, without changing legacy launch or publishing behavior. |
-| **D3** | **Activation is `aspire run --watch`** (watch is a **sub-mode of local run**, not a separate command). In watch sub-mode the **app host runs via the watch tool's `host` command** *and* **each C# service runs via the tool's `resource` command**, coordinated by a hidden watch **`server`**. |
-| **D4** | **Only C# watch is implemented now.** Design a **general per-language-package watch seam** so Go/Python/JavaScript can adopt watch later, but do not implement them in this plan. Non-C# services run normally under watch until their package adds support. |
-| **D5** | **Core exposes run configuration as state** on `DistributedApplicationExecutionContext` (a `RunConfiguration` with a `WatchEnabled` property); language packages query it. **All watch mechanics** (server, `host`/`resource`/`server` commands, pipes, builds) live in the language package. Core is **not** involved in watch details. |
-| **D6** | **Watch tool referenced from `Aspire.Hosting.Dotnet`** via a NuGet `PackageReference` (`GeneratePathProperty=true`) + a `.targets` file that injects the tool dll path as **app-host assembly metadata** (the DCP/dashboard/terminal-host pattern); the running app host invokes it with `dotnet exec`. **Not bundled in the CLI.** The CLI obtains the tool for the `host` command by resolving it from the **restored app host project** (handled in the app-host-watch session). |
-| **D7** | **Coordinated INITIAL build is in scope**, owned by `Aspire.Hosting.Dotnet`: generate MSBuild traversal projects under the AppHost's intermediate output for `DotnetProjectResource` `.csproj`s with compatible SDK/environment contexts, serialize context-specific direct builds, and complete the full build chain before services start — **identically for watch and non-watch**. The watch tool's `server`/`host`/`resource` perform only **incremental** builds, never the initial one. |
-| **D8** | **App-host watch via the tool's `host` command is a separate implementation session.** The earlier service-watch sessions run the app host normally; the host-command session layers app-host hot reload on top and reconciles/replaces today's whole-app-host `dotnet watch`. |
-| **D9** | **Non-watch debugging/F5 parity is required** for `DotnetProjectResource`. Because it is an `ExecutableResource` (not a `ProjectResource`), this requires generalizing the DCP project-launch/debug path (§6, R1). |
+1. **`Aspire.Hosting.Dotnet` and `DotnetProjectResource : ExecutableResource`**, with
+   `AddDotnetProject` / polyglot `addDotnetProject` accepting `.csproj`, single-project directories, and
+   file-based `.cs` apps. This foundation, publishing, and default-template adoption are implemented.
+2. **Coordinated initial builds**, independent of the watch signal, followed by launches from the
+   selected build output. This is implemented, subject to the IDE capability negotiation in Session 2.
+3. **`aspire run --watch`**, with Aspire-controlled C# service watching and a separately scoped C#
+   AppHost-watch integration. These are not implemented. Non-C# service packages need not implement watch
+   in this slice; polyglot AppHost code keeps its language-native watching.
 
-### Assumptions (flag if wrong)
-- **A1.** The watch tool's CLI surface (`server` / `resource` / `host` flags) follows the
-  `karolz-ms/aspire-watch` POC (§4.1). **Re-verify against the shipped `Microsoft.DotNet.HotReload.Watch.Aspire`**
-  (currently `10.0.301` on nuget.org) since the POC may differ from the released tool.
-- **A2.** `Microsoft.DotNet.HotReload.Watch.Aspire` must be available on an **approved internal feed mirror**
-  (per `NuGet.config`) before use; mirror it if not.
-- **A3.** The watch tool's `--sdk <dir>` must match the active SDK; resolve the SDK directory at runtime
-  (e.g. via `dotnet --info`) rather than assuming the bundled/pinned version.
-- **A4.** The watch tool does **not** perform the initial build (confirmed by the requester); the coordinated
-  traversal/direct build chain (D7) is always required.
+Partial-run selection, complete persistent/container-execution support, watch-under-debugger, and an
+events/callbacks redesign remain broader-roadmap work, not delivery promises of this slice. Existing
+foundation support for persistent executables does not prove all Project V2/watch combinations work.
 
----
+## 2. Agreed architectural direction
 
-## 3. How it works today (research baseline — verified against current `main` as of 6/22/2026)
+These decisions preserve the original direction, incorporating requester-approved corrections from the
+implementation review. Package contract facts are centralized in section 3; delivered details and
+remaining work are recorded once, under their coding sessions.
 
-### 3.1 The watch tool protocol (from `karolz-ms/aspire-watch`; re-verify per A1)
-Tool = `Microsoft.DotNet.HotReload.Watch.Aspire` (a `PackAsTool` dotnet tool, .NET 10); invoked as
-`dotnet exec <tool>.dll <command> …`. Three commands — **all three are now used**:
+| ID | Decision |
+|---|---|
+| D1 | **The .NET language integration is `Aspire.Hosting.Dotnet`**, a peer of the other language packages, not a new special project category in core. |
+| D2 | **Project V2 uses `DotnetProjectResource : ExecutableResource`.** Core retains `ProjectResource`, `AddProject<T>`, and the path-based legacy APIs. `CSharpAppResource : ProjectResource` remains; `AddCSharpApp` / `addCSharpApp` are obsolete in favor of the new package. Existing calls are not silently redirected to V2. |
+| D3 | **Activation is `aspire run --watch`**, a local-run sub-mode, not a new `aspire watch` command. The target includes C# service watching and C# AppHost watching through the tool's `host` command, with the latter gated as described in Session 8. |
+| D4 | **Implement only C# service watch here.** Retain a general language-package seam. For polyglot AppHosts, keep the guest runtime's native AppHost watching and separately watch its C# services; do not wrap a native AppHost server or guest program in the .NET `host` command. |
+| D5 | **Core exposes run configuration as state, not watch mechanics.** Integrations consume `ExecutionContext.RunConfiguration.WatchEnabled`. The .NET package owns service-watch coordination and tool acquisition; the CLI owns command UX, the infrastructure proxy command, and invocation of the AppHost wrapper. Shared core project defaults, publishing, and executable launch infrastructure remain reusable. |
+| D6 | **Acquire the pinned watcher at watch-run time, owned by `Aspire.Hosting.Dotnet`, not bundled in the CLI.** The CLI invokes the package-owned ensure operation before C# AppHost `host` launch. Session 4 defines the acquisition requirements. |
+| D7 | **Retain Aspire's coordinated initial-build barrier and accept the watcher's additional build for now.** Avoiding duplicate work through upstream `--no-build` support is a future improvement, not a prerequisite or an available option. |
+| D8 | **AppHost watch is a separate session.** Earlier service-watch work runs the AppHost normally. Package-based watching is for the CLI path, not IDE-owned runs; preserve IDE-native change tracking, service launch, and session-restart behavior. |
+| D9 | **Non-watch F5 parity is required and implemented.** Preserve capability negotiation and older-launcher behavior rather than forcing every IDE onto the coordinated-build path. |
+| D10 | **Aspire owns a hidden service proxy command in the CLI**, using private-pipe environment delivery rather than sensitive `-e` arguments. Session 6a defines its runtime and wire-contract responsibilities. |
 
+**API maturity is not uniform.** `DotnetProjectResource`, `AddDotnetProject`, and the package's ordinary
+consumer APIs no longer carry the original `ASPIREDOTNETPROJECT001` experimental diagnostic. The package
+still uses `SuppressFinalPackageVersion`; integration-authoring seams such as `IDotnetProgramResource`,
+`WithProjectDefaults`, and .NET publishing/build-completion APIs retain `ASPIREPROJECTS001`.
+Run configuration retains `ASPIREWATCH001`; other features such as Blazor have their own maturity.
+Do not impose a blanket "all new APIs experimental" requirement or hand-edit generated release
+`api/*.cs`, ATS, or capability baselines. Update codegen test snapshots when behavior requires it.
+
+## 3. Verified published watcher contract
+
+### 3.1 Version, provenance, runtime, and acquisition constraints
+
+As of **2026-10-27**, the latest listed stable
+**`Microsoft.DotNet.HotReload.Watch.Aspire` is `10.0.403`**, published
+**2026-10-25T17:09:38.56Z**.
+[NuGet metadata][watch-registration] and the [actual package][watch-nupkg] identify
+`dotnet/dotnet` revision **`5a2162bea6845eabc1fc721624a43568c65db3b1`**; packaged PDB SourceLink agrees.
+The source links in this section are pinned to that revision, not development `main` or the old POC.
+
+The approved **`dotnet-public`** feed in repository `NuGet.config` already lists `10.0.403`, and its
+package-content endpoint was reachable. Mirroring this version is therefore not a pending prerequisite.
+Future pins still need an approved-source check; do not add nuget.org as a repository package source.
+
+The package is a **`DotnetTool`** with a complete payload under `tools/net10.0/any/`, including
+`Microsoft.DotNet.HotReload.Watch.Aspire.dll`, runtimeconfig/deps files, supporting assemblies, and
+hot-reload agents. It has no ordinary library assets or consumer tool-path targets. Its installed command
+name is `Microsoft.DotNet.HotReload.Watch.Aspire`; direct invocation is
+`dotnet exec <full-tool-dll-path> ...`, retaining the adjacent payload.
+
+Its runtimeconfig requests **both `Microsoft.NETCore.App` and `Microsoft.AspNetCore.App` `10.0.14`**,
+with no explicit major-version roll-forward setting. An installed SDK or .NET 11 runtime alone is not
+proof that these requirements are satisfied. Tool runtime, selected MSBuild SDK, and application target
+framework are distinct compatibility checks.
+
+An ordinary `PackageReference` plus `GeneratePathProperty` is **not** a sufficient acquisition design
+for this package type ([NU1212][nu1212]). `PackageDownload` is a possible acquisition primitive, but
+[does not flow transitively or become a packed dependency][package-download]. Neither mechanism alone
+implements D6. Runtime acquisition must also work for package-backed polyglot hosts, which load integration
+assemblies without executing a C# AppHost's MSBuild targets.
+
+### 3.2 Commands
+
+All commands support `--verbose` or `--quiet`, not both.
+
+| Command | Required options | Additional surface |
+|---|---|---|
+| `server` | `--sdk <sdk-directory>`, `--server <resource-pipe>` | Repeatable/multi-value `--resource <path> ...`; optional `--status-pipe <name>` and `--control-pipe <name>`. Supply the intended resource roots; an empty accepted parse is not a useful supported watch graph. |
+| `resource` | `--server <resource-pipe>`, `--entrypoint <path>` | `--environment` / `-e NAME=VALUE`, `--no-launch-profile`, `--launch-profile` / `-lp <name>`, positional application arguments. |
+| `host` | `--sdk <sdk-directory>`, `--entrypoint <path>` | Launch-profile options and positional application arguments. |
+
+`--sdk` is the actual SDK directory, for example `C:\Program Files\dotnet\sdk\10.0.403`, not the
+installation root or a version string. The tool registers MSBuild there and derives its `dotnet`
+muxer from that layout. Resolve the appropriate SDK in the relevant project/build context; do not assume
+the repository-pinned SDK, the AppHost's SDK, and every service's SDK are interchangeable.
+
+The stable definitions expose **no `--no-build`, `--no-restore`, build-configuration, target-framework,
+RID, or per-resource MSBuild-property options**. See the [command definitions][watch-commands].
+For example, the server shape is:
+
+```powershell
+dotnet exec $tool server --sdk $sdk --server $resourcePipe `
+    --resource $projectA --resource $projectB
 ```
-server   --sdk <sdkDir> --server <pipe> --status-pipe <pipe> --control-pipe <pipe> --verbose \
-         --resource <projA.csproj> --resource <projB.csproj> …
-resource --server <serverPipe> --entrypoint <proj.csproj> --no-launch-profile --verbose -e KEY=VALUE …
-host     --sdk <sdkDir> --entrypoint <apphost.csproj> --verbose [-- forwardedArgs]
-```
 
-Model: a hidden **`server`** holds the status/control pipes and owns incremental builds (service +
-shared-library change handling); each service runs as a **`resource`** that connects to the server pipe
-and `WaitForStart`s it; the **`host`** wraps the app host process itself under hot reload.
+The planned Aspire CLI proxy connects to that resource pipe instead of constructing a sensitive
+`resource ... -e ...` invocation. `host --sdk $sdk --entrypoint $appHostProject` remains the C# AppHost
+target, subject to Session 8. Do not promise arbitrary argument forwarding just because the outer
+parser accepts `--`: the tool's downstream `dotnet run` construction does not insert a new application
+argument separator.
 
-### 3.2 Language integration packages are the established pattern (the template for `Aspire.Hosting.Dotnet`)
-`Aspire.Hosting.Go`, `Aspire.Hosting.Python`, `Aspire.Hosting.JavaScript` already demonstrate everything
-the C# package needs:
+### 3.3 Builds, pipe roles, and lifecycle
 
-| Concern | How the existing language packages do it |
-|---------|------------------------------------------|
-| Resource type | `GoAppResource` / `PythonAppResource` derive from **`ExecutableResource`** (e.g. `ExecutableResource(name, "go"/"python", workingDirectory)`), implement `IResourceWithServiceDiscovery`, `IContainerFilesDestinationResource`, etc. |
-| Launch args | A `WithArgs(ctx => …)` callback builds the run command (`go run …`, `python …`). |
-| Debug/IDE launch | **`WithDebugSupport(producer, "<type>", argsCallback)`** attaches a `SupportsDebuggingAnnotation` carrying a `*LaunchConfiguration : ExecutableLaunchConfiguration("<type>")` + an args transformer that strips the run-command args in IDE mode. Run-mode only. |
-| Supporting executables | Hidden helper `ExecutableResource`s (e.g. `PythonInstallerResource`, `PythonVenvCreatorResource`, `JavaScriptInstallerResource`) added with `WithParentRelationship`, `WithExplicitStart`, and ordered via `WaitForCompletion` / `WaitForStart`. |
-| Polyglot exposure | `[AspireExport]` on the resource type (`ExposeProperties = true`) and on the `Add*` method; code generators (`Aspire.Hosting.CodeGeneration.{TypeScript,Go,Python,…}`) + `Aspire.Hosting.RemoteHost` surface them to non-C# app hosts. |
+**`server` and `host` perform initial restore/build and graph/workspace initialization**, then
+incremental watch work. Multiple physical roots can be built through the tool's generated `.slnx`;
+file apps are built separately. `resource` is a launch/output/lifetime proxy, not the initial builder.
+See [watch initialization/build code][watch-build].
 
-### 3.3 DCP launch categorization (the one core change non-watch needs)
-`Dcp/ExecutableCreator.cs`:
-- `PrepareProjectExecutables()` iterates **`_model.GetProjectResources()`** (i.e. `OfType<ProjectResource>()`)
-  and configures the **`"project"`** launch config there directly.
-- `PreparePlainExecutables()` iterates `ExecutableResource`s; in `CreateObjectAsync` the generic debug
-  annotator runs **only for launch types `!= "project"`** (lines ~163–172) — `"project"` is deliberately
-  skipped because it is handled in `PrepareProjectExecutables`.
+| Pipe | Listener/server owner | Other endpoint and format |
+|---|---|---|
+| `--server` resource pipe | Watcher `server` | One proxy connection per service instance; binary framing, not JSON lines. |
+| `--status-pipe` | Aspire caller/AppHost | Watcher connects as an output client and writes one JSON event per line. |
+| `--control-pipe` | Aspire caller/AppHost | Watcher connects as an input client and reads one JSON command per line. |
 
-This means, because `DotnetProjectResource` is an `ExecutableResource` (not a `ProjectResource`), a `"project"` launch
-config on it would be applied **nowhere**. Achieving F5/debug parity (D9) therefore requires
-generalizing this path (see R1). Non-debug run works regardless (plain `dotnet run --project …`).
+The [resource protocol][watch-resource] sends version byte `1`, then a 7-bit-length-prefixed UTF-8 JSON
+launch request. Its fields are `EntryPoint`, `ApplicationArguments`, `EnvironmentVariables`, and
+`LaunchProfileName`. An ACK byte precedes output records, each with type byte `1` (stdout) or `2` (stderr)
+and a length-prefixed string. This is an implementation-defined, pinned wire contract, not a public .NET API
+dependency.
 
-### 3.4 Existing watch is the *inverse* of the v2 vision (must be reconciled)
-Today watch is a CLI **feature flag** `KnownFeatures.DefaultWatchEnabled` (default `false`); there is **no
-`--watch` CLI option**. When enabled, `DotNetCliRunner.RunAsync` runs the **whole app host** under
-`dotnet watch` (`watch` vs `run`), and the guest path enables `enableHotReload`. The v2 vision is the
-opposite (app host + services hot-reload via the watch tool's `host`/`resource`). The app-host-watch
-session (D8) reconciles these by switching to the tool's `host` command.
+Important semantics for the integration:
 
-### 3.5 Run/Publish plumbing pattern (template for the watch signal)
-`DistributedApplicationBuilder` reads `Configuration["Publishing:Publisher"]` to choose Run vs Publish and
-builds `DistributedApplicationExecutionContextOptions` → `DistributedApplicationExecutionContext`
-(`Operation`, `IsRunMode`, `IsPublishMode`). The `--publisher` CLI arg maps to that config key. The watch
-signal follows the identical pattern: a CLI config key → builder → a new state member on the execution
-context.
+- Resource roots are supplied when starting the server; a proxy request does not dynamically add a new
+  root. The requested entry point must be present in the loaded graph.
+- The resource listener is created after initial build/workspace initialization. A DCP server process
+  reaching `Running` is not proof that the listener or build output is ready.
+- The resource ACK precedes actual application launch. It is not proof of process start, successful
+  hot-reload-agent initialization, or application health.
+- The package proxy's default pipe-connection timeout is 30 seconds; its timeout/cancellation path can
+  return zero. Proxy startup or exit code must not become a false application-success signal.
+- The server owns the actual service process. Disconnecting its proxy terminates the associated
+  process, but application completion/exit code is not faithfully represented by proxy completion.
 
-### 3.6 Tool referencing pattern (template for D6)
-`Aspire.Hosting.AppHost/build/*.targets` inject `AssemblyMetadata` (e.g. `dcpclipath`,
-`aspiredashboardpath`, `aspireterminalhostpath`) from resolved bundle/package paths; `Dcp/DcpOptions.cs`
-reads them at runtime (priority: explicit config > `ASPIRE_*` env var > assembly metadata). The dashboard
-is invoked via `dotnet exec --runtimeconfig <cfg> <dll>`. `Aspire.Hosting.Dotnet` mirrors this for the
-watch tool dll.
+The [status schema and control implementation][watch-status] use project paths, not resource names,
+instance IDs, or PIDs. Status types include `building`, `build_complete`, `hot_reload_applied`,
+`restarting`, `process_started`, and `process_exited`; there is no general `ready` event, and
+`process_exited` is not a complete feed of all exits. The control request
+`{"type":"rebuild","projects":[...]}` **restarts currently running matching projects; it does not
+perform a build**. Do not map the dashboard's Rebuild command to it as if those operations were equivalent.
 
-### 3.7 Reuse map
-| Need | Reuse | Location |
-|------|-------|----------|
-| `ExecutableResource` + debug seam | `ExecutableResource`, `WithDebugSupport`, `SupportsDebuggingAnnotation`, `ExecutableLaunchConfiguration` | `Aspire.Hosting` |
-| Project defaults (OTEL, `ASPNETCORE_URLS`, launchSettings/Kestrel endpoints, dev certs, rebuilder) | `WithProjectDefaults` & helpers (today `where T : ProjectResource`) | `ProjectResourceBuilderExtensions.cs` |
-| Hidden/explicit-start/ordering | `WithHidden`, `WithExplicitStart`, `WaitForStart`, `WaitForCompletion`, `WithParentRelationship`, `ExcludeFromManifest` | `ResourceBuilderExtensions.cs` |
-| Supporting executable pattern | `PythonInstallerResource` / `PythonVenvCreatorResource` wiring | `Aspire.Hosting.Python` |
-| Hidden DCP build executable | `ProjectRebuilderResource` + rebuild command | `Aspire.Hosting/ApplicationModel` |
-| Polyglot export + codegen | `[AspireExport]`, `Aspire.Hosting.RemoteHost`, `CodeGeneration.*` | various |
-| Tool path → app host | `.targets` `AssemblyMetadata` + runtime reader; `dotnet exec` | `AppHost/build/*.targets`, `Dcp/DcpOptions.cs` |
-| Generated build artifacts | AppHost intermediate-output `.aspire/build` content-addressed files | `Aspire.Hosting.Dotnet` |
-| CLI run/launch/backchannel | `RunCommand`, `AppHostLauncher`, `DotNetCliRunner`, backchannel | `Aspire.Cli/…` |
+### 3.4 Environment and AppHost behavior
 
----
+The package's `resource` command forwards only explicit `-e` values, not the proxy's inherited
+environment. The application is started by the server, which has its own inherited environment.
+The pipe request and hot-reload agent can deliver service values without putting them into downstream
+build/run command lines, but **`-e` still exposes those values on the outer proxy command line**.
+D10 addresses that remaining exposure; merely putting DCP environment on the stock proxy does not.
 
-## 4. Target architecture
+The `host` command can automatically start the watcher's **Aspire execution service** when the
+evaluated AppHost has the `Aspire` capability. It injects `DEBUG_SESSION_PORT`,
+`DEBUG_SESSION_TOKEN`, and `DEBUG_SESSION_SERVER_CERTIFICATE`. This also applies to modern
+`Microsoft.NET.Sdk` + `Aspire.Hosting.AppHost` projects and happens without a real IDE.
+There is no exposed AppHost-only switch that selectively disables this service.
+See [factory selection][watch-host-factory] and [the execution-service factory][watch-host-service].
+This is the concrete composition issue gated in Session 8, not a requirement to use the package in IDE runs.
 
-### 4.1 Component view (watch mode)
-```mermaid
-flowchart TD
-    CLI["aspire run --watch (CLI)"] -->|"set watch config; resolve watch tool<br/>from restored app host project"| HOST["watch tool: host --entrypoint apphost<br/>(app host under hot reload — session 6)"]
-    HOST --> AH["App host process (C# or polyglot)"]
-    AH --> Model["Aspire app model (Aspire.Hosting, core)"]
-    Model -->|"ExecutionContext.RunConfiguration.WatchEnabled == true"| Pkg["Aspire.Hosting.Dotnet (language integration)"]
-    Pkg -->|"coordinated INITIAL build (always)"| BUILD["AppHost intermediate-output traversal projects<br/>+ serialized context-specific builds"]
-    Pkg -->|"adds hidden system resource"| WS["watch server (ExecutableResource, hidden)<br/>dotnet exec tool server --resource projA --resource projB …"]
-    Pkg -->|"launch each C# service via tool"| P1["csharp svc A<br/>dotnet exec tool resource --entrypoint projA --server pipe"]
-    Pkg -->|"launch each C# service via tool"| P2["csharp svc B<br/>dotnet exec tool resource --entrypoint projB --server pipe"]
-    P1 -. "WaitForStart" .-> WS
-    P2 -. "WaitForStart" .-> WS
-    WS <-->|named pipes| P1
-    WS <-->|named pipes| P2
-    WS -->|"INCREMENTAL rebuild on change<br/>(service + shared library)"| P1
-    WS --> P2
-```
-Non-watch run is identical minus the watch `server`/`host`/`resource` wrapping: the coordinated initial
-build still runs, then each `DotnetProjectResource` launches as `dotnet run --project …` (with `"project"`
-debug launch config for F5).
+Supported edits can hot-reload; rude edits can trigger noninteractive restarts. A hot-reloaded AppHost
+method body does not by itself rerun model-construction code or update topology. Build failures can leave
+the watcher waiting for edits rather than exiting like a one-shot build. Do not infer topology refresh,
+startup failure, or health semantics from the wrapper process alone.
 
-### 4.2 The core/package boundary (D5)
-- **Core `Aspire.Hosting`** gains exactly one watch-aware concept: **run configuration as state** on
-  `DistributedApplicationExecutionContext` (a `RunConfiguration` object carrying `bool WatchEnabled`),
-  populated from a CLI config key the same way `Operation` is populated from `Publishing:Publisher`.
-  Core contains **no** watch server, pipes, tool paths, or build logic.
-- **`Aspire.Hosting.Dotnet`** reads `ExecutionContext.RunConfiguration.WatchEnabled` and, when true, adds the
-  watch `server` and rewrites each C# service's launch to the tool's `resource` command. This is the
-  **general seam**: any language package can do the same for its own resources later (D4).
+## 4. Work breakdown - coding sessions
 
----
+Session numbers are retained for continuity. Completed work is not waiting on earlier-numbered pending
+sessions; dependencies are listed after the session descriptions.
 
-## 5. New & changed types / files
+### Session 1 - .NET package and executable-based project resource
 
-> Resources → the package's own namespace (`Aspire.Hosting.Dotnet`, matching Go/Python);
-> builder extensions → `Aspire.Hosting`. All new public surface stays `[Experimental]`. Do **not**
-> hand-edit `api/*.cs`, `*.Capabilities.txt`, `*.ats.txt` (generated).
+**Implemented:** [#18442](https://github.com/microsoft/aspire/pull/18442), with API and polyglot follow-ups
+including [#18981](https://github.com/microsoft/aspire/pull/18981) and
+[#19026](https://github.com/microsoft/aspire/pull/19026).
 
-### 5.1 `Aspire.Hosting.Dotnet` (new package)
-- `src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj` (mirror `Aspire.Hosting.Go.csproj`: project-ref
-  to `Aspire.Hosting`, `[AspireExport]` wiring, `api/Aspire.Hosting.Dotnet.cs`, README).
-- **`DotnetProjectResource`** (new): `public class DotnetProjectResource(string name, string workingDirectory)
-  : ExecutableResource(name, "dotnet", workingDirectory), IResourceWithServiceDiscovery,
-  IContainerFilesDestinationResource, IDotnetProgramResource`
-  — an `ExecutableResource` that opts into the shared .NET SDK publishing pipeline through its builder flow.
-  `[AspireExport(ExposeProperties = true)]`.
-- **`AddDotnetProject`** (new): builds the `DotnetProjectResource`, attaches `IProjectMetadata`, adds a
-  `WithArgs` callback producing `run --project <proj>` (or the file-based `.cs` form), applies the
-  generalized project defaults (§5.4), and `WithDebugSupport(mode => new ProjectLaunchConfiguration{…},
-  "project")` for F5 parity. Includes the `Action<ProjectResourceOptions>` overload + validation
-  (`.csproj`/`.cs`, .NET-version check) in `OnBeforeResourceStarted`.
-- **`AddDotnetProjectForPolyglot`** (new, `internal`, `[AspireExport("addDotnetProject")]`). New capability id
-  `Aspire.Hosting.Dotnet/addDotnetProject`.
-- Core `CSharpAppResource` / `AddCSharpApp` (+ `addCSharpApp`) stay in `Aspire.Hosting`
-  for compatibility. `AddCSharpApp` and `addCSharpApp` are obsolete in favor of `AddDotnetProject`
-  and `addDotnetProject` from `Aspire.Hosting.Dotnet`; their implementations remain unchanged.
+`DotnetProjectResource` implements `IResourceWithServiceDiscovery`,
+`IContainerFilesDestinationResource`, and `IDotnetProgramResource`, and carries
+`ProjectLaunchDefaultsAnnotation`. `AddDotnetProject` attaches deferred path metadata, applies shared
+project defaults and SDK publishing, and validates the input on the resource-start path. It accepts a
+project file, a directory containing one `.csproj`, or a `.cs` file; file apps require .NET 10+.
+Metadata is stable after defaults are applied.
 
-### 5.2 `DotnetWatchServerResource` (new, internal) — hidden system resource
-`internal sealed class DotnetWatchServerResource : ExecutableResource` running
-`dotnet exec <tool> server --sdk <dir> --server <pipe> --status-pipe <pipe> --control-pipe <pipe>
---resource <projA> …`. Added with `WithHidden`, `WithExplicitStart`, `ExcludeFromManifest`, lifecycle-command
-exclusion (mirrors `AddRebuilderResource`). One per app run (MVP). Includes a small pipe-name helper
-(ported from POC) and, optionally, a status-pipe monitor surfacing watch status into resource logs/state.
+C# overloads use `Action<ProjectResourceOptions>`. The internal polyglot dispatcher exports
+`addDotnetProject` with a plain-data `DotnetProjectOptions` DTO: `launchProfileName`,
+`excludeLaunchProfile`, and `excludeKestrelEndpoints`. Excluding profiles wins over a supplied name.
+This intentionally does not change the legacy `ProjectResourceOptions` handle contract.
 
-### 5.3 Coordinated build orchestrator (new, internal)
-An internal `DotnetProjectBuildCoordinator` collects all `DotnetProjectResource` `.csproj` and `.cs` paths
-and adds hidden, automatically-started `DotnetProjectBuildResource` instances. Projects with the same
-effective `global.json` root and no project-specific build environment share a content-addressed MSBuild
-traversal project under `.aspire/build` within the AppHost's resolved intermediate output directory. The traversal invokes child projects
-through the MSBuild task with parallel scheduling, preserving direct-project properties while de-duplicating
-shared project references. Projects with distinct or opaque environments use direct builds from their own
-working directories. File-based `.cs` apps also use direct builds and then launch with `--no-build`. The
-build resources are serialized so different SDK/environment contexts and file apps cannot race shared
-outputs through `#:project` references.
+The package consumes public core seams and source-shared implementation helpers, not production
+`InternalsVisibleTo`. Shared defaults supply launch-profile/Kestrel endpoints, telemetry, environment,
+certificate handling, project launch metadata, and the Rebuild infrastructure.
+The default tool invocation uses **`WithLaunchToolArgs`**, separate from program arguments; the current
+normal launch path is described in Session 5, not a blanket `dotnet run` recipe.
 
-### 5.4 Generalized project-defaults wiring (core ↔ package)
-Today `WithProjectDefaults` / `SetAspNetCoreUrls` / rebuilder / launchSettings-endpoint logic are
-owned by `Aspire.Hosting`. `AddDotnetProject` (different assembly, non-`ProjectResource`) must reuse them.
-**Decision (R2):** expose the reusable project-defaults and pipeline seams as experimental public APIs,
-while source-linking implementation helpers such as path, launch-profile, and command-line parsing into
-`Aspire.Hosting.Dotnet`. The language package must remain buildable from the public `Aspire.Hosting`
-surface without production `InternalsVisibleTo`. The shipped `CSharpAppResource : ProjectResource` keeps
-working through the same generalized helpers unchanged.
+**Blazor consumer:** both gateway resource shapes exist, sharing client/state/publish helpers.
+`AddBlazorGateway` retains its `ProjectResource` return type; `AddDotnetProjectBlazorGateway` returns V2.
+The V2 attachment capability is `withDotnetProjectBlazorClientApp`, generated as `withBlazorClientApp`.
+Both gateway variants now intentionally override development launch to the official
+`Microsoft.AspNetCore.Components.Gateway.Cli` tool and force process execution; their metadata-backed
+file app is used for publishing. Thus a V2 resource type alone does not mean its current custom launch
+can be replaced with project watch. Scripts are packed for both C# `buildTransitive` and direct
+package-backed polyglot loading.
 
-### 5.5 Core run configuration state (new, minimal)
-- Add a `RunConfiguration` object with a `WatchEnabled` property to
-  `DistributedApplicationExecutionContextOptions` and surface it read-only on
-  `DistributedApplicationExecutionContext`.
-- `DistributedApplicationBuilder` populates it from a CLI config key, exactly as `Operation` is derived
-  from `Publishing:Publisher`.
+**Evidence:** [package implementation][dotnet-source], `DotnetProjectOptionsTests`,
+`AddDotnetProjectBlazorGatewayTests`, four Blazor polyglot fixtures (TS/Go/Java/Python), and
+`TypeScriptBlazorGatewayTests.DotnetProjectBlazorGatewayRunsFromTypeScriptAppHost`.
 
-### 5.6 Watch tool acquisition (D6)
-- `Directory.Packages.props`: pin `Microsoft.DotNet.HotReload.Watch.Aspire` (mirror to approved feed; A2).
-- `Aspire.Hosting.Dotnet`: `PackageReference … GeneratePathProperty="true"` + `build/Aspire.Hosting.Dotnet.targets`
-  injecting the tool dll path as app-host `AssemblyMetadata`; a runtime reader (priority: env var > metadata)
-  resolves it; invoked via `dotnet exec`.
+### Session 1b - Persistent playground/dogfood harness
 
-### 5.7 CLI `aspire run --watch`
-- Add a `--watch` `Option<bool>` to `RunCommand`; when set, pass the watch config signal to the app
-  host (so the package reacts). Reconcile with `DefaultWatchEnabled` (explicit `--watch` wins; keep the flag
-  as the default-on switch). The `host`-command wrapping of the app host is **session 6**.
+**Implemented:** [#18654](https://github.com/microsoft/aspire/pull/18654).
 
-### 5.8 Consumers
-- **`Aspire.Hosting.Blazor`**: `AddBlazorGateway` (calls core `AddCSharpApp`, returns
-  `IResourceBuilder<ProjectResource>`) is **unchanged**. **Add** a new `DotnetProjectResource`-backed gateway
-  (`AddDotnetProjectBlazorGateway` + a `WithBlazorClientApp` overload) and **generalize** the gateway's
-  private helpers (`WithBlazorApp`, `MirrorGatewayStateToClients`, `WatchGatewayStateAsync`,
-  `CreatePublishCompanion`, `ForwardEndpointReference`) over a shared constraint so both gateway resource
-  types share one implementation. The new variant supports both run and publish modes through the shared
-  container-files destination pipeline. The built-in gateway scripts are packed
-  both as `buildTransitive` assets for C# AppHosts and beside the package assembly for package-backed polyglot
-  AppHosts, which load integration assemblies directly without running the package's MSBuild targets.
-- Polyglot SDKs: the `addDotnetProject` export is **additive** in `Aspire.Hosting.Dotnet`; core
-  `addCSharpApp` retains its signature and runtime behavior but is obsolete in favor of `addDotnetProject`.
-  The Blazor variant exports `addDotnetProjectBlazorGateway` and exports the
-  `DotnetProjectResource` overload with the distinct `withDotnetProjectBlazorClientApp` capability ID while
-  retaining `withBlazorClientApp` as the generated method name on that resource type. Generated APIs compile in
-  TypeScript, Go, Java, and Python; a package-backed TypeScript run verifies the gateway serves an attached Blazor
-  client. `api/*`, `*.Capabilities.txt`, and `*.ats.txt` remain generated artifacts and are not hand-edited.
+[`playground/DotnetProject`][playground] has C# and TypeScript AppHosts, two project services
+(`DotnetProject.ApiService` and `DotnetProject.WorkerService`) referencing
+`DotnetProject.SharedLibrary`, and `worker/worker.cs`. Both AppHosts add the services through V2 and
+wire worker service-discovery references to the API. They do **not** currently add `WaitFor(apiservice)`.
+The C# AppHost has no service project references; the service projects retain their ordinary shared-library
+references. The TypeScript AppHost declares the integration in `aspire.config.json`.
 
----
+Keep this as the shared-library and mixed project/file-app target for later watch sessions, including
+package-backed polyglot runs.
 
-## 6. Work breakdown — agentic coding sessions
+### Session 2 - Non-watch debugging and executable launch parity
 
-> Sequential unless noted. Every session ends **green**: `./build.sh` clean + targeted tests, and (where
-> applicable) a manual run against a **TypeScript** app host first, then a C# app host. Keep all surface
-> `[Experimental]`. Legacy `AddCSharpApp` carries `[Obsolete]` instead. Do **not** hand-edit generated `api/*` files.
+**Implemented:** [#18729](https://github.com/microsoft/aspire/pull/18729), followed by shared launch
+planning and coordinated/external-build support in [#19552](https://github.com/microsoft/aspire/pull/19552)
+and [#19678](https://github.com/microsoft/aspire/pull/19678).
 
-### Session 1 — Scaffold `Aspire.Hosting.Dotnet`; add `DotnetProjectResource`/`AddDotnetProject`
-Create the package (mirror `Aspire.Hosting.Go`). Add `DotnetProjectResource` (`: ExecutableResource`) and
-`AddDotnetProject` (+ polyglot `addDotnetProject`); core
-`CSharpAppResource`/`AddCSharpApp` retain their existing implementations; `AddCSharpApp` is obsolete
-in favor of `AddDotnetProject`. Add the core project-defaults generalization (§5.4 —
-`ProjectLaunchDefaultsAnnotation`). Reproduce **non-watch, non-debug** launch via `dotnet run --project …`
-args + generalized project defaults. Add the new `DotnetProjectResource`-backed Blazor gateway variant (§5.8);
-regenerate polyglot SDKs/api (additive). 
+The [executable launch recipes][launch-recipes] and DCP launch policy produce an immutable launch plan
+shared by legacy projects and executable resources. Launch-tool, launch-profile, and application
+arguments have distinct roles; replacing a tool prefix must not discard program arguments. Failed
+required IDE launch configuration is reported, not silently retried as a DCP process.
 
-**Verify:** builds clean; a service added via `AddDotnetProject` runs
-(no debug) from a C# app host **and** a TS app host with endpoints/env/service discovery; the existing Blazor
-gateway is unchanged, the new variant serves an attached client from a package-backed TS app host, and the
-generated Blazor APIs compile from TypeScript, Go, Java, and Python AppHosts. *Depends on: none.*
+Coordinated V2 builds negotiate **`project-with-external-build.v1`**
+(`KnownLaunchConfigurationTypes.ProjectWithExternalBuild`). In an external debug session, the coordinator
+runs only when that capability is advertised. Older/capability-less launchers
+retain the legacy project-build path; unsupported project launch or persistent lifetime can retain normal
+process execution. Build configuration, build-only environment, build working directory, and build
+suppression flow through project launch metadata.
 
-**Status: ✅ Complete** — initial implementation commit `435f5d08`, PR
-[#18442](https://github.com/microsoft/aspire/pull/18442); polyglot exports, direct package-load assets, and
-validation added in follow-up PR [#19026](https://github.com/microsoft/aspire/pull/19026).
+The VS Code debugger understands externally built projects and file apps, resolves SDK-selected
+commands/arguments, and preserves selected/disabled launch-profile behavior and required host variables.
+It must not silently rebuild suppressed output or launch a different configuration. This preserves
+non-watch Debug/NoDebug behavior; it does not implement this plan's watcher under an IDE.
 
-### Session 1b — `AddDotnetProject` playground sample (early dogfood harness)
-Add a **committed** `playground/` sample (name TBD, e.g. `ProjectV2AppHost`) that models services via
-`AddDotnetProject`: at minimum a `.csproj` service **plus a shared class library** it references, and — since
-the resource supports it — optionally a file-based `.cs` service. Provide a **TypeScript app host**
-(`addDotnetProject`) alongside a C# app host, mirroring `playground/GoAppHost`, `playground/PythonAppHost`,
-`playground/TypeScriptAppHost`, and `playground/FileBasedApps`. Wire endpoints/env/service discovery between
-the services. This is the **persistent dogfood target** later sessions verify against: the shared library
-gives Session 5 (coordinated traversal build) and Session 6 (shared-library hot reload) a ready multi-project
-case, and Session 9 extends it for the watch end-to-end. 
+**Evidence:** `ExecutableLaunchPlanTests`, DCP/package tests, `extension/src/test/dotnetDebugger.test.ts`,
+and `extension/src/test-e2e/coordinatedBuild.e2e.test.ts`.
 
-**Verify:** `aspire run` (non-watch) starts the services from both the C# and TS app hosts; 
-endpoints, env, and service discovery resolve. *Depends on: 1. Parallelizable with 2–5.*
+### Session 3 - Core run configuration state
 
-**Status: ✅ Complete** — sample at `playground/DotnetProject/`: a C# app host (`DotnetProject.AppHost`, using
-`AddDotnetProject`) and a `TypeScriptAppHost` (using the polyglot `addDotnetProject`), sharing a class library
-(`DotnetProject.SharedLibrary`), two `.csproj` services (`DotnetProject.ApiService`, `DotnetProject.WorkerService`
-— both referencing the shared library, with `workerservice` referencing/`WaitFor`-ing `apiservice`), and a
-file-based `.cs` service (`worker/worker.cs`). The four C# projects are in `Aspire.slnx` and build clean.
-`aspire run` is verified end-to-end from the **C# app host**: all resources reach `Running`/`Healthy`, each
-`DotnetProjectResource` launches via `dotnet run --project/--file … --no-launch-profile`, and HTTP calls confirm
-the shared library and service discovery (`workerservice`/`worker` → `apiservice`). Running the **TypeScript**
-app host in-repo follows the standard polyglot package workflow (pack `Aspire.Hosting.Dotnet` to a local source
-+ `npm install`; see A2/A1).
+**Implemented:** [#18863](https://github.com/microsoft/aspire/pull/18863).
 
-### Session 2 — Non-watch **debug/F5 parity** (DCP project-launch generalization)
-Generalize the DCP path so a non-`ProjectResource` carrying `IProjectMetadata` + a `"project"`
-`SupportsDebuggingAnnotation` is launched/debugged correctly (preferred: an annotation/metadata-driven
-predicate; fallback: a dedicated prepare path or a distinct launch type). Preserve launch-profile behavior.
+`RunConfiguration` is an immutable-init `[AspireDto]` with `bool WatchEnabled`.
+`DistributedApplicationExecutionContextOptions.RunConfiguration` initializes the never-null, read-only
+execution-context property. `DistributedApplicationBuilder` reads **`AppHost:Run:WatchEnabled`** on
+both run-mode construction paths. Non-boolean inputs yield false; publish contexts report defaults even
+if caller-supplied run options request watching.
 
-**Verify:** F5/debug of a `DotnetProjectResource` (no watch) from a C# app host and the Aspire VS Code extension;
-debug behavior matches `AddProject`. *Depends on: 1.* **(R1)**
+No watch-server/acquisition/pipe behavior is implemented by this state. Merely setting the key currently
+does not make .NET services watch.
 
-**Status: ✅ Complete.** DCP treats an `ExecutableResource` carrying `IProjectMetadata` and `"project"` debug
-support as a project launch. `DotnetProjectResource` therefore gets launch-profile and Debug/NoDebug handling,
-is classified/rendered as a project, and passes only application arguments to the IDE. Project launches and
-other debug integrations that rewrite arguments have no Process fallback; persistent resources and IDEs without
-`"project"` support keep the normal process launch.
+**Evidence:** `RunConfiguration.cs`, execution-context/options and builder source,
+`OperationModesTests`, and the polyglot codegen snapshots.
 
-The VS Code project debugger supports file-based `.cs` resources. It resolves the program through
-`dotnet run-api`, retains the built-DLL host prefix when `dotnet` is the launcher, and keeps the selected or
-disabled launch profile authoritative for application arguments, working directory, and environment while
-preserving required `DOTNET_ROOT*` host variables.
+### Session 4 - Runtime-only watcher acquisition and resolution
 
-Automated coverage exercises the DCP, package, snapshot, and extension behavior above. The C# app-host + VS Code
-F5 check in **Verify** was verified manually. *(Watch-mode debugging remains out of scope; see Session 9.)*
+**Not implemented.** There is no watcher pin/reference, acquisition implementation, tool-path target,
+or runtime resolver in `Aspire.Hosting.Dotnet`.
 
-### Session 3 — Core run configuration state (minimal, no mechanics)
-Add a run configuration to `DistributedApplicationExecutionContext(+Options)`; populate from a CLI config
-key in `DistributedApplicationBuilder` (mirror `Publishing:Publisher`). No watch logic in core. **Verify:**
-unit test that the config flag flips the watch signal; both run modes still behave normally.
-*Depends on: none (parallelizable with 1–2).*
+Implement D6 using the verified package contract in section 3:
 
-**Status: ✅ Complete.** Core exposes an experimental `RunConfiguration` class with a single
-`bool WatchEnabled` property, and a read-only, never-null `DistributedApplicationExecutionContext.RunConfiguration`
-set through an `init` property on `DistributedApplicationExecutionContextOptions`. Both are marked
-`[Experimental("ASPIREWATCH001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]`, and `RunConfiguration`
-is an `[AspireDto]` so polyglot app hosts read it as a plain object. `DistributedApplicationBuilder` populates
-it on both run-mode paths from the **`AppHost:Run:WatchEnabled`** configuration key. Values other than
-`true`/`false`, and publish mode, yield defaults (`WatchEnabled == false`). Downstream reads
-`ExecutionContext.RunConfiguration.WatchEnabled`. Core contains **no** watch mechanics. `OperationModesTests`
-covers the configuration and publish-mode behavior; the five polyglot codegen snapshots (TS/Go/Python/Java/Rust)
-are regenerated.
+- Pin the verified `10.0.403` baseline and acquire its complete payload from approved/configured sources only when
+  an effective CLI watch run needs it. Reuse a compatible cache entry; handle concurrent ensure requests,
+  interrupted acquisition, version mismatch, and missing runtimes with explicit diagnostics.
+- Keep acquisition logic owned by `Aspire.Hosting.Dotnet`, usable during AppHost startup before the
+  service-watch server starts. Do not add a build/restore/publish or ordinary-run download prerequisite.
+- Expose a package-owned **launch-time ensure/resolution entry point** that the CLI can invoke from the
+  already-restored C# AppHost project **before** launching the AppHost through `host`. Otherwise there is
+  a circular dependency: AppHost startup cannot acquire the tool needed to start that AppHost.
+- Establish path/configuration precedence and pass the same resolved installation to both launch paths.
+  C# MSBuild metadata may expose information where useful, but cannot be the sole runtime contract for
+  direct-loaded polyglot packages. The exact ensure entry point, cache layout, and tool-compatible
+  acquisition primitive remain implementation work, not an assumed ordinary `PackageReference`.
 
-### Session 4 — Watch tool acquisition in `Aspire.Hosting.Dotnet`
-Pin + mirror `Microsoft.DotNet.HotReload.Watch.Aspire` (A2); add the `PackageReference` +
-`GeneratePathProperty` + `.targets` assembly-metadata injection + runtime resolver; invoke via `dotnet exec`.
+**Acceptance:** watch-only acquisition and cache reuse work for C# and package-backed TypeScript
+AppHosts; non-watch/build/restore/publish do not acquire the tool; the resolved installation executes
+`--help` and meets runtime requirements. Cover failures, cancellation, concurrent callers, and approved
+feed selection without modifying repository `NuGet.config`.
 
-**Verify:** from a built app host that references `Aspire.Hosting.Dotnet`, `dotnet exec <resolved tool> --help`
-runs; re-verify the `server`/`resource`/`host` flag surface (A1). *Depends on: 1.*
+### Session 5 - Coordinated initial builds and output-bound launches
 
-### Session 5 — Coordinated initial traversal and context-specific builds
-Implement the coordinated build (§5.3): AppHost intermediate-output traversal projects for compatible
-`DotnetProjectResource` `.csproj`s, serialized direct builds for incompatible SDK/environment contexts,
-and serialized direct builds for file-based `.cs` apps, with one completed build chain before services
-start, **identically for watch and non-watch**; stream logs; fail fast.
+**Implemented:** [#19678](https://github.com/microsoft/aspire/pull/19678), with unified restore in
+[#20294](https://github.com/microsoft/aspire/pull/20294).
 
-**Verify:** a multi-project app **with a shared library** builds once, no write races, from a TS app host then a C# app host.
-*Depends on: 1. Parallelizable with 2–4.*
+`DotnetProjectBuildCoordinator` prepares supported Run-mode resources, then materializes the active
+model's build plan in the **`BeforeStart` pipeline's final action**. Removed/replaced resources are not
+built. Existing projects are grouped by physical nearest `global.json` identity and build configuration;
+explicit `WithBuildEnvironment` callbacks select direct builds. Runtime `WithEnvironment`,
+service-discovery references, launch-profile environment, and runtime working-directory overrides do not
+split build groups.
 
-**Status: ✅ Complete.** Added coordinated Run-mode build resources that write AppHost intermediate-output traversal
-projects for compatible contexts. Different SDK roots and configurations use separate serialized traversal
-builds, while project-specific build environments and file-based `.cs` apps use serialized direct builds.
-All dependent resources (including forced starts) are blocked on success. Traditional projects launch their
-resolved `RunCommand` and `RunArguments` directly from the coordinated output; file-based apps remain outside
-generated traversal projects and launch with `dotnet run --file <path> --no-build`. Automated coverage and the
-TypeScript-first/C#-second playground runs pass, including shared-library and service-discovery calls.
+Traversal projects are content-addressed, leased artifacts under **`Aspire:Store:Path/.aspire/build`**
+(the resolved AppHost intermediate-output store). Each compatible group performs aggregate NuGet graph
+restore and parallel MSBuild child builds, de-duplicating shared references within that build context
+without introducing solution-specific properties. Groups run serially; direct builds and `.cs` apps also
+run serially so shared outputs, including `#:project` references, do not race.
 
-### Session 5b — .NET program publishing parity
-Extract the legacy `ProjectResource` SDK publishing pipeline behind a shared, annotation-driven capability and add
-the cross-package `IDotnetProgramResource` identity. Configure `AddDotnetProject` for project manifests, SDK
-container image build/push, container-file layering, and supported compute environments without changing its
-`ExecutableResource` run architecture. Preserve direct file-app SDK publishing and report actionable guidance for
-cross-operating-system Native AOT failures. Generalize project-oriented integration APIs, including EF migrations,
-without adding production dependencies on `Aspire.Hosting.Dotnet`.
+Aggregate restore does not run each root's `BeforeTargets="Restore"` / `AfterTargets="Restore"` hooks.
+**`Aspire:Dotnet:RestoreProjectsIndividually=true`** opts into serial per-root restore while retaining
+parallel builds. Unavailable NuGet restore targets or top-level `RestoreUseStaticGraphEvaluation` also
+select the logged individual-restore path; a restore failure is not retried with another strategy.
 
-**Verify:** `.csproj`, project-directory, and file-based `.cs` resources publish through manifest, Docker Compose,
-Kubernetes, Azure, Radius, Sandboxes, Foundry hosted agents, and the Blazor gateway paths with legacy/Project V2
-differential coverage. *Depends on: 5.*
+Services wait for the full successful build chain, including forced starts. Failure handling waits for
+a settled exit code rather than treating an early `Exited`/unknown code as success. Missing paths retain
+resource-local failure behavior rather than preventing valid siblings from building. No coordinator is
+created in publish mode or for an IDE that does not advertise external-build support.
 
-### Session 6 — C# **service** watch: watch `server` + `resource` launch
-Add `DotnetWatchServerResource` (§5.2). When `ExecutionContext.RunConfiguration.WatchEnabled`, the package (a) adds the hidden
-watch server with all `DotnetProjectResource` project paths, (b) rewrites each `DotnetProjectResource` to
-`dotnet exec <tool> resource --entrypoint <proj> --server <pipe> --no-launch-profile -e K=V …`, (c)
-`WaitForStart(server)`. Coordinated initial build (session 5) runs first; the server owns incremental builds.
-Optional status-pipe monitor. **App host still runs normally in this session.** 
+After coordinated builds, `.csproj` resources query `ComputeRunArguments` for **`RunCommand`,
+`RunArguments`, and `RunWorkingDirectory`** in the same build context and launch that output directly.
+File apps use `dotnet run --file <path> --no-build`; uncoordinated file-app launches use `--no-cache`.
+Start/Restart reuse built output; Rebuild builds and restarts through the separate project rebuilder.
 
-**Verify (TS app host first,
-then C#):** edit a service file → that service hot-reloads; edit the shared library → both services reload.
-*Depends on: 3, 4, 5 (and 1).*
+**Additional delivered build API:** `WithBuildEnvironment` supplies build-only variables/global
+properties for `.csproj` resources, not `.cs` apps. One evaluated snapshot per build attempt feeds the
+coordinated build, run-property query, rebuilder, and IDE metadata; publishing also receives the
+customization. Protected response files preserve MSBuild global-property precedence without command-line
+values. This is **not a secret transport**. Callbacks must be configured before plan materialization;
+incompatible duplicate registrations of one project with custom build contexts are rejected.
 
-### Session 7 — `aspire run --watch` CLI wiring
-Add the `--watch` option to `RunCommand`; flow the watch signal to the app host; reconcile with
-`DefaultWatchEnabled` (explicit flag wins). App host still launched normally (services hot-reload). 
+**Evidence:** [coordinator implementation][build-coordinator], `DotnetProjectBuildCoordinatorTests`,
+`DotnetProjectBuildEnvironmentTests`,
+`DotnetProjectRunPropertiesResolverTests`, `DotnetProjectBuildArtifactManagerTests`, and the
+[integration README][dotnet-readme]. These cover real shared-graph builds as well as model/argument,
+failure, retry/cancellation, filesystem-identity, build-output-readiness, and artifact-lifetime behavior.
 
-**Verify (TS first, then C#):** `aspire run --watch` → C# services start under watch and hot-reload end-to-end.
-*Depends on: 6, 3.*
+### Session 5b - .NET program publishing and consumer parity
 
-### Session 8 — App-host watch via the tool's `host` command (reverses D3; separate per D8)
-CLI launches the app host via `dotnet exec <tool> host --sdk <dir> --entrypoint <apphost> …` (tool resolved
-from the **restored app host project**, not bundled), replacing today's whole-app-host `dotnet watch`.
-Reconcile `DefaultWatchEnabled`. Decide polyglot-app-host behavior (guest hosts under their own watch; the C#
-app-host-server case). 
+**Implemented, with documented limitations:** [#19997](https://github.com/microsoft/aspire/pull/19997).
+This is no longer just planned scaffolding.
 
-**Verify:** editing app host code hot-reloads the topology under `aspire run --watch`.
-*Depends on: 7, 4.*
+Core distinguishes **`IDotnetProgramResource` identity** from the annotation-backed
+**`WithDotnetProgramPublishing` capability**. Legacy projects and `AddDotnetProject` opt into the shared
+SDK image build/push pipeline; implementing the interface or directly constructing a V2 resource is not
+enough. V2 emits project manifests, supports SDK container publishing and container-file layering, and
+is recognized by Docker Compose, Kubernetes, Azure Container Apps/App Service/Sandboxes, Radius,
+Foundry hosted-agent, and Blazor integration paths. The shared pipeline and general compute integrations
+use identity/capability checks rather than requiring the V2 concrete type; Blazor deliberately references
+the package for its concrete gateway variant.
 
-### Session 9 — Tests, playground & docs
-**Extend the Session 1b playground** to exercise `aspire run --watch` (C# services hot-reload; a shared-library
-edit reloads both) from the TS and C# app hosts; CLI e2e for `aspire run --watch` (hex1b /
-`cli-e2e-testing`); hosting tests for the package, watch-server wiring, watch switch, and the traversal/direct
-build; Verify-snapshot updates. Docs for experimental `Aspire.Hosting.Dotnet` + `aspire run --watch`,
-limitations (no watch-debug, no partial runs yet). *Depends on: 7 (and 8).*
+Delivered details include SDK archive output, daemon-free archive builds when no container-file
+layering is needed, temporary image identities/cleanup for layering, prebuilt-image validation, and
+build-environment propagation with rejection of artifact identity/platform redirection.
+File-app publishing preserves SDK defaults, including Native AOT; cross-OS AOT failures report
+actionable guidance such as `#:property PublishAot=false` for framework-dependent output.
+See the README for archive-format/runtime constraints rather than duplicating them here.
 
-### Dependency graph
-```
-1 ─┬─► 1b ───────────────────────────────┐
-   ├─► 2 ─────────────────────────┐      │
-   ├─► 4 ─────────────┐           │      │
-   └─► 5 ─────────────┤           │      │
-3 ──────────────────► 6 ─► 7 ─► 8 ─► 9 ◄─┘
-                      ▲           ▲
-                      └─ (4,5) ───┘
-```
-Session 1 (✅ complete) is the root. Sessions 1b (✅ complete) and 2 (✅ complete) are done; sessions 4, 5
-parallelize after 1; session 3 is independent.
-Service watch (6) needs 3+4+5; CLI `--watch` (7) needs 6+3; app-host watch (8) needs 7+4; tests/docs (9) last.
-Session 1b (the playground dogfood harness) is extended by session 9.
+EF Core APIs accept the shared .NET-program identity and wait for build output using
+`DotnetProgramBuildCompletionAnnotation`, without waiting for application readiness. **EF does not
+receive Aspire-specific build values as MSBuild global properties.** It warns once per requested
+operation and continues; output can be suitable, different/stale, or missing. Run-mode EF commands
+normally retain `--no-build`; publish-time script/bundle generation allows EF to build. This limitation
+must remain explicit, not be described as complete build-customization parity.
 
----
+**Evidence:** [shared publishing implementation][publishing-source], core `DotnetProgramPublishingTests`
+and archive/image-manager tests; V2 manifest/publish tests; EF readiness/customization tests;
+compute-integration differential/snapshot coverage; and
+deployment scenarios in `Aspire.Cli.EndToEnd.Tests` and `Aspire.Deployment.EndToEnd.Tests`, including
+ACA/AKS, App Service, Sandboxes, Radius, and Foundry.
 
-## 7. Compatibility with the annotation-based RunAs/PublishAs proposal ([#8984](https://github.com/microsoft/aspire/issues/8984))
-The per-language launch decision is **annotation/state-driven** (`ExecutionContext.RunConfiguration.WatchEnabled` + the package's
-own annotations), not type-bound — the natural insertion point for a future `RunAsWatch()` / `RunAsProject()`
-/ `RunAsContainer()` union. Adding modalities (container, persistent) later is additive and stays inside the
-language package. #8984 alignment is best-effort and must not compromise the core Project v2 vision.
+### Session 5c - Default adoption and API graduation
 
-## 8. Events / callbacks (noted; redesign deferred)
-The slice touches `BeforeResourceStartedEvent` (path/SDK validation, env materialization), `WaitForStart`
-ordering (server → services), and env/args callbacks (materialized into the `resource` command line). For the
-MVP we **document** current ordering/cardinality but do **not** redesign the contracts. Watch point: env/args
-callbacks may need to run for build/closure even when a resource isn't "running" (a known #16386 concern).
+**Implemented; previously missing from the plan.**
 
-## 9. Risks & open items
-- **R1 — DCP project-launch generalization (Session 2).** Making a non-`ProjectResource` debuggable via the
-  `"project"` path could affect Azure Functions / file-based-app categorization. Mitigate with an
-  annotation/metadata-driven predicate + regression tests; fall back to a dedicated prepare path or a distinct
-  launch type recognized by DCP/the Aspire extension.
-- **R2 — Core ↔ language package boundary.** Generalize project defaults behind narrow experimental public
-  seams used by both `ProjectResource` and `DotnetProjectResource`; source-link low-level implementation
-  helpers where necessary and avoid both production `InternalsVisibleTo` and divergent copies of
-  launchSettings/Kestrel/dev-cert/rebuilder logic.
-- **R3 — Feed availability (A2).** `Microsoft.DotNet.HotReload.Watch.Aspire` must be mirrored to an approved
-  internal feed before Session 4.
-- **R4 — Watch tool ↔ SDK coupling (A3).** `--sdk <dir>` must match the active SDK; resolve at runtime.
-- **R5 — Tool surface drift (A1).** Re-verify the shipped tool's `server`/`resource`/`host` flags vs the POC.
-- **R6 — Named pipes cross-platform.** Verify `PipeOptions.CurrentUserOnly` semantics on macOS/Linux
-  (POC was Windows-centric); TS-first verification exercises non-Windows.
-- **R7 — `--watch` vs `DefaultWatchEnabled` vs the old `dotnet watch`.** Reconcile UX/strings so the explicit
-  flag, the feature flag, and the host-command behavior don't collide (Sessions 7–8).
-- **R8 — New polyglot capabilities.** `addDotnetProject` is a new capability in `Aspire.Hosting.Dotnet`
-  (additive; core `addCSharpApp` retains its runtime behavior but is obsolete in favor of `addDotnetProject`).
-  The Blazor package also adds
-  `addDotnetProjectBlazorGateway` and `withDotnetProjectBlazorClientApp`; the latter keeps
-  `withBlazorClientApp` as its generated method name on `DotnetProjectResource`. Confirm guest SDK
-  regeneration picks them up in TypeScript, Go, Java, and Python.
-- **R9 — Blazor gateway variant (Session 1).** The new `DotnetProjectResource`-backed gateway shares one
-  generalized helper implementation with the unchanged `ProjectResource` gateway and publishes through the
-  shared container-files destination pipeline. Its scripts are available through both
-  C# `buildTransitive` output and direct polyglot package loading. Keep the generated APIs covered in all four
-  validation AppHosts and the run-mode behavior covered by a package-backed TypeScript test.
-- **O1 — Watch signal shape.** ✅ **Resolved (Session 3):** a `RunConfiguration` object with a
-  `bool WatchEnabled` property, exposed read-only as `DistributedApplicationExecutionContext.RunConfiguration`.
-  Additional run behaviors are added as further properties rather than as mutually exclusive modes.
-  Sessions 6/7 query `ExecutionContext.RunConfiguration.WatchEnabled`. The signal is carried by the
-  `AppHost:Run:WatchEnabled` configuration key.
-- **O2 — App-host watch for polyglot hosts (Session 8).** How the tool's `host` command applies when the app
-  host is TypeScript/Go/Python (guest runtime watch vs the C# app-host-server).
+- [#20490](https://github.com/microsoft/aspire/pull/20490) removed the V2 consumer experimental
+  attributes; [#20582](https://github.com/microsoft/aspire/pull/20582) removed the obsolete diagnostic
+  guidance. [#20825](https://github.com/microsoft/aspire/pull/20825) made `AddCSharpApp` obsolete.
+- [#20867](https://github.com/microsoft/aspire/pull/20867) deprecated **`Aspire.AppHost.Sdk`**
+  (`ASPIRE012`) and migrated C# AppHost templates to **`Microsoft.NET.Sdk`**, explicit
+  `Aspire.Hosting.AppHost` / `Aspire.Hosting.Dotnet` package references, and path-based service additions
+  instead of AppHost service `ProjectReference` items. File-based AppHost templates include both packages.
+- The AppHost package supplies the plain-SDK defaults/capability and CLI-bundle run plumbing. Legacy
+  SDK projects and explicitly marked legacy project references remain supported for staged migration;
+  `AddProject` has not been silently changed to return V2.
 
-## 10. Out of scope
+This is the **default new C# project-inclusion path**, not proof that all existing applications or
+every polyglot template has been migrated. The current TypeScript starter models Node/Vite services;
+polyglot AppHosts add the .NET integration explicitly when they need C# services.
 
-- **Azure Functions on `DotnetProjectResource`.** A Functions resource backed by the new
-  `ExecutableResource`-based `DotnetProjectResource` (to gain watch/hot-reload) is **not** in this plan.
-  Functions launches via its own `azure-functions` launch type / `func host start`, so hot-reload through the
-  Functions host + isolated worker is unverified; it would also add an
-  `Aspire.Hosting.Azure.Functions` → `Aspire.Hosting.Dotnet` dependency. Revisit once container execution and
-  Functions-specific watch behavior are designed. Today's `AzureFunctionsProjectResource : ProjectResource`
-  stays unchanged.
+**Evidence:** `Aspire.AppHost.Sdk/SDK/Sdk.in.targets`, `Aspire.Hosting.AppHost/build`,
+`Aspire.ProjectTemplates/templates`, CLI empty/starter templates, and `AppHostSdkTargetsTests`.
+
+### Session 6 - Aspire-controlled C# service watch
+
+**Not implemented.** No `DotnetWatchServerResource` or V2 watch launch rewrite exists.
+
+When a supported CLI watch run is requested, ensure the tool, collect eligible project roots, add
+**one hidden system watch server per AppHost run**, and launch one **Aspire-owned proxy per resource
+instance**. Keep infrastructure out of manifests and inappropriate user lifecycle commands; define
+intentional startup and shutdown ordering, rather than adding an explicit-start server with no owner to start it.
+
+Retain the coordinated initial-build contract, then accommodate the watcher's additional build and
+initialization before services use it. Use the existing launch-tool/program-argument seam rather than
+discarding all `WithArgs` or silently overwriting a custom tool launch such as the Blazor gateway.
+The AppHost still runs normally during this session.
+
+Implement the applicable compatibility/lifecycle gates in section 5, including meaningful failure and
+status reporting. A bare `WaitForStart(server)` is not the complete readiness design, and the status
+monitor is not optional where correctness depends on it. Do not assume the stock proxy's zero exit
+code or `rebuild` control request supplies Aspire's lifecycle semantics.
+
+**Acceptance:** from the TypeScript playground first, then C#, a service edit updates the intended
+service and a shared-library edit updates both consumers. Verify server failure, initial-build failure,
+restart/rebuild behavior, cleanup, and unsupported-context diagnostics, not only successful edits.
+
+### Session 6a - Hidden Aspire CLI service proxy
+
+**Not implemented; requester-approved addition to the work breakdown.**
+
+Implement a hidden, infrastructure-only CLI command for D10. DCP launches it per instance with the
+intended service environment delivered through process environment/private local transport; it sends
+that environment in the watcher resource-pipe request. Do not indiscriminately forward every ambient
+CLI variable or put values into `-e` arguments, logs, dashboard command lines, or persisted payloads.
+
+Pass the **exact invoking CLI launch specification** to the integration, including any managed/dogfood
+host prefix; do not resolve an arbitrary `aspire` from `PATH`. Build-time `AspireCliPath` metadata alone
+is not this runtime contract. The infrastructure command must avoid banners, prompts, first-run/update
+UX, and payload dumps.
+
+Own the pinned binary framing, serialization/profile states, output forwarding, disconnect cleanup,
+cancellation, bounds checking, and failure handling. Version-byte acceptance alone does not prove full
+semantic compatibility. Do not translate transport completion into a fabricated application exit code.
+A future supported secure input channel in the upstream proxy may let Aspire replace this implementation,
+but that is not available in the verified contract.
+
+**Acceptance:** contract tests against the actual pinned watcher prove environment values reach the
+service without command-line disclosure, stdout/stderr stay correctly separated, one proxy connection
+owns one launched instance, and failures/cancellation never look like successful application completion.
+
+### Session 7 - `aspire run --watch` CLI wiring
+
+**Not implemented.** `RunCommand` currently has no `--watch` option and does not project the V2 signal.
+The existing `defaultWatchEnabled` feature still selects whole-AppHost `dotnet watch` for project-based
+C# AppHosts and the guest runtime's watch path for polyglot hosts. It is not the new service-watch mode.
+Current `--no-build` validation already accounts for legacy watch and extension-terminal launches.
+
+Add the option, with explicit `--watch` enabling watch and `DefaultWatchEnabled` supplying the default.
+Project `AppHost:Run:WatchEnabled` into the process that actually hosts `Aspire.Hosting`.
+For polyglot runs that means the **AppHost server's environment**, not only the guest application's
+environment. Enable runtime acquisition and provide the exact proxy CLI invocation for that run.
+Initially keep normal C# AppHost launch; service watch must work before Session 8 replaces its wrapper.
+
+Preserve IDE ownership: VS Code/Visual Studio launches use their existing watch/debug/session-restart
+protocol, not this package-backed CLI watcher. Reconcile flags, diagnostics, help/localization,
+backchannel reconnect/cancellation, and existing `--no-build` behavior rather than leaving two unrelated
+watch implementations active under the same effective setting.
+
+**Acceptance:** CLI tests plus terminal E2E prove explicit/default watch selection, absence of acquisition
+in non-watch runs, correct C#/guest signal delivery, existing option validation, and service hot reload.
+
+### Session 8 - C# AppHost watch through `host`
+
+**Not implemented; composition gate remains open.** Use the package-owned prelaunch ensure operation
+from Session 4, then launch the C# AppHost with the resolved tool's `host` command.
+Keep language-native AppHost watching for polyglot runs, including native-server configurations.
+
+The requester chose **Aspire-controlled service launch**, not adoption of the package's built-in
+execution service as a replacement backend. Establish a supported composition that prevents the
+automatically injected external-launch settings from bypassing the proxy path or disabling coordinated
+build ownership. CLI-only invocation is a boundary requirement, but does not suppress the package's
+automatic service. An Aspire-side integration or upstream enhancement must be demonstrated; do not
+silently assume an AppHost-only switch, strip protocol settings as an unexplained workaround, or mark
+this gate resolved.
+
+Also account for the AppHost package's `dotnet run` -> `aspire run` hook: watcher launches must not
+recursively re-enter the CLI. Preserve the AppHost configuration/profile, forwarded arguments,
+CLI backchannel, startup-failure behavior, and shutdown ownership.
+
+**Acceptance:** supported AppHost edits update running code; topology changes actually reconstruct the
+model through a verified restart/update path. Verify backchannel reconnection, old server/proxy/child
+cleanup, changed root graphs, and continued Aspire ownership of service launch/builds. Do not equate
+method-body hot reload with topology reevaluation.
+
+### Session 9 - Watch end-to-end coverage, playground extension, and documentation
+
+**Not implemented for the new watcher.** Existing package/build/publish/debug and legacy-watch coverage
+is not end-to-end coverage of Sessions 6-8.
+
+Extend the Session 1b playground and add hosting/proxy contract tests, CLI unit tests, and CLI terminal
+E2E using the repository's `cli-e2e-testing` guidance. Verify **TypeScript first, C# second**, and cover
+Windows, Linux, and macOS: TypeScript-first testing alone says nothing about cross-platform pipes.
+Combine the acceptance checks of Sessions 4, 6, 6a, 7, and 8 with the compatibility gates in section 5;
+also exercise rude-edit restart, invalid source edits, and recovery after correcting them.
+
+Update package/CLI documentation for actual availability, supported contexts, runtime prerequisites,
+acquisition/cache behavior, and limitations. Preserve the EF customization warning and other existing
+publishing/debug limitations; do not label watch-debug or partial-run combinations as supported without
+their own work.
+
+Use the smallest relevant builds/tests, repository-native MTP filters, and focused E2E scenarios.
+Do not require a full-repository build for every session or regenerate frozen release API baselines
+as a routine coding-session completion step.
+
+### Session dependencies
+
+| Session | Prerequisites |
+|---|---|
+| 1b, 2, 4, 5 | 1 |
+| 3 | Independent |
+| 5b | 1, 5 |
+| 5c | Delivered package/default-adoption work; not blocked on watcher sessions |
+| 6a | 3, 4; agree the launch/configuration contract with 6/7 |
+| 6 | 1, 3, 4, 5, 6a |
+| 7 | 3, 4, 6, 6a |
+| 8 | 4, 7, and supported composition of `host` with Aspire-owned service launch |
+| 9 | Extend coverage alongside 6/6a/7; complete the full slice after 8 |
+
+Session 1b remains the reusable dogfood target. Sessions 4 and 6a can advance independently of the
+remaining AppHost composition investigation; service-watch delivery must not imply that Session 8 passed.
+
+## 5. Remaining compatibility gates and roadmap boundaries
+
+Start with **verified compatible watch contexts and explicit, actionable rejections** for unsupported
+ones. Preserve broad support where semantics are established; do not impose an arbitrary blanket
+single-instance-only restriction or silently fall back to non-watch behavior.
+
+| Gate | Required investigation/verification | Owner |
+|---|---|---|
+| Build/launch fidelity | The watcher takes one SDK per server and has no per-resource build-property/configuration/RID fields or precomputed run-command input. Establish which existing V2 build contexts round-trip correctly, including custom inputs, working directories, and solution properties introduced by its `.slnx` build. Multiple servers alone do not solve shared-output races or property precedence. Reject unsupported cases rather than launch a different output. | 4, 6 |
+| Exact entry point, arguments, profiles | Server graph lookup uses the requested path, but the standalone resource-launch construction does not explicitly pass `--project` or `--file`. Verify `.cs` apps and directories with multiple projects instead of inferring support from successful builds. Verify application-option forwarding and the three-state profile field across the actual wire serialization; parser-level tests alone are insufficient. | 6, 6a |
+| Per-instance control and completion | One proxy maps to one service instance, but status/control events identify project paths only. Verify replicas and duplicate paths without losing attribution or independently requested lifecycle actions. Reject known ambiguous independently controlled registrations and completion-sensitive cases when the contract cannot represent their outcome; do not claim proxy completion is `WaitForCompletion` parity. | 6, 6a |
+| Custom launches and framework resources | Resource type/metadata alone does not authorize replacing an integration's launch tool. Cover or explicitly reject custom invocation, persistent lifetime, and other unsupported combinations without taking back their normal non-watch behavior. | 6, 7 |
+| Pipe security, environment, startup, cleanup | Verify current-user-only pipe behavior on each OS, intended environment versus server inheritance, startup-only environment semantics, connection/readiness timeouts, concurrent instances, disconnects, and server/AppHost restarts. A successful connection/ACK is not application health. | 6, 6a, 9 |
+| C# AppHost composition/topology | Resolve the automatic execution-service overlap and run-hook recursion described in Session 8. Rebuild/start/reconnect ownership must remain explicit when an AppHost restarts or the model changes. | 8 |
+| Future tool upgrades | Reverify version, approved-feed availability, runtime, protocol, and build/launch semantics before changing the pin, including any new prebuilt-output contract for D7. | 4, 6, 8 |
+
+**Azure Functions remains deferred in this slice**, not removed from the overall no-take-back goal.
+`AzureFunctionsProjectResource : ProjectResource` and its `azure-functions` / `func host start` path
+remain in use. A V2-backed Functions resource needs Functions-host/isolated-worker watch validation and
+an explicit package-dependency/launch design; ordinary `.NET resource` watching does not establish that.
+
+**Annotation-based resource flavoring** ([#8984][resource-flavoring]) remains compatible directionally:
+shared annotations/capabilities and run state avoid unnecessarily binding every behavior to a concrete
+resource type. That proposal is not implemented by this plan, nor a prerequisite for its vertical slice.
+
+**Events/callback redesign remains deferred.** The delivered build materialization and per-attempt
+build-environment behavior are concrete current contracts to preserve. Watch must document any new
+callback ordering/repetition and invalidation on restart; it must not claim to solve partial-run closure
+or the broader event-cardinality questions merely by subscribing to `BeforeResourceStartedEvent`.
 
 ## References
-| Description | Reference |
-|---------|------|
-| Project v2 vision and roadmap | https://github.com/microsoft/aspire/issues/16386 |
-| Stage 1 scope for Project v2 (tracking issue) | https://github.com/microsoft/aspire/issues/15710 |
-| Aspire watch prototype | https://github.com/karolz-ms/aspire-watch |
-| Watch tool package | https://www.nuget.org/packages/Microsoft.DotNet.HotReload.Watch.Aspire/ |
-| Hot reload & watch docs | https://aspire.dev/app-host/hot-reload-and-watch/ |
-| Annotation-based resource flavoring proposal | https://github.com/microsoft/aspire/issues/8984 |
+
+| Subject | Reference |
+|---|---|
+| Overall vision, motivations, and orthogonal capabilities | [Project Resource V2 goals][vision] |
+| Watch tracking item | [#15710](https://github.com/microsoft/aspire/issues/15710) |
+| Original prototype, historical context only | [karolz-ms/aspire-watch](https://github.com/karolz-ms/aspire-watch) |
+| Stable package and publication evidence | [NuGet version index][watch-versions], [10.0.403 registration][watch-registration], [published nupkg][watch-nupkg] |
+| Published command/launch/pipe implementation | [Pinned command definitions][watch-commands], [resource/server protocol][watch-resource], [status/control][watch-status] |
+| Existing user-facing watch documentation; update when new behavior lands | [Hot reload and watch](https://aspire.dev/app-host/hot-reload-and-watch/) |
+| Resource flavoring proposal | [#8984][resource-flavoring] |
+| Current package behavior and limitations | [Aspire.Hosting.Dotnet README][dotnet-readme] |
+
+[vision]: https://github.com/microsoft/aspire/issues/16386#issuecomment-4300443345
+[resource-flavoring]: https://github.com/microsoft/aspire/issues/8984
+[watch-versions]: https://api.nuget.org/v3-flatcontainer/microsoft.dotnet.hotreload.watch.aspire/index.json
+[watch-registration]: https://api.nuget.org/v3/registration5-gz-semver2/microsoft.dotnet.hotreload.watch.aspire/10.0.403.json
+[watch-nupkg]: https://api.nuget.org/v3-flatcontainer/microsoft.dotnet.hotreload.watch.aspire/10.0.403/microsoft.dotnet.hotreload.watch.aspire.10.0.403.nupkg
+[watch-commands]: https://github.com/dotnet/dotnet/tree/5a2162bea6845eabc1fc721624a43568c65db3b1/src/sdk/src/Dotnet.Watch/Watch.Aspire/Commands
+[watch-build]: https://github.com/dotnet/dotnet/blob/5a2162bea6845eabc1fc721624a43568c65db3b1/src/sdk/src/Dotnet.Watch/Watch/HotReload/HotReloadDotNetWatcher.cs#L101-L185
+[watch-resource]: https://github.com/dotnet/dotnet/tree/5a2162bea6845eabc1fc721624a43568c65db3b1/src/sdk/src/Dotnet.Watch/Watch.Aspire/Resource
+[watch-status]: https://github.com/dotnet/dotnet/tree/5a2162bea6845eabc1fc721624a43568c65db3b1/src/sdk/src/Dotnet.Watch/Watch.Aspire/Server
+[watch-host-factory]: https://github.com/dotnet/dotnet/blob/5a2162bea6845eabc1fc721624a43568c65db3b1/src/sdk/src/Dotnet.Watch/Watch/HotReload/HotReloadDotNetWatcher.cs#L150-L181
+[watch-host-service]: https://github.com/dotnet/dotnet/blob/5a2162bea6845eabc1fc721624a43568c65db3b1/src/sdk/src/Dotnet.Watch/Watch/Aspire/AspireServiceFactory.cs
+[nu1212]: https://learn.microsoft.com/en-us/nuget/reference/errors-and-warnings/nu1212
+[package-download]: https://learn.microsoft.com/en-us/nuget/consume-packages/packagedownload-functionality
+[dotnet-source]: ../../src/Aspire.Hosting.Dotnet
+[dotnet-readme]: ../../src/Aspire.Hosting.Dotnet/README.md
+[launch-recipes]: ../../src/Aspire.Hosting/ApplicationModel/ExecutableLaunchRecipe.cs
+[build-coordinator]: ../../src/Aspire.Hosting.Dotnet/DotnetProjectBuildCoordinator.cs
+[publishing-source]: ../../src/Aspire.Hosting/ApplicationModel/DotnetProgramPublishing.cs
+[playground]: ../../playground/DotnetProject

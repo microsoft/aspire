@@ -13,6 +13,7 @@ import { registerTreeViewCommands } from '../activation/registerTreeViewCommands
 import { csharpExtensionId, getCsharpBlazorWasmDebuggingSupport, useCsharpExtensionVersionProviderForTests } from '../capabilities';
 import { AppHostDataRepository, ViewMode } from '../data/AppHostDataRepository';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { executeE2eControlCommand, isBrowserDebugSessionType } from '../testing/e2eStateFileBridge';
 import { pipelineInteractionCapability } from '../types/configInfo';
 import { AspireExtensionE2EControlCommand } from '../types/extensionApi';
@@ -22,6 +23,7 @@ import * as configInfoProvider from '../utils/configInfoProvider';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import * as workspaceModule from '../utils/workspace';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
+import { EndpointUrlItem } from '../views/treeItems/resourceItems';
 
 import { createMockExtension, createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 
@@ -832,7 +834,179 @@ suite('E2E state file bridge', () => {
         assert.strictEqual(harness.breakpoints.length, 0);
         assert.strictEqual(harness.stopDebugging.callCount, 3);
     });
+    for (const sessionKind of ['AppHost', 'child'] as const) {
+        test(`fails the AppHost/resource proof immediately when the ${sessionKind} session terminates`, async () => {
+            const harness = createAppHostAndResourceProofHarness(sandbox, runRoot);
+            try {
+                harness.launch.callsFake(async () => {
+                    const session = sessionKind === 'AppHost' ? harness.appHostSession : harness.childSession;
+                    harness.startSession(session).onDidSendMessage?.({
+                        type: 'event', event: 'output',
+                        body: { output: "Program.cs(2,15): error CS0103: The name 'DistributedApplication' does not exist in the current context" },
+                    });
+                    harness.terminateSession(session);
+                });
+                const error = await captureError(harness.run);
+                assert.match(error.message, /terminated while waiting for breakpoint/);
+                assert.match(error.message, /CS0103/);
+                assert.match(error.message, /"terminatedSessions"/);
+                harness.assertCleanedUp();
+            }
+            finally {
+                harness.provider.dispose();
+            }
+        });
+    }
+
+    for (const command of ['launch', 'attach']) {
+        test(`fails the AppHost/resource proof immediately on a rejected ${command} before the session starts`, async () => {
+            const harness = createAppHostAndResourceProofHarness(sandbox, runRoot);
+            try {
+                harness.launch.callsFake(async () => {
+                    harness.trackSession(harness.childSession).onDidSendMessage?.({
+                        type: 'response', command, success: false, message: 'AppHost build failed',
+                    });
+                });
+                const error = await captureError(harness.run);
+                assert.ok(error.message.includes(`${command} failed`));
+                assert.match(error.message, /AppHost build failed/);
+                harness.assertCleanedUp();
+            }
+            finally {
+                harness.provider.dispose();
+            }
+        });
+    }
+
+    test('fails the AppHost/resource proof during endpoint discovery when the AppHost exits', async () => {
+        const harness = createAppHostAndResourceProofHarness(sandbox, runRoot);
+        try {
+            harness.launch.callsFake(async () => harness.hitAppHostBreakpoint());
+            harness.appHostSession.customRequest = async request => {
+                if (request === 'stackTrace') {
+                    return { stackFrames: [{ source: { path: harness.command.appHostSourcePath }, line: 1 }] };
+                }
+                harness.terminateSession(harness.appHostSession);
+                return {};
+            };
+            const error = await captureError(harness.run);
+            assert.match(error.message, /terminated while waiting for an HTTP endpoint/);
+            harness.assertCleanedUp();
+        }
+        finally {
+            harness.provider.dispose();
+        }
+    });
+
+    test('completes the AppHost/resource proof despite unrelated session failures and termination', async () => {
+        const harness = createAppHostAndResourceProofHarness(sandbox, runRoot);
+        try {
+            const unrelated = createDebugSession('unrelated', 'coreclr', 'Other AppHost', { program: path.join(runRoot, 'Other.csproj') });
+            harness.launch.callsFake(async () => {
+                harness.startSession(unrelated).onDidSendMessage?.({
+                    type: 'response', command: 'launch', success: false, message: 'Unrelated failure',
+                });
+                harness.terminateSession(unrelated);
+                harness.hitAppHostBreakpoint();
+                harness.startSession(harness.childSession).onDidSendMessage?.({
+                    type: 'event', event: 'stopped', body: { reason: 'breakpoint', threadId: 2 },
+                });
+            });
+            harness.childSession.customRequest = async request => request === 'stackTrace'
+                ? { stackFrames: [{ source: { path: harness.command.resourceSourcePath }, line: 1 }] } : {};
+            sandbox.stub(harness.provider, 'findEndpointElement').returns(new EndpointUrlItem('http://localhost:12345', 'HTTP'));
+            sandbox.stub(globalThis, 'fetch').resolves(new Response());
+            fs.writeFileSync(harness.command.appHostSourcePath, 'AppHost breakpoint');
+            fs.writeFileSync(harness.command.resourceSourcePath, 'Resource breakpoint');
+            const proof = await harness.run() as { proof: string };
+            assert.strictEqual(proof.proof, 'aspire-apphost-and-resource-debug-breakpoints-hit');
+            harness.assertCleanedUp();
+        }
+        finally {
+            harness.provider.dispose();
+        }
+    });
 });
+
+function createAppHostAndResourceProofHarness(sandbox: sinon.SinonSandbox, workspaceRoot: string) {
+    const appHostPath = path.join(workspaceRoot, 'AppHost.csproj');
+    const command: Extract<AspireExtensionE2EControlCommand, { name: 'proveAppHostAndResourceDebugging' }> = {
+        name: 'proveAppHostAndResourceDebugging',
+        appHostPath,
+        appHostSourcePath: path.join(workspaceRoot, 'Program.cs'),
+        appHostBreakpointLine: 0,
+        resourceName: 'functions',
+        resourceSourcePath: path.join(workspaceRoot, 'index.js'),
+        resourceBreakpointLine: 0,
+        timeoutMs: 300000,
+    };
+    const repository = createRepository([appHostPath], appHostPath);
+    const launchService = createLaunchService();
+    const terminalProvider = {} as AspireTerminalProvider;
+    const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService);
+    const aspireContext = new AspireExtensionContext();
+    const proofSession = sandbox.createStubInstance(AspireDebugSession);
+    sandbox.stub(proofSession, 'startupCompleted').get(() => true);
+    sandbox.stub(proofSession, 'appHostPath').get(() => appHostPath);
+    sandbox.stub(aspireContext, 'aspireDebugSessions').get(() => [proofSession]);
+    const disposals = [sandbox.spy(), sandbox.spy(), sandbox.spy()];
+    let startListener: ((session: vscode.DebugSession) => unknown) | undefined;
+    let terminateListener: ((session: vscode.DebugSession) => unknown) | undefined;
+    let trackerFactory: vscode.DebugAdapterTrackerFactory | undefined;
+    const breakpoints: vscode.Breakpoint[] = [];
+    sandbox.stub(vscode.workspace, 'workspaceFolders').value([createWorkspaceFolder('repo', workspaceRoot)]);
+    sandbox.stub(vscode.debug, 'onDidStartDebugSession').callsFake(listener => {
+        startListener = listener;
+        return { dispose: disposals[0] };
+    });
+    sandbox.stub(vscode.debug, 'onDidTerminateDebugSession').callsFake(listener => {
+        terminateListener = listener;
+        return { dispose: disposals[1] };
+    });
+    sandbox.stub(vscode.debug, 'registerDebugAdapterTrackerFactory').callsFake((_type, factory) => {
+        trackerFactory = factory;
+        return { dispose: disposals[2] };
+    });
+    sandbox.stub(vscode.debug, 'addBreakpoints').callsFake(added => breakpoints.push(...added));
+    sandbox.stub(vscode.debug, 'removeBreakpoints').callsFake(removed => {
+        for (const breakpoint of removed) {
+            breakpoints.splice(breakpoints.indexOf(breakpoint), 1);
+        }
+    });
+    const stopDebugging = sandbox.stub(vscode.debug, 'stopDebugging').resolves();
+    const launch = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+    const appHostSession = createDebugSession('apphost', 'aspire', 'AppHost', { program: appHostPath });
+    const childSession = createDebugSession('child', 'coreclr', 'AppHost child', {}, appHostSession);
+    appHostSession.customRequest = async request => request === 'stackTrace'
+        ? { stackFrames: [{ source: { path: command.appHostSourcePath }, line: 1 }] } : {};
+    const trackSession = (session: vscode.DebugSession) => {
+        const tracker = trackerFactory?.createDebugAdapterTracker(session);
+        assert.ok(tracker && !('then' in tracker));
+        return tracker;
+    };
+    const startSession = (session: vscode.DebugSession) => {
+        const tracker = trackSession(session);
+        startListener?.(session);
+        return tracker;
+    };
+    return {
+        command, provider, launch, appHostSession, childSession, trackSession, startSession,
+        terminateSession: (session: vscode.DebugSession) => terminateListener?.(session),
+        hitAppHostBreakpoint: () => startSession(appHostSession).onDidSendMessage?.({
+            type: 'event', event: 'stopped', body: { reason: 'breakpoint', threadId: 1 },
+        }),
+        run: () => executeE2eControlCommand(
+            {} as vscode.ExtensionContext,
+            aspireContext,
+            repository, launchService, provider, terminalProvider,
+            { hasSnapshot: false }, {}, new Map(), command, () => { }),
+        assertCleanedUp: () => {
+            assert.strictEqual(breakpoints.length, 0);
+            disposals.forEach(dispose => sinon.assert.calledOnce(dispose));
+            sinon.assert.calledOnce(stopDebugging);
+        },
+    };
+}
 
 function createRepository(candidatePaths: readonly string[], selectedPath?: string): AppHostDataRepository {
     const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });

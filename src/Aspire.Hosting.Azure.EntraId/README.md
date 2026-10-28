@@ -134,6 +134,23 @@ var entraWeb = builder.AddEntraIdApplication("entra-web")
 
 Owners are appended; existing owners are never removed. Owners can manage the registration, and the deploying identity needs permission to manage owners (for example `Application.ReadWrite.All`). Existing registrations are not modified.
 
+### Declare application roles
+
+Application roles (for example `User` and `Admin`) appear in the `roles` claim of tokens issued for the API. They are distinct from delegated scopes, consent, and Azure RBAC roles. `WithAppRole` only declares roles on registrations created by Aspire; it does not assign them to any user, group, or application:
+
+```csharp
+var entraApi = builder.AddEntraIdApplication("entra-api")
+                      .WithAppRole(new EntraIdAppRole("User", "User", "Can use the API."))
+                      .WithAppRole(new EntraIdAppRole("Admin", "Administrator", "Can administer the API.",
+                          ["User", "Application"]));
+```
+
+Role IDs are derived from the resource name and role value (or supplied with the `id` argument), so they stay stable across deployments. Changing a role's value or ID creates a different role. A role's value can be at most 120 characters, can't start with a period, and can contain only ASCII letters, digits and the punctuation that [Microsoft Graph allows](https://learn.microsoft.com/graph/api/resources/approle), so spaces and quotation marks are rejected when you write the AppHost.
+
+Whenever the application declares at least one role, Aspire sends the complete `appRoles` collection and Microsoft Graph replaces what is stored, so include every role you want to keep, including ones that were added outside the AppHost. A role that is left out fails the deployment if it is still enabled (`CannotDeleteOrUpdateEnabledEntitlement`) and is deleted if it is already disabled. When the application declares no roles, Aspire doesn't send `appRoles`, so roles that the AppHost never declared are left alone.
+
+To retire a role, deploy it with `isEnabled: false` and leave it declared. A disabled role can't be assigned to anyone new, but Microsoft Entra [keeps issuing it in tokens for existing assignments](https://learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps#app-roles-ui), so disabling isn't access revocation; remove the existing assignments separately. A role can be removed from the AppHost only after a deployment has disabled it, and only while other roles remain declared. Existing registrations are never modified, and role assignments are not provisioned yet.
+
 ### Clean up created registrations
 
 Registrations live in the tenant and **are not deleted when the resource group is deleted**. The deployment outputs include `objectId`, `servicePrincipalId`, and `uniqueName` for locating the objects.
@@ -329,6 +346,8 @@ The integration can reference existing registrations or create registrations and
 
 * Automatically add the referencing resources' URLs as redirect URIs.
 * Expose API scopes or grant API permissions.
+* Assign application roles to users, groups, or applications (not yet supported).
+* Delete the last application role. When no roles are declared, Aspire doesn't send `appRoles`, so keep the last role declared with `isEnabled: false`, or delete it in the Microsoft Entra admin center.
 * Create, store, or rotate client secrets and certificates.
 
 Existing registrations are never modified. Continue configuring their redirect URIs, API permissions, and credentials in the [Microsoft Entra admin center](https://entra.microsoft.com).

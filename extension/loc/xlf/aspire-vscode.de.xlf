@@ -192,7 +192,7 @@
       </trans-unit>
       <trans-unit id="extension.description">
         <source xml:lang="en">Official Aspire extension for Visual Studio Code</source>
-        <target state="translated">Offizielle Erweiterung für Visual Studio Code</target>
+        <target state="translated">Offizielle Aspire-Erweiterung für Visual Studio Code</target>
       </trans-unit>
       <trans-unit id="command.openTerminal">
         <source xml:lang="en">Open Aspire terminal</source>

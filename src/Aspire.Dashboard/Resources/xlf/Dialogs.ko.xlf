@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ko" original="../Dialogs.resx">
     <body>
@@ -25,28 +25,28 @@ This command configures skill files for your AI agent. The skill files tell the 
 Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
 
 For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</source>
-        <target state="new">Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
+        <target state="translated">Aspire는 대시보드에서 확인할 수 있는 것과 동일한 정보를 사용해 AI 코딩 에이전트에게 앱에 대한 심층적인 가시성을 제공합니다. 에이전트는 원격 분석을 사용해 문제를 더 빠르게 진단하고 수정 사항을 자신 있게 검증할 수 있습니다. 🚀
 
-- 📦 Resource state, health checks, and relationships
-- 🖥️ Console logs
-- 📊 Distributed traces
-- 🪵 Structured logs
+- 📦 리소스 상태, 상태 검사 및 관계
+- 🖥️ 콘솔 로그
+- 📊 분산 추적
+- 🪵 구조화된 로그
 
-## Getting started
+## 시작하기
 
-AI agents access dashboard telemetry through the Aspire CLI. If you haven't installed it yet, [install the Aspire CLI]({1}).
+AI 에이전트는 Aspire CLI를 통해 대시보드 원격 분석에 액세스합니다. 아직 설치하지 않았다면 [Aspire CLI 설치]({1})를 진행하세요.
 
-Initialize AI agent support in your project with:
+다음 명령으로 프로젝트에서 AI 에이전트 지원을 초기화하세요:
 
 ```bash
 aspire agent init
 ```
 
-This command configures skill files for your AI agent. The skill files tell the agent how to use Aspire CLI commands like [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
+이 명령은 AI 에이전트의 기술 파일을 구성합니다. 기술 파일에는 [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) 및 [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/)와 같은 Aspire CLI 명령을 사용하는 방법이 설명되어 있습니다.
 
-Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
+연결되면 에이전트는 앱을 시작하고, 리소스 상태를 확인하고, 로그와 추적을 가져오는 등의 작업을 수행할 수 있습니다.
 
-For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</target>
+기술 설정을 포함하여 Aspire에서 AI 에이전트를 사용하는 방법에 대한 자세한 내용은 [AI 코딩 에이전트]({0})를 참조하세요.</target>
         <note>{0} is the learn more URL, {1} is the install CLI URL</note>
       </trans-unit>
       <trans-unit id="AIAgentsDialogStandaloneDescription">
@@ -68,29 +68,29 @@ aspire otel logs --dashboard-url {0}
 This is one example of how AI agents can access telemetry for your app. See [`aspire otel`](https://aspire.dev/reference/cli/commands/aspire-otel/) and [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/).
 
 For more information about using AI agents with the dashboard, including setting up skills, see [Standalone dashboard and AI coding agents]({1}).</source>
-        <target state="new">Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
+        <target state="translated">Aspire는 대시보드에서 확인할 수 있는 것과 동일한 정보를 사용해 AI 코딩 에이전트에게 앱에 대한 심층적인 가시성을 제공합니다. 에이전트는 원격 분석을 사용해 문제를 더 빠르게 진단하고 수정 사항을 자신 있게 검증할 수 있습니다. 🚀
 
-- 📊 Distributed traces
-- 🔗 Trace spans
-- 🪵 Structured logs
-- 🗂️ Zip file export
+- 📊 분산 추적
+- 🔗 추적 범위
+- 🪵 구조화된 로그
+- 🗂️ ZIP 파일 내보내기
 
-AI agents access dashboard telemetry using the Aspire CLI. [Install the Aspire CLI]({2}) if you haven't already.
+AI 에이전트는 Aspire CLI를 사용해 대시보드 원격 분석에 액세스합니다. 아직 설치하지 않았다면 [Aspire CLI 설치]({2})를 진행하세요.
 
-Use Aspire CLI commands to retrieve telemetry data directly in your terminal:
+Aspire CLI 명령을 사용하여 터미널에서 직접 원격 분석 데이터를 검색하세요:
 
 ```bash
 aspire otel logs --dashboard-url {0}
 ```
 
-This is one example of how AI agents can access telemetry for your app. See [`aspire otel`](https://aspire.dev/reference/cli/commands/aspire-otel/) and [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/).
+이것은 AI 에이전트가 앱의 원격 분석에 액세스하는 방법의 한 가지 예입니다. [`aspire otel`](https://aspire.dev/reference/cli/commands/aspire-otel/) 및 [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/)를 참조하세요.
 
-For more information about using AI agents with the dashboard, including setting up skills, see [Standalone dashboard and AI coding agents]({1}).</target>
+기술 설정을 포함해 대시보드에서 AI 에이전트를 사용하는 방법에 대한 자세한 내용은 [독립 실행형 대시보드 및 AI 코딩 에이전트]({1})를 참조하세요.</target>
         <note>{0} is the dashboard URL, {1} is the learn more URL, {2} is the install CLI URL</note>
       </trans-unit>
       <trans-unit id="AIAgentsDialogTitle">
         <source>AI agents</source>
-        <target state="new">AI agents</target>
+        <target state="translated">AI 에이전트</target>
         <note />
       </trans-unit>
       <trans-unit id="DialogCloseButtonText">
@@ -155,12 +155,12 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="FilterDialogDatePlaceholder">
         <source>e.g. 2024-01-15T09:30:00</source>
-        <target state="new">e.g. 2024-01-15T09:30:00</target>
+        <target state="translated">예: 2024-01-15T09:30:00</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogDateValueLabel">
         <source>Date and time</source>
-        <target state="new">Date and time</target>
+        <target state="translated">날짜 및 시간</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogDisableAll">
@@ -185,7 +185,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="FilterDialogInvalidDate">
         <source>Invalid date format</source>
-        <target state="new">Invalid date format</target>
+        <target state="translated">잘못된 날짜 형식</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogParameterInputLabel">
@@ -195,7 +195,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="FilterDialogPickDateButtonTitle">
         <source>Pick date and time</source>
-        <target state="new">Pick date and time</target>
+        <target state="translated">날짜 및 시간 선택</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogRemoveFilterButtonText">
@@ -250,7 +250,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="GenAILLMBadgeText">
         <source>LLM</source>
-        <target state="new">LLM</target>
+        <target state="translated">LLM</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAIMessageCategoryMessage">
@@ -305,7 +305,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="GenAIMessageTreeLabel">
         <source>Generative AI messages</source>
-        <target state="new">Generative AI messages</target>
+        <target state="translated">생성형 AI 메시지</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAINAText">
@@ -370,12 +370,12 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="GenAIToolCallButtonText">
         <source>Tool call</source>
-        <target state="new">Tool call</target>
+        <target state="translated">도구 호출</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAIToolDefinitionButtonText">
         <source>Tool definition</source>
-        <target state="new">Tool definition</target>
+        <target state="translated">도구 정의</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAIToolNoParameters">
@@ -410,7 +410,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="GenAIUnexpectedOrTruncatedContent">
         <source>Unexpected or truncated message content.</source>
-        <target state="new">Unexpected or truncated message content.</target>
+        <target state="translated">예기치 않거나 잘린 메시지 콘텐츠입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryNavigation">
@@ -470,7 +470,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="HelpDialogGoToTerminals">
         <source>Go to Terminals</source>
-        <target state="new">Go to Terminals</target>
+        <target state="translated">터미널로 이동</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTraces">
@@ -505,7 +505,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="HelpDialogToggleTerminalDock">
         <source>Toggle terminal</source>
-        <target state="new">Toggle terminal</target>
+        <target state="translated">터미널 토글</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionButtonCancel">
@@ -525,32 +525,32 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="InteractionFileExceedsMaxSize">
         <source>Exceeds the maximum size of {0}</source>
-        <target state="new">Exceeds the maximum size of {0}</target>
+        <target state="translated">최대 크기 {0}을(를) 초과합니다</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionFilePlaceholder">
         <source>Choose a file</source>
-        <target state="new">Choose a file</target>
+        <target state="translated">파일 선택</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionFilePlaceholderMultiple">
         <source>Choose files</source>
-        <target state="new">Choose files</target>
+        <target state="translated">파일 선택</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionFileUploadFailed">
         <source>Upload failed</source>
-        <target state="new">Upload failed</target>
+        <target state="translated">업로드 실패</target>
         <note />
       </trans-unit>
       <trans-unit id="ManageDataAllDataCheckboxLabel">
         <source>All data</source>
-        <target state="new">All data</target>
+        <target state="translated">모든 데이터</target>
         <note />
       </trans-unit>
       <trans-unit id="ManageDataDataTypeForResourceCheckboxLabel">
         <source>{0} for {1}</source>
-        <target state="new">{0} for {1}</target>
+        <target state="translated">{1}의 {0}</target>
         <note>{0} is the data type display name. {1} is the parent resource display name.</note>
       </trans-unit>
       <trans-unit id="ManageDataDialogTitle">
@@ -615,17 +615,17 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="NotificationCenterDismissAll">
         <source>Dismiss all</source>
-        <target state="new">Dismiss all</target>
+        <target state="translated">모두 해제</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationCenterEmpty">
         <source>No notifications</source>
-        <target state="new">No notifications</target>
+        <target state="translated">알림 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationEntryDismiss">
         <source>Dismiss notification</source>
-        <target state="new">Dismiss notification</target>
+        <target state="translated">알림 해제</target>
         <note />
       </trans-unit>
       <trans-unit id="OpenInTextVisualizer">
@@ -700,22 +700,22 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="SettingsDialogTimeFormat">
         <source>Time format</source>
-        <target state="new">Time format</target>
+        <target state="translated">시간 형식</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogTimeFormatSystem">
         <source>System</source>
-        <target state="new">System</target>
+        <target state="translated">시스템</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogTimeFormatTwelveHour">
         <source>12-hour</source>
-        <target state="new">12-hour</target>
+        <target state="translated">12시간</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogTimeFormatTwentyFourHour">
         <source>24-hour</source>
-        <target state="new">24-hour</target>
+        <target state="translated">24시간</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogVersion">
@@ -750,41 +750,41 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="TelemetryHelpApiKeyDescription">
         <source>Set OTEL_EXPORTER_OTLP_HEADERS to x-otlp-api-key=&lt;your-api-key&gt;, replacing &lt;your-api-key&gt; with the dashboard's configured OTLP API key.</source>
-        <target state="new">Set OTEL_EXPORTER_OTLP_HEADERS to x-otlp-api-key=&lt;your-api-key&gt;, replacing &lt;your-api-key&gt; with the dashboard's configured OTLP API key.</target>
+        <target state="translated">OTEL_EXPORTER_OTLP_HEADERS를 x-otlp-api-key=&lt;your-api-key&gt;(으)로 설정하고, 이때 &lt;your-api-key&gt;을(를) 대시보드의 구성된 OTLP API 키로 바꿉니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpButtonText">
         <source>Add telemetry</source>
-        <target state="new">Add telemetry</target>
+        <target state="translated">원격 분석 추가</target>
         <note>Inline link following TelemetryHelpMoreInformation. Opens the telemetry setup dialog.</note>
       </trans-unit>
       <trans-unit id="TelemetryHelpCertificateDescription">
         <source>Configure your OTLP exporter to present a client certificate trusted by the dashboard. Use your SDK's OTLP exporter settings to specify the certificate and private key.</source>
-        <target state="new">Configure your OTLP exporter to present a client certificate trusted by the dashboard. Use your SDK's OTLP exporter settings to specify the certificate and private key.</target>
+        <target state="translated">대시보드에서 신뢰할 수 있는 클라이언트 인증서를 제시하도록 OTLP 내보내기 도구를 구성합니다. SDK의 OTLP 내보내기 도구 설정을 사용하여 인증서 및 프라이빗 키를 지정합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpContainerDescription">
         <source>The dashboard is running in a container. Access it from the host using port forwarding.</source>
-        <target state="new">The dashboard is running in a container. Access it from the host using port forwarding.</target>
+        <target state="translated">대시보드가 컨테이너에서 실행되고 있습니다. 포트 전달을 사용하여 호스트에서 액세스합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpDialogTitle">
         <source>Add telemetry</source>
-        <target state="new">Add telemetry</target>
+        <target state="translated">원격 분석 추가</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpEndpointHeader">
         <source>Dashboard endpoint</source>
-        <target state="new">Dashboard endpoint</target>
+        <target state="translated">대시보드 엔드포인트</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpImportDescription">
         <source>### 📥 Import telemetry from a file
 
 Import previously exported telemetry or OTLP JSON files by selecting **{0}** in the **{1}** dialog.</source>
-        <target state="new">### 📥 Import telemetry from a file
+        <target state="translated">### 📥 파일에서 원격 분석 가져오기
 
-Import previously exported telemetry or OTLP JSON files by selecting **{0}** in the **{1}** dialog.</target>
+**{1}** 대화 상자에서 **{0}**를 선택하여 이전에 내보낸 원격 분석 또는 OTLP JSON 파일을 가져옵니다.</target>
         <note>Markdown. {0} is the localized import button text, {1} is the localized data management dialog title.</note>
       </trans-unit>
       <trans-unit id="TelemetryHelpIntroduction">
@@ -793,51 +793,51 @@ Import previously exported telemetry or OTLP JSON files by selecting **{0}** in 
 ### 📡 Send telemetry from your app
 
 Configure your app to export logs, traces, and metrics using [OTLP]({0}).</source>
-        <target state="new">Visualize logs, traces, and metrics in the dashboard. To see telemetry, first send it to the dashboard using OTLP or manually import telemetry JSON files.
+        <target state="translated">대시보드에서 로그, 추적 및 메트릭을 시각화합니다. 원격 분석을 보려면 먼저 OTLP를 사용하여 대시보드로 보내거나 원격 분석 JSON 파일을 수동으로 가져옵니다.
 
-### 📡 Send telemetry from your app
+### 📡 앱에서 원격 분석 보내기
 
-Configure your app to export logs, traces, and metrics using [OTLP]({0}).</target>
+[OTLP]({0})를 사용하여 로그, 추적 및 메트릭을 내보내도록 앱을 구성합니다.</target>
         <note>Markdown. {0} is the OTLP specification URL.</note>
       </trans-unit>
       <trans-unit id="TelemetryHelpManageDataLink">
         <source>Learn about managing dashboard data</source>
-        <target state="new">Learn about managing dashboard data</target>
+        <target state="translated">대시보드 데이터 관리에 대한 자세한 정보</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpMessage">
         <source>Configure your app to send telemetry to the dashboard.</source>
-        <target state="new">Configure your app to send telemetry to the dashboard.</target>
+        <target state="translated">대시보드에 원격 분석을 보내도록 앱을 구성합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpMoreInformation">
         <source>For setup instructions, see</source>
-        <target state="new">For setup instructions, see</target>
+        <target state="translated">설치 지침은 다음을 참조하세요.</target>
         <note>Followed by the TelemetryHelpButtonText inline link and a period.</note>
       </trans-unit>
       <trans-unit id="TelemetryHelpNoEndpointsDescription">
         <source>No OTLP endpoints are configured. To receive live telemetry, configure an OTLP endpoint when starting the dashboard.</source>
-        <target state="new">No OTLP endpoints are configured. To receive live telemetry, configure an OTLP endpoint when starting the dashboard.</target>
+        <target state="translated">구성된 OTLP 엔드포인트가 없습니다. 라이브 원격 분석 데이터를 받으려면 대시보드를 시작할 때 OTLP 엔드포인트를 구성합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpProtocolHeader">
         <source>Protocol</source>
-        <target state="new">Protocol</target>
+        <target state="translated">프로토콜</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpSendTelemetryLink">
         <source>Connect your app to the dashboard</source>
-        <target state="new">Connect your app to the dashboard</target>
+        <target state="translated">대시보드에 앱 연결</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogJsonFormat">
         <source>JSON</source>
-        <target state="needs-review-translation">JSON 형식 지정</target>
+        <target state="translated">JSON</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogMarkdownFormat">
         <source>Markdown</source>
-        <target state="new">Markdown</target>
+        <target state="translated">Markdown</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogPlaintextFormat">
@@ -847,12 +847,12 @@ Configure your app to export logs, traces, and metrics using [OTLP]({0}).</targe
       </trans-unit>
       <trans-unit id="TextVisualizerDialogSqlFormat">
         <source>SQL</source>
-        <target state="new">SQL</target>
+        <target state="translated">SQL</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogXmlFormat">
         <source>XML</source>
-        <target state="needs-review-translation">XML 형식 지정</target>
+        <target state="translated">XML</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningAcknowledge">
@@ -862,7 +862,7 @@ Configure your app to export logs, traces, and metrics using [OTLP]({0}).</targe
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningDescription">
         <source>Confirm you want to show this value. Once confirmed, the text visualizer in the browser will show values automatically</source>
-        <target state="needs-review-translation">값을 표시할지 확인하세요. 나중에 텍스트 시각화 도구를 열면 모든 값이 자동으로 표시됩니다.</target>
+        <target state="translated">이 값을 표시할지 확인합니다. 확인되면 브라우저의 텍스트 시각화 도우미에 값이 자동으로 표시됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningTitle">

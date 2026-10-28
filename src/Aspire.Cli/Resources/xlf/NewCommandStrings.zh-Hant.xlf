@@ -19,22 +19,22 @@
       </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
         <source>Directly in the selected folder</source>
-        <target state="new">Directly in the selected folder</target>
+        <target state="translated">直接在選取的資料夾中</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectNameSubdirectoryChoice">
         <source>In a subdirectory named '{0}' in the selected folder</source>
-        <target state="new">In a subdirectory named '{0}' in the selected folder</target>
+        <target state="translated">在所選資料夾中名為 '{0}' 的子目錄中</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Create a new app from an Aspire starter template</source>
-        <target state="needs-review-translation">建立新的 Aspire 專案。</target>
+        <target state="translated">從 Aspire 入門範本建立新的應用程式</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
         <source>Enter the output path</source>
-        <target state="new">Enter the output path</target>
+        <target state="translated">輸入輸出路徑</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheProjectName">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
         <source>The programming language for the AppHost</source>
-        <target state="new">The programming language for the AppHost</target>
+        <target state="translated">AppHost 的程式設計語言</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateCreationFailed">
@@ -69,12 +69,12 @@
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
         <source>The name of the project to create</source>
-        <target state="needs-review-translation">要建立專案之名稱。</target>
+        <target state="translated">要建立的專案名稱</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChannelFoundMatching">
         <source>No channel found matching '{0}'. Valid options are: {1}.</source>
-        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <target state="translated">找不到符合 '{0}' 的頻道。有效的選項為： {1}。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
@@ -84,42 +84,42 @@
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
         <source>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</source>
-        <target state="new">No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</target>
+        <target state="translated">找不到與 Aspire CLI 版本 '{0}' 相符的本機 Aspire.ProjectTemplates 套件。使用 localhive.sh (macOS/Linux) 或 localhive.ps1 (Windows) 建置和暫存相符套件，將 ASPIRE_CLI_PACKAGES 設定為包含此套件的目錄，或明確選擇包含 --channel、--source 或 --version. 的摘要支援範本。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoPackageChannelsAvailable">
         <source>No package channels are available.</source>
-        <target state="new">No package channels are available.</target>
+        <target state="translated">沒有可用的套件通道。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTemplateVersionsFoundInChannel">
         <source>No template versions found in channel '{0}'.</source>
-        <target state="new">No template versions found in channel '{0}'.</target>
+        <target state="translated">在通道 '{0}' 中找不到任何範本版本。</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveTemplateRequired">
         <source>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</source>
-        <target state="new">A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</target>
+        <target state="translated">在非互動式模式中執行時，必須指定範本。使用 'aspire new &lt;template&gt;'。</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
         <source>The output path for the project</source>
-        <target state="needs-review-translation">專案的輸出路徑。</target>
+        <target state="translated">專案的輸出路徑</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyNonInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify --output with a different location.</target>
+        <target state="translated">輸出目錄 '{0}' 已存在且不是空的。請使用不同的位置指定 --output。</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify a different location.</target>
+        <target state="translated">輸出目錄 '{0}' 已存在且不是空的。請指定不同的位置。</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputPathContainsInvalidCharacters">
         <source>The output path '{0}' contains invalid characters.</source>
-        <target state="new">The output path '{0}' contains invalid characters.</target>
+        <target state="translated">輸出路徑 '{0}' 包含無效的字元。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateRepository">
@@ -144,22 +144,22 @@
       </trans-unit>
       <trans-unit id="SelectProjectCreationLocation">
         <source>Where do you want the project to be created?</source>
-        <target state="new">Where do you want the project to be created?</target>
+        <target state="translated">您想要在哪裡建立專案?</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
         <source>The NuGet source to use for the project templates</source>
-        <target state="needs-review-translation">要用於專案範本的 NuGet 來源。</target>
+        <target state="translated">要用於專案範本的 NuGet 來源</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceDirectoryNotFound">
         <source>The local NuGet source directory '{0}' does not exist.</source>
-        <target state="new">The local NuGet source directory '{0}' does not exist.</target>
+        <target state="translated">本機 NuGet 來源目錄 '{0}' 不存在。</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceWithCredentialsCannotBePersisted">
         <source>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
-        <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
+        <target state="translated">--source URL 包含認證、查詢字串或片段，無法寫入至專案的 NuGet.config。使用 NuGet 認證提供者或使用者層級 NuGet 設定來設定認證，然後傳遞不含內嵌密碼的摘要 URL。</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateDirectoryNotFound">
@@ -224,7 +224,7 @@
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
         <source>The version of the project templates to use</source>
-        <target state="needs-review-translation">要使用的專案範本版本。</target>
+        <target state="translated">要使用的專案範本版本</target>
         <note />
       </trans-unit>
     </body>

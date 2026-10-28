@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	password := builder.AddParameter("valkey-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
@@ -25,7 +25,7 @@ func main() {
 		KeysChangedThreshold: aspire.Float64Ptr(1),
 	})
 	if err = valkey.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	_ = valkey.PrimaryEndpoint()
@@ -36,9 +36,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

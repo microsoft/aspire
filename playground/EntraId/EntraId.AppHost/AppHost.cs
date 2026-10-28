@@ -22,7 +22,11 @@ if (useExistingApplication)
 else
 {
     entraWeb = builder.AddEntraIdApplication("entra-web")
-        .WithIdTokenIssuance();
+        .WithIdTokenIssuance()
+        // Roles appear in the roles claim of the ID token for users who are assigned to them. Aspire declares the roles;
+        // assign them to users in the Entra admin center (Enterprise applications > Users and groups).
+        .WithAppRole(new EntraIdAppRole("User", "User", "Can sign in and view the playground."))
+        .WithAppRole(new EntraIdAppRole("Admin", "Administrator", "Can administer the playground."));
 }
 
 var webFrontend = builder.AddProject<Projects.EntraId_Web>("webfrontend")

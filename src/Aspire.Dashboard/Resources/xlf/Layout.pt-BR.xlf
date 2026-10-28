@@ -4,42 +4,42 @@
     <body>
       <trans-unit id="DashboardRunSelectAccessibleLabel">
         <source>Select run: {0}</source>
-        <target state="new">Select run: {0}</target>
+        <target state="translated">Selecionar execução: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectCurrent">
         <source>Live run</source>
-        <target state="new">Live run</target>
+        <target state="translated">Execução em tempo real</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectHelp">
         <source>Learn about runs</source>
-        <target state="new">Learn about runs</target>
+        <target state="translated">Saiba mais sobre as execuções</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectHelpTooltip">
         <source>Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</source>
-        <target state="new">Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</target>
+        <target state="translated">Alterne entre a execução em tempo real e os dados de somente leitura de execuções anteriores. Fixe uma execução para impedir que ela seja excluída automaticamente.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectIncompatibleTooltip">
         <source>This run can't be viewed because it was created by an incompatible version of the dashboard.</source>
-        <target state="new">This run can't be viewed because it was created by an incompatible version of the dashboard.</target>
+        <target state="translated">Esta execução não pode ser exibida porque foi criada por uma versão incompatível do dashboard.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectPin">
         <source>Pin run</source>
-        <target state="new">Pin run</target>
+        <target state="translated">Fixar execução</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectTitle">
         <source>Select dashboard run</source>
-        <target state="new">Select dashboard run</target>
+        <target state="translated">Selecionar a execução de painel</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectUnpin">
         <source>Unpin run</source>
-        <target state="new">Unpin run</target>
+        <target state="translated">Desafixar execução</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutAspire">
@@ -59,12 +59,12 @@
       </trans-unit>
       <trans-unit id="MainLayoutLaunchAIAgents">
         <source>AI agents</source>
-        <target state="new">AI agents</target>
+        <target state="translated">Agentes de IA</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutLaunchNotifications">
         <source>Notifications</source>
-        <target state="new">Notifications</target>
+        <target state="translated">Notificações</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutLaunchSettings">
@@ -74,7 +74,7 @@
       </trans-unit>
       <trans-unit id="MainLayoutNotificationCenterTitle">
         <source>Notifications</source>
-        <target state="new">Notifications</target>
+        <target state="translated">Notificações</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutSettingsDialogClose">
@@ -119,7 +119,7 @@
       </trans-unit>
       <trans-unit id="NavMenuConsoleLogsTab">
         <source>Console logs</source>
-        <target state="needs-review-translation">Console</target>
+        <target state="translated">Logs do console</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuMetricsTab">
@@ -134,22 +134,22 @@
       </trans-unit>
       <trans-unit id="NavMenuStructuredLogsTab">
         <source>Structured logs</source>
-        <target state="needs-review-translation">Estruturado</target>
+        <target state="translated">Logs estruturados</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuTerminalsTab">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">Terminais</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuToggleCollapse">
         <source>Collapse navigation to icons</source>
-        <target state="new">Collapse navigation to icons</target>
+        <target state="translated">Recolher navegação em ícones</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuToggleExpand">
         <source>Expand navigation labels</source>
-        <target state="new">Expand navigation labels</target>
+        <target state="translated">Expandir os rótulos de navegação</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuTracesTab">

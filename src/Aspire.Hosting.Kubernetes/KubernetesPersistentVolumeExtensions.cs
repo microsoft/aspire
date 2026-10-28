@@ -274,12 +274,17 @@ public static class KubernetesPersistentVolumeExtensions
     /// <summary>
     /// Configures the Kubernetes PersistentVolumeClaim generated for the persistent volume.
     /// </summary>
+    /// <ats-summary>Configures the generated persistent volume claim</ats-summary>
     /// <param name="builder">The persistent volume resource builder.</param>
     /// <param name="configure">The action used to configure the generated persistent volume claim.</param>
     /// <returns>The same builder for chaining.</returns>
     /// <remarks>
     /// This callback runs when the Kubernetes manifest is generated and can be used to set
     /// properties that are not exposed by the other persistent volume configuration methods.
+    /// Callbacks run in registration order after the fluent settings and environment defaults
+    /// have been applied. TypeScript callbacks use asynchronous property and collection operations
+    /// to customize labels, annotations, storage class, volume name, volume mode, access modes,
+    /// and resource requests. Other Kubernetes manifest fields remain C#-only.
     /// Changing <c>claim.Metadata.Name</c> changes the identity of the generated PVC; if you
     /// do so, ensure that any workload references are updated accordingly.
     /// </remarks>
@@ -293,7 +298,7 @@ public static class KubernetesPersistentVolumeExtensions
     ///     });
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = "The callback exposes C#-only Kubernetes manifest types; use With* for polyglot configuration.")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesPersistentVolumeResource> WithConfiguration(
         this IResourceBuilder<KubernetesPersistentVolumeResource> builder,
         Action<PersistentVolumeClaim> configure)

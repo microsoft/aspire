@@ -568,7 +568,7 @@ internal sealed class ProjectLocator(
     {
         // Intentionally does not call ValidateAppHostAsync. See interface XML docs for rationale.
         // Probe-style callers (DotNetSdkCheck, AspireVersionCheck, TypeScriptAppHostToolingCheck,
-        // UpdateCommand, IntegrationPackageSearchService) drive this path and expect a
+        // GoAppHostToolingCheck, UpdateCommand, IntegrationPackageSearchService) drive this path and expect a
         // non-interactive answer; the user-facing legacy-migration warning is emitted from the
         // discovery walk (AddSettingsAppHostCandidateAsync) instead.
         var settingsAppHost = await GetAppHostProjectFileFromSettingsAsync(searchDirectory, searchParentDirectories, silent: true, cancellationToken);

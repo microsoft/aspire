@@ -1,0 +1,26 @@
+﻿{
+  "skills": [
+    true
+  ],
+  "mcp": {
+    "servers": {
+      "custom": {
+        "type": "remote",
+        "url": "https://example.test/mcp"
+      },
+      "aspire": {
+        "type": "local",
+        "command": [
+          "aspire",
+          "agent",
+          "mcp"
+        ],
+        "disabled": false
+      }
+    },
+    "timeout": {
+      "catalog": 5000
+    }
+  },
+  "$schema": "https://opencode.ai/config.json"
+}

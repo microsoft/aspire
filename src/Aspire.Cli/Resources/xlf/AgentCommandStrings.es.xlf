@@ -1,90 +1,95 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="es" original="../AgentCommandStrings.resx">
     <body>
       <trans-unit id="AgentTelemetryCommand_ClientNameDescription">
         <source>The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</source>
-        <target state="new">The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</target>
+        <target state="translated">Cliente del agente de IA que generó el evento (por ejemplo, copilot-cli, claude-code o vscode)</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_Description">
         <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
-        <target state="new">Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</target>
+        <target state="translated">Registrar la telemetría de uso de herramientas y aptitudes del agente de IA. Lo invocan los scripts de enlace de telemetría del agente de Aspire; no está pensado para ejecutarse directamente.</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
         <source>The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</source>
-        <target state="new">The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</target>
+        <target state="translated">Tipo de evento de telemetría (skill_invocation, tool_invocation o reference_file_read)</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_FileReferenceDescription">
         <source>The Aspire skills-relative reference file path for a reference_file_read event</source>
-        <target state="new">The Aspire skills-relative reference file path for a reference_file_read event</target>
+        <target state="translated">Ruta de acceso relativa a las aptitudes de Aspire del archivo de referencia para un evento reference_file_read</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
         <source>The opaque AI agent session identifier</source>
-        <target state="new">The opaque AI agent session identifier</target>
+        <target state="translated">El identificador opaco de la sesión del agente de IA</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SkillNameDescription">
         <source>The Aspire skill name for a skill_invocation event</source>
-        <target state="new">The Aspire skill name for a skill_invocation event</target>
+        <target state="translated">El nombre de la aptitud de Aspire para un evento skill_invocation</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_TimestampDescription">
         <source>The timestamp recorded for the event</source>
-        <target state="new">The timestamp recorded for the event</target>
+        <target state="translated">La marca de tiempo registrada para el evento</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_ToolNameDescription">
         <source>The Aspire MCP tool name for a tool_invocation event</source>
-        <target state="new">The Aspire MCP tool name for a tool_invocation event</target>
+        <target state="translated">Nombre de la herramienta MCP de Aspire para un evento tool_invocation</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
         <source>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</source>
-        <target state="new">Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</target>
+        <target state="translated">Error en la comprobación SHA-512 del archivo de aptitudes de Aspire incrustado. Esperaba '{0}', obtuve '{1}'.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_GitHubUnavailable">
         <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</source>
-        <target state="new">Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</target>
+        <target state="translated">No se han podido descargar las aptitudes de Aspire del activo de versión comprobado de GitHub y no hay ningún paquete válido disponible en la caché ni incrustado.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InvalidMetadata">
         <source>Embedded Aspire skills bundle metadata is invalid: {0}</source>
-        <target state="new">Embedded Aspire skills bundle metadata is invalid: {0}</target>
+        <target state="translated">Los metadatos del paquete incrustado de aptitudes de Aspire no son válidos: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MetadataRepositoryMismatch">
         <source>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</source>
-        <target state="new">Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</target>
+        <target state="translated">El repositorio de metadatos de aptitudes de Aspire incrustado '{0}' no coincide con el '{1}' del repositorio esperado.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataAssetName">
         <source>Embedded Aspire skills metadata must specify a release asset name.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a release asset name.</target>
+        <target state="translated">Los metadatos incrustados de las aptitudes de Aspire deben especificar el nombre de un activo de versión.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataSha512">
         <source>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</source>
-        <target state="new">Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</target>
+        <target state="translated">Los metadatos incrustados de las aptitudes de Aspire deben especificar el hash SHA-512 del activo de versión.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataTag">
         <source>Embedded Aspire skills metadata must specify a GitHub release tag.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a GitHub release tag.</target>
+        <target state="translated">Los metadatos incrustados de las aptitudes de Aspire deben especificar una etiqueta de versión de GitHub.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataVersion">
         <source>Embedded Aspire skills metadata must specify a version.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a version.</target>
+        <target state="translated">Los metadatos incrustados de las aptitudes de Aspire deben especificar una versión.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">
         <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
         <target state="translated">Las siguientes configuraciones de agente usan el comando "mcp start" en desuso. ¿Actualizarlos?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigurationWriteRefused">
+        <source>Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</source>
+        <target state="new">Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeprecatedConfigFix">
@@ -104,277 +109,364 @@
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage AI agent environment configuration</source>
-        <target state="needs-review-translation">Administrar integraciones de agentes de IA.</target>
+        <target state="translated">Administración de la configuración del entorno del agente de IA</target>
         <note />
       </trans-unit>
       <trans-unit id="Environment_ClaudeCode">
         <source>Claude Code</source>
-        <target state="new">Claude Code</target>
+        <target state="translated">Código de Claude</target>
         <note />
       </trans-unit>
       <trans-unit id="Environment_Copilot">
         <source>GitHub Copilot</source>
-        <target state="new">GitHub Copilot</target>
+        <target state="translated">GitHub Copilot</target>
         <note />
       </trans-unit>
       <trans-unit id="Environment_OpenCode">
         <source>OpenCode</source>
-        <target state="new">OpenCode</target>
+        <target state="translated">OpenCode</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_AspireSkillChoice">
+        <source>Agent assets from microsoft/aspire-skills</source>
+        <target state="new">Agent assets from microsoft/aspire-skills</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_AspireSourceOptionDescription">
+        <source>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</source>
+        <target state="new">Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigurationTarget">
+        <source>{0}: {1}</source>
+        <target state="new">{0}: {1}</target>
+        <note>{0} is the agent name, and {1} lists its configuration paths separated by commas.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigureAspireSourcePrompt">
+        <source>Which source do you want to use for Aspire?</source>
+        <target state="new">Which source do you want to use for Aspire?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
-        <target state="new">Install Aspire MCP server</target>
+        <target state="translated">Instalar el servidor MCP de Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServerPrompt">
         <source>Configure the Aspire MCP server for selected agent environments?</source>
-        <target state="new">Configure the Aspire MCP server for selected agent environments?</target>
+        <target state="translated">¿Configurar el servidor MCP de Aspire para los entornos de agente seleccionados?</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfiguredTargets">
+        <source>Configured Aspire plugin:
+  {0}</source>
+        <target state="new">Configured Aspire plugin:
+  {0}</target>
+        <note>{0} lists one agent per line, with that agent's configuration paths comma-separated.</note>
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
-        <target state="needs-review-translation">Inicialice la configuración del entorno del agente para los agentes detectados.</target>
+        <target state="translated">Inicialización de la configuración y las aptitudes de los clientes de agente seleccionados</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_EmbeddedSkillsChoice">
+        <source>Embedded (bundled skill files)</source>
+        <target state="new">Embedded (bundled skill files)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentLocationDescription">
         <source>{0}: {1}</source>
-        <target state="new">{0}: {1}</target>
+        <target state="translated">{0}: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentsOptionDescription">
         <source>Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</source>
-        <target state="new">Comma-separated agent IDs ({0}), '{1}', or '{2}'. Defaults to detected agents, or Copilot when none are detected</target>
+        <target state="translated">Id. de agente separados por comas ({0}), '{1}' o '{2}'. El valor predeterminado son los agentes detectados o Copilot cuando no se detecta ninguno</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ExistingConfigurationConflict">
+        <source>Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</source>
+        <target state="new">Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</target>
+        <note>{0} identifies the conflicting JSON setting or environment override.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_FailedTarget">
+        <source>Failed to configure Aspire plugin:
+  {0}</source>
+        <target state="new">Failed to configure Aspire plugin:
+  {0}</target>
+        <note>{0} lists each agent's configuration path and failure details, one target per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_FailedToInstallSkill">
         <source>Failed to install {0} skill at {1}: {2}</source>
-        <target state="new">Failed to install {0} skill at {1}: {2}</target>
+        <target state="translated">No se pudo instalar {0} aptitud en {1}: {2}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_GlobalScope">
         <source>Global (Install in your home directory; available across all projects)</source>
-        <target state="new">Global (Install in your home directory; available across all projects)</target>
+        <target state="translated">Global (instalar en el directorio principal; disponible en todos los proyectos)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallationLocations">
         <source>Installation locations:</source>
-        <target state="new">Installation locations:</target>
+        <target state="translated">Ubicaciones de instalación:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledPlaywrightCli">
         <source>Installed Playwright CLI.</source>
-        <target state="new">Installed Playwright CLI.</target>
+        <target state="translated">CLI de Playwright instalada.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummary">
         <source>Installed Aspire agent skills:</source>
-        <target state="new">Installed Aspire agent skills:</target>
+        <target state="translated">Aptitudes del agente de Aspire instaladas:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
         <source>Locations: {0}</source>
-        <target state="new">Locations: {0}</target>
+        <target state="translated">Ubicaciones: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummarySkills">
         <source>Skills: {0}</source>
-        <target state="new">Skills: {0}</target>
+        <target state="translated">Aptitudes: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InvalidAspireSource">
+        <source>Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</source>
+        <target state="new">Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InvalidEnvironments">
         <source>Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
-        <target state="new">Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <target state="translated">Selección de agente no válida '{0}'. Use {1}, '{2}' o '{3}'.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InvalidScope">
         <source>Invalid scope '{0}'. Use 'project' or 'global'.</source>
-        <target state="new">Invalid scope '{0}'. Use 'project' or 'global'.</target>
+        <target state="translated">Ámbito no válido "{0}". Use "project" o "global".</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InvalidSkills">
+        <source>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
+        <target state="new">Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_LocalSkillsConflict">
+        <source>Local Aspire skill files may override plugin skills:
+{0}</source>
+        <target state="new">Local Aspire skill files may override plugin skills:
+{0}</target>
+        <note>{0} lists the local skill entry-point paths, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_McpConfigurationDescription">
         <source>Configure Aspire MCP for {0} at {1}</source>
-        <target state="new">Configure Aspire MCP for {0} at {1}</target>
+        <target state="translated">Configurar MCP de Aspire para {0} en {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_McpLocationHint">
         <source>MCP: {0}</source>
-        <target state="new">MCP: {0}</target>
+        <target state="translated">MCP: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_McpOptionDescription">
         <source>Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</source>
-        <target state="new">Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</target>
+        <target state="translated">Configure el servidor MCP de Aspire para los entornos de agente seleccionados. Omita dejar MCP sin configurar, pase "--mcp" para participar o pase "--mcp=false" para rechazarlo explícitamente</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_NoConfigurationSelected">
         <source>No agent configuration selected. Existing configuration was left unchanged.</source>
-        <target state="new">No agent configuration selected. Existing configuration was left unchanged.</target>
+        <target state="translated">No se seleccionó ninguna configuración de agente. La configuración existente se dejó sin cambios.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
         <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
-        <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
+        <target state="translated">La CLI de Playwright requiere npm, que no se encontró en PATH. Omitiendo la instalación.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_PluginRiskWarning">
+        <source>Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from {0}.</source>
+        <target state="new">Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from {0}.</target>
+        <note>{0} is the official Aspire skills repository URL.</note>
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>
-        <target state="new">Project (Install in your workspace root; committed with your project)</target>
+        <target state="translated">Project (instalación en la raíz del área de trabajo; confirmada con el proyecto)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoteSkillsChoice">
+        <source>Remote (plugin)</source>
+        <target state="new">Remote (plugin)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoteSkillsConflict">
+        <source>The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</source>
+        <target state="new">The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
         <source>Configuration and skill scope: project or global (default: project)</source>
-        <target state="new">Configuration and skill scope: project or global (default: project)</target>
+        <target state="translated">Ámbito de configuración y aptitud: proyecto o global (valor predeterminado: proyecto)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectAgentsPrompt">
         <source>Which agents do you use?</source>
-        <target state="new">Which agents do you use?</target>
+        <target state="translated">¿Qué agentes usa?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectScopePrompt">
         <source>Installation scope</source>
-        <target state="new">Installation scope</target>
+        <target state="translated">Ámbito de instalación</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocation">
         <source>{0} (shared: {1})</source>
-        <target state="new">{0} (shared: {1})</target>
+        <target state="translated">{0} (compartido: {1})</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocationNotice">
         <source>Shared files may be discovered by agents that aren't selected.</source>
-        <target state="new">Shared files may be discovered by agents that aren't selected.</target>
+        <target state="translated">Los agentes que no están seleccionados pueden detectar archivos compartidos.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>
-        <target state="new">Skills: {0}</target>
+        <target state="translated">Aptitudes: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
-        <source>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</source>
-        <target state="new">Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</target>
+        <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</source>
+        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
         <source>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</target>
+        <target state="translated">Se omitió el enlace de telemetría para {0} porque su archivo de configuración contiene JSON con formato incorrecto.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedUnexpectedShape">
         <source>Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</target>
+        <target state="translated">Se omitió el enlace de telemetría para {0} porque su configuración tiene una forma inesperada.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookWriteFailed">
         <source>Skipped the telemetry hook for {0} because its configuration could not be written.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration could not be written.</target>
+        <target state="translated">Se omitió el enlace de telemetría para {0} porque no se pudo escribir su configuración.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
         <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
+        <target state="translated">Se han instalado los ganchos de telemetría del agente de Aspire para: {0}. Solo se registra el uso de la aptitud de Aspire, de la herramienta MCP y del archivo de referencia. No participar en cualquier momento estableciendo ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
-        <target state="new">Path to the workspace root directory</target>
+        <target state="translated">Ruta de acceso al directorio raíz del área de trabajo</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InstallingStatus">
         <source>Installing Aspire skills...</source>
-        <target state="new">Installing Aspire skills...</target>
+        <target state="translated">Instalando las aptitudes de Aspire...</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InvalidBundle">
         <source>The Aspire skills bundle is invalid: {0}</source>
-        <target state="new">The Aspire skills bundle is invalid: {0}</target>
+        <target state="translated">El paquete de aptitudes de Aspire no es válido: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalSkills_ReadFailed">
+        <source>Could not check local Aspire skills at '{0}': {1}</source>
+        <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="McpServerContainerMustBeJsonObject">
         <source>The MCP server container '{0}' in '{1}' must be a JSON object.</source>
-        <target state="new">The MCP server container '{0}' in '{1}' must be a JSON object.</target>
+        <target state="translated">El contenedor del servidor MCP "{0}" en "{1}" debe ser un objeto JSON.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToDownload">
         <source>Failed to download {0}.</source>
-        <target state="new">Failed to download {0}.</target>
+        <target state="translated">No se pudo descargar {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToGenerateSkillFiles">
         <source>Failed to generate Playwright CLI skill files.</source>
-        <target state="new">Failed to generate Playwright CLI skill files.</target>
+        <target state="translated">No se pudieron generar los archivos de aptitudes de la CLI de Playwright.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToInstallGlobally">
         <source>Failed to install {0} globally via npm.</source>
-        <target state="new">Failed to install {0} globally via npm.</target>
+        <target state="translated">No se pudo instalar {0} globalmente mediante npm.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToMirrorSkillFiles">
         <source>Failed to copy Playwright CLI skill files to the selected locations.</source>
-        <target state="new">Failed to copy Playwright CLI skill files to the selected locations.</target>
+        <target state="translated">No se pudieron copiar los archivos de aptitud de la CLI de Playwright en las ubicaciones seleccionadas.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToResolvePackage">
         <source>Failed to resolve {0} from the npm registry.</source>
-        <target state="new">Failed to resolve {0} from the npm registry.</target>
+        <target state="translated">No se pudo resolver {0} desde el Registro npm.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_InstalledWithMirrorWarnings">
         <source>Installed Playwright CLI (some locations failed to mirror).</source>
-        <target state="new">Installed Playwright CLI (some locations failed to mirror).</target>
+        <target state="translated">Se ha instalado la CLI de Playwright (no se han podido replicar algunas ubicaciones).</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_InstallingStatus">
         <source>Installing Playwright CLI...</source>
-        <target state="new">Installing Playwright CLI...</target>
+        <target state="translated">Instalando la CLI de Playwright...</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_IntegrityVerificationFailed">
         <source>Integrity verification failed for {0}. The downloaded package may have been tampered with.</source>
-        <target state="new">Integrity verification failed for {0}. The downloaded package may have been tampered with.</target>
+        <target state="translated">Error de comprobación de integridad para {0}. Es posible que el paquete descargado se haya alterado.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_InvalidVersionOverride">
         <source>The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</source>
-        <target state="new">The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</target>
+        <target state="translated">El valor del parámetro de configuración '{0}' ('{1}') no es una versión válida de SemVer 2.0.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_ProvenanceVerificationFailed">
         <source>Provenance verification failed for {0}: {1}</source>
-        <target state="new">Provenance verification failed for {0}: {1}</target>
+        <target state="translated">Error en la comprobación de procedencia para {0}: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_Aspire">
         <source>Aspire CLI commands and workflows for distributed apps</source>
-        <target state="new">Aspire CLI commands and workflows for distributed apps</target>
+        <target state="translated">Comandos y flujos de trabajo de la CLI de Aspire para aplicaciones distribuidas</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_AspireDeployment">
         <source>Aspire deployment target selection, preflight, publish, and deploy workflows</source>
-        <target state="new">Aspire deployment target selection, preflight, publish, and deploy workflows</target>
+        <target state="translated">Flujos de trabajo de selección del destino de implementación de Aspire, comprobación previa, publicación e implementación</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_Aspireify">
         <source>One-time setup: wire up AppHost with discovered projects</source>
-        <target state="new">One-time setup: wire up AppHost with discovered projects</target>
+        <target state="translated">Configuración inicial: integrar AppHost con los proyectos detectados</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_DotnetInspect">
         <source>Query .NET API surfaces across NuGet packages and platform libraries</source>
-        <target state="new">Query .NET API surfaces across NuGet packages and platform libraries</target>
+        <target state="translated">Consultar las superficies de API de .NET en paquetes de NuGet y bibliotecas de plataforma</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_PlaywrightCli">
         <source>Browser automation and functional testing</source>
-        <target state="new">Browser automation and functional testing</target>
+        <target state="translated">Automatización del navegador y pruebas funcionales</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectSkills">
-        <source>Which skills should be installed?</source>
-        <target state="new">Which skills should be installed?</target>
+        <source>Which skills and tools do you want to configure?</source>
+        <target state="new">Which skills and tools do you want to configure?</target>
         <note />
       </trans-unit>
       <trans-unit id="MalformedConfigFileError">
@@ -384,12 +476,12 @@
       </trans-unit>
       <trans-unit id="McpCommand_Description">
         <source>Start the MCP (Model Context Protocol) server</source>
-        <target state="needs-review-translation">Inicie el servidor MCP (protocolo de contexto de modelo).</target>
+        <target state="translated">Iniciar el servidor MCP (Protocolo de contexto de modelo)</target>
         <note />
       </trans-unit>
       <trans-unit id="SkipNoneDescription">
         <source>None — skip</source>
-        <target state="new">None — skip</target>
+        <target state="translated">Ninguno: omitir</target>
         <note />
       </trans-unit>
       <trans-unit id="SkippedMalformedConfigFile">
