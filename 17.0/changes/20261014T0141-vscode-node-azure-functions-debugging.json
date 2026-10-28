@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "With the Aspire VS Code extension installed, debugging an AppHost containing a TypeScript or JavaScript Azure Functions app now starts Azure Functions Core Tools, reserves a Node inspector port, and attaches the Node debugger automatically, stopping Core Tools when the debug session ends.",
-  "docsPrs": [],
+  "docsPrs": [
+    1889
+  ],
   "docsRequired": true,
   "emoji": "🐞",
   "firstMergedAt": "2026-10-14T01:41:07Z",

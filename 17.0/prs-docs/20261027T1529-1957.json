@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site dependency pin; no matching changelog entry",
+  "mergedAt": "2026-10-27T15:29:54Z",
+  "number": 1957,
+  "runDate": "2026-10-28T00:06:00Z",
+  "status": "excluded",
+  "title": "Pin astro back to 7.4.1"
+}

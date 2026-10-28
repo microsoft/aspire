@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "CLI writes aspire.config.json with consistent line endings",
+  "mergedAt": "2026-10-27T15:29:50Z",
+  "number": 21252,
+  "runDate": "2026-10-28T00:06:00Z",
+  "status": "included",
+  "title": "Write aspire.config.json with the OS line endings and a final newline"
+}

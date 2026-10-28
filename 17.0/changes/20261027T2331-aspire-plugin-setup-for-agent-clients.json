@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "`aspire agent init` can now set up the Aspire plugin for GitHub Copilot, Claude Code, and OpenCode, choosing between a remote plugin or embedded skill files, with warnings to review the plugin source and about local skills overriding plugin skills.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-10-27T23:31:35Z",
+  "lastMergedAt": "2026-10-27T23:31:35Z",
+  "name": "Aspire plugin setup for agent clients",
+  "owner": "ellahathaway",
+  "prs": [
+    20946
+  ]
+}

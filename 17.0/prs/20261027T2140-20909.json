@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Bot dependency bump",
+  "mergedAt": "2026-10-27T21:40:34Z",
+  "number": 20909,
+  "runDate": "2026-10-28T00:06:00Z",
+  "status": "excluded",
+  "title": "Bump http-cache-semantics from 4.2.0 to 4.3.0 in /extension"
+}

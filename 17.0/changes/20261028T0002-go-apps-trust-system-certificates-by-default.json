@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@aarsethio"
+  ],
+  "description": "Go apps started by Aspire now default to system certificate trust, so Go 1.27+ apps on macOS and Windows no longer fail with `x509` errors for public hosts when Aspire sets `SSL_CERT_FILE`/`SSL_CERT_DIR`.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-10-28T00:02:47Z",
+  "lastMergedAt": "2026-10-28T00:02:47Z",
+  "name": "Go apps trust system certificates by default",
+  "owner": "danegsta",
+  "prs": [
+    21200
+  ]
+}

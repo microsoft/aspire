@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The CLI now writes `aspire.config.json` with the OS line endings and a final newline, so `aspire new` and `aspire init` produce identical files regardless of how the CLI was built.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📝",
+  "firstMergedAt": "2026-10-27T15:29:50Z",
+  "lastMergedAt": "2026-10-27T15:29:50Z",
+  "name": "Consistent aspire.config.json line endings",
+  "owner": "IEvangelist",
+  "prs": [
+    21252
+  ]
+}

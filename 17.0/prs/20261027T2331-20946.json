@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Plugin setup for agent clients in aspire agent init",
+  "mergedAt": "2026-10-27T23:31:35Z",
+  "number": 20946,
+  "runDate": "2026-10-28T00:06:00Z",
+  "status": "included",
+  "title": "Configure agent plugins"
+}

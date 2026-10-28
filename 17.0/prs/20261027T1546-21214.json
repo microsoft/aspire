@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Repository agent skill; not user-facing product change",
+  "mergedAt": "2026-10-27T15:46:09Z",
+  "number": 21214,
+  "runDate": "2026-10-28T00:06:00Z",
+  "status": "excluded",
+  "title": "Add the create-video agent skill"
+}

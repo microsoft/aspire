@@ -1,0 +1,9 @@
+{
+  "author": "aarsethio",
+  "comment": "Go apps default to system certificate trust",
+  "mergedAt": "2026-10-28T00:02:47Z",
+  "number": 21200,
+  "runDate": "2026-10-28T00:06:00Z",
+  "status": "included",
+  "title": "Default Go apps to System certificate trust"
+}
