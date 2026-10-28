@@ -57,6 +57,7 @@ internal sealed partial class AtsGoCodeGenerator
         cancellationToken.ThrowIfCancellationRequested();
 
         ProjectHandleInterfaces(scope);
+        ProjectAcceptingInterfaces(scope);
 
         return new GoApiModel
         {
@@ -252,6 +253,7 @@ internal sealed partial class AtsGoCodeGenerator
                 isMarker: !isBuilder,
                 summary: type.Summary,
                 remarks: type.Remarks,
+                acceptingMarkerMembers: [],
                 capabilityMembers: [],
                 synthesizedMembers: ProjectSynthesizedMembers(scope, typeId, type.Name));
         }
@@ -494,10 +496,68 @@ internal sealed partial class AtsGoCodeGenerator
                 isMarker,
                 summary: handleType?.Documentation?.Summary,
                 remarks: handleType?.Documentation?.Remarks,
+                acceptingMarkerMembers: _acceptingMarkers.TryGetValue(typeId, out var markers)
+                    ? ProjectAcceptingMarkerMembers(interfaceName, markers)
+                    : [],
                 capabilityMembers: isMarker ? [] : ProjectCapabilityMembers(scope, typeId, interfaceName, capabilitiesByConcreteImpl),
                 synthesizedMembers: ProjectSynthesizedMembers(scope, typeId, interfaceName));
         }
     }
+
+    // The Any<Type> accepting interfaces are public types in the parameters of the generated methods, so
+    // they are exported like the handle interfaces they sit beside. Besides Err, which handleReference
+    // requires, their only members are the unexported marker methods that restrict them to one family of
+    // handle types.
+    private void ProjectAcceptingInterfaces(ApiExportScope scope)
+    {
+        foreach (var (typeId, name) in _acceptingNames.OrderBy(pair => pair.Value, StringComparer.Ordinal))
+        {
+            var owner = scope.GetTypeOwner(typeId);
+
+            // A package that does not own the base type only needs the name to resolve in its signatures.
+            if (!scope.IsOwned(owner))
+            {
+                scope.AddDeclaration(new GoApiDeclaration
+                {
+                    Id = $"{owner}:opaque:{name}",
+                    Content = RenderInterfaceFragment(name, []),
+                    OwningAssemblyName = owner
+                });
+
+                continue;
+            }
+
+            var members = ProjectAcceptingMarkerMembers(name, _acceptingMarkers[typeId])
+                .Concat(ProjectMembers(name, [scope.ErrMethod], GoApiErrorModel.None))
+                .ToList();
+
+            scope.AddDeclaration(new GoApiDeclaration
+            {
+                Id = $"{owner}:interface:{name}",
+                Content = RenderInterfaceFragment(name, members),
+                OwningAssemblyName = owner
+            });
+
+            scope.AddItem(new GoApiItem
+            {
+                Id = $"interface:{name}",
+                TypeId = typeId,
+                Kind = GoApiItemKind.Interface,
+                Name = name,
+                Declaration = $"type {name} interface",
+                OwningAssemblyName = owner,
+                Summary = $"{name} accepts {_interfaceNames[typeId]} or a handle of any type derived from it.",
+                IsMarker = true,
+                Members = members
+            });
+        }
+    }
+
+    private static List<GoApiMember> ProjectAcceptingMarkerMembers(string interfaceName, IEnumerable<string> markers)
+        => ProjectMembers(
+            interfaceName,
+            markers.Select(marker => new GoDeclaration { Kind = GoDeclarationKind.Method, Name = marker, Signature = $"{marker}()" }),
+            GoApiErrorModel.None);
 
     // An owning package documents the interface. A package that only adds capabilities to a type another
     // package owns contributes an augmentation, and the type is declared as an opaque stub so signatures
@@ -510,6 +570,7 @@ internal sealed partial class AtsGoCodeGenerator
         bool isMarker,
         string? summary,
         string? remarks,
+        IReadOnlyList<GoApiMember> acceptingMarkerMembers,
         IReadOnlyList<GoApiMember> capabilityMembers,
         IReadOnlyList<GoApiMember> synthesizedMembers)
     {
@@ -541,7 +602,8 @@ internal sealed partial class AtsGoCodeGenerator
             return;
         }
 
-        var members = capabilityMembers.Concat(synthesizedMembers).ToList();
+        // The generator writes the accepting markers right after handleReference, before the methods.
+        var members = acceptingMarkerMembers.Concat(capabilityMembers).Concat(synthesizedMembers).ToList();
 
         scope.AddDeclaration(new GoApiDeclaration
         {

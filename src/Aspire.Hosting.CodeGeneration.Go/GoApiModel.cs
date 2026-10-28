@@ -341,7 +341,8 @@ internal sealed record GoApiItem
 
     /// <summary>
     /// Gets a value indicating whether the item is a marker interface, which embeds the handle
-    /// contract and declares no members of its own.
+    /// contract and declares no capability methods of its own. The <c>Any&lt;Type&gt;</c> interfaces that
+    /// accept a handle type or any type derived from it are markers too.
     /// </summary>
     public bool IsMarker { get; init; }
 
