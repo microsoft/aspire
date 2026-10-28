@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Application de démarrage Aspire (ASP.NET Core/React, C# AppHost)",
   "description": "Modèle de projet pour créer une application Aspire avec un front-end React et un service backend d’API Minimal en C#, avec une mise en cache Redis optionnelle.",
