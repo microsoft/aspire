@@ -80,7 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           ./build.sh -restore -ci -build \
-            -projects "$TEST_PROJECT_PATH" \
+            -projects "$PWD/$TEST_PROJECT_PATH" \
             /p:InstallBrowsersForPlaywright=false \
             2>&1 | tee comparison/build.log
           ./dotnet.sh --info | tee comparison/dotnet-info.txt
