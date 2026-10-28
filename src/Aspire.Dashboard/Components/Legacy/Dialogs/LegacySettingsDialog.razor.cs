@@ -2,13 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Legacy.Dialogs;
 
@@ -21,7 +19,6 @@ public partial class LegacySettingsDialog : IDisposable
     private List<CultureInfo> _languageOptions = null!;
     private CultureInfo? _selectedUiCulture;
     private TimeFormat _timeFormat;
-    private IReadOnlyList<IconToggleOption<string>> _dashboardExperienceOptions = [];
     private IDisposable? _themeChangedSubscription;
 
     [Inject]
@@ -53,11 +50,6 @@ public partial class LegacySettingsDialog : IDisposable
             : CultureInfo.CurrentUICulture;
         _timeFormat = TimeProvider.ConfiguredTimeFormat;
         _currentSetting = ThemeManager.SelectedTheme ?? ThemeManager.ThemeSettingSystem;
-        _dashboardExperienceOptions =
-        [
-            new(NewDashboardExperience, new Icons.Regular.Size24.Sparkle(), Loc[nameof(Resources.Dialogs.SettingsDialogDashboardExperienceNew)]),
-            new(PreviousDashboardExperience, new Icons.Regular.Size24.History(), Loc[nameof(Resources.Dialogs.SettingsDialogDashboardExperiencePrevious)]),
-        ];
 
         _themeChangedSubscription = ThemeManager.OnThemeChanged(async () =>
         {

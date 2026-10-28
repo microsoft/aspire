@@ -17,14 +17,21 @@
         </div>
 
         <div class="input-container">
-            <span class="setting-title aspire-field-label">@Loc[nameof(Dialogs.SettingsDialogDashboardExperience)]</span>
-            <IconToggleGroup TValue="string"
-                             Label="@Loc[nameof(Dialogs.SettingsDialogDashboardExperience)]"
-                             Options="@_dashboardExperienceOptions"
-                             Value="@PreviousDashboardExperience"
-                             ValueChanged="OnDashboardExperienceChangedAsync"
-                             ShowCurrentLabel="false"
-                             ShowOptionText="true" />
+            <FluentRadioGroup TValue="string"
+                              Class="legacy-dashboard-experience-select"
+                              Label="@Loc[nameof(Dialogs.SettingsDialogDashboardExperience)]"
+                              Value="@PreviousDashboardExperience"
+                              ValueChanged="OnDashboardExperienceChangedAsync"
+                              Orientation="Orientation.Vertical">
+                <FluentRadio Value="@NewDashboardExperience"
+                             Label="@Loc[nameof(Dialogs.SettingsDialogDashboardExperienceNew)]"
+                             role="radio"
+                             aria-checked="false" />
+                <FluentRadio Value="@PreviousDashboardExperience"
+                             Label="@Loc[nameof(Dialogs.SettingsDialogDashboardExperiencePrevious)]"
+                             role="radio"
+                             aria-checked="true" />
+            </FluentRadioGroup>
             <p class="setting-subtext">@Loc[nameof(Dialogs.SettingsDialogDashboardExperienceDescription)]</p>
         </div>
 

@@ -44,8 +44,10 @@ public partial class LegacyMainLayout : IGlobalKeydownListener, IAsyncDisposable
     private bool _suppressNextDialogFocusRestore;
     private const string SettingsDialogId = "SettingsDialog";
     private const string HelpDialogId = "HelpDialog";
+    private const string AIAgentsDialogId = "AIAgentsDialog";
     private const string NotificationsDialogId = "NotificationsDialog";
     internal const string HelpButtonId = "dashboard-help-button";
+    internal const string AIAgentsButtonId = "legacy-dashboard-ai-agents-button";
     internal const string SettingsButtonId = "dashboard-settings-button";
     internal const string RunSelectButtonId = "legacy-dashboard-run-select-button";
     internal const string NavigationButtonId = "dashboard-navigation-button";
@@ -420,7 +422,28 @@ public partial class LegacyMainLayout : IGlobalKeydownListener, IAsyncDisposable
         return true;
     }
 
-    public Task LaunchAIAgentsAsync() => LaunchHelpAsync();
+    public async Task LaunchAIAgentsAsync()
+    {
+        var parameters = new DialogParameters
+        {
+            Title = Loc[nameof(Resources.Layout.MainLayoutLaunchAIAgents)],
+            PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)],
+            PrimaryActionEnabled = true,
+            SecondaryAction = null,
+            Modal = true,
+            Alignment = HorizontalAlignment.Center,
+            Width = "700px",
+            Id = AIAgentsDialogId,
+            OnDialogClosing = EventCallback.Factory.Create<IDialogInstance>(this, _ => HandleDialogClose())
+        };
+
+        if (!await CloseOpenPageDialogForReplacementAsync(AIAgentsDialogId).ConfigureAwait(true))
+        {
+            return;
+        }
+
+        _openPageDialog = await DialogService.ShowDialogAsync<LegacyAIAgentsDialog>(parameters).ConfigureAwait(true);
+    }
 
     public Task LaunchSettingsAsync() => LaunchSettingsAsync(GetDefaultReturnFocusElementId(SettingsButtonId));
 
