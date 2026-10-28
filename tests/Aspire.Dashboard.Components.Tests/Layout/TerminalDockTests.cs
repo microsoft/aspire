@@ -726,6 +726,32 @@ public partial class TerminalDockTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Detach_UsesConfiguredRoutePrefix()
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var client = new TestDashboardClient(
+            isEnabled: true,
+            terminalChannelProvider: () => updates);
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = Render<TerminalDock>(builder =>
+            builder.Add(p => p.TerminalWindowPathPrefix, "legacy/terminal-window"));
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first"));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        await cut.InvokeAsync(() => cut.FindComponent<TerminalView>().Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Generation = 1,
+            Connected = true,
+            FontPx = 13
+        }));
+
+        Assert.Equal(
+            "http://localhost/legacy/terminal-window/apphost/first?fontSize=13",
+            cut.Find(".terminal-dock-detach").GetAttribute("data-terminal-window-url"));
+    }
+
+    [Fact]
     public async Task RecoverySnapshot_ClosesWindowForMissingTerminal()
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();

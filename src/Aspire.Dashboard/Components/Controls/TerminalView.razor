@@ -22,7 +22,7 @@
                     <TerminalWindowButton Class="terminal-open-window"
                                           Label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarOpenInWindow)]"
                                           TerminalKey="@($"resource:{WindowResourceName ?? ResourceName}")"
-                                          Url="@($"terminal-window/resource/{Uri.EscapeDataString(WindowResourceName ?? ResourceName)}")"
+                                          Url="@($"{TerminalWindowPathPrefix.Trim('/')}/resource/{Uri.EscapeDataString(WindowResourceName ?? ResourceName)}")"
                                           FontSize="@FontSize" />
                 }
             </div>

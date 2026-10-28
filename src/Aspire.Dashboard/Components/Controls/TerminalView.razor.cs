@@ -79,6 +79,10 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [Parameter]
     public bool ShowOpenInWindow { get; set; }
 
+    /// <summary>Gets or sets the route prefix used to open an independent terminal window.</summary>
+    [Parameter]
+    public string TerminalWindowPathPrefix { get; set; } = "terminal-window";
+
     /// <summary>Gets or sets the per-surface key for page-lifetime font-size persistence.</summary>
     /// <remarks>Detached windows seed their font from the opener without sharing live font preferences.</remarks>
     [Parameter]

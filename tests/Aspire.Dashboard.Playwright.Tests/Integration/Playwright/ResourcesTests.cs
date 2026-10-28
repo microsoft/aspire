@@ -194,8 +194,10 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             Assert.NotNull(linkBounds);
             Assert.True(linkBounds.X >= 0 && linkBounds.X + linkBounds.Width <= 360, $"The resource link should fit inside the viewport, but it spanned {linkBounds.X} to {linkBounds.X + linkBounds.Width}.");
 
-            await resourceLink.ClickAsync();
-            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/resources/TestResource");
+            await page.Mouse.ClickAsync(
+                linkBounds.X + linkBounds.Width / 2,
+                linkBounds.Y + linkBounds.Height / 2);
+            await page.WaitForFunctionAsync("() => location.pathname === '/resources/TestResource'");
             await Assertions.Expect(layout).Not.ToHaveClassAsync(new Regex("drawer-open"));
             await Assertions.Expect(page.Locator(".resource-title")).ToHaveTextAsync("TestResource");
         });
@@ -326,16 +328,18 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await Assertions.Expect(cog).ToBeFocusedAsync();
 
             await page.Keyboard.PressAsync("Enter");
-            await page.GetByRole(
+            var viewDetails = page.GetByRole(
                 AriaRole.Menuitem,
                 new PageGetByRoleOptions
                 {
                     Name = ControlsStrings.ActionViewDetailsText,
                     Exact = true
-                }).ClickAsync();
+                });
+            await viewDetails.FocusAsync();
+            await page.Keyboard.PressAsync("Enter");
 
             // Non-parameter resources open in the Resources view rather than a graph side panel.
-            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/resources/TestResource");
+            await page.WaitForFunctionAsync("() => location.pathname === '/resources/TestResource'");
             await Assertions.Expect(page.Locator(".resource-title")).ToHaveTextAsync("TestResource");
         });
     }

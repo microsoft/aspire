@@ -19,9 +19,8 @@
     }
 
     if (experience === 'legacy' && !isLegacyPath) {
-        const legacyPath = path === '/parameters' ? '/legacy/resources' : `/legacy${path}`;
-        window.location.replace(`${legacyPath}${window.location.search}${window.location.hash}`);
+        window.location.replace('/legacy');
     } else if (experience === 'modern' && isLegacyPath) {
-        window.location.replace(`${path.substring('/legacy'.length) || '/'}${window.location.search}${window.location.hash}`);
+        window.location.replace('/');
     }
 })();

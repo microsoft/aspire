@@ -67,6 +67,7 @@
             {
                 <TerminalView ResourceName="@resource.Name" ShowOpenInWindow="true"
                               AutoFit="@resource.ShouldAutoFitTerminal()"
+                              TerminalWindowPathPrefix="legacy/terminal-window"
                               WindowResourceName="@GetResourceName(PageViewModel.SelectedResource)"
                               ResourceIcon="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)" />
             }

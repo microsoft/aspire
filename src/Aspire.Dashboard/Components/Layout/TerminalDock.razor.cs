@@ -108,6 +108,10 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     [Inject]
     public required IJSRuntime JS { get; init; }
 
+    /// <summary>Gets or sets the route prefix used to detach a terminal into an independent window.</summary>
+    [Parameter]
+    public string TerminalWindowPathPrefix { get; set; } = "terminal-window";
+
     public IReadOnlySet<AspireKeyboardShortcut> SubscribedShortcuts { get; } = new HashSet<AspireKeyboardShortcut>
     {
         AspireKeyboardShortcut.ToggleTerminalDock
@@ -328,7 +332,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private string GetPaneId(string terminalId) => $"{_elementIdPrefix}-pane-{terminalId}";
 
     private string? ActiveTerminalWindowUrl => _activeTerminalId is { } id
-        ? $"terminal-window/apphost/{Uri.EscapeDataString(id)}"
+        ? $"{TerminalWindowPathPrefix.Trim('/')}/apphost/{Uri.EscapeDataString(id)}"
         : null;
 
     private int? ActiveTerminalFontSize => _activeTerminalId is { } id && _terminalViews.TryGetValue(id, out var view)

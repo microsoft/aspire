@@ -265,6 +265,28 @@ public class TerminalViewTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task NewWindowAction_UsesConfiguredRoutePrefix()
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        TerminalSetupHelpers.SetupTerminalWindows(this);
+        var cut = Render<TerminalView>(builder => builder
+            .Add(p => p.ResourceName, "shell")
+            .Add(p => p.ShowOpenInWindow, true)
+            .Add(p => p.TerminalWindowPathPrefix, "legacy/terminal-window"));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Generation = 1,
+            Connected = true,
+            FontPx = 13
+        }));
+
+        Assert.Equal(
+            "http://localhost/legacy/terminal-window/resource/shell?fontSize=13",
+            cut.Find(".terminal-open-window").GetAttribute("data-terminal-window-url"));
+    }
+
+    [Fact]
     public async Task Titlebar_UsesWorkloadMetadataAndHidesDisconnectedProgress()
     {
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");

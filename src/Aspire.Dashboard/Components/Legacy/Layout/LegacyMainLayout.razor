@@ -153,7 +153,8 @@
     {
         @* Removing the dock cancels its selected-run subscription and shortcut. Returning to the live run starts a
            new subscription rather than reusing the stream chosen for a previous selection. *@
-        <TerminalDock @key="RunSelection.SelectedRun.RunId" />
+        <TerminalDock @key="RunSelection.SelectedRun.RunId"
+                      TerminalWindowPathPrefix="legacy/terminal-window" />
     }
     <ResourceServiceConnectionProvider />
     @if (IsTerminalDockEnabled)

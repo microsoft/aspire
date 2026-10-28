@@ -6,6 +6,7 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.TestUtilities;
 using Google.Protobuf.Collections;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using OpenTelemetry.Proto.Trace.V1;
@@ -55,16 +56,22 @@ public sealed class TracesLayoutTests : PlaywrightTestsBase<DashboardServerFixtu
             var progressRings = page.Locator(".aspire-progress-ring.determinate.duration-ring");
             await Assertions.Expect(progressRings).ToHaveCountAsync(2);
 
-            var values = await progressRings.EvaluateAllAsync<int[]>(
-                "elements => elements.map(element => Number(element.getAttribute('aria-valuenow')))");
-            var attributesAreValid = await progressRings.EvaluateAllAsync<bool>(
-                """
-                elements => elements.every(element =>
-                    element.getAttribute('aria-valuemin') === '0' &&
-                    element.getAttribute('aria-valuemax') === '2000' &&
-                    element.getBoundingClientRect().width === 20 &&
-                    element.getBoundingClientRect().height === 20)
-                """);
+            int[] values = [];
+            var attributesAreValid = false;
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(async () =>
+            {
+                values = await progressRings.EvaluateAllAsync<int[]>(
+                    "elements => elements.map(element => Number(element.getAttribute('aria-valuenow')))");
+                attributesAreValid = await progressRings.EvaluateAllAsync<bool>(
+                    """
+                    elements => elements.length === 2 && elements.every(element =>
+                        element.getAttribute('aria-valuemin') === '0' &&
+                        element.getAttribute('aria-valuemax') === '2000' &&
+                        element.getBoundingClientRect().width === 20 &&
+                        element.getBoundingClientRect().height === 20)
+                    """);
+                return values.Length == 2 && attributesAreValid;
+            }, "The two determinate duration rings should remain rendered with valid dimensions and ARIA values.");
 
             Assert.Collection(
                 values.Order(),

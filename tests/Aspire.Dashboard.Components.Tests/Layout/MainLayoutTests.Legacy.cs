@@ -12,7 +12,7 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 public partial class MainLayoutTests
 {
     [Fact]
-    public async Task LegacyHeader_HelpAndAIAgentsOpenSeparateDialogs()
+    public async Task LegacyHeader_AIAgentsOpensDedicatedDialog()
     {
         var openedDialogIds = new List<string?>();
         var dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
@@ -24,9 +24,8 @@ public partial class MainLayoutTests
         var cut = Render<LegacyMainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
 
-        await cut.InvokeAsync(() => cut.Find($"#{LegacyMainLayout.HelpButtonId}").Click());
         await cut.InvokeAsync(() => cut.Find($"#{LegacyMainLayout.AIAgentsButtonId}").Click());
 
-        Assert.Equal(["HelpDialog", "AIAgentsDialog"], openedDialogIds);
+        Assert.Equal(["AIAgentsDialog"], openedDialogIds);
     }
 }

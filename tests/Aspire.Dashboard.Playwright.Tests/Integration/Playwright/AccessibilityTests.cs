@@ -208,7 +208,14 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
         var button = page.Locator("#accent-contrast-probe");
         var states = new List<(string Name, (int R, int G, int B) Foreground, (int R, int G, int B) Background)>();
-        var rest = await ReadFluentControlColorsAsync(button);
+        ((int R, int G, int B) Foreground, (int R, int G, int B) Background)? settledRest = null;
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(async () =>
+        {
+            var colors = await ReadFluentControlColorsAsync(button);
+            settledRest = colors;
+            return ContrastRatio(colors.Foreground, colors.Background) >= WcagAaContrastMinimum;
+        }, "The dark primary-button tokens should be fully applied before measuring interaction-state contrast.");
+        var rest = settledRest ?? throw new InvalidOperationException("The dark primary-button colors were not measured.");
         states.Add(("rest", rest.Foreground, rest.Background));
 
         await button.HoverAsync();

@@ -18,27 +18,44 @@ public sealed class DashboardExperienceTests : PlaywrightTestsBase<DashboardServ
 
     [Theory]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    [InlineData("/resources", "/legacy/resources")]
-    [InlineData("/consolelogs", "/legacy/consolelogs")]
-    [InlineData("/structuredlogs", "/legacy/structuredlogs")]
-    [InlineData("/traces", "/legacy/traces")]
-    [InlineData("/metrics", "/legacy/metrics")]
-    [InlineData("/does-not-exist", "/legacy/does-not-exist")]
-    [InlineData("/legacyish", "/legacy/legacyish")]
-    public Task PreviousDashboard_RedirectsModernRoutesWithoutMixingLayouts(string modernPath, string expectedLegacyPath)
-        => AssertExperienceRouteAsync("legacy", modernPath, expectedLegacyPath, expectLegacy: true);
+    [InlineData("/resources")]
+    [InlineData("/consolelogs")]
+    [InlineData("/structuredlogs")]
+    [InlineData("/traces")]
+    [InlineData("/metrics")]
+    [InlineData("/does-not-exist")]
+    [InlineData("/legacyish")]
+    public Task PreviousDashboard_RedirectsModernRoutesToLegacyRoot(string modernPath)
+        => AssertExperienceRouteAsync("legacy", modernPath, "/legacy", expectLegacy: true);
 
     [Theory]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    [InlineData("/legacy/resources", "/resources")]
-    [InlineData("/legacy/consolelogs", "/consolelogs")]
-    [InlineData("/legacy/structuredlogs", "/structuredlogs")]
-    [InlineData("/legacy/traces", "/traces")]
-    [InlineData("/legacy/metrics", "/metrics")]
-    [InlineData("/legacy/does-not-exist", "/does-not-exist")]
-    [InlineData("/legacyish", "/legacyish")]
-    public Task NewDashboard_RedirectsLegacyRoutesWithoutMixingLayouts(string legacyPath, string expectedModernPath)
-        => AssertExperienceRouteAsync("modern", legacyPath, expectedModernPath, expectLegacy: false);
+    [InlineData("/legacy/resources")]
+    [InlineData("/legacy/consolelogs")]
+    [InlineData("/legacy/structuredlogs")]
+    [InlineData("/legacy/traces")]
+    [InlineData("/legacy/metrics")]
+    [InlineData("/legacy/does-not-exist")]
+    public Task NewDashboard_RedirectsLegacyRoutesToModernRoot(string legacyPath)
+        => AssertExperienceRouteAsync("modern", legacyPath, "/resources", expectLegacy: false);
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task CrossExperienceRedirect_DiscardsQueryAndFragment()
+    {
+        await RunTestAsync(async page =>
+        {
+            await SetExperienceAsync(page, "legacy");
+            await NavigateAcrossExperienceAsync(page, "/traces?resource=api#details");
+            await page.WaitForFunctionAsync(
+                "() => location.pathname === '/legacy' && location.search === '' && location.hash === ''");
+
+            await SetExperienceAsync(page, "modern");
+            await NavigateAcrossExperienceAsync(page, "/legacy/traces?resource=api#details");
+            await page.WaitForFunctionAsync(
+                "() => location.pathname === '/resources' && location.search === '' && location.hash === ''");
+        });
+    }
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
@@ -63,9 +80,10 @@ public sealed class DashboardExperienceTests : PlaywrightTestsBase<DashboardServ
         await RunTestAsync(async page =>
         {
             await SetExperienceAsync(page, experience);
-            await page.GotoAsync(requestedPath);
+            var response = await page.GotoAsync(requestedPath);
             await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == expectedPath);
 
+            Assert.Equal(200, response?.Status);
             await AssertSingleExperienceLayoutAsync(page, expectLegacy);
         });
     }
@@ -79,6 +97,19 @@ public sealed class DashboardExperienceTests : PlaywrightTestsBase<DashboardServ
             Value = experience,
             Url = baseUrl
         }]);
+    }
+
+    private static async Task NavigateAcrossExperienceAsync(IPage page, string url)
+    {
+        try
+        {
+            await page.GotoAsync(url, new() { WaitUntil = WaitUntilState.Commit });
+        }
+        catch (PlaywrightException exception) when (exception.Message.Contains("net::ERR_ABORTED", StringComparison.Ordinal))
+        {
+            // Chromium can report the source navigation as aborted when the server immediately redirects it
+            // to the selected experience root. The destination assertion below verifies the completed redirect.
+        }
     }
 
     private static async Task AssertSingleExperienceLayoutAsync(IPage page, bool expectLegacy)
