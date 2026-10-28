@@ -17,8 +17,8 @@
                     @GetTitle(context)
                 </span>
             </AspireTemplateColumn>
-            <AspireTemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogTimestampColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, TimeProvider.ToLocal(context.Start), MillisecondsDisplay.None, CultureInfo.CurrentCulture))" Tooltip="true">
-                @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, TimeProvider.ToLocal(context.Start), MillisecondsDisplay.Truncated)
+            <AspireTemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogTimestampColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, context.Start, MillisecondsDisplay.None, CultureInfo.CurrentCulture))" Tooltip="true">
+                @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, context.Start, MillisecondsDisplay.Truncated)
             </AspireTemplateColumn>
             <AspireTemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogValueColumnHeader)]">
                 @FormatMetricValue(context.Value)

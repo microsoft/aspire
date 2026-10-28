@@ -3,7 +3,7 @@
 
 using Aspire.Dashboard.Telemetry;
 
-namespace Aspire.Dashboard.Components.Pages;
+namespace Aspire.Dashboard.Components;
 
 public sealed class ComponentTelemetryContextProvider
 {

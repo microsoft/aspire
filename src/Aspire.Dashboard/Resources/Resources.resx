@@ -577,4 +577,34 @@
   <data name="ResourceOverviewBrowseMeters" xml:space="preserve">
     <value>Browse meters</value>
   </data>
+  <data name="MissingParametersCount" xml:space="preserve">
+    <value>{0} parameters need values</value>
+  </data>
+  <data name="MissingParameterCount" xml:space="preserve">
+    <value>{0} parameter needs a value</value>
+  </data>
+  <data name="MissingParametersReview" xml:space="preserve">
+    <value>Review missing parameters</value>
+  </data>
+  <data name="ParametersAllValuesSet" xml:space="preserve">
+    <value>All values are set</value>
+  </data>
+  <data name="ParameterValueRequired" xml:space="preserve">
+    <value>Value required</value>
+  </data>
+  <data name="ParameterValueSet" xml:space="preserve">
+    <value>Value set</value>
+  </data>
+  <data name="MissingParametersPanelDescription" xml:space="preserve">
+    <value>Enter the missing values together, then apply them without leaving the resource overview.</value>
+  </data>
+  <data name="MissingParametersCardTitle" xml:space="preserve">
+    <value>Missing parameter values</value>
+  </data>
+  <data name="MissingParametersSaveToUserSecrets" xml:space="preserve">
+    <value>Save values to user secrets</value>
+  </data>
+  <data name="MissingParametersSetValues" xml:space="preserve">
+    <value>Set parameter values</value>
+  </data>
 </root>

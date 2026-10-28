@@ -3,16 +3,22 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+#pragma warning disable ASPIRETERMINAL001 // Terminal APIs are experimental.
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var storefrontPromotion = builder.AddParameter("storefront-promotion", "Free shipping over $50");
-var lowStockThreshold = builder.AddParameter("low-stock-threshold", "5");
-var checkoutSigningKey = builder.AddParameter("checkout-signing-key", () => Guid.NewGuid().ToString(), secret: true);
+var storefrontPromotion = builder.AddParameter("storefront-promotion", "Free shipping over $50")
+                                .WithTags("Frontend", "Marketing");
+var lowStockThreshold = builder.AddParameter("low-stock-threshold", "5")
+                         .WithTags("Backend", "Inventory");
+var checkoutSigningKey = builder.AddParameter("checkout-signing-key", () => Guid.NewGuid().ToString(), secret: true)
+                          .WithTags("Backend", "Security");
 builder.AddParameter("support-contact-email")
-       .WithDescription("The customer support email address displayed by the storefront.");
+       .WithDescription("The customer support email address displayed by the storefront.")
+       .WithTags("Frontend", "Support");
 builder.AddParameter("storefront-theme", "system")
        .WithDescription("Choose the storefront color theme.")
+       .WithTags("Frontend", "Appearance")
        .WithCustomInput(parameter => new()
        {
            Name = parameter.Name,
@@ -28,6 +34,7 @@ builder.AddParameter("storefront-theme", "system")
        });
 builder.AddParameter("storefront-accent", "blue")
        .WithDescription("Choose a suggested accent or enter a custom value.")
+       .WithTags("Frontend", "Appearance")
        .WithCustomInput(parameter => new()
        {
            Name = parameter.Name,
@@ -44,6 +51,7 @@ builder.AddParameter("storefront-accent", "blue")
        });
 builder.AddParameter("recommendation-limit", "12")
        .WithDescription("The maximum number of recommendations to display.")
+       .WithTags("Backend", "Inventory")
        .WithCustomInput(parameter => new()
        {
            Name = parameter.Name,
@@ -54,6 +62,7 @@ builder.AddParameter("recommendation-limit", "12")
        });
 builder.AddParameter("maintenance-mode", "false")
        .WithDescription("Temporarily show the storefront maintenance experience.")
+       .WithTags("Frontend", "Operations")
        .WithCustomInput(parameter => new()
        {
            Name = parameter.Name,
@@ -63,6 +72,7 @@ builder.AddParameter("maintenance-mode", "false")
        });
 builder.AddParameter("storefront-certificate")
        .WithDescription("Upload the certificate used by the storefront.")
+       .WithTags("Frontend", "Security")
        .WithCustomInput(parameter => new()
        {
            Name = parameter.Name,
@@ -177,6 +187,27 @@ var frontend = builder.AddProject<Projects.MyFrontend>("frontend")
     // Add health relative URL (show in details only)
     .WithUrlForEndpoint("https", ep => new() { Url = "/health", DisplayText = "Health", DisplayLocation = UrlDisplayLocation.DetailsOnly })
     .WithHttpHealthCheck("/health");
+
+if (OperatingSystem.IsWindows())
+{
+    builder.AddExecutable("frontend-shell", "cmd.exe", @"..\MyFrontend")
+        .WithTags("Frontend", "Development")
+        .WithTerminal();
+
+    builder.AddExecutable("catalog-shell", "cmd.exe", @"..\CatalogService")
+        .WithTags("Backend", "Development")
+        .WithTerminal();
+}
+else
+{
+    builder.AddExecutable("frontend-shell", "/bin/bash", @"..\MyFrontend", "-i", "-l")
+        .WithTags("Frontend", "Development")
+        .WithTerminal();
+
+    builder.AddExecutable("catalog-shell", "/bin/bash", @"..\CatalogService", "-i", "-l")
+        .WithTags("Backend", "Development")
+        .WithTerminal();
+}
 
 builder.AddProject<Projects.OrderProcessor>("orderprocessor", launchProfileName: "OrderProcessor")
     .WithReference(messaging)

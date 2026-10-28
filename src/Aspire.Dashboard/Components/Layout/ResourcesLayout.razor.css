@@ -1,4 +1,4 @@
-﻿.resources-layout {
+.resources-layout {
     /* --resource-pane-expanded-width is set inline once the user resizes the pane. */
     --resource-pane-width: var(--resource-pane-expanded-width, 290px);
     --resource-brand-soft: color-mix(in srgb, var(--colorBrandBackground) 14%, transparent);
@@ -207,7 +207,7 @@
 }
 
 .resource-tag-header:hover {
-    background: var(--datagrid-hover-color);
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
 }
 
 .resource-tag-header.selected {
@@ -308,7 +308,7 @@
 }
 
 .resource-row:hover {
-    background: var(--datagrid-hover-color);
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
 }
 
 .resource-row.selected {
@@ -414,6 +414,94 @@
     margin-bottom: 9px;
 }
 
+/* The toggles sit between the search row and the list, outside the scrolling list. A scrollbar in the list never
+   changes their width (which would change which labels fit), and the divider marks where the scrolling begins. */
+.resource-pane-kinds {
+    flex: 0 0 auto;
+    /* The same inline padding as the search row, so the toggles line up with the search box on the left and the
+       grouping button on the right. */
+    padding: 2px 12px 10px;
+    border-bottom: 1px solid var(--colorNeutralStroke2);
+    container-type: inline-size;
+}
+/* Toggles for the kinds of items the pane lists. They look like the layout switcher in the page header: a quiet
+   tray with icon buttons, where an on button is the raised one with a brand-colored icon. Every button is the same
+   size in both states, so toggling never shifts the list. The name and count are in the tooltip. */
+.resource-kind-toggles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 8px;
+    background: var(--colorNeutralBackground2);
+}
+
+.resource-kind-toggle {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--colorNeutralForeground3);
+    cursor: pointer;
+}
+
+.resource-kind-toggle:hover {
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-kind-toggle.on {
+    background: var(--colorNeutralBackground1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
+    color: var(--colorBrandForeground1);
+}
+
+.resource-kind-toggle.on:hover {
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
+    color: var(--colorBrandForeground1);
+}
+
+.resource-kind-toggle:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+.resource-selection-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 8px 4px 0;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--fontSizeBase200);
+}
+
+.resource-selection-clear {
+    padding: 2px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--colorBrandForegroundLink);
+    font: inherit;
+    cursor: pointer;
+}
+
+.resource-selection-clear:hover {
+    background: var(--colorNeutralBackground1Hover);
+    text-decoration: underline;
+}
+
+.resource-selection-clear:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
 .resource-row-all::after {
     content: "";
     position: absolute;
@@ -470,6 +558,11 @@
     white-space: nowrap;
 }
 
+.resource-row-detail > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .resource-row-endpoint {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -478,6 +571,26 @@
 .resource-row-type {
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.resource-pane-counts {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.resource-pane-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: 0 0 auto;
+    color: var(--colorNeutralForeground2);
+    font-variant-numeric: tabular-nums;
+}
+
+.resource-pane-count ::deep svg {
+    color: var(--colorNeutralForeground3);
 }
 
 .error-badge {
@@ -631,6 +744,8 @@
     align-items: center;
     gap: 10px;
     min-width: 0;
+    /* Lets header actions (such as the missing parameters notice) condense with @container as the row narrows. */
+    container-type: inline-size;
 }
 
 .resource-header-icon {
@@ -815,8 +930,36 @@
     width: max-content;
     max-width: 100%;
     min-width: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
+    flex: 0 1 auto;
+    overflow: hidden;
+}
+
+/* Tabs that don't fit are hidden from the right by registerTabOverflow and listed in the "..." menu instead. */
+.resource-tabs-nav ::deep fluent-tab[data-tab-overflow] {
+    display: none;
+}
+
+.resource-tabs-overflow {
+    display: none;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+.resource-tabs-overflow.has-overflow {
+    display: flex;
+}
+
+.resource-tabs-nav .resource-tabs-overflow ::deep .aspire-menu-button {
+    display: inline-flex;
+}
+
+.resource-tabs-nav .resource-tabs-overflow ::deep .resource-tabs-overflow-button {
+    color: var(--colorNeutralForeground2);
+}
+
+/* The current page's tab is in the menu, so the button takes the active tab's accent. */
+.resource-tabs-overflow.has-active ::deep .resource-tabs-overflow-button {
+    color: var(--colorBrandForeground1);
 }
 
 /* Wraps the tab row in its own layout container so a container query can react to the row's
@@ -913,7 +1056,7 @@
     color: var(--colorBrandForeground1);
 }
 
-@container (max-width: 520px) {
+@container (max-width: 200px) {
     .resource-tabs-nav ::deep .resources-tab-header {
         display: none;
     }
@@ -921,25 +1064,10 @@
     .resource-tabs-nav ::deep .aspire-menu-button {
         display: inline-flex;
     }
-}
 
-/* Tabs the selected resource doesn't support (no telemetry) stay visible so the tab row keeps its
-   shape, but read as unavailable. */
-.resource-tabs-nav ::deep fluent-tab[disabled],
-.resource-tabs-nav ::deep fluent-tab[aria-disabled="true"] {
-    cursor: not-allowed;
-    opacity: 0.45;
-    pointer-events: auto;
-}
-
-.resource-tabs-nav ::deep fluent-tab[disabled] *,
-.resource-tabs-nav ::deep fluent-tab[aria-disabled="true"] * {
-    cursor: not-allowed;
-}
-
-.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item:state(disabled) {
-    cursor: not-allowed;
-    pointer-events: auto;
+    .resource-tabs-nav .resource-tabs-overflow.has-overflow {
+        display: none;
+    }
 }
 
 .resource-tabs-nav ::deep .resource-tab-error-count {
@@ -1137,6 +1265,7 @@
         padding: 0 16px;
         font-size: var(--fontSizeBase400);
     }
+
 }
 
 /* Fluent UI has no 16px GroupList icon. Draw the 20px one at 16px so the grouping button matches the

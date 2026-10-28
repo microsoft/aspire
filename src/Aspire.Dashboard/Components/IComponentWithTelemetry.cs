@@ -3,7 +3,7 @@
 
 using Aspire.Dashboard.Telemetry;
 
-namespace Aspire.Dashboard.Components.Pages;
+namespace Aspire.Dashboard.Components;
 
 /// <summary>
 /// Interface for components that would like to opt-in to telemetry events, capturing

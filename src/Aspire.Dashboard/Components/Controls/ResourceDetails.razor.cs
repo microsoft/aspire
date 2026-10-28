@@ -5,7 +5,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Controls.PropertyValues;
-using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;

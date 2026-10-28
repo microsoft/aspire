@@ -12,6 +12,7 @@ using Aspire.Dashboard.Authentication.Connection;
 using Aspire.Dashboard.Authentication.OpenIdConnect;
 using Aspire.Dashboard.Authentication.OtlpApiKey;
 using Aspire.Dashboard.Components;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Shared;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Configuration;
@@ -145,6 +146,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Login))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Metrics))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(NotFound))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(ParametersRedirect))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(ResourceOverview))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Pages.Resources))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(StructuredLogs))]
@@ -157,6 +159,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         Action<WebApplicationBuilder>? preConfigureBuilder = null,
         WebApplicationOptions? options = null)
     {
+        DashboardExperienceComponents.PreserveLegacyComponents();
+
         var startupTimestamp = Stopwatch.GetTimestamp();
 
         // Workaround MaxItemCount regression. In .NET 8 the value is set via AppContext.
@@ -229,6 +233,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Telemetry must be available before options validation so failed startup attempts
         // can be recorded even though the host never starts.
         builder.Services.TryAddScoped<ComponentTelemetryContextProvider>();
+        builder.Services.TryAddSingleton(new DashboardExperienceAvailability(DashboardExperienceComponents.IsLegacyAvailable));
         builder.Services.TryAddSingleton<DashboardTelemetryService>();
         builder.Services.TryAddSingleton(services => DashboardTelemetryConfiguration.Create(
             services.GetRequiredService<IConfiguration>()));
@@ -449,8 +454,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             () => _otlpServiceGrpcEndPointAccessor?.Invoke(),
             () => _otlpServiceHttpEndPointAccessor?.Invoke()));
         builder.Services.AddScoped<DashboardMessageBarService>();
+        builder.Services.AddScoped<ParameterInteractionState>();
         builder.Services.AddScoped<ResourceMenuBuilder>();
         builder.Services.AddScoped<ResourcePaneState>();
+        builder.Services.AddScoped<TerminalDockState>();
         builder.Services.AddScoped<DashboardViewPreferences>();
         builder.Services.AddScoped<StructuredLogMenuBuilder>();
         builder.Services.AddScoped<SpanMenuBuilder>();
@@ -571,6 +578,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
 
         _app.UseMiddleware<ValidateTokenMiddleware>();
+        _app.UseMiddleware<DashboardExperienceRedirectMiddleware>();
 
         // Configure the HTTP request pipeline.
         if (!_app.Environment.IsDevelopment())

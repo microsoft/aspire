@@ -176,5 +176,50 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("VirtualizedLimitText", resourceCulture);
             }
         }
+        /// <summary>
+        ///   Looks up a localized string similar to {0} spans.
+        /// </summary>
+        public static string TracesResourceSpans {
+            get {
+                return ResourceManager.GetString("TracesResourceSpans", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Total: {0}.
+        /// </summary>
+        public static string TracesTotalTraces {
+            get {
+                return ResourceManager.GetString("TracesTotalTraces", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Errored: {0}.
+        /// </summary>
+        public static string TracesTotalErroredTraces {
+            get {
+                return ResourceManager.GetString("TracesTotalErroredTraces", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Name: {0}.
+        /// </summary>
+        public static string TracesFullName {
+            get {
+                return ResourceManager.GetString("TracesFullName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Trace Id: {0}.
+        /// </summary>
+        public static string TracesTraceId {
+            get {
+                return ResourceManager.GetString("TracesTraceId", resourceCulture);
+            }
+        }
+
     }
 }

@@ -67,6 +67,10 @@
 }
 
 /* Tags fit on one line next to the card title, so the card stays short. */
+.overview-parameter-tags {
+    margin-bottom: 14px;
+}
+
 .overview-tags-card {
     flex-direction: row;
     flex-wrap: wrap;
@@ -444,6 +448,29 @@ a.overview-stat:hover .overview-stat-label {
     font-family: var(--aspire-font-mono);
     font-size: 11.5px;
     line-height: 1.6;
+}
+
+.overview-terminal {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--terminal-background, var(--colorNeutralBackground1));
+}
+
+.overview-terminal ::deep .terminal-view,
+.overview-terminal ::deep .terminal-frame {
+    height: 100%;
+}
+
+.overview-terminal ::deep .terminal-footer {
+    min-height: 36px;
+    padding: 3px 8px;
+    border-top: 1px solid var(--colorNeutralStroke3);
+    background: color-mix(in srgb, var(--terminal-background, var(--colorNeutralBackground1)) 82%, var(--colorNeutralBackground2));
+}
+
+.overview-terminal ::deep .terminal-focus-hint {
+    font-size: 11.5px;
 }
 
 .overview-console-line {

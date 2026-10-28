@@ -1,9 +1,10 @@
-@using Aspire.Dashboard.Components.CustomIcons
+﻿@using Aspire.Dashboard.Components.CustomIcons
 @using Aspire.Dashboard.Components.Dialogs
 @using Aspire.Dashboard.Components.Interactions
 @using Aspire.Dashboard.Resources
 @using Microsoft.AspNetCore.Components.Sections
 @inject IStringLocalizer<Dialogs> DialogsLoc
+@inject IStringLocalizer<TerminalStrings> TerminalLoc
 @inherits LayoutComponentBase
 
 <div class="layout @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
@@ -19,7 +20,7 @@
                     <AspireLogo />
                 </a>
             </div>
-            <a href="/" class="application-name" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
+            <a href="/" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="after" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
                 <ApplicationName/>
             </a>
             <div class="header-context">
@@ -35,18 +36,26 @@
             else if (RunStore.SupportsRunSelection)
             {
                 var selectedRun = RunSelection.SelectedRun;
-                @if (selectedRun.IsCurrent)
-                {
-                    <DashboardRunSelect ButtonId="@RunSelectButtonId"
-                                        SelectedRunIsCurrent="true"
-                                        SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
-                                        OnClick="@LaunchRecordingsAsync" />
-                }
-                else
+                <DashboardRunSelect ButtonId="@RunSelectButtonId"
+                                    SelectedRunIsCurrent="@selectedRun.IsCurrent"
+                                    SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
+                                    OnClick="@LaunchRecordingsAsync" />
+                @if (!selectedRun.IsCurrent)
                 {
                     <DashboardRunPill SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
                                       OnClick="@LaunchRecordingsAsync" />
                 }
+            }
+            @if (_navigationAvailability.HasResourceTerminals)
+            {
+                <FluentButton Class="header-button"
+                              Appearance="ButtonAppearance.Default"
+                              OnClick="ToggleTerminalDockAsync"
+                              data-tooltip="@TerminalLoc[nameof(TerminalStrings.MainLayoutToggleTerminalDock)]"
+                              aria-label="@TerminalLoc[nameof(TerminalStrings.MainLayoutToggleTerminalDock)]"
+                              aria-keyshortcuts="`">
+                    <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="22px" Color="Color.Default" />
+                </FluentButton>
             }
             <FluentButton Class="header-button"
                           Id="@HelpButtonId"
@@ -75,7 +84,7 @@
             </a>
         </div>
         <header>
-            <a href="/" class="application-name" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
+            <a href="/" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="after" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
                 <ApplicationName/>
             </a>
             <div class="flex-filler"></div>
@@ -107,7 +116,6 @@
 
         <MobileNavMenu
             HasResourceTerminals="@_navigationAvailability.HasResourceTerminals"
-            Availability="@_navigationAvailability"
             IsNavMenuOpen="_isNavMenuOpen"
             CloseNavMenu="@CloseMobileNavMenu"
             LaunchHelpAsync="@LaunchHelpAsync"
@@ -141,7 +149,7 @@
     {
         @* Removing the dock cancels its selected-run subscription and shortcut. Returning to the live run starts a
            new subscription rather than reusing the stream chosen for a previous selection. *@
-        <TerminalDock @key="RunSelection.SelectedRun.RunId" />
+        <TerminalDock @ref="_terminalDock" @key="RunSelection.SelectedRun.RunId" />
     }
     <ResourceServiceConnectionProvider />
     @if (IsTerminalDockEnabled)

@@ -1367,5 +1367,95 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("WaitingHealthDataStatusMessage", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} parameters need values.
+        /// </summary>
+        public static string MissingParametersCount {
+            get {
+                return ResourceManager.GetString("MissingParametersCount", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} parameter needs a value.
+        /// </summary>
+        public static string MissingParameterCount {
+            get {
+                return ResourceManager.GetString("MissingParameterCount", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Review missing parameters.
+        /// </summary>
+        public static string MissingParametersReview {
+            get {
+                return ResourceManager.GetString("MissingParametersReview", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to All values are set.
+        /// </summary>
+        public static string ParametersAllValuesSet {
+            get {
+                return ResourceManager.GetString("ParametersAllValuesSet", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Value required.
+        /// </summary>
+        public static string ParameterValueRequired {
+            get {
+                return ResourceManager.GetString("ParameterValueRequired", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Value set.
+        /// </summary>
+        public static string ParameterValueSet {
+            get {
+                return ResourceManager.GetString("ParameterValueSet", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Enter the missing values together, then apply them without leaving the resource overview..
+        /// </summary>
+        public static string MissingParametersPanelDescription {
+            get {
+                return ResourceManager.GetString("MissingParametersPanelDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Missing parameter values.
+        /// </summary>
+        public static string MissingParametersCardTitle {
+            get {
+                return ResourceManager.GetString("MissingParametersCardTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Save values to user secrets.
+        /// </summary>
+        public static string MissingParametersSaveToUserSecrets {
+            get {
+                return ResourceManager.GetString("MissingParametersSaveToUserSecrets", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Set parameter values.
+        /// </summary>
+        public static string MissingParametersSetValues {
+            get {
+                return ResourceManager.GetString("MissingParametersSetValues", resourceCulture);
+            }
+        }
     }
 }

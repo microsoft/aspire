@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -15,6 +15,7 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Localization;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -27,6 +28,7 @@ namespace Aspire.Dashboard.Components.Controls;
 public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 {
     private const string GraphContainerId = "overviewResourcesGraphContainer";
+    private const string ResourceContextMenuHeaderId = "application-summary-resource-context-menu-header";
     private const int RecentItemCount = 5;
     private const int InsightItemCount = 4;
     internal const int ActivityBucketCount = 30;
@@ -38,6 +40,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     // Metrics arrive every few seconds from each resource, so coalesce telemetry notifications to bound the
     // number of repository queries the page runs.
     private static readonly TimeSpan s_telemetryRefreshDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan s_ageRefreshInterval = TimeSpan.FromSeconds(30);
     private static readonly List<TelemetryFilter> s_errorLogFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.GreaterThanOrEqual, Value = nameof(LogLevel.Error) }];
     private static readonly List<TelemetryFilter> s_warningLogFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.Equals, Value = nameof(LogLevel.Warning) }];
     private static readonly FieldTelemetryFilter s_failedTraceFilter = new() { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = nameof(OtlpSpanStatusCode.Error) };
@@ -46,6 +49,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly CancellationTokenSource _cts = new();
     private Task? _resourceSubscriptionTask;
+    private Task? _ageRefreshTask;
     private Subscription? _logsSubscription;
     private Subscription? _tracesSubscription;
     private Subscription? _metricsSubscription;
@@ -59,6 +63,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private bool _graphInitializing;
     private bool _graphInitialized;
     private bool _isDisposing;
+    private AspireMenu? _contextMenu;
+    private bool _contextMenuOpen;
+    private readonly List<MenuButtonItem> _contextMenuItems = [];
     /// <summary>
     /// Gets or sets the resources to summarize, by name. <see langword="null"/> summarizes every resource.
     /// </summary>
@@ -90,6 +97,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     public required DashboardCommandExecutor DashboardCommandExecutor { get; init; }
 
     [Inject]
+    public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
+
+    [Inject]
     public required DashboardViewPreferences ViewPreferences { get; init; }
 
     [Inject]
@@ -110,13 +120,41 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
+    [CascadingParameter]
+    public required ViewportInformation ViewportInformation { get; init; }
+
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
     private IReadOnlyList<IconToggleOption<GroupOverview>> OverviewOptions =>
     [
+        new(GroupOverview.Cards, new Icons.Regular.Size20.Grid(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewCards)]),
         new(GroupOverview.Summary, new Icons.Regular.Size20.Home(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
-        new(GroupOverview.Graph, new Icons.Regular.Size20.ShareAndroid(), Loc[nameof(Dashboard.Resources.Resources.GraphPageTitle)]),
-        new(GroupOverview.Cards, new Icons.Regular.Size20.Grid(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewCards)])
+        new(GroupOverview.Graph, new Icons.Regular.Size20.ShareAndroid(), Loc[nameof(Dashboard.Resources.Resources.GraphPageTitle)])
     ];
+
+    private IconToggleOption<GroupOverview> GetCurrentOverviewOption() =>
+        OverviewOptions.First(option => option.Value == ViewPreferences.GroupOverview);
+
+    private int GetMissingParameterCount() =>
+        _resourceByName.Values.Count(resource => resource.HasMissingParameterValueState() && IsInScope(resource));
+
+    private string GetMissingParametersUrl() =>
+        DashboardUrls.AddResourceSelection(
+            DashboardUrls.ResourceListUrl(),
+            _resourceByName.Values
+                .Where(resource => resource.HasMissingParameterValueState() && IsInScope(resource))
+                .OrderBy(resource => resource.DisplayName, StringComparers.ResourceName)
+                .Select(resource => resource.Name));
+
+    private IList<MenuButtonItem> GetOverviewMenuItems() =>
+        OverviewOptions.Select(option => new MenuButtonItem
+        {
+            Text = option.Text,
+            StartIcon = option.Icon,
+            Role = MenuItemRole.Radio,
+            Checked = option.Value == ViewPreferences.GroupOverview,
+            OnClick = () => ViewPreferences.SetGroupOverviewAsync(option.Value),
+            RenderKey = option.Value
+        }).ToList();
 
     private string CardDensityClass => ViewPreferences.Density switch
     {
@@ -125,6 +163,12 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _ => "resource-card-grid-comfortable"
     };
 
+    private string? GetResourceStartAge(ResourceViewModel resource) =>
+        resource.StartTimeStamp is { } startTimeStamp
+            ? DashboardRunSelect.FormatRunAge(new DateTimeOffset(startTimeStamp), TimeProvider.GetUtcNow(), LayoutLoc)
+            : null;
+
+    // The card shows how long ago the resource started. The tooltip adds the exact time: "5 minutes ago (10:34:56 AM)".
     private string? GetResourceStartTimeTooltip(ResourceViewModel resource)
     {
         if (resource.StartTimeStamp is not { } startTimeStamp)
@@ -132,8 +176,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             return null;
         }
 
-        var age = DashboardRunSelect.FormatRunAge(new DateTimeOffset(startTimeStamp), TimeProvider.GetUtcNow(), LayoutLoc);
-        return $"{LayoutLoc[nameof(Dashboard.Resources.Layout.ResourceHeaderStarted)]} {age}";
+        // The resource server's time stamp has second precision, so no milliseconds.
+        return $"{GetResourceStartAge(resource)} ({FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTimeStamp)})";
     }
 
     protected override async Task OnInitializedAsync()
@@ -158,6 +202,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             _resourceByName[resource.Name] = resource;
         }
         _isLoaded = true;
+
+        _ageRefreshTask = RefreshAgesPeriodicallyAsync(_cts.Token);
 
         _resourceSubscriptionTask = Task.Run(async () =>
         {
@@ -247,8 +293,11 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private void QueueTelemetryRefresh()
     {
-        if (Interlocked.Exchange(ref _telemetryRefreshPending, 1) == 1)
+        // Single-flight: the gate (1) is held through delay, load and publish. Notifications that
+        // arrive while a refresh is running set the dirty flag (2) so exactly one trailing refresh runs.
+        if (Interlocked.CompareExchange(ref _telemetryRefreshPending, 1, 0) != 0)
         {
+            Interlocked.CompareExchange(ref _telemetryRefreshPending, 2, 1);
             return;
         }
 
@@ -256,17 +305,21 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         {
             try
             {
-                await Task.Delay(s_telemetryRefreshDelay, _cts.Token).ConfigureAwait(false);
-                Interlocked.Exchange(ref _telemetryRefreshPending, 0);
-
-                var telemetry = await LoadTelemetryAsync(_cts.Token).ConfigureAwait(false);
-                var unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
-                await InvokeAsync(() =>
+                do
                 {
-                    _telemetry = telemetry;
-                    _unviewedErrorCounts = unviewedErrorCounts;
-                    StateHasChanged();
-                }).ConfigureAwait(false);
+                    await Task.Delay(s_telemetryRefreshDelay, _cts.Token).ConfigureAwait(false);
+                    Interlocked.Exchange(ref _telemetryRefreshPending, 1);
+
+                    var telemetry = await LoadTelemetryAsync(_cts.Token).ConfigureAwait(false);
+                    var unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
+                    await InvokeAsync(() =>
+                    {
+                        _telemetry = telemetry;
+                        _unviewedErrorCounts = unviewedErrorCounts;
+                        StateHasChanged();
+                    }).ConfigureAwait(false);
+                }
+                while (Interlocked.CompareExchange(ref _telemetryRefreshPending, 0, 1) == 2);
             }
             catch (OperationCanceledException)
             {
@@ -447,6 +500,16 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         var totalRequests = okBuckets.Sum() + errorBuckets.Sum();
         var totalErrors = errorBuckets.Sum();
         var windowMinutes = s_activityBucketSize.TotalMinutes * ActivityBucketCount;
+        if (spanTotal > spanCount && spans.Count > 0)
+        {
+            // Only the newest MaxActivitySpans were sampled, so the rate must be computed over the
+            // interval those spans actually cover rather than the full window.
+            var oldestSampled = spans.Min(s => s.StartTime);
+            if (oldestSampled > windowStart)
+            {
+                windowMinutes = Math.Max(s_activityBucketSize.TotalMinutes, (windowEnd - oldestSampled).TotalMinutes);
+            }
+        }
 
         return new HomeActivity
         {
@@ -556,6 +619,53 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private Task ExecuteCommandAsync(ResourceViewModel resource, CommandViewModel command) =>
         DashboardCommandExecutor.ExecuteAsync(resource, command, GetResourceName);
+
+    private async Task ShowContextMenuAsync(string id, int clientX, int clientY)
+    {
+        if (_contextMenu is not { } contextMenu || !_resourceByName.TryGetValue(id, out var resource))
+        {
+            return;
+        }
+
+        _contextMenuItems.Clear();
+        _contextMenuItems.Add(new MenuButtonItem
+        {
+            Id = ResourceContextMenuHeaderId,
+            IsHeader = true,
+            Text = GetResourceName(resource),
+            Icon = ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)
+        });
+
+        ResourceMenuBuilder.AddMenuItems(
+            _contextMenuItems,
+            resource,
+            _resourceByName,
+            EventCallback.Factory.Create(this, () =>
+            {
+                NavigateToResource(resource);
+                return Task.CompletedTask;
+            }),
+            EventCallback.Factory.Create<CommandViewModel>(this, command => ExecuteCommandAsync(resource, command)),
+            (menuResource, command) => DashboardCommandExecutor.IsExecuting(menuResource.Name, command.Name),
+            showViewDetails: true,
+            showTerminalItem: true,
+            showConsoleLogsItem: true,
+            showUrls: true);
+
+        await contextMenu.OpenAsync(clientX, clientY);
+        StateHasChanged();
+    }
+
+    private async Task ContextMenuOpenChangedAsync(bool open)
+    {
+        _contextMenuOpen = open;
+        if (_jsModule is not null)
+        {
+            await _jsModule.InvokeVoidAsync("updateResourcesGraphContextMenu", open);
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
 
     private Task ExecuteCardCommandAsync(ResourceViewModel resource, CommandViewModel command)
     {
@@ -748,6 +858,22 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         await UpdateResourceGraphResourcesAsync();
     });
 
+    // The cards show how long ago a resource started, so re-render now and then to keep that current.
+    private async Task RefreshAgesPeriodicallyAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(s_ageRefreshInterval, TimeProvider);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         _isDisposing = true;
@@ -757,6 +883,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _tracesSubscription?.Dispose();
         _metricsSubscription?.Dispose();
         await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
+        await TaskHelpers.WaitIgnoreCancelAsync(_ageRefreshTask);
         _resourcesInteropReference?.Dispose();
         if (_jsModule is not null)
         {
@@ -771,7 +898,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         public Task SelectResource(string id) => summary.SelectResourceAsync(id);
 
         [JSInvokable]
-        public Task ResourceContextMenu(string id, int _, int __, string? ___) => summary.SelectResourceAsync(id);
+        public Task ResourceContextMenu(string id, int clientX, int clientY, string? _) =>
+            summary.ShowContextMenuAsync(id, clientX, clientY);
     }
 
     private async Task SelectResourceAsync(string id)

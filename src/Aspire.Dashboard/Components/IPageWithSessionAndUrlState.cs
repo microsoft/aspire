@@ -5,7 +5,7 @@ using Aspire.Dashboard.Components.Layout;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 
-namespace Aspire.Dashboard.Components.Pages;
+namespace Aspire.Dashboard.Components;
 
 /// <summary>
 /// Represents a page that can contain state both in the url and in localstorage.

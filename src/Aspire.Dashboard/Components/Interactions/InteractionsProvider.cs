@@ -5,7 +5,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Net;
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Components.Pages;
+using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.Markdown;
@@ -74,6 +74,15 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
     [Inject]
     public required DashboardMessageBarService MessageService { get; init; }
+
+    [Inject]
+    public required IResourceRepository ResourceRepository { get; init; }
+
+    [Inject]
+    public required ParameterInteractionState ParameterInteractionState { get; init; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
     public required IStringLocalizer<Resources.Dialogs> Loc { get; init; }
@@ -204,27 +213,16 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                 }
                 else if (item.InputsDialog is not null)
                 {
-                    var vm = new InteractionsInputsDialogViewModel
+                    var vm = CreateInputsViewModel(item);
+                    if (IsNewDashboard && IsParameterInputsInteraction(item))
                     {
-                        Interaction = item,
-                        Message = GetMessageHtml(item),
-                        DashboardClient = DashboardClient,
-                        OnSubmitCallback = async (savedInteraction, update) =>
-                        {
-                            var request = new WatchInteractionsRequestUpdate
-                            {
-                                InteractionId = savedInteraction.InteractionId,
-                                InputsDialog = savedInteraction.InputsDialog,
-                                ResponseUpdate = update
-                            };
-
-                            await DashboardClient.SendInteractionRequestAsync(request, _cts.Token).ConfigureAwait(false);
-                        }
-                    };
+                        await InvokeAsync(() => ParameterInteractionState.SetCurrent(vm));
+                        continue;
+                    }
 
                     var dialogParameters = CreateDialogParameters(item, intent: null);
                     dialogParameters.Id = "interactions-input-dialog";
-                    dialogParameters.Width = "min(650px, 75vw)";
+                    dialogParameters.Width = "min(900px, 90vw)";
                     // A non-cancelled result means the form submission already sent its request.
                     dialogParameters.OnDialogResult = CreateDialogResultCallback(dialogResult =>
                         dialogResult.Cancelled ? CreateCompletionRequest(item.InteractionId) : null);
@@ -319,6 +317,46 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
         return InteractionMarkdownHelper.ToHtml(_markdownProcessor, item.Message);
     }
 
+    private bool IsNewDashboard =>
+        !NavigationManager.ToBaseRelativePath(NavigationManager.Uri).StartsWith("legacy", StringComparison.OrdinalIgnoreCase);
+
+    private InteractionsInputsDialogViewModel CreateInputsViewModel(WatchInteractionsResponseUpdate item) =>
+        new()
+        {
+            Interaction = item,
+            Message = GetMessageHtml(item),
+            DashboardClient = DashboardClient,
+            OnSubmitCallback = async (savedInteraction, update) =>
+            {
+                var request = new WatchInteractionsRequestUpdate
+                {
+                    InteractionId = savedInteraction.InteractionId,
+                    InputsDialog = savedInteraction.InputsDialog,
+                    ResponseUpdate = update
+                };
+
+                await DashboardClient.SendInteractionRequestAsync(request, _cts.Token).ConfigureAwait(false);
+            }
+        };
+
+    private bool IsParameterInputsInteraction(WatchInteractionsResponseUpdate item)
+    {
+        var inputNames = item.InputsDialog?.InputItems
+            .Where(input => !string.Equals(input.Name, "SaveToUserSecrets", StringComparisons.InteractionInputName))
+            .Select(input => input.Name)
+            .ToList();
+        if (inputNames is not { Count: > 0 })
+        {
+            return false;
+        }
+
+        var missingParameterNames = ResourceRepository.GetResources()
+            .Where(resource => resource.IsParameter && resource.HasMissingParameterValueState())
+            .Select(resource => resource.Name)
+            .ToHashSet(StringComparers.ResourceName);
+        return inputNames.All(missingParameterNames.Contains);
+    }
+
     private async Task WatchInteractionsAsync()
     {
         await DashboardClient.WhenConnected.WaitAsync(_cts.Token).ConfigureAwait(false);
@@ -335,7 +373,11 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     case WatchInteractionsResponseUpdate.KindOneofCase.InputsDialog:
                     case WatchInteractionsResponseUpdate.KindOneofCase.PromptProgress:
                     case WatchInteractionsResponseUpdate.KindOneofCase.PromptTerminal:
-                        if (_interactionDialogReference != null &&
+                        if (ParameterInteractionState.Current?.Interaction.InteractionId == item.InteractionId)
+                        {
+                            await ParameterInteractionState.Current.UpdateInteractionAsync(item);
+                        }
+                        else if (_interactionDialogReference != null &&
                             _interactionDialogReference.InteractionId == item.InteractionId)
                         {
                             // Reconnection replays pending interactions. Update the open view instead of queuing
@@ -402,6 +444,8 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                                     AllowDismiss = item.ShowDismiss,
                                     LinkText = notification.LinkText,
                                     LinkUrl = notification.LinkUrl,
+                                    LinkAsAction = notification.LinkUrl?.StartsWith("/", StringComparison.Ordinal) == true,
+                                    LinkActionResult = notification.LinkUrl?.StartsWith("/resources?resource=", StringComparison.OrdinalIgnoreCase) == true ? true : null,
                                     PrimaryAction = primaryButtonText,
                                     SecondaryAction = secondaryButtonText
                                 },
@@ -412,6 +456,23 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                         Debug.Assert(message != null, "Message should have been created in UI thread.");
                         _openMessageBars.Add(new InteractionMessageBarReference(item.InteractionId, message, CreateTelemetryContext(TelemetryComponentIds.InteractionMessageBar)));
 
+                        if (IsNewDashboard &&
+                            notification.LinkUrl?.StartsWith("/resources?resource=", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            var parameterNotification = notification.Clone();
+                            await InvokeAsync(() => ParameterInteractionState.SetBeginInteraction(async () =>
+                            {
+                                parameterNotification.Result = true;
+                                await DashboardClient.SendInteractionRequestAsync(
+                                    new WatchInteractionsRequestUpdate
+                                    {
+                                        InteractionId = item.InteractionId,
+                                        Notification = parameterNotification
+                                    },
+                                    _cts.Token).ConfigureAwait(false);
+                            }));
+                        }
+
                         // Don't await the result because the watcher must continue processing server updates while the message bar is open.
                         // The observer handles and logs its own exceptions.
                         _ = ObserveNotificationResultAsync(item, notification, message);
@@ -419,6 +480,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     case WatchInteractionsResponseUpdate.KindOneofCase.Complete:
                         // Complete interaction.
                         _pendingInteractions.Remove(item.InteractionId);
+                        await InvokeAsync(() => ParameterInteractionState.Clear(item.InteractionId));
 
                         // Close the interaction's dialog if it is open.
                         if (_interactionDialogReference?.InteractionId == item.InteractionId)

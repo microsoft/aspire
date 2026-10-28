@@ -21,7 +21,7 @@ public class DesktopNavMenuTests : DashboardTestContext
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public void TerminalsNavigation_IsConditional(bool enabled, bool hasTerminals)
+    public void Navigation_ReflectsAppHostMode(bool enabled, bool hasTerminals)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -40,7 +40,7 @@ public class DesktopNavMenuTests : DashboardTestContext
         var expected = new List<string>();
         if (enabled)
         {
-            expected.AddRange([DashboardUrls.ResourceListUrl(), DashboardUrls.ParametersUrl()]);
+            expected.Add(DashboardUrls.ResourceListUrl());
             if (hasTerminals)
             {
                 expected.Add(DashboardUrls.TerminalsUrl());
@@ -98,24 +98,15 @@ public class DesktopNavMenuTests : DashboardTestContext
     }
 
     [Fact]
-    public void EmptyParametersAndTelemetrySources_AreDisabledWithTheReason()
+    public void EmptyTelemetrySources_StayEnabled()
     {
         RenderNavMenu(DashboardUrls.ResourceListUrl());
-        var cut = Render<DesktopNavMenu>(builder => builder.Add(p => p.Availability, new NavigationAvailability(HasResourceTerminals: false, HasParameters: false, HasTelemetrySources: false)));
+        var cut = Render<DesktopNavMenu>();
 
-        Assert.Equal(["desktop-nav-parameters", "desktop-nav-telemetry"], cut.FindAll(".desktop-nav-item.disabled").Select(item => item.Id));
-        var parameters = cut.Find("#desktop-nav-parameters");
-        Assert.Equal("span", parameters.LocalName);
-        Assert.Equal(Resources.Layout.NavMenuParametersTab, parameters.TextContent.Trim());
-        Assert.Equal("true", parameters.GetAttribute("aria-disabled"));
-        Assert.Equal(Resources.Layout.NavMenuParametersTab, parameters.GetAttribute("aria-label"));
-        Assert.Equal(Resources.Layout.NavMenuNoParameters, parameters.GetAttribute("aria-description"));
-        Assert.Equal(Resources.Layout.TelemetryPaneNoSources, cut.Find("#desktop-nav-telemetry").GetAttribute("aria-description"));
-
-        cut.Render(builder => builder.Add(p => p.Availability, new NavigationAvailability(HasResourceTerminals: false, HasParameters: true, HasTelemetrySources: true)));
-
+        var telemetry = cut.Find("#desktop-nav-telemetry");
+        Assert.Equal(DashboardUrls.TelemetrySourcesUrl(), telemetry.GetAttribute("href"));
+        Assert.Null(telemetry.GetAttribute("aria-disabled"));
         Assert.Empty(cut.FindAll(".desktop-nav-item.disabled"));
-        Assert.Equal(DashboardUrls.ParametersUrl(), cut.Find("#desktop-nav-parameters").GetAttribute("href"));
     }
 
     private void RenderNavMenu(string url)

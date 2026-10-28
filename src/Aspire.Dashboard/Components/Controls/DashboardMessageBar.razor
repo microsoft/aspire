@@ -22,7 +22,7 @@
                 @Content.Message.TrimEnd()
             }
         </span>
-        @if (!string.IsNullOrEmpty(Content.LinkText) && !string.IsNullOrEmpty(Content.LinkUrl))
+        @if (!Content.LinkAsAction && !string.IsNullOrEmpty(Content.LinkText) && !string.IsNullOrEmpty(Content.LinkUrl))
         {
             @* Message bar links are specified by application code, so they don't need automatic URL sanitization. *@
             <span class="dashboard-message-bar-link">
@@ -31,6 +31,14 @@
         }
     </div>
     <div class="dashboard-message-bar-actions">
+        @if (Content.LinkAsAction && !string.IsNullOrEmpty(Content.LinkText) && !string.IsNullOrEmpty(Content.LinkUrl))
+        {
+            <a class="dashboard-message-bar-link-action"
+               href="@Content.LinkUrl"
+               @onclick="@(() => CloseAsync(Content.LinkActionResult))">
+                @Content.LinkText
+            </a>
+        }
         @if (!string.IsNullOrEmpty(Content.PrimaryAction))
         {
             <FluentButton Class="aspire-compact-button aspire-neutral-button dashboard-message-bar-action" OnClick="@(() => CloseAsync(true))">@Content.PrimaryAction</FluentButton>

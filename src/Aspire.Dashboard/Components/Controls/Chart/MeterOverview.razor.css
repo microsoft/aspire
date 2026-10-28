@@ -65,6 +65,36 @@
     white-space: nowrap;
 }
 
+/* The source resource of an instrument, shown when a list mixes instruments from several resources. */
+.meter-card-resource {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: 6px;
+    max-width: calc(100% - 24px);
+    margin-bottom: 4px;
+    padding: 1px 8px 1px 6px;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 999px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: var(--type-ramp-minus-1-font-size);
+    line-height: 16px;
+}
+
+.meter-card-resource-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.meter-card-resource-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .meter-card-header {
     display: flex;
     align-items: center;

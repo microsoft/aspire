@@ -35,8 +35,12 @@ internal static class ResourceSetupHelpers
         var module = context.JSInterop.SetupModule(invocation => invocation.Arguments[0] is string path && path.Contains(nameof(ResourcesLayout), StringComparison.Ordinal));
         module.SetupVoid("registerPaneResizer", _ => true).SetVoidResult();
         module.SetupVoid("unregisterPaneResizer", _ => true).SetVoidResult();
+        module.SetupVoid("fitPaneToActions", _ => true).SetVoidResult();
+        module.SetupVoid("setTabListAriaLabel", _ => true).SetVoidResult();
         module.SetupVoid("registerResourceOrdering", _ => true).SetVoidResult();
         module.SetupVoid("unregisterResourceOrdering", _ => true).SetVoidResult();
+        module.SetupVoid("registerTabOverflow", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterTabOverflow", _ => true).SetVoidResult();
     }
 
     public static void SetupResourceDetails(BunitContext context)

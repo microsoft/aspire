@@ -9,7 +9,10 @@ internal static class BrowserStorageKeys
 {
     public const string UnsecuredTelemetryMessageDismissedKey = "Aspire_Telemetry_UnsecuredMessageDismissed";
     public const string UnsecuredEndpointMessageDismissedKey = "Aspire_Security_UnsecuredEndpointMessageDismissed";
+    public const string DashboardFeedbackPromptDismissed = "Aspire_DashboardFeedback_PromptDismissed";
+    public const string DashboardFeedbackPromptDismissedForSession = "Aspire_DashboardFeedback_PromptDismissedForSession";
     public const string TimeFormat = "Aspire_TimeFormat";
+    public const string NavMenuExpanded = "Aspire_NavMenu_Expanded";
 
     public const string TracesPageState = "Aspire_PageState_Traces";
     public const string StructuredLogsPageState = "Aspire_PageState_StructuredLogs";
@@ -32,6 +35,7 @@ internal static class BrowserStorageKeys
     public const string ResourcePaneWidth = "Aspire_ResourcePane_Width";
     public const string ResourcePaneMode = "Aspire_ResourcePane_Mode";
     public const string ResourcePaneGrouping = "Aspire_ResourcePane_Grouping";
+    public const string ResourcePaneKinds = "Aspire_ResourcePane_Kinds";
     public const string ResourceListDensity = "Aspire_ResourcePane_Density";
     public const string GroupOverview = "Aspire_ResourceOverview_GroupView";
     public const string RecordingsStyle = "Aspire_Header_RecordingsStyle";

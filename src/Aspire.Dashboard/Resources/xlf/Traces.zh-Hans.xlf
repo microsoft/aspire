@@ -37,6 +37,11 @@
         <target state="translated">正在显示 &lt;strong&gt;{0} 个跟踪&lt;/strong&gt;</target>
         <note>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
       </trans-unit>
+      <trans-unit id="TracesFullName">
+        <source>Name: {0}</source>
+        <target state="new">Name: {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TracesHeader">
         <source>Traces</source>
         <target state="translated">跟踪</target>
@@ -57,9 +62,29 @@
         <target state="translated">{0} 跟踪</target>
         <note>{0} is an application name</note>
       </trans-unit>
+      <trans-unit id="TracesResourceSpans">
+        <source>{0} spans</source>
+        <target state="new">{0} spans</target>
+        <note>{0} is a resource name</note>
+      </trans-unit>
       <trans-unit id="TracesSpansColumnHeader">
         <source>Spans</source>
         <target state="translated">范围</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TracesTotalErroredTraces">
+        <source>Errored: {0}</source>
+        <target state="new">Errored: {0}</target>
+        <note>{0} is a number</note>
+      </trans-unit>
+      <trans-unit id="TracesTotalTraces">
+        <source>Total: {0}</source>
+        <target state="new">Total: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TracesTraceId">
+        <source>Trace Id: {0}</source>
+        <target state="new">Trace Id: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="VirtualizedLimitText">

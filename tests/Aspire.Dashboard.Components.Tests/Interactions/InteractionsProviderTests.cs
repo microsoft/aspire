@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
-using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
@@ -732,15 +731,18 @@ public partial class InteractionsProviderTests : DashboardTestContext
         Services.AddFluentUIComponents();
         Services.AddSingleton<ILoggerFactory>(loggerFactory);
 
+        var liveDashboardClient = dashboardClient ?? new TestDashboardClient();
         Services.AddSingleton<IDialogService>(dialogService ?? new TestDialogService());
         Services.AddSingleton<IDashboardClient>(selectedDashboardClient ?? new TestDashboardClient());
-        Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, dashboardClient ?? new TestDashboardClient());
+        Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, liveDashboardClient);
+        Services.AddSingleton<IResourceRepository>(liveDashboardClient);
         Services.AddSingleton<DashboardTelemetryService>();
         Services.AddSingleton(new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = false });
         Services.AddSingleton<ComponentTelemetryContextProvider>();
         Services.AddSingleton<DimensionManager>();
         Services.AddScoped<DashboardDialogService>();
         Services.AddScoped<DashboardMessageBarService>();
+        Services.AddScoped<ParameterInteractionState>();
 
         _messageBarProvider = Render<FluentMessageBarProvider>(builder =>
         {

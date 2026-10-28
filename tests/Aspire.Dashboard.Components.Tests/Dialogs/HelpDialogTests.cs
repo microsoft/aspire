@@ -41,7 +41,8 @@ public class HelpDialogTests : DashboardTestContext
                 "https://aspire.dev/",
                 "https://discord.com/invite/raNPcaaSj8",
                 "https://aka.ms/aspire/repo",
-                "https://github.com/microsoft/aspire/issues/new/choose"
+                "https://github.com/microsoft/aspire/issues/new/choose",
+                DashboardFeedbackDialog.DiscussionUrl
             ],
             links.Select(link => link.GetAttribute("href")));
         Assert.All(links, link =>

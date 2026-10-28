@@ -188,6 +188,54 @@ fluent-dialog::part(dialog) {
     box-shadow: 0 0 2px rgba(0, 0, 0, 0.2), 0 64px 128px rgba(0, 0, 0, 0.24);
 }
 
+fluent-drawer::part(dialog) {
+    transition-duration: 360ms !important;
+    transition-timing-function: cubic-bezier(.2, .8, .2, 1) !important;
+}
+
+@media (min-width: 769px) {
+    fluent-drawer::part(dialog) {
+        box-sizing: border-box;
+        height: calc(100dvh - 24px) !important;
+        max-height: calc(100dvh - 24px) !important;
+        margin: 12px 12px 12px auto;
+        inset-inline-start: auto !important;
+        inset-inline-end: 0 !important;
+        border: 1px solid var(--dialog-border-color);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, .28);
+        overflow: hidden;
+        opacity: 1;
+        transform: translateX(0);
+        transition:
+            transform 360ms cubic-bezier(.2, .8, .2, 1),
+            opacity 240ms ease-out;
+    }
+
+    @starting-style {
+        fluent-drawer::part(dialog):open {
+            opacity: 0;
+            transform: translateX(calc(100% + 24px));
+        }
+    }
+
+    fluent-drawer::part(dialog):not(:open) {
+        opacity: 0;
+        transform: translateX(calc(100% + 24px));
+    }
+
+    fluent-drawer-body {
+        height: 100% !important;
+        max-height: 100% !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    fluent-drawer::part(dialog) {
+        transition: none;
+    }
+}
+
 fluent-dialog-body {
     height: auto !important;
     max-height: calc(100dvh - 48px) !important;

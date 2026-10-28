@@ -25,7 +25,7 @@
         ItemKey="@(item => item.DateTime)">
         <ChildContent>
             <AspireTemplateColumn Title="@Loc[nameof(ControlsStrings.MetricTableStartColumnHeader)]">
-                @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, TimeProvider.ToLocal(context.DateTime))
+                @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, context.DateTime)
             </AspireTemplateColumn>
 
             @if (ShowPercentiles())

@@ -2,7 +2,8 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
-    padding: var(--layout-top-padding) var(--layout-right-padding) 24px var(--layout-left-padding);
+    /* The resource overview that hosts this already pads its content. */
+    padding: 0;
     container-type: inline-size;
 }
 

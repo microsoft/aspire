@@ -293,6 +293,34 @@ window.copyText = function (text) {
     return navigator.clipboard.writeText(text);
 };
 
+window.copyTextAndOpen = async function (text, url) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.pointerEvents = 'none';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            return typeof document.execCommand === 'function' && document.execCommand('copy');
+        } finally {
+            textarea.remove();
+        }
+    }
+};
+
+window.setDashboardExperience = function (experience, targetPath) {
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `Aspire_Dashboard_Experience=${experience}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+    // replace() keeps the page being left out of the history, so Back can't return to the other experience.
+    window.location.replace(targetPath);
+};
+
 function isActiveElementInput() {
     let currentElement = document.activeElement;
     // Document.activeElement is the shadow host when Hex1b's textarea has
@@ -495,6 +523,59 @@ window.disposeMobileNavMenuKeyboardNavigation = function (obj) {
     document.removeEventListener("keydown", obj.keydownListener, true);
     obj.menu?.removeEventListener("focusout", obj.focusoutListener);
 };
+
+// Fluent buttons and checkboxes render as focusable custom elements without exposing their native roles,
+// so assistive technology receives their names but not their control types or checked state. Keep the host
+// semantics explicit until Fluent exposes them itself. Related upstream accessibility history:
+// https://github.com/microsoft/fluentui-blazor/issues/2671
+function updateFluentButtonSemantics(button) {
+    button.setAttribute("role", "button");
+    if (button.disabled) {
+        button.setAttribute("aria-disabled", "true");
+    } else {
+        button.removeAttribute("aria-disabled");
+    }
+}
+
+function updateFluentCheckboxSemantics(checkbox) {
+    checkbox.setAttribute("role", "checkbox");
+    checkbox.setAttribute("aria-checked", checkbox.indeterminate ? "mixed" : String(checkbox.checked));
+    if (checkbox.disabled) {
+        checkbox.setAttribute("aria-disabled", "true");
+    } else {
+        checkbox.removeAttribute("aria-disabled");
+    }
+}
+
+function applyFluentControlRoles(root) {
+    if (root instanceof Element && root.matches("fluent-button")) {
+        updateFluentButtonSemantics(root);
+    }
+    if (root instanceof Element && root.matches("fluent-checkbox")) {
+        updateFluentCheckboxSemantics(root);
+    }
+
+    root.querySelectorAll?.("fluent-button").forEach(updateFluentButtonSemantics);
+    root.querySelectorAll?.("fluent-checkbox").forEach(updateFluentCheckboxSemantics);
+}
+
+applyFluentControlRoles(document);
+new MutationObserver(records => {
+    for (const record of records) {
+        if (record.type === "attributes") {
+            applyFluentControlRoles(record.target);
+        } else {
+            record.addedNodes.forEach(applyFluentControlRoles);
+        }
+    }
+}).observe(document.body, { attributes: true, attributeFilter: ["disabled"], childList: true, subtree: true });
+
+document.addEventListener("change", event => {
+    const checkbox = event.composedPath().find(element => element instanceof Element && element.matches("fluent-checkbox"));
+    if (checkbox) {
+        updateFluentCheckboxSemantics(checkbox);
+    }
+});
 
 window.getWindowDimensions = function() {
     return {

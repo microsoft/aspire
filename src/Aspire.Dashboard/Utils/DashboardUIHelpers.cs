@@ -12,6 +12,7 @@ namespace Aspire.Dashboard.Utils;
 
 internal static class DashboardUIHelpers
 {
+    public const string PageTitleTopBarSection = "PageTitleTopBar";
     // Virtualize represents unloaded rows with CSS spacers. Browser engines clamp very tall
     // elements, causing the spacer observer to report inconsistent measurements and render forever.
     // At the dashboard's 46px grid row height, 200,000 items use a 9.2 million pixel spacer.

@@ -54,12 +54,6 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
     [Parameter]
     public bool HasResourceTerminals { get; set; }
 
-    /// <summary>
-    /// Which entries have something to show. The others are displayed disabled, with a tooltip that says why.
-    /// </summary>
-    [Parameter]
-    public NavigationAvailability Availability { get; set; } = NavigationAvailability.Default;
-
     internal static Icon StructuredLogsIcon(bool active = false) =>
         active ? new Icons.Filled.Size24.SlideTextSparkle()
                   : new Icons.Regular.Size24.SlideTextSparkle();
@@ -148,15 +142,12 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
             // The pages of a selection (overview, console logs, structured logs, traces and metrics) are icons at the
             // top of the resources view, so the app navigation has a single entry for them.
             yield return new NavItem(NavSection.Resources, GetSelectionPageUrl(NavigationManager, ResourcesLayout.ResourceTab.Overview), Loc[nameof(Resources.Layout.NavMenuResourcesTab)], ResourcesIcon(), ResourcesIcon(active: true));
-            yield return new NavItem(NavSection.Parameters, DashboardUrls.ParametersUrl(), Loc[nameof(Resources.Layout.NavMenuParametersTab)], ParametersIcon(), ParametersIcon(active: true),
-                DisabledText: Availability.HasParameters ? null : Loc[nameof(Resources.Layout.NavMenuNoParameters)].Value);
             if (HasResourceTerminals)
             {
                 yield return new NavItem(NavSection.Terminals, DashboardUrls.TerminalsUrl(), Loc[nameof(Resources.Layout.NavMenuTerminalsTab)], TerminalsIcon(), TerminalsIcon(active: true));
             }
         }
-        yield return new NavItem(NavSection.Telemetry, DashboardUrls.TelemetrySourcesUrl(), Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)], TelemetryIcon(), TelemetryIcon(active: true),
-            DisabledText: Availability.HasTelemetrySources ? null : Loc[nameof(Resources.Layout.TelemetryPaneNoSources)].Value);
+        yield return new NavItem(NavSection.Telemetry, DashboardUrls.TelemetrySourcesUrl(), Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)], TelemetryIcon(), TelemetryIcon(active: true));
     }
 
     /// <summary>
@@ -224,5 +215,5 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
         Extensions
     }
 
-    private sealed record NavItem(NavSection Section, string Href, string Text, Icon Icon, Icon ActiveIcon, string? DisabledText = null);
+    private sealed record NavItem(NavSection Section, string Href, string Text, Icon Icon, Icon ActiveIcon);
 }

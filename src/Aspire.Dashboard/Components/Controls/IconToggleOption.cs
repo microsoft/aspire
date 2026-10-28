@@ -8,4 +8,4 @@ namespace Aspire.Dashboard.Components.Controls;
 /// <summary>
 /// An option of an <see cref="IconToggleGroup{TValue}"/>: its value, its icon and its name.
 /// </summary>
-public sealed record IconToggleOption<TValue>(TValue Value, Icon Icon, string Text);
+public sealed record IconToggleOption<TValue>(TValue Value, Icon Icon, string Text, string? BadgeText = null);

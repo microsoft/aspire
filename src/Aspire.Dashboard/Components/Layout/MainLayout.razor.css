@@ -12,11 +12,11 @@
 }
 
 ::deep.layout > header > a.application-name {
-    display: flex;
-    align-items: center;
+    display: block;
     flex: 0 1 auto;
     min-width: 0;
-    max-width: min(180px, 18vw);
+    /* Long application names truncate with an ellipsis; the full name is in the tooltip. */
+    max-width: min(220px, 22vw);
     height: 28px;
     padding: 0 2px;
     overflow: hidden;
@@ -24,9 +24,10 @@
     font-family: var(--aspire-font-display);
     font-size: 20px;
     font-weight: var(--fontWeightRegular);
-    line-height: 20px;
+    line-height: 28px;
     text-decoration: none;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 ::deep.layout > header > .flex-filler {
@@ -108,8 +109,8 @@
 ::deep.layout > .messagebar-container > .top-messagebar {
     flex: 1 1 auto;
     min-width: 0;
-    padding: 12px;
-    gap: 8px;
+    padding: 8px;
+    gap: 6px;
 }
 
 ::deep.layout > .messagebar-container > .top-messagebar:empty {
@@ -151,6 +152,13 @@
     border-top: 1px solid var(--colorNeutralStroke1);
     border-left: 1px solid var(--colorNeutralStroke1);
     display: flex;
+    max-height: min(240px, 35dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+::deep.layout > .messagebar-container:has(> .top-messagebar:empty) {
+    display: none;
 }
 
 ::deep .header-right {

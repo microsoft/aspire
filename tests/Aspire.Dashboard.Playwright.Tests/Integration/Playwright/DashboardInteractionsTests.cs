@@ -101,7 +101,10 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
     {
         await RunTestAsync(async page =>
         {
-            await page.GotoAsync("/parameters");
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = "legacy", Url = baseUrl }]);
+            await page.GotoAsync("/legacy/resources");
+            await page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
 
             var grid = page.Locator(".main-grid").First;
             await Assertions.Expect(grid.Locator(".resource-row").First).ToBeVisibleAsync();
@@ -552,7 +555,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
 
             var bottomButton = page.Locator(".scroll-to-bottom");
             await Assertions.Expect(bottomButton).ToHaveAttributeAsync("aria-label", "Jump to latest");
-            await Assertions.Expect(bottomButton).ToHaveAttributeAsync("title", "Jump to latest");
+            await Assertions.Expect(bottomButton).ToHaveAttributeAsync("data-tooltip", "Jump to latest");
         });
     }
 

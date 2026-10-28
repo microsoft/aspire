@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
@@ -162,11 +162,9 @@ public class ResourcesLayoutTests : DashboardTestContext
         }
         else
         {
-            cut.Find("#resourcePaneFilterButton").Click();
-            var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.MenuButtonId == "resourcePaneFilterButton");
-            var item = menu.Instance.Items.Single(item => item.Id == $"resource-filter-{filter}-0");
-            await cut.InvokeAsync(() => item.OnCheckedChanged!(false));
-            reset = () => item.OnCheckedChanged!(true);
+            var filterPopover = OpenFilter(cut);
+            await SetAllFilterValuesAsync(cut, filterPopover, filter, isVisible: false);
+            reset = () => SetAllFilterValuesAsync(cut, filterPopover, filter, isVisible: true);
         }
 
         Assert.Equal("false", cut.Find(".resource-pane-list").GetAttribute("data-group-reorder-enabled"));
@@ -196,8 +194,7 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         Assert.Equal(
             [
-                ("All resources", "1 resource", (string?)null),
-                ("cache", $"Running; Container; {Resources.Columns.PersistentContainerIconTooltip}", null)
+                ("cache", $"Running; Container; {Resources.Columns.PersistentContainerIconTooltip}", (string?)null)
             ],
             cut.FindAll(".resource-row-link").Select(link => (
                 link.GetAttribute("aria-label"), link.GetAttribute("aria-description"), link.GetAttribute("data-tooltip"))));
@@ -238,20 +235,45 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
-        Assert.Equal(["All resources", "cache"], cut.FindAll(".resource-row-link").Select(link => link.GetAttribute("aria-label")));
+        Assert.Equal(["cache"], cut.FindAll(".resource-row-link").Select(link => link.GetAttribute("aria-label")));
 
-        var filterButton = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.MenuButtonId == "resourcePaneFilterButton");
-        var telemetryOnlyItem = filterButton.Instance.ItemsProvider().Single(item => item.Id == "resource-filter-telemetry-only");
-        Assert.False(telemetryOnlyItem.Checked);
-        Assert.Equal("Telemetry sources", telemetryOnlyItem.Text);
-        Assert.Equal(1, telemetryOnlyItem.Count);
+        var telemetryToggle = cut.Find(".resource-kind-toggle[aria-label='Telemetry sources']");
+        Assert.Equal("false", telemetryToggle.GetAttribute("aria-pressed"));
+        Assert.Equal("1 telemetry source", telemetryToggle.GetAttribute("aria-description"));
 
-        await cut.InvokeAsync(() => telemetryOnlyItem.OnCheckedChanged!(true));
+        telemetryToggle.Click();
 
         cut.WaitForAssertion(() => Assert.Equal(
-            ["All resources", "cache", "browser"],
+            ["cache", "browser"],
             cut.FindAll(".resource-row-link").Select(link => link.GetAttribute("aria-label"))));
-        Assert.Equal("1 resource, 1 telemetry source", cut.Find(".resource-pane-foot").TextContent.Trim());
+        Assert.Equal("1 resource, 1 telemetry source", cut.Find(".resource-pane-foot > span").GetAttribute("aria-label"));
+    }
+
+    [Fact]
+    public void AppHost_CountsResourcesAndParametersSeparately()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api"),
+                ModelTestHelpers.CreateResource("worker"),
+                ModelTestHelpers.CreateResource("parameter", resourceType: KnownResourceTypes.Parameter)
+            ],
+            resourceChannelProvider: () => channel));
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(
+                [("Resources", "2 resources"), ("Parameters", "1 parameter"), ("Telemetry sources", "0 telemetry sources")],
+                cut.FindAll(".resource-kind-toggle").Select(toggle => (toggle.GetAttribute("aria-label")!, toggle.GetAttribute("aria-description")!)));
+            var countSummary = cut.Find(".resource-pane-foot > span");
+            Assert.Equal("img", countSummary.GetAttribute("role"));
+            Assert.Equal("2 resources, 1 parameter", countSummary.GetAttribute("aria-label"));
+        });
     }
 
     [Fact]
@@ -340,7 +362,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public void Tabs_ShowTheSelectionsPagesAndDisableThoseWithoutTelemetry()
+    public void Tabs_ShowTheSelectionsPagesAndNeverDisableThoseWithoutTelemetry()
     {
         var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -356,10 +378,17 @@ public class ResourcesLayoutTests : DashboardTestContext
             ["tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
             cut.FindComponents<FluentTab>().Where(t => t.Instance.Visible).Select(t => t.Instance.Id)));
         Assert.Equal("tab-Console", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
-        // The resources send no telemetry, so their telemetry tabs are shown disabled.
+        // The resources send no telemetry, so their telemetry tabs are flagged unavailable but stay enabled.
+        Assert.DoesNotContain(cut.FindComponents<FluentTab>(), t => t.Instance.Disabled);
         Assert.Equal(
             ["tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
-            cut.FindComponents<FluentTab>().Where(t => t.Instance.Disabled).Select(t => t.Instance.Id));
+            cut.FindComponents<FluentTab>().Where(t => t.Markup.Contains(Resources.Layout.ResourceTabUnavailable)).Select(t => t.Instance.Id));
+
+        // Selecting an unavailable tab still navigates.
+        cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(
+            cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Traces").Instance));
+        Assert.Equal("http://localhost/traces?resource=api&resource=worker", navigation.Uri);
+        cut.Render();
 
         cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(
             cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance));
@@ -429,8 +458,35 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Contains(menuButton.Instance.ItemsProvider(), item => item.Text == "Custom command");
     }
 
+    // The filters are a popover that stays open while values change. Expands only the given group, so the checkboxes
+    // found are that group's: the first is "(All)", the rest are its values in order.
+    private static IRenderedComponent<ResourcePaneFilter> OpenFilter(IRenderedComponent<ResourcesLayout> cut)
+    {
+        cut.Find("#resourcePaneFilterButton").Click();
+        return cut.FindComponent<ResourcePaneFilter>();
+    }
+
+    private static List<IRenderedComponent<FluentCheckbox>> GetFilterCheckboxes(IRenderedComponent<ResourcePaneFilter> filter, string groupId)
+    {
+        var target = groupId switch { "types" => 0, "states" => 1, "health" => 2, _ => 3 };
+        var count = filter.FindAll(".resource-filter-group-header").Count;
+        for (var i = 0; i < count; i++)
+        {
+            var header = filter.FindAll(".resource-filter-group-header")[i];
+            if ((header.GetAttribute("aria-expanded") == "true") != (i == target))
+            {
+                header.Click();
+            }
+        }
+
+        return filter.FindComponents<FluentCheckbox>().ToList();
+    }
+
+    private static Task SetAllFilterValuesAsync(IRenderedComponent<ResourcesLayout> cut, IRenderedComponent<ResourcePaneFilter> filter, string groupId, bool isVisible) =>
+        cut.InvokeAsync(() => GetFilterCheckboxes(filter, groupId)[0].Instance.CheckStateChanged.InvokeAsync(isVisible));
+
     [Fact]
-    public void FilterMenu_ShowsHowManyResourcesEachValueMatches()
+    public void FilterPopover_ShowsHowManyResourcesEachValueMatches()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -445,21 +501,18 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(3, cut.FindAll("[data-resource-name]").Count));
 
-        var filterButton = cut.FindComponents<AspireMenuButton>().Single(b => b.Instance.MenuButtonId == "resourcePaneFilterButton");
-        var stateItems = filterButton.Instance.ItemsProvider()
-            .SkipWhile(item => item.Id != "resource-filter-states-header")
-            .Skip(1)
-            .TakeWhile(item => !item.IsDivider)
-            .ToList();
+        var filter = OpenFilter(cut);
+        var boxes = GetFilterCheckboxes(filter, "states");
 
         // "All" has no count: it isn't a value of the filter.
+        Assert.Equal("(All)", boxes[0].Instance.Label);
         Assert.Equal(
-            [("(All)", (int?)null), (nameof(KnownResourceState.FailedToStart), 1), (nameof(KnownResourceState.Running), 2)],
-            stateItems.Select(item => (item.Text!, item.Count)));
+            [(nameof(KnownResourceState.FailedToStart), "1"), (nameof(KnownResourceState.Running), "2")],
+            boxes.Skip(1).Select(box => box.Instance.Label!).Zip(filter.FindAll(".resource-filter-option .resource-filter-count").Select(count => count.TextContent.Trim())));
     }
 
     [Fact]
-    public async Task FilterMenu_FiltersResourcesByTags()
+    public async Task FilterPopover_FiltersResourcesByTags()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -479,23 +532,95 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(3, cut.FindAll("[data-resource-name]").Count));
 
-        var filterButton = cut.FindComponents<AspireMenuButton>().Single(b => b.Instance.MenuButtonId == "resourcePaneFilterButton");
-        var tagItems = filterButton.Instance.ItemsProvider()
-            .SkipWhile(item => item.Id != "resource-filter-tags-header")
-            .Skip(1)
-            .TakeWhile(item => !item.IsDivider)
-            .ToList();
+        var filter = OpenFilter(cut);
+        var boxes = GetFilterCheckboxes(filter, "tags");
 
         Assert.Equal(
-            [("(All)", (int?)null), ("Untagged", 1), ("Backend", 2), ("Shared", 1)],
-            tagItems.Select(item => (item.Text!, item.Count)));
+            [("(All)", (string?)null), ("Untagged", "1"), ("Backend", "2"), ("Shared", "1")],
+            boxes.Select((box, index) => (box.Instance.Label!, index == 0 ? null : filter.FindAll(".resource-filter-option .resource-filter-count")[index - 1].TextContent.Trim())));
 
-        await cut.InvokeAsync(() => tagItems[0].OnCheckedChanged!(false));
-        await cut.InvokeAsync(() => tagItems.Single(item => item.Text == "Backend").OnCheckedChanged!(true));
+        await SetAllFilterValuesAsync(cut, filter, "tags", isVisible: false);
+        await cut.InvokeAsync(() => GetFilterCheckboxes(filter, "tags").Single(box => box.Instance.Label == "Backend").Instance.ValueChanged.InvokeAsync(true));
 
         cut.WaitForAssertion(() => Assert.Equal(
             ["api", "worker"],
             cut.FindAll("[data-resource-name]").Select(e => e.GetAttribute("data-resource-name"))));
+
+        // The popover stays open while values change, and OK only closes it.
+        Assert.Single(cut.FindAll(".resource-filter"));
+        cut.Find(".resource-filter-done").Click();
+        Assert.Empty(cut.FindAll(".resource-filter"));
+        Assert.Equal(["api", "worker"], cut.FindAll("[data-resource-name]").Select(e => e.GetAttribute("data-resource-name")));
+    }
+
+    [Fact]
+    public async Task FilterPopover_ResetShowsEveryValueAgain()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running),
+                ModelTestHelpers.CreateResource("cache", state: KnownResourceState.Exited)
+            ],
+            resourceChannelProvider: () => channel));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-name]").Count));
+
+        var filter = OpenFilter(cut);
+        Assert.True(cut.Find(".resource-filter-reset").HasAttribute("disabled"));
+
+        await SetAllFilterValuesAsync(cut, filter, "states", isVisible: false);
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-resource-name]")));
+        Assert.False(cut.Find(".resource-filter-reset").HasAttribute("disabled"));
+
+        cut.Find(".resource-filter-reset").Click();
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-name]").Count));
+        Assert.True(cut.Find(".resource-filter-reset").HasAttribute("disabled"));
+    }
+
+    [Fact]
+    public async Task KindToggles_HideAndShowEachKindOfItem()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api"),
+                ModelTestHelpers.CreateResource("parameter", resourceType: KnownResourceTypes.Parameter)
+            ],
+            resourceChannelProvider: () => channel));
+        await AddTelemetryAsync("api");
+        await AddTelemetryAsync("browser");
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-name]").Count));
+
+        // Resources and parameters are on, telemetry sources are off. Each toggle names its kind and count.
+        Assert.Equal(
+            [("Resources", "1 resource", "true"), ("Parameters", "1 parameter", "true"), ("Telemetry sources", "1 telemetry source", "false")],
+            cut.FindAll(".resource-kind-toggle").Select(toggle => (toggle.GetAttribute("aria-label")!, toggle.GetAttribute("aria-description")!, toggle.GetAttribute("aria-pressed")!)));
+        Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim());
+
+        cut.Find(".resource-kind-toggle[aria-label='Parameters']").Click();
+        cut.WaitForAssertion(() => Assert.Equal(["api"], cut.FindAll("[data-resource-name]").Select(e => e.GetAttribute("data-resource-name"))));
+        Assert.Equal("false", cut.Find(".resource-kind-toggle[aria-label='Parameters']").GetAttribute("aria-pressed"));
+        Assert.Equal(["api"], cut.Instance.GetScopeResourceNames());
+
+        cut.Find(".resource-kind-toggle[aria-label='Telemetry sources']").Click();
+        cut.WaitForAssertion(() => Assert.Equal(["api", "browser"], cut.FindAll(".resource-row-name").Select(e => e.TextContent.Trim())));
+        Assert.Equal(["Resources, Telemetry sources"], cut.FindAll(".resource-header-title").Select(e => e.TextContent.Trim()));
+        Assert.Equal(["api", "browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
+
+        cut.Find(".resource-kind-toggle[aria-label='Resources']").Click();
+        cut.WaitForAssertion(() => Assert.Equal(["browser"], cut.FindAll(".resource-row-name").Select(e => e.TextContent.Trim())));
+        Assert.Equal(["browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
+
+        cut.Find(".resource-kind-toggle[aria-label='Telemetry sources']").Click();
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".resource-row-name")));
+        Assert.Equal("Nothing shown", cut.Find(".resource-header-title").TextContent.Trim());
+        Assert.Contains(Resources.Layout.ResourcePaneNoKindsHint, cut.Find(".resource-pane-message").TextContent);
     }
 
     [Fact]
@@ -513,7 +638,9 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-name]").Count));
         Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
-        Assert.Equal("page", cut.Find(".resource-row-all .resource-row-link").GetAttribute("aria-current"));
+        // Nothing is selected, which means all resources: there is no selection to clear.
+        Assert.Empty(cut.FindAll(".resource-selection-bar"));
+        Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim());
     }
 
     [Theory]
@@ -617,11 +744,9 @@ public class ResourcesLayoutTests : DashboardTestContext
         }
         else if (mode is "types" or "states" or "health")
         {
-            cut.Find("#resourcePaneFilterButton").Click();
-            var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.MenuButtonId == "resourcePaneFilterButton");
-            var item = menu.Instance.Items.Single(item => item.Id == $"resource-filter-{mode}-0");
-            await cut.InvokeAsync(() => item.OnCheckedChanged!(false));
-            reset = () => item.OnCheckedChanged!(true);
+            var filterPopover = OpenFilter(cut);
+            await SetAllFilterValuesAsync(cut, filterPopover, mode, isVisible: false);
+            reset = () => SetAllFilterValuesAsync(cut, filterPopover, mode, isVisible: true);
         }
         else
         {
@@ -695,7 +820,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(menu.Instance.Items.Single(item => item.Id == $"resource-grouping-{grouping}").OnClick!);
         Assert.Equal(expectedGroups, cut.FindAll(".resource-tag-group").Select(group => group.GetAttribute("aria-label")));
         Assert.Equal("http://localhost/structuredlogs/resource/api", navigation.Uri);
-        Assert.Equal("3 resources", cut.Find(".resource-pane-foot > span").TextContent.Trim());
+        Assert.Equal("3 resources", cut.Find(".resource-pane-foot > span").GetAttribute("aria-label"));
 
         var group = cut.FindAll(".resource-tag-group")[0];
         var groupName = group.GetAttribute("aria-label");
@@ -809,7 +934,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         {
             var group = Assert.Single(cut.FindAll(".resource-tag-group"));
             Assert.Equal("Unknown", group.GetAttribute("aria-label"));
-            Assert.Equal(["api", "parameter", "worker"], group.QuerySelectorAll(".resource-row-name").Select(name => name.TextContent.Trim()));
+            Assert.Equal(["api", "worker"], group.QuerySelectorAll(".resource-row-name").Select(name => name.TextContent.Trim()));
         });
 
         await channel.Writer.WriteAsync([new ResourceViewModelChange(ResourceViewModelChangeType.Upsert,
@@ -817,12 +942,12 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Equal(["Unknown", "Running"], cut.FindAll(".resource-tag-group").Select(group => group.GetAttribute("aria-label")));
-            Assert.Equal(["parameter", "worker", "api"], cut.FindAll(".resource-tag-group .resource-row-name").Select(name => name.TextContent.Trim()));
+            Assert.Equal(["worker", "api"], cut.FindAll(".resource-tag-group .resource-row-name").Select(name => name.TextContent.Trim()));
         });
     }
 
     [Fact]
-    public void AppHost_FilterMenuOnlyShowsTooltipOnButton()
+    public void AppHost_FilterButtonOpensPopoverAndShowsTooltipOnButton()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -835,13 +960,13 @@ public class ResourcesLayoutTests : DashboardTestContext
         var button = cut.Find("#resourcePaneFilterButton");
         Assert.Equal("Filters", button.GetAttribute("data-tooltip"));
         Assert.Equal("Filters", button.GetAttribute("aria-label"));
+        Assert.Equal("false", button.GetAttribute("aria-expanded"));
+        Assert.Empty(cut.FindAll(".resource-filter"));
         button.Click();
 
-        var menu = cut.FindComponents<AspireMenu>().Single(menu => menu.Instance.Anchor == "resourcePaneFilterButton");
-        var tooltipAnchors = menu.FindAll("[data-tooltip]");
-        Assert.NotEmpty(tooltipAnchors);
-        Assert.All(tooltipAnchors, anchor => Assert.Equal(string.Empty, anchor.GetAttribute("data-tooltip")));
-        Assert.Empty(menu.FindComponents<FluentTooltip>());
+        Assert.Equal("true", cut.Find("#resourcePaneFilterButton").GetAttribute("aria-expanded"));
+        Assert.Single(cut.FindAll(".resource-filter"));
+        Assert.Equal(["Resource types", "State", "Health state", "Tags"], cut.FindAll(".resource-filter-group-name").Select(name => name.TextContent.Trim()));
     }
 
     [Theory]
@@ -865,7 +990,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.True(cut.Instance.IsLoaded);
             Assert.Equal(["api", "worker"], cut.Instance.GetAllResourceNames());
             Assert.Equal(3, cut.FindAll(".resource-row").Count);
-            Assert.Equal("2 telemetry sources", cut.Find(".resource-pane-foot").TextContent.Trim());
+            Assert.Equal("2 telemetry sources", cut.Find(".resource-pane-foot > span").GetAttribute("aria-label"));
         });
         Assert.Equal(0, client.ResourceSubscriptionCount);
     }
@@ -890,7 +1015,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             var links = cut.FindAll(".resource-row-link");
             Assert.Equal([DashboardUrls.StructuredLogsUrl(), DashboardUrls.StructuredLogsUrl("worker")],
                 links.Select(link => link.GetAttribute("href")));
-            Assert.Equal("1 telemetry source", cut.Find(".resource-pane-foot").TextContent.Trim());
+            Assert.Equal("1 telemetry source", cut.Find(".resource-pane-foot > span").GetAttribute("aria-label"));
             Assert.Equal(["api", "worker"], cut.Instance.GetAllResourceNames());
         });
     }
@@ -962,7 +1087,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.False(cut.Instance.IsTelemetryPane);
             Assert.Equal(["api"], cut.Instance.GetAllResourceNames());
             Assert.Equal(["api"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
-            Assert.Equal([DashboardUrls.StructuredLogsUrl(), DashboardUrls.StructuredLogsUrl("api")],
+            Assert.Equal([DashboardUrls.StructuredLogsUrl("api")],
                 cut.FindAll(".resource-row-link").Select(link => link.GetAttribute("href")));
         });
 
@@ -973,7 +1098,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.True(cut.Instance.IsTelemetryPane);
             Assert.Equal(["api"], cut.Instance.GetAllResourceNames());
             Assert.Equal(["browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
-            Assert.Equal(["/structuredlogs", "/structuredlogs/resource/api"],
+            Assert.Equal(["/structuredlogs/resource/api"],
                 cut.FindAll(".resource-row-link").Select(link => link.GetAttribute("href")));
         });
         navigation.NavigateTo(DashboardUrls.AddTelemetryPane(DashboardUrls.TracesUrl("browser")));
@@ -1016,7 +1141,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.Empty(cut.FindAll(".resource-pane-message"));
             Assert.Equal(["api"], cut.Instance.GetAllResourceNames());
             Assert.Empty(cut.Instance.GetSelectionTelemetryKeys(null)!);
-            Assert.Equal("All resources", cut.Find(".resource-row-all .resource-row-name").TextContent.Trim());
+            Assert.Equal(3, cut.FindAll(".resource-kind-toggle").Count);
         });
     }
 

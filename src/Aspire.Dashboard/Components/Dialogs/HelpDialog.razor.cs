@@ -96,7 +96,11 @@ public partial class HelpDialog
             new(Loc[nameof(Resources.Dialogs.HelpDialogReportIssueTitle)],
                 Loc[nameof(Resources.Dialogs.HelpDialogReportIssueDescription)],
                 ReportIssueUrl,
-                new Icons.Regular.Size24.Bug())
+                new Icons.Regular.Size24.Bug()),
+            new(Loc[nameof(Resources.Dialogs.HelpDialogDashboardFeedbackTitle)],
+                Loc[nameof(Resources.Dialogs.HelpDialogDashboardFeedbackDescription)],
+                DashboardFeedbackDialog.DiscussionUrl,
+                new Icons.Regular.Size24.ChatHelp())
         ])
     ];
 

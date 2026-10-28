@@ -324,6 +324,12 @@
   <data name="ResourcePaneCountPlural" xml:space="preserve">
     <value>{0} resources</value>
   </data>
+  <data name="ResourcePaneParameterCountSingular" xml:space="preserve">
+    <value>{0} parameter</value>
+  </data>
+  <data name="ResourcePaneParameterCountPlural" xml:space="preserve">
+    <value>{0} parameters</value>
+  </data>
   <data name="ResourcePaneMixedCount" xml:space="preserve">
     <value>{0}, {1}</value>
   </data>
@@ -354,6 +360,36 @@
   <data name="ResourceTabsLandmark" xml:space="preserve">
     <value>Resource views</value>
   </data>
+  <data name="ResourcePaneFilterDone" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="ResourcePaneFilterReset" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="ResourcePaneKindShow" xml:space="preserve">
+    <value>Select to show {0}</value>
+  </data>
+  <data name="ResourcePaneKindHide" xml:space="preserve">
+    <value>Select to hide {0}</value>
+  </data>
+  <data name="ResourcePaneSelectedCount" xml:space="preserve">
+    <value>{0} selected</value>
+  </data>
+  <data name="ResourcePaneNoKindsHint" xml:space="preserve">
+    <value>Turn on a type above to list it.</value>
+  </data>
+  <data name="ResourcePaneNoKindsShown" xml:space="preserve">
+    <value>Nothing shown</value>
+  </data>
+  <data name="ResourcePaneKindsLandmark" xml:space="preserve">
+    <value>Types to show</value>
+  </data>
+  <data name="ResourcePaneClearSelection" xml:space="preserve">
+    <value>Clear selection</value>
+  </data>
+  <data name="ResourceTabsMore" xml:space="preserve">
+    <value>More views</value>
+  </data>
   <data name="ResourceTabUnavailable" xml:space="preserve">
     <value>Not available for this resource</value>
   </data>
@@ -362,6 +398,9 @@
   </data>
   <data name="ResourceHeaderSelectedResources" xml:space="preserve">
     <value>{0} selected resources</value>
+  </data>
+  <data name="ResourceHeaderSelectedParameters" xml:space="preserve">
+    <value>{0} selected parameters</value>
   </data>
   <data name="ResourcePaneResize" xml:space="preserve">
     <value>Resize resource list</value>
@@ -416,5 +455,11 @@
   </data>
   <data name="ResourcePaneGroupReorderFailed" xml:space="preserve">
     <value>Unable to save the group order. Try again.</value>
+  </data>
+  <data name="NavMenuToggleExpand" xml:space="preserve">
+    <value>Expand navigation labels</value>
+  </data>
+  <data name="NavMenuToggleCollapse" xml:space="preserve">
+    <value>Collapse navigation to icons</value>
   </data>
 </root>

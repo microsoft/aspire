@@ -8,6 +8,107 @@
 
 const registrations = new WeakMap();
 
+// Priority+ overflow for the tab strip in the header. Tabs that no longer fit are marked with data-tab-overflow (hidden
+// by CSS) from the right, and their ids are reported to .NET, which lists them in the "..." menu. Hiding is done in the
+// DOM, rather than by rendering, so resizing never waits for a server round trip.
+let tabOverflow = null;
+
+export function registerTabOverflow(dotNetRef) {
+    unregisterTabOverflow();
+
+    const state = { dotNetRef, nav: null, resizeObserver: null, tabsObserver: null, reported: "", frame: 0 };
+    const schedule = () => {
+        if (!state.frame) {
+            state.frame = requestAnimationFrame(() => {
+                state.frame = 0;
+                attach();
+            });
+        }
+    };
+
+    function attach() {
+        // The header is rendered through a section outlet, so the strip can be created or replaced after this runs.
+        const nav = document.querySelector(".resource-tabs-nav");
+        if (nav !== state.nav) {
+            state.resizeObserver.disconnect();
+            state.tabsObserver.disconnect();
+            state.nav = nav;
+            state.reported = "";
+            if (nav) {
+                state.resizeObserver.observe(nav);
+                const tablist = nav.querySelector(".resources-tab-header");
+                if (tablist) {
+                    // Attributes are filtered so setting data-tab-overflow below doesn't re-trigger a measurement.
+                    state.tabsObserver.observe(tablist, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["hidden", "style", "class"] });
+                }
+            }
+        }
+        measure();
+    }
+
+    function measure() {
+        const nav = state.nav;
+        const tablist = nav?.querySelector(".resources-tab-header");
+        if (!nav || !tablist) {
+            return;
+        }
+
+        const tabs = Array.from(tablist.querySelectorAll("fluent-tab"));
+        tabs.forEach(tab => tab.removeAttribute("data-tab-overflow"));
+
+        const visibleTabs = tabs.filter(tab => tab.offsetWidth > 0);
+        let hiddenIds = [];
+        if (visibleTabs.length > 1 && getComputedStyle(tablist).display !== "none") {
+            const left = visibleTabs[0].getBoundingClientRect().left;
+            const widthThrough = index => visibleTabs[index].getBoundingClientRect().right - left;
+            const available = nav.clientWidth;
+            if (widthThrough(visibleTabs.length - 1) > available) {
+                // Reserve room for the "..." button, then keep as many tabs from the left as fit.
+                const budget = available - 44;
+                let keep = 1;
+                while (keep < visibleTabs.length && widthThrough(keep) <= budget) {
+                    keep++;
+                }
+                visibleTabs.slice(keep).forEach(tab => tab.setAttribute("data-tab-overflow", ""));
+                hiddenIds = visibleTabs.slice(keep).map(tab => tab.id);
+            }
+        }
+
+        const key = hiddenIds.join(",");
+        if (key !== state.reported) {
+            state.reported = key;
+            state.dotNetRef.invokeMethodAsync("SetOverflowTabs", hiddenIds).catch(() => { });
+        }
+    }
+
+    state.resizeObserver = new ResizeObserver(schedule);
+    state.tabsObserver = new MutationObserver(schedule);
+    // Cheap check on any DOM change (the terminal updates constantly): only a replaced strip needs attaching again.
+    state.bodyObserver = new MutationObserver(() => {
+        if (document.querySelector(".resource-tabs-nav") !== state.nav) {
+            schedule();
+        }
+    });
+    state.bodyObserver.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", schedule);
+    state.schedule = schedule;
+    tabOverflow = state;
+    schedule();
+}
+
+export function unregisterTabOverflow() {
+    const state = tabOverflow;
+    if (!state) {
+        return;
+    }
+    tabOverflow = null;
+    cancelAnimationFrame(state.frame);
+    state.resizeObserver.disconnect();
+    state.tabsObserver.disconnect();
+    state.bodyObserver.disconnect();
+    window.removeEventListener("resize", state.schedule);
+}
+
 export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maximumWidth) {
     unregisterPaneResizer(layoutElement);
 
@@ -54,7 +155,8 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
 
     const getActionsWidth = () => {
         const actions = pane.querySelectorAll(
-            '.resource-row-action-priority-0, .resource-row-action-priority-1');
+            '.resource-row-action-priority-0, .resource-row-action-priority-1, ' +
+            '.resource-row-action-priority-2, .resource-row-action-priority-3');
         if (actions.length === 0) {
             return width;
         }
@@ -64,8 +166,8 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
         let upper = max;
         let fittedWidth = max;
 
-        // Let the pane's container queries determine the smallest width where the endpoint and primary command
-        // are visible. Reading computed styles after each width change forces the browser to evaluate those rules.
+        // Let the pane's container queries determine the smallest width where every row action is visible.
+        // Reading computed styles after each width change forces the browser to evaluate those rules.
         while (lower <= upper) {
             const candidate = Math.floor((lower + upper) / 2);
             layoutElement.style.setProperty('--resource-pane-expanded-width', `${candidate}px`);
@@ -152,13 +254,20 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
         }
     };
 
-    // Double-clicking fits the pane to the action disclosure rules instead of duplicating their breakpoints here.
-    const onDoubleClick = e => {
-        e.preventDefault();
+    const fitToActions = (expandOnly = false) => {
         const actionsWidth = getActionsWidth();
+        if (expandOnly && actionsWidth <= width) {
+            return;
+        }
         if (resizeTo(actionsWidth) || actionsWidth === width) {
             commit();
         }
+    };
+
+    // Double-clicking fits the pane to the action disclosure rules instead of duplicating their breakpoints here.
+    const onDoubleClick = e => {
+        e.preventDefault();
+        fitToActions();
     };
 
     handle.addEventListener('pointerdown', onPointerDown);
@@ -168,29 +277,40 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
     handle.addEventListener('keydown', onKeyDown);
     handle.addEventListener('dblclick', onDoubleClick);
 
-    registrations.set(layoutElement, () => {
-        disposed = true;
-        handle.removeEventListener('pointerdown', onPointerDown);
-        handle.removeEventListener('pointermove', onPointerMove);
-        handle.removeEventListener('pointerup', onPointerEnd);
-        handle.removeEventListener('pointercancel', onPointerEnd);
-        handle.removeEventListener('keydown', onKeyDown);
-        handle.removeEventListener('dblclick', onDoubleClick);
-        if (pointerId !== null) {
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
+    registrations.set(layoutElement, {
+        fitToActions,
+        unregister: () => {
+            disposed = true;
+            handle.removeEventListener('pointerdown', onPointerDown);
+            handle.removeEventListener('pointermove', onPointerMove);
+            handle.removeEventListener('pointerup', onPointerEnd);
+            handle.removeEventListener('pointercancel', onPointerEnd);
+            handle.removeEventListener('keydown', onKeyDown);
+            handle.removeEventListener('dblclick', onDoubleClick);
+            if (pointerId !== null) {
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
         }
     });
+}
+
+export function fitPaneToActions(layoutElement) {
+    registrations.get(layoutElement)?.fitToActions(true);
+}
+
+export function setTabListAriaLabel(tabId, label) {
+    document.getElementById(tabId)?.closest("fluent-tablist")?.setAttribute("aria-label", label);
 }
 
 export function unregisterPaneResizer(layoutElement) {
     if (!layoutElement) {
         return;
     }
-    const unregister = registrations.get(layoutElement);
-    if (unregister) {
+    const registration = registrations.get(layoutElement);
+    if (registration) {
         registrations.delete(layoutElement);
-        unregister();
+        registration.unregister();
     }
 }
 

@@ -3,6 +3,7 @@
 
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
@@ -10,6 +11,7 @@ using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Components.Sections;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -19,17 +21,15 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class ApplicationSummaryTests : DashboardTestContext
 {
     [Fact]
-    public void Render_DefaultSetting_SummarizesTheAppWithoutListingResources()
+    public void Render_DefaultSetting_ShowsResourceCards()
     {
         var cut = RenderSummary();
 
-        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".home-hero")));
-        Assert.Equal("1 of 2 resources need attention", cut.Find(".home-hero-headline").TextContent);
-        Assert.Single(cut.FindAll(".home-activity"));
-        Assert.Single(cut.FindAll(".home-insights"));
-        Assert.Equal(["home-errors-title", "home-traces-title"], cut.FindAll(".home-problems h2").Select(h => h.Id));
-        // The resource table is the other choice of the "overview of several resources" setting.
-        Assert.Empty(cut.FindAll(".home-resource-table"));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".resource-card").Count));
+        Assert.Empty(cut.FindAll(".home-hero"));
+        Assert.Empty(cut.FindAll(".home-activity"));
+        Assert.Empty(cut.FindAll(".home-insights"));
+        Assert.Empty(cut.FindAll(".home-problems"));
     }
 
     [Fact]
@@ -123,9 +123,32 @@ public class ApplicationSummaryTests : DashboardTestContext
         Assert.Contains(module.Invocations, invocation => invocation.Identifier == "updateResourcesGraph");
     }
 
-    private IRenderedComponent<ApplicationSummary> RenderSummary()
+    [Fact]
+    public void Render_MobileViewport_CollapsesLayoutOptionsIntoMenu()
     {
-        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: true);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, resourceType: "Project"),
+                ModelTestHelpers.CreateResource("broken", state: KnownResourceState.FailedToStart, resourceType: "Container")
+            ],
+            resourceChannelProvider: () => channel));
+        var outlet = Render<SectionOutlet>(builder => builder.Add(p => p.SectionName, ResourcesLayout.HeaderActionsSectionName));
+        _ = Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport));
+
+        outlet.WaitForAssertion(() =>
+        {
+            Assert.Empty(outlet.FindAll(".icon-toggle-group"));
+            Assert.Equal("Cards", outlet.Find(".overview-layout-menu").TextContent.Trim());
+            Assert.Equal("Layout: Cards", outlet.Find(".overview-layout-menu").GetAttribute("aria-label"));
+        });
+    }
+
+    private IRenderedComponent<ApplicationSummary> RenderSummary(ViewportInformation? viewport = null)
+    {
+        viewport ??= new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources:

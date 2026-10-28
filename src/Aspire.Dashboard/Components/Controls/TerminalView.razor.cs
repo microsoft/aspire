@@ -70,10 +70,18 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [Parameter]
     public bool Chromeless { get; set; }
 
+    /// <summary>Gets or sets whether the terminal is embedded inside another compact surface.</summary>
+    [Parameter]
+    public bool Embedded { get; set; }
+
     /// <summary>Gets or sets whether the resource terminal titlebar offers an independent window.</summary>
     /// <remarks>The Terminals page enables this. Chromeless surfaces never render this action.</remarks>
     [Parameter]
     public bool ShowOpenInWindow { get; set; }
+
+    /// <summary>Gets or sets the route prefix used to open an independent terminal window.</summary>
+    [Parameter]
+    public string TerminalWindowPathPrefix { get; set; } = "terminal-window";
 
     /// <summary>Gets or sets the per-surface key for page-lifetime font-size persistence.</summary>
     /// <remarks>Detached windows seed their font from the opener without sharing live font preferences.</remarks>
@@ -235,6 +243,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 ReadOnly = readOnly,
                 ShowDimensions = ShowDimensionsPicker,
                 AutoFit = autoFit,
+                Embedded = Embedded,
                 SizeMemoryKey = SizeMemoryKey,
                 InitialFontSize = InitialFontSize,
                 Label = Loc[nameof(Resources.TerminalStrings.TerminalInputLabel)],
@@ -548,6 +557,8 @@ public sealed record TerminalViewOptions
     public bool ShowDimensions { get; init; } = true;
     /// <summary>Whether opening the active surface requests automatic grid sizing at the current font size.</summary>
     public bool AutoFit { get; init; }
+    /// <summary>Whether the terminal is embedded inside another compact surface.</summary>
+    public bool Embedded { get; init; }
     /// <summary>The per-surface key for remembering the font size.</summary>
     public string? SizeMemoryKey { get; init; }
     /// <summary>The initial font size when no per-surface preference has been remembered.</summary>

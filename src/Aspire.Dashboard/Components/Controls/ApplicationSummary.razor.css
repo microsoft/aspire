@@ -6,10 +6,67 @@
     outline: none;
 }
 
+.home.graph-view {
+    height: 100%;
+    min-height: 0;
+}
+
 .home-message {
     display: flex;
     justify-content: center;
     padding: 48px 16px;
+}
+
+.overview-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.missing-parameters-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    gap: 6px;
+    padding: 0 10px;
+    border: 1px solid var(--colorPaletteMarigoldBorderActive);
+    border-radius: var(--aspire-control-radius);
+    background: color-mix(in srgb, var(--warning) 10%, transparent);
+    color: var(--colorNeutralForeground1);
+    font-size: var(--fontSizeBase200);
+    font-weight: var(--fontWeightSemibold);
+    text-decoration: none;
+}
+
+.missing-parameters-link:hover {
+    background: color-mix(in srgb, var(--warning) 16%, transparent);
+}
+
+.missing-parameters-link {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.missing-parameters-count {
+    display: none;
+}
+
+/* Condense to the key icon and the count when the header row is short on room, so the notice stays readable and the
+   title and layout switcher keep their space. */
+@container (max-width: 700px) {
+    .missing-parameters-label {
+        display: none;
+    }
+
+    .missing-parameters-count {
+        display: inline;
+        min-width: 1ch;
+        text-align: center;
+    }
+
+    .missing-parameters-link {
+        padding: 0 8px;
+    }
 }
 
 .resource-card-grid {
@@ -129,7 +186,7 @@
 }
 
 .resource-card-label {
-    color: var(--colorNeutralForeground3);
+    color: var(--colorNeutralForeground2);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -269,7 +326,8 @@
 .home-resource-graph-layout {
     --resource-hidden-background: color-mix(in srgb, var(--colorNeutralBackground3) 50%, var(--aspire-page-background));
     width: 100%;
-    height: max(600px, calc(100vh - 220px));
+    height: 100%;
+    min-height: 0;
 }
 
 .resource-graph-container {
@@ -382,9 +440,57 @@
     fill: var(--aspire-page-background);
 }
 
-/* The overview graph opens resource details directly, so the separate actions affordance isn't shown here. */
 ::deep .resource-menu-cog {
-    display: none;
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+    transition: opacity .15s ease-in-out;
+}
+
+::deep .resource-group-hover .resource-menu-cog,
+::deep .resource-menu-cog:focus,
+::deep .resource-menu-cog[aria-expanded="true"] {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (hover: none) {
+    ::deep .resource-menu-cog {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+::deep .resource-menu-cog-background {
+    fill: var(--colorNeutralBackground1);
+    stroke: var(--colorNeutralStroke2);
+    stroke-width: var(--strokeWidthThin);
+}
+
+::deep .resource-menu-cog:hover .resource-menu-cog-background {
+    fill: var(--colorNeutralBackground3);
+    stroke: var(--colorNeutralStroke1Hover);
+}
+
+::deep .resource-menu-cog:focus-visible .resource-menu-cog-background {
+    stroke: var(--colorStrokeFocus1);
+    stroke-width: var(--strokeWidthThick);
+}
+
+::deep .resource-menu-cog[aria-expanded="true"] .resource-menu-cog-background {
+    fill: var(--colorBrandBackground2);
+    stroke: var(--colorBrandStroke1);
+    stroke-width: var(--strokeWidthThin);
+}
+
+::deep .resource-menu-cog[aria-expanded="true"],
+::deep .resource-menu-cog:active {
+    outline: none;
+}
+
+::deep .resource-menu-cog-icon {
+    fill: var(--colorBrandForeground1);
+    pointer-events: none;
 }
 
 ::deep .resource-link {
@@ -505,7 +611,6 @@
     min-width: 6px;
     height: 100%;
     background: var(--home-state-color);
-    transition: width 0.3s ease;
 }
 
 .home-legend {

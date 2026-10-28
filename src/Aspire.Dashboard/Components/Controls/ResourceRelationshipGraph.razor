@@ -13,7 +13,7 @@
 
     @foreach (var edge in _layout.Edges)
     {
-        <path class="relationship-graph-edge" d="@edge.Path" marker-end="@($"url(#{_markerId})")" data-tooltip="@edge.Type" aria-label="@edge.Type" />
+        <path class="relationship-graph-edge" d="@edge.Path" marker-end="@($"url(#{_markerId})")" data-tooltip="@edge.Type" role="img" aria-label="@edge.Type" />
     }
 
     @foreach (var node in _layout.Nodes)
@@ -28,7 +28,7 @@
         }
         else
         {
-            <g class="relationship-graph-node center" data-tooltip="@title" aria-label="@title">
+            <g class="relationship-graph-node center" data-tooltip="@title" role="img" aria-label="@title">
                 @NodeContent(node, resourceNode)
             </g>
         }

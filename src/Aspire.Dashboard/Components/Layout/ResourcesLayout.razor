@@ -11,12 +11,13 @@
 @{
     var isGrouped = DashboardClient.IsEnabled && _grouping != ResourceGrouping.None;
     var paneRows = isGrouped ? new List<ResourceGridViewModel>() : GetPaneRows().ToList();
-    var parameterRows = isGrouped ? new List<ResourceViewModel>() : GetParameterPaneRows();
+    var parameterRows = GetParameterPaneRows();
     var groups = isGrouped ? GetResourceGroups() : new List<ResourceGroup>();
     var telemetryRows = GetVisibleTelemetryResources().ToList();
-    var paneResourceCount = isGrouped ? groups.SelectMany(g => g.Resources).DistinctBy(r => r.Name).Count() : paneRows.Count + parameterRows.Count;
+    var paneResourceCount = isGrouped ? groups.SelectMany(g => g.Resources).DistinctBy(r => r.Name).Count() : paneRows.Count;
+    var paneParameterCount = parameterRows.Count;
     var paneTelemetrySourceCount = telemetryRows.Count;
-    var paneItemCount = paneResourceCount + paneTelemetrySourceCount;
+    var paneItemCount = paneResourceCount + paneParameterCount + paneTelemetrySourceCount;
     var isDesktop = ViewportInformation.IsDesktop;
     var showCollapsedPane = isDesktop && _isPaneCollapsed;
 
@@ -42,15 +43,12 @@
                 @if (DashboardClient.IsEnabled)
                 {
                     var filterTitle = ControlsStringsLoc[nameof(ControlsStrings.ChartContainerFiltersHeader)];
-                    <AspireMenuButton MenuButtonId="@FilterButtonId"
-                                      ButtonClass="resource-pane-button"
-                                      ButtonAppearance="@(NoFiltersSet ? ButtonAppearance.Default : ButtonAppearance.Primary)"
-                                      Icon="@(new Icons.Regular.Size16.Filter())"
-                                      IconColor="Color.Custom"
-                                      IconCustomColor="currentColor"
-                                      ItemsProvider="@GetFilterMenuItems"
-                                      Title="@filterTitle"
-                                      aria-label="@filterTitle" />
+                    <ResourcePaneFilter ButtonId="@FilterButtonId"
+                                        Title="@filterTitle"
+                                        Groups="@GetFilterGroups"
+                                        Resources="@GetFilterCountResources"
+                                        @* The popover stays open when a value changes. Handling the callback re-renders the pane. *@
+                                        OnChanged="@(() => Task.CompletedTask)" />
                     <AspireMenuButton MenuButtonId="@GroupingButtonId"
                                       ButtonClass="resource-pane-button"
                                       ButtonAppearance="@(_grouping == ResourceGrouping.None ? ButtonAppearance.Default : ButtonAppearance.Primary)"
@@ -73,6 +71,33 @@
                 }
             </div>
 
+            @if (_isLoaded && DashboardClient.IsEnabled)
+            {
+                var isAllSelected = _selectedResourceNames.Count == 0;
+                var allResources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources)).ToList();
+                var allResourceCount = allResources.Count(r => !r.IsParameter);
+                var allParameterCount = allResources.Count(r => r.IsParameter);
+
+                @* The toggles are outside the scrolling list, so a scrollbar appearing or leaving never changes their
+                   width or layout. They decide what the list shows and what "all resources" covers. *@
+                <div class="resource-pane-kinds">
+                    <div class="resource-kind-toggles" role="group" aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneKindsLandmark)]">
+                        @KindToggle(PaneKind.Resources, allResourceCount, new Icons.Regular.Size20.AppFolder(), ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)])
+                        @KindToggle(PaneKind.Parameters, allParameterCount, new Icons.Regular.Size20.Key(), Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)])
+                        @KindToggle(PaneKind.TelemetrySources, _telemetryOnlyResources.Count, new Icons.Regular.Size20.DataUsage(), Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)])
+                    </div>
+                    @if (!isAllSelected)
+                    {
+                        <div class="resource-selection-bar">
+                            <span>@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneSelectedCount)], _selectedResourceNames.Count)</span>
+                            <button type="button" class="resource-selection-clear" @onclick="OnAllResourcesClickAsync">
+                                @Loc[nameof(Dashboard.Resources.Layout.ResourcePaneClearSelection)]
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+
             <nav class="resource-pane-list @(IsCompact ? "density-compact" : IsSpacious ? "density-spacious" : null)"
                  data-reorder-enabled="@CanReorderResources.ToString().ToLowerInvariant()"
                  data-group-reorder-enabled="@CanReorderGroups.ToString().ToLowerInvariant()"
@@ -84,20 +109,25 @@
                         <FluentSpinner Size="SpinnerSize.Small" />
                     </div>
                 }
-                else if (paneItemCount == 0 && !(isGrouped && _grouping == ResourceGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0))
+                else if (paneItemCount == 0 && !(isGrouped && _grouping == ResourceGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0) && !DashboardClient.IsEnabled)
                 {
-                    <div class="resource-pane-message">@(DashboardClient.IsEnabled ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)] : Loc[nameof(Dashboard.Resources.Layout.TelemetryPaneNoSources)])</div>
+                    <div class="resource-pane-message">@Loc[nameof(Dashboard.Resources.Layout.TelemetryPaneNoSources)]</div>
                 }
 
                 @if (_isLoaded)
                 {
                     var isAllSelected = _selectedResourceNames.Count == 0;
-                    var allResourceCount = GetAllResourceNames().Count;
+                    var allResources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources)).ToList();
+                    var allResourceCount = allResources.Count(r => !r.IsParameter);
+                    var allParameterCount = allResources.Count(r => r.IsParameter);
+                    var allTelemetrySourceCount = DashboardClient.IsEnabled ? paneTelemetrySourceCount : _telemetryOnlyResources.Count;
                     var allResourcesText = Loc[DashboardClient.IsEnabled ? nameof(Dashboard.Resources.Layout.ResourceHeaderAllResources) : nameof(Dashboard.Resources.Layout.TelemetryHeaderAllSources)].Value;
                     var allResourcesCountText = DashboardClient.IsEnabled
-                        ? GetPaneCountText(allResourceCount, paneTelemetrySourceCount)
-                        : GetPaneCountText(resourceCount: 0, telemetrySourceCount: allResourceCount);
+                        ? GetPaneCountText(allResourceCount, allParameterCount, allTelemetrySourceCount)
+                        : GetPaneCountText(resourceCount: 0, parameterCount: 0, telemetrySourceCount: allTelemetrySourceCount);
 
+                    @if (!DashboardClient.IsEnabled)
+                    {
                     <div class="resource-row resource-row-all @(isAllSelected ? "selected" : string.Empty)">
                         <a class="resource-row-link"
                            href="@GetSelectionUrl([])"
@@ -107,15 +137,26 @@
                            @onclick="OnAllResourcesClickAsync"
                            @onclick:preventDefault="true">
                             <span class="resource-row-icon">
-                                <FluentIcon Width="16px" Value="@(new Icons.Regular.Size20.AppsList())" Color="Color.Custom" CustomColor="currentColor" />
+                               <FluentIcon Width="16px" Value="@(new Icons.Regular.Size20.AppsList())" Color="Color.Custom" CustomColor="currentColor" />
                             </span>
                             <span class="resource-row-text">
                                 <span class="resource-row-name">@allResourcesText</span>
-                                <span class="resource-row-sub">@allResourcesCountText</span>
+                                <span class="resource-row-sub">@RenderPaneCounts(allResourceCount, allParameterCount, allTelemetrySourceCount)</span>
                             </span>
                         </a>
                     </div>
+                    }
 
+                }
+
+                @if (_isLoaded && DashboardClient.IsEnabled && paneItemCount == 0 && !(isGrouped && _grouping == ResourceGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0))
+                {
+                    @* Below the toggles, which are the way to bring items back when every kind is off. *@
+                    <div class="resource-pane-message">
+                        @(!_showResources && !_showParameters && !_showTelemetryOnlyResources
+                            ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneNoKindsHint)]
+                            : ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)])
+                    </div>
                 }
 
                 @if (isGrouped)
@@ -288,7 +329,9 @@
             @if (!isDesktop)
             {
                 <div class="resource-pane-foot">
-                    <span>@GetPaneCountText(paneResourceCount, paneTelemetrySourceCount)</span>
+                    <span role="img" aria-label="@GetPaneCountText(paneResourceCount, paneParameterCount, paneTelemetrySourceCount)">
+                        @RenderPaneCounts(paneResourceCount, paneParameterCount, paneTelemetrySourceCount)
+                    </span>
                     @if (DashboardClient.IsEnabled)
                     {
                         <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
@@ -345,7 +388,9 @@
                 @if (!_isPaneCollapsed)
                 {
                     <div class="resource-pane-foot">
-                        <span>@GetPaneCountText(paneResourceCount, paneTelemetrySourceCount)</span>
+                        <span role="img" aria-label="@GetPaneCountText(paneResourceCount, paneParameterCount, paneTelemetrySourceCount)">
+                            @RenderPaneCounts(paneResourceCount, paneParameterCount, paneTelemetrySourceCount)
+                        </span>
                         <div class="resource-pane-foot-actions">
                             @if (DashboardClient.IsEnabled)
                             {
@@ -432,6 +477,67 @@
                               data-tooltip-positioning="@(!showLabels ? "above" : null)"
                               Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
         </div>
+    };
+
+    private RenderFragment KindToggle(PaneKind kind, int count, Icon icon, string fullLabel) => __builder =>
+    {
+        var isOn = IsKindShown(kind);
+        var countText = kind switch
+        {
+            PaneKind.Resources => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneCountPlural)], count),
+            PaneKind.Parameters => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountPlural)], count),
+            _ => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.TelemetryPaneCountSingular) : nameof(Dashboard.Resources.Layout.TelemetryPaneCountPlural)], count)
+        };
+
+        @* Icon-only, like the layout switcher. The name and count are the tooltip and the accessible description. The segments are the same size on or off, so toggling never moves the list below. *@
+        <button type="button"
+                class="resource-kind-toggle @(isOn ? "on" : null)"
+                aria-pressed="@(isOn ? "true" : "false")"
+                aria-label="@fullLabel"
+                aria-description="@countText"
+                data-tooltip="@string.Format(CultureInfo.CurrentCulture, Loc[isOn ? nameof(Dashboard.Resources.Layout.ResourcePaneKindHide) : nameof(Dashboard.Resources.Layout.ResourcePaneKindShow)], countText)"
+                data-tooltip-positioning="above"
+                @onclick="@(() => ToggleKindAsync(kind))">
+            <FluentIcon Value="@icon" Width="20px" Color="Color.Custom" CustomColor="currentColor" />
+        </button>
+    };
+    private RenderFragment RenderPaneCounts(int resourceCount, int parameterCount, int telemetrySourceCount) => __builder =>
+    {
+        <span class="resource-pane-counts" aria-hidden="true">
+            @if (resourceCount > 0)
+            {
+                var text = string.Format(
+                    CultureInfo.CurrentCulture,
+                    Loc[resourceCount == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneCountPlural)],
+                    resourceCount);
+                <span class="resource-pane-count" data-tooltip="@text">
+                    <FluentIcon Value="@(new Icons.Regular.Size24.AppFolder())" Width="14px" Color="Color.Custom" CustomColor="currentColor" />
+                    <span>@resourceCount</span>
+                </span>
+            }
+            @if (parameterCount > 0)
+            {
+                var text = string.Format(
+                    CultureInfo.CurrentCulture,
+                    Loc[parameterCount == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountPlural)],
+                    parameterCount);
+                <span class="resource-pane-count" data-tooltip="@text">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Key())" Width="14px" Color="Color.Custom" CustomColor="currentColor" />
+                    <span>@parameterCount</span>
+                </span>
+            }
+            @if (telemetrySourceCount > 0)
+            {
+                var text = string.Format(
+                    CultureInfo.CurrentCulture,
+                    Loc[telemetrySourceCount == 1 ? nameof(Dashboard.Resources.Layout.TelemetryPaneCountSingular) : nameof(Dashboard.Resources.Layout.TelemetryPaneCountPlural)],
+                    telemetrySourceCount);
+                <span class="resource-pane-count" data-tooltip="@text">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.DataUsage())" Width="14px" Color="Color.Custom" CustomColor="currentColor" />
+                    <span>@telemetrySourceCount</span>
+                </span>
+            }
+        </span>
     };
 
     private static string GetResourceRowActionClass(int actionIndex) =>
@@ -526,12 +632,28 @@
         }
         else if (IsMultiSelection)
         {
+            var selectedItemsAreParameters = _selectedItems.All(item => item.Resource is { IsParameter: true });
             <span class="resource-header-icon">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Stack())" Color="Color.Primary" />
+                @if (selectedItemsAreParameters)
+                {
+                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Primary" />
+                }
+                else
+                {
+                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Stack())" Color="Color.Primary" />
+                }
             </span>
             <div class="resource-header-text">
                 <div class="resource-header-title">
-                    @{ RenderTitle(__builder, string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderSelectedResources)], _selectedItems.Count), isDesktop); }
+                    @{
+                        var title = string.Format(
+                            CultureInfo.CurrentCulture,
+                            Loc[selectedItemsAreParameters
+                                ? nameof(Dashboard.Resources.Layout.ResourceHeaderSelectedParameters)
+                                : nameof(Dashboard.Resources.Layout.ResourceHeaderSelectedResources)],
+                            _selectedItems.Count);
+                        RenderTitle(__builder, title, isDesktop);
+                    }
                 </div>
             </div>
         }
@@ -554,7 +676,7 @@
             </span>
             <div class="resource-header-text">
                 <div class="resource-header-title">
-                    @{ RenderTitle(__builder, Loc[DashboardClient.IsEnabled ? nameof(Dashboard.Resources.Layout.ResourceHeaderAllResources) : nameof(Dashboard.Resources.Layout.TelemetryHeaderAllSources)], isDesktop); }
+                    @{ RenderTitle(__builder, GetScopeTitle(), isDesktop); }
                 </div>
             </div>
         }
@@ -607,15 +729,13 @@
         <FluentTabs Class="resources-tab-header"
                     ActiveTabId="@GetTabId(activeTab)"
                     ActiveTabChanged="@(tab => OnTabChanged(tab, isDesktop))"
-                    aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourceTabsLandmark)]"
                     Size="null">
             @foreach (var tab in GetTabs())
             {
                 <FluentTab HeaderClass="tab-label"
                            Id="@GetTabId(tab.Tab)"
                            Visible="@tab.IsVisible"
-                           Disabled="@(tab.Href is null)"
-                           data-tooltip="@(tab.Href is null ? Loc[nameof(Dashboard.Resources.Layout.ResourceTabUnavailable)] : null)"
+                           data-tooltip="@(tab.IsAvailable ? null : Loc[nameof(Dashboard.Resources.Layout.ResourceTabUnavailable)])"
                            IconStart="@tab.Icon">
                     <HeaderTemplate>
                         <span>@tab.Text</span>
@@ -627,6 +747,16 @@
                 </FluentTab>
             }
         </FluentTabs>
+        @* Tabs that don't fit the row move here, from the right (see registerTabOverflow). *@
+        <div class="resource-tabs-overflow @(_overflowTabIds.Length > 0 ? "has-overflow" : null) @(_overflowTabIds.Contains(GetTabId(activeTab)) ? "has-active" : null)">
+            <AspireMenuButton ButtonClass="resource-tabs-overflow-button"
+                              Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
+                              IconColor="Color.Custom"
+                              IconCustomColor="currentColor"
+                              ButtonAppearance="ButtonAppearance.Transparent"
+                              ItemsProvider="@GetOverflowMenuItems"
+                              Title="@Loc[nameof(Dashboard.Resources.Layout.ResourceTabsMore)]" />
+        </div>
         @* The button already shows the current view, so a tooltip would only cover the controls above it. *@
         <AspireMenuButton ButtonClass="resource-tabs-compact-button"
                           Text="@currentTabItem?.Text"
@@ -648,6 +778,7 @@
         var depth = row?.Depth ?? 0;
         var primaryUrl = ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true)
             .FirstOrDefault(url => url.Url is not null);
+        var source = ResourceSourceViewModel.GetSourceViewModel(resource);
         // The whole row is the drag source, so reordering doesn't need a separate grip.
         var canReorder = CanReorderResources && !resource.IsParameter;
 
@@ -735,11 +866,35 @@
                             <span class="resource-row-sep" aria-hidden="true">·</span>
                             <span class="resource-row-type">@resource.ResourceType</span>
                         </span>
-                        @if (IsSpacious && resource.HealthStatus is not null)
+                        @if (IsSpacious && !resource.IsParameter)
                         {
-                            <span class="resource-row-detail">
-                                <span>@resource.HealthStatus.Value.Humanize()</span>
-                            </span>
+                            @if (resource.StartTimeStamp is not null)
+                            {
+                                @* How long ago it started. The tooltip adds the exact time. *@
+                                <span class="resource-row-detail resource-row-started" data-tooltip="@GetStartedTooltip(resource)">
+                                    <FluentIcon Value="@(new Icons.Regular.Size12.Clock())" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
+                                    <span>@GetStartedAge(resource)</span>
+                                </span>
+                            }
+                            @if (resource.HealthStatus is { } healthStatus &&
+                                 healthStatus != Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy)
+                            {
+                                <span class="resource-row-detail">
+                                    <span>@healthStatus.Humanize()</span>
+                                </span>
+                            }
+                            else if (primaryUrl?.Url is not null)
+                            {
+                                <span class="resource-row-detail" data-tooltip="@primaryUrl.Url">
+                                    <span>@primaryUrl.Text</span>
+                                </span>
+                            }
+                            else if (source is not null)
+                            {
+                                <span class="resource-row-detail" data-tooltip="@source.Tooltip">
+                                    <span>@source.Value</span>
+                                </span>
+                            }
                         }
                     </span>
                     @if (errorCount > 0)

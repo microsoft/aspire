@@ -35,6 +35,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     private List<OtlpResource> _resources = default!;
     private List<SelectViewModel<ResourceTypeDetails>> _resourceViewModels = default!;
     private List<SelectViewModel<ResourceTypeDetails>>? _selectionResourceViewModels;
+    private List<OtlpResource>? _aggregateResources;
     private Subscription? _resourcesSubscription;
     private Subscription? _metricsSubscription;
 
@@ -233,10 +234,10 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     {
         UpdateSelectionResources();
         if (_selectionResourceViewModels is { Count: > 0 } selectionResources &&
-            (ResourceName is null || !selectionResources.Any(r => string.Equals(r.Name, ResourceName, StringComparisons.ResourceName))))
+            ResourceName is not null && !selectionResources.Any(r => string.Equals(r.Name, ResourceName, StringComparisons.ResourceName)))
         {
-            // Several resources are selected in the resource list. Metrics are displayed for one resource at a time,
-            // so display the first selected resource until the user picks another one.
+            // The URL names a resource that isn't part of the multi-resource selection. Display the first selected
+            // resource instead. Without a named resource, the page lists the instruments of every selected resource.
             PageViewModel.SelectedResource = selectionResources[0];
             ResourceName = selectionResources[0].Name;
             return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
@@ -328,15 +329,48 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     private void UpdateInstruments(MetricsViewModel viewModel)
     {
+        if (viewModel.SelectedResource.Id is null && _aggregateResources is not null)
+        {
+            viewModel.Instruments = GetAggregateInstruments();
+            return;
+        }
+
         var selectedInstance = viewModel.SelectedResource.Id?.GetResourceKey();
         viewModel.Instruments = selectedInstance != null ? TelemetryRepository.GetInstrumentSummaries(selectedInstance.Value) : null;
     }
+
+    /// <summary>
+    /// Gets whether the page lists the instruments of every selected resource, rather than of one resource.
+    /// That is the case for all resources and for a multi-resource selection. Each instrument keeps its source
+    /// resource, so the same instrument from two resources is two entries.
+    /// </summary>
+    private bool IsAggregate => PageViewModel.SelectedResource.Id is null && _aggregateResources is not null;
+
+    private List<OtlpInstrumentSummary> GetAggregateInstruments() =>
+        [.. (_aggregateResources ?? []).SelectMany(resource => TelemetryRepository.GetInstrumentSummaries(resource.ResourceKey))];
+
+    private void UpdateAggregateResources()
+    {
+        _aggregateResources = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is { } keys
+            ? _resources.Where(resource => keys.Contains(resource.ResourceKey)).ToList()
+            : null;
+    }
+
+    private string GetInstrumentResourceLabel(OtlpInstrumentSummary instrument) =>
+        OtlpHelpers.GetResourceName(instrument.ResourceView.Resource, _resources);
+
+    private string? CurrentResourceName => PageViewModel.SelectedResource.Id is null ? null : PageViewModel.SelectedResource.Name;
+
+    private ResourceKey? OverviewResourceKey => PageViewModel.SelectedResource.Id?.GetResourceKey();
+
+    private Func<OtlpInstrumentSummary, string>? ResourceLabelProvider => IsAggregate ? GetInstrumentResourceLabel : null;
 
     /// <summary>
     /// Updates the resources the user can pick from when several resources are selected in the resource list.
     /// </summary>
     private void UpdateSelectionResources()
     {
+        UpdateAggregateResources();
         if (SelectedResourceNames is not { Length: > 1 } || ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is not { } selectionKeys)
         {
             _selectionResourceViewModels = null;
@@ -394,6 +428,12 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             await UpdateViewModelFromQueryAsync(PageViewModel);
             UpdateSubscription();
             UpdateTelemetryProperties();
+        }
+        else if (IsAggregate)
+        {
+            // Resources joining or leaving the pane change which instruments are listed.
+            UpdateInstruments(PageViewModel);
+            SelectDefaultView(PageViewModel);
         }
 
         StateHasChanged();
@@ -583,8 +623,12 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     public string GetUrlFromSerializableViewModel(MetricsPageState serializable)
     {
         // In the resources layout, the resource list owns the selection, so a resource remembered in the session
-        // doesn't replace it. With several selected resources, the page displays the resource the user picked.
-        var resourceName = ResourcesLayout is { IsMultiSelection: false, SelectedResourceName: { } selectedName } ? selectedName : serializable.ResourceName;
+        // doesn't replace it. Without a single selected resource (all resources, or several), no resource is named
+        // and the page lists the instruments of every selected resource. A remembered name could also be stale,
+        // for example a replica from an earlier run.
+        var resourceName = ResourcesLayout is { } layout
+            ? (layout.IsMultiSelection ? null : layout.SelectedResourceName)
+            : serializable.ResourceName;
         var url = DashboardUrls.MetricsUrl(
             resource: resourceName,
             meter: serializable.MeterName,
@@ -627,14 +671,15 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     private string GetGroupUrl(MetricGroupKind kind, string? meterName)
     {
         var url = DashboardUrls.MetricsUrl(
-            resource: PageViewModel.SelectedResource.Name,
+            resource: CurrentResourceName,
             meter: kind == MetricGroupKind.Meter ? meterName : null,
             duration: DurationMinutes,
             view: ViewKindName,
             pinned: kind == MetricGroupKind.Pinned,
             all: kind == MetricGroupKind.All);
 
-        return ResourcesLayout?.AddPaneToUrl(url) ?? url;
+        // Listing several resources keeps the selection in the URL, so the page keeps listing them all.
+        return (IsAggregate ? ResourcesLayout?.AddSelectionToUrl(url) : ResourcesLayout?.AddPaneToUrl(url)) ?? url;
     }
 
     private void OnPinsChanged()
@@ -664,14 +709,15 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     private string GetInstrumentUrl(OtlpInstrumentSummary instrument)
     {
+        // A card in a list of several resources opens the chart of the resource it came from.
         var url = DashboardUrls.MetricsUrl(
-            resource: PageViewModel.SelectedResource.Name,
+            resource: IsAggregate ? GetInstrumentResourceLabel(instrument) : PageViewModel.SelectedResource.Name,
             meter: instrument.Parent.Name,
             instrument: instrument.Name,
             duration: DurationMinutes,
             view: ViewKindName);
 
-        return ResourcesLayout?.AddPaneToUrl(url) ?? url;
+        return (IsAggregate ? ResourcesLayout?.AddSelectionToUrl(url) : ResourcesLayout?.AddPaneToUrl(url)) ?? url;
     }
 
     private void UpdateSubscription()
@@ -684,10 +730,12 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             _metricsSubscription?.Dispose();
             _metricsSubscription = TelemetryRepository.OnNewMetrics(selectedResourceKey, SubscriptionType.Read, async () =>
             {
-                if (selectedResourceKey != null)
+                if (selectedResourceKey != null || IsAggregate)
                 {
                     // If there are more instruments than before then update the UI.
-                    var instruments = TelemetryRepository.GetInstrumentSummaries(selectedResourceKey.Value);
+                    var instruments = selectedResourceKey != null
+                        ? TelemetryRepository.GetInstrumentSummaries(selectedResourceKey.Value)
+                        : GetAggregateInstruments();
 
                     if (PageViewModel.Instruments is null || instruments.Count != PageViewModel.Instruments.Count)
                     {
