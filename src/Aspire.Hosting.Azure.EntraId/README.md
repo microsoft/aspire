@@ -360,11 +360,11 @@ same AppHost still enable their normal provisioning behavior.
 In TypeScript, each ID independently accepts a literal or a parameter, so mixed inputs are supported:
 
 ```typescript
-const tenantId = await builder.addParameter("entra-tenant");
+const clientId = await builder.addParameter("entra-client");
 const clientSecret = await builder.addParameter("entra-secret", { secret: true });
 
 const entraApi = await builder.addExistingEntraApplication(
-    "entra-api", tenantId, "00001111-aaaa-2222-bbbb-3333cccc4444")
+    "entra-api", "aaaabbbb-0000-cccc-1111-dddd2222eeee", clientId)
     .withClientSecret(clientSecret);
 
 await builder.addExecutable("worker", "node", ".", ["worker.mjs"])
