@@ -148,7 +148,7 @@
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.launchingWithAppHost">
         <source xml:lang="en">Launching Aspire debug session for apphost {0}...</source>
-        <target state="translated">Trwa uruchamianie sesji debugowania przerzutu dla hosta aplikacji {0}...</target>
+        <target state="translated">Trwa uruchamianie sesji debugowania Aspire dla hosta aplikacji {0}...</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.launchingWithDirectory">
         <source xml:lang="en">Launching Aspire debug session using directory {0}: attempting to determine effective apphost...</source>
