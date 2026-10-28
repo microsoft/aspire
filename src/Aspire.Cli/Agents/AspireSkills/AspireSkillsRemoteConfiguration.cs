@@ -313,7 +313,9 @@ internal static class AspireSkillsRemoteConfiguration
                     NormalizeRepositoryUrl(configuration.RepositoryUrl), StringComparison.OrdinalIgnoreCase),
             "git" => String(source["url"]) is { } url &&
                 string.Equals(NormalizeRepositoryUrl(url), NormalizeRepositoryUrl(configuration.RepositoryUrl),
-                    SkillSource.IsGitHubRepository(configuration.Repository!) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal),
+                    Uri.TryCreate(configuration.RepositoryUrl, UriKind.Absolute, out var repositoryUri) &&
+                        repositoryUri.Scheme == Uri.UriSchemeHttps && repositoryUri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
+                        ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal),
             _ => false
         };
     }
