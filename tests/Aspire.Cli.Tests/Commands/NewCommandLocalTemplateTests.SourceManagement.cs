@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
@@ -23,14 +24,6 @@ public partial class NewCommandLocalTemplateTests
     [InlineData(5, false)]
     [InlineData(6, true)]
     [InlineData(7, true)]
-    [InlineData(8, true)]
-    [InlineData(9, false)]
-    [InlineData(10, false)]
-    [InlineData(11, false)]
-    [InlineData(12, false)]
-    [InlineData(13, false)]
-    [InlineData(14, false)]
-    [InlineData(15, false)]
     public void TemplateSourceOptions_FromParseResultValidatesEveryFieldCombination(int fieldMask, bool valid)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -40,8 +33,7 @@ public partial class NewCommandLocalTemplateTests
         [
             (1, "--path", path),
             (2, "--repository", "https://example.test/repo"),
-            (4, "--ref", "main"),
-            (8, "--href", "https://example.test/templates")
+            (4, "--ref", "main")
         ];
         var arguments = fields.Where(field => (fieldMask & field.Mask) != 0)
             .SelectMany(field => new[] { field.Option, field.Value }).ToArray();
@@ -55,7 +47,6 @@ public partial class NewCommandLocalTemplateTests
             Assert.Equal((fieldMask & 1) != 0 ? path : null, options.Path);
             Assert.Equal((fieldMask & 2) != 0 ? "https://example.test/repo" : null, options.Repository);
             Assert.Equal((fieldMask & 4) != 0 ? "main" : null, options.Ref);
-            Assert.Equal((fieldMask & 8) != 0 ? "https://example.test/templates" : null, options.Href);
         }
         else
         {
@@ -69,7 +60,6 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("git-defaults")]
     [InlineData("git-path")]
     [InlineData("git-ref")]
-    [InlineData("catalog")]
     public async Task TemplateSourceCommands_AddAndRemoveGlobalObjects(string kind)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -77,7 +67,7 @@ public partial class NewCommandLocalTemplateTests
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var configuration = provider.GetRequiredService<IConfigurationService>();
         var globalPath = configuration.GetSettingsFilePath(true);
-        await File.WriteAllTextAsync(globalPath, """{"unrelated":"preserved","templates":{"existing":{"href":"https://example.test/other"}}}""");
+        await File.WriteAllTextAsync(globalPath, """{"unrelated":"preserved","templates":{"existing":{"repository":"https://example.test/other"}}}""");
         var localPath = configuration.GetSettingsFilePath(false);
         var localBefore = File.Exists(localPath) ? await File.ReadAllTextAsync(localPath) : null;
         var options = kind switch
@@ -87,7 +77,7 @@ public partial class NewCommandLocalTemplateTests
             "git-defaults" => ["--repository", "https://example.test/templates"],
             "git-path" => ["--repository", "https://example.test/templates", "--path", "templates/api"],
             "git-ref" => ["--repository", "https://example.test/templates", "--ref", "release/17.0"],
-            _ => ["--href", "https://example.test/templates?q={search}&cliVersion={cliVersion}"]
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
         var root = provider.GetRequiredService<RootCommand>();
 
@@ -114,13 +104,10 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("company", new[] { "--path", "relative/path" })]
     [InlineData("company", new[] { "--ref", "main" })]
     [InlineData("company", new string[0])]
-    [InlineData("company", new[] { "--href", "https://example.test/templates", "--path", "templates" })]
-    [InlineData("company", new[] { "--href", "https://example.test/templates", "--repository", "https://example.test/repo" })]
     [InlineData("company", new[] { "--repository", "http://example.test/repo" })]
     [InlineData("company", new[] { "--repository", "https://example.test/repo", "--path", "../escape" })]
-    [InlineData("company", new[] { "--href", "https://example.test/{search}" })]
-    [InlineData("nested.name", new[] { "--href", "https://example.test/templates" })]
-    [InlineData("nested:name", new[] { "--href", "https://example.test/templates" })]
+    [InlineData("nested.name", new[] { "--repository", "https://example.test/templates" })]
+    [InlineData("nested:name", new[] { "--repository", "https://example.test/templates" })]
     public async Task TemplateSourceCommands_InvalidAddDoesNotWrite(string name, string[] options)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -145,11 +132,11 @@ public partial class NewCommandLocalTemplateTests
         var interaction = new TestInteractionService();
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
-        const string original = """{ /*keep*/ "templates": { "Company": { "href": "https://example.test/index" } } }""";
+        const string original = """{ /*keep*/ "templates": { "Company": { "repository": "https://example.test/templates" } } }""";
         await File.WriteAllTextAsync(path, original);
         var root = provider.GetRequiredService<RootCommand>();
 
-        Assert.Equal(CliExitCodes.InvalidCommand, await root.Parse("template source add company --href https://example.test/replacement").InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.InvalidCommand, await root.Parse("template source add company --repository https://example.test/replacement").InvokeAsync().DefaultTimeout());
         Assert.Equal(original, await File.ReadAllTextAsync(path));
         Assert.Equal(CliExitCodes.ConfigNotFound, await root.Parse("template source remove missing").InvokeAsync().DefaultTimeout());
         Assert.Equal(original, await File.ReadAllTextAsync(path));
@@ -170,7 +157,7 @@ public partial class NewCommandLocalTemplateTests
         await File.WriteAllTextAsync(path, original);
         var root = provider.GetRequiredService<RootCommand>();
 
-        Assert.Equal(CliExitCodes.InvalidCommand, await root.Parse("template source add company --href https://example.test/index").InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.InvalidCommand, await root.Parse("template source add company --repository https://example.test/templates").InvokeAsync().DefaultTimeout());
         Assert.Equal(original, await File.ReadAllTextAsync(path));
         Assert.Equal(CliExitCodes.InvalidCommand, await root.Parse("template source remove company").InvokeAsync().DefaultTimeout());
         Assert.Equal(original, await File.ReadAllTextAsync(path));
@@ -178,7 +165,6 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Theory]
-    [InlineData("templates.company.href", "https://example.test/index")]
     [InlineData("templates.company.unknown", "value")]
     [InlineData("templates.company.path.child", "value")]
     [InlineData("templates.company.path", "../escape")]
@@ -212,7 +198,7 @@ public partial class NewCommandLocalTemplateTests
         await File.WriteAllTextAsync(path, original);
         var root = provider.GetRequiredService<RootCommand>();
 
-        Assert.Equal(CliExitCodes.InvalidCommand, await root.Parse("template source add COMPANY --href https://example.test/duplicate").InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.InvalidCommand, await root.Parse("template source add COMPANY --repository https://example.test/duplicate").InvokeAsync().DefaultTimeout());
         Assert.Equal(original, await File.ReadAllTextAsync(path));
         Assert.Equal(CliExitCodes.Success, await root.Parse("config set templates.company.path templates/api --global").InvokeAsync().DefaultTimeout());
         Assert.Equal(CliExitCodes.Success, await root.Parse("config set TEMPLATES.COMPANY.repository https://example.test/repo --global").InvokeAsync().DefaultTimeout());
@@ -226,7 +212,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(new TemplateSource("templates/api", "https://example.test/repo", null), source.Value.Template);
         Assert.Equal("Company", Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(default)).Key);
 
-        Assert.Equal(CliExitCodes.Success, await root.Parse("template source add other --href https://example.test/catalog").InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.Success, await root.Parse("template source add other --repository https://example.test/other").InvokeAsync().DefaultTimeout());
         Assert.Equal(CliExitCodes.Success, await root.Parse("template source remove company").InvokeAsync().DefaultTimeout());
         Assert.Equal(["other"], JsonNode.Parse(await File.ReadAllTextAsync(path))!["Templates"]!.AsObject().Select(entry => entry.Key));
         Assert.Equal(CliExitCodes.Success, await root.Parse("template source remove OTHER").InvokeAsync().DefaultTimeout());
@@ -262,13 +248,13 @@ public partial class NewCommandLocalTemplateTests
         var interaction = new TestInteractionService();
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
-        const string original = """{"templates":{"company":{"href":"https://example.test/index"}}}""";
+        const string original = """{"templates":{"company":{"repository":"https://example.test/templates"}}}""";
         await File.WriteAllTextAsync(path, original);
         var cache = provider.GetRequiredService<CliExecutionContext>().CacheDirectory;
         cache.Create();
         await File.WriteAllTextAsync(Path.Combine(cache.FullName, "workspace-config-locks"), "Blocks lock directory creation.");
 
-        var command = remove ? "template source remove company" : "template source add other --href https://example.test/other";
+        var command = remove ? "template source remove company" : "template source add other --repository https://example.test/other";
         var result = await provider.GetRequiredService<RootCommand>().Parse(command).InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, result);
@@ -277,7 +263,7 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Fact]
-    public async Task TemplateSourceConfig_PartialGitObjectCanBeCompletedWithoutOtherBrokenSourceBlocking()
+    public async Task TemplateSourceConfig_PartialGitObjectCanBeCompletedAndBrokenSourceRemoved()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
@@ -290,10 +276,14 @@ public partial class NewCommandLocalTemplateTests
         {
             Assert.Equal(CliExitCodes.Success, await root.Parse(["config", "set", $"templates.company.{field}", value, "--global"]).InvokeAsync().DefaultTimeout());
         }
+        await Assert.ThrowsAsync<JsonException>(() =>
+            provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
+        Assert.False(JsonNode.Parse(await File.ReadAllTextAsync(path))!["templates"]!["broken"]!.GetValue<bool>());
+
+        Assert.Equal(CliExitCodes.Success, await root.Parse("template source remove broken").InvokeAsync().DefaultTimeout());
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
         Assert.Equal("company", source.Key);
         Assert.Equal(new TemplateSource("templates/api", "https://example.test/repo", "release/17.0"), source.Value.Template);
-        Assert.False(JsonNode.Parse(await File.ReadAllTextAsync(path))!["templates"]!["broken"]!.GetValue<bool>());
         Assert.Empty(interaction.DisplayedErrors);
     }
 }

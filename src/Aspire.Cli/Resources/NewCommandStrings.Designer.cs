@@ -98,31 +98,11 @@ namespace Aspire.Cli.Resources {
 
         internal static string TemplateSourceInvalidRepository => ResourceManager.GetString("TemplateSourceInvalidRepository", resourceCulture);
 
-        internal static string TemplateSourceInvalidHref => ResourceManager.GetString("TemplateSourceInvalidHref", resourceCulture);
-
-        internal static string TemplateSourceFieldConflict => ResourceManager.GetString("TemplateSourceFieldConflict", resourceCulture);
-
         internal static string TemplateSourceMissingLocation => ResourceManager.GetString("TemplateSourceMissingLocation", resourceCulture);
 
         internal static string TemplateSourceNameRequired => ResourceManager.GetString("TemplateSourceNameRequired", resourceCulture);
 
         internal static string TemplateSourceCannotExtendString => ResourceManager.GetString("TemplateSourceCannotExtendString", resourceCulture);
-
-        internal static string TemplateCatalogHttpFailed => ResourceManager.GetString("TemplateCatalogHttpFailed", resourceCulture);
-
-        internal static string TemplateCatalogInvalidResponse => ResourceManager.GetString("TemplateCatalogInvalidResponse", resourceCulture);
-
-        internal static string TemplateCatalogEntryMustBeObject => ResourceManager.GetString("TemplateCatalogEntryMustBeObject", resourceCulture);
-
-        internal static string TemplateCatalogRequiresSingleTemplate => ResourceManager.GetString("TemplateCatalogRequiresSingleTemplate", resourceCulture);
-
-        internal static string TemplateCatalogTimedOut => ResourceManager.GetString("TemplateCatalogTimedOut", resourceCulture);
-
-        internal static string TemplateCatalogDownloadFailed => ResourceManager.GetString("TemplateCatalogDownloadFailed", resourceCulture);
-
-        internal static string TemplateCatalogInvalidContinuation => ResourceManager.GetString("TemplateCatalogInvalidContinuation", resourceCulture);
-
-        internal static string TemplateCatalogPageLimit => ResourceManager.GetString("TemplateCatalogPageLimit", resourceCulture);
 
         internal static string TemplateCommandDescription => ResourceManager.GetString("TemplateCommandDescription", resourceCulture);
 
@@ -139,8 +119,6 @@ namespace Aspire.Cli.Resources {
         internal static string TemplateSourceRepositoryDescription => ResourceManager.GetString("TemplateSourceRepositoryDescription", resourceCulture);
 
         internal static string TemplateSourceRefDescription => ResourceManager.GetString("TemplateSourceRefDescription", resourceCulture);
-
-        internal static string TemplateSourceHrefDescription => ResourceManager.GetString("TemplateSourceHrefDescription", resourceCulture);
 
         internal static string TemplateSourceAdded => ResourceManager.GetString("TemplateSourceAdded", resourceCulture);
 
@@ -161,6 +139,8 @@ namespace Aspire.Cli.Resources {
         internal static string TemplateSourceConfigurationHeader => ResourceManager.GetString("TemplateSourceConfigurationHeader", resourceCulture);
 
         internal static string TemplateSourceReadFailed => ResourceManager.GetString("TemplateSourceReadFailed", resourceCulture);
+
+        internal static string TemplateSourceLegacyConfiguration => ResourceManager.GetString("TemplateSourceLegacyConfiguration", resourceCulture);
 
         private static global::System.Resources.ResourceManager resourceMan;
         

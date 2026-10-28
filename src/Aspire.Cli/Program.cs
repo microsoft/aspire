@@ -656,15 +656,6 @@ public class Program
         // Template factories.
         builder.Services.AddSingleton<TemplateNuGetConfigService>();
         builder.Services.AddSingleton<ITemplateProvider, TemplateProvider>();
-        builder.Services.AddHttpClient(nameof(TemplateCatalogService))
-            .RemoveAllLoggers()
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-            {
-                // Catalog search text must not follow redirects to a different server.
-                AllowAutoRedirect = false,
-                UseCookies = false
-            });
-        builder.Services.AddSingleton<TemplateCatalogService>();
         builder.Services.AddSingleton<TemplateSourceStore>();
         builder.Services.AddSingleton<ConfiguredTemplateSourceService>();
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, DotNetTemplateFactory>());

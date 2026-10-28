@@ -20,77 +20,80 @@ internal static class TemplateSourceConfiguration
 
         foreach (var property in value.EnumerateObject())
         {
-            if (property.Name is not ("repository" or "ref" or "path" or "href"))
+            if (property.Name is not ("repository" or "ref" or "path"))
             {
                 throw new TemplateSourceConfigurationException($"{settingPath}.{property.Name}", NewCommandStrings.TemplateSourceUnknownField);
             }
             ReadString(property.Value, $"{settingPath}.{property.Name}");
         }
 
-        if (value.TryGetProperty("href", out var hrefElement))
-        {
-            foreach (var field in new[] { "repository", "ref", "path" })
-            {
-                if (value.TryGetProperty(field, out _))
-                {
-                    throw new TemplateSourceConfigurationException($"{settingPath}.{field}",
-                        string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceFieldConflict, $"{settingPath}.href"));
-                }
-            }
+        return Parse(
+            ReadOptionalString(value, "path", settingPath),
+            ReadOptionalString(value, "repository", settingPath),
+            ReadOptionalString(value, "ref", settingPath),
+            settingPath,
+            requireComplete);
+    }
 
-            var href = ReadString(hrefElement, $"{settingPath}.href");
-            if (!IsCatalogUrl(href))
+    public static ConfiguredTemplateSource Parse(
+        string? path, string? repository, string? reference, string settingPath, bool requireComplete)
+    {
+        foreach (var (field, value) in new[] { ("path", path), ("repository", repository), ("ref", reference) })
+        {
+            if (value is not null)
             {
-                throw new TemplateSourceConfigurationException($"{settingPath}.href", NewCommandStrings.TemplateSourceInvalidHref);
+                ValidateString(value, $"{settingPath}.{field}");
             }
-            return new(null, href);
         }
 
-        if (!value.TryGetProperty("repository", out var repositoryElement))
+        if (repository is null)
         {
-            if (value.TryGetProperty("path", out var localPath))
+            if (path is not null)
             {
-                var directory = ReadString(localPath, $"{settingPath}.path");
-                if (!value.TryGetProperty("ref", out _) && Path.IsPathFullyQualified(directory))
+                if (reference is null && Path.IsPathFullyQualified(path))
                 {
-                    return new(new TemplateSource(directory, null, null), null);
+                    return new(new TemplateSource(path, null, null));
                 }
-                ValidateRepositoryPath(directory, $"{settingPath}.path");
+                ValidateRepositoryPath(path, $"{settingPath}.path");
             }
             if (requireComplete)
             {
                 throw new TemplateSourceConfigurationException(settingPath, NewCommandStrings.TemplateSourceMissingLocation);
             }
-            return new(null, null);
+            return new(null);
         }
 
-        var repository = ReadString(repositoryElement, $"{settingPath}.repository");
         ValidateRepository(repository, $"{settingPath}.repository");
-        var path = value.TryGetProperty("path", out var pathElement) ? ReadString(pathElement, $"{settingPath}.path") : ".";
+        path ??= ".";
         ValidateRepositoryPath(path, $"{settingPath}.path");
-        var reference = value.TryGetProperty("ref", out var refElement) ? ReadString(refElement, $"{settingPath}.ref") : null;
-        return new(new TemplateSource(path, repository, reference), null);
+        return new(new TemplateSource(path, repository, reference));
     }
 
     public static string ReadString(JsonElement value, string settingPath)
     {
         if (value.ValueKind is not JsonValueKind.String ||
-            value.GetString() is not { } text ||
-            string.IsNullOrWhiteSpace(text) || text.Any(char.IsControl))
+            value.GetString() is not { } text)
         {
             throw new TemplateSourceConfigurationException(settingPath, NewCommandStrings.TemplateSourceStringRequired);
         }
+        ValidateString(text, settingPath);
         return text;
     }
 
-    public static string ReadRequiredString(JsonElement value, string field, string settingPath) =>
-        value.TryGetProperty(field, out var property)
-            ? ReadString(property, $"{settingPath}.{field}")
-            : throw new TemplateSourceConfigurationException($"{settingPath}.{field}", NewCommandStrings.TemplateSourceStringRequired);
+    private static void ValidateString(string value, string settingPath)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Any(char.IsControl))
+        {
+            throw new TemplateSourceConfigurationException(settingPath, NewCommandStrings.TemplateSourceStringRequired);
+        }
+    }
+
+    private static string? ReadOptionalString(JsonElement value, string field, string settingPath) =>
+        value.TryGetProperty(field, out var property) ? ReadString(property, $"{settingPath}.{field}") : null;
 
     public static void ValidateRepository(string repository, string settingPath)
     {
-        if (!GitRepositoryUrl.IsValid(repository))
+        if (!GitHelpers.IsValidRepositoryUrl(repository))
         {
             throw new TemplateSourceConfigurationException(settingPath, NewCommandStrings.TemplateSourceInvalidRepository);
         }
@@ -116,8 +119,8 @@ internal static class TemplateSourceConfiguration
         }
     }
 
-    public static string GetPropertyName(JsonObject settings, string key) =>
-        settings.Select(property => property.Key).FirstOrDefault(name => name.Equals(key, StringComparison.OrdinalIgnoreCase)) ?? key;
+    public static string GetPropertyName(JsonObject settings, string key, StringComparison comparison) =>
+        settings.Select(property => property.Key).FirstOrDefault(name => name.Equals(key, comparison)) ?? key;
 
     public static string ResolveEditKey(JsonObject settings, string key)
     {
@@ -126,10 +129,10 @@ internal static class TemplateSourceConfiguration
         {
             return key;
         }
-        parts[0] = GetPropertyName(settings, "templates");
+        parts[0] = GetPropertyName(settings, "templates", StringComparison.OrdinalIgnoreCase);
         if (parts.Length > 1 && settings[parts[0]] is JsonObject sources)
         {
-            parts[1] = GetPropertyName(sources, parts[1]);
+            parts[1] = GetPropertyName(sources, parts[1], StringComparisons.TemplateSourceName);
         }
 
         return string.Join('.', parts);
@@ -148,7 +151,7 @@ internal static class TemplateSourceConfiguration
             throw new TemplateSourceConfigurationException("templates", NewCommandStrings.TemplateSourcesMustBeObject);
         }
         ValidateName(parts[1]);
-        if (parts.Length > 3 || (parts.Length == 3 && parts[2] is not ("repository" or "ref" or "path" or "href")))
+        if (parts.Length > 3 || (parts.Length == 3 && parts[2] is not ("repository" or "ref" or "path")))
         {
             throw new TemplateSourceConfigurationException(key.Replace(':', '.'), NewCommandStrings.TemplateSourceUnknownField);
         }
@@ -176,25 +179,9 @@ internal static class TemplateSourceConfiguration
             Parse(document.RootElement, $"templates.{parts[1]}", requireComplete: false);
         }
     }
-
-    private static bool IsCatalogUrl(string href)
-    {
-        var queryStart = href.IndexOf('?');
-        var address = queryStart < 0 ? href : href[..queryStart];
-        var expanded = href.Replace("{search}", "", StringComparison.Ordinal)
-            .Replace("{cliVersion}", "", StringComparison.Ordinal);
-        // Placeholders are query-only: https://host/index?q={search}&cliVersion={cliVersion}.
-        // URL-escaping a search must not let it choose a different server or resource path.
-        return !href.Any(c => char.IsWhiteSpace(c) || char.IsControl(c))
-            && !href.Contains('\\') && !address.Contains('{') && !address.Contains('}')
-            && !expanded.Contains('{') && !expanded.Contains('}')
-            && Uri.TryCreate(expanded, UriKind.Absolute, out var uri)
-            && uri.Scheme == "https" && !string.IsNullOrEmpty(uri.Host)
-            && string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Fragment);
-    }
 }
 
-internal sealed record ConfiguredTemplateSource(TemplateSource? Template, string? Href);
+internal sealed record ConfiguredTemplateSource(TemplateSource? Template);
 
 internal sealed class TemplateSourceConfigurationException(string settingPath, string reason)
     : Exception(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSettingInvalid, settingPath, reason));

@@ -6,72 +6,43 @@ using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Templating;
 
 internal sealed class ConfiguredTemplateSourceService(
     IConfigurationService configurationService,
     ITemplateProvider templateProvider,
-    TemplateCatalogService catalogService,
     IInteractionService interactionService)
 {
     internal async Task<IReadOnlyList<KeyValuePair<string, ConfiguredTemplateSource>>> GetSourcesAsync(CancellationToken cancellationToken)
     {
         var settingsPath = configurationService.GetSettingsFilePath(isGlobal: true);
+        AspireConfigFile? settings;
         try
         {
-            using var settings = JsonDocument.Parse(
-                await File.ReadAllTextAsync(settingsPath, cancellationToken), ConfigurationHelper.ParseOptions);
-            // Sources are local, Git, or catalog objects, e.g.
-            // { "templates": { "local": { "path": "/absolute/path" },
-            //   "remote": { "repository": "https://host/repo", "ref": "main", "path": "templates" },
-            //   "catalog": { "href": "https://host/templates.json" } } }.
-            // Read the JSON directly to preserve value types and avoid project-config overrides.
-            if (settings.RootElement.ValueKind is not JsonValueKind.Object)
-            {
-                Warn(settingsPath, NewCommandStrings.TemplateSourcesMustBeObject);
-                return [];
-            }
-            var templates = settings.RootElement.EnumerateObject()
-                .FirstOrDefault(property => property.Name.Equals("templates", StringComparison.OrdinalIgnoreCase)).Value;
-            if (templates.ValueKind is JsonValueKind.Undefined)
-            {
-                return [];
-            }
-            if (templates.ValueKind is not JsonValueKind.Object)
-            {
-                Warn(settingsPath, NewCommandStrings.TemplateSourcesMustBeObject);
-                return [];
-            }
-
-            List<KeyValuePair<string, ConfiguredTemplateSource>> sources = [];
-            foreach (var entry in templates.EnumerateObject())
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                try
-                {
-                    TemplateSourceConfiguration.ValidateName(entry.Name);
-                    var source = TemplateSourceConfiguration.Parse(entry.Value, $"templates.{entry.Name}", requireComplete: true);
-                    sources.Add(new(entry.Name, source));
-                }
-                catch (TemplateSourceConfigurationException ex)
-                {
-                    Warn(entry.Name, ex.Message);
-                }
-            }
-
-            return sources;
+            settings = JsonSerializer.Deserialize(
+                await File.ReadAllTextAsync(settingsPath, cancellationToken), JsonSourceGenerationContext.Default.AspireConfigFile);
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
             return [];
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+
+        List<KeyValuePair<string, ConfiguredTemplateSource>> sources = [];
+        foreach (var (name, definition) in settings?.Templates ?? [])
         {
-            Warn(settingsPath, ex.Message);
-            return [];
+            cancellationToken.ThrowIfCancellationRequested();
+            TemplateSourceConfiguration.ValidateName(name);
+            if (definition is null)
+            {
+                throw new TemplateSourceConfigurationException($"templates.{name}", NewCommandStrings.InvalidConfiguredTemplateSource);
+            }
+            var source = TemplateSourceConfiguration.Parse(
+                definition.Path, definition.Repository, definition.Ref, $"templates.{name}", requireComplete: true);
+            sources.Add(new(name, source));
         }
+
+        return sources;
     }
 
     public async Task<IReadOnlyList<ConfiguredTemplate>> SearchAsync(string query, CancellationToken cancellationToken)
@@ -92,34 +63,25 @@ internal sealed class ConfiguredTemplateSourceService(
             try
             {
                 var status = string.Format(CultureInfo.CurrentCulture, NewCommandStrings.SearchingTemplateSource, name);
+                var source = configuredSource.Template
+                    ?? throw new InvalidOperationException("A complete template source must have a location.");
                 IEnumerable<ITemplate> templates;
-                if (configuredSource.Href is { } href)
+                if (source.Repository is null)
                 {
                     templates = await interactionService.ShowStatusAsync(status,
-                        () => catalogService.SearchAsync(href, $"templates.{name}", query, cancellationToken));
-                }
-                else if (configuredSource.Template is { } source)
-                {
-                    if (source.Repository is null)
-                    {
-                        templates = await interactionService.ShowStatusAsync(status,
-                            () => templateProvider.GetTemplatesAsync(source, cancellationToken));
-                    }
-                    else
-                    {
-                        // Git owns its resolve/clone spinners; an enclosing status hides them.
-                        interactionService.DisplaySubtleMessage(status);
-                        templates = await templateProvider.GetTemplatesAsync(source, cancellationToken);
-                    }
+                        () => templateProvider.GetTemplatesAsync(source, cancellationToken));
                 }
                 else
                 {
-                    throw new InvalidOperationException("A complete template source must have a location.");
+                    // Git owns its resolve/clone spinners; an enclosing status hides them.
+                    interactionService.DisplaySubtleMessage(status);
+                    templates = await templateProvider.GetTemplatesAsync(source, cancellationToken);
                 }
 
                 results.AddRange(templates
                     .Where(template => template.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                        template.Description.Contains(query, StringComparison.OrdinalIgnoreCase))
+                        template.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                        template.SearchDescription?.Contains(query, StringComparison.OrdinalIgnoreCase) is true)
                     .Select(template => new ConfiguredTemplate(name, template)));
             }
             catch (Exception ex) when (ex is TemplateDiscoveryException or IOException or UnauthorizedAccessException or ArgumentException)
@@ -129,7 +91,7 @@ internal sealed class ConfiguredTemplateSourceService(
         }
 
         return results.OrderBy(result => result.Template.Description, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(result => result.SourceName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(result => result.SourceName, StringComparers.TemplateSourceName)
             .ThenBy(result => result.Template.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }

@@ -121,7 +121,10 @@ internal sealed partial class TemplateEngineFactory(
                 template.Name,
                 (context, name) => OutputPathHelper.GetUniqueDefaultOutputPath(name, context.WorkingDirectory.FullName),
                 _ => { },
-                (_, templateInputs, result, token) => ApplyAsync(settings, creator, template, templateInputs, result, token)))
+                (_, templateInputs, result, token) => ApplyAsync(settings, creator, template, templateInputs, result, token))
+            {
+                SearchDescription = template.Description
+            })
             .ToArray();
         cancellationToken.ThrowIfCancellationRequested();
         if (templates.Length == 0)

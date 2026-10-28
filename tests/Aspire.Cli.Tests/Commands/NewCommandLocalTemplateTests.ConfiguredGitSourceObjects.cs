@@ -151,18 +151,15 @@ public partial class NewCommandLocalTemplateTests
             ["working"] = Path.Combine(workspace.Path, "local")
         });
 
-        var result = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().SearchAsync("", default));
+        var error = await Assert.ThrowsAsync<TemplateSourceConfigurationException>(() =>
+            provider.GetRequiredService<ConfiguredTemplateSourceService>().SearchAsync("", default));
 
-        Assert.Equal("working", result.SourceName);
         Assert.Empty(GetGitResolutions(git));
         Assert.Empty(GetGitFetches(git));
-        var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, warning.Emoji);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
-            NewCommandStrings.TemplateSourceSearchFailed, "broken",
-            string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSettingInvalid,
-                "templates.broken.path", NewCommandStrings.TemplateRepositoryPathInvalid)),
-            warning.Message);
+            NewCommandStrings.TemplateSourceSettingInvalid,
+            "templates.broken.path", NewCommandStrings.TemplateRepositoryPathInvalid), error.Message);
+        Assert.Empty(interaction.DisplayedMessages);
     }
 
     [Fact]

@@ -164,7 +164,11 @@ internal sealed class AspireConfigFile
     [Description("Package references for the AppHost. Value is either a string (NuGet, short form — empty = SDK version, otherwise explicit version) or an object with a required \"source\" discriminator (\"nuget\", \"project\", or \"npm\") and per-source fields (version for nuget, path for project/npm).")]
     public Dictionary<string, PackageEntry>? Packages { get; set; }
 
-    // Global template sources and other unmodeled settings must survive typed load/save cycles.
+    [JsonPropertyName("templates")]
+    [Description("Named global template sources. Each source specifies an absolute local path or a Git repository with optional ref and path.")]
+    public Dictionary<string, AspireConfigTemplateSource?>? Templates { get; set; }
+
+    // Unmodeled settings must survive typed load/save cycles.
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 
@@ -461,17 +465,6 @@ internal sealed class AspireConfigFile
             config.Channel = settings.Channel;
             config.Features = settings.Features;
 
-            // Source-management commands can edit the legacy global file before normal startup
-            // migrates it. Retain raw definitions, including incomplete entries and their casing.
-            foreach (var (name, value) in settings.ExtensionData ?? [])
-            {
-                if (name.Equals("templates", StringComparison.OrdinalIgnoreCase))
-                {
-                    config.ExtensionData ??= [];
-                    config.ExtensionData[name] = value.Clone();
-                }
-            }
-
             // Legacy settings.json stored packages as Dictionary<string,string> with an
             // ad-hoc ".csproj" suffix for project references. Translate to strong entries.
             if (settings.Packages is not null)
@@ -589,6 +582,22 @@ internal sealed class AspireConfigApiDocs
     [JsonPropertyName("sitemapUrl")]
     [Description($"""Optional override for the API sitemap consumed by aspire docs api. Defaults to {ApiDocsSourceConfiguration.DefaultSitemapUrl}.""")]
     public string? SitemapUrl { get; set; }
+}
+
+/// <summary>
+/// Template source within aspire.config.json.
+/// </summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+internal sealed class AspireConfigTemplateSource
+{
+    [JsonPropertyName("path")]
+    public string? Path { get; set; }
+
+    [JsonPropertyName("repository")]
+    public string? Repository { get; set; }
+
+    [JsonPropertyName("ref")]
+    public string? Ref { get; set; }
 }
 
 /// <summary>

@@ -1,7 +1,5 @@
 ﻿{
-  "catalog": {
-    "href": "https://example.test/index?q={search}\u0026cliVersion={cliVersion}"
-  },
+  "empty": {},
   "git-head": {
     "repository": "https://example.test/head"
   },

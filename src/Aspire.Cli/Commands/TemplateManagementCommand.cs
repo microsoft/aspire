@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
+using Aspire.Cli.Utils;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -22,13 +23,12 @@ internal sealed class TemplateManagementCommand : ParentCommand
         Subcommands.Add(new SourceCommand(store, services));
     }
 
-    internal sealed record AddSourceOptions(string Name, string? Path, string? Repository, string? Ref, string? Href)
+    internal sealed record AddSourceOptions(string Name, string? Path, string? Repository, string? Ref)
     {
         internal static Argument<string> NameArgument { get; } = new("name") { Description = NewCommandStrings.TemplateSourceNameDescription };
         internal static Option<string?> PathOption { get; } = new("--path") { Description = NewCommandStrings.TemplateSourcePathDescription };
         internal static Option<string?> RepositoryOption { get; } = new("--repository") { Description = NewCommandStrings.TemplateSourceRepositoryDescription };
         internal static Option<string?> RefOption { get; } = new("--ref") { Description = NewCommandStrings.TemplateSourceRefDescription };
-        internal static Option<string?> HrefOption { get; } = new("--href") { Description = NewCommandStrings.TemplateSourceHrefDescription };
 
         public static AddSourceOptions FromParseResult(ParseResult parseResult)
         {
@@ -36,8 +36,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
                 parseResult.GetRequiredValue(NameArgument),
                 parseResult.GetValue(PathOption),
                 parseResult.GetValue(RepositoryOption),
-                parseResult.GetValue(RefOption),
-                parseResult.GetValue(HrefOption));
+                parseResult.GetValue(RefOption));
             options.Validate();
             return options;
         }
@@ -45,7 +44,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
         public JsonObject ToJsonObject()
         {
             JsonObject source = new();
-            foreach (var (field, value) in new[] { ("path", Path), ("repository", Repository), ("ref", Ref), ("href", Href) })
+            foreach (var (field, value) in new[] { ("path", Path), ("repository", Repository), ("ref", Ref) })
             {
                 if (value is not null)
                 {
@@ -58,8 +57,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
         private void Validate()
         {
             TemplateSourceConfiguration.ValidateName(Name);
-            using var document = JsonDocument.Parse(ToJsonObject().ToJsonString());
-            TemplateSourceConfiguration.Parse(document.RootElement, $"templates.{Name}", requireComplete: true);
+            TemplateSourceConfiguration.Parse(Path, Repository, Ref, $"templates.{Name}", requireComplete: true);
         }
     }
 
@@ -102,7 +100,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
                 return CommandResult.Failure(CliExitCodes.InvalidCommand, NewCommandStrings.TemplateSourceReadFailed);
             }
 
-            var orderedSources = sources.OrderBy(source => source.Key, StringComparer.OrdinalIgnoreCase)
+            var orderedSources = sources.OrderBy(source => source.Key, StringComparers.TemplateSourceName)
                 .ThenBy(source => source.Key, StringComparer.Ordinal);
             if (parseResult.GetValue(_format) == OutputFormat.Json)
             {
@@ -121,14 +119,14 @@ internal sealed class TemplateManagementCommand : ParentCommand
             else
             {
                 var table = new Table()
-                    .AddColumn(NewCommandStrings.TemplateSourceNameHeader)
-                    .AddColumn(NewCommandStrings.TemplateSourceConfigurationHeader);
+                    .AddBoldColumn(NewCommandStrings.TemplateSourceNameHeader)
+                    .AddBoldColumn(NewCommandStrings.TemplateSourceConfigurationHeader);
                 foreach (var (name, source) in orderedSources)
                 {
                     var configuration = source is JsonObject definition
                         ? string.Join(Environment.NewLine, definition.Select(field => $"{field.Key}: {field.Value?.ToString() ?? "null"}"))
                         : source?.ToJsonString() ?? "null";
-                    table.AddRow(name.EscapeMarkup(), configuration.EscapeMarkup());
+                    table.AddRow(name.EscapeMarkup(), string.IsNullOrEmpty(configuration) ? "-" : configuration.EscapeMarkup());
                 }
 
                 InteractionService.DisplayRenderable(table);
@@ -150,7 +148,6 @@ internal sealed class TemplateManagementCommand : ParentCommand
             Options.Add(AddSourceOptions.PathOption);
             Options.Add(AddSourceOptions.RepositoryOption);
             Options.Add(AddSourceOptions.RefOption);
-            Options.Add(AddSourceOptions.HrefOption);
         }
 
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)

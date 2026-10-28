@@ -1,0 +1,16 @@
+﻿{
+  "templates": {
+    "local": {
+      "path": "/templates"
+    },
+    "git": {
+      "repository": "https://example.test/templates"
+    },
+    "unfinished": {
+      "ref": "main"
+    }
+  },
+  "unrelated": {
+    "enabled": true
+  }
+}

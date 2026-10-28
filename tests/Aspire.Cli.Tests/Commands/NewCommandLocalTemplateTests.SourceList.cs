@@ -7,7 +7,6 @@ using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
-using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
@@ -24,7 +23,7 @@ public partial class NewCommandLocalTemplateTests
           "templates": {
             "z-git": { "repository": "https://example.test/templates", "path": "templates/api", "ref": "release/17.0" },
             "Local [red]": { "path": "/templates/with [brackets]" },
-            "catalog": { "href": "https://example.test/index?q={search}&cliVersion={cliVersion}" },
+            "empty": {},
             "git-head": { "repository": "https://example.test/head" },
             "unfinished": { "ref": "main" }
           }
@@ -39,16 +38,14 @@ public partial class NewCommandLocalTemplateTests
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
         var git = new TestGitCommandRunner();
-        using var handler = new MockHttpMessageHandler(new InvalidOperationException("Listing must not make HTTP requests."));
         var services = CreateServices(workspace, interaction, interactive: true);
-        services.AddSingleton<IHttpClientFactory>(new MockHttpClientFactory(handler));
         services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
         var settings = provider.GetRequiredService<IConfigurationService>();
         await File.WriteAllTextAsync(settings.GetSettingsFilePath(true), SourceListSettings);
         var localPath = settings.GetSettingsFilePath(false);
         Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
-        const string localSettings = """{"templates":{"project-only":{"href":"https://example.test/project"}}}""";
+        const string localSettings = """{"templates":{"project-only":{"repository":"https://example.test/project"}}}""";
         await File.WriteAllTextAsync(localPath, localSettings);
 
         var result = await provider.GetRequiredService<RootCommand>()

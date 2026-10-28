@@ -94,7 +94,7 @@ edit; source fallback does not guess whether their MSBuild conditions are active
 
 ## Configured template sources
 
-Register named local directories, Git repositories, or HTTPS template catalogs in the
+Register named local directories or Git repositories in the
 CLI's global configuration. Source management is always global; no `--global` flag is needed.
 
 Interactive `aspire new` offers **Search for more templates** only when at least
@@ -105,8 +105,6 @@ definitions only; it does not discover templates or contact remote sources.
 aspire template source add company --path /absolute/path/to/company-templates
 aspire template source add examples --repository https://github.com/microsoft/aspire-templates
 aspire template source add release --repository https://github.com/microsoft/aspire-templates --ref release/17.0 --path templates
-aspire template source add catalog --href 'https://example.com/templates.json'
-aspire template source add search --href 'https://example.com/templates?q={search}&cliVersion={cliVersion}'
 aspire template source remove examples
 aspire template source list
 aspire template source list --format json
@@ -124,12 +122,6 @@ This writes the following shape to the global `~/.aspire/aspire.config.json` fil
       "repository": "https://github.com/microsoft/aspire-templates",
       "ref": "release/17.0",
       "path": "templates"
-    },
-    "catalog": {
-      "href": "https://example.com/templates.json"
-    },
-    "search": {
-      "href": "https://example.com/templates?q={search}&cliVersion={cliVersion}"
     }
   }
 }
@@ -168,15 +160,16 @@ the global `templates` object (without the surrounding `templates` property):
 }
 ```
 
-Global migration and edits share a configuration lock. In-flight edits follow the
-preferred global file if another CLI invocation migrates legacy settings.
+Source-management commands require the modern global `aspire.config.json`.
+If only legacy `globalsettings.json` exists, they fail without modifying it.
+Run `aspire config info` to perform the existing startup migration, then retry.
 
 Listing sorts sources by name, preserves configured fields without adding defaults,
 and includes incomplete source objects so they can be inspected while editing.
 No configured sources produces `{}` in JSON mode. Invalid/unreadable global
 configuration fails with a nonzero exit code and diagnostics on stderr, not an
 empty success result. Startup normalization and legacy-config migration also leave
-configuration files untouched when listing. Listing does not scan directories, contact catalogs, resolve
+configuration files untouched when listing. Listing does not scan directories, resolve
 Git refs, or clone repositories.
 
 The `repository` value must be an HTTPS or SSH URL, for example
@@ -192,9 +185,9 @@ interactive Git credential prompt.
 Use a repository object to select a branch, tag, or full commit SHA with `ref`, or
 limit discovery to a repository-relative `path`. Omit `ref` to use the default `HEAD`
 and omit `path` to search the repository root (`.`). Paths must stay inside the
-repository and must not traverse symbolic links. Object fields are case-sensitive:
-only `repository`, `ref`, and `path` are accepted for Git sources; supplied values must
-be nonempty strings. A catalog uses `href` alone and cannot include these Git/local fields.
+repository and must not traverse symbolic links. Git sources use
+`repository`, `ref`, and `path`; supplied values must
+be nonempty strings.
 Invalid combinations and unknown fields are rejected before saving. For stepwise
 editing with `aspire config set templates.<name>.<field> <value> --global`, incomplete
 Git objects are allowed until discovery, but supplied paths are still validated;
@@ -219,56 +212,12 @@ of these options therefore keeps the picker restricted to built-in templates.
 
 Directories are scanned and repositories are acquired only when searching, not when
 displaying help or the default picker. Repository resolution and cloning show progress.
+Malformed source configuration fails the command rather than skipping entries.
 A source that cannot be read, resolved, authenticated, or cloned produces a warning
 without blocking other sources. Cancellation stops the search. You can search again
 or return to the default templates without creating project files.
 Repeated queries reuse template-engine sessions for local directories and unchanged
 Git checkouts, keeping selected template callbacks alive through generation.
-
-### HTTPS template catalogs
-
-Static JSON files and searchable endpoints return the same envelope:
-
-```json
-{
-  "templates": [
-    {
-      "name": "Contoso API",
-      "description": "An API with PostgreSQL",
-      "repository": "https://github.com/contoso/templates",
-      "ref": "release/17.0",
-      "path": "templates/api"
-    }
-  ],
-  "nextLink": "https://example.com/templates?continuation=opaque-token"
-}
-```
-
-Each result requires nonempty `name`, `description`, `repository`, `ref`, and `path`
-strings. Its repository-relative path must identify exactly one .NET template.
-Invalid entries produce warnings without hiding valid entries. Additional metadata is ignored.
-
-`nextLink` is optional; omit it or return `null` on the final page. The CLI
-automatically follows absolute or relative links, resolving relative links against
-the current page without reconstructing the query or substituting placeholders.
-Links must retain the original HTTPS host and port, without credentials or fragments.
-Repeated links are rejected. Empty pages still follow their continuation.
-Each catalog search is limited to 10 pages, 30 seconds overall, and 4 MiB of
-response bodies in total. Invalid continuations, exceeded limits, and failed pages
-reject that catalog with a warning instead of showing an incomplete result set;
-other configured sources remain available.
-
-Optional `{search}` and `{cliVersion}` placeholders are supported in the URL query
-only. Values are URL-escaped; the CLI always filters names and descriptions locally,
-even when the server also filters. An empty query lists the entire returned catalog.
-`cliVersion` is the CLI build identity, not a local compatibility filter.
-
-Catalog discovery does not resolve or clone Git repositories. Selecting a result
-acquires only its repository/ref and then uses the actual template's parameter prompts.
-HTTPS endpoints cannot contain credentials or fragments; redirects and cookies are
-disabled. Search text is sent
-to every configured catalog, so configure only trusted endpoints. Error diagnostics
-do not include request URLs, search text, or response bodies.
 
 ## Examples
 

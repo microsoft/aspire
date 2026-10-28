@@ -21,6 +21,7 @@ public partial class NewCommandLocalTemplateTests
 {
     [Theory]
     [InlineData("{}")]
+    [InlineData("""{ "templates": null }""")]
     [InlineData("""{ "unrelated": true }""")]
     public async Task ConfiguredSources_AbsentSettingHasNoSources(string json)
     {
@@ -51,11 +52,10 @@ public partial class NewCommandLocalTemplateTests
 
     [Theory]
     [InlineData("[]")]
-    [InlineData("""{ "templates": null }""")]
     [InlineData("""{ "templates": [] }""")]
     [InlineData("""{ "templates": "relative" }""")]
     [InlineData("{")]
-    public async Task ConfiguredSources_InvalidConfigurationReportsWarning(string json)
+    public async Task ConfiguredSources_InvalidConfigurationFailsDiscovery(string json)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
@@ -63,13 +63,10 @@ public partial class NewCommandLocalTemplateTests
         var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
         await File.WriteAllTextAsync(path, json);
 
-        var sources = await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default);
+        await Assert.ThrowsAsync<JsonException>(() =>
+            provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
 
-        Assert.Empty(sources);
-        var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, warning.Emoji);
-        Assert.StartsWith(string.Format(CultureInfo.CurrentCulture,
-            NewCommandStrings.TemplateSourceSearchFailed, path, ""), warning.Message);
+        Assert.Empty(interaction.DisplayedMessages);
     }
 
     [Theory]
@@ -90,7 +87,6 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("\"https://user:password@example.test/templates\"")]
     [InlineData("\"https://token@example.test/templates\"")]
     [InlineData("\"ssh://git:password@example.test/templates\"")]
-    [InlineData("\"https://example.test/templates?q={search}\"")]
     [InlineData("\"https://example.test/templates#main\"")]
     [InlineData("\"https:///templates\"")]
     [InlineData("\"https:example.test/templates\"")]
@@ -112,21 +108,18 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("""{ "repository": "https://token@example.test/templates" }""")]
     [InlineData("""{ "repository": "https://example.test/templates?q=search" }""")]
     [InlineData("""{ "repository": "https://example.test/templates#main" }""")]
-    [InlineData("""{ "repository": "https://example.test/templates", "ref": null }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "ref": 42 }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "ref": {} }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "ref": "" }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "ref": " " }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "ref": "main\n" }""")]
-    [InlineData("""{ "repository": "https://example.test/templates", "path": null }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "path": false }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "path": [] }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "path": "" }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "path": " " }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "path": "templates\u0000" }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "refs": "release/17.0" }""")]
-    [InlineData("""{ "Repository": "https://example.test/templates" }""")]
-    public async Task ConfiguredSources_InvalidEntryDoesNotHideValidSources(string invalidValue)
+    public async Task ConfiguredSources_InvalidEntryFailsDiscovery(string invalidValue)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
@@ -142,17 +135,30 @@ public partial class NewCommandLocalTemplateTests
             }
             """);
 
+        var error = await Record.ExceptionAsync(() =>
+            provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
+
+        Assert.True(error is JsonException or TemplateSourceConfigurationException, error?.ToString());
+        Assert.Empty(interaction.DisplayedMessages);
+    }
+
+    [Theory]
+    [InlineData("""{ "Repository": "https://example.test/templates" }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "ref": null }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "path": null }""")]
+    public async Task ConfiguredSources_UsesConfigurationDeserializationConventions(string definition)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
+        var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
+        await File.WriteAllTextAsync(path, $$"""{"templates": { "company": {{definition}} } }""");
+
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
 
-        Assert.Equal("working", source.Key);
-        Assert.Equal(new TemplateSource(workspace.Path, null, null), source.Value.Template);
-        var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, warning.Emoji);
-        using var document = JsonDocument.Parse(invalidValue);
-        var error = Assert.Throws<TemplateSourceConfigurationException>(() =>
-            TemplateSourceConfiguration.Parse(document.RootElement, "templates.broken", requireComplete: true));
-        Assert.Equal(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed,
-            "broken", error.Message), warning.Message);
+        Assert.Equal("company", source.Key);
+        Assert.Equal(new TemplateSource(".", "https://example.test/templates", null), source.Value.Template);
+        Assert.Empty(interaction.DisplayedMessages);
     }
 
     [Theory]
@@ -165,8 +171,9 @@ public partial class NewCommandLocalTemplateTests
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new() { [sourceName] = workspace.Path });
 
-        Assert.Empty(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
-        Assert.Equal(KnownEmojis.Warning, Assert.Single(interaction.DisplayedMessages).Emoji);
+        await Assert.ThrowsAsync<TemplateSourceConfigurationException>(() =>
+            provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
+        Assert.Empty(interaction.DisplayedMessages);
     }
 
     [Fact]
@@ -210,6 +217,25 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(query.Length == 0
             ? ["second-source", "first-source"]
             : expectedCount == 0 ? [] : new[] { "first-source" }, results.Select(result => result.SourceName));
+        Assert.Empty(interaction.DisplayedMessages);
+    }
+
+    [Fact]
+    public async Task ConfiguredSources_SearchesActualDescriptionWithoutChangingDisplayName()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateSearchTemplateAsync(workspace, "template", "company-api", "Company starter", "Found",
+            description: "Uses PostgreSQL");
+        var interaction = new TestInteractionService();
+        using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
+        await WriteConfiguredSourcesAsync(provider, new() { ["examples"] = Path.Combine(workspace.Path, "template") });
+
+        var result = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().SearchAsync("POSTGRESQL", default));
+
+        Assert.Equal("examples", result.SourceName);
+        Assert.Equal("company-api", result.Template.Name);
+        Assert.Equal("Company starter", result.Template.Description);
+        Assert.Equal("Uses PostgreSQL", result.Template.SearchDescription);
         Assert.Empty(interaction.DisplayedMessages);
     }
 
@@ -428,7 +454,7 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("""{"templates":{"unfinished":{"ref":"main"}}}""", true)]
     [InlineData("""{"templates":"invalid"}""", true)]
     [InlineData("{", true)]
-    public async Task ConfiguredSources_InitialPickerHidesSearchWithoutUsableGlobalSources(string? globalSettings, bool warning)
+    public async Task ConfiguredSources_InitialPickerRejectsMalformedConfigurationOrHidesSearchWithoutSources(string? globalSettings, bool malformed)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cancellation = new CancellationTokenSource();
@@ -441,7 +467,7 @@ public partial class NewCommandLocalTemplateTests
         }
         var localPath = settings.GetSettingsFilePath(false);
         Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
-        await File.WriteAllTextAsync(localPath, """{"templates":{"project-only":{"href":"https://example.test/templates"}}}""");
+        await File.WriteAllTextAsync(localPath, """{"templates":{"project-only":{"repository":"https://example.test/templates"}}}""");
         var selectionCount = 0;
         interaction.PromptForSelectionCallback = (_, choices, _, _) =>
         {
@@ -456,13 +482,14 @@ public partial class NewCommandLocalTemplateTests
         var result = await provider.GetRequiredService<RootCommand>().Parse("new")
             .InvokeAsync(cancellationToken: cancellation.Token).DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.Cancelled, result);
-        Assert.Equal(1, selectionCount);
+        Assert.Equal(malformed ? CliExitCodes.InvalidCommand : CliExitCodes.Cancelled, result);
+        Assert.Equal(malformed ? 0 : 1, selectionCount);
         Assert.Empty(interaction.StringPromptCalls);
         Assert.Empty(interaction.ShownStatuses);
-        if (warning)
+        if (malformed)
         {
-            Assert.Equal(KnownEmojis.Warning, Assert.Single(interaction.DisplayedMessages).Emoji);
+            Assert.Single(interaction.DisplayedErrors);
+            Assert.Equal(KnownEmojis.PageFacingUp, Assert.Single(interaction.DisplayedMessages).Emoji);
         }
         else
         {
@@ -546,7 +573,7 @@ public partial class NewCommandLocalTemplateTests
         var interaction = new TestInteractionService();
         interaction.PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("No usable choices.");
         using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
-        await WriteConfiguredSourcesAsync(provider, new() { ["catalog"] = new { href = "https://example.test/index" } });
+        await WriteConfiguredSourcesAsync(provider, new() { ["company"] = workspace.Path });
 
         var result = await provider.GetRequiredService<RootCommand>().Parse("new --language unknown").InvokeAsync().DefaultTimeout();
 
@@ -617,14 +644,15 @@ public partial class NewCommandLocalTemplateTests
             }));
 
     private static async Task CreateSearchTemplateAsync(
-        TemporaryWorkspace workspace, string directory, string shortName, string description, string marker)
+        TemporaryWorkspace workspace, string directory, string shortName, string displayName, string marker, string? description = null)
     {
         var config = workspace.CreateDirectory($"{directory}/.template.config");
         await File.WriteAllTextAsync(Path.Combine(config.FullName, "template.json"), JsonSerializer.Serialize(new
         {
             identity = $"Aspire.Search.{directory}",
-            name = description,
+            name = displayName,
             shortName,
+            description,
             sourceName = "TemplateApp",
             symbols = new
             {

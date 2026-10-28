@@ -51,7 +51,7 @@ internal sealed class ConfigSource
         // Require fully qualified local paths so a saved binding cannot change repositories
         // when a later command runs in a different working directory.
         var isLocal = System.IO.Path.IsPathFullyQualified(Repository);
-        var isUrl = GitRepositoryUrl.IsValid(Repository);
+        var isUrl = GitHelpers.IsValidRepositoryUrl(Repository);
         var at = Repository.IndexOf('@');
         var colon = Repository.IndexOf(':');
         var isScp = at > 0 && colon > at + 1 && colon < Repository.Length - 1

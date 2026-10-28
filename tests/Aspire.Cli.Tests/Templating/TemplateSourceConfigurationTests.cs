@@ -58,17 +58,6 @@ public class TemplateSourceConfigurationTests(ITestOutputHelper outputHelper)
     [InlineData("{}", "templates.example")]
     [InlineData("""{"path":"relative"}""", "templates.example")]
     [InlineData("""{"ref":"main"}""", "templates.example")]
-    [InlineData("""{"href":""}""", "templates.example.href")]
-    [InlineData("""{"href":null}""", "templates.example.href")]
-    [InlineData("""{"href":"http://example.test/index"}""", "templates.example.href")]
-    [InlineData("""{"href":"https://user@example.test/index"}""", "templates.example.href")]
-    [InlineData("""{"href":"https://example.test/{search}"}""", "templates.example.href")]
-    [InlineData("""{"href":"https://{search}/index"}""", "templates.example.href")]
-    [InlineData("""{"href":"https://example.test/index?q={unknown}"}""", "templates.example.href")]
-    [InlineData("""{"href":"https://example.test/index#fragment"}""", "templates.example.href")]
-    [InlineData("""{"href":"https://example.test/index","path":"templates"}""", "templates.example.path")]
-    [InlineData("""{"href":"https://example.test/index","ref":"main"}""", "templates.example.ref")]
-    [InlineData("""{"href":"https://example.test/index","repository":"https://example.test/repo"}""", "templates.example.repository")]
     [InlineData("""{"repository":false}""", "templates.example.repository")]
     [InlineData("""{"repository":"http://example.test/repo"}""", "templates.example.repository")]
     [InlineData("""{"repository":"https://example.test/repo","ref":42}""", "templates.example.ref")]
@@ -93,7 +82,6 @@ public class TemplateSourceConfigurationTests(ITestOutputHelper outputHelper)
         using var document = JsonDocument.Parse(json);
         var source = TemplateSourceConfiguration.Parse(document.RootElement, "templates.example", requireComplete: false);
         Assert.Null(source.Template);
-        Assert.Null(source.Href);
         Assert.Throws<TemplateSourceConfigurationException>(() =>
             TemplateSourceConfiguration.Parse(document.RootElement, "templates.example", requireComplete: true));
     }
@@ -105,18 +93,6 @@ public class TemplateSourceConfigurationTests(ITestOutputHelper outputHelper)
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { path = directory }));
         var source = TemplateSourceConfiguration.Parse(document.RootElement, "templates.example", requireComplete: true);
         Assert.Equal(new TemplateSource(directory, null, null), source.Template);
-        Assert.Null(source.Href);
-    }
-
-    [Theory]
-    [InlineData("https://example.test/templates.json")]
-    [InlineData("https://example.test/index?q={search}&cliVersion={cliVersion}")]
-    public void ParseAcceptsStaticAndSearchableCatalogs(string href)
-    {
-        using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { href }));
-        var source = TemplateSourceConfiguration.Parse(document.RootElement, "templates.example", requireComplete: true);
-        Assert.Equal(href, source.Href);
-        Assert.Null(source.Template);
     }
 
     [Theory]

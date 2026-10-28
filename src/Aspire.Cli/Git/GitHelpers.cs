@@ -3,9 +3,9 @@
 
 namespace Aspire.Cli.Git;
 
-internal static class GitRepositoryUrl
+internal static class GitHelpers
 {
-    public static bool IsValid(string repository) =>
+    public static bool IsValidRepositoryUrl(string repository) =>
         !repository.Any(c => char.IsWhiteSpace(c) || char.IsControl(c))
         && !repository.Contains('\\')
         && !repository.Contains('?')

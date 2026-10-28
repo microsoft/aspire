@@ -17,7 +17,7 @@ internal sealed class TemplateSourceStore(
 {
     public async Task<JsonObject> ListAsync(CancellationToken cancellationToken)
     {
-        var settings = await ReadAsync(configurationService.GetSettingsFilePath(isGlobal: true), cancellationToken);
+        var settings = await ReadAsync(GetSettingsFilePath(), cancellationToken);
         // Listing is configuration management, not discovery. Keep incomplete sources visible
         // so users can inspect and finish objects created through stepwise config edits.
         return GetSources(settings);
@@ -29,17 +29,16 @@ internal sealed class TemplateSourceStore(
         using var document = JsonDocument.Parse(source.ToJsonString());
         TemplateSourceConfiguration.Parse(document.RootElement, $"templates.{name}", requireComplete: true);
 
-        var path = configurationService.GetSettingsFilePath(isGlobal: true);
+        var path = GetSettingsFilePath();
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
             executionContext, ConfigurationHelper.GetCanonicalGlobalSettingsFile(new FileInfo(path)), logger, cancellationToken)
             ?? throw new IOException("Could not acquire the global template source configuration lock.");
-        // Startup may have captured the legacy path before another invocation migrated it.
-        path = configurationService.GetSettingsFilePath(isGlobal: true);
+        path = GetSettingsFilePath();
         var settings = await ReadAsync(path, cancellationToken);
         var sources = GetSources(settings);
         // IConfiguration keys are case-insensitive even though JSON properties are not.
         // Do not create a global file that the configuration provider cannot load.
-        if (sources.Any(entry => entry.Key.Equals(name, StringComparison.OrdinalIgnoreCase)))
+        if (sources.Any(entry => entry.Key.Equals(name, StringComparisons.TemplateSourceName)))
         {
             throw new TemplateSourceConfigurationException($"templates.{name}", NewCommandStrings.TemplateSourceAlreadyExists);
         }
@@ -50,14 +49,14 @@ internal sealed class TemplateSourceStore(
     public async Task<bool> RemoveAsync(string name, CancellationToken cancellationToken)
     {
         TemplateSourceConfiguration.ValidateName(name);
-        var path = configurationService.GetSettingsFilePath(isGlobal: true);
+        var path = GetSettingsFilePath();
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
             executionContext, ConfigurationHelper.GetCanonicalGlobalSettingsFile(new FileInfo(path)), logger, cancellationToken)
             ?? throw new IOException("Could not acquire the global template source configuration lock.");
-        path = configurationService.GetSettingsFilePath(isGlobal: true);
+        path = GetSettingsFilePath();
         var settings = await ReadAsync(path, cancellationToken);
         var sources = GetSources(settings);
-        var existing = sources.Select(entry => entry.Key).FirstOrDefault(key => key.Equals(name, StringComparison.OrdinalIgnoreCase));
+        var existing = sources.Select(entry => entry.Key).FirstOrDefault(key => key.Equals(name, StringComparisons.TemplateSourceName));
         if (existing is null)
         {
             return false;
@@ -65,15 +64,25 @@ internal sealed class TemplateSourceStore(
         sources.Remove(existing);
         if (sources.Count == 0)
         {
-            settings.Remove(TemplateSourceConfiguration.GetPropertyName(settings, "templates"));
+            settings.Remove(TemplateSourceConfiguration.GetPropertyName(settings, "templates", StringComparison.OrdinalIgnoreCase));
         }
         await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, settings, cancellationToken, preserveOwnershipAndAcl: true);
         return true;
     }
 
+    private string GetSettingsFilePath()
+    {
+        var path = configurationService.GetSettingsFilePath(isGlobal: true);
+        if (Path.GetFileName(path).Equals("globalsettings.json", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new TemplateSourceConfigurationException("templates", NewCommandStrings.TemplateSourceLegacyConfiguration);
+        }
+        return path;
+    }
+
     private static JsonObject GetSources(JsonObject settings)
     {
-        var key = TemplateSourceConfiguration.GetPropertyName(settings, "templates");
+        var key = TemplateSourceConfiguration.GetPropertyName(settings, "templates", StringComparison.OrdinalIgnoreCase);
         if (settings.TryGetPropertyValue(key, out var value))
         {
             return value as JsonObject

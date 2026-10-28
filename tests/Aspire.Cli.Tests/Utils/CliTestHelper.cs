@@ -163,7 +163,6 @@ internal static class CliTestHelper
         services.AddTransient(options.NuGetPackageCacheFactory);
         services.AddSingleton<TemplateNuGetConfigService>();
         services.AddSingleton(options.TemplateProviderFactory);
-        services.AddSingleton<TemplateCatalogService>();
         services.AddSingleton<TemplateSourceStore>();
         services.AddSingleton<ConfiguredTemplateSourceService>();
         // Template registration checks the real PATH, independently of command-specific environment fakes.

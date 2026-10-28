@@ -40,6 +40,38 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LoadAndSave_PreservesTypedTemplateSourcesAndUnmodeledSettings()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(path, """
+            {
+              "Templates": {
+                "local": { "Path": "/templates" },
+                "git": { "repository": "https://example.test/templates", "ref": null, "path": null },
+                "unfinished": { "ref": "main" }
+              },
+              "unrelated": { "enabled": true }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.Path);
+
+        Assert.NotNull(config);
+        Assert.NotNull(config.Templates);
+        Assert.Equal(["local", "git", "unfinished"], config.Templates.Keys);
+        Assert.Equal("/templates", config.Templates["local"]?.Path);
+        Assert.Equal("https://example.test/templates", config.Templates["git"]?.Repository);
+        Assert.Null(config.Templates["git"]?.Ref);
+        Assert.Null(config.Templates["git"]?.Path);
+        Assert.Equal("main", config.Templates["unfinished"]?.Ref);
+
+        config.Save(workspace.Path);
+
+        await Verify(await File.ReadAllTextAsync(path), "json");
+    }
+
+    [Fact]
     public void Load_ReturnsConfig_WhenFileContainsDocsSourceConfiguration()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -650,36 +682,6 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.NotNull(loaded.Profiles);
         Assert.True(loaded.Profiles.ContainsKey("default"));
         Assert.Equal("https://localhost:5001", loaded.Profiles["default"].ApplicationUrl);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task LegacyMigration_PreservesRawTemplateDefinitionsThroughLoadAndSave(bool mixedCase)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var section = mixedCase ? "Templates" : "templates";
-        var settingsPath = Path.Combine(workspace.Path, ".aspire", "settings.json");
-        var original = $$"""
-            {
-                "{{section}}": {
-                    "git": { "repository": "https://github.com/example/templates" },
-                    "catalog": { "href": "https://example.com/templates?q={search}&cliVersion={cliVersion}" },
-                    "partial": { "ref": "release/17.0", "path": "templates" },
-                    "invalid": false
-                }
-            }
-            """;
-        File.WriteAllText(settingsPath, original);
-
-        AspireConfigFile.LoadOrCreate(workspace.Path);
-        var config = AspireConfigFile.Load(workspace.Path);
-        Assert.NotNull(config);
-        config.Channel = "daily";
-        config.Save(workspace.Path);
-
-        await Verify(File.ReadAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName)), "json").UseParameters(mixedCase);
-        Assert.Equal(original, File.ReadAllText(settingsPath));
     }
 
     [Fact]

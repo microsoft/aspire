@@ -65,28 +65,25 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
         {
             await auto.RunCommandAsync("aspire template source add company --path \"$PWD/template\" --nologo", counter);
             await auto.RunCommandAsync("aspire template source add git-example --repository https://example.test/templates --ref main --path templates --nologo", counter);
-            await auto.RunCommandAsync("aspire template source add catalog --href 'https://example.test/index?q={search}&cliVersion={cliVersion}' --nologo", counter);
             // Do not suppress the banner explicitly: JSON mode must keep redirected stdout parseable.
             await auto.RunCommandAsync("aspire template source list --format json > sources.json", counter);
             var listed = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "sources.json")))!.AsObject();
-            Assert.Equal(["catalog", "company", "git-example"], listed.Select(source => source.Key));
+            Assert.Equal(["company", "git-example"], listed.Select(source => source.Key));
             Assert.Equal(CliE2ETestHelpers.ToContainerPath(Path.Combine(workspace.WorkspaceRoot.FullName, "template"), workspace),
                 listed["company"]!["path"]!.GetValue<string>());
             Assert.Equal("https://example.test/templates", listed["git-example"]!["repository"]!.GetValue<string>());
             Assert.Equal("main", listed["git-example"]!["ref"]!.GetValue<string>());
             Assert.Equal("templates", listed["git-example"]!["path"]!.GetValue<string>());
-            Assert.Equal("https://example.test/index?q={search}&cliVersion={cliVersion}", listed["catalog"]!["href"]!.GetValue<string>());
             await auto.RunCommandAsync("aspire template source list > sources.txt", counter);
             var table = await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "sources.txt"));
             Assert.Contains("company", table);
             Assert.Contains("git-example", table);
-            Assert.Contains("catalog", table);
             await auto.RunCommandAsync("cp \"$HOME/.aspire/aspire.config.json\" before.json", counter);
-            await auto.RunCommandAsync($"aspire template source add COMPANY --href https://example.test/replacement --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
+            await auto.RunCommandAsync($"aspire template source add COMPANY --repository https://example.test/replacement --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
             await auto.RunCommandAsync("cmp before.json \"$HOME/.aspire/aspire.config.json\"", counter);
-            await auto.RunCommandAsync($"aspire config set templates.company.href https://example.test/conflicting --global --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
+            await auto.RunCommandAsync($"aspire config set templates.company.path ../escape --global --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
             await auto.RunCommandAsync("cmp before.json \"$HOME/.aspire/aspire.config.json\"", counter);
-            await auto.RunCommandAsync("aspire template source remove git-example --nologo && aspire template source remove catalog --nologo", counter);
+            await auto.RunCommandAsync("aspire template source remove git-example --nologo", counter);
         }
 
         if (repository)
@@ -129,7 +126,7 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
             await auto.KeyAsync(Hex1bKey.End);
             await auto.EnterAsync();
             await auto.WaitUntilTextAsync("Search templates (leave empty to list all)", timeout: TimeSpan.FromSeconds(30));
-            await auto.TypeAsync("CUSTOM");
+            await auto.TypeAsync("DESCRIPTION METADATA");
             await auto.EnterAsync();
             await auto.WaitUntilTextAsync("custom-template-fixture", timeout: TimeSpan.FromSeconds(30));
             await auto.WaitUntilTextAsync("company", timeout: TimeSpan.FromSeconds(30));
