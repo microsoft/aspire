@@ -4,127 +4,127 @@
     <body>
       <trans-unit id="AllOptionDescription">
         <source>Stop all running AppHosts</source>
-        <target state="new">Stop all running AppHosts</target>
+        <target state="translated">실행 중인 모든 AppHost 중지</target>
         <note />
       </trans-unit>
       <trans-unit id="AmbiguousAppHostPid">
         <source>Multiple AppHost connections match PID {0}. No AppHosts were stopped.</source>
-        <target state="new">Multiple AppHost connections match PID {0}. No AppHosts were stopped.</target>
+        <target state="translated">PID {0}와(과) 일치하는 AppHost 연결이 여러 개 있습니다. 중지된 AppHost가 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostIdentifierWithProcessId">
         <source>{0} (PID {1})</source>
-        <target state="new">{0} (PID {1})</target>
+        <target state="translated">{0}(PID {1})</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotRunningAtPathWithPid">
         <source>No running AppHost at '{0}' with PID {1} was found. No AppHosts were stopped.</source>
-        <target state="new">No running AppHost at '{0}' with PID {1} was found. No AppHosts were stopped.</target>
+        <target state="translated">'{0}'에서 PID {1}(으)로 실행 중인 AppHost를 찾을 수 없습니다. 중지된 AppHost가 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotRunningWithPid">
         <source>No running AppHost with PID {0} was found. No AppHosts were stopped.</source>
-        <target state="new">No running AppHost with PID {0} was found. No AppHosts were stopped.</target>
+        <target state="translated">PID {0}(으)로 실행 중인 AppHost를 찾을 수 없습니다. 중지된 AppHost가 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStoppedSuccessfully">
         <source>{0} stopped successfully.</source>
-        <target state="new">{0} stopped successfully.</target>
+        <target state="translated">{0}이(가) 중지되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="CleaningPersistentResources">
         <source>Cleaning up persistent resources for {0}...</source>
-        <target state="new">Cleaning up persistent resources for {0}...</target>
+        <target state="translated">{0}에 대한 영구 리소스를 정리하는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="CouldNotDetermineAppHostPath">
         <source>Could not determine the AppHost project path.</source>
-        <target state="new">Could not determine the AppHost project path.</target>
+        <target state="translated">AppHost 프로젝트 경로를 확인할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupCompatibilityCheckFailed">
         <source>Could not inspect the AppHost project to verify persistent resource cleanup compatibility. Persistent resource cleanup will still be attempted.</source>
-        <target state="new">Could not inspect the AppHost project to verify persistent resource cleanup compatibility. Persistent resource cleanup will still be attempted.</target>
+        <target state="translated">영구 리소스 정리 호환성을 확인하기 위해 AppHost 프로젝트를 검사할 수 없습니다. 영구 리소스 정리는 계속 시도됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupExitCode">
         <source>DCP cleanup exited with code {0}.</source>
-        <target state="new">DCP cleanup exited with code {0}.</target>
+        <target state="translated">DCP 정리가 코드 {0}(으)로 종료되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupFailed">
         <source>Failed to clean up persistent resources for {0}. {1}</source>
-        <target state="new">Failed to clean up persistent resources for {0}. {1}</target>
+        <target state="translated">{0}에 대한 영구 리소스를 정리하지 못했습니다. {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupUnavailable">
         <source>Could not find the DCP executable needed to clean up persistent resources.</source>
-        <target state="new">Could not find the DCP executable needed to clean up persistent resources.</target>
+        <target state="translated">영구 리소스를 정리하는 데 필요한 DCP 실행 파일을 찾을 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupUnsupportedAppHostVersion">
         <source>This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted.</source>
-        <target state="new">This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted.</target>
+        <target state="translated">이 AppHost는 Aspire.Hosting {0}을(를) 사용하므로 영구 리소스 정리를 지원하지 않을 수 있습니다. 영구 리소스 정리를 사용하려면 Aspire.Hosting {1} 이상이 필요하거나 Aspire CLI 번들을 사용하도록 AppHost를 구성해야 합니다. 그래도 영구 리소스 정리를 시도합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpVolumeCleanupUnsupportedAppHostVersion">
         <source>This AppHost uses Aspire.Hosting {0}, which might not support persistent volume cleanup. Persistent volume cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent volume cleanup will still be attempted.</source>
-        <target state="new">This AppHost uses Aspire.Hosting {0}, which might not support persistent volume cleanup. Persistent volume cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent volume cleanup will still be attempted.</target>
+        <target state="translated">이 AppHost는 Aspire.Hosting {0}을(를) 사용하므로 영구 볼륨 정리를 지원하지 않을 수 있습니다. 영구 볼륨 정리를 사용하려면 Aspire.Hosting {1} 이상이 필요하거나 Aspire CLI 번들을 사용하도록 AppHost를 구성해야 합니다. 그래도 영구 볼륨 정리를 시도합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Stop a running AppHost</source>
-        <target state="needs-review-translation">실행 중인 Aspire AppHost를 중지합니다.</target>
+        <target state="translated">실행 중인 AppHost 중지</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToStopAppHost">
         <source>Failed to stop {0}.</source>
-        <target state="new">Failed to stop {0}.</target>
+        <target state="translated">{0}을(를) 중지하지 못했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ForceOptionDescription">
         <source>Stop the AppHost and clean up its persistent resources, preserving volumes by default</source>
-        <target state="new">Stop the AppHost and clean up its persistent resources, preserving volumes by default</target>
+        <target state="translated">AppHost를 중지하고 영구 리소스를 정리하며, 기본적으로 볼륨은 유지합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundRunningAppHost">
         <source>Found running AppHost: {0}</source>
-        <target state="new">Found running AppHost: {0}</target>
+        <target state="translated">실행 중인 AppHost를 찾음: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsNonInteractive">
         <source>Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</source>
-        <target state="new">Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</target>
+        <target state="translated">여러 AppHost가 실행 중입니다. {0}을(를) 사용하여 중지할 항목을 지정하거나 {1}을(를) 사용하여 모두 중지하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsRunning">
         <source>Multiple AppHosts are running. Use --apphost to specify which one to stop, or select one:</source>
-        <target state="needs-review-translation">여러 AppHost가 실행 중입니다. --apphost를 사용해 중지할 AppHost를 지정하거나 하나를 선택하세요.</target>
+        <target state="translated">여러 AppHost가 실행 중입니다. --apphost를 사용하여 중지할 항목을 지정하거나 다음을 선택합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="PersistentResourcesCleaned">
         <source>Persistent resources for {0} cleaned up.</source>
-        <target state="new">Persistent resources for {0} cleaned up.</target>
+        <target state="translated">{0}에 대한 영구 리소스를 정리했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="PidMustBePositive">
         <source>The --pid option must be a positive integer.</source>
-        <target state="new">The --pid option must be a positive integer.</target>
+        <target state="translated">--pid 옵션은 양의 정수여야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="PidOptionDescription">
         <source>Stop only the AppHost with this positive process ID (not the CLI process ID). With --apphost, the project file path must also match exactly. Cannot be combined with --all or --force.</source>
-        <target state="new">Stop only the AppHost with this positive process ID (not the CLI process ID). With --apphost, the project file path must also match exactly. Cannot be combined with --all or --force.</target>
+        <target state="translated">이 양수 프로세스 ID를 가진 AppHost만 중지합니다(CLI 프로세스 ID는 제외). --apphost를 지정하면 프로젝트 파일 경로도 정확히 일치해야 합니다. --all 또는 --force와 함께 사용할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file or a directory to search</source>
-        <target state="needs-review-translation">Aspire AppHost 프로젝트 파일의 경로입니다.</target>
+        <target state="translated">Aspire AppHost 프로젝트 파일 또는 검색할 디렉터리의 경로</target>
         <note />
       </trans-unit>
       <trans-unit id="ProtocolRequiresExactIdentity">
         <source>The experimental tray protocol requires --protocol-version 1 --format json --apphost with an absolute file path, a positive --pid, and a positive --started-at in Unix milliseconds. --all and --force are not allowed.</source>
-        <target state="new">The experimental tray protocol requires --protocol-version 1 --format json --apphost with an absolute file path, a positive --pid, and a positive --started-at in Unix milliseconds. --all and --force are not allowed.</target>
+        <target state="translated">실험적 트레이 프로토콜을 사용하려면 절대 파일 경로가 포함된 --protocol-version 1 --format json --apphost와 양수인 --pid 및 Unix 밀리초 단위의 양수인 --started-at이 필요합니다. --all 및 --force는 허용되지 않습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -134,12 +134,12 @@
       </trans-unit>
       <trans-unit id="SendingStopSignal">
         <source>Sending stop signal to {0}...</source>
-        <target state="new">Sending stop signal to {0}...</target>
+        <target state="translated">{0}에 중지 신호를 보내는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
         <source>Stopping {0}...</source>
-        <target state="new">Stopping {0}...</target>
+        <target state="translated">{0}을(를) 중지하는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="AllAndProjectMutuallyExclusive">
@@ -149,17 +149,17 @@
       </trans-unit>
       <trans-unit id="UnknownAspireHostingVersion">
         <source>an unknown version</source>
-        <target state="new">an unknown version</target>
+        <target state="translated">알 수 없는 버전</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumesOptionDescription">
         <source>Also remove persistent volumes created by Aspire (requires --force)</source>
-        <target state="new">Also remove persistent volumes created by Aspire (requires --force)</target>
+        <target state="translated">Aspire에서 만든 영구 볼륨도 제거(--force 필요)</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumesRequiresForce">
         <source>The {0} option requires the {1} option.</source>
-        <target state="new">The {0} option requires the {1} option.</target>
+        <target state="translated">{0} 옵션에는 {1} 옵션이 필요합니다.</target>
         <note />
       </trans-unit>
     </body>
