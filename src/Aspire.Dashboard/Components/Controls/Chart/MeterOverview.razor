@@ -19,18 +19,25 @@
            inside <a>, and nesting would make clicking the pin also navigate to the instrument. *@
         <div @key="instrument" class="meter-card @(cardData.LatestValue is null ? "no-data" : null)">
         <a class="meter-card-link" href="@GetInstrumentUrl(instrument)">
-            @if (GetResourceLabel is { } getResourceLabel)
+            @if (GetResourceLabel is not null || ShowMeterName)
             {
-                var resourceLabel = getResourceLabel(instrument);
-                @* Names the source of this instrument, since the same instrument can come from several resources. *@
-                <span class="meter-card-resource" title="@resourceLabel">
-                    <span class="meter-card-resource-dot" aria-hidden="true" style="background: @ColorGenerator.Instance.GetColorVariableByKey(resourceLabel)"></span>
-                    <span class="meter-card-resource-name">@resourceLabel</span>
-                </span>
-            }
-            @if (ShowMeterName)
-            {
-                <div class="meter-card-meter" title="@instrument.Parent.Name">@instrument.Parent.Name</div>
+                @* The instrument's source labels share one line: its resource, since the same instrument can come from
+                   several resources, and its meter when the list mixes meters. *@
+                <div class="meter-card-tags">
+                    @if (GetResourceLabel is { } getResourceLabel)
+                    {
+                        var resourceLabel = getResourceLabel(instrument);
+                        var resourceColor = ColorGenerator.Instance.GetColorVariableByKey(resourceLabel);
+                        <span class="meter-card-resource" title="@resourceLabel" style="--meter-card-resource-color: @resourceColor">
+                            <span class="meter-card-resource-dot" aria-hidden="true"></span>
+                            <span class="meter-card-resource-name">@resourceLabel</span>
+                        </span>
+                    }
+                    @if (ShowMeterName)
+                    {
+                        <span class="meter-card-meter" title="@instrument.Parent.Name">@instrument.Parent.Name</span>
+                    }
+                </div>
             }
             <div class="meter-card-header">
                 @if (icon is not null)

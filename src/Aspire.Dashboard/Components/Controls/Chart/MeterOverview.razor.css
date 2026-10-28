@@ -56,37 +56,54 @@
     opacity: 1;
 }
 
+/* The card's source labels: the resource an instrument comes from, and its meter when a list mixes meters. They're
+   squared tags in the monospace font of identifiers elsewhere in the dashboard, small and grey so they stay
+   secondary to the instrument's name and value. The resource tag is outlined in the resource's color, the same
+   color the resource has everywhere else in the dashboard. */
+/* One line, leaving room for the pin button at the card's top right. The tags shrink, and cut their text, before
+   the line wraps. */
+.meter-card-tags {
+    display: flex;
+    gap: 4px;
+    min-width: 0;
+    max-width: calc(100% - 24px);
+    margin-bottom: 4px;
+}
+
+.meter-card-resource,
+.meter-card-meter {
+    box-sizing: border-box;
+    flex: 0 1 auto;
+    min-width: 0;
+    padding: 0 6px;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--colorNeutralForeground3);
+    font-family: var(--aspire-font-mono);
+    font-size: 11px;
+    line-height: 16px;
+}
+
+.meter-card-resource {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-color: var(--meter-card-resource-color, var(--colorNeutralStroke2));
+}
+
 .meter-card-meter {
     overflow: hidden;
-    padding-right: 24px;
-    color: var(--colorNeutralForeground3);
-    font-size: var(--type-ramp-minus-1-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-/* The source resource of an instrument, shown when a list mixes instruments from several resources. */
-.meter-card-resource {
-    display: inline-flex;
-    align-items: center;
-    align-self: flex-start;
-    gap: 6px;
-    max-width: calc(100% - 24px);
-    margin-bottom: 4px;
-    padding: 1px 8px 1px 6px;
-    border: 1px solid var(--colorNeutralStroke2);
-    border-radius: 999px;
-    background: var(--colorNeutralBackground3);
-    color: var(--colorNeutralForeground2);
-    font-size: var(--type-ramp-minus-1-font-size);
-    line-height: 16px;
-}
-
 .meter-card-resource-dot {
     flex: none;
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
+    background: var(--meter-card-resource-color, var(--colorNeutralStroke2));
 }
 
 .meter-card-resource-name {
