@@ -1,424 +1,272 @@
-# Reproduces flaky tests by running them repeatedly across multiple OS runners.
-#
-# HOW TO USE:
-# 1. Edit the CONFIGURATION section below with the test you want to reproduce
-# 2. Push to your branch
-# 3. Trigger: gh workflow run reproduce-flaky-tests.yml --repo microsoft/aspire --ref <your-branch>
-# 4. Check the results across OSes and runners
-#
-# The configuration is designed to be edited by agents (Copilot, etc.)
-# who modify the env vars below and push to trigger a run.
-
+# Investigation only. Both arms use identical source at the pinned baseline;
+# only the excluded arm omits the 26 added process-spawning test cases.
 name: Reproduce Flaky Tests
 
 on:
   workflow_dispatch: {}
 
-# ============================================================
-# CONFIGURATION — Edit these values to customize the test run
-# ============================================================
+permissions:
+  contents: read
+
 env:
-  # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
-  # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
-  TEST_PROJECT: "Hosting"
-
-  # Test filter arguments passed to dotnet test (after the -- separator).
-  # Use quotes around wildcard patterns to prevent shell glob expansion.
-  # Examples:
-  #   --filter-method "*.TestMethodName"
-  #   --filter-class "*.TestClassName"
-  #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
-
-  # Target operating systems (comma-separated)
-  # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
-
-  # Number of parallel runners per OS
-  # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "3"
-
-  # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "3"
+  BASELINE: a0925cab2af4ff649e114a94df0dc61147dba564
+  TEST_PROJECT_PATH: tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj
+  ITERATIONS_PER_RUNNER: "2"
+  ITERATION_TIMEOUT_SECONDS: "900"
+  DOTNET_ROOT: ${{ github.workspace }}/.dotnet
+  NUGET_PACKAGES: ${{ github.workspace }}/.packages
+  TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: netaspireci.azurecr.io
+  MSBUILDTERMINALLOGGER: "false"
+  NO_COLOR: "1"
+  RunQuarantinedTests: "false"
+  RunOuterloopTests: "false"
+  SkipDefaultTestFilters: "false"
+  EXCLUDED_METHODS: |
+    ConfiguredGitSources_RealGitCheckoutRendersSelectedTemplate
+    ConfiguredGitSourceObjects_RealGitRefsRenderOnlySelectedSubdirectory
+    ValidateRepositoryPathRejectsLogicalEscapeRegardlessOfWorkingDirectory
+    ListStartup_PreservesGlobalAndProjectConfigurationBytes
+    RejectedCommand_PreservesGlobalAndProjectConfigurationBytes
+    SuccessfulCommand_NormalizesOnlyTheUpdatedGlobalFile
+    NormalStartup_MigratesBeforeSourceManagement
+    SourceListing_RejectsLegacyConfigurationWithoutAttemptingMigration
+    SourceCommands_RejectLegacyConfigurationWithoutWaitingForMutationLock
+    NormalStartup_WaitsForGlobalLockAndRechecksBothFiles
+    ConfigSet_MigratesBeforeEditingNonTemplateGlobalSettings
+    ConfigDelete_MigratesBeforeEditingGlobalSettings
+    ConfigSet_AppHostPathPreservesFlattenedLegacyFeatureSettings
+    NormalStartup_MalformedLegacyGlobalConfigurationAllowsRecovery
 
 jobs:
-
-  setup:
-    name: Generate matrix
-    if: ${{ github.repository == 'microsoft/aspire' }}
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.generate.outputs.matrix }}
-      is_cli_e2e: ${{ steps.detect_cli_e2e.outputs.is_cli_e2e }}
-    steps:
-      - name: Validate configuration
-        shell: bash
-        run: |
-          ERRORS=0
-
-          # Validate RUNNERS_PER_OS is a positive integer
-          if ! [[ "${{ env.RUNNERS_PER_OS }}" =~ ^[1-9][0-9]*$ ]]; then
-            echo "::error::RUNNERS_PER_OS must be a positive integer, got '${{ env.RUNNERS_PER_OS }}'"
-            ERRORS=1
-          fi
-
-          # Validate ITERATIONS_PER_RUNNER is a positive integer
-          if ! [[ "${{ env.ITERATIONS_PER_RUNNER }}" =~ ^[1-9][0-9]*$ ]]; then
-            echo "::error::ITERATIONS_PER_RUNNER must be a positive integer, got '${{ env.ITERATIONS_PER_RUNNER }}'"
-            ERRORS=1
-          fi
-
-          # Validate TARGET_OSES is not empty and contains only known runners
-          if [[ -z "${{ env.TARGET_OSES }}" ]]; then
-            echo "::error::TARGET_OSES must not be empty"
-            ERRORS=1
-          else
-            IFS=',' read -ra CHECK_OSES <<< "${{ env.TARGET_OSES }}"
-            for os in "${CHECK_OSES[@]}"; do
-              os=$(echo "$os" | xargs)
-              if [[ "$os" != "ubuntu-latest" && "$os" != "windows-latest" && "$os" != "macos-latest" ]]; then
-                echo "::error::Unknown OS in TARGET_OSES: '$os'. Allowed: ubuntu-latest, windows-latest, macos-latest"
-                ERRORS=1
-              fi
-            done
-          fi
-
-          # Validate TEST_FILTER is not the placeholder
-          if [[ "${{ env.TEST_FILTER }}" == *"YourTestMethodName"* ]]; then
-            echo "::error::TEST_FILTER still contains the placeholder 'YourTestMethodName'. Configure it with the actual test to reproduce."
-            ERRORS=1
-          fi
-
-          if [[ $ERRORS -ne 0 ]]; then exit 1; fi
-
-      - name: Detect CLI E2E project
-        id: detect_cli_e2e
-        shell: bash
-        run: |
-          if [ "${{ env.TEST_PROJECT }}" = "Cli.EndToEnd" ]; then
-            echo "is_cli_e2e=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_cli_e2e=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Generate runner matrix
-        id: generate
-        shell: bash
-        run: |
-          IFS=',' read -ra OSES <<< "${{ env.TARGET_OSES }}"
-          RUNNERS=${{ env.RUNNERS_PER_OS }}
-
-          ENTRIES=""
-          for os in "${OSES[@]}"; do
-            os=$(echo "$os" | xargs)
-            for i in $(seq 1 "$RUNNERS"); do
-              if [ -n "$ENTRIES" ]; then ENTRIES="$ENTRIES,"; fi
-              ENTRIES="${ENTRIES}{\"os\":\"${os}\",\"index\":${i}}"
-            done
-          done
-
-          MATRIX="{\"include\":[${ENTRIES}]}"
-          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
-
-          TOTAL=$(echo "$ENTRIES" | tr ',' '\n' | wc -l)
-          echo "Generated matrix: $TOTAL runners across ${#OSES[@]} OS(es)"
-          echo "Each runner will execute ${{ env.ITERATIONS_PER_RUNNER }} iterations"
-          echo "Total test executions: $(( TOTAL * ${{ env.ITERATIONS_PER_RUNNER }} ))"
-
-  build_cli_e2e_image:
-    name: Build CLI E2E Docker image
-    needs: setup
-    if: ${{ github.repository == 'microsoft/aspire' && needs.setup.outputs.is_cli_e2e == 'true' }}
-    uses: ./.github/workflows/build-cli-e2e-image.yml
-
   reproduce:
-    name: "${{ matrix.os }} #${{ matrix.index }}"
-    needs: [setup, build_cli_e2e_image]
-    if: >-
-      ${{
-        github.repository == 'microsoft/aspire' &&
-        !cancelled() &&
-        needs.setup.result == 'success' &&
-        (needs.build_cli_e2e_image.result == 'success' || needs.build_cli_e2e_image.result == 'skipped')
-      }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    name: "${{ matrix.arm }} / macOS ARM64 / runner ${{ matrix.index }}"
+    if: ${{ github.repository == 'microsoft/aspire' }}
+    runs-on: macos-latest
+    timeout-minutes: 70
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+      matrix:
+        arm: [included, excluded]
+        index: [1, 2, 3]
     env:
-      DOTNET_ROOT: ${{ github.workspace }}/.dotnet
-
+      COMPARISON_ARM: ${{ matrix.arm }}
+      RUNNER_INDEX: ${{ matrix.index }}
     steps:
-      - name: Setup vars (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          echo "DOTNET_SCRIPT=./dotnet.sh" >> $GITHUB_ENV
-          echo "BUILD_SCRIPT=./build.sh" >> $GITHUB_ENV
-          echo "${{ github.workspace }}/.dotnet" >> $GITHUB_PATH
-
-      - name: Setup vars (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          echo "DOTNET_SCRIPT=.\dotnet.cmd" >> $env:GITHUB_ENV
-          echo "BUILD_SCRIPT=.\build.cmd" >> $env:GITHUB_ENV
-          echo "${{ github.workspace }}\.dotnet" >> $env:GITHUB_PATH
-
-      - name: Checkout code
+      - name: Checkout experiment
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Trust HTTPS development certificate (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          EXIT_CODE=0
-          ${{ env.DOTNET_SCRIPT }} dev-certs https --trust || EXIT_CODE=$?
-          if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 4 ]; then
-            echo "dev-certs https --trust failed with exit code $EXIT_CODE"
-            exit $EXIT_CODE
-          fi
-        env:
-          WSL_INTEROP: ""
-
-      - name: Verify Docker is running (Linux)
-        if: runner.os == 'Linux'
-        run: docker info
-
-      - name: Download prebuilt CLI E2E Docker image
-        if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: cli-e2e-dotnet-image
-          path: ${{ github.workspace }}/cli-e2e-image
-
-      - name: Download prebuilt CLI E2E Java Docker image
-        if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: cli-e2e-polyglot-java-image
-          path: ${{ github.workspace }}/cli-e2e-image
-
-      - name: Download prebuilt CLI E2E polyglot Docker image
-        if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: cli-e2e-polyglot-image
-          path: ${{ github.workspace }}/cli-e2e-image
-
-      - name: Load prebuilt CLI E2E Docker image
-        if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
+      - name: Verify unchanged baseline and architecture
         shell: bash
         run: |
           set -euo pipefail
-          eng/scripts/load-cli-e2e-images.sh \
-            --image-dir "${{ github.workspace }}/cli-e2e-image" \
-            --require-dotnet true \
-            --require-polyglot true \
-            --require-java true
+          mkdir -p comparison
+          git rev-parse HEAD | tee comparison/experiment-sha.txt
+          test "$(git rev-parse HEAD^)" = "$BASELINE"
+          test "$(git diff --name-only "$BASELINE" HEAD)" = ".github/workflows/reproduce-flaky-tests.yml"
+          test "$(uname -m)" = "arm64"
+          uname -a | tee comparison/platform.txt
+          sw_vers | tee -a comparison/platform.txt
+          env | sort | grep -E '^(Image|RUNNER_|DOTNET_|RunQuarantinedTests|RunOuterloopTests|SkipDefaultTestFilters|MSBUILDTERMINALLOGGER|NUGET_PACKAGES|TESTCONTAINERS_)' \
+            > comparison/environment.txt
+          echo "${{ github.workspace }}/.dotnet" >> "$GITHUB_PATH"
 
       - name: Unlock macOS keychain
-        if: runner.os == 'macOS'
         uses: ./.github/actions/unlock-macos-keychain
 
-      - name: Compute test project path
-        shell: pwsh
-        run: |
-          $testShortName = "${{ env.TEST_PROJECT }}"
-          $projectPath1 = "${{ github.workspace }}/tests/$testShortName.Tests/$testShortName.Tests.csproj"
-          $projectPath2 = "${{ github.workspace }}/tests/Aspire.$testShortName.Tests/Aspire.$testShortName.Tests.csproj"
-
-          if (Test-Path -Path $projectPath1) {
-              $projectPath = $projectPath1
-          } elseif (Test-Path -Path $projectPath2) {
-              $projectPath = $projectPath2
-          } else {
-              Write-Error "No test project found for shortname '$testShortName'. Looked at: $projectPath1, $projectPath2"
-              exit 1
-          }
-
-          echo "TEST_PROJECT_PATH=$projectPath" >> $env:GITHUB_ENV
-          Write-Host "Resolved test project: $projectPath"
-
-      - name: Build test project
-        run: >
-          ${{ env.BUILD_SCRIPT }}
-          -restore -ci -build
-          -projects ${{ env.TEST_PROJECT_PATH }}
-          /p:InstallBrowsersForPlaywright=false
-          /p:RunQuarantinedTests=true
-
-      - name: Run test iterations (Linux/macOS)
-        if: runner.os != 'Windows'
-        env:
-          ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
-          NUGET_PACKAGES: ${{ github.workspace }}/.packages
-          TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # Skip default quarantine/outerloop exclusion filters so the target test can run
-          SkipDefaultTestFilters: true
-        run: |
-          PASS=0
-          FAIL=0
-          ITERATIONS=${{ env.ITERATIONS_PER_RUNNER }}
-
-          for i in $(seq 1 "$ITERATIONS"); do
-            echo "::group::Iteration $i/$ITERATIONS"
-
-            # Cleanup between iterations
-            rm -rf "${{ github.workspace }}/testresults" 2>/dev/null || true
-            pgrep -lf "dcp" 2>/dev/null | grep -E "\bdcp(\.exe|ctl)?\b" | awk '{print $1}' | while read pid; do
-              kill -9 "$pid" 2>/dev/null || true
-            done
-            sleep 1
-
-            # Run test (capture output for zero-test detection)
-            ITER_OUTPUT="${{ github.workspace }}/iter-output-$i.log"
-            set +e  # Disable errexit so pipefail doesn't abort before PIPESTATUS capture
-            ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" \
-              --no-restore \
-              --no-build \
-              -- \
-              --timeout 10m \
-              --results-directory "${{ github.workspace }}/testresults" \
-              ${{ env.TEST_FILTER }} \
-              2>&1 | tee "$ITER_OUTPUT"
-            RESULT=${PIPESTATUS[0]}
-            set -e
-
-            # Detect zero-test runs (--ignore-exit-code 8 in Testing.targets masks exit code 8)
-            if [ "$RESULT" -eq 0 ]; then
-              if ! grep -qiE "total:\s*[1-9]" "$ITER_OUTPUT" 2>/dev/null; then
-                echo "::error::Iteration $i: Zero tests executed. Verify TEST_FILTER and quarantine settings."
-                RESULT=8
-              fi
-            fi
-            rm -f "$ITER_OUTPUT"
-
-            if [ "$RESULT" -eq 0 ]; then
-              echo "✅ Iteration $i: PASS"
-              PASS=$((PASS + 1))
-            else
-              echo "❌ Iteration $i: FAIL (exit $RESULT)"
-              FAIL=$((FAIL + 1))
-              mkdir -p "${{ github.workspace }}/all-results/failure-$i"
-              cp -r "${{ github.workspace }}/testresults/"* "${{ github.workspace }}/all-results/failure-$i/" 2>/dev/null || true
-            fi
-
-            echo "::endgroup::"
-          done
-
-          echo ""
-          echo "========================================"
-          echo "Summary for runner #${{ matrix.index }} on ${{ matrix.os }}"
-          echo "  Passed: $PASS / $ITERATIONS"
-          echo "  Failed: $FAIL / $ITERATIONS"
-          echo "========================================"
-
-          if [ "$FAIL" -gt 0 ]; then exit 1; fi
-
-      - name: Run test iterations (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
-          NUGET_PACKAGES: ${{ github.workspace }}/.packages
-          TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # Skip default quarantine/outerloop exclusion filters so the target test can run
-          SkipDefaultTestFilters: true
-        run: |
-          $pass = 0
-          $fail = 0
-          $iterations = [int]"${{ env.ITERATIONS_PER_RUNNER }}"
-
-          for ($i = 1; $i -le $iterations; $i++) {
-            Write-Host "::group::Iteration $i/$iterations"
-
-            # Cleanup between iterations
-            Remove-Item -Recurse -Force "${{ github.workspace }}/testresults" -ErrorAction SilentlyContinue
-            Get-Process | Where-Object { $_.ProcessName -match '^dcp' } | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 1
-
-            # Run test (capture output for zero-test detection)
-            $iterOutput = Join-Path "${{ github.workspace }}" "iter-output-$i.log"
-            & ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" `
-              --no-restore `
-              --no-build `
-              -- `
-              --timeout 10m `
-              --results-directory "${{ github.workspace }}/testresults" `
-              ${{ env.TEST_FILTER }} *> $iterOutput
-            $result = $LASTEXITCODE
-            Get-Content $iterOutput
-
-            # Detect zero-test runs (--ignore-exit-code 8 in Testing.targets masks exit code 8)
-            if ($result -eq 0) {
-              $content = Get-Content $iterOutput -Raw -ErrorAction SilentlyContinue
-              if (-not ($content -match '(?i)total:\s*[1-9]')) {
-                Write-Host "::error::Iteration ${i}: Zero tests executed. Verify TEST_FILTER and quarantine settings."
-                $result = 8
-              }
-            }
-            Remove-Item $iterOutput -ErrorAction SilentlyContinue
-
-            if ($result -eq 0) {
-              Write-Host "✅ Iteration ${i}: PASS"
-              $pass++
-            } else {
-              Write-Host "❌ Iteration ${i}: FAIL (exit $result)"
-              $fail++
-              $dest = "${{ github.workspace }}/all-results/failure-$i"
-              New-Item -ItemType Directory -Path $dest -Force | Out-Null
-              Copy-Item -Recurse "${{ github.workspace }}/testresults/*" $dest -ErrorAction SilentlyContinue
-            }
-
-            Write-Host "::endgroup::"
-          }
-
-          Write-Host ""
-          Write-Host "========================================"
-          Write-Host "Summary for runner #${{ matrix.index }} on ${{ matrix.os }}"
-          Write-Host "  Passed: $pass / $iterations"
-          Write-Host "  Failed: $fail / $iterations"
-          Write-Host "========================================"
-
-          if ($fail -gt 0) { exit 1 }
-
-      - name: Upload failure logs
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: failures-${{ matrix.os }}-${{ matrix.index }}
-          path: all-results/
-          if-no-files-found: ignore
-
-  results:
-    if: ${{ always() && github.repository == 'microsoft/aspire' }}
-    runs-on: ubuntu-latest
-    name: Reproduce Results
-    needs: [reproduce]
-    permissions: {}
-    steps:
-      - name: Summary
+      - name: Restore and build identical test project
         shell: bash
         run: |
-          echo "## Reproduce Flaky Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Test Project | \`${{ env.TEST_PROJECT }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Filter | \`${{ env.TEST_FILTER }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| OSes | ${{ env.TARGET_OSES }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Runners per OS | ${{ env.RUNNERS_PER_OS }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Iterations per runner | ${{ env.ITERATIONS_PER_RUNNER }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          set -euo pipefail
+          ./build.sh -restore -ci -build \
+            -projects "$TEST_PROJECT_PATH" \
+            /p:InstallBrowsersForPlaywright=false \
+            2>&1 | tee comparison/build.log
+          ./dotnet.sh --info | tee comparison/dotnet-info.txt
+          ./dotnet.sh --list-sdks | tee comparison/sdks.txt
+          ./dotnet.sh --list-runtimes | tee comparison/runtimes.txt
+          ./dotnet.sh msbuild "$TEST_PROJECT_PATH" \
+            -getProperty:TestRunnerAdditionalArguments \
+            > comparison/effective-test-arguments.txt
+          cat comparison/effective-test-arguments.txt
 
-          if [ "${{ needs.reproduce.result }}" = "success" ]; then
-            echo "### ✅ All iterations passed on all runners" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.reproduce.result }}" = "failure" ]; then
-            echo "### ❌ Some runners reported failures" >> $GITHUB_STEP_SUMMARY
-            echo "Check individual job logs and uploaded failure artifacts for details." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### ⚠️ Reproduce job was ${{ needs.reproduce.result }}" >> $GITHUB_STEP_SUMMARY
-          fi
+      - name: Discover and execute controlled full-suite trials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+          import shlex
+          import signal
+          import subprocess
+          import sys
+          import time
+          import xml.etree.ElementTree as ET
 
-      - name: Fail if reproduce did not succeed
-        if: ${{ needs.reproduce.result != 'success' }}
-        run: exit 1
+          root = pathlib.Path("comparison").resolve()
+          arm = os.environ["COMPARISON_ARM"]
+          methods = os.environ["EXCLUDED_METHODS"].split()
+          excluded = [arg for method in methods for arg in ("--filter-not-method", "*." + method)]
+          traits = [arg for trait in ("category=failing", "quarantined=true", "outerloop=true")
+                    for arg in ("--filter-not-trait", trait)]
+          base = ["./dotnet.sh", "test", "--project", os.environ["TEST_PROJECT_PATH"],
+                  "--no-launch-profile", "--no-restore", "--no-build", "--"]
+          timeout = int(os.environ["ITERATION_TIMEOUT_SECONDS"])
+          ns = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
+
+          def process_table():
+              output = subprocess.check_output(
+                  ["ps", "-axo", "pid=,ppid=,lstart="], text=True)
+              result = {}
+              for line in output.splitlines():
+                  parts = line.split(None, 2)
+                  if len(parts) == 3:
+                      result[int(parts[0])] = (int(parts[1]), parts[2])
+              return result
+
+          def refresh_descendants(tracked):
+              table = process_table()
+              changed = True
+              while changed:
+                  changed = False
+                  for pid, (parent, started) in table.items():
+                      if (parent in tracked and pid not in tracked
+                              and table.get(parent, (None, None))[1] == tracked[parent]):
+                          tracked[pid] = started
+                          changed = True
+              return table
+
+          def terminate_tracked(tracked, directory):
+              # Track descendants while their parent is alive, including detached
+              # children; verify start times before signaling to avoid PID reuse.
+              events = []
+              for sig in (signal.SIGTERM, signal.SIGKILL):
+                  table = refresh_descendants(tracked)
+                  for pid, started in reversed(list(tracked.items())):
+                      if pid in table and table[pid][1] == started:
+                          try:
+                              os.kill(pid, sig)
+                              events.append({"pid": pid, "signal": sig.name})
+                          except ProcessLookupError:
+                              pass
+                  if events and sig == signal.SIGTERM:
+                      time.sleep(5)
+              (directory / "cleanup.json").write_text(json.dumps(events, indent=2))
+
+          def execute(command, directory, seconds):
+              directory.mkdir(parents=True, exist_ok=True)
+              (directory / "command.txt").write_text(shlex.join(command) + "\n")
+              env = dict(os.environ, ASPIRE__TEST__DCPLOGBASEPATH=str(directory / "dcp"))
+              started = time.monotonic()
+              timed_out = False
+              tracked = {}
+              with (directory / "console.log").open("w") as log:
+                  process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
+                                             env=env, start_new_session=True)
+                  table = process_table()
+                  if process.pid in table:
+                      tracked[process.pid] = table[process.pid][1]
+                  with (directory / "console.log").open() as reader:
+                      try:
+                          while process.poll() is None:
+                              refresh_descendants(tracked)
+                              chunk = reader.read()
+                              if chunk:
+                                  print(chunk, end="", flush=True)
+                              if time.monotonic() - started >= seconds:
+                                  timed_out = True
+                                  print(f"::error::External {seconds}s deadline: {directory.name}", flush=True)
+                                  break
+                              time.sleep(1)
+                      finally:
+                          terminate_tracked(tracked, directory)
+                      process.wait(timeout=30)
+                      print(reader.read(), end="", flush=True)
+              return {"exit_code": process.returncode, "timed_out": timed_out,
+                      "elapsed_seconds": round(time.monotonic() - started, 2)}
+
+          # Listing does not launch test bodies. Save both selections on every
+          # runner to check the actual discovered case delta without a class filter.
+          discoveries = {}
+          for selection, filters in (("included", []), ("excluded", excluded)):
+              directory = root / ("discovery-" + selection)
+              result = execute(base + traits + filters + ["--list-tests"], directory, 180)
+              discoveries[selection] = result
+              if result["exit_code"] != 0 or result["timed_out"]:
+                  (root / "discovery-status.json").write_text(json.dumps(discoveries, indent=2))
+                  raise RuntimeError("Discovery failed; no full-suite trials executed")
+          included_lines = (root / "discovery-included/console.log").read_text().splitlines()
+          excluded_lines = (root / "discovery-excluded/console.log").read_text().splitlines()
+          pattern = re.compile(r"\b(" + "|".join(re.escape(m) for m in methods) + r")\b")
+          removed = [line for line in included_lines if pattern.search(line)]
+          remaining = [line for line in excluded_lines if pattern.search(line)]
+          discoveries["excluded_case_count"] = len(removed)
+          discoveries["remaining_excluded_cases"] = remaining
+          discoveries["removed_cases"] = removed
+          parser = "ListDetection_UsesCommandPathAndGlobalOptionArity"
+          discoveries["parser_cases_included"] = sum(parser in line for line in included_lines)
+          discoveries["parser_cases_excluded"] = sum(parser in line for line in excluded_lines)
+          (root / "discovery-status.json").write_text(json.dumps(discoveries, indent=2))
+          if len(removed) != 26 or remaining:
+              raise RuntimeError(f"Expected exactly 26 excluded cases; discovered {len(removed)}")
+          if discoveries["parser_cases_included"] != 9 or discoveries["parser_cases_excluded"] != 9:
+              raise RuntimeError("Expected all nine parser-only cases to remain in both arms")
+
+          results = []
+          for iteration in range(1, int(os.environ["ITERATIONS_PER_RUNNER"]) + 1):
+              directory = root / f"iteration-{iteration}"
+              command = base + traits + (excluded if arm == "excluded" else []) + [
+                  "--results-directory", str(directory), "--report-trx",
+                  "--report-trx-filename", "results.trx"]
+              print(f"::group::{arm} runner {os.environ['RUNNER_INDEX']} iteration {iteration}", flush=True)
+              result = execute(command, directory, timeout)
+              result.update(arm=arm, runner=os.environ["RUNNER_INDEX"], iteration=iteration)
+              trx = list(directory.rglob("*.trx"))
+              result["trx_files"] = [str(path.relative_to(root)) for path in trx]
+              result["counters"] = []
+              result["failed_tests"] = []
+              result["trx_errors"] = []
+              for path in trx:
+                  try:
+                      tree = ET.parse(path)
+                  except ET.ParseError as error:
+                      result["trx_errors"].append({"file": str(path), "error": str(error)})
+                      continue
+                  counters = tree.find(".//t:Counters", ns)
+                  if counters is not None:
+                      result["counters"].append(dict(counters.attrib))
+                  result["failed_tests"].extend(
+                      dict(test.attrib) for test in tree.findall(".//t:UnitTestResult", ns)
+                      if test.get("outcome") == "Failed")
+              total = sum(int(c.get("total", 0)) for c in result["counters"])
+              result["zero_tests_or_missing_trx"] = total == 0
+              failed = sum(int(c.get("failed", 0)) for c in result["counters"])
+              result["passed"] = (result["exit_code"] == 0 and not result["timed_out"]
+                                  and total > 0 and failed == 0 and not result["trx_errors"])
+              (directory / "status.json").write_text(json.dumps(result, indent=2))
+              results.append(result)
+              (root / "results.json").write_text(json.dumps(results, indent=2))
+              print(json.dumps(result, indent=2), flush=True)
+              print("::endgroup::", flush=True)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"## {arm}, runner {os.environ['RUNNER_INDEX']}\n\n")
+              summary.write("| Iteration | Passed | Timeout | Exit | TRX counts |\n|---|---|---|---|---|\n")
+              for result in results:
+                  summary.write(f"| {result['iteration']} | {result['passed']} | "
+                                f"{result['timed_out']} | {result['exit_code']} | "
+                                f"{json.dumps(result['counters'])} |\n")
+          sys.exit(0 if all(result["passed"] for result in results) else 1)
+          PY
+
+      - name: Preserve every trial and build evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: comparison-${{ matrix.arm }}-runner-${{ matrix.index }}
+          path: |
+            comparison/
+            artifacts/log/
+          if-no-files-found: error
+          retention-days: 30
