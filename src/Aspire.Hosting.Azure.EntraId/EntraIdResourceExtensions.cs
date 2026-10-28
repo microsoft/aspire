@@ -1380,6 +1380,11 @@ public static class EntraIdResourceExtensions
     /// the directory; assignments of the previous role are not migrated.
     /// </para>
     /// <para>
+    /// Whenever at least one role is declared, the complete <c>appRoles</c> collection is sent and Microsoft Graph replaces what is
+    /// stored. Include every role to keep, including roles that were added outside the AppHost: a role that is left out fails the
+    /// deployment if it is still enabled and is deleted if it is already disabled.
+    /// </para>
+    /// <para>
     /// Existing registrations are never modified, so this method cannot be used with <c>AddExistingEntraApplication</c>.
     /// </para>
     /// </remarks>

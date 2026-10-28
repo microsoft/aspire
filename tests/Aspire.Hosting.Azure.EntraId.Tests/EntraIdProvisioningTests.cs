@@ -71,6 +71,45 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         Assert.Single(entra.Resource.AppRoles);
     }
 
+    [Theory]
+    [InlineData(".Admin")]
+    [InlineData("Admin\"")]
+    [InlineData("Ad min")]
+    [InlineData("Adm\u00efn")]
+    [InlineData("Admin\n")]
+    public void AppRole_RejectsValuesThatGraphRejects(string value)
+    {
+        Assert.Throws<ArgumentException>(() => new EntraIdAppRole(value, "Name", "Description."));
+    }
+
+    [Theory]
+    [InlineData("Task.Write")]
+    [InlineData("Admin:Read-Only_2")]
+    [InlineData("a!#$%&'()*+,-/:;<=>?@[]^_`{|}~")]
+    public void AppRole_AcceptsValuesThatGraphAllows(string value)
+    {
+        Assert.Equal(value, new EntraIdAppRole(value, "Name", "Description.").Value);
+    }
+
+    [Fact]
+    public void AppRole_RejectsValuesLongerThanGraphAllows()
+    {
+        Assert.Throws<ArgumentException>(() => new EntraIdAppRole(new string('a', 121), "Name", "Description."));
+        Assert.Equal(120, new EntraIdAppRole(new string('a', 120), "Name", "Description.").Value.Length);
+    }
+
+    [Fact]
+    public void AppRoles_CannotBeMutatedThroughTheCollection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddEntraIdApplication("entra-api").WithAppRole(new EntraIdAppRole("Admin", "Admin", "Admin role."));
+
+        var roles = Assert.IsAssignableFrom<IList<EntraIdAppRole>>(entra.Resource.AppRoles);
+        Assert.Throws<NotSupportedException>(() => roles.Add(new EntraIdAppRole("Other", "Other", "Other role.")));
+        Assert.Throws<NotSupportedException>(roles.Clear);
+        Assert.Single(entra.Resource.AppRoles);
+    }
+
     [Fact]
     public void WithAppRole_RejectsDuplicateRoleIds()
     {

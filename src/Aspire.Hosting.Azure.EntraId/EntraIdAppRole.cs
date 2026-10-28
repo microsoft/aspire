@@ -20,7 +20,8 @@ public sealed class EntraIdAppRole
     /// </summary>
     /// <param name="value">
     /// The value emitted in the <c>roles</c> claim, for example <c>Admin</c>. It must be unique for the application,
-    /// at most 120 characters, and contain no spaces.
+    /// at most 120 characters, must not start with a period, and may contain only ASCII letters, digits and the punctuation that Microsoft Graph allows:
+    /// <c>! # $ % &amp; ' ( ) * + , - . / : ; &lt; = &gt; ? @ [ ] ^ _  { | } ~</c>.
     /// </param>
     /// <param name="displayName">The display name shown in the Microsoft Entra admin center.</param>
     /// <param name="description">The description shown in assignment and consent experiences.</param>
@@ -31,7 +32,7 @@ public sealed class EntraIdAppRole
     /// An optional role ID. When omitted, a stable ID is derived from the application's resource name and <paramref name="value"/>.
     /// </param>
     /// <param name="isEnabled">
-    /// Whether the role is enabled. To retire a role, deploy it with <see langword="false"/> and leave it declared: a disabled role can't be assigned and is not issued in tokens. Microsoft Graph rejects deleting an enabled role, so delete one only after a deployment has disabled it, and only while other roles remain declared.
+    /// Whether the role is enabled. To retire a role, deploy it with <see langword="false"/> and leave it declared. A disabled role can't be assigned to anyone new, but Microsoft Entra keeps issuing it in tokens for existing assignments, so disabling is not access revocation; remove existing assignments separately. Microsoft Graph rejects deleting an enabled role, so delete one only after a deployment has disabled it, and only while other roles remain declared.
     /// </param>
     /// <exception cref="ArgumentException">Thrown when an argument is invalid.</exception>
     public EntraIdAppRole(string value, string displayName, string description, IEnumerable<string>? allowedMemberTypes = null, Guid? id = null, bool isEnabled = true)
@@ -40,9 +41,9 @@ public sealed class EntraIdAppRole
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
 
-        if (value.Length > 120 || value.Any(char.IsWhiteSpace))
+        if (!IsValidValue(value))
         {
-            throw new ArgumentException($"'{value}' is not a valid role value. Role values must be at most 120 characters and contain no spaces.", nameof(value));
+            throw new ArgumentException($"'{value}' is not a valid role value. Role values must be at most 120 characters, must not start with a period, and may contain only ASCII letters, digits and the punctuation that Microsoft Graph allows.", nameof(value));
         }
 
         var memberTypes = allowedMemberTypes?.ToArray() ?? ["User"];
@@ -90,9 +91,17 @@ public sealed class EntraIdAppRole
     public Guid? Id { get; }
 
     /// <summary>
-    /// Gets whether the role can be assigned and appears in tokens. Microsoft Graph requires a role to be disabled before it is removed.
+    /// Gets whether the role can be assigned to new principals. A disabled role is still issued in tokens for existing assignments, so this is not access revocation. Microsoft Graph requires a role to be disabled before it is removed.
     /// </summary>
     public bool IsEnabled { get; }
+
+    // Microsoft Graph rejects any other character, including spaces and quotation marks, and a leading period:
+    // https://learn.microsoft.com/graph/api/resources/approle
+    private static bool IsValidValue(string value)
+    {
+        const string AllowedPunctuation = "!#$%&'()*+,-./:;<=>?@[]^_`{|}~";
+        return value.Length <= 120 && value[0] != '.' && value.All(c => char.IsAsciiLetterOrDigit(c) || AllowedPunctuation.Contains(c));
+    }
 
     // Role IDs must not change across deployments, or existing assignments are orphaned. Derive the ID from names
     // with a fixed algorithm so every deployment of the same model produces the same ID.

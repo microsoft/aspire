@@ -145,7 +145,11 @@ var entraApi = builder.AddEntraIdApplication("entra-api")
                           ["User", "Application"]));
 ```
 
-Role IDs are derived from the resource name and role value (or supplied with the `id` argument), so they stay stable across deployments. Changing a role's value or ID creates a different role. To retire a role, deploy it with `isEnabled: false` and leave it declared: a disabled role can't be assigned and is not issued in tokens. Microsoft Graph rejects deleting an enabled role, so a role can be removed from the AppHost only after a deployment has disabled it, and only while other roles remain declared. Aspire sends `appRoles` only when the application declares at least one role, so roles that the AppHost never declared are left alone. Existing registrations are never modified, and role assignments are not provisioned yet.
+Role IDs are derived from the resource name and role value (or supplied with the `id` argument), so they stay stable across deployments. Changing a role's value or ID creates a different role. A role's value can be at most 120 characters, can't start with a period, and can contain only ASCII letters, digits and the punctuation that [Microsoft Graph allows](https://learn.microsoft.com/graph/api/resources/approle), so spaces and quotation marks are rejected when you write the AppHost.
+
+Whenever the application declares at least one role, Aspire sends the complete `appRoles` collection and Microsoft Graph replaces what is stored, so include every role you want to keep, including ones that were added outside the AppHost. A role that is left out fails the deployment if it is still enabled (`CannotDeleteOrUpdateEnabledEntitlement`) and is deleted if it is already disabled. When the application declares no roles, Aspire doesn't send `appRoles`, so roles that the AppHost never declared are left alone.
+
+To retire a role, deploy it with `isEnabled: false` and leave it declared. A disabled role can't be assigned to anyone new, but Microsoft Entra [keeps issuing it in tokens for existing assignments](https://learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps#app-roles-ui), so disabling isn't access revocation; remove the existing assignments separately. A role can be removed from the AppHost only after a deployment has disabled it, and only while other roles remain declared. Existing registrations are never modified, and role assignments are not provisioned yet.
 
 ### Clean up created registrations
 

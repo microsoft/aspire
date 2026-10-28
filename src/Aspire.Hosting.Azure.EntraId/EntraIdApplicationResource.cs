@@ -515,7 +515,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource
     /// Application roles are distinct from delegated scopes and from Azure RBAC roles. Declaring a role does not
     /// assign it to any user, group, or application, and existing registrations are not modified.
     /// </remarks>
-    public IReadOnlyList<EntraIdAppRole> AppRoles => _appRoles;
+    public IReadOnlyList<EntraIdAppRole> AppRoles => _appRoles.AsReadOnly();
 
     private readonly List<EntraIdAppRole> _appRoles = [];
 
