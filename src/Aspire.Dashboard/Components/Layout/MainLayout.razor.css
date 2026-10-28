@@ -108,8 +108,8 @@
 ::deep.layout > .messagebar-container > .top-messagebar {
     flex: 1 1 auto;
     min-width: 0;
-    padding: 12px;
-    gap: 8px;
+    padding: 8px;
+    gap: 6px;
 }
 
 ::deep.layout > .messagebar-container > .top-messagebar:empty {
@@ -151,6 +151,13 @@
     border-top: 1px solid var(--colorNeutralStroke1);
     border-left: 1px solid var(--colorNeutralStroke1);
     display: flex;
+    max-height: min(240px, 35dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+::deep.layout > .messagebar-container:has(> .top-messagebar:empty) {
+    display: none;
 }
 
 ::deep .header-right {

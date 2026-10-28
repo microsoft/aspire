@@ -182,6 +182,26 @@
         <target state="new">Set</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesContainerGraphAccessibleLabel">
+        <source>Graph. For an accessible view please navigate to the Resources tab</source>
+        <target state="new">Graph. For an accessible view please navigate to the Resources tab</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerGraphTab">
+        <source>Graph</source>
+        <target state="new">Graph</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerParametersTab">
+        <source>Parameters</source>
+        <target state="new">Parameters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerTableTab">
+        <source>Resources</source>
+        <target state="new">Resources</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ScrollToBottom">
         <source>Scroll to bottom</source>
         <target state="new">Scroll to bottom</target>

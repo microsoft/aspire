@@ -27,12 +27,12 @@ public sealed class TracesLayoutTests : PlaywrightTestsBase<DashboardServerFixtu
     public async Task Duration_UsesDeterminateProgressRings()
     {
         var repository = DashboardServerFixture.DashboardApp.Services.GetRequiredService<ITelemetryRepositoryWriter>();
-        var startTime = DateTime.UnixEpoch;
+        var startTime = DateTime.UtcNow.AddSeconds(-2);
         await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
-                Resource = CreateResource(),
+                Resource = CreateResource(name: MockDashboardClient.TestResource1.Name, instanceId: MockDashboardClient.TestResource1.Uid),
                 ScopeSpans =
                 {
                     new ScopeSpans
@@ -50,7 +50,7 @@ public sealed class TracesLayoutTests : PlaywrightTestsBase<DashboardServerFixtu
 
         await RunTestAsync(async page =>
         {
-            await page.GotoAsync("/traces");
+            await page.GotoAsync($"/traces/resource/{MockDashboardClient.TestResource1.Name}?pane=telemetry");
 
             var progressRings = page.Locator(".aspire-progress-ring.determinate.duration-ring");
             await Assertions.Expect(progressRings).ToHaveCountAsync(2);

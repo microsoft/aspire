@@ -234,8 +234,16 @@ internal static class FluentUISetupHelpers
         context.Services.AddScoped<IDialogService>(services => services.GetRequiredService<NavigationDialogService>());
         context.Services.AddSingleton<ILocalStorage>(localStorage ?? new TestLocalStorage());
         context.Services.AddSingleton<ISessionStorage>(sessionStorage ?? new TestSessionStorage());
-        context.Services.AddSingleton<IDashboardRunStore>(services => dashboardRunStore ?? new TestDashboardRunStore(
-            databasePath: Path.Combine(services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db")));
+        context.Services.AddSingleton<IDashboardRunStore>(services =>
+        {
+            var databasePath = Path.Combine(services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db");
+            var runStore = dashboardRunStore ?? new TestDashboardRunStore(databasePath: databasePath);
+            if (runStore is TestDashboardRunStore testRunStore)
+            {
+                testRunStore.SetDefaultDatabasePath(databasePath);
+            }
+            return runStore;
+        });
         context.Services.AddSingleton<IDashboardRunSelection, TestDashboardRunSelection>();
         context.Services.AddSingleton<IDashboardClient, TestDashboardClient>();
         context.Services.AddSingleton<IResourceRepository>(services => services.GetRequiredService<IDashboardClient>());
@@ -256,6 +264,7 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<Aspire.Dashboard.Model.INotificationService, Aspire.Dashboard.Model.NotificationService>();
         context.Services.AddScoped<DashboardDialogService>();
         context.Services.AddScoped<DashboardMessageBarService>();
+        context.Services.AddScoped<ParameterInteractionState>();
         context.Services.AddScoped<ResourceMenuBuilder>();
         context.Services.AddScoped<StructuredLogMenuBuilder>();
         context.Services.AddScoped<SpanMenuBuilder>();
@@ -265,6 +274,7 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton(new ResourceOrderStore(databasePath: null, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance));
         context.Services.AddSingleton(new MetricPinStore(databasePath: null, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance));
         context.Services.AddScoped<ResourcePaneState>();
+        context.Services.AddScoped<Aspire.Dashboard.Components.Layout.TerminalDockState>();
         context.Services.AddScoped<DashboardViewPreferences>();
     }
 
@@ -285,6 +295,12 @@ internal static class FluentUISetupHelpers
                 DatabasePath: databasePath ?? string.Empty,
                 IsCurrent: true)
             ]).ToArray();
+        private string? _defaultDatabasePath;
+
+        public void SetDefaultDatabasePath(string databasePath)
+        {
+            _defaultDatabasePath = databasePath;
+        }
 
         public int GetRunsCallCount { get; private set; }
 
@@ -296,13 +312,15 @@ internal static class FluentUISetupHelpers
             return _runs;
         }
 
-        public DashboardRunDescriptor GetCurrentRun() => _runs.Single(run => run.IsCurrent);
+        public DashboardRunDescriptor GetCurrentRun() => WithDefaultDatabasePath(_runs.Single(run => run.IsCurrent));
 
         public DashboardRunDescriptor? GetRunById(string runId, bool onlyCompatible) =>
             _runs.SingleOrDefault(run =>
                 (!onlyCompatible || run.IsCompatible) &&
                 !run.IsPruned &&
-                string.Equals(run.RunId, runId, StringComparison.Ordinal));
+                string.Equals(run.RunId, runId, StringComparison.Ordinal)) is { } run
+                    ? WithDefaultDatabasePath(run)
+                    : null;
 
         public void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
         {
@@ -311,6 +329,11 @@ internal static class FluentUISetupHelpers
         }
 
         public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run) => null;
+
+        private DashboardRunDescriptor WithDefaultDatabasePath(DashboardRunDescriptor run) =>
+            string.IsNullOrWhiteSpace(run.DatabasePath) && _defaultDatabasePath is not null
+                ? run with { DatabasePath = _defaultDatabasePath }
+                : run;
 
         public void PublishRun()
         {

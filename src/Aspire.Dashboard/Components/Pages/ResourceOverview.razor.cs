@@ -82,6 +82,12 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     public required IVolumePathLauncher VolumePathLauncher { get; init; }
 
     [Inject]
+    public required ShortcutManager ShortcutManager { get; init; }
+
+    [Inject]
+    public required TerminalDockState TerminalDockState { get; init; }
+
+    [Inject]
     public required Microsoft.FluentUI.AspNetCore.Components.INotificationService ToastService { get; init; }
 
     [Inject]
@@ -96,8 +102,14 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     [Inject]
     public required IStringLocalizer<Dashboard.Resources.Layout> LayoutLoc { get; init; }
 
+    private Task ToggleTerminalDockAsync()
+        => ShortcutManager.OnGlobalKeyDown(AspireKeyboardShortcut.ToggleTerminalDock);
+
     [Inject]
     public required IStringLocalizer<Dashboard.Resources.ConsoleLogs> ConsoleLogsLoc { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<Dashboard.Resources.TerminalStrings> TerminalLoc { get; init; }
 
     [Inject]
     public required ILogger<ResourceOverview> Logger { get; init; }
@@ -116,6 +128,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     {
         // The Metrics card lists pinned instruments, which can change on the metrics page in another tab.
         PinStore.Changed += OnPinsChanged;
+        TerminalDockState.Changed += OnTerminalDockStateChanged;
 
         // The console preview hides lines removed with the console logs page's "Remove" action, which are stored
         // as filters in session storage.
@@ -647,6 +660,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     {
         _subscribedLayout?.ResourcesChanged -= OnResourcesChanged;
         PinStore.Changed -= OnPinsChanged;
+        TerminalDockState.Changed -= OnTerminalDockStateChanged;
 
         _resourceCts?.Cancel();
         _resourceCts?.Dispose();
@@ -656,6 +670,9 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         _consoleLogsFiltersChangedSubscription?.Dispose();
         return ValueTask.CompletedTask;
     }
+
+    private void OnTerminalDockStateChanged()
+        => _ = InvokeAsync(StateHasChanged);
 
     private sealed record ConsolePreviewLine(int LineNumber, string Content, DateTimeOffset? Timestamp, bool IsError);
 

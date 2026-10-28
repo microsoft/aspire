@@ -163,6 +163,8 @@ public partial class MainLayoutTests : DashboardTestContext
                 case BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey:
                 case BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey:
                     return (false, false);
+                case BrowserStorageKeys.DashboardFeedbackPromptDismissed:
+                    return (true, true);
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
@@ -217,6 +219,8 @@ public partial class MainLayoutTests : DashboardTestContext
                     return (unsecuredTelemetryMessageDismissedKey, unsecuredTelemetryMessageDismissedKey);
                 case BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey:
                     return (unsecuredEndpointMessageDismissedKey, unsecuredEndpointMessageDismissedKey);
+                case BrowserStorageKeys.DashboardFeedbackPromptDismissed:
+                    return (true, true);
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
@@ -256,6 +260,8 @@ public partial class MainLayoutTests : DashboardTestContext
                 case BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey:
                 case BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey:
                     return (false, false); // Message not dismissed, but should be suppressed by config if suppressUnsecuredMessage is true
+                case BrowserStorageKeys.DashboardFeedbackPromptDismissed:
+                    return (true, true);
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
@@ -299,6 +305,11 @@ public partial class MainLayoutTests : DashboardTestContext
             OnGetUnprotectedAsync = key =>
             {
                 // The view preferences are read with the layout too, and aren't what this test is about.
+                if (key == BrowserStorageKeys.DashboardFeedbackPromptDismissed)
+                {
+                    return (true, true);
+                }
+
                 if (key is BrowserStorageKeys.ResourceListDensity or BrowserStorageKeys.GroupOverview or BrowserStorageKeys.RecordingsStyle)
                 {
                     return (false, null);
@@ -537,6 +548,9 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal(expectedHistoricalRunText, pill.QuerySelector(".dashboard-run-pill-text")!.TextContent);
         Assert.Equal($"Recordings, viewing {expectedHistoricalRunText}", pill.GetAttribute("aria-label"));
         Assert.Single(pill.QuerySelectorAll(".dashboard-run-indicator.recording"));
+        var historicalRunButton = cut.Find($"#{MainLayout.RunSelectButtonId}");
+        Assert.Equal($"Recordings, viewing {expectedHistoricalRunText}", historicalRunButton.GetAttribute("aria-label"));
+        Assert.Single(historicalRunButton.QuerySelectorAll(".dashboard-run-indicator.recording"));
 
         // The pill opens the same recordings panel as the header button. The panel closes itself when a run is
         // selected; the test dialog service doesn't render it, so close it here.
@@ -641,7 +655,9 @@ public partial class MainLayoutTests : DashboardTestContext
         supportsRunSelection: false);
         var sessionStorage = new TestSessionStorage
         {
-            OnGetAsync = _ => throw new InvalidOperationException("Run selection should not be read.")
+            OnGetAsync = key => key == BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession
+                ? (false, false)
+                : throw new InvalidOperationException("Run selection should not be read.")
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
@@ -737,7 +753,9 @@ public partial class MainLayoutTests : DashboardTestContext
         var runSelectionSource = new TaskCompletionSource<(bool Success, object? Value)>(TaskCreationOptions.RunContinuationsAsynchronously);
         var sessionStorage = new TestSessionStorage
         {
-            OnGetTaskAsync = _ => runSelectionSource.Task
+            OnGetTaskAsync = key => key == BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession
+                ? Task.FromResult<(bool Success, object? Value)>((false, false))
+                : runSelectionSource.Task
         };
         var localStorage = new TestLocalStorage
         {
@@ -791,7 +809,9 @@ public partial class MainLayoutTests : DashboardTestContext
         var runSelectionSource = new TaskCompletionSource<(bool Success, object? Value)>(TaskCreationOptions.RunContinuationsAsynchronously);
         var sessionStorage = new TestSessionStorage
         {
-            OnGetTaskAsync = _ => runSelectionSource.Task
+            OnGetTaskAsync = key => key == BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession
+                ? Task.FromResult<(bool Success, object? Value)>((false, false))
+                : runSelectionSource.Task
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
         await Services.GetRequiredService<DashboardViewPreferences>().EnsureLoadedAsync();
@@ -842,7 +862,9 @@ public partial class MainLayoutTests : DashboardTestContext
         string? storedRunId = null;
         var sessionStorage = new TestSessionStorage
         {
-            OnGetAsync = _ => (true, "historical"),
+            OnGetAsync = key => key == BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession
+                ? (false, false)
+                : (true, "historical"),
             OnSetAsync = (_, value) => storedRunId = Assert.IsType<string>(value)
         };
         var testSink = new TestSink();
@@ -905,7 +927,9 @@ public partial class MainLayoutTests : DashboardTestContext
         string? storedRunId = null;
         var sessionStorage = new TestSessionStorage
         {
-            OnGetTaskAsync = _ => runSelectionSource.Task,
+            OnGetTaskAsync = key => key == BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession
+                ? Task.FromResult<(bool Success, object? Value)>((false, false))
+                : runSelectionSource.Task,
             OnSetAsync = (_, value) => storedRunId = Assert.IsType<string>(value)
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);

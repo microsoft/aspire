@@ -149,7 +149,7 @@ public class ResourcesNavigationTests
     [Theory]
     [InlineData(null, "Graph", "/graph")]
     [InlineData("api", "graph", "/graph")]
-    [InlineData(null, "Parameters", "/parameters")]
+    [InlineData(null, "Parameters", "/resources")]
     [InlineData("api", null, "/resources/api")]
     [InlineData("api", "Table", "/resources/api")]
     [InlineData(null, null, null)]

@@ -32,14 +32,14 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
             await SetAndVerifyTheme(Dialogs.SettingsDialogLightTheme, "light");
             await SetAndVerifyTheme(Dialogs.SettingsDialogDarkTheme, "dark");
 
-            async Task SetAndVerifyTheme(string checkboxText, string? expected)
+            async Task SetAndVerifyTheme(string optionText, string? expected)
             {
                 var settingsButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = Layout.MainLayoutLaunchSettings });
                 await settingsButton.ClickAsync();
 
-                // Set theme
-                var checkbox = await GetThemeRadioAsync();
-                await checkbox.ClickAsync();
+                var themeGroup = page.GetByRole(AriaRole.Group, new() { Name = Dialogs.SettingsDialogTheme });
+                var option = themeGroup.GetByRole(AriaRole.Button, new() { Name = optionText, Exact = true });
+                await option.ClickAsync();
 
                 if (expected != null)
                 {
@@ -52,24 +52,12 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
                 var closeButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = Layout.MainLayoutSettingsDialogClose });
                 await closeButton.First.ClickAsync();
 
-                // Re-open settings and assert that the correct checkbox is checked.
                 await settingsButton.ClickAsync();
-
-                checkbox = await GetThemeRadioAsync();
-
-                await AsyncTestHelpers.AssertIsTrueRetryAsync(
-                    async () => await checkbox.EvaluateAsync<bool>("element => element.checked"),
-                    "Checkbox isn't immediately checked.");
+                themeGroup = page.GetByRole(AriaRole.Group, new() { Name = Dialogs.SettingsDialogTheme });
+                option = themeGroup.GetByRole(AriaRole.Button, new() { Name = optionText, Exact = true });
+                await Assertions.Expect(option).ToHaveAttributeAsync("aria-pressed", "true");
 
                 await closeButton.First.ClickAsync();
-
-                async Task<ILocator> GetThemeRadioAsync()
-                {
-                    var label = page.GetByText(checkboxText, new PageGetByTextOptions { Exact = true }).First;
-                    var radioId = await label.GetAttributeAsync("for");
-                    Assert.False(string.IsNullOrEmpty(radioId));
-                    return page.Locator($"fluent-radio[id='{radioId}']");
-                }
             }
         });
     }
@@ -112,6 +100,7 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
                         headerRight: bounds.right
                     });
                 }
+
                 """);
 
             using var document = JsonDocument.Parse(layout);
@@ -126,6 +115,22 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
                 root.GetProperty("headerRight").GetDouble() - root.GetProperty("lastActionRight").GetDouble(),
                 0,
                 20);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task AppBar_TooltipDoesNotBlockAdjacentHeaderActions()
+    {
+        await RunTestAsync(async page =>
+        {
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+
+            await page.Locator("#dashboard-settings-button").HoverAsync();
+            await Assertions.Expect(page.Locator(".dashboard-tooltip")).ToBeVisibleAsync();
+
+            await page.Locator("#dashboard-help-button").ClickAsync();
+            await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToBeVisibleAsync();
         });
     }
 

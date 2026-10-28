@@ -15,6 +15,7 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Localization;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -27,6 +28,7 @@ namespace Aspire.Dashboard.Components.Controls;
 public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 {
     private const string GraphContainerId = "overviewResourcesGraphContainer";
+    private const string ResourceContextMenuHeaderId = "application-summary-resource-context-menu-header";
     private const int RecentItemCount = 5;
     private const int InsightItemCount = 4;
     internal const int ActivityBucketCount = 30;
@@ -59,6 +61,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private bool _graphInitializing;
     private bool _graphInitialized;
     private bool _isDisposing;
+    private AspireMenu? _contextMenu;
+    private bool _contextMenuOpen;
+    private readonly List<MenuButtonItem> _contextMenuItems = [];
     /// <summary>
     /// Gets or sets the resources to summarize, by name. <see langword="null"/> summarizes every resource.
     /// </summary>
@@ -90,6 +95,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     public required DashboardCommandExecutor DashboardCommandExecutor { get; init; }
 
     [Inject]
+    public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
+
+    [Inject]
     public required DashboardViewPreferences ViewPreferences { get; init; }
 
     [Inject]
@@ -110,13 +118,41 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
+    [CascadingParameter]
+    public required ViewportInformation ViewportInformation { get; init; }
+
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
     private IReadOnlyList<IconToggleOption<GroupOverview>> OverviewOptions =>
     [
+        new(GroupOverview.Cards, new Icons.Regular.Size20.Grid(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewCards)]),
         new(GroupOverview.Summary, new Icons.Regular.Size20.Home(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
-        new(GroupOverview.Graph, new Icons.Regular.Size20.ShareAndroid(), Loc[nameof(Dashboard.Resources.Resources.GraphPageTitle)]),
-        new(GroupOverview.Cards, new Icons.Regular.Size20.Grid(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewCards)])
+        new(GroupOverview.Graph, new Icons.Regular.Size20.ShareAndroid(), Loc[nameof(Dashboard.Resources.Resources.GraphPageTitle)])
     ];
+
+    private IconToggleOption<GroupOverview> GetCurrentOverviewOption() =>
+        OverviewOptions.First(option => option.Value == ViewPreferences.GroupOverview);
+
+    private int GetMissingParameterCount() =>
+        _resourceByName.Values.Count(resource => resource.HasMissingParameterValueState() && IsInScope(resource));
+
+    private string GetMissingParametersUrl() =>
+        DashboardUrls.AddResourceSelection(
+            DashboardUrls.ResourceListUrl(),
+            _resourceByName.Values
+                .Where(resource => resource.HasMissingParameterValueState() && IsInScope(resource))
+                .OrderBy(resource => resource.DisplayName, StringComparers.ResourceName)
+                .Select(resource => resource.Name));
+
+    private IList<MenuButtonItem> GetOverviewMenuItems() =>
+        OverviewOptions.Select(option => new MenuButtonItem
+        {
+            Text = option.Text,
+            StartIcon = option.Icon,
+            Role = MenuItemRole.Radio,
+            Checked = option.Value == ViewPreferences.GroupOverview,
+            OnClick = () => ViewPreferences.SetGroupOverviewAsync(option.Value),
+            RenderKey = option.Value
+        }).ToList();
 
     private string CardDensityClass => ViewPreferences.Density switch
     {
@@ -557,6 +593,53 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private Task ExecuteCommandAsync(ResourceViewModel resource, CommandViewModel command) =>
         DashboardCommandExecutor.ExecuteAsync(resource, command, GetResourceName);
 
+    private async Task ShowContextMenuAsync(string id, int clientX, int clientY)
+    {
+        if (_contextMenu is not { } contextMenu || !_resourceByName.TryGetValue(id, out var resource))
+        {
+            return;
+        }
+
+        _contextMenuItems.Clear();
+        _contextMenuItems.Add(new MenuButtonItem
+        {
+            Id = ResourceContextMenuHeaderId,
+            IsHeader = true,
+            Text = GetResourceName(resource),
+            Icon = ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)
+        });
+
+        ResourceMenuBuilder.AddMenuItems(
+            _contextMenuItems,
+            resource,
+            _resourceByName,
+            EventCallback.Factory.Create(this, () =>
+            {
+                NavigateToResource(resource);
+                return Task.CompletedTask;
+            }),
+            EventCallback.Factory.Create<CommandViewModel>(this, command => ExecuteCommandAsync(resource, command)),
+            (menuResource, command) => DashboardCommandExecutor.IsExecuting(menuResource.Name, command.Name),
+            showViewDetails: true,
+            showTerminalItem: true,
+            showConsoleLogsItem: true,
+            showUrls: true);
+
+        await contextMenu.OpenAsync(clientX, clientY);
+        StateHasChanged();
+    }
+
+    private async Task ContextMenuOpenChangedAsync(bool open)
+    {
+        _contextMenuOpen = open;
+        if (_jsModule is not null)
+        {
+            await _jsModule.InvokeVoidAsync("updateResourcesGraphContextMenu", open);
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
     private Task ExecuteCardCommandAsync(ResourceViewModel resource, CommandViewModel command)
     {
         if (string.Equals(command.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName))
@@ -771,7 +854,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         public Task SelectResource(string id) => summary.SelectResourceAsync(id);
 
         [JSInvokable]
-        public Task ResourceContextMenu(string id, int _, int __, string? ___) => summary.SelectResourceAsync(id);
+        public Task ResourceContextMenu(string id, int clientX, int clientY, string? _) =>
+            summary.ShowContextMenuAsync(id, clientX, clientY);
     }
 
     private async Task SelectResourceAsync(string id)

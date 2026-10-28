@@ -1,5 +1,6 @@
 ﻿@using Aspire.Dashboard.Components.Resize
 @inject IStringLocalizer<Resources.Routes> Loc
+@inject NavigationManager NavigationManager
 
 <BrowserDimensionWatcher @bind-ViewportInformation="@_viewportInformation" />
 
@@ -14,17 +15,41 @@
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
             <!-- AuthorizeRouteView protects pages from being accessed when authorization is required -->
-            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)" />
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@GetDefaultLayout(routeData)" />
         </Found>
         <NotFound>
             <PageTitle>@Loc[nameof(Resources.Routes.NotFoundPageTitle)]</PageTitle>
-            <LayoutView Layout="@typeof(Layout.MainLayout)">
-                <Aspire.Dashboard.Components.Pages.NotFound />
-            </LayoutView>
+            @if (IsLegacyLocation)
+            {
+                <LayoutView Layout="@typeof(Legacy.Layout.LegacyMainLayout)">
+                    <Aspire.Dashboard.Components.Legacy.Pages.NotFound />
+                </LayoutView>
+            }
+            else
+            {
+                <LayoutView Layout="@typeof(Layout.MainLayout)">
+                    <Aspire.Dashboard.Components.Pages.NotFound />
+                </LayoutView>
+            }
         </NotFound>
     </Router>
 </CascadingValue>
 
 @code {
     private ViewportInformation? _viewportInformation;
+
+    private bool IsLegacyLocation
+    {
+        get
+        {
+            var path = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+            return string.Equals(path, "legacy", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("legacy/", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private static Type GetDefaultLayout(RouteData routeData) =>
+        routeData.PageType.Namespace?.StartsWith("Aspire.Dashboard.Components.Legacy.", StringComparison.Ordinal) == true
+            ? typeof(Legacy.Layout.LegacyMainLayout)
+            : typeof(Layout.MainLayout);
 }

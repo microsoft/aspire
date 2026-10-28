@@ -1271,6 +1271,7 @@ fluent-badge.property-details-accordion-badge {
 .dashboard-tooltip {
     width: max-content;
     overflow-wrap: anywhere;
+    pointer-events: none;
 }
 
 /* Preserve description newlines only in content, not Fluent's shadow-template whitespace. */

@@ -97,10 +97,8 @@ public class NativeAotDashboardTests(ITestOutputHelper outputHelper)
 
             await page.GetByTitle(Dialogs.HelpDialogCategoryNavigation).ClickAsync();
             await page.GetByRole(AriaRole.Menuitem, new() { Name = Layout.MainLayoutLaunchSettings }).ClickAsync();
-            var darkThemeLabel = page.GetByText(Dialogs.SettingsDialogDarkTheme, new() { Exact = true }).First;
-            var darkThemeRadioId = await darkThemeLabel.GetAttributeAsync("for");
-            Assert.False(string.IsNullOrEmpty(darkThemeRadioId));
-            await page.Locator($"fluent-radio[id='{darkThemeRadioId}']").ClickAsync();
+            var themeGroup = page.GetByRole(AriaRole.Group, new() { Name = Dialogs.SettingsDialogTheme });
+            await themeGroup.GetByRole(AriaRole.Button, new() { Name = Dialogs.SettingsDialogDarkTheme, Exact = true }).ClickAsync();
             await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "dark");
 
             await page.WaitForTimeoutAsync(1_000);

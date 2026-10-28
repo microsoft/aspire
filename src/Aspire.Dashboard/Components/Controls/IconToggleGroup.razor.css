@@ -20,6 +20,8 @@
 }
 
 .icon-toggle {
+    position: relative;
+    box-sizing: border-box;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -31,6 +33,32 @@
     background: transparent;
     color: var(--colorNeutralForeground2);
     cursor: pointer;
+}
+
+.icon-toggle-icon {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-toggle-badge {
+    position: absolute;
+    right: -5px;
+    bottom: -3px;
+    min-width: 13px;
+    padding-inline: 1px;
+    border-radius: 3px;
+    background: var(--colorNeutralBackground1);
+    color: currentColor;
+    font-size: 8px;
+    font-weight: var(--fontWeightSemibold);
+    line-height: 10px;
+}
+
+.icon-toggle.selected .icon-toggle-badge {
+    background: var(--colorNeutralBackground3);
 }
 
 .icon-toggle:hover {
@@ -52,6 +80,79 @@
 .icon-toggle-current {
     color: var(--colorNeutralForeground2);
     font-size: var(--fontSizeBase200);
+}
+
+.icon-toggle-group.labeled {
+    display: block;
+    width: 100%;
+    container-type: inline-size;
+}
+
+.icon-toggle-group.labeled .icon-toggle-buttons {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+}
+
+.icon-toggle-group.labeled .icon-toggle {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    height: 34px;
+    gap: 6px;
+    padding-inline: 7px;
+}
+
+.icon-toggle-group.labeled .icon-toggle-option-text {
+    overflow: visible;
+    text-overflow: clip;
+}
+
+@container (max-width: 320px) {
+    .icon-toggle-group.labeled .icon-toggle {
+        gap: 3px;
+        padding-inline: 3px;
+    }
+
+    .icon-toggle-group.labeled .icon-toggle-option-text {
+        font-size: 11px;
+    }
+}
+
+.icon-toggle-option-text {
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--fontSizeBase200);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.icon-toggle-group.selected-labeled {
+    display: block;
+}
+
+.icon-toggle-group.selected-labeled .icon-toggle-buttons {
+    display: flex;
+    width: 100%;
+}
+
+.icon-toggle-group.selected-labeled .icon-toggle {
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+}
+
+.icon-toggle-group.selected-labeled .icon-toggle.selected {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    gap: 7px;
+    padding: 0 10px;
+}
+
+.icon-toggle-group.selected-labeled .icon-toggle.selected .icon-toggle-option-text {
+    overflow: visible;
+    text-overflow: clip;
 }
 
 .icon-toggle-group.prominent {

@@ -207,8 +207,11 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await dimensions.ClickAsync();
             await dropdown.Locator("fluent-option[text='80×24']").ClickAsync();
             await Assertions.Expect(dimensions).ToHaveTextAsync("80×24");
-            Assert.NotNull(connection.Presentation.PrimaryPeerId);
-            Assert.NotEqual(primaryId, connection.Presentation.PrimaryPeerId);
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => Task.FromResult(
+                    connection.Presentation.PrimaryPeerId is not null &&
+                    !string.Equals(primaryId, connection.Presentation.PrimaryPeerId, StringComparison.Ordinal)),
+                "The explicitly sized terminal should become the primary presenter.");
             await page.WaitForFunctionAsync("() => window.terminalObserver.geometry.columns === 80 && window.terminalObserver.geometry.rows === 24").DefaultTimeout();
         });
     }
@@ -383,7 +386,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await WriteMetadataAsync(page, connection, "Building <app> & \u03bb", "/work/source files");
             connection.Workload.Write("\u001b]9;4;1;42\u0007");
             await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("data-state", "normal");
-            await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("title", "42%");
+            await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("data-tooltip", "42%");
             await Assertions.Expect(page.Locator(".terminal-icon [role=progressbar]")).ToHaveAttributeAsync("aria-valuenow", "42");
             await Assertions.Expect(input).ToBeFocusedAsync();
             await titleButton.ClickAsync();
@@ -395,7 +398,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await WriteMetadataAsync(page, connection, "Build failed", "/work/build output");
             connection.Workload.Write("\u001b]9;4;2;75\u0007");
             await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("data-state", "error");
-            await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("title", "75%");
+            await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("data-tooltip", "75%");
             await Assertions.Expect(page.Locator(".terminal-icon [role=progressbar]")).ToHaveAttributeAsync("aria-valuenow", "75");
             await Assertions.Expect(directoryButton).ToBeFocusedAsync();
             await page.Keyboard.PressAsync("Enter");
@@ -512,10 +515,14 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             async ({ endpoint, viewId, readOnly, chromeless }) => {
                 const module = await import('/Components/Controls/TerminalView.razor.js');
                 window.terminalModule = module;
+                const view = document.createElement('div');
+                view.className = 'terminal-view';
+                view.style.cssText = 'position:fixed;left:0;top:0;width:700px;height:500px;z-index:10000';
+                document.body.appendChild(view);
                 const container = document.createElement('div');
                 container.dataset.testid = 'module-terminal';
-                container.style.cssText = 'position:fixed;left:0;top:0;width:700px;height:500px;z-index:10000';
-                document.body.appendChild(container);
+                container.style.cssText = 'width:100%;height:100%';
+                view.appendChild(container);
                 const template = document.createElement('div');
                 template.innerHTML = '<div><fluent-button aria-label="Copy">Copy</fluent-button></div>';
                 template.hidden = true;

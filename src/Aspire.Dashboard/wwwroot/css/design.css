@@ -303,11 +303,11 @@
     --aspire-dropdown-option-selected-background: #44404e;
     --aspire-dropdown-option-selected-hover-background: #3f3c4a;
     --accent-button-background: var(--colorBrandBackground);
-    --accent-button-foreground: color-mix(in srgb, #512bd4 85%, #000000);
+    --accent-button-foreground: #211047;
     --accent-button-hover-background: color-mix(in srgb, var(--colorBrandBackground) 90%, #000000);
-    --accent-button-hover-foreground: color-mix(in srgb, #512bd4 65%, #000000);
+    --accent-button-hover-foreground: #211047;
     --accent-button-pressed-background: color-mix(in srgb, var(--colorBrandBackground) 85%, #000000);
-    --accent-button-pressed-foreground: color-mix(in srgb, #512bd4 55%, #000000);
+    --accent-button-pressed-foreground: #211047;
 
     --log-critical: #493634;
     --log-error: #493634;

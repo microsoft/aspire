@@ -67,8 +67,6 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
     [InlineData("/", "Dark")]
     [InlineData("/resources/frontend", "Light")]
     [InlineData("/resources/frontend", "Dark")]
-    [InlineData("/parameters", "Light")]
-    [InlineData("/parameters", "Dark")]
     [InlineData("/consolelogs", "Light")]
     [InlineData("/consolelogs", "Dark")]
     [InlineData("/structuredlogs", "Light")]
@@ -79,6 +77,21 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
     [InlineData("/metrics", "Dark")]
     public Task DashboardPage_HasNoSeriousOrCriticalWcagViolations(string relativeUrl, string theme)
         => AssertNoBlockingWcagViolationsAsync(relativeUrl, theme, s_desktopViewport);
+
+    [Theory]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    [InlineData("/legacy/resources", "Light")]
+    [InlineData("/legacy/resources", "Dark")]
+    [InlineData("/legacy/consolelogs", "Light")]
+    [InlineData("/legacy/consolelogs", "Dark")]
+    [InlineData("/legacy/structuredlogs", "Light")]
+    [InlineData("/legacy/structuredlogs", "Dark")]
+    [InlineData("/legacy/traces", "Light")]
+    [InlineData("/legacy/traces", "Dark")]
+    [InlineData("/legacy/metrics", "Light")]
+    [InlineData("/legacy/metrics", "Dark")]
+    public Task PreviousDashboardPage_HasNoSeriousOrCriticalWcagViolations(string relativeUrl, string theme)
+        => AssertNoBlockingWcagViolationsAsync(relativeUrl, theme, s_desktopViewport, experience: "legacy");
 
     // Responsive coverage: re-run the same WCAG gate on the primary page across mobile, tablet and
     // desktop widths so layout-sensitive barriers - reflow, focus order, and content that overlaps or
@@ -136,7 +149,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         await page.WaitForSelectorAsync(
             $"html[data-theme='{theme.ToLowerInvariant()}']",
             new PageWaitForSelectorOptions { State = WaitForSelectorState.Attached }).DefaultTimeout();
-        await Assertions.Expect(page.GetByText("frontend", new PageGetByTextOptions { Exact = true }).First).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "frontend", Exact = true }).Last).ToBeVisibleAsync();
         await WaitForComponentsAndFontsAsync(page);
 
         await page.EvaluateAsync(
@@ -160,7 +173,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task DarkAccentButtonInteractionStates_MeetWcagAaContrast()
+    public async Task DarkPrimaryButtonInteractionStates_MeetWcagAaContrast()
     {
         var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
 
@@ -185,7 +198,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
                 await customElements.whenDefined('fluent-button');
                 const button = document.createElement('fluent-button');
                 button.id = 'accent-contrast-probe';
-                button.setAttribute('appearance', 'accent');
+                button.setAttribute('appearance', 'primary');
                 button.textContent = 'Primary action';
                 button.style.cssText = 'position:fixed;left:16px;top:16px;z-index:10000;';
                 document.body.appendChild(button);
@@ -199,10 +212,12 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         states.Add(("rest", rest.Foreground, rest.Background));
 
         await button.HoverAsync();
+        await page.WaitForTimeoutAsync(250);
         var hover = await ReadFluentControlColorsAsync(button);
         states.Add(("hover", hover.Foreground, hover.Background));
 
         await page.Mouse.DownAsync();
+        await page.WaitForTimeoutAsync(250);
         var active = await ReadFluentControlColorsAsync(button);
         states.Add(("active", active.Foreground, active.Background));
         await page.Mouse.UpAsync();
@@ -218,6 +233,67 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         Assert.True(
             failures.Count == 0,
             $"Dark accent button state contrast falls below the WCAG AA {WcagAaContrastMinimum:F1}:1 minimum:{Environment.NewLine}{string.Join(Environment.NewLine, failures)}");
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task FluentInteractiveControls_ExposeNameRoleAndValue()
+    {
+        var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+
+        await using var context = await PlaywrightFixture.CreateContextAsync(new BrowserNewContextOptions
+        {
+            IgnoreHTTPSErrors = true,
+            BaseURL = baseUrl,
+            ViewportSize = s_desktopViewport
+        });
+
+        var page = await context.NewPageAsync();
+        await page.GotoAsync("/").DefaultTimeout();
+        await Assertions.Expect(page.GetByText("frontend", new PageGetByTextOptions { Exact = true }).First).ToBeVisibleAsync();
+        await WaitForComponentsAndFontsAsync(page);
+
+        var helpButton = page.Locator("#dashboard-help-button");
+        await Assertions.Expect(helpButton).ToHaveAttributeAsync("role", "button");
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = Layout.MainLayoutHelp })).ToBeVisibleAsync();
+
+        await page.EvaluateAsync(
+            """
+            async () => {
+                await customElements.whenDefined('fluent-checkbox');
+                const checkbox = document.createElement('fluent-checkbox');
+                checkbox.id = 'checkbox-semantics-probe';
+                checkbox.setAttribute('aria-label', 'Semantic checkbox');
+                checkbox.checked = true;
+                document.body.appendChild(checkbox);
+
+                const button = document.createElement('fluent-button');
+                button.id = 'disabled-button-semantics-probe';
+                button.setAttribute('aria-label', 'Disabled semantic button');
+                button.disabled = true;
+                document.body.appendChild(button);
+                await new Promise(resolve => requestAnimationFrame(resolve));
+            }
+            """).DefaultTimeout();
+
+        var checkbox = page.Locator("#checkbox-semantics-probe");
+        await Assertions.Expect(checkbox).ToHaveAttributeAsync("role", "checkbox");
+        await Assertions.Expect(checkbox).ToHaveAttributeAsync("aria-checked", "true");
+        await Assertions.Expect(page.GetByRole(AriaRole.Checkbox, new() { Name = "Semantic checkbox", Checked = true })).ToBeVisibleAsync();
+
+        var disabledButton = page.Locator("#disabled-button-semantics-probe");
+        await Assertions.Expect(disabledButton).ToHaveAttributeAsync("role", "button");
+        await Assertions.Expect(disabledButton).ToHaveAttributeAsync("aria-disabled", "true");
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Disabled semantic button", Disabled = true })).ToBeVisibleAsync();
+
+        await checkbox.EvaluateAsync(
+            """
+            checkbox => {
+                checkbox.checked = false;
+                checkbox.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+            }
+            """).DefaultTimeout();
+        await Assertions.Expect(checkbox).ToHaveAttributeAsync("aria-checked", "false");
     }
 
     // Maps each dialog surface (the InlineData key) to the page it's opened from, a human-readable
@@ -285,8 +361,21 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         // Settle component hydration + fonts before probing so the code block's computed colors are read
         // against fully applied theme styles (see WaitForComponentsAndFontsAsync).
         await WaitForComponentsAndFontsAsync(page);
+        var probeJson = string.Empty;
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(async () =>
+        {
+            probeJson = await page.EvaluateAsync<string>(CodeblockColorProbeScript);
+            if (theme != "Dark")
+            {
+                return true;
+            }
 
-        var probeJson = await page.EvaluateAsync<string>(CodeblockColorProbeScript);
+            using var attempt = JsonDocument.Parse(probeJson);
+            var markdownSurface = attempt.RootElement.GetProperty("surfaces").EnumerateArray().Last();
+            var background = ReadRgb(markdownSurface.GetProperty("bg"));
+            return background.R + background.G + background.B < 384;
+        }, "The dark-theme code block background should be fully applied before measuring contrast.");
+
         using var probe = JsonDocument.Parse(probeJson);
 
         var failures = new List<string>();
@@ -314,7 +403,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
             $"in the {theme} theme:{Environment.NewLine}{string.Join(Environment.NewLine, failures)}");
     }
 
-    private async Task AssertNoBlockingWcagViolationsAsync(string relativeUrl, string theme, ViewportSize viewport, string? viewportLabel = null, Func<IPage, Task>? openSurfaceAsync = null, string? surfaceLabel = null)
+    private async Task AssertNoBlockingWcagViolationsAsync(string relativeUrl, string theme, ViewportSize viewport, string? viewportLabel = null, Func<IPage, Task>? openSurfaceAsync = null, string? surfaceLabel = null, string? experience = null)
     {
         var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
 
@@ -328,7 +417,12 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         // The dashboard resolves its theme from the `currentTheme` cookie on boot (see
         // wwwroot/js/app-theme.js). Seeding it before the first navigation makes the scanned
         // theme deterministic instead of depending on the OS/browser "System" preference.
-        await context.AddCookiesAsync([new Cookie { Name = "currentTheme", Value = theme, Url = baseUrl }]);
+        var cookies = new List<Cookie> { new() { Name = "currentTheme", Value = theme, Url = baseUrl } };
+        if (experience is not null)
+        {
+            cookies.Add(new Cookie { Name = "Aspire_Dashboard_Experience", Value = experience, Url = baseUrl });
+        }
+        await context.AddCookiesAsync(cookies);
 
         var page = await context.NewPageAsync();
         await page.GotoAsync(relativeUrl).DefaultTimeout();
@@ -431,13 +525,17 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         var path = relativeUrl.Split('?', 2)[0].TrimEnd('/');
         var content = path switch
         {
-            "" => page.GetByText("frontend", new PageGetByTextOptions { Exact = true }).First,
+            "" => page.GetByRole(AriaRole.Link, new() { Name = "frontend", Exact = true }).Last,
+            "/legacy/resources" => page.GetByText("frontend", new PageGetByTextOptions { Exact = true }).First,
             "/resources/frontend" => page.Locator("h1.resource-title", new PageLocatorOptions { HasText = "frontend" }),
-            "/parameters" => page.GetByText(Dashboard.Resources.Resources.ResourcesNoParameters, new PageGetByTextOptions { Exact = true }).First,
             "/consolelogs" => page.GetByText(ConsoleLogs.ConsoleLogsNoLogsFound, new PageGetByTextOptions { Exact = true }).First,
+            "/legacy/consolelogs" => page.GetByText(ConsoleLogs.ConsoleLogsNoLogsFound, new PageGetByTextOptions { Exact = true }).First,
             "/structuredlogs" => page.GetByText(StructuredLogs.StructuredLogsNoLogsFound, new PageGetByTextOptions { Exact = true }).First,
+            "/legacy/structuredlogs" => page.GetByText(StructuredLogs.StructuredLogsNoLogsFound, new PageGetByTextOptions { Exact = true }).First,
             "/traces" => page.GetByText(Traces.TracesNoTraces, new PageGetByTextOptions { Exact = true }).First,
+            "/legacy/traces" => page.GetByText(Traces.TracesNoTraces, new PageGetByTextOptions { Exact = true }).First,
             "/metrics" => page.GetByText(Metrics.MetricsSelectAResource, new PageGetByTextOptions { Exact = true }).First,
+            "/legacy/metrics" => page.GetByText(Metrics.MetricsSelectAResource, new PageGetByTextOptions { Exact = true }).First,
             _ => throw new InvalidOperationException($"No accessibility readiness signal is configured for '{relativeUrl}'.")
         };
 
@@ -579,6 +677,14 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
                     if (m) {
                         const p = m[1].split(/[ \/]+/).filter(Boolean).map(parseFloat);
                         return [Math.round(p[0] * 255), Math.round(p[1] * 255), Math.round(p[2] * 255)];
+                    }
+                    const probe = document.createElement('span');
+                    probe.style.color = `color-mix(in srgb, ${s} 100%, transparent)`;
+                    document.body.appendChild(probe);
+                    const srgb = getComputedStyle(probe).color;
+                    probe.remove();
+                    if (srgb !== s) {
+                        return parseRgb(srgb);
                     }
                     throw new Error('unparseable color: ' + s);
                 }

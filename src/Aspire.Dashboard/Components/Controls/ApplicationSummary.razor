@@ -4,17 +4,46 @@
 @using Aspire.Dashboard.Components.ResourcesGridColumns
 
 <StableSectionContent SectionName="@ResourcesLayout.HeaderActionsSectionName">
-    <IconToggleGroup TValue="GroupOverview"
-                     Label="@Loc[nameof(Dashboard.Resources.Resources.LayoutLabel)]"
-                     Options="@OverviewOptions"
-                     Value="@ViewPreferences.GroupOverview"
-                     ValueChanged="@ViewPreferences.SetGroupOverviewAsync"
-                     ShowLabel="true"
-                     ShowCurrentLabel="false" />
+    <div class="overview-header-actions">
+        @if (GetMissingParameterCount() is > 0 and var missingParameterCount)
+        {
+            <a class="missing-parameters-link"
+               href="@GetMissingParametersUrl()"
+               data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.MissingParametersReview)]">
+                <FluentIcon Value="@(new Icons.Regular.Size16.Key())" Color="Color.Custom" CustomColor="currentColor" />
+                @string.Format(
+                    CultureInfo.CurrentCulture,
+                    Loc[missingParameterCount == 1
+                        ? nameof(Dashboard.Resources.Resources.MissingParameterCount)
+                        : nameof(Dashboard.Resources.Resources.MissingParametersCount)],
+                    missingParameterCount)
+            </a>
+        }
+        @if (ViewportInformation.IsDesktop)
+        {
+            <IconToggleGroup TValue="GroupOverview"
+                             Label="@Loc[nameof(Dashboard.Resources.Resources.LayoutLabel)]"
+                             Options="@OverviewOptions"
+                             Value="@ViewPreferences.GroupOverview"
+                             ValueChanged="@ViewPreferences.SetGroupOverviewAsync"
+                             ShowLabel="true"
+                             ShowCurrentLabel="false" />
+        }
+        else
+        {
+            var currentOverview = GetCurrentOverviewOption();
+            <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
+                              ButtonClass="overview-layout-menu"
+                              IconStart="@currentOverview.Icon"
+                              Text="@currentOverview.Text"
+                              Title="@($"{Loc[nameof(Dashboard.Resources.Resources.LayoutLabel)]}: {currentOverview.Text}")"
+                              ItemsProvider="GetOverviewMenuItems" />
+        }
+    </div>
 </StableSectionContent>
 
 @* The application summary shown by the resource overview when several or all resources are selected. *@
-<div class="home">
+<div class="home @(ViewPreferences.GroupOverview == GroupOverview.Graph ? "graph-view" : null)">
 
     @if (!_isLoaded)
     {
@@ -86,6 +115,12 @@
             </div>
         </div>
     }
+    <AspireMenu Open="_contextMenuOpen"
+                OpenChanged="ContextMenuOpenChangedAsync"
+                @ref="_contextMenu"
+                Anchor="application-summary-context-menu-anchor"
+                Anchored="false"
+                Items="_contextMenuItems" />
 </div>
 
 @code {

@@ -271,7 +271,7 @@ function releaseClient(state, preserve = false) {
     client?.dispose();
 }
 
-function configureTerminalChrome(client) {
+function configureTerminalChrome(client, embedded) {
     // This pinned Hex1b release has no options/parts for its history chrome or
     // pointer focus outline, or unused-space styling. Keep keyboard focus, errors and selection feedback;
     // remove these overrides when upstream exposes controls for them.
@@ -281,6 +281,7 @@ function configureTerminalChrome(client) {
         throw new Error("Hex1b history chrome could not be configured.");
     }
     const style = document.createElement("style");
+    client.element.toggleAttribute("data-aspire-embedded", embedded);
     // Paint the edge inside the existing padding so it neither resizes nor overlaps terminal cells.
     // Keep transparent default cells solid; only the unused viewport is hatched.
     style.textContent = `
@@ -300,6 +301,13 @@ function configureTerminalChrome(client) {
             box-shadow:
                 0 0 0 ${TERMINAL_PADDING - 0.5}px var(--terminal-background),
                 0 0 0 ${TERMINAL_PADDING}px color-mix(in srgb, var(--terminal-foreground) 10%, var(--terminal-background));
+        }
+        :host([data-aspire-embedded]) .viewport {
+            background-color: var(--terminal-background);
+            background-image: none;
+        }
+        :host([data-aspire-embedded]) .surface {
+            box-shadow: none;
         }
         @media (forced-colors: active) {
             .viewport {
@@ -368,6 +376,10 @@ function connectionFailed(state, generation, error, preserve) {
     }
     scheduleReconnect(state, generation);
     notifyToolbar(state);
+}
+
+function isTerminalDisposal(error) {
+    return error?.name === "AbortError" && error?.message === "Terminal view was disposed";
 }
 
 function connectionClosed(state, generation, details) {
@@ -770,7 +782,7 @@ async function mountClient(state, generation, controller) {
             return;
         }
         state.client = client;
-        state.inspectionObserver = configureTerminalChrome(client);
+        state.inspectionObserver = configureTerminalChrome(client, state.embedded);
         // Theme/accessibility settings can change while awaiting the first frame.
         client.setColorMode(state.colorMode);
         client.setScrollbar(state.scrollbar);
@@ -797,7 +809,10 @@ async function mountClient(state, generation, controller) {
         applyPendingSizing(state);
         notifyToolbar(state);
     } catch (error) {
-        if (current()) {
+        // Blazor can remove an embedded terminal before its async Hex1b mount finishes. The component's
+        // disposal path owns that cancellation; reporting it as a connection failure produces a false warning
+        // during normal route changes and dock transitions.
+        if (current() && !isTerminalDisposal(error)) {
             connectionFailed(state, generation, error, false);
         }
     }
@@ -858,6 +873,7 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         viewElement: element.closest(".terminal-view"),
         readOnly: !!options.readOnly,
         autoFit: !!options.autoFit,
+        embedded: !!options.embedded,
         client: null,
         retainedClient: null,
         inspectionObserver: null,

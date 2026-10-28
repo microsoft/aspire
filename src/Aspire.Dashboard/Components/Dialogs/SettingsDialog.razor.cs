@@ -8,21 +8,31 @@ using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
 public partial class SettingsDialog : IDisposable
 {
+    private const string NewDashboardExperience = "modern";
+    private const string PreviousDashboardExperience = "legacy";
+
     private string? _currentSetting;
     private List<CultureInfo> _languageOptions = null!;
     private CultureInfo? _selectedUiCulture;
     private TimeFormat _timeFormat;
+    private IReadOnlyList<IconToggleOption<string>> _themeOptions = [];
+    private IReadOnlyList<IconToggleOption<TimeFormat>> _timeFormatOptions = [];
     private IReadOnlyList<IconToggleOption<ResourceListDensity>> _densityOptions = [];
     private IReadOnlyList<IconToggleOption<GroupOverview>> _groupOverviewOptions = [];
-    private IReadOnlyList<IconToggleOption<RecordingsStyle>> _recordingsStyleOptions = [];
+    private IReadOnlyList<IconToggleOption<string>> _dashboardExperienceOptions = [];
 
     private IDisposable? _themeChangedSubscription;
+
+    [CascadingParameter]
+    public required IDialogInstance Dialog { get; set; }
 
     [Inject]
     public required ThemeManager ThemeManager { get; init; }
@@ -46,10 +56,13 @@ public partial class SettingsDialog : IDisposable
     public required DashboardViewPreferences ViewPreferences { get; init; }
 
     [Inject]
-    public required IDashboardRunStore RunStore { get; init; }
+    public required IStringLocalizer<Dashboard.Resources.Resources> ResourcesLoc { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Dashboard.Resources.Resources> ResourcesLoc { get; init; }
+    public required IDashboardClient DashboardClient { get; init; }
+
+    [Inject]
+    public required IJSRuntime JS { get; init; }
 
     protected override void OnInitialized()
     {
@@ -61,6 +74,18 @@ public partial class SettingsDialog : IDisposable
             CultureInfo.CurrentUICulture;
 
         _timeFormat = TimeProvider.ConfiguredTimeFormat;
+        _themeOptions =
+        [
+            new(ThemeManager.ThemeSettingSystem, new Icons.Regular.Size20.Desktop(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogSystemTheme)]),
+            new(ThemeManager.ThemeSettingLight, new Icons.Regular.Size20.WeatherSunny(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogLightTheme)]),
+            new(ThemeManager.ThemeSettingDark, new Icons.Regular.Size20.WeatherMoon(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogDarkTheme)]),
+        ];
+        _timeFormatOptions =
+        [
+            new(TimeFormat.System, new Icons.Regular.Size20.Desktop(), FormatTimeFormatOption(TimeFormat.System)),
+            new(TimeFormat.TwelveHour, new Icons.Regular.Size20.Clock(), FormatTimeFormatOption(TimeFormat.TwelveHour), BadgeText: "12"),
+            new(TimeFormat.TwentyFourHour, new Icons.Regular.Size20.Clock(), FormatTimeFormatOption(TimeFormat.TwentyFourHour), BadgeText: "24"),
+        ];
         _densityOptions =
         [
             new(ResourceListDensity.Spacious, new Icons.Regular.Size20.TextBulletListLtr(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogResourceListDensitySpacious)]),
@@ -69,17 +94,15 @@ public partial class SettingsDialog : IDisposable
         ];
         _groupOverviewOptions =
         [
+            new(GroupOverview.Cards, new Icons.Regular.Size20.Grid(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewCards)]),
             new(GroupOverview.Summary, new Icons.Regular.Size20.Home(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
             new(GroupOverview.Graph, new Icons.Regular.Size20.ShareAndroid(), ResourcesLoc[nameof(Dashboard.Resources.Resources.GraphPageTitle)]),
-            new(GroupOverview.Cards, new Icons.Regular.Size20.Grid(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewCards)]),
-            new(GroupOverview.Resources, new Icons.Regular.Size20.AppsListDetail(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewResources)]),
         ];
-        _recordingsStyleOptions =
+        _dashboardExperienceOptions =
         [
-            new(RecordingsStyle.Panel, new Icons.Regular.Size20.History(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogRecordingsStylePanel)]),
-            new(RecordingsStyle.Menu, new Icons.Regular.Size20.ChevronDownUp(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogRecordingsStyleMenu)]),
+            new(NewDashboardExperience, new Icons.Regular.Size24.Sparkle(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogDashboardExperienceNew)]),
+            new(PreviousDashboardExperience, new Icons.Regular.Size24.History(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogDashboardExperiencePrevious)]),
         ];
-
         _currentSetting = ThemeManager.SelectedTheme ?? ThemeManager.ThemeSettingSystem;
 
         // Handle value being changed in a different browser window.
@@ -94,16 +117,12 @@ public partial class SettingsDialog : IDisposable
         });
     }
 
-    private async Task ThemeChangedAsync()
+    private async Task ThemeChangedAsync(string theme)
     {
-        // The field is being transiently set to null when the value changes. Maybe a bug in FluentUI?
-        // This should never be set to null by the dashboard so we can ignore null values.
-        if (_currentSetting != null)
-        {
-            // The theme isn't changed here. Instead, the MainLayout subscribes to the change event
-            // and applies the new theme to the browser window.
-            await ThemeManager.RaiseThemeChangedAsync(_currentSetting);
-        }
+        _currentSetting = theme;
+        // The theme isn't changed here. Instead, the MainLayout subscribes to the change event
+        // and applies the new theme to the browser window.
+        await ThemeManager.RaiseThemeChangedAsync(theme);
     }
 
     private void OnLanguageChanged()
@@ -124,8 +143,43 @@ public partial class SettingsDialog : IDisposable
 
     private Task LaunchManageDataAsync() => DialogService.ShowManageDataAsync();
 
-    private async Task OnTimeFormatChanged()
+    private Task CloseAsync() => Dialog.CloseAsync();
+
+    private async Task OnDashboardExperienceChangedAsync(string experience)
     {
+        if (experience == NewDashboardExperience)
+        {
+            await SwitchDashboardExperienceAsync("modern");
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            Title = Loc[nameof(Dashboard.Resources.Dialogs.DashboardFeedbackDialogTitle)],
+            PrimaryAction = string.Empty,
+            SecondaryAction = string.Empty,
+            Width = "min(640px, calc(100vw - 24px))"
+        };
+        var feedback = new DashboardFeedback
+        {
+            IsAppHost = DashboardClient.IsEnabled,
+            SwitchToLegacyAsync = () => SwitchDashboardExperienceAsync("legacy")
+        };
+        await DialogService.ShowDialogAsync<DashboardFeedbackDialog>(feedback, parameters);
+    }
+
+    private async Task SwitchDashboardExperienceAsync(string experience)
+    {
+        var current = new Uri(NavigationManager.Uri).GetComponents(UriComponents.PathAndQuery | UriComponents.Fragment, UriFormat.UriEscaped);
+        var target = experience == "legacy"
+            ? current.StartsWith("/legacy", StringComparison.OrdinalIgnoreCase) ? current : $"/legacy{current}"
+            : current.StartsWith("/legacy", StringComparison.OrdinalIgnoreCase) ? current["/legacy".Length..] : current;
+        await JS.InvokeVoidAsync("setDashboardExperience", experience, string.IsNullOrEmpty(target) ? "/" : target);
+    }
+
+    private async Task OnTimeFormatChanged(TimeFormat timeFormat)
+    {
+        _timeFormat = timeFormat;
         TimeProvider.SetConfiguredTimeFormat(_timeFormat);
         await LocalStorage.SetAsync(BrowserStorageKeys.TimeFormat, _timeFormat);
 

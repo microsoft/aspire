@@ -127,6 +127,56 @@
         <target state="new">Layout</target>
         <note />
       </trans-unit>
+      <trans-unit id="MissingParameterCount">
+        <source>{0} parameter needs a value</source>
+        <target state="new">{0} parameter needs a value</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingParametersCardTitle">
+        <source>Missing parameter values</source>
+        <target state="new">Missing parameter values</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingParametersCount">
+        <source>{0} parameters need values</source>
+        <target state="new">{0} parameters need values</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingParametersPanelDescription">
+        <source>Enter the missing values together, then apply them without leaving the resource overview.</source>
+        <target state="new">Enter the missing values together, then apply them without leaving the resource overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingParametersReview">
+        <source>Review missing parameters</source>
+        <target state="new">Review missing parameters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingParametersSaveToUserSecrets">
+        <source>Save values to user secrets</source>
+        <target state="new">Save values to user secrets</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingParametersSetValues">
+        <source>Set parameter values</source>
+        <target state="new">Set parameter values</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterValueRequired">
+        <source>Value required</source>
+        <target state="new">Value required</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterValueSet">
+        <source>Value set</source>
+        <target state="new">Value set</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParametersAllValuesSet">
+        <source>All values are set</source>
+        <target state="new">All values are set</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ParametersPageTitle">
         <source>Parameters</source>
         <target state="new">Parameters</target>

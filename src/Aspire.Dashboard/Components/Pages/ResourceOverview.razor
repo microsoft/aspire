@@ -1,6 +1,7 @@
 ﻿@page "/resources"
 @page "/resources/{ResourceName}"
 @layout ResourcesLayout
+@using Aspire.Dashboard.Extensions
 @using Aspire.Dashboard.Components.Layout
 @using Aspire.Dashboard.Components.ResourcesGridColumns
 @using Aspire.Dashboard.Otlp.Model
@@ -17,14 +18,30 @@
             <FluentSpinner Size="SpinnerSize.Small" />
         </div>
     }
+    else if (ResourcesLayout.IsMultiSelection &&
+             ResourcesLayout.SelectedResources.ToList() is { Count: > 0 } selectedResources &&
+             selectedResources.All(resource => resource.IsParameter))
+    {
+        <MissingParametersPanel Parameters="selectedResources"
+                                OnExecuteCommandAsync="ExecuteResourceCommandAsync"
+                                OnExecuteCommandWithOptionsAsync="ExecuteResourceCommandAsync"
+                                IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
+    }
     else if (ResourcesLayout.IsMultiSelection || ResourceName is null)
     {
         @* All resources, or several selected resources: summarize them, with their endpoints. *@
         <ApplicationSummary ResourceNames="@(ResourcesLayout.IsMultiSelection ? ResourcesLayout.SelectedResourceNames : null)" />
     }
-    else if (Resource is { IsParameter: true } parameter)
+    else if (Resource is { IsParameter: true } parameter && parameter.HasMissingParameterValueState())
     {
-        <ParameterOverview Resource="parameter"
+        <MissingParametersPanel Parameters="@([parameter])"
+                                OnExecuteCommandAsync="ExecuteResourceCommandAsync"
+                                OnExecuteCommandWithOptionsAsync="ExecuteResourceCommandAsync"
+                                IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
+    }
+    else if (Resource is { IsParameter: true } resolvedParameter)
+    {
+        <ParameterOverview Resource="resolvedParameter"
                            ResourceByName="ResourcesLayout.ResourceByName"
                            OnExecuteCommandAsync="ExecuteResourceCommandAsync"
                            OnExecuteCommandWithOptionsAsync="ExecuteResourceCommandAsync"
@@ -54,7 +71,8 @@
         var showMetrics = isInstrumented && (!_telemetryLoaded || _telemetry is { Instruments.Count: > 0 });
         var consoleLines = GetConsoleLines();
         var showEndpoints = urls.Count > 0;
-        var showConsole = true;
+        var showTerminal = ResourceSelectHelpers.HasUsableTerminal(resource);
+        var showConsole = !showTerminal;
         var properties = GetVisibleProperties();
         var environmentVariables = GetVisibleEnvironmentVariables(resource);
         var healthReports = GetHealthReports(resource);
@@ -255,7 +273,43 @@
                 @EmptyCard(OverviewCard.Metrics, cardLayout, "overview-metrics-title", new Icons.Regular.Size16.ChartMultiple(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)])
             }
 
-            @if (showConsole)
+            @if (showTerminal && !TerminalDockState.IsResourceOpen(resource.Name))
+            {
+            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Console)" aria-labelledby="overview-terminal-title">
+                <div class="overview-card-header">
+                    <span class="card-header-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
+                    <h2 id="overview-terminal-title">@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.TerminalTitle)]</h2>
+                    <div class="overview-card-actions">
+                        <a class="overview-card-action-link"
+                           href="https://aka.ms/aspire/dashboard-terminal"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           data-tooltip="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.TerminalDockMoreInformation)]"
+                           aria-label="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.TerminalDockMoreInformation)]">
+                            <FluentIcon Value="@(new Icons.Regular.Size16.Info())" Color="Color.Primary" />
+                        </a>
+                        <button type="button"
+                                class="overview-card-action-link"
+                                data-tooltip="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.MainLayoutToggleTerminalDock)]"
+                                aria-label="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.MainLayoutToggleTerminalDock)]"
+                                @onclick="ToggleTerminalDockAsync">
+                            <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="16px" Color="Color.Primary" />
+                        </button>
+                    </div>
+                </div>
+                <div class="overview-terminal">
+                    <TerminalView ResourceName="@resource.Name"
+                                  Chromeless="true"
+                                  Embedded="true"
+                                  ShowDimensionsPicker="false"
+                                  AutoFit="true"
+                                  SizeMemoryKey="@($"overview:{resource.Name}")" />
+                </div>
+            </section>
+            }
+            else if (showConsole)
             {
             <section class="overview-card" style="@cardLayout.Style(OverviewCard.Console)" aria-labelledby="overview-console-title">
                 <div class="overview-card-header">
@@ -785,7 +839,7 @@
     // and every card has the same fixed structure so cards in a row line up.
     private RenderFragment SelectionGroups(IEnumerable<string> names, string ariaLabel) => __builder =>
     {
-        <div class="overview-selection-groups" aria-label="@ariaLabel">
+        <div class="overview-selection-groups" role="group" aria-label="@ariaLabel">
             @foreach (var group in GetSelectionGroups(names))
             {
                 <section class="overview-selection-group" aria-label="@group.Title" @key="group.Title">

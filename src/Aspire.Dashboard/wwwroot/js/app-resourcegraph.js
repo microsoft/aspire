@@ -44,6 +44,7 @@ class ResourceGraph {
 
         this.nodes = [];
         this.links = [];
+        this.hasFitInitialGraph = false;
 
         this.svg = d3.select('.resource-graph');
         this.baseGroup = this.svg.append("g");
@@ -155,7 +156,33 @@ class ResourceGraph {
     }
 
     resetZoomAndPan() {
-        this.svg.transition().call(this.zoom.transform, d3.zoomIdentity);
+        this.fitGraph(true);
+    }
+
+    fitGraph(animate) {
+        const bounds = this.baseGroup.node()?.getBBox();
+        const container = document.querySelector(".resources-summary-layout");
+        if (!bounds || !container || bounds.width <= 0 || bounds.height <= 0) {
+            const selection = animate ? this.svg.transition().duration(300) : this.svg;
+            selection.call(this.zoom.transform, d3.zoomIdentity);
+            return;
+        }
+
+        const padding = 64;
+        const availableWidth = Math.max(container.clientWidth - (padding * 2), 1);
+        const availableHeight = Math.max(container.clientHeight - (padding * 2), 1);
+        const fitScale = Math.min(availableWidth / bounds.width, availableHeight / bounds.height);
+        // Avoid both extremes: don't enlarge a small graph, and don't reduce a large graph to an unreadable thumbnail.
+        // Larger topologies can still be panned after reset.
+        const scale = Math.min(Math.max(fitScale, 0.55), 1);
+        const centerX = bounds.x + (bounds.width / 2);
+        const centerY = bounds.y + (bounds.height / 2);
+        const transform = d3.zoomIdentity
+            .translate(-centerX * scale, -centerY * scale)
+            .scale(scale);
+
+        const selection = animate ? this.svg.transition().duration(300) : this.svg;
+        selection.call(this.zoom.transform, transform);
     }
 
     zoomIn() {
@@ -185,7 +212,7 @@ class ResourceGraph {
         var container = document.querySelector(".resources-summary-layout");
         if (container) {
             var width = container.clientWidth;
-            var height = Math.max(container.clientHeight - 50, 0);
+            var height = container.clientHeight;
             this.svg.attr("viewBox", [-width / 2, -height / 2, width, height]);
         }
     }
@@ -393,7 +420,12 @@ class ResourceGraph {
             const bbox = node.getBBox();
 
             const available = Math.max(1, iconSize - 2);
-            const scale = available / Math.max(bbox.width, bbox.height);
+            const largestDimension = Math.max(bbox.width, bbox.height);
+            if (!Number.isFinite(largestDimension) || largestDimension <= 0) {
+                path.attr("transform", null);
+                return;
+            }
+            const scale = available / largestDimension;
 
             const cx = bbox.x + bbox.width / 2;
             const cy = bbox.y + bbox.height / 2;
@@ -490,7 +522,12 @@ class ResourceGraph {
                 const iconSize = 16;
                 const path = d3.select(this);
                 const bbox = this.getBBox();
-                const scale = iconSize / Math.max(bbox.width, bbox.height);
+                const largestDimension = Math.max(bbox.width, bbox.height);
+                if (!Number.isFinite(largestDimension) || largestDimension <= 0) {
+                    path.attr("transform", null);
+                    return;
+                }
+                const scale = iconSize / largestDimension;
                 const cx = bbox.x + bbox.width / 2;
                 const cy = bbox.y + bbox.height / 2;
 
@@ -590,6 +627,11 @@ class ResourceGraph {
             for (let i = 0; i < 300; i++) {
                 this.simulation.tick();
             }
+            this.onTick();
+            if (!this.hasFitInitialGraph) {
+                this.fitGraph(false);
+                this.hasFitInitialGraph = true;
+            }
         }
 
         this.simulation.restart();
@@ -649,6 +691,7 @@ class ResourceGraph {
 
         // Prevent default browser context menu.
         event.preventDefault();
+        event.stopPropagation();
 
         await this.openResourceContextMenu(data.id, event.clientX, event.clientY, null, null);
     };

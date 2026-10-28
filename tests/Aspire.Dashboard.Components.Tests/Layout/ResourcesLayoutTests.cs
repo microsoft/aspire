@@ -251,7 +251,32 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal(
             ["All resources", "cache", "browser"],
             cut.FindAll(".resource-row-link").Select(link => link.GetAttribute("aria-label"))));
-        Assert.Equal("1 resource, 1 telemetry source", cut.Find(".resource-pane-foot").TextContent.Trim());
+        Assert.Equal("1 resource, 1 telemetry source", cut.Find(".resource-pane-foot > span").GetAttribute("aria-label"));
+    }
+
+    [Fact]
+    public void AppHost_CountsResourcesAndParametersSeparately()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api"),
+                ModelTestHelpers.CreateResource("worker"),
+                ModelTestHelpers.CreateResource("parameter", resourceType: KnownResourceTypes.Parameter)
+            ],
+            resourceChannelProvider: () => channel));
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("2 resources, 1 parameter", cut.Find(".resource-row-all .resource-row-link").GetAttribute("aria-description"));
+            var countSummary = cut.Find(".resource-pane-foot > span");
+            Assert.Equal("img", countSummary.GetAttribute("role"));
+            Assert.Equal("2 resources, 1 parameter", countSummary.GetAttribute("aria-label"));
+        });
     }
 
     [Fact]
@@ -695,7 +720,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(menu.Instance.Items.Single(item => item.Id == $"resource-grouping-{grouping}").OnClick!);
         Assert.Equal(expectedGroups, cut.FindAll(".resource-tag-group").Select(group => group.GetAttribute("aria-label")));
         Assert.Equal("http://localhost/structuredlogs/resource/api", navigation.Uri);
-        Assert.Equal("3 resources", cut.Find(".resource-pane-foot > span").TextContent.Trim());
+        Assert.Equal("3 resources", cut.Find(".resource-pane-foot > span").GetAttribute("aria-label"));
 
         var group = cut.FindAll(".resource-tag-group")[0];
         var groupName = group.GetAttribute("aria-label");
@@ -809,7 +834,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         {
             var group = Assert.Single(cut.FindAll(".resource-tag-group"));
             Assert.Equal("Unknown", group.GetAttribute("aria-label"));
-            Assert.Equal(["api", "parameter", "worker"], group.QuerySelectorAll(".resource-row-name").Select(name => name.TextContent.Trim()));
+            Assert.Equal(["api", "worker"], group.QuerySelectorAll(".resource-row-name").Select(name => name.TextContent.Trim()));
         });
 
         await channel.Writer.WriteAsync([new ResourceViewModelChange(ResourceViewModelChangeType.Upsert,
@@ -817,7 +842,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Equal(["Unknown", "Running"], cut.FindAll(".resource-tag-group").Select(group => group.GetAttribute("aria-label")));
-            Assert.Equal(["parameter", "worker", "api"], cut.FindAll(".resource-tag-group .resource-row-name").Select(name => name.TextContent.Trim()));
+            Assert.Equal(["worker", "api"], cut.FindAll(".resource-tag-group .resource-row-name").Select(name => name.TextContent.Trim()));
         });
     }
 
@@ -865,7 +890,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.True(cut.Instance.IsLoaded);
             Assert.Equal(["api", "worker"], cut.Instance.GetAllResourceNames());
             Assert.Equal(3, cut.FindAll(".resource-row").Count);
-            Assert.Equal("2 telemetry sources", cut.Find(".resource-pane-foot").TextContent.Trim());
+            Assert.Equal("2 telemetry sources", cut.Find(".resource-pane-foot > span").GetAttribute("aria-label"));
         });
         Assert.Equal(0, client.ResourceSubscriptionCount);
     }
@@ -890,7 +915,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             var links = cut.FindAll(".resource-row-link");
             Assert.Equal([DashboardUrls.StructuredLogsUrl(), DashboardUrls.StructuredLogsUrl("worker")],
                 links.Select(link => link.GetAttribute("href")));
-            Assert.Equal("1 telemetry source", cut.Find(".resource-pane-foot").TextContent.Trim());
+            Assert.Equal("1 telemetry source", cut.Find(".resource-pane-foot > span").GetAttribute("aria-label"));
             Assert.Equal(["api", "worker"], cut.Instance.GetAllResourceNames());
         });
     }

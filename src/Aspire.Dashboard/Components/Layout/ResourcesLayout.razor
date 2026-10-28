@@ -11,12 +11,13 @@
 @{
     var isGrouped = DashboardClient.IsEnabled && _grouping != ResourceGrouping.None;
     var paneRows = isGrouped ? new List<ResourceGridViewModel>() : GetPaneRows().ToList();
-    var parameterRows = isGrouped ? new List<ResourceViewModel>() : GetParameterPaneRows();
+    var parameterRows = GetParameterPaneRows();
     var groups = isGrouped ? GetResourceGroups() : new List<ResourceGroup>();
     var telemetryRows = GetVisibleTelemetryResources().ToList();
-    var paneResourceCount = isGrouped ? groups.SelectMany(g => g.Resources).DistinctBy(r => r.Name).Count() : paneRows.Count + parameterRows.Count;
+    var paneResourceCount = isGrouped ? groups.SelectMany(g => g.Resources).DistinctBy(r => r.Name).Count() : paneRows.Count;
+    var paneParameterCount = parameterRows.Count;
     var paneTelemetrySourceCount = telemetryRows.Count;
-    var paneItemCount = paneResourceCount + paneTelemetrySourceCount;
+    var paneItemCount = paneResourceCount + paneParameterCount + paneTelemetrySourceCount;
     var isDesktop = ViewportInformation.IsDesktop;
     var showCollapsedPane = isDesktop && _isPaneCollapsed;
 
@@ -92,11 +93,14 @@
                 @if (_isLoaded)
                 {
                     var isAllSelected = _selectedResourceNames.Count == 0;
-                    var allResourceCount = GetAllResourceNames().Count;
+                    var allResources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources)).ToList();
+                    var allResourceCount = allResources.Count(r => !r.IsParameter);
+                    var allParameterCount = allResources.Count(r => r.IsParameter);
+                    var allTelemetrySourceCount = DashboardClient.IsEnabled ? paneTelemetrySourceCount : _telemetryOnlyResources.Count;
                     var allResourcesText = Loc[DashboardClient.IsEnabled ? nameof(Dashboard.Resources.Layout.ResourceHeaderAllResources) : nameof(Dashboard.Resources.Layout.TelemetryHeaderAllSources)].Value;
                     var allResourcesCountText = DashboardClient.IsEnabled
-                        ? GetPaneCountText(allResourceCount, paneTelemetrySourceCount)
-                        : GetPaneCountText(resourceCount: 0, telemetrySourceCount: allResourceCount);
+                        ? GetPaneCountText(allResourceCount, allParameterCount, allTelemetrySourceCount)
+                        : GetPaneCountText(resourceCount: 0, parameterCount: 0, telemetrySourceCount: allTelemetrySourceCount);
 
                     <div class="resource-row resource-row-all @(isAllSelected ? "selected" : string.Empty)">
                         <a class="resource-row-link"
@@ -107,11 +111,11 @@
                            @onclick="OnAllResourcesClickAsync"
                            @onclick:preventDefault="true">
                             <span class="resource-row-icon">
-                                <FluentIcon Width="16px" Value="@(new Icons.Regular.Size20.AppsList())" Color="Color.Custom" CustomColor="currentColor" />
+                               <FluentIcon Width="16px" Value="@(new Icons.Regular.Size20.AppsList())" Color="Color.Custom" CustomColor="currentColor" />
                             </span>
                             <span class="resource-row-text">
                                 <span class="resource-row-name">@allResourcesText</span>
-                                <span class="resource-row-sub">@allResourcesCountText</span>
+                                <span class="resource-row-sub">@RenderPaneCounts(allResourceCount, allParameterCount, allTelemetrySourceCount)</span>
                             </span>
                         </a>
                     </div>
@@ -288,7 +292,9 @@
             @if (!isDesktop)
             {
                 <div class="resource-pane-foot">
-                    <span>@GetPaneCountText(paneResourceCount, paneTelemetrySourceCount)</span>
+                    <span role="img" aria-label="@GetPaneCountText(paneResourceCount, paneParameterCount, paneTelemetrySourceCount)">
+                        @RenderPaneCounts(paneResourceCount, paneParameterCount, paneTelemetrySourceCount)
+                    </span>
                     @if (DashboardClient.IsEnabled)
                     {
                         <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
@@ -345,7 +351,9 @@
                 @if (!_isPaneCollapsed)
                 {
                     <div class="resource-pane-foot">
-                        <span>@GetPaneCountText(paneResourceCount, paneTelemetrySourceCount)</span>
+                        <span role="img" aria-label="@GetPaneCountText(paneResourceCount, paneParameterCount, paneTelemetrySourceCount)">
+                            @RenderPaneCounts(paneResourceCount, paneParameterCount, paneTelemetrySourceCount)
+                        </span>
                         <div class="resource-pane-foot-actions">
                             @if (DashboardClient.IsEnabled)
                             {
@@ -432,6 +440,45 @@
                               data-tooltip-positioning="@(!showLabels ? "above" : null)"
                               Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
         </div>
+    };
+
+    private RenderFragment RenderPaneCounts(int resourceCount, int parameterCount, int telemetrySourceCount) => __builder =>
+    {
+        <span class="resource-pane-counts" aria-hidden="true">
+            @if (resourceCount > 0)
+            {
+                var text = string.Format(
+                    CultureInfo.CurrentCulture,
+                    Loc[resourceCount == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneCountPlural)],
+                    resourceCount);
+                <span class="resource-pane-count" data-tooltip="@text">
+                    <FluentIcon Value="@(new Icons.Regular.Size24.AppFolder())" Width="14px" Color="Color.Custom" CustomColor="currentColor" />
+                    <span>@resourceCount</span>
+                </span>
+            }
+            @if (parameterCount > 0)
+            {
+                var text = string.Format(
+                    CultureInfo.CurrentCulture,
+                    Loc[parameterCount == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountPlural)],
+                    parameterCount);
+                <span class="resource-pane-count" data-tooltip="@text">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Key())" Width="14px" Color="Color.Custom" CustomColor="currentColor" />
+                    <span>@parameterCount</span>
+                </span>
+            }
+            @if (telemetrySourceCount > 0)
+            {
+                var text = string.Format(
+                    CultureInfo.CurrentCulture,
+                    Loc[telemetrySourceCount == 1 ? nameof(Dashboard.Resources.Layout.TelemetryPaneCountSingular) : nameof(Dashboard.Resources.Layout.TelemetryPaneCountPlural)],
+                    telemetrySourceCount);
+                <span class="resource-pane-count" data-tooltip="@text">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.DataUsage())" Width="14px" Color="Color.Custom" CustomColor="currentColor" />
+                    <span>@telemetrySourceCount</span>
+                </span>
+            }
+        </span>
     };
 
     private static string GetResourceRowActionClass(int actionIndex) =>
@@ -526,12 +573,28 @@
         }
         else if (IsMultiSelection)
         {
+            var selectedItemsAreParameters = _selectedItems.All(item => item.Resource is { IsParameter: true });
             <span class="resource-header-icon">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Stack())" Color="Color.Primary" />
+                @if (selectedItemsAreParameters)
+                {
+                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Primary" />
+                }
+                else
+                {
+                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Stack())" Color="Color.Primary" />
+                }
             </span>
             <div class="resource-header-text">
                 <div class="resource-header-title">
-                    @{ RenderTitle(__builder, string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderSelectedResources)], _selectedItems.Count), isDesktop); }
+                    @{
+                        var title = string.Format(
+                            CultureInfo.CurrentCulture,
+                            Loc[selectedItemsAreParameters
+                                ? nameof(Dashboard.Resources.Layout.ResourceHeaderSelectedParameters)
+                                : nameof(Dashboard.Resources.Layout.ResourceHeaderSelectedResources)],
+                            _selectedItems.Count);
+                        RenderTitle(__builder, title, isDesktop);
+                    }
                 </div>
             </div>
         }
@@ -607,7 +670,6 @@
         <FluentTabs Class="resources-tab-header"
                     ActiveTabId="@GetTabId(activeTab)"
                     ActiveTabChanged="@(tab => OnTabChanged(tab, isDesktop))"
-                    aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourceTabsLandmark)]"
                     Size="null">
             @foreach (var tab in GetTabs())
             {
@@ -648,6 +710,7 @@
         var depth = row?.Depth ?? 0;
         var primaryUrl = ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true)
             .FirstOrDefault(url => url.Url is not null);
+        var source = ResourceSourceViewModel.GetSourceViewModel(resource);
         // The whole row is the drag source, so reordering doesn't need a separate grip.
         var canReorder = CanReorderResources && !resource.IsParameter;
 
@@ -735,11 +798,27 @@
                             <span class="resource-row-sep" aria-hidden="true">·</span>
                             <span class="resource-row-type">@resource.ResourceType</span>
                         </span>
-                        @if (IsSpacious && resource.HealthStatus is not null)
+                        @if (IsSpacious && !resource.IsParameter)
                         {
-                            <span class="resource-row-detail">
-                                <span>@resource.HealthStatus.Value.Humanize()</span>
-                            </span>
+                            @if (resource.HealthStatus is { } healthStatus &&
+                                 healthStatus != Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy)
+                            {
+                                <span class="resource-row-detail">
+                                    <span>@healthStatus.Humanize()</span>
+                                </span>
+                            }
+                            else if (primaryUrl?.Url is not null)
+                            {
+                                <span class="resource-row-detail" data-tooltip="@primaryUrl.Url">
+                                    <span>@primaryUrl.Text</span>
+                                </span>
+                            }
+                            else if (source is not null)
+                            {
+                                <span class="resource-row-detail" data-tooltip="@source.Tooltip">
+                                    <span>@source.Value</span>
+                                </span>
+                            }
                         }
                     </span>
                     @if (errorCount > 0)

@@ -20,6 +20,10 @@ public sealed class DashboardMessageBarContent
 
     public string? LinkUrl { get; init; }
 
+    public bool LinkAsAction { get; init; }
+
+    public bool? LinkActionResult { get; init; }
+
     public string? PrimaryAction { get; init; }
 
     public string? SecondaryAction { get; init; }

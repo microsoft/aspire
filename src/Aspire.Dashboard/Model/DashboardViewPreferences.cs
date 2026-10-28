@@ -33,6 +33,11 @@ public enum ResourceListDensity
 public enum GroupOverview
 {
     /// <summary>
+    /// A responsive grid of cards for resources and parameters.
+    /// </summary>
+    Cards,
+
+    /// <summary>
     /// The app's health, live activity, insights and recent problems.
     /// </summary>
     Summary,
@@ -43,12 +48,7 @@ public enum GroupOverview
     Graph,
 
     /// <summary>
-    /// A responsive grid of cards for resources and parameters.
-    /// </summary>
-    Cards,
-
-    /// <summary>
-    /// A table of the resources, with their state, endpoints and actions.
+    /// The former table layout. Stored values are migrated to <see cref="Cards"/>.
     /// </summary>
     Resources
 }
@@ -144,6 +144,11 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage)
         {
             var density = await ReadAsync<ResourceListDensity>(BrowserStorageKeys.ResourceListDensity).ConfigureAwait(false);
             var groupOverview = await ReadAsync<GroupOverview>(BrowserStorageKeys.GroupOverview).ConfigureAwait(false);
+            if (groupOverview == GroupOverview.Resources)
+            {
+                groupOverview = GroupOverview.Cards;
+                await localStorage.SetUnprotectedAsync(BrowserStorageKeys.GroupOverview, groupOverview.ToString()).ConfigureAwait(false);
+            }
             var recordingsStyle = await ReadAsync<RecordingsStyle>(BrowserStorageKeys.RecordingsStyle).ConfigureAwait(false);
             if (density != Density || groupOverview != GroupOverview || recordingsStyle != RecordingsStyle)
             {

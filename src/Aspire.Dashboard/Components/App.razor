@@ -1,4 +1,8 @@
-﻿<!DOCTYPE html>
+﻿@using Aspire.Dashboard.Configuration
+@using Microsoft.Extensions.Options
+@inject IOptionsMonitor<DashboardOptions> DashboardOptions
+
+<!DOCTYPE html>
 <html lang="@GlobalizationHelpers.GetHtmlLanguageName(System.Globalization.CultureInfo.CurrentUICulture)">
 
 <head>
@@ -7,6 +11,7 @@
     <meta name="aspire-version" content="@VersionHelpers.DashboardDisplayVersion" />
     <meta name="dotnet-runtime-version" content="@VersionHelpers.RuntimeFrameworkDescription" />
     <meta name="dotnet-runtime-mode" content="@VersionHelpers.RuntimeMode" />
+    <meta name="aspire-dashboard-default-experience" content="@(DashboardOptions.CurrentValue.UI.DisableModernDashboard == true ? "legacy" : "modern")" />
     <base href="/" />
     <link rel="icon" type="image/x-icon" href="@Assets["favicon.ico"]" />
     <link rel="stylesheet" href="@Assets["_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css"]" />
@@ -17,6 +22,7 @@
     <link rel="stylesheet" href="@Assets["css/markdown.css"]" />
     <link rel="stylesheet" href="@Assets["Aspire.Dashboard.styles.css"]" />
     <script src="@Assets["js/app-theme-bootstrap.js"]"></script>
+    <script src="@Assets["js/app-dashboard-experience.js"]"></script>
 
     <HeadOutlet @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
 </head>

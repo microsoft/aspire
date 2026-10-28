@@ -1358,5 +1358,41 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("VolumeRevealInFileExplorer", resourceCulture);
             }
         }
+        /// <summary>
+        ///   Looks up a localized string similar to Resources.
+        /// </summary>
+        public static string ResourcesContainerTableTab {
+            get {
+                return ResourceManager.GetString("ResourcesContainerTableTab", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Parameters.
+        /// </summary>
+        public static string ResourcesContainerParametersTab {
+            get {
+                return ResourceManager.GetString("ResourcesContainerParametersTab", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Graph.
+        /// </summary>
+        public static string ResourcesContainerGraphTab {
+            get {
+                return ResourceManager.GetString("ResourcesContainerGraphTab", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Graph. For an accessible view please navigate to the Resources tab.
+        /// </summary>
+        public static string ResourcesContainerGraphAccessibleLabel {
+            get {
+                return ResourceManager.GetString("ResourcesContainerGraphAccessibleLabel", resourceCulture);
+            }
+        }
+
     }
 }

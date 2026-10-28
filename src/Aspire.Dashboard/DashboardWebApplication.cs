@@ -12,6 +12,7 @@ using Aspire.Dashboard.Authentication.Connection;
 using Aspire.Dashboard.Authentication.OpenIdConnect;
 using Aspire.Dashboard.Authentication.OtlpApiKey;
 using Aspire.Dashboard.Components;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Shared;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Configuration;
@@ -145,6 +146,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Login))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Metrics))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(NotFound))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(ParametersRedirect))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(ResourceOverview))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Pages.Resources))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(StructuredLogs))]
@@ -152,6 +154,18 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(TerminalWindow))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(TraceDetail))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Traces))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Layout.LegacyMainLayout))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.ConsoleLogs))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.Error))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.Login))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.Metrics))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.NotFound))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.Resources))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.StructuredLogs))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.Terminals))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.TerminalWindow))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.TraceDetail))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Legacy.Pages.Traces))]
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "AddRazorComponents and AddInteractiveServerComponents still warn that Blazor does not support trimming. Routed components and MainLayout are explicitly preserved, and circuit serialization uses generated Dashboard and Fluent UI contexts. Remove when Blazor supports trimming: https://aka.ms/aspnet/nativeaot.")]
     public DashboardWebApplication(
         Action<WebApplicationBuilder>? preConfigureBuilder = null,
@@ -229,6 +243,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Telemetry must be available before options validation so failed startup attempts
         // can be recorded even though the host never starts.
         builder.Services.TryAddScoped<ComponentTelemetryContextProvider>();
+        builder.Services.TryAddScoped<Components.Legacy.Pages.ComponentTelemetryContextProvider>();
         builder.Services.TryAddSingleton<DashboardTelemetryService>();
         builder.Services.TryAddSingleton(services => DashboardTelemetryConfiguration.Create(
             services.GetRequiredService<IConfiguration>()));
@@ -449,8 +464,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             () => _otlpServiceGrpcEndPointAccessor?.Invoke(),
             () => _otlpServiceHttpEndPointAccessor?.Invoke()));
         builder.Services.AddScoped<DashboardMessageBarService>();
+        builder.Services.AddScoped<ParameterInteractionState>();
         builder.Services.AddScoped<ResourceMenuBuilder>();
         builder.Services.AddScoped<ResourcePaneState>();
+        builder.Services.AddScoped<TerminalDockState>();
         builder.Services.AddScoped<DashboardViewPreferences>();
         builder.Services.AddScoped<StructuredLogMenuBuilder>();
         builder.Services.AddScoped<SpanMenuBuilder>();

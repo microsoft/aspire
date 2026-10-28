@@ -470,6 +470,11 @@
     white-space: nowrap;
 }
 
+.resource-row-detail > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .resource-row-endpoint {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -478,6 +483,26 @@
 .resource-row-type {
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.resource-pane-counts {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.resource-pane-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: 0 0 auto;
+    color: var(--colorNeutralForeground2);
+    font-variant-numeric: tabular-nums;
+}
+
+.resource-pane-count ::deep svg {
+    color: var(--colorNeutralForeground3);
 }
 
 .error-badge {
@@ -1137,6 +1162,7 @@
         padding: 0 16px;
         font-size: var(--fontSizeBase400);
     }
+
 }
 
 /* Fluent UI has no 16px GroupList icon. Draw the 20px one at 16px so the grouping button matches the

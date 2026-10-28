@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIRETERMINAL001
 
 var builder = DistributedApplication.CreateBuilder(args);
 builder.Services.AddHttpClient();
@@ -152,5 +153,16 @@ builder.AddProject<Projects.Stress_Empty>("empty-profile-2", launchProfileName: 
 
 builder.AddNoStatusResource("no-status-resource");
 builder.AddPropertyStressResource("property-stress-resource");
+
+if (OperatingSystem.IsWindows())
+{
+    builder.AddExecutable("stress-shell", "cmd.exe", ".")
+        .WithTerminal();
+}
+else
+{
+    builder.AddExecutable("stress-shell", "/bin/bash", ".", "-i", "-l")
+        .WithTerminal();
+}
 
 builder.Build().Run();

@@ -646,6 +646,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to {0} selected parameters.
+        /// </summary>
+        public static string ResourceHeaderSelectedParameters {
+            get {
+                return ResourceManager.GetString("ResourceHeaderSelectedParameters", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Started.
         /// </summary>
         public static string ResourceHeaderStarted {
@@ -678,6 +687,24 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourcePaneCountPlural {
             get {
                 return ResourceManager.GetString("ResourcePaneCountPlural", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} parameters.
+        /// </summary>
+        public static string ResourcePaneParameterCountPlural {
+            get {
+                return ResourceManager.GetString("ResourcePaneParameterCountPlural", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} parameter.
+        /// </summary>
+        public static string ResourcePaneParameterCountSingular {
+            get {
+                return ResourceManager.GetString("ResourcePaneParameterCountSingular", resourceCulture);
             }
         }
 
@@ -941,5 +968,23 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TerminalsPageDescription", resourceCulture);
             }
         }
+        /// <summary>
+        ///   Looks up a localized string similar to Expand navigation labels.
+        /// </summary>
+        public static string NavMenuToggleExpand {
+            get {
+                return ResourceManager.GetString("NavMenuToggleExpand", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Collapse navigation to icons.
+        /// </summary>
+        public static string NavMenuToggleCollapse {
+            get {
+                return ResourceManager.GetString("NavMenuToggleCollapse", resourceCulture);
+            }
+        }
+
     }
 }

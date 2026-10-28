@@ -93,6 +93,216 @@ For more information about using AI agents with the dashboard, including setting
         <target state="new">AI agents</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardFeedbackBack">
+        <source>Back</source>
+        <target state="new">Back</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackContinue">
+        <source>Continue</source>
+        <target state="new">Continue</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackCopied">
+        <source>Feedback copied to the clipboard.</source>
+        <target state="new">Feedback copied to the clipboard.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackCopiedAndOpened">
+        <source>Feedback copied. Paste it into the GitHub discussion to share it.</source>
+        <target state="new">Feedback copied. Paste it into the GitHub discussion to share it.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackCopy">
+        <source>Copy feedback</source>
+        <target state="new">Copy feedback</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackCopyAndOpen">
+        <source>Copy and open discussion</source>
+        <target state="new">Copy and open discussion</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackCopyFailed">
+        <source>The clipboard could not be accessed. Copy the preview manually.</source>
+        <target state="new">The clipboard could not be accessed. Copy the preview manually.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackCopyOpenAndSwitch">
+        <source>Open new discussion and switch</source>
+        <target state="new">Open new discussion and switch</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDescription">
+        <source>Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself.</source>
+        <target state="new">Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDialogTitle">
+        <source>Share dashboard feedback</source>
+        <target state="new">Share dashboard feedback</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDifficultiesLabel">
+        <source>What felt harder or less clear?</source>
+        <target state="new">What felt harder or less clear?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDurationLabel">
+        <source>Time using the new dashboard</source>
+        <target state="new">Time using the new dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDurationLessThanOneHour">
+        <source>Less than one hour</source>
+        <target state="new">Less than one hour</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDurationMoreThanOneWeek">
+        <source>More than one week</source>
+        <target state="new">More than one week</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDurationNotSpecified">
+        <source>Prefer not to say</source>
+        <target state="new">Prefer not to say</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDurationOneDay">
+        <source>About one day</source>
+        <target state="new">About one day</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDurationTwoToSevenDays">
+        <source>2-7 days</source>
+        <target state="new">2-7 days</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackMarkdownTitle">
+        <source>Dashboard experience feedback</source>
+        <target state="new">Dashboard experience feedback</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackMissingLabel">
+        <source>What are you missing from the new dashboard?</source>
+        <target state="new">What are you missing from the new dashboard?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackModeAppHost">
+        <source>AppHost</source>
+        <target state="new">AppHost</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackModeLabel">
+        <source>Dashboard mode</source>
+        <target state="new">Dashboard mode</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackModeStandalone">
+        <source>Standalone telemetry</source>
+        <target state="new">Standalone telemetry</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackOtherPlaceholder">
+        <source>Describe another reason</source>
+        <target state="new">Describe another reason</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackPreviewDisclosure">
+        <source>Preview copied feedback</source>
+        <target state="new">Preview copied feedback</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackPreviewLabel">
+        <source>Feedback to copy</source>
+        <target state="new">Feedback to copy</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackPromptIgnore">
+        <source>Don't ask again</source>
+        <target state="new">Don't ask again</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackPromptMessage">
+        <source>Share what works, what is missing, or what feels harder. Your feedback helps improve the dashboard while both experiences are available.</source>
+        <target state="new">Share what works, what is missing, or what feels harder. Your feedback helps improve the dashboard while both experiences are available.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackPromptShare">
+        <source>Share feedback</source>
+        <target state="new">Share feedback</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackPromptTitle">
+        <source>Help shape the new dashboard</source>
+        <target state="new">Help shape the new dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
+        <source>Finding application URLs</source>
+        <target state="new">Finding application URLs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonMissingFeature">
+        <source>A missing feature</source>
+        <target state="new">A missing feature</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonNavigation">
+        <source>Navigation</source>
+        <target state="new">Navigation</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonOther">
+        <source>Other</source>
+        <target state="new">Other</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonPerformanceOrAccessibility">
+        <source>Performance or accessibility</source>
+        <target state="new">Performance or accessibility</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonTelemetryWorkflow">
+        <source>Telemetry workflow</source>
+        <target state="new">Telemetry workflow</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonTerminals">
+        <source>Terminals</source>
+        <target state="new">Terminals</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonsLabel">
+        <source>Reasons for returning to the previous dashboard</source>
+        <target state="new">Reasons for returning to the previous dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackStepOneTitle">
+        <source>Why are you switching?</source>
+        <target state="new">Why are you switching?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackStepProgress">
+        <source>Step {0} of 2</source>
+        <target state="new">Step {0} of 2</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackStepTwoDescription">
+        <source>These details are optional, but they help us understand what to improve.</source>
+        <target state="new">These details are optional, but they help us understand what to improve.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackStepTwoTitle">
+        <source>Anything else we should know?</source>
+        <target state="new">Anything else we should know?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackSwitchToLegacy">
+        <source>Switch to previous dashboard</source>
+        <target state="new">Switch to previous dashboard</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DialogCloseButtonText">
         <source>Close</source>
         <target state="translated">Zavřít</target>
@@ -453,6 +663,16 @@ For more information about using AI agents with the dashboard, including setting
         <target state="new">Guides and reference for using the Aspire dashboard.</target>
         <note />
       </trans-unit>
+      <trans-unit id="HelpDialogDashboardFeedbackDescription">
+        <source>Share feedback about the evolving dashboard experience.</source>
+        <target state="new">Share feedback about the evolving dashboard experience.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogDashboardFeedbackTitle">
+        <source>Dashboard feedback</source>
+        <target state="new">Dashboard feedback</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HelpDialogDashboardVersion">
         <source>Aspire dashboard version {0}</source>
         <target state="new">Aspire dashboard version {0}</target>
@@ -476,6 +696,11 @@ For more information about using AI agents with the dashboard, including setting
       <trans-unit id="HelpDialogDocumentationTab">
         <source>Documentation</source>
         <target state="new">Documentation</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogGetHelpLinkText">
+        <source>Go to aspire.dev documentation</source>
+        <target state="new">Go to aspire.dev documentation</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToConsoleLogs">
@@ -541,6 +766,11 @@ For more information about using AI agents with the dashboard, including setting
       <trans-unit id="HelpDialogIncreasePanelSize">
         <source>Increase panel size</source>
         <target state="translated">Zvětšit velikost panelu</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogKeyboardShortcutsTitle">
+        <source>Keyboard Shortcuts</source>
+        <target state="new">Keyboard Shortcuts</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogLearnHeading">
@@ -728,9 +958,39 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Čeká se na načtení rozsahu {0}...</target>
         <note>{0} is a span ID</note>
       </trans-unit>
+      <trans-unit id="SettingsDialogAppearanceGroup">
+        <source>Appearance</source>
+        <target state="new">Appearance</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SettingsDialogDarkTheme">
         <source>Dark</source>
         <target state="translated">Tmavý</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardExperience">
+        <source>Dashboard experience</source>
+        <target state="new">Dashboard experience</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardExperienceDescription">
+        <source>Choose which dashboard experience to use.</source>
+        <target state="new">Choose which dashboard experience to use.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardExperienceNew">
+        <source>New dashboard</source>
+        <target state="new">New dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardExperiencePrevious">
+        <source>Previous dashboard</source>
+        <target state="new">Previous dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardExperienceSelectorLabel">
+        <source>Experience</source>
+        <target state="new">Experience</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardLogsAndTelemetry">
@@ -738,14 +998,24 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Protokoly prostředků a telemetrie</target>
         <note />
       </trans-unit>
+      <trans-unit id="SettingsDialogDataAndTelemetryGroup">
+        <source>Data and telemetry</source>
+        <target state="new">Data and telemetry</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SettingsDialogDotNetRuntimeVersion">
         <source>Runtime: {0}</source>
         <target state="translated">Modul runtime: {0}</target>
         <note>{0} is the .NET runtime version</note>
       </trans-unit>
+      <trans-unit id="SettingsDialogExperienceGroup">
+        <source>Dashboard experience</source>
+        <target state="new">Dashboard experience</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SettingsDialogGroupOverview">
-        <source>Overview of several resources</source>
-        <target state="new">Overview of several resources</target>
+        <source>Overview layout</source>
+        <target state="new">Overview layout</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogGroupOverviewCards">
@@ -753,19 +1023,19 @@ For more information about using AI agents with the dashboard, including setting
         <target state="new">Cards</target>
         <note />
       </trans-unit>
-      <trans-unit id="SettingsDialogGroupOverviewResources">
-        <source>Resource list</source>
-        <target state="new">Resource list</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SettingsDialogGroupOverviewSummary">
-        <source>Summary</source>
-        <target state="new">Summary</target>
+        <source>Home</source>
+        <target state="new">Home</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguage">
         <source>Language</source>
         <target state="translated">Jazyk</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogLanguageAndTimeGroup">
+        <source>Language and time</source>
+        <target state="new">Language and time</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguagePageReloads">
@@ -776,21 +1046,6 @@ For more information about using AI agents with the dashboard, including setting
       <trans-unit id="SettingsDialogLightTheme">
         <source>Light</source>
         <target state="translated">Světlý</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SettingsDialogRecordingsStyle">
-        <source>Recordings</source>
-        <target state="new">Recordings</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SettingsDialogRecordingsStyleMenu">
-        <source>Live run menu</source>
-        <target state="new">Live run menu</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SettingsDialogRecordingsStylePanel">
-        <source>Recordings panel</source>
-        <target state="new">Recordings panel</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogResourceListDensity">

@@ -43,7 +43,7 @@ public sealed partial class Home : ComponentBase
 
         if (string.Equals(viewKind, nameof(Resources.ResourceViewKind.Parameters), StringComparison.OrdinalIgnoreCase))
         {
-            return DashboardUrls.ParametersUrl();
+            return DashboardUrls.ResourceListUrl();
         }
 
         if (!string.IsNullOrEmpty(resourceName))

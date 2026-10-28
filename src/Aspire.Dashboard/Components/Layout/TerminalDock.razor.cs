@@ -45,6 +45,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private bool _isVisible;
     private bool _disposed;
     private string? _activeTerminalId;
+    private string? _activeResourceTerminalName;
+    private TerminalView? _resourceTerminalView;
 
     private int _heightPx = DefaultHeightPx;
     private int _maximumHeightPx = MaximumHeightPx;
@@ -78,6 +80,15 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
+
+    [Inject]
+    public required IResourceRepository ResourceRepository { get; init; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; init; }
+
+    [Inject]
+    public required TerminalDockState DockState { get; init; }
 
     [Inject]
     public required ShortcutManager ShortcutManager { get; init; }
@@ -154,6 +165,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             [new(TelemetryPropertyKeys.TerminalDockTrigger, new AspireTelemetryProperty(trigger))], Logger);
         _hasBeenOpened = true;
         _isVisible = true;
+        SelectResourceTerminal();
     }
 
     protected override Task OnAfterRenderAsync(bool firstRender)
@@ -226,6 +238,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         TelemetryContext?.Dispose();
         TelemetryContext = null;
         _isVisible = false;
+        DockState.Update(isVisible: false, resourceName: null);
     }
 
     private void Activate(string terminalId)
@@ -240,7 +253,43 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         _activeTerminalId = terminalId;
     }
 
-    private bool IsPanelVisible => _terminals.Count == 0;
+    private ResourceViewModel? ActiveResourceTerminal =>
+        _activeResourceTerminalName is { } name
+            ? ResourceRepository.GetResources().FirstOrDefault(resource =>
+                string.Equals(resource.Name, name, StringComparisons.ResourceName) &&
+                ResourceSelectHelpers.HasUsableTerminal(resource))
+            : null;
+
+    private bool IsPanelVisible => _terminals.Count == 0 && ActiveResourceTerminal is null;
+
+    private void SelectResourceTerminal()
+    {
+        if (_terminals.Count > 0)
+        {
+            _activeResourceTerminalName = null;
+            DockState.Update(_isVisible, resourceName: null);
+            return;
+        }
+
+        var resources = ResourceRepository.GetResources()
+            .Where(ResourceSelectHelpers.HasUsableTerminal)
+            .ToList();
+        if (resources.Count == 0)
+        {
+            _activeResourceTerminalName = null;
+            DockState.Update(_isVisible, resourceName: null);
+            return;
+        }
+
+        var selectedNames = ResourcesLayout.ParseLocation(
+            NavigationManager.ToBaseRelativePath(NavigationManager.Uri)).SelectedResourceNames;
+        _activeResourceTerminalName = resources.FirstOrDefault(resource =>
+                selectedNames.Contains(resource.Name, StringComparers.ResourceName) ||
+                selectedNames.Contains(resource.DisplayName, StringComparers.ResourceName))
+            ?.Name
+            ?? resources[0].Name;
+        DockState.Update(_isVisible, _activeResourceTerminalName);
+    }
 
     /// <summary>
     /// Moves a dock tab relative to another tab without changing the active terminal or its viewer.
@@ -437,6 +486,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                         ordered.AddRange(update.Snapshot.Terminals.Where(t => !existingIds.Contains(t.TerminalId)));
                         _terminals.Clear();
                         _terminals.AddRange(ordered);
+                        SelectResourceTerminal();
                         if (!_terminals.Any(t => t.TerminalId == _activeTerminalId))
                         {
                             // Snapshots can also remove the active tab; use the same adjacent fallback as removal.
@@ -470,6 +520,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                     {
                         endedTerminalIds.Add(endedTerminalId);
                     }
+
+                    SelectResourceTerminal();
 
                     if (_hasBeenOpened)
                     {
@@ -572,6 +624,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         _disposed = true;
         TelemetryContext?.Dispose();
         TelemetryContext = null;
+        DockState.Update(isVisible: false, resourceName: null);
         ShortcutManager.RemoveGlobalKeydownListener(this);
 
         // Stop updates before releasing browser-side state. A queued dispatcher callback observes _disposed and

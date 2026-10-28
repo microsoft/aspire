@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -324,6 +324,12 @@
   <data name="ResourcePaneCountPlural" xml:space="preserve">
     <value>{0} resources</value>
   </data>
+  <data name="ResourcePaneParameterCountSingular" xml:space="preserve">
+    <value>{0} parameter</value>
+  </data>
+  <data name="ResourcePaneParameterCountPlural" xml:space="preserve">
+    <value>{0} parameters</value>
+  </data>
   <data name="ResourcePaneMixedCount" xml:space="preserve">
     <value>{0}, {1}</value>
   </data>
@@ -362,6 +368,9 @@
   </data>
   <data name="ResourceHeaderSelectedResources" xml:space="preserve">
     <value>{0} selected resources</value>
+  </data>
+  <data name="ResourceHeaderSelectedParameters" xml:space="preserve">
+    <value>{0} selected parameters</value>
   </data>
   <data name="ResourcePaneResize" xml:space="preserve">
     <value>Resize resource list</value>
@@ -416,5 +425,11 @@
   </data>
   <data name="ResourcePaneGroupReorderFailed" xml:space="preserve">
     <value>Unable to save the group order. Try again.</value>
+  </data>
+  <data name="NavMenuToggleExpand" xml:space="preserve">
+    <value>Expand navigation labels</value>
+  </data>
+  <data name="NavMenuToggleCollapse" xml:space="preserve">
+    <value>Collapse navigation to icons</value>
   </data>
 </root>

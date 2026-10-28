@@ -76,6 +76,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private DotNetObjectReference<ResourcesLayout>? _selfRef;
     private bool _isResizerRegistered;
     private bool _isOrderingRegistered;
+    private bool _fitPaneAfterInitialRender = true;
     private string? _orderStatus;
 
     [Inject]
@@ -231,7 +232,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             _paneWidth = Math.Clamp(paneWidthResult.Value, MinimumPaneWidthPx, MaximumPaneWidthPx);
         }
-
         // The URL selects the mode when navigating from the main navigation. Other resource URLs, such as a row's
         // link, don't include it, so the last mode is remembered.
         var paneModeResult = await LocalStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneMode);
@@ -413,7 +413,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         var showResizer = ViewportInformation.IsDesktop && !_isPaneCollapsed;
-        if (showResizer == _isResizerRegistered && _isOrderingRegistered)
+        var registrationChanged = showResizer != _isResizerRegistered || !_isOrderingRegistered;
+        if (!registrationChanged && !(_fitPaneAfterInitialRender && _isLoaded && showResizer))
         {
             return;
         }
@@ -427,16 +428,26 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 await _jsModule.InvokeVoidAsync("registerResourceOrdering", _layoutElement, _selfRef);
                 _isOrderingRegistered = true;
             }
-            if (showResizer)
+            if (registrationChanged && showResizer)
             {
                 await _jsModule.InvokeVoidAsync("registerPaneResizer", _layoutElement, _selfRef, MinimumPaneWidthPx, MaximumPaneWidthPx);
             }
-            else
+            else if (registrationChanged)
             {
                 await _jsModule.InvokeVoidAsync("unregisterPaneResizer", _layoutElement);
             }
 
             _isResizerRegistered = showResizer;
+            await _jsModule.InvokeVoidAsync(
+                "setTabListAriaLabel",
+                GetTabId(CurrentTab),
+                Loc[nameof(Dashboard.Resources.Layout.ResourceTabsLandmark)].Value);
+
+            if (_fitPaneAfterInitialRender && _isLoaded && showResizer)
+            {
+                _fitPaneAfterInitialRender = false;
+                await _jsModule.InvokeVoidAsync("fitPaneToActions", _layoutElement);
+            }
         }
         catch (JSDisconnectedException)
         {
@@ -843,7 +854,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private List<ResourceGroup> GetResourceGroups()
     {
         var groups = _grouping == ResourceGrouping.Tags ? GetTagGroups() : _resourceByName.Values
-            .Where(r => _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
+            .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
             .GroupBy(r => _grouping == ResourceGrouping.ResourceType ? r.ResourceType
                 : string.IsNullOrEmpty(r.State) ? nameof(KnownResourceState.Unknown) : r.State, StringComparer.OrdinalIgnoreCase)
             .Select(group => new ResourceGroup(group.Key,
@@ -921,7 +932,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         var textFilter = _filter.TextFilter;
         var resources = _resourceByName.Values
-            .Where(r => _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
+            .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
             .OrderBy(r => r.ResourceType)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
             .ToList();
@@ -1322,7 +1333,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     private Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
-        => DashboardCommandExecutor.ExecuteAsync(resource, command, GetResourceName);
+    {
+        if (resource.IsParameter &&
+            string.Equals(command.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName))
+        {
+            NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(GetResourceName(resource)));
+            return Task.CompletedTask;
+        }
+
+        return DashboardCommandExecutor.ExecuteAsync(resource, command, GetResourceName);
+    }
 
     internal string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
 
@@ -1413,12 +1433,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         ? _telemetryOnlyResources.Select(r => r.Resource.ResourceKey).Distinct().ToList()
         : _resourceByName.Values.Select(GetTelemetryResource).OfType<OtlpResource>().Select(r => r.ResourceKey).Distinct().ToList();
 
-    private string GetPaneCountText(int resourceCount, int telemetrySourceCount)
+    private string GetPaneCountText(int resourceCount, int parameterCount, int telemetrySourceCount)
     {
         var resourceCountText = resourceCount > 0
             ? string.Format(CultureInfo.CurrentCulture,
                 Loc[resourceCount == 1 ? nameof(Resources.Layout.ResourcePaneCountSingular) : nameof(Resources.Layout.ResourcePaneCountPlural)],
                 resourceCount)
+            : null;
+        var parameterCountText = parameterCount > 0
+            ? string.Format(CultureInfo.CurrentCulture,
+                Loc[parameterCount == 1 ? nameof(Resources.Layout.ResourcePaneParameterCountSingular) : nameof(Resources.Layout.ResourcePaneParameterCountPlural)],
+                parameterCount)
             : null;
         var telemetrySourceCountText = telemetrySourceCount > 0
             ? string.Format(CultureInfo.CurrentCulture,
@@ -1426,13 +1451,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 telemetrySourceCount)
             : null;
 
-        return (resourceCountText, telemetrySourceCountText) switch
+        var counts = new[] { resourceCountText, parameterCountText, telemetrySourceCountText }
+            .OfType<string>()
+            .ToList();
+        if (counts.Count == 0)
         {
-            ({ } resources, { } sources) => string.Format(CultureInfo.CurrentCulture, Loc[nameof(Resources.Layout.ResourcePaneMixedCount)], resources, sources),
-            ({ } resources, null) => resources,
-            (null, { } sources) => sources,
-            _ => string.Format(CultureInfo.CurrentCulture, Loc[nameof(Resources.Layout.ResourcePaneCountPlural)], 0)
-        };
+            return string.Format(CultureInfo.CurrentCulture, Loc[nameof(Resources.Layout.ResourcePaneCountPlural)], 0);
+        }
+
+        return counts.Skip(1).Aggregate(
+            counts[0],
+            (combined, count) => string.Format(CultureInfo.CurrentCulture, Loc[nameof(Resources.Layout.ResourcePaneMixedCount)], combined, count));
     }
 
     /// <summary>
@@ -1588,13 +1617,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     private async Task OnRowClickAsync(MouseEventArgs e, string resourceName)
     {
-        if (_resourceByName.TryGetValue(resourceName, out var clickedResource) && clickedResource.IsParameter)
-        {
-            _selectionAnchor = resourceName;
-            NavigationManager.NavigateTo(GetSelectionUrl([resourceName]));
-            return;
-        }
-
         // The selection can also change by navigating, for example with a link to a resource. Ranges then start at
         // the last selected resource.
         var anchor = _selectionAnchor is not null && IsSelected(_selectionAnchor) ? _selectionAnchor : _selectedResourceNames is [.., var last] ? last : null;
@@ -1835,7 +1857,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return items;
     }
 
-    internal static string GetStateClass(ResourceViewModel resource) => resource.KnownState switch
+    internal static string GetStateClass(ResourceViewModel resource) =>
+        resource.IsParameter && resource.HasMissingParameterValueState()
+            ? "state-warning"
+            : resource.KnownState switch
     {
         KnownResourceState.Running when resource.HealthStatus is Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy => "state-warning",
         KnownResourceState.Running => "state-success",

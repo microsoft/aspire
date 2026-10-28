@@ -67,7 +67,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await page.GotoAsync("/resources");
 
             var pane = page.Locator(".resource-pane");
-            var rows = pane.Locator("[data-resource-name]");
+            var rows = pane.Locator("[data-resource-name]:has([data-resource-drag-handle])");
             await Assertions.Expect(rows).ToHaveCountAsync(3);
             var originalOrder = await rows.EvaluateAllAsync<string[]>("rows => rows.map(row => row.dataset.resourceName)");
             var source = rows.Last.Locator("[data-resource-drag-handle]");
@@ -109,9 +109,8 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         {
             await GoToParametersAndWaitForDataGridLoadAsync(page).DefaultTimeout();
 
-            var viewOptionsButton = page.Locator(
-                $"fluent-button[title='{Dashboard.Resources.Resources.ResourcesChangeViewOptions}']");
-            await Assertions.Expect(viewOptionsButton).ToHaveAttributeAsync("aria-expanded", "false");
+            var viewOptionsButton = page.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourcesChangeViewOptions, Exact = true });
+            await Assertions.Expect(viewOptionsButton).Not.ToHaveAttributeAsync("aria-expanded", "true");
 
             await viewOptionsButton.ClickAsync();
             await Assertions.Expect(viewOptionsButton).ToHaveAttributeAsync("aria-expanded", "true");
@@ -120,7 +119,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await Assertions.Expect(page.GetByRole(AriaRole.Menuitem, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourceExpandAllChildren, Exact = true })).ToHaveCountAsync(0);
             var showResourceTypes = page.GetByRole(AriaRole.Menuitem, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourcesShowTypes, Exact = true });
             await showResourceTypes.ClickAsync();
-            await Assertions.Expect(viewOptionsButton).ToHaveAttributeAsync("aria-expanded", "false");
+            await Assertions.Expect(viewOptionsButton).Not.ToHaveAttributeAsync("aria-expanded", "true");
         });
     }
 
@@ -132,16 +131,16 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         {
             await GoToParametersAndWaitForDataGridLoadAsync(page).DefaultTimeout();
 
-            var values = await page.Locator(".grid-action-container fluent-button").EvaluateAllAsync<int[]>(
+            var buttons = page.Locator(".grid-action-container fluent-button");
+            await Assertions.Expect(buttons.First).ToHaveCSSAsync("min-width", "32px");
+            var values = await buttons.EvaluateAllAsync<double[]>(
                 """
-                buttons => [
-                    buttons.length,
-                    buttons.filter(button => getComputedStyle(button).minWidth !== '32px').length
-                ]
+                buttons => buttons.map(button => Number.parseFloat(getComputedStyle(button).minWidth))
                 """);
 
-            Assert.True(values[0] > 0);
-            Assert.Equal(0, values[1]);
+            Assert.NotEmpty(values);
+            Assert.Single(values.Distinct());
+            Assert.InRange(values[0], 32, 36);
         });
     }
 
@@ -151,7 +150,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
     {
         await RunTestAsync(async page =>
         {
-            await page.GotoAsync("/parameters");
+            await GoToParametersAndWaitForDataGridLoadAsync(page).DefaultTimeout();
 
             var resourceNames = page.Locator(".main-grid .resource-row .resource-name-text");
             await Assertions.Expect(resourceNames).ToHaveCountAsync(2);
@@ -187,7 +186,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             var layout = page.Locator(".resources-layout");
             await Assertions.Expect(layout).Not.ToHaveClassAsync(new Regex("drawer-open"));
 
-            await page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = Dashboard.Resources.Layout.ResourcePaneOpen, Exact = true }).ClickAsync();
+            await page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = Dashboard.Resources.Layout.ResourceHeaderAllResources, Exact = true }).ClickAsync();
             await Assertions.Expect(layout).ToHaveClassAsync(new Regex("drawer-open"));
 
             var resourceLink = page.Locator(".resource-pane").GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = "TestResource" });
@@ -217,7 +216,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await graphButton.ClickAsync();
             await Assertions.Expect(graphButton).ToHaveAttributeAsync("aria-pressed", "true");
 
-            var graphContainer = page.Locator("#resourcesGraphContainer");
+            var graphContainer = page.GetByRole(AriaRole.Region, new() { Name = Dashboard.Resources.ControlsStrings.ChartContainerGraphAccessibleLabel });
             await Assertions.Expect(graphContainer).ToBeVisibleAsync();
 
             var graphWidth = await graphContainer.EvaluateAsync<double>("element => element.getBoundingClientRect().width");
@@ -235,7 +234,10 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
     {
         await RunTestAsync(async page =>
         {
-            await page.GotoAsync("/graph");
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+            await page.GetByRole(AriaRole.Group, new() { Name = Dashboard.Resources.Resources.LayoutLabel, Exact = true })
+                .GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Layout.NavMenuGraphTab, Exact = true })
+                .ClickAsync();
 
             var node = page.Locator(".resource-group[resource-name='TestResource']");
             await Assertions.Expect(node).ToBeVisibleAsync();
@@ -290,11 +292,11 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             Assert.InRange(Math.Abs(nodeBoundsAfter.Y - nodeBoundsBefore.Y), 0, 5);
             Assert.False((await node.GetAttributeAsync("class"))?.Split(' ').Contains("resource-group-selected"));
 
-            var menu = page.Locator(".aspire-menu-container:has(#resource-context-menu-header) fluent-menu-list");
-            await Assertions.Expect(menu).ToBeHiddenAsync();
+            await Assertions.Expect(page.Locator("fluent-menu-list:visible")).ToHaveCountAsync(0);
 
             await node.HoverAsync();
             await cog.ClickAsync();
+            var menu = page.Locator("fluent-menu-list:visible");
             await Assertions.Expect(menu).ToBeVisibleAsync();
             await Assertions.Expect(cog).ToHaveAttributeAsync("aria-expanded", "true");
             Assert.False((await node.GetAttributeAsync("class"))?.Split(' ').Contains("resource-group-selected"));
@@ -376,7 +378,10 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
     {
         await RunTestAsync(async page =>
         {
-            await page.GotoAsync("/graph");
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+            await page.GetByRole(AriaRole.Group, new() { Name = Dashboard.Resources.Resources.LayoutLabel, Exact = true })
+                .GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Layout.NavMenuGraphTab, Exact = true })
+                .ClickAsync();
 
             var node = page.Locator(".resource-node").First;
             await Assertions.Expect(node).ToBeVisibleAsync();
@@ -398,7 +403,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 }
                 """);
 
-            var menu = page.Locator(".aspire-menu-container:has(#resource-context-menu-header) fluent-menu-list");
+            var menu = page.Locator("fluent-menu-list:visible");
             await Assertions.Expect(menu).ToBeVisibleAsync();
             var menuBounds = await menu.BoundingBoxAsync();
             Assert.NotNull(menuBounds);
@@ -467,9 +472,12 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         ];
     }
 
-    private static async Task GoToParametersAndWaitForDataGridLoadAsync(IPage page)
+    private async Task GoToParametersAndWaitForDataGridLoadAsync(IPage page)
     {
-        await page.GotoAsync("/parameters");
+        var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+        await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = "legacy", Url = baseUrl }]);
+        await page.GotoAsync("/legacy/resources");
+        await page.GetByRole(AriaRole.Tab, new() { Name = Dashboard.Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
         await Assertions.Expect(page.Locator(".main-grid .resource-row").First).ToBeVisibleAsync();
     }
 }

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -561,5 +561,17 @@
   <data name="ChartContainerUnitPerInterval" xml:space="preserve">
     <value>{0} per interval</value>
     <comment>{0} is the instrument's unit, e.g. "Requests"</comment>
+  </data>
+  <data name="ResourcesContainerTableTab" xml:space="preserve">
+    <value>Resources</value>
+  </data>
+  <data name="ResourcesContainerParametersTab" xml:space="preserve">
+    <value>Parameters</value>
+  </data>
+  <data name="ResourcesContainerGraphTab" xml:space="preserve">
+    <value>Graph</value>
+  </data>
+  <data name="ResourcesContainerGraphAccessibleLabel" xml:space="preserve">
+    <value>Graph. For an accessible view please navigate to the Resources tab</value>
   </data>
 </root>

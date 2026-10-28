@@ -94,9 +94,7 @@ public partial class TerminalDockTests : DashboardTestContext
     [Fact]
     public async Task EmptyDock_ShowsHeadingDocumentationAndKeyboardHint()
     {
-        var client = new TestDashboardClient(
-            isEnabled: true,
-            initialResources: [TerminalSetupHelpers.CreateTerminalResource("database")]);
+        var client = new TestDashboardClient(isEnabled: true);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);

@@ -34,6 +34,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private DotNetObjectReference<ShortcutManager>? _shortcutManagerReference;
     private DotNetObjectReference<MainLayout>? _layoutReference;
     private DashboardDialogReference? _openPageDialog;
+    private TerminalDock? _terminalDock;
     private string? _pendingReturnFocusElementId;
     private bool _suppressNextDialogFocusRestore;
     private const string SettingsDialogId = "SettingsDialog";
@@ -117,6 +118,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private bool IsTerminalDockEnabled => !_isSwitchingRuns && DashboardClient.IsEnabled && !DashboardClient.IsReadOnly;
 
+    private Task ToggleTerminalDockAsync() => _terminalDock?.ToggleAsync() ?? Task.CompletedTask;
+
     protected override async Task OnInitializedAsync()
     {
         ViewPreferences.Changed += OnViewPreferencesChanged;
@@ -187,6 +190,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             }
 
             await DisplayUnsecuredEndpointsMessageAsync();
+            await DisplayDashboardFeedbackMessageAsync();
         }
         catch (JSDisconnectedException ex)
         {
@@ -196,6 +200,56 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         {
             Logger.LogDebug(ex, "Dashboard layout initialization stopped because the layout was disposed.");
         }
+    }
+
+    private async Task DisplayDashboardFeedbackMessageAsync()
+    {
+        var dismissed = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.DashboardFeedbackPromptDismissed);
+        var dismissedForSession = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession);
+        if ((dismissed.Success && dismissed.Value) || (dismissedForSession.Success && dismissedForSession.Value))
+        {
+            return;
+        }
+
+        await MessageService.ShowAsync(
+            new DashboardMessageBarContent
+            {
+                Title = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptTitle)],
+                Message = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptMessage)],
+                PrimaryAction = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptShare)],
+                SecondaryAction = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackPromptIgnore)]
+            },
+            MessageBarIntent.Info,
+            DashboardUIHelpers.MessageBarSection,
+            OnDashboardFeedbackMessageClosedAsync);
+    }
+
+    private async Task OnDashboardFeedbackMessageClosedAsync(MessageBarResult result)
+    {
+        if (result.Data is false)
+        {
+            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.DashboardFeedbackPromptDismissed, true);
+            return;
+        }
+
+        await SessionStorage.SetAsync(BrowserStorageKeys.DashboardFeedbackPromptDismissedForSession, true);
+        if (result.Data is true)
+        {
+            await InvokeAsync(LaunchDashboardFeedbackAsync);
+        }
+    }
+
+    private async Task LaunchDashboardFeedbackAsync()
+    {
+        var parameters = new DialogParameters
+        {
+            Title = DialogsLoc[nameof(Resources.Dialogs.DashboardFeedbackDialogTitle)],
+            PrimaryAction = string.Empty,
+            SecondaryAction = string.Empty,
+            Width = "min(640px, calc(100vw - 24px))"
+        };
+        var feedback = new DashboardFeedback { IsAppHost = DashboardClient.IsEnabled };
+        await DialogService.ShowDialogAsync<DashboardFeedbackDialog>(feedback, parameters);
     }
 
     private async Task DisplayUnsecuredEndpointsMessageAsync()
@@ -431,7 +485,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             SecondaryAction = null,
             Modal = true,
             Alignment = HorizontalAlignment.Right,
-            Width = "300px",
+            Width = "min(480px, calc(100vw - 24px))",
             Id = SettingsDialogId,
             OnDialogClosing = EventCallback.Factory.Create<IDialogInstance>(this, _ => HandleDialogClose(GetVisibleReturnFocusElementId(returnFocusElementId, SettingsButtonId)))
         };

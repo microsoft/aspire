@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+#pragma warning disable ASPIRETERMINAL001 // Terminal APIs are experimental.
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -177,6 +178,27 @@ var frontend = builder.AddProject<Projects.MyFrontend>("frontend")
     // Add health relative URL (show in details only)
     .WithUrlForEndpoint("https", ep => new() { Url = "/health", DisplayText = "Health", DisplayLocation = UrlDisplayLocation.DetailsOnly })
     .WithHttpHealthCheck("/health");
+
+if (OperatingSystem.IsWindows())
+{
+    builder.AddExecutable("frontend-shell", "cmd.exe", @"..\MyFrontend")
+        .WithTags("Frontend", "Development")
+        .WithTerminal();
+
+    builder.AddExecutable("catalog-shell", "cmd.exe", @"..\CatalogService")
+        .WithTags("Backend", "Development")
+        .WithTerminal();
+}
+else
+{
+    builder.AddExecutable("frontend-shell", "/bin/bash", @"..\MyFrontend", "-i", "-l")
+        .WithTags("Frontend", "Development")
+        .WithTerminal();
+
+    builder.AddExecutable("catalog-shell", "/bin/bash", @"..\CatalogService", "-i", "-l")
+        .WithTags("Backend", "Development")
+        .WithTerminal();
+}
 
 builder.AddProject<Projects.OrderProcessor>("orderprocessor", launchProfileName: "OrderProcessor")
     .WithReference(messaging)

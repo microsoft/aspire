@@ -68,7 +68,7 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
 
             // Assert
             await Assertions
-                .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
+                .Expect(page.GetByRole(AriaRole.Link, new() { Name = MockDashboardClient.TestResource1.DisplayName, Exact = true }).First)
                 .ToBeVisibleAsync()
                 .DefaultTimeout();
         });
@@ -97,7 +97,7 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
 
             // Assert
             await Assertions
-                .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
+                .Expect(page.GetByRole(AriaRole.Link, new() { Name = MockDashboardClient.TestResource1.DisplayName, Exact = true }).First)
                 .ToBeVisibleAsync()
                 .DefaultTimeout();
         });
@@ -142,7 +142,7 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
 
             // Assert
             await Assertions
-                .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
+                .Expect(page.GetByRole(AriaRole.Link, new() { Name = MockDashboardClient.TestResource1.DisplayName, Exact = true }).First)
                 .ToBeVisibleAsync()
                 .DefaultTimeout();
         });

@@ -272,6 +272,16 @@
         <target state="new">Tags</target>
         <note />
       </trans-unit>
+      <trans-unit id="NavMenuToggleCollapse">
+        <source>Collapse navigation to icons</source>
+        <target state="new">Collapse navigation to icons</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuToggleExpand">
+        <source>Expand navigation labels</source>
+        <target state="new">Expand navigation labels</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NavMenuTracesTab">
         <source>Traces</source>
         <target state="translated">İzlemeler</target>
@@ -295,6 +305,11 @@
       <trans-unit id="ResourceHeaderNotFound">
         <source>Resource not found</source>
         <target state="new">Resource not found</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceHeaderSelectedParameters">
+        <source>{0} selected parameters</source>
+        <target state="new">{0} selected parameters</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceHeaderSelectedResources">
@@ -395,6 +410,16 @@
       <trans-unit id="ResourcePaneOpen">
         <source>Show resource list</source>
         <target state="new">Show resource list</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterCountPlural">
+        <source>{0} parameters</source>
+        <target state="new">{0} parameters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterCountSingular">
+        <source>{0} parameter</source>
+        <target state="new">{0} parameter</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneReorderFailed">

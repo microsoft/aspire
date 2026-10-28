@@ -26,28 +26,36 @@ public sealed class DesktopNavMenuTests : PlaywrightTestsBase<DashboardServerFix
         {
             await page.GotoAsync("/");
 
-            // The root URL opens the resources, with all resources selected.
             await page.WaitForURLAsync(url => new Uri(url).AbsolutePath.StartsWith("/resources", StringComparison.Ordinal));
-            var nav = page.Locator(".desktop-nav-menu");
-            await AssertActiveItemAsync(Resources.Layout.NavMenuResourcesTab);
+            await Assertions.Expect(page.Locator(".resource-card").First).ToBeVisibleAsync();
+            await Assertions.Expect(page.GetByRole(AriaRole.Tablist, new() { Name = Resources.Layout.ResourceTabsLandmark })).ToBeVisibleAsync();
+            await AssertActiveItemAsync(Resources.Layout.ResourceTabOverview);
 
             var navigationCount = await page.EvaluateAsync<int>("() => performance.getEntriesByType('navigation').length");
 
-            await nav.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = Resources.Layout.NavMenuResourcesTab, Exact = true }).ClickAsync();
-            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath.StartsWith("/resources", StringComparison.Ordinal));
-            await AssertActiveItemAsync(Resources.Layout.NavMenuResourcesTab);
+            foreach (var (label, path) in new[]
+            {
+                (Resources.Layout.NavMenuConsoleLogsTab, "/consolelogs"),
+                (Resources.StructuredLogs.StructuredLogsHeader, "/structuredlogs"),
+                (Resources.Layout.NavMenuTracesTab, "/traces"),
+                (Resources.Layout.ResourceTabOverview, "/resources")
+            })
+            {
+                var tab = page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = label, Exact = true });
+                var tabBounds = await tab.BoundingBoxAsync();
+                Assert.NotNull(tabBounds);
+                await page.Mouse.ClickAsync(tabBounds.X + tabBounds.Width / 2, tabBounds.Y + tabBounds.Height / 2);
+                await page.WaitForFunctionAsync(
+                    "path => window.location.pathname.startsWith(path)",
+                    path);
+                await AssertActiveItemAsync(label);
+            }
 
-            await nav.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
-            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/parameters");
-            await AssertActiveItemAsync(Resources.Layout.NavMenuParametersTab);
-            await Assertions.Expect(nav.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = Resources.Layout.NavMenuGraphTab, Exact = true })).ToHaveCountAsync(0);
-
-            // Navigation links are handled by Blazor's router, so switching sections doesn't reload the document.
             Assert.Equal(navigationCount, await page.EvaluateAsync<int>("() => performance.getEntriesByType('navigation').length"));
 
             async Task AssertActiveItemAsync(string expectedName)
             {
-                var activeItem = nav.Locator("a[aria-current='page']");
+                var activeItem = page.Locator("fluent-tab[aria-selected='true']");
                 await Assertions.Expect(activeItem).ToHaveCountAsync(1);
                 await Assertions.Expect(activeItem).ToHaveAccessibleNameAsync(expectedName);
             }
