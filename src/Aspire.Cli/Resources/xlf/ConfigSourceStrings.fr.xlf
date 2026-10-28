@@ -19,7 +19,7 @@
       </trans-unit>
       <trans-unit id="BindingChanged">
         <source>The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</source>
-        <target state="new">The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</target>
+        <target state="translated">La source de configuration enregistrée a été modifiée lors de la récupération. Aucun paramètre source n’a été appliqué. Réessayez à l’aide de la liaison source enregistrée.</target>
         <note />
       </trans-unit>
       <trans-unit id="Candidate">
@@ -27,10 +27,10 @@
 Configuration file: {1}
 Configuration ref: {2}
 Source origin: {3}</source>
-        <target state="new">Configuration source: {0}
-Configuration file: {1}
-Configuration ref: {2}
-Source origin: {3}</target>
+        <target state="translated">Source de configuration : {0}
+Fichier de configuration : {1}
+Réf configuration : {2}
+Origine de la source : {3}</target>
         <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the branch name, commit SHA, or default-branch label, and {3} is the source origin (an environment variable name or Microsoft employee default).</note>
       </trans-unit>
       <trans-unit id="CheckFailed">
@@ -60,7 +60,7 @@ Source origin: {3}</target>
       </trans-unit>
       <trans-unit id="DefaultBranch">
         <source>default branch</source>
-        <target state="new">default branch</target>
+        <target state="translated">branche par défaut</target>
         <note />
       </trans-unit>
       <trans-unit id="EmployeeOrigin">
@@ -70,12 +70,12 @@ Source origin: {3}</target>
       </trans-unit>
       <trans-unit id="GitNotFound">
         <source>Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</source>
-        <target state="new">Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</target>
+        <target state="translated">Impossible de démarrer Git. Vérifiez que Git est installé et disponible sur PATH pour utiliser cette source de configuration.</target>
         <note>Do not translate "PATH".</note>
       </trans-unit>
       <trans-unit id="GitTimeout">
         <source>The configuration source Git operation timed out. Check repository access and Git credentials, then retry.</source>
-        <target state="new">The configuration source Git operation timed out. Check repository access and Git credentials, then retry.</target>
+        <target state="translated">L’opération Git de la source de configuration a expiré. Vérifiez l’accès au référentiel et les informations d’identification Git, puis réessayez.</target>
         <note />
       </trans-unit>
       <trans-unit id="IncompatibleOptions">
@@ -90,7 +90,7 @@ Source origin: {3}</target>
       </trans-unit>
       <trans-unit id="InvalidCache">
         <source>The configuration source cache is invalid. Restore or remove its cache entry and retry.</source>
-        <target state="new">The configuration source cache is invalid. Restore or remove its cache entry and retry.</target>
+        <target state="translated">Le cache de la source de configuration n’est pas valide. Restaurez ou supprimez son entrée de cache et réessayez.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidConfiguration">
@@ -130,7 +130,7 @@ Source origin: {3}</target>
       </trans-unit>
       <trans-unit id="NoCandidate">
         <source>No configuration source is available. Set {0} to a Git repository address.</source>
-        <target state="new">No configuration source is available. Set {0} to a Git repository address.</target>
+        <target state="translated">Aucune source de configuration n’est disponible. Définissez {0} sur une adresse de dépôt Git.</target>
         <note>{0} is the environment variable name.</note>
       </trans-unit>
       <trans-unit id="RefreshOptionDescription">
@@ -150,7 +150,7 @@ Source origin: {3}</target>
       </trans-unit>
       <trans-unit id="RepositoryUnavailable">
         <source>Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry.</source>
-        <target state="new">Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry.</target>
+        <target state="translated">Git n’a pas pu lire le référentiel source de configuration. Vérifiez l’accès au dépôt, la connectivité réseau et l’authentification Git, puis réessayez.</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateAvailable">
@@ -161,8 +161,8 @@ Source origin: {3}</target>
       <trans-unit id="UseNotice">
         <source>Configuration source {0} ({1}) at commit {2}: {3}.
 Settings file: {4}</source>
-        <target state="new">Configuration source {0} ({1}) at commit {2}: {3}.
-Settings file: {4}</target>
+        <target state="translated">Source de configuration {0} ({1}) à la {2} de validation : {3}.
+Fichier de paramètres : {4}</target>
         <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the resolved Git commit SHA, {3} is the localized configuration update result, and {4} is the destination settings file path.</note>
       </trans-unit>
       <trans-unit id="UseSourceOptionDescription">
