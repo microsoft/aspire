@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire 시작 앱(ASP.NET Core/Blazor)",
   "description": "선택적 Redis 캐싱을 사용하여 Blazor 웹 프런트 엔드와 웹 API 백 엔드 서비스로 Aspire 앱을 만들기 위한 프로젝트 템플릿입니다.",

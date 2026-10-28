@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Úvodní aplikace Aspire (ASP.NET Core/React, C# AppHost)",
   "description": "Šablona projektu pro vytvoření aplikace Aspire s front-endem React a back-endovou službou minimálního rozhraní API jazyka C# s volitelným ukládáním do mezipaměti Redis",
