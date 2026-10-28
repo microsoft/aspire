@@ -4,7 +4,8 @@ import * as net from 'net';
 import * as path from 'path';
 import { getTaskProcessEventCount, isSamePath, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForSelectedWorkspaceAppHost, waitForTaskProcessEvent } from './helpers/assertions';
 import { createEmptyAppHostProject, executeE2eControlCommand, getGeneratedAppHostPath, removeGeneratedProject, restoreWorkspaceAppHostConfig, runE2eTeardown, stopAppHostIfRunning, waitForKnownProcessExit, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
-import { getRepoRoot } from './helpers/paths';
+import { getRepoRoot, getWorkspaceRoot } from './helpers/paths';
+import { runProcess } from './helpers/process';
 import { openAspireView } from './helpers/vscode';
 
 interface NodeFunctionsDebugProof {
@@ -85,6 +86,12 @@ builder.Build().Run();`);
         assert.notStrictEqual(appHostSource, withoutDirectives, 'Expected the generated AppHost run statement.');
         writeFileWithRetry(appHostSourcePath, appHostSource);
         fs.rmSync(generatedAppHostPath);
+        // Restore before launch so the first build evaluation imports the package's
+        // build assets, including the Aspire.Hosting global using, without relying on C# tooling.
+        await runProcess('dotnet', ['restore', appHostPath, '--configfile', path.join(getWorkspaceRoot(), 'NuGet.config')], {
+            cwd: projectRoot,
+            timeoutMs: 180000,
+        });
         writeWorkspaceAppHostConfigForPath(appHostPath);
 
         await openAspireView();

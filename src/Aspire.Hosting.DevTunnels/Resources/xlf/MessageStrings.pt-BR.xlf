@@ -19,17 +19,17 @@
       </trans-unit>
       <trans-unit id="DevTunnelHostDisconnected">
         <source>The local host for dev tunnel '{0}' is disconnected.</source>
-        <target state="new">The local host for dev tunnel '{0}' is disconnected.</target>
+        <target state="translated">O host local do túnel de desenvolvimento '{0}' está desconectado.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevTunnelHostHealthy">
         <source>Dev tunnel '{0}' is connected and hosting all expected ports.</source>
-        <target state="new">Dev tunnel '{0}' is connected and hosting all expected ports.</target>
+        <target state="translated">O túnel de desenvolvimento '{0}' está conectado e hospedando todas as portas esperadas.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevTunnelHostNotReady">
         <source>Waiting for dev tunnel '{0}' to connect and expose its ports.</source>
-        <target state="new">Waiting for dev tunnel '{0}' to connect and expose its ports.</target>
+        <target state="translated">Aguardando o túnel do desenvolvedor '{0}' se conectar e expor suas portas.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevTunnelPortHealthy">
@@ -79,47 +79,47 @@
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandClose">
         <source>Close</source>
-        <target state="new">Close</target>
+        <target state="translated">Fechar</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandDescription">
         <source>Opens available public, inspect, and local URLs for the dev tunnel port.</source>
-        <target state="new">Opens available public, inspect, and local URLs for the dev tunnel port.</target>
+        <target state="translated">Abre URLs públicas, locais e públicas disponíveis para a porta do túnel de desenvolvimento.</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandDisplayName">
         <source>Show tunnel URLs</source>
-        <target state="new">Show tunnel URLs</target>
+        <target state="translated">Mostrar URLs de túnel</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandInspectUrlLabel">
         <source>Inspect URL</source>
-        <target state="new">Inspect URL</target>
+        <target state="translated">Inspecionar URL</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandInteractionUnavailable">
         <source>Dev tunnel URLs can only be shown in an interactive environment.</source>
-        <target state="new">Dev tunnel URLs can only be shown in an interactive environment.</target>
+        <target state="translated">As URLs do túnel do desenvolvedor só podem ser mostradas em um ambiente interativo.</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandLocalEndpointUrlLabel">
         <source>Local endpoint URL</source>
-        <target state="new">Local endpoint URL</target>
+        <target state="translated">Ponto de extremidade local</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandResultHeading">
         <source>Dev tunnel URLs</source>
-        <target state="new">Dev tunnel URLs</target>
+        <target state="translated">URLs de túnel do desenvolvedor</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandTunnelUrlLabel">
         <source>Tunnel URL</source>
-        <target state="new">Tunnel URL</target>
+        <target state="translated">URL do Túnel</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandUnavailable">
         <source>Dev tunnel URLs are not available yet.</source>
-        <target state="new">Dev tunnel URLs are not available yet.</target>
+        <target state="translated">As URLs do túnel do desenvolvedor ainda não estão disponíveis.</target>
         <note />
       </trans-unit>
     </body>

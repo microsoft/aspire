@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Table tab</source>
-        <target state="needs-review-translation">图。有关可访问的视图，请导航到“资源”选项卡</target>
+        <target state="translated">图。有关可访问的视图，请导航到“表”选项卡</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphTab">
@@ -54,7 +54,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerIncompatibleHistogramBounds">
         <source>Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts.</source>
-        <target state="new">Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts.</target>
+        <target state="translated">部分直方图没有共享分箱边界。无法计算这些间隔的百分位数。使用“显示计数”查看观察计数。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerOptionsHeader">
@@ -84,7 +84,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerTableTab">
         <source>Table</source>
-        <target state="needs-review-translation">资源</target>
+        <target state="translated">表</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerUnableToDisplay">
@@ -94,17 +94,17 @@
       </trans-unit>
       <trans-unit id="ClearAllResources">
         <source>Remove all telemetry</source>
-        <target state="needs-review-translation">全部移除</target>
+        <target state="translated">移除所有遥测数据</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearPendingSelectedResource">
         <source>Remove telemetry for resource</source>
-        <target state="needs-review-translation">删除资源</target>
+        <target state="translated">移除资源的遥测数据</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSelectedResource">
         <source>Remove telemetry for {0}</source>
-        <target state="needs-review-translation">删除 {0}</target>
+        <target state="translated">移除 {0} 的遥测数据</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSignalsButtonTitle">
@@ -159,37 +159,37 @@
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Resources tab</source>
-        <target state="new">Graph. For an accessible view please navigate to the Resources tab</target>
+        <target state="translated">图。有关可访问的视图，请导航到“资源”选项卡</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphTab">
         <source>Graph</source>
-        <target state="new">Graph</target>
+        <target state="translated">图表</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerParametersTab">
         <source>Parameters</source>
-        <target state="new">Parameters</target>
+        <target state="translated">参数</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerTableTab">
         <source>Resources</source>
-        <target state="new">Resources</target>
+        <target state="translated">资源</target>
         <note />
       </trans-unit>
       <trans-unit id="ScrollToBottom">
         <source>Scroll to bottom</source>
-        <target state="new">Scroll to bottom</target>
+        <target state="translated">滚动到底部</target>
         <note>Accessible name and tooltip for the floating button that jumps a large scroll region to the bottom.</note>
       </trans-unit>
       <trans-unit id="TextVisualizerContentLabel">
         <source>Text content</source>
-        <target state="new">Text content</target>
+        <target state="translated">文本内容</target>
         <note>Accessible name for the scrollable text/code region in the text visualizer.</note>
       </trans-unit>
       <trans-unit id="ViewJson">
         <source>View JSON</source>
-        <target state="new">View JSON</target>
+        <target state="translated">查看 JSON</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterPlaceholder">
@@ -389,7 +389,7 @@
       </trans-unit>
       <trans-unit id="ParameterSetValueAction">
         <source>Click to set parameter value</source>
-        <target state="new">Click to set parameter value</target>
+        <target state="translated">单击以设置参数值</target>
         <note />
       </trans-unit>
       <trans-unit id="ParameterValueNotSet">
@@ -474,7 +474,7 @@
       </trans-unit>
       <trans-unit id="ResourceDetailsStateDescriptionHeader">
         <source>State details</source>
-        <target state="new">State details</target>
+        <target state="translated">状态详细信息</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceDetailsTypeHeader">
@@ -544,7 +544,7 @@
       </trans-unit>
       <trans-unit id="SpanDetailsDurationLabel">
         <source>Duration</source>
-        <target state="new">Duration</target>
+        <target state="translated">持续时间</target>
         <note />
       </trans-unit>
       <trans-unit id="SpanDetailsEventsHeader">
@@ -564,7 +564,7 @@
       </trans-unit>
       <trans-unit id="SpanDetailsResourceLabel">
         <source>Resource</source>
-        <target state="new">Resource</target>
+        <target state="translated">资源</target>
         <note />
       </trans-unit>
       <trans-unit id="SpanDetailsSpanColumnHeader">
@@ -584,7 +584,7 @@
       </trans-unit>
       <trans-unit id="SpanDetailsStartTimeLabel">
         <source>Start time</source>
-        <target state="new">Start time</target>
+        <target state="translated">开始时间</target>
         <note />
       </trans-unit>
       <trans-unit id="SpanTypeCloud">
@@ -644,12 +644,12 @@
       </trans-unit>
       <trans-unit id="StructuredLogsDetailsResourceLabel">
         <source>Resource</source>
-        <target state="new">Resource</target>
+        <target state="translated">资源</target>
         <note />
       </trans-unit>
       <trans-unit id="StructuredLogsDetailsTimestampLabel">
         <source>Timestamp</source>
-        <target state="new">Timestamp</target>
+        <target state="translated">时间戳</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeOffsetColumnHeader">

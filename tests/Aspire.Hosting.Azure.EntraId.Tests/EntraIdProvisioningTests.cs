@@ -39,6 +39,97 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WithAppRole_GeneratesAppRolesWithStableIds()
+    {
+        static string Generate()
+        {
+            using var builder = TestDistributedApplicationBuilder.Create();
+            var entra = builder.AddEntraIdApplication("entra-api")
+                .WithAppRole(new EntraIdAppRole("User", "User", "Can use the API."))
+                .WithAppRole(new EntraIdAppRole("Admin", "Administrator", "Can administer the API.", ["User", "Application"]))
+                .WithAppRole(new EntraIdAppRole("Reader", "Reader", "Can read data.", ["Application"], new Guid("11112222-aaaa-3333-bbbb-4444cccc5555")))
+                .WithAppRole(new EntraIdAppRole("Retired", "Retired", "Being removed.", isEnabled: false));
+            return entra.Resource.GetBicepTemplateString();
+        }
+
+        var bicep = Generate();
+        Assert.Equal(bicep, Generate());
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public void WithAppRole_ValidatesArguments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddEntraIdApplication("entra-api").WithAppRole(new EntraIdAppRole("Admin", "Admin", "Admin role."));
+
+        Assert.Throws<ArgumentException>(() => entra.WithAppRole(new EntraIdAppRole("Admin", "Other", "Duplicate value.")));
+        Assert.Throws<ArgumentException>(() => entra.WithAppRole(new EntraIdAppRole("Has Space", "Name", "Description.")));
+        Assert.Throws<ArgumentException>(() => entra.WithAppRole(new EntraIdAppRole("Other", "Name", "Description.", [])));
+        Assert.Throws<ArgumentException>(() => entra.WithAppRole(new EntraIdAppRole("Other", "Name", "Description.", id: Guid.Empty)));
+        Assert.Throws<ArgumentException>(() => entra.WithAppRole(new EntraIdAppRole("Other", " ", "Description.")));
+        Assert.Single(entra.Resource.AppRoles);
+    }
+
+    [Theory]
+    [InlineData(".Admin")]
+    [InlineData("Admin\"")]
+    [InlineData("Ad min")]
+    [InlineData("Adm\u00efn")]
+    [InlineData("Admin\n")]
+    public void AppRole_RejectsValuesThatGraphRejects(string value)
+    {
+        Assert.Throws<ArgumentException>(() => new EntraIdAppRole(value, "Name", "Description."));
+    }
+
+    [Theory]
+    [InlineData("Task.Write")]
+    [InlineData("Admin:Read-Only_2")]
+    [InlineData("a!#$%&'()*+,-/:;<=>?@[]^_`{|}~")]
+    public void AppRole_AcceptsValuesThatGraphAllows(string value)
+    {
+        Assert.Equal(value, new EntraIdAppRole(value, "Name", "Description.").Value);
+    }
+
+    [Fact]
+    public void AppRole_RejectsValuesLongerThanGraphAllows()
+    {
+        Assert.Throws<ArgumentException>(() => new EntraIdAppRole(new string('a', 121), "Name", "Description."));
+        Assert.Equal(120, new EntraIdAppRole(new string('a', 120), "Name", "Description.").Value.Length);
+    }
+
+    [Fact]
+    public void AppRoles_CannotBeMutatedThroughTheCollection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddEntraIdApplication("entra-api").WithAppRole(new EntraIdAppRole("Admin", "Admin", "Admin role."));
+
+        var roles = Assert.IsAssignableFrom<IList<EntraIdAppRole>>(entra.Resource.AppRoles);
+        Assert.Throws<NotSupportedException>(() => roles.Add(new EntraIdAppRole("Other", "Other", "Other role.")));
+        Assert.Throws<NotSupportedException>(roles.Clear);
+        Assert.Single(entra.Resource.AppRoles);
+    }
+
+    [Fact]
+    public void WithAppRole_RejectsDuplicateRoleIds()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var id = Guid.NewGuid();
+        var entra = builder.AddEntraIdApplication("entra-api").WithAppRole(new EntraIdAppRole("A", "A", "A role.", id: id));
+
+        Assert.Throws<ArgumentException>(() => entra.WithAppRole(new EntraIdAppRole("B", "B", "B role.", id: id)));
+    }
+
+    [Fact]
+    public void WithAppRole_ExistingApplication_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddExistingEntraApplication("entra-api", "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002");
+
+        Assert.Throws<InvalidOperationException>(() => entra.WithAppRole(new EntraIdAppRole("Admin", "Admin", "Admin role.")));
+    }
+
+    [Fact]
     public void WithOwners_ValidatesIds()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

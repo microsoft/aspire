@@ -1,0 +1,130 @@
+// The VS Code user settings of the recordings: VsCode.OpenAsync writes this file into VS Code before each scene.
+//
+// Why a file of user settings, rather than the app's .vscode/settings.json: the recorder shows VS Code in the browser
+// ("code serve-web"), whose user settings live in the browser's IndexedDB, not on disk. A workspace's
+// .vscode/settings.json can't carry them: VS Code ignores its terminal profiles and their env in Restricted Mode, and
+// reads trust and "remote.extensionKind" only from user settings. See the VS Code section of
+// references/troubleshooting.md.
+//
+// What they do, for a clean and working demo:
+// - Readable, uncluttered screen: a larger editor font, a single tab, and no minimap, activity bar, status bar,
+//   hovers, lightbulbs, chat, welcome page or recommendations. "files.exclude" hides generated folders and config
+//   files.
+// - IntelliSense that works with Aspire's generated TypeScript modules: workspace trust off, and the TypeScript
+//   extension running on the server ("remote.extensionKind"); in the browser it runs in a partial mode that doesn't
+//   resolve them.
+// - A terminal the recorder can read and the viewer can trust: "gpuAcceleration": "off" draws its text in the DOM
+//   (a canvas can't be found or highlighted), and the "demo" profile has a short "contoso $" prompt, none of the
+//   user's shell setup, and ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS, so "aspire run" prints a dashboard URL
+//   without the login token, which mustn't show on camera.
+// - Nothing that changes between takes: auto save (so typed code can be checked on disk), no persistent terminal
+//   sessions, no updates, experiments or telemetry.
+{
+  "workbench.colorTheme": "Default Dark Modern",
+  "workbench.startupEditor": "none",
+  "workbench.tips.enabled": false,
+  "workbench.activityBar.location": "hidden",
+  "workbench.layoutControl.enabled": false,
+  "workbench.editor.showTabs": "single",
+  "window.commandCenter": false,
+  "chat.commandCenter.enabled": false,
+  "chat.disableAIFeatures": true,
+  "editor.fontSize": 17,
+  "editor.lineHeight": 24,
+  "editor.minimap.enabled": false,
+  "editor.stickyScroll.enabled": false,
+  "editor.renderWhitespace": "none",
+  "editor.guides.indentation": false,
+  "editor.occurrencesHighlight": "off",
+  "editor.lightbulb.enabled": "off",
+  "editor.inlayHints.enabled": "off",
+  "editor.codeLens": false,
+  "editor.hover.enabled": "off",
+  "editor.parameterHints.enabled": false,
+  "editor.suggest.preview": false,
+  "editor.acceptSuggestionOnCommitCharacter": false,
+  "files.autoSave": "afterDelay",
+  "breadcrumbs.enabled": false,
+  "git.enabled": false,
+  "problems.decorations.enabled": false,
+  "terminal.integrated.fontSize": 15,
+  "terminal.integrated.defaultProfile.osx": "demo",
+  "terminal.integrated.profiles.osx": {
+    "demo": {
+      "path": "/bin/zsh",
+      "args": [
+        "-f"
+      ],
+      "env": {
+        "PS1": "%F{141}contoso%f %F{245}$%f ",
+        "ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS": "true"
+      }
+    }
+  },
+  "terminal.integrated.defaultProfile.linux": "demo",
+  "terminal.integrated.profiles.linux": {
+    "demo": {
+      "path": "/bin/bash",
+      "args": [
+        "--noprofile",
+        "--norc"
+      ],
+      "env": {
+        "PS1": "\\[\\e[38;5;141m\\]contoso\\[\\e[0m\\] \\[\\e[38;5;245m\\]$\\[\\e[0m\\] ",
+        "ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS": "true"
+      }
+    }
+  },
+  "terminal.integrated.defaultProfile.windows": "demo",
+  "terminal.integrated.profiles.windows": {
+    "demo": {
+      "path": "pwsh.exe",
+      "args": [
+        "-NoLogo",
+        "-NoProfile",
+        "-NoExit",
+        "-Command",
+        "function prompt { \"`e[38;5;141mcontoso`e[0m `e[38;5;245m>`e[0m \" }"
+      ],
+      "env": {
+        "ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS": "true"
+      }
+    }
+  },
+  "terminal.integrated.shellIntegration.enabled": false,
+  "terminal.integrated.enablePersistentSessions": false,
+  "terminal.integrated.tabs.enabled": false,
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/.aspire": true,
+    "**/bin": true,
+    "**/obj": true,
+    "**/.gitignore": true,
+    "**/eslint.config.*": true,
+    "**/tsconfig*.json": true,
+    "**/package-lock.json": true,
+    "**/.dockerignore": true,
+    "**/*.d.ts": true,
+    "aspire-output": true,
+    "**/.vscode": true
+  },
+  "security.workspace.trust.enabled": false,
+  "extensions.ignoreRecommendations": true,
+  "workbench.welcomePage.walkthroughs.openOnInstall": false,
+  "workbench.statusBar.visible": false,
+  "update.mode": "none",
+  "extensions.autoCheckUpdates": false,
+  "workbench.enableExperiments": false,
+  "telemetry.telemetryLevel": "off",
+  "workbench.secondarySideBar.defaultVisibility": "hidden",
+  "typescript.tsserver.web.typeAcquisition.enabled": false,
+  "terminal.integrated.gpuAcceleration": "off",
+  "workbench.editor.empty.hint": "hidden",
+  "files.autoSaveDelay": 400,
+  "remote.extensionKind": {
+    "vscode.typescript-language-features": [
+      "workspace"
+    ]
+  },
+  "typescript.tsserver.web.projectWideIntellisense.enabled": true
+}

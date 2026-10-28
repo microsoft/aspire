@@ -18,6 +18,130 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
         "tests", "Aspire.Cli.EndToEnd.Tests", "Fixtures", "JsPublish");
 
     [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task PublishWithKubernetesPersistentVolumeConfigurationCustomizesClaims()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        if (strategy.Mode == CliInstallMode.InstallScript && strategy.Quality is null && strategy.Version is null)
+        {
+            Assert.Skip("This test requires locally built packages or current PR artifacts for the PVC customization exports.");
+        }
+
+        using var workspace = TemporaryWorkspace.Create(output);
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
+            ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.Kubernetes."]);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output,
+            variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.RunCommandAsync("aspire init --language typescript --non-interactive", counter, TimeSpan.FromMinutes(2));
+        if (localChannel is not null)
+        {
+            CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
+        }
+
+        await auto.RunCommandAsync("aspire add Aspire.Hosting.Kubernetes", counter, TimeSpan.FromMinutes(2));
+        await auto.RunCommandAsync("aspire restore", counter, TimeSpan.FromMinutes(3));
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
+        var appHost = """
+            import assert from 'node:assert/strict';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
+
+            const builder = await createBuilder();
+            const k8s = await builder.addKubernetesEnvironment("env");
+            const data = await k8s.addPersistentVolume("data");
+            await data.withStorageClass("fast");
+            await data.withPersistentVolumeName("original-volume");
+            await data.withConfiguration(async (claim) => {
+                const metadata = await claim.metadata.get();
+                await metadata.labels.set("stage", "first");
+                const annotations = await metadata.annotations();
+                await annotations.set("example.com/retention", "retain");
+                const spec = await claim.spec.get();
+                assert.equal(await spec.storageClassName.get(), "fast");
+                assert.equal(await spec.volumeName.get(), "original-volume");
+                await spec.storageClassName.set("");
+                await spec.volumeName.set("replacement-volume");
+                await spec.volumeMode.set("Filesystem");
+                const accessModes = await spec.accessModes();
+                assert.equal(await accessModes.get(0), "ReadWriteOnce");
+                await accessModes.clear();
+                await accessModes.add("ReadWriteMany");
+                const requests = await (await spec.resources.get()).requests();
+                assert.equal(await requests.get("storage"), "1Gi");
+                await requests.set("storage", "20Gi");
+            });
+            await data.withConfiguration(async (claim) => {
+                const metadata = await claim.metadata.get();
+                assert.equal(await metadata.labels.get("stage"), "first");
+                await metadata.labels.set("stage", "second");
+                const spec = await claim.spec.get();
+                assert.equal(await spec.storageClassName.get(), "");
+                assert.equal(await spec.volumeName.get(), "replacement-volume");
+            });
+
+            const omitted = await k8s.addPersistentVolume("omitted");
+            await omitted.withStorageClass("fast");
+            await omitted.withConfiguration(async (claim) => {
+                const spec = await claim.spec.get();
+                assert.equal(await spec.volumeMode.get(), null);
+                assert.equal(await spec.volumeName.get(), null);
+                await spec.storageClassName.set(null);
+            });
+
+            const storageClass = await builder.addParameter("storageclass");
+            const capacity = await builder.addParameter("capacity");
+            const backupTier = await builder.addParameter("backuptier");
+            const parameterized = await k8s.addPersistentVolume("parameterized");
+            await parameterized.withStorageClassParam(storageClass);
+            await parameterized.withCapacityParam(capacity);
+            await parameterized.withVolumeAnnotationParam("backup.example.com/tier", backupTier);
+            await parameterized.withConfiguration(async (claim) => {
+                const metadata = await claim.metadata.get();
+                await metadata.labels.set("example.com/retention", "retain");
+                await (await claim.spec.get()).volumeMode.set("Filesystem");
+            });
+
+            for (const [name, volume] of [["data", data], ["omitted", omitted], ["parameterized", parameterized]] as const) {
+                const service = await builder.addContainer(`${name}-service`, "nginx");
+                await service.withKubernetesPersistentVolumeMount(volume, "/data");
+            }
+
+            await builder.build().run();
+            """;
+        await File.WriteAllTextAsync(appHostPath, appHost);
+        await auto.RunCommandAsync("unset ASPIRE_PLAYGROUND", counter);
+        await auto.RunCommandAsync("export Parameters__storageclass=fast Parameters__capacity=5Gi Parameters__backuptier=daily", counter);
+        await auto.RunCommandAsync("aspire publish -o artifacts --non-interactive", counter, TimeSpan.FromMinutes(5));
+
+        var artifactsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "artifacts");
+        var claimPath = Assert.Single(Directory.GetFiles(artifactsPath, "data.yaml", SearchOption.AllDirectories));
+        var chartPath = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(claimPath)))!;
+        await Verify(await File.ReadAllTextAsync(claimPath), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(chartPath, "templates", "omitted", "omitted.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(chartPath, "templates", "parameterized", "parameterized.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(chartPath, "values.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(chartPath, "templates", "data-service", "statefulset.yaml")), "yaml");
+
+        await File.WriteAllTextAsync(appHostPath, appHost.Replace("await builder.build().run();", """
+            await data.withConfiguration(async () => {
+                throw new Error("PVC callback failure");
+            });
+            await builder.build().run();
+            """, StringComparison.Ordinal));
+        await auto.RunCommandAsync("! aspire publish -o failed-artifacts --non-interactive > callback-failure.log 2>&1",
+            counter, TimeSpan.FromMinutes(5));
+        var failureLog = await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "callback-failure.log"));
+        Assert.Contains("PVC callback failure", failureLog);
+    }
+
+    [Fact]
     public async Task PublishWithDockerComposeServiceCallbackSucceeds()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

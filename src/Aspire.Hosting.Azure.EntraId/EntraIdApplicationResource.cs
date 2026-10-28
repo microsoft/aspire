@@ -353,6 +353,10 @@ public class EntraIdApplicationResource : AzureProvisioningResource
         {
             application.Owners = CreateOwnerList(infrastructure, resource.ApplicationOwners, "applicationOwner");
         }
+        if (resource.AppRoles.Count > 0)
+        {
+            application.AppRoles = [.. resource.AppRoles.Select(role => CreateAppRole(resource, role))];
+        }
         infrastructure.Add(application);
 
         var servicePrincipal = new MicrosoftGraphServicePrincipal("servicePrincipal")
@@ -504,10 +508,42 @@ public class EntraIdApplicationResource : AzureProvisioningResource
 
     internal void AddRedirectUri(IEntraIdDerivedRedirectUri redirectUri) => _redirectUriValues.Add(redirectUri);
 
+    /// <summary>
+    /// Gets the application roles to declare on an application created by Aspire.
+    /// </summary>
+    /// <remarks>
+    /// Application roles are distinct from delegated scopes and from Azure RBAC roles. Declaring a role does not
+    /// assign it to any user, group, or application, and existing registrations are not modified.
+    /// </remarks>
+    public IReadOnlyList<EntraIdAppRole> AppRoles => _appRoles.AsReadOnly();
+
+    private readonly List<EntraIdAppRole> _appRoles = [];
+
+    internal void AddAppRole(EntraIdAppRole role) => _appRoles.Add(role);
+
     // Each entry is either a literal directory object ID (string) or a ParameterResource holding one.
     internal List<object> ApplicationOwners { get; } = [];
 
     internal List<object> ServicePrincipalOwners { get; } = [];
+
+    private static MicrosoftGraphAppRole CreateAppRole(EntraIdApplicationResource resource, EntraIdAppRole role)
+    {
+        var memberTypes = new BicepList<string>();
+        foreach (var memberType in role.AllowedMemberTypes)
+        {
+            memberTypes.Add(memberType);
+        }
+
+        return new MicrosoftGraphAppRole
+        {
+            Id = role.GetStableId(resource.Name).ToString("D"),
+            DisplayName = role.DisplayName,
+            Description = role.Description,
+            Value = role.Value,
+            IsEnabled = role.IsEnabled,
+            AllowedMemberTypes = memberTypes
+        };
+    }
 
     private static BicepList<string> CreateOwnerList(AzureResourceInfrastructure infrastructure, IEnumerable<object> owners, string prefix)
     {

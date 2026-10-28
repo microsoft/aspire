@@ -170,6 +170,18 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task SetConfigurationAsync_RewritesNonOsLineBreaksWithOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(workspace, "{\n  \"appHost\": {\n    \"path\": \"MyApp.csproj\"\n  }\n}\n".ReplaceLineEndings(LineEndingAssert.NonOsNewLine));
+
+        await service.SetConfigurationAsync("channel", "daily", isGlobal: false);
+
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(settingsFilePath);
+    }
+
+    [Fact]
     public async Task SetConfigurationAsync_HandlesEmptyFile()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -180,6 +192,19 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
 
         var result = File.ReadAllText(settingsFilePath);
         Assert.Contains("daily", result);
+    }
+
+    [Fact]
+    public async Task DeleteConfigurationAsync_RewritesNonOsLineBreaksWithOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(workspace, "{\n  \"channel\": \"daily\",\n  \"appHost\": {\n    \"path\": \"MyApp.csproj\"\n  }\n}\n".ReplaceLineEndings(LineEndingAssert.NonOsNewLine));
+
+        var deleted = await service.DeleteConfigurationAsync("channel", isGlobal: false);
+
+        Assert.True(deleted);
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(settingsFilePath);
     }
 
     [Fact]

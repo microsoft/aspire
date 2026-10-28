@@ -1058,6 +1058,96 @@ builder.Build().Run();
         assert.ok(!nodeFunctionsSpec.includes('Aspire.Hosting.Azure.Functions.csproj'));
     });
 
+    for (const restoreSucceeds of [true, false]) {
+        test(`waits for the Node Functions fixture restore ${restoreSucceeds ? 'before publishing it' : 'and propagates failures without launching'}`, async () => {
+            const extensionRoot = path.resolve(__dirname, '..', '..');
+            const source = ts.createSourceFile('azureFunctionsNode.e2e.test.ts',
+                fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'azureFunctionsNode.e2e.test.ts'), 'utf8'),
+                ts.ScriptTarget.Latest, true);
+            const testStatement = getSuiteStatements(source)
+                .map(statement => getDirectCallExpression(statement, 'test'))
+                .find(call => call !== undefined);
+            assert.ok(testStatement);
+            const callback = testStatement.arguments[1];
+            assert.ok(callback);
+            const findLine = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'findLine');
+            assert.ok(findLine);
+            const compiled = ts.transpileModule(`${findLine.getText(source)}\nconst execute = ${callback.getText(source)};`, {
+                compilerOptions: { target: ts.ScriptTarget.ES2022 },
+            }).outputText;
+            const workspaceRoot = path.join(os.tmpdir(), 'node-functions-workspace');
+            const projectRoot = path.join(workspaceRoot, 'AspireE2E.NodeFunctionsDebugger');
+            const appHostPath = path.join(projectRoot, 'AspireE2E.NodeFunctionsDebugger.csproj');
+            const generatedPath = path.join(projectRoot, 'apphost.cs');
+            const files = new Map<string, string>([
+                [generatedPath, '#:sdk Aspire.AppHost.Sdk@1.0.0\nvar builder = DistributedApplication.CreateBuilder(args);\nbuilder.Build().Run();'],
+                [path.join(projectRoot, 'functions', 'HttpProof', 'index.js'), "const message = 'Aspire Node Functions debugger E2E';"],
+            ]);
+            const restoreCalls: unknown[][] = [];
+            const publications: string[] = [];
+            let launched = false;
+            let resolveRestore: (() => void) | undefined;
+            let rejectRestore: ((error: Error) => void) | undefined;
+            const restore = new Promise<void>((resolve, reject) => {
+                resolveRestore = resolve;
+                rejectRestore = reject;
+            });
+            const stopAfterSetup = new Error('Reached launch after fixture setup');
+            const restoreFailure = new Error('dotnet restore failed with package feed diagnostics');
+            const execution: Promise<unknown> = vm.runInNewContext(`${compiled}\nexecute();`, {
+                assert, path,
+                process: { env: { ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS: 'true', ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: '1.0.0' } },
+                projectName: 'AspireE2E.NodeFunctionsDebugger',
+                resourceName: 'e2e-node-functions',
+                appHostPath: undefined,
+                createEmptyAppHostProject: async () => projectRoot,
+                getGeneratedAppHostPath: () => generatedPath,
+                getRepoRoot: () => extensionRoot,
+                getWorkspaceRoot: () => workspaceRoot,
+                fs: {
+                    cpSync: () => { },
+                    readFileSync: (filePath: string) => {
+                        assert.ok(files.has(filePath), `Unexpected file read: ${filePath}`);
+                        return files.get(filePath);
+                    },
+                    rmSync: (filePath: string) => files.delete(filePath),
+                },
+                writeFileWithRetry: (filePath: string, content: string) => files.set(filePath, content),
+                runProcess: (...args: unknown[]) => {
+                    restoreCalls.push(args);
+                    return restore;
+                },
+                writeWorkspaceAppHostConfigForPath: (filePath: string) => publications.push(filePath),
+                openAspireView: async () => {
+                    launched = true;
+                    throw stopAfterSetup;
+                },
+            });
+            const result = execution.then(() => assert.fail('Expected fixture setup to stop.'), (error: unknown) => error);
+            await new Promise(resolve => setImmediate(resolve));
+            assert.deepStrictEqual(JSON.parse(JSON.stringify(restoreCalls)), [[
+                'dotnet', ['restore', appHostPath, '--configfile', path.join(workspaceRoot, 'NuGet.config')],
+                { cwd: projectRoot, timeoutMs: 180000 },
+            ]]);
+            assert.deepStrictEqual(publications, []);
+            assert.strictEqual(launched, false);
+            assert.ok(files.has(appHostPath));
+            assert.strictEqual(files.has(generatedPath), false);
+            if (restoreSucceeds) {
+                resolveRestore!();
+                assert.strictEqual(await result, stopAfterSetup);
+                assert.deepStrictEqual(publications, [appHostPath]);
+                assert.strictEqual(launched, true);
+            }
+            else {
+                rejectRestore!(restoreFailure);
+                assert.strictEqual(await result, restoreFailure);
+                assert.deepStrictEqual(publications, []);
+                assert.strictEqual(launched, false);
+            }
+        });
+    }
+
     test('pins the unpackaged WinUI debugger regression environment for its Windows E2E shard', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');

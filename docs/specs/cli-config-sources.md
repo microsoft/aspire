@@ -323,7 +323,7 @@ Skills, templates, and integrations are acquired according to the application's 
 
 | Content | Acquisition today | Possible configuration customizations |
 |---|---|---|
-| Skills | `aspire agent init` installs the embedded Aspire bundle by default, with existing optional remote-bundle support | Additional validated bundles, selected/default skills, and workspace installation destinations |
+| Skills | `aspire agent init` registers remote Aspire agent assets by default; `--aspire-source embedded` installs bundled skill files | Additional validated bundles, selected/default skills, and workspace installation destinations |
 | Templates | .NET templates are installed from NuGet; CLI-native starters use embedded files or scaffolding | Template catalogs, package identities, versions, and feeds; external starter content could follow later |
 | Integrations | Templates declare dependencies; `aspire add` and integration list/search discover NuGet packages | Additional catalog entries, package versions, feeds, and package-source mappings |
 

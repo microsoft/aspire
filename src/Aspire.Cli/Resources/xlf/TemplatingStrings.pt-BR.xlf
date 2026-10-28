@@ -9,7 +9,7 @@
       </trans-unit>
       <trans-unit id="AspireEmptyDotNetTemplate_Description">
         <source>Empty (C# AppHost, dotnet template)</source>
-        <target state="new">Empty (C# AppHost, dotnet template)</target>
+        <target state="translated">Vazio (AppHost em C#, modelo dotnet)</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireEmpty_Description">
@@ -19,12 +19,12 @@
       </trans-unit>
       <trans-unit id="AspireJavaStarter_Description">
         <source>Starter App (Java AppHost/Express/React)</source>
-        <target state="new">Starter App (Java AppHost/Express/React)</target>
+        <target state="translated">Aplicativo Inicial (Java AppHost/Express/React)</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireJsFrontendStarter_Description">
         <source>Starter App (ASP.NET Core/React, C# AppHost)</source>
-        <target state="needs-review-translation">Aplicativo inicial (ASP.NET Core/React)</target>
+        <target state="translated">Aplicativo Inicial (ASP.NET Core/React, AppHost em C#)</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireMSTest_Description">
@@ -119,7 +119,7 @@
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
         <source>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</source>
-        <target state="new">No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</target>
+        <target state="translated">Nenhum local correspondente ao Aspire. O pacote ProjectTemplates foi encontrado para Aspire versão CLI '{0}'. Crie e prepare pacotes correspondentes com localhive.sh (macOS/Linux) ou localhive.ps1 (Windows), defina ASPIRE_CLI_PACKAGES como um diretório que contenha o pacote ou escolha explicitamente modelos baseados em feed com --channel, --source ou --version.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTemplateVersionsFound">
@@ -139,12 +139,12 @@
       </trans-unit>
       <trans-unit id="NuGetConfigCreatedOrUpdatedConfirmationMessage">
         <source>Created or updated NuGet.config in the project directory with required package sources.</source>
-        <target state="new">Created or updated NuGet.config in the project directory with required package sources.</target>
+        <target state="translated">Criado ou atualizado NuGet.config no diretório do projeto com as fontes de pacote necessárias.</target>
         <note />
       </trans-unit>
       <trans-unit id="NuGetConfigUpdatedConfirmationMessage">
         <source>Updated NuGet.config with required package sources.</source>
-        <target state="new">Updated NuGet.config with required package sources.</target>
+        <target state="translated">O NuGet.config foi atualizado com as fontes de pacotes necessárias.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectAlreadyExists">
@@ -159,7 +159,7 @@
       </trans-unit>
       <trans-unit id="ProjectCreationFailed">
         <source>Project creation failed with exit code {0}.</source>
-        <target state="new">Project creation failed with exit code {0}.</target>
+        <target state="translated">Falha na criação do projeto com código de saída {0}.</target>
         <note>{0} is a number</note>
       </trans-unit>
       <trans-unit id="PromptForTFMOptions_Description">
@@ -194,12 +194,12 @@
       </trans-unit>
       <trans-unit id="SourceOverrideNotPersistedWarning">
         <source>[yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/]</source>
-        <target state="new">[yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/]</target>
+        <target state="translated">[yellow]--source foi usado apenas para a restauração inicial do scaffold e não é persistente. Posteriormente, 'aspire restore'/'aspire add' usará os feeds de canal configurados para este projeto. [/]</target>
         <note>Do not translate [yellow] or [/]. Displayed after 'aspire new' (aspire-empty or aspire-starter) when --source was supplied for a non-C# language.</note>
       </trans-unit>
       <trans-unit id="TemplateInstallationFailed">
         <source>The template installation failed with exit code {0}.</source>
-        <target state="new">The template installation failed with exit code {0}.</target>
+        <target state="translated">A instalação do modelo falhou com o código de saída {0}.</target>
         <note>{0} is a number</note>
       </trans-unit>
       <trans-unit id="TemplateNuGetConfigurationChanged">
@@ -229,7 +229,7 @@
       </trans-unit>
       <trans-unit id="TemplateVersionNotFound">
         <source>Template version '{0}' was not found.</source>
-        <target state="new">Template version '{0}' was not found.</target>
+        <target state="translated">A versão do modelo '{0}' não foi encontrada.</target>
         <note />
       </trans-unit>
       <trans-unit id="Unknown">
@@ -239,7 +239,7 @@
       </trans-unit>
       <trans-unit id="UpdateNuGetConfigConfirmation">
         <source>Update NuGet.config to add missing package sources for the selected channel?</source>
-        <target state="new">Update NuGet.config to add missing package sources for the selected channel?</target>
+        <target state="translated">Atualizar o NuGet.config para adicionar as fontes de pacotes ausentes ao canal selecionado?</target>
         <note />
       </trans-unit>
       <trans-unit id="UseLocalhostTld_Description">
@@ -294,12 +294,12 @@
       </trans-unit>
       <trans-unit id="RunAspireRun">
         <source>Run 'aspire run' to start your AppHost.</source>
-        <target state="new">Run 'aspire run' to start your AppHost.</target>
+        <target state="translated">Execute 'aspire run' para iniciar seu AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="RunCdThenAspireRun">
         <source>Run 'cd "{0}"' and then 'aspire run' to start your AppHost.</source>
-        <target state="new">Run 'cd "{0}"' and then 'aspire run' to start your AppHost.</target>
+        <target state="translated">Execute 'cd "{0}"' e depois 'aspire run' para iniciar seu AppHost.</target>
         <note>{0} is the relative path to the project directory</note>
       </trans-unit>
     </body>

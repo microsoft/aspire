@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Table tab</source>
-        <target state="needs-review-translation">그래프. 액세스 가능한 보기를 보려면 리소스 탭으로 이동하세요.</target>
+        <target state="translated">그래프. 액세스 가능한 보기를 보려면 표 탭으로 이동하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphTab">
@@ -54,7 +54,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerIncompatibleHistogramBounds">
         <source>Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts.</source>
-        <target state="new">Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts.</target>
+        <target state="translated">일부 히스토그램에는 공유 버킷 경계가 없습니다. 이러한 구간의 백분위수는 계산할 수 없습니다. 관측 수를 보려면 ‘개수 표시’를 사용하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerOptionsHeader">
@@ -84,7 +84,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerTableTab">
         <source>Table</source>
-        <target state="needs-review-translation">리소스</target>
+        <target state="translated">표</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerUnableToDisplay">
@@ -94,17 +94,17 @@
       </trans-unit>
       <trans-unit id="ClearAllResources">
         <source>Remove all telemetry</source>
-        <target state="needs-review-translation">모두 제거</target>
+        <target state="translated">모든 원격 분석 데이터 제거</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearPendingSelectedResource">
         <source>Remove telemetry for resource</source>
-        <target state="needs-review-translation">리소스 제거</target>
+        <target state="translated">리소스에 대한 원격 분석 데이터 제거</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSelectedResource">
         <source>Remove telemetry for {0}</source>
-        <target state="needs-review-translation">{0} 제거</target>
+        <target state="translated">{0}에 대한 원격 분석 데이터 제거</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSignalsButtonTitle">
@@ -159,37 +159,37 @@
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Resources tab</source>
-        <target state="new">Graph. For an accessible view please navigate to the Resources tab</target>
+        <target state="translated">그래프. 액세스 가능한 보기를 보려면 리소스 탭으로 이동하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphTab">
         <source>Graph</source>
-        <target state="new">Graph</target>
+        <target state="translated">그래프</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerParametersTab">
         <source>Parameters</source>
-        <target state="new">Parameters</target>
+        <target state="translated">매개 변수</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerTableTab">
         <source>Resources</source>
-        <target state="new">Resources</target>
+        <target state="translated">리소스</target>
         <note />
       </trans-unit>
       <trans-unit id="ScrollToBottom">
         <source>Scroll to bottom</source>
-        <target state="new">Scroll to bottom</target>
+        <target state="translated">맨 아래로 스크롤</target>
         <note>Accessible name and tooltip for the floating button that jumps a large scroll region to the bottom.</note>
       </trans-unit>
       <trans-unit id="TextVisualizerContentLabel">
         <source>Text content</source>
-        <target state="new">Text content</target>
+        <target state="translated">텍스트 내용</target>
         <note>Accessible name for the scrollable text/code region in the text visualizer.</note>
       </trans-unit>
       <trans-unit id="ViewJson">
         <source>View JSON</source>
-        <target state="new">View JSON</target>
+        <target state="translated">JSON 보기</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterPlaceholder">
@@ -389,7 +389,7 @@
       </trans-unit>
       <trans-unit id="ParameterSetValueAction">
         <source>Click to set parameter value</source>
-        <target state="new">Click to set parameter value</target>
+        <target state="translated">매개 변수 값을 설정하려면 클릭하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="ParameterValueNotSet">
@@ -474,7 +474,7 @@
       </trans-unit>
       <trans-unit id="ResourceDetailsStateDescriptionHeader">
         <source>State details</source>
-        <target state="new">State details</target>
+        <target state="translated">상태 세부 정보</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceDetailsTypeHeader">
@@ -544,7 +544,7 @@
       </trans-unit>
       <trans-unit id="SpanDetailsDurationLabel">
         <source>Duration</source>
-        <target state="new">Duration</target>
+        <target state="translated">기간</target>
         <note />
       </trans-unit>
       <trans-unit id="SpanDetailsEventsHeader">
@@ -564,7 +564,7 @@
       </trans-unit>
       <trans-unit id="SpanDetailsResourceLabel">
         <source>Resource</source>
-        <target state="new">Resource</target>
+        <target state="translated">리소스</target>
         <note />
       </trans-unit>
       <trans-unit id="SpanDetailsSpanColumnHeader">
@@ -584,7 +584,7 @@
       </trans-unit>
       <trans-unit id="SpanDetailsStartTimeLabel">
         <source>Start time</source>
-        <target state="new">Start time</target>
+        <target state="translated">시작 시간</target>
         <note />
       </trans-unit>
       <trans-unit id="SpanTypeCloud">
@@ -644,12 +644,12 @@
       </trans-unit>
       <trans-unit id="StructuredLogsDetailsResourceLabel">
         <source>Resource</source>
-        <target state="new">Resource</target>
+        <target state="translated">리소스</target>
         <note />
       </trans-unit>
       <trans-unit id="StructuredLogsDetailsTimestampLabel">
         <source>Timestamp</source>
-        <target state="new">Timestamp</target>
+        <target state="translated">타임스탬프</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeOffsetColumnHeader">

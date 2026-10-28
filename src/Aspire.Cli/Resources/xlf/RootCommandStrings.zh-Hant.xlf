@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="BannerArgumentDescription">
         <source>Display the animated Aspire CLI welcome banner</source>
-        <target state="needs-review-translation">顯示動畫 Aspire CLI 的歡迎使用橫幅。</target>
+        <target state="translated">顯示動畫 Aspire CLI 的歡迎使用橫幅</target>
         <note />
       </trans-unit>
       <trans-unit id="BannerVersionFormat">
@@ -19,42 +19,42 @@
       </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">請等候偵錯工具連結後再執行命令。</target>
+        <target state="translated">等候偵錯工具連結後再執行命令</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionScriptDescription">
         <source>Write a shell completion script to standard output</source>
-        <target state="new">Write a shell completion script to standard output</target>
+        <target state="translated">將殼層完成指令碼寫入至標準輸出</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellDescription">
         <source>Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</source>
-        <target state="new">Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</target>
+        <target state="translated">要產生指令碼的殼層 (bash、fish、pwsh、zsh)。預設為 SHELL，或 Windows 上的 pwsh。</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellRequired">
         <source>Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</source>
-        <target state="new">Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</target>
+        <target state="translated">偵測不到支援的殼層。指定 bash、fish、pwsh 或 zsh: aspire completions script &lt;shell&gt;。</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionsDescription">
         <source>Generate shell completion scripts</source>
-        <target state="new">Generate shell completion scripts</target>
+        <target state="translated">產生殼層完成指令碼</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
         <source>Enable debug logging to the console</source>
-        <target state="needs-review-translation">啟用控制台的偵錯記錄。</target>
+        <target state="translated">啟用主控台的偵錯記錄</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugLevelArgumentDescription">
         <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
-        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
+        <target state="translated">設定主控台輸出的最低記錄層級 (追蹤、偵錯、資訊、警告、錯誤、危急)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
-        <target state="needs-review-translation">Aspire CLI 可用來建立、執行及發佈以 Aspire 為基礎的應用程式。</target>
+        <target state="translated">Aspire CLI 可用來建立、執行及發佈以 Aspire 為基礎的應用程式</target>
         <note />
       </trans-unit>
       <trans-unit id="FirstTimeUseTelemetryNotice">
@@ -64,37 +64,37 @@
 The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
 
 Read more about Aspire CLI telemetry: {0}</source>
-        <target state="new">Telemetry
+        <target state="translated">遙測
 ---------
 
-The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
+Aspire CLI 會收集使用方式資料。它由 Microsoft 收集，用於協助我們改善您的體驗。您可以使用您偏好的殼層，將 ASPIRE_CLI_TELEMETRY_OPTOUT 環境變數設定為 '1' 或 'true'，以選擇退出遙測。
 
-Read more about Aspire CLI telemetry: {0}</target>
+深入了解 Aspire CLI 遙測: {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
       <trans-unit id="IdentityOverrideNotice">
         <source>Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</source>
-        <target state="new">Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</target>
+        <target state="translated">Aspire CLI 正在模擬身分識別 '{0}' 版本 '{1}'。行為可能與已安裝的組建不同; 身分識別已透過環境變數或安裝 Sidecar 覆寫。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidCompletionRequest">
         <source>Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</source>
-        <target state="new">Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</target>
+        <target state="translated">預期 [suggest] 或 [suggest:&lt;cursor&gt;] 後面接著一個命令列字串，其中游標位於該字串內。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
         <source>Suppress the startup banner and telemetry notice</source>
-        <target state="needs-review-translation">抑制啟動橫幅與遙測通知。</target>
+        <target state="translated">抑制啟動橫幅與遙測通知</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveArgumentDescription">
         <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
-        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
+        <target state="translated">以非互動模式執行指令，停用所有互動提示和微調按鈕</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">請等候偵錯工具連結後再執行命令。</target>
+        <target state="translated">等候偵錯工具連結後再執行命令</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

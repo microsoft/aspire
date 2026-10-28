@@ -4,57 +4,57 @@
     <body>
       <trans-unit id="ActivityStarting">
         <source>Starting...</source>
-        <target state="new">Starting...</target>
+        <target state="translated">시작하는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="ActivityStartingWithName">
         <source>Starting {0}...</source>
-        <target state="new">Starting {0}...</target>
+        <target state="translated">{0} 시작 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="PipelineFailed">
         <source>Pipeline failed</source>
-        <target state="new">Pipeline failed</target>
+        <target state="translated">파이프라인 실패</target>
         <note />
       </trans-unit>
       <trans-unit id="PipelineSucceeded">
         <source>Pipeline succeeded</source>
-        <target state="new">Pipeline succeeded</target>
+        <target state="translated">파이프라인 성공</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryFailed">
         <source>{0} failed</source>
-        <target state="new">{0} failed</target>
+        <target state="translated">{0} 실패</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryLogLevelHelp">
         <source>For more details, add --pipeline-log-level debug/trace to the command.</source>
-        <target state="new">For more details, add --pipeline-log-level debug/trace to the command.</target>
+        <target state="translated">자세한 내용을 검토하려면 명령에 --pipeline-log-level debug/trace를 추가하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryStepsSucceeded">
         <source>{0} steps succeeded</source>
-        <target state="new">{0} steps succeeded</target>
+        <target state="translated">{0}단계 완료됨</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryStepsSucceededWithTotal">
         <source>{0}/{1} steps succeeded</source>
-        <target state="new">{0}/{1} steps succeeded</target>
+        <target state="translated">{0}/{1}단계 완료됨</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryTotalTime">
         <source>Total time: {0}</source>
-        <target state="new">Total time: {0}</target>
+        <target state="translated">총시간: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryWarningsPlural">
         <source>{0} warnings</source>
-        <target state="new">{0} warnings</target>
+        <target state="translated">경고 {0}개</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryWarningsSingular">
         <source>{0} warning</source>
-        <target state="new">{0} warning</target>
+        <target state="translated">경고 {0}개</target>
         <note />
       </trans-unit>
     </body>
