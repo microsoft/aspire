@@ -447,17 +447,6 @@ path_rules:
     targets: [test:Infrastructure.Tests, job:nix-package]
     reason: Infrastructure.Tests validates the Nix flake, package derivation, update script, and release asset manifest; the Nix package smoke runs nix flake check, nix build, and the packaged CLI
   - paths:
-      - eng/scripts/download-native-archives.ps1
-      - eng/scripts/stage-native-cli-tool-packages.ps1
-      - eng/scripts/validate-npm-package-signatures.ps1
-      - eng/scripts/validate-npm-release-aliases.ps1
-    targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests/PowerShellScripts validates these CLI-archive/npm packaging scripts (DownloadNativeArchivesTests, StageNativeCliToolPackagesTests, ValidateNpmPackageSignaturesTests, ValidateNpmReleaseAliasesTests; ReleasePublishNugetPipelineTests reads validate-npm-release-aliases.ps1); the build jobs that run them are unconditional needs, so the unit verifier is the trigger that must fire
-  - paths:
-      - eng/test-retry-patterns.json
-    targets: [test:Infrastructure.Tests]
-    reason: transient retry-pattern regression coverage
-  - paths:
       - eng/scripts/verify-cli-archive.ps1
     targets: [test:Aspire.Acquisition.Tests]
     reason: Aspire.Acquisition.Tests/Scripts/VerifyCliArchivePowerShellTests invokes eng/scripts/verify-cli-archive.ps1
