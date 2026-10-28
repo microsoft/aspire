@@ -308,7 +308,7 @@
     <comment>{0} identifies the conflicting JSON setting or environment override.</comment>
   </data>
   <data name="InitCommand_AspireSourceOptionDescription" xml:space="preserve">
-    <value>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</value>
+    <value>Source for Aspire agent assets: remote (configured plugins) or embedded (bundled skill files)</value>
   </data>
   <data name="InitCommand_EmbeddedSkillsChoice" xml:space="preserve">
     <value>Embedded (bundled skill files)</value>
@@ -320,7 +320,7 @@
     <value>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</value>
   </data>
   <data name="InitCommand_AspireSkillChoice" xml:space="preserve">
-    <value>Agent assets from microsoft/aspire-skills</value>
+    <value>Agent assets from configured skill sources</value>
   </data>
   <data name="InitCommand_FailedTarget" xml:space="preserve">
     <value>Failed to configure Aspire plugin:
@@ -346,7 +346,7 @@
 Review the source before enabling it.
 
 Prefer skill files only? Choose Embedded, or install skills directly from {0}.</value>
-    <comment>{0} is the official Aspire skills repository URL.</comment>
+    <comment>{0} is a configured skill source repository URL.</comment>
   </data>
   <data name="InitCommand_ConfiguredTargets" xml:space="preserve">
     <value>Configured Aspire plugin:

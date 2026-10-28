@@ -26,7 +26,18 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
         => ConfigSourceTestContext.RunAsync(output, async context =>
         {
             await context.CreateProjectAsync();
+            var configuration = await context.AssertSourceAppliedAsync("original");
+            Assert.Equal("""{"custom":"keep"}""", configuration["docs"]!.ToJsonString());
+        });
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task AgentInit_RegistersMaterializedSkillSources()
+        => ConfigSourceTestContext.RunAsync(output, async context =>
+        {
+            await context.CreateProjectAsync();
             await context.AssertSourceAppliedAsync("original");
+            await context.RegisterAndAssertSkillSourcesAsync();
         });
 
     [Fact]

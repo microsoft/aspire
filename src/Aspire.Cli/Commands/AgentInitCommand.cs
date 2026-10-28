@@ -11,6 +11,7 @@ using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.Playwright;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
@@ -36,6 +37,7 @@ internal sealed class AgentInitCommand : BaseCommand
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly ITelemetryHookConfigurator _telemetryHookConfigurator;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly IConfigurationService _configurationService;
     private static readonly string[] s_skillChoices =
         [CommonAgentApplicators.AspireSkillName, SkillDefinition.PlaywrightCli.Name, SkillDefinition.DotnetInspect.Name];
 
@@ -47,6 +49,7 @@ internal sealed class AgentInitCommand : BaseCommand
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
         ITelemetryHookConfigurator telemetryHookConfigurator,
+        IConfigurationService configurationService,
         CommonCommandServices services)
         : base("init", AgentCommandStrings.InitCommand_Description, services)
     {
@@ -59,6 +62,7 @@ internal sealed class AgentInitCommand : BaseCommand
         _languageDiscovery = languageDiscovery;
         _telemetryHookConfigurator = telemetryHookConfigurator;
         _hostEnvironment = services.HostEnvironment;
+        _configurationService = configurationService;
         Options.Add(s_workspaceRootOption);
         Options.Add(s_mcpOption);
         Options.Add(AgentsOption);
@@ -236,6 +240,7 @@ internal sealed class AgentInitCommand : BaseCommand
         IInteractionService interactionService,
         int previousResultExitCode,
         DirectoryInfo workspaceRoot,
+        DirectoryInfo configurationDirectory,
         PromptBinding<bool> agentInitBinding,
         PromptBinding<string?> agentsBinding,
         PromptBinding<string?> skillsBinding,
@@ -259,7 +264,7 @@ internal sealed class AgentInitCommand : BaseCommand
         if (runAgentInit)
         {
             return await ExecuteAgentInitAsync(
-                workspaceRoot, agentsBinding, skillsBinding, aspireSourceBinding,
+                workspaceRoot, configurationDirectory, agentsBinding, skillsBinding, aspireSourceBinding,
                 scopeBinding, mcpBinding: null, cancellationToken);
         }
 
@@ -271,6 +276,7 @@ internal sealed class AgentInitCommand : BaseCommand
         var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
         var result = await ExecuteAgentInitAsync(
             workspaceRoot,
+            ExecutionContext.WorkingDirectory,
             PromptBinding.Create(parseResult, AgentsOption),
             PromptBinding.Create(parseResult, s_skillsOption, CommonAgentApplicators.AspireSkillName),
             PromptBinding.Create(parseResult, s_aspireSourceOption, DefaultAspireSource),
@@ -312,6 +318,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
     private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(
         DirectoryInfo workspaceRoot,
+        DirectoryInfo configurationDirectory,
         PromptBinding<string?> agentsBinding,
         PromptBinding<string?> skillsBinding,
         PromptBinding<string?> aspireSourceBinding,
@@ -397,16 +404,21 @@ internal sealed class AgentInitCommand : BaseCommand
         var playwright = selectedSkillNames.Contains(SkillDefinition.PlaywrightCli.Name);
         var dotnetInspect = selectedSkillNames.Contains(SkillDefinition.DotnetInspect.Name);
         var skillsMode = AspireSkillsMode.None;
+        IReadOnlyList<SkillSource> skillSources = [];
 
         if (selectedSkillNames.Contains(CommonAgentApplicators.AspireSkillName))
         {
+            skillSources = SkillSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
             var (sourceProvided, requestedSource, defaultSource) = PromptBinding.Resolve(aspireSourceBinding);
             if ((!sourceProvided && _hostEnvironment.SupportsInteractiveInput) ||
                 string.Equals(sourceProvided ? requestedSource : defaultSource, "remote", StringComparison.OrdinalIgnoreCase))
             {
-                InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture,
-                    AgentCommandStrings.InitCommand_PluginRiskWarning, AspireSkillsRemoteConfiguration.RepositoryUrl));
-                InteractionService.DisplayEmptyLine();
+                foreach (var skillSource in skillSources)
+                {
+                    InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture,
+                        AgentCommandStrings.InitCommand_PluginRiskWarning, skillSource.RepositoryUrl));
+                    InteractionService.DisplayEmptyLine();
+                }
             }
 
             var source = await InteractionService.PromptForSelectionAsync(
@@ -496,7 +508,7 @@ internal sealed class AgentInitCommand : BaseCommand
             {
                 foreach (var client in selectedClients)
                 {
-                    if (client.HasIntegrationRegistration(workspaceRoot, scope, cancellationToken))
+                    if (client.HasIntegrationRegistration(workspaceRoot, scope, skillSources))
                     {
                         conflict = AgentCommandStrings.InitCommand_RemoteSkillsConflict;
                         break;
@@ -559,7 +571,7 @@ internal sealed class AgentInitCommand : BaseCommand
         if (skillsMode is AspireSkillsMode.Remote)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var results = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, cancellationToken);
+            var results = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
             hasErrors |= DisplayRemoteConfigurationResults(results, workspaceRoot);
         }
 

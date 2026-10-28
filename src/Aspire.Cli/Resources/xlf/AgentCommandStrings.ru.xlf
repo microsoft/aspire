@@ -128,13 +128,13 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
-        <source>Agent assets from microsoft/aspire-skills</source>
-        <target state="new">Agent assets from microsoft/aspire-skills</target>
+        <source>Agent assets from configured skill sources</source>
+        <target state="new">Agent assets from configured skill sources</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AspireSourceOptionDescription">
-        <source>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</source>
-        <target state="new">Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</target>
+        <source>Source for Aspire agent assets: remote (configured plugins) or embedded (bundled skill files)</source>
+        <target state="new">Source for Aspire agent assets: remote (configured plugins) or embedded (bundled skill files)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
@@ -292,7 +292,7 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
 Review the source before enabling it.
 
 Prefer skill files only? Choose Embedded, or install skills directly from {0}.</target>
-        <note>{0} is the official Aspire skills repository URL.</note>
+        <note>{0} is a configured skill source repository URL.</note>
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>

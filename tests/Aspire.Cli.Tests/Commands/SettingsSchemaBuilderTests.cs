@@ -9,6 +9,25 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class SettingsSchemaBuilderTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildSchema_IncludesNamedSkillSources(bool global)
+    {
+        foreach (var schema in new[]
+        {
+            SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: global),
+            SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global)
+        })
+        {
+            var skillSources = Assert.Single(schema.Properties, property => property.Name == "skillSources");
+            Assert.Equal("object", skillSources.AdditionalPropertiesType);
+            Assert.Equal(
+                ["enabled", "repository", "marketplace", "plugin", "ref", "openCodeV1Catalog", "openCodeV2Catalog"],
+                skillSources.SubProperties!.Select(property => property.Name));
+        }
+    }
+
     [Fact]
     public void BuildSchema_DoesNotIncludeDocsSourceProperties()
     {
