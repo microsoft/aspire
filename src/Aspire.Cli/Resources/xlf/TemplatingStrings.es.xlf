@@ -109,7 +109,7 @@
       </trans-unit>
       <trans-unit id="InvalidTemplateValueSource">
         <source>Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.</source>
-        <target state="translated">El valor calculado "{0}" debe apuntar a un parámetro de cadena no reservado y especificar el tipo "nugetPackageVersion", un "packageId" y un «"ersionRange" válidos, un valor booleano opcional "allowPrerelease" y un "workingDirectory" opcional relativo a la salida.</target>
+        <target state="translated">El valor calculado "{0}" debe apuntar a un parámetro de cadena no reservado y especificar el tipo "nugetPackageVersion", un "packageId" y un "versionRange" válidos, un valor booleano opcional "allowPrerelease" y un "workingDirectory" opcional relativo a la salida.</target>
         <note>{0} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="No">

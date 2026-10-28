@@ -99,7 +99,7 @@
       </trans-unit>
       <trans-unit id="InvalidTemplateHostConfiguration">
         <source>Could not load template host configuration '{0}': {1}</source>
-        <target state="translated">Die Vorlagenhostkonfiguration konnte nicht geladen '{0}': {1}</target>
+        <target state="translated">Die Vorlagenhostkonfiguration '{0}' konnte nicht geladen werden: {1}</target>
         <note>{0} is the host configuration path; {1} is the validation error.</note>
       </trans-unit>
       <trans-unit id="InvalidTemplateHostConfigurationFormat">

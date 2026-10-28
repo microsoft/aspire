@@ -209,12 +209,12 @@
       </trans-unit>
       <trans-unit id="TemplatePackageVersionLookupFailed">
         <source>Could not query the effective NuGet sources for package '{0}' to compute parameter '{1}'. Check the NuGet configuration, connectivity, and credentials.</source>
-        <target state="translated">パラメーター '{0}' を計算するためにパッケージ '{1}' の有効な NuGet ソースのクエリを実行できませんでした。NuGet の構成、接続、資格情報を確認してください。</target>
+        <target state="translated">パラメーター '{1}' を計算するためにパッケージ '{0}' の有効な NuGet ソースのクエリを実行できませんでした。NuGet の構成、接続、資格情報を確認してください。</target>
         <note>{0} is the package ID; {1} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="TemplatePackageVersionNotFound">
         <source>No version of package '{0}' matches range '{1}' with allowPrerelease={2} in the effective NuGet sources for parameter '{3}'.</source>
-        <target state="translated">パラメーター '{0}' の有効な NuGet ソースで allowPrerelease={2} の範囲 '{1}' に一致するパッケージ '{3}' のバージョンはありません。</target>
+        <target state="translated">パラメーター '{3}' の有効な NuGet ソースで allowPrerelease={2} の範囲 '{1}' に一致するパッケージ '{0}' のバージョンはありません。</target>
         <note>{0} is the package ID; {1} is the version range; {2} is the prerelease Boolean; {3} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="TemplateStagingLinkNotSupported">

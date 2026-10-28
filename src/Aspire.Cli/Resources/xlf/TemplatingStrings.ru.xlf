@@ -104,7 +104,7 @@
       </trans-unit>
       <trans-unit id="InvalidTemplateHostConfigurationFormat">
         <source>Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</source>
-        <target state="translated">Ожидаемый объект JSON. Свойство «createNuGetConfig» должно иметь логическое значение, а свойство «symbolInfo» — быть объектом. Записи символов должны быть объектами, свойство «isHidden» должно иметь значение «true» или «false», а свойство «displayName» должность быть строкой.</target>
+        <target state="translated">Ожидаемый объект JSON. Свойство «createNuGetConfig» должно иметь логическое значение, а свойство «symbolInfo» — быть объектом. Записи символов должны быть объектами, свойство «isHidden» должно иметь значение «true» или «false», а свойство «displayName» должно быть строкой.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidTemplateValueSource">
