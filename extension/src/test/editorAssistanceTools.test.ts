@@ -2639,14 +2639,14 @@ suite('Editor assistance AppHost services', () => {
                     expectedPresentation: 'debugBrowser',
                     expectedDebugType: 'pwa-chrome',
                     expectedRuntimeArgs: ['--allow-insecure-localhost'],
-                    expectedTimeout: 60000,
+                    expectedTimeout: 30000,
                 },
                 {
                     values: { dashboardBrowser: 'debugEdge' },
                     expectedPresentation: 'debugBrowser',
                     expectedDebugType: 'pwa-msedge',
                     expectedRuntimeArgs: ['--allow-insecure-localhost'],
-                    expectedTimeout: 60000,
+                    expectedTimeout: 30000,
                 },
                 {
                     values: { dashboardBrowser: 'debugFirefox' },

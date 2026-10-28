@@ -22,7 +22,7 @@ export type ResolvedDashboardLaunchBehavior = {
 };
 
 const dashboardLaunchIdConfigKey = '__aspireDashboardLaunchId';
-const dashboardDebugBrowserStartTimeoutMs = 60000;
+const dashboardDebugBrowserStartTimeoutMs = 30000;
 const preOptInDefaultDashboardBrowser: DashboardLaunchBehavior = 'integratedBrowser';
 
 export function normalizeDashboardLaunchBehavior(value: unknown): DashboardLaunchBehavior | undefined {
@@ -305,9 +305,9 @@ function createDashboardDebugConfiguration(
 
   if (debugType === 'pwa-chrome' || debugType === 'pwa-msedge') {
     debugConfig.pauseForSourceMap = false;
-    // js-debug's 10-second default can expire before Chromium creates its initial page target
-    // on a busy machine. Dashboard launch runs in the background, so allow startup contention
-    // without delaying AppHost startup.
+    // Allow startup contention beyond js-debug's 10-second default for Chromium's initial page
+    // target. Automatic Dashboard launches run in the background without delaying AppHost startup;
+    // explicit handoffs await the browser launch.
     debugConfig.timeout = dashboardDebugBrowserStartTimeoutMs;
     // Fresh or isolated environments can have a valid localhost development certificate that has
     // not been trusted yet. Limit Chromium's certificate bypass to localhost instead of disabling
@@ -390,9 +390,8 @@ export class DashboardLauncher implements vscode.Disposable {
   /**
    * Dashboard browsers are optional UI children. Give their launch/stop a smaller share of the
    * shutdown budget so a wedged browser adapter cannot starve AppHost and parent teardown.
-   * js-debug can take more than two seconds to publish root-session termination on a loaded
-   * Windows runner after accepting the stop request. Five seconds still fits inside the six-second
-   * resource phase while leaving the AppHost and parent reserve untouched.
+   * The five-second allowance fits inside the six-second resource phase while leaving the
+   * AppHost and parent reserve untouched.
    */
   private static readonly _dashboardStopTimeoutMs = 5000;
   // Keep the listener beyond js-debug's launch timeout so shutdown can still adopt and stop a

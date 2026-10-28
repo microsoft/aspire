@@ -12,10 +12,6 @@ suite('Aspire debug dashboard E2E', function () {
 
     const debugDashboardBrowserTestTimeoutMs = 900000;
     const debugDashboardTeardownTimeoutMs = 900000;
-    const debugStopTimeoutMs = 180000;
-    const debugSessionCleanupTimeoutMs = 90000;
-    const browserDebugSessionStartTimeoutMs = 120000;
-    const browserDebugSessionCleanupTimeoutMs = 120000;
     let requireBrowserDebugSessionCleanup = false;
 
     teardown(async function () {
@@ -33,13 +29,13 @@ suite('Aspire debug dashboard E2E', function () {
             () => writeWorkspaceSetting('aspire.dashboardBrowser', undefined),
             () => writeWorkspaceSetting('aspire.enableAspireDashboardAutoLaunch', undefined),
             () => restoreWorkspaceCliPath(),
-            () => executeE2eControlCommand({ name: 'stopDebugging' }, { timeoutMs: debugStopTimeoutMs }),
+            () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => stopPrimaryAppHostIfRunning(),
             () => failOnBrowserDebugSessionCleanup
-                ? waitForNoDebugSessions(debugSessionCleanupTimeoutMs)
-                : waitForNoDebugSessions(debugSessionCleanupTimeoutMs).catch(() => undefined),
+                ? waitForNoDebugSessions()
+                : waitForNoDebugSessions().catch(() => undefined),
             () => failOnBrowserDebugSessionCleanup
-                ? waitForNoBrowserDebugSessions(browserDebugSessionCleanupTimeoutMs)
+                ? waitForNoBrowserDebugSessions()
                 : waitForNoBrowserDebugSessions(15000).catch(() => undefined),
             () => waitForNoRunningAppHost().catch(() => undefined),
         ], 'Debug dashboard E2E teardown failed.');
@@ -131,34 +127,33 @@ suite('Aspire debug dashboard E2E', function () {
 
         await waitForDebugSessionStartup();
 
-        try {
-            // The debug browser is only launched once the dashboard URL is known, so wait for that
-            // milestone separately. Folding both waits into one budget makes a slow dashboard start
-            // look like a missing browser session.
-            await waitForDebugDashboardUrl();
+        // The debug browser is only launched once the dashboard URL is known, so wait for that
+        // milestone separately. Folding both waits into one budget makes a slow dashboard start
+        // look like a missing browser session.
+        await waitForDebugDashboardUrl();
 
-            const browserSession = await waitForBrowserDebugSession(browserDebugSessionStartTimeoutMs);
-            assert.deepStrictEqual(
-                getBrowserDebugSessions().filter(session => session.parentSessionType === 'aspire').map(session => ({ id: session.id, type: session.type })),
-                [{ id: browserSession.id, type: 'pwa-chrome' }]);
+        let browserSession;
+        try {
+            browserSession = await waitForBrowserDebugSession();
         }
         catch (error) {
-            let browserLaunchError = error;
-            if (error instanceof Error && error.message.includes('waiting for dashboard browser debug session to start')) {
-                // js-debug can leave this modal open after a launch failure. Cancel only that known
-                // dialog so it cannot block teardown or every later Selenium interaction.
-                try {
-                    await acceptModalDialog('Cancel', 10000, 'dashboard-debug-launch-failure', 'Unable to launch browser');
-                }
-                catch (dialogError) {
-                    browserLaunchError = new AggregateError(
-                        [error, dialogError],
-                        `${error.message}\nLaunch-dialog cleanup failed: ${dialogError instanceof Error ? dialogError.message : String(dialogError)}`);
-                }
+            // js-debug can leave this modal open after a launch failure. Cancel only that known
+            // dialog so it cannot block teardown or every later Selenium interaction.
+            try {
+                await acceptModalDialog('Cancel', 10000, 'dashboard-debug-launch-failure', 'Unable to launch browser');
+            }
+            catch (dialogError) {
+                throw new AggregateError(
+                    [error, dialogError],
+                    `${error instanceof Error ? error.message : String(error)}\nLaunch-dialog cleanup failed: ${dialogError instanceof Error ? dialogError.message : String(dialogError)}`);
             }
 
-            throw browserLaunchError;
+            throw error;
         }
+
+        assert.deepStrictEqual(
+            getBrowserDebugSessions().filter(session => session.parentSessionType === 'aspire').map(session => ({ id: session.id, type: session.type })),
+            [{ id: browserSession.id, type: 'pwa-chrome' }]);
     });
 
     test('workspace debug stop removes running apphost', async () => {

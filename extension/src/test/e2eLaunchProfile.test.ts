@@ -1419,70 +1419,129 @@ builder.Build().Run();
         assert.ok(debugDashboard.includes('await resetDashboardDefaultChangedNotificationForE2E();'));
     });
 
-    test('scopes real debug browser cleanup to Windows while retaining deterministic nonblocking coverage', () => {
-        const extensionRoot = path.resolve(__dirname, '..', '..');
-        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
-        const vscodeHelpers = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
-        const aspireDebugSessionTests = fs.readFileSync(path.join(extensionRoot, 'src', 'test', 'aspireDebugSession.test.ts'), 'utf8');
-        const debugBrowserTest = getTestBlock(debugDashboard, 'starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows');
-        const normalizedDebugBrowserTest = debugBrowserTest.replace(/\r\n/g, '\n');
-        const normalizedDebugDashboard = debugDashboard.replace(/\r\n/g, '\n');
-        const nonblockingUnitTest = getTestBlock(aspireDebugSessionTests, 'openDashboard does not wait for a dashboard debug session to start');
-        const nonWindowsSkip = `if (process.platform !== 'win32') {
-            this.skip();
-        }`;
-        const teardownStartIndex = normalizedDebugDashboard.indexOf('teardown(async function () {');
-        const teardownEndIndex = normalizedDebugDashboard.indexOf("test('debugs the AppHost with unconfigured dashboard launch defaults'", teardownStartIndex);
-        const teardownBlock = normalizedDebugDashboard.slice(teardownStartIndex, teardownEndIndex);
-        const cleanupStartIndex = teardownBlock.indexOf('await runE2eTeardown([');
-        const cleanupStopIndex = teardownBlock.indexOf("() => executeE2eControlCommand({ name: 'stopDebugging' }, { timeoutMs: debugStopTimeoutMs })", cleanupStartIndex);
-        const cleanupAspireWaitIndex = teardownBlock.indexOf('waitForNoDebugSessions(debugSessionCleanupTimeoutMs)', cleanupStopIndex);
-        const cleanupBrowserWaitIndex = teardownBlock.indexOf('waitForNoBrowserDebugSessions(browserDebugSessionCleanupTimeoutMs)', cleanupAspireWaitIndex);
+    for (const failDialogCleanup of [false, true]) {
+        test(`preserves dashboard browser launch failures and finishes teardown when dialog cleanup ${failDialogCleanup ? 'fails' : 'succeeds'}`, async () => {
+            const extensionRoot = path.resolve(__dirname, '..', '..');
+            const dashboardSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
+            const fixturesSource = ts.createSourceFile(
+                'fixtures.ts',
+                fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8'),
+                ts.ScriptTarget.Latest,
+                true);
+            const cleanupFunctionNames = new Set(['runE2eTeardown', 'formatE2eTeardownFailureMessage', 'redactE2eTeardownFailure']);
+            const cleanupDeclarations = fixturesSource.statements.filter((statement): statement is ts.FunctionDeclaration =>
+                ts.isFunctionDeclaration(statement) && statement.name !== undefined && cleanupFunctionNames.has(statement.name.text));
+            assert.strictEqual(cleanupDeclarations.length, cleanupFunctionNames.size);
+            const compilerOptions = { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 };
+            const compiledCleanup = ts.transpileModule(
+                cleanupDeclarations.map(declaration => declaration.getText(fixturesSource)).join('\n'),
+                { compilerOptions }).outputText;
+            const runE2eTeardown = vm.runInNewContext(`${compiledCleanup}\nrunE2eTeardown;`, { exports: {}, Error, AggregateError });
 
-        assert.deepStrictEqual({
-            nonWindowsSkipPrecedesDashboardBrowserSetting: normalizedDebugBrowserTest.indexOf(nonWindowsSkip) >= 0
-                && normalizedDebugBrowserTest.indexOf(nonWindowsSkip) < normalizedDebugBrowserTest.indexOf("writeWorkspaceSetting('aspire.dashboardBrowser', 'debugChrome')"),
-            hasIndependentValidationBudget: normalizedDebugDashboard.includes('const debugDashboardBrowserTestTimeoutMs = 900000;')
-                && normalizedDebugBrowserTest.includes('this.timeout(debugDashboardBrowserTestTimeoutMs);'),
-            hasIndependentCleanupBudget: normalizedDebugDashboard.includes('const debugDashboardTeardownTimeoutMs = 900000;')
-                && teardownBlock.includes('this.timeout(debugDashboardTeardownTimeoutMs);'),
-            waitsForBrowserDebugSession: normalizedDebugDashboard.includes('const browserDebugSessionStartTimeoutMs = 120000;')
-                && debugBrowserTest.includes('await waitForBrowserDebugSession(browserDebugSessionStartTimeoutMs)'),
-            requiresBrowserCleanup: normalizedDebugBrowserTest.includes('requireBrowserDebugSessionCleanup = true;'),
-            cancelsKnownLaunchFailureDialog: debugBrowserTest.includes("await acceptModalDialog('Cancel', 10000, 'dashboard-debug-launch-failure', 'Unable to launch browser');"),
-            rethrowsBrowserFailureBeforeCleanup: normalizedDebugBrowserTest.includes('throw browserLaunchError;')
-                && !normalizedDebugBrowserTest.includes('await runE2eTeardown(['),
-            completesEveryCleanupAfterStopFailure: teardownStartIndex >= 0
-                && teardownEndIndex > teardownStartIndex
-                && cleanupStartIndex >= 0
-                && cleanupStartIndex < cleanupStopIndex
-                && cleanupStopIndex < cleanupAspireWaitIndex
-                && cleanupAspireWaitIndex < cleanupBrowserWaitIndex,
-            usesExplicitCleanupTimeouts: teardownBlock.includes("executeE2eControlCommand({ name: 'stopDebugging' }, { timeoutMs: debugStopTimeoutMs })")
-                && teardownBlock.includes('waitForNoDebugSessions(debugSessionCleanupTimeoutMs)')
-                && teardownBlock.includes('waitForNoBrowserDebugSessions(browserDebugSessionCleanupTimeoutMs)')
-                && teardownBlock.includes('const failOnBrowserDebugSessionCleanup = requireBrowserDebugSessionCleanup;')
-                && normalizedDebugDashboard.includes('const debugStopTimeoutMs = 180000;')
-                && normalizedDebugDashboard.includes('const debugSessionCleanupTimeoutMs = 90000;')
-                && normalizedDebugDashboard.includes('const browserDebugSessionCleanupTimeoutMs = 120000;'),
-            hasNonblockingUnitTest: aspireDebugSessionTests.includes("test('openDashboard does not wait for a dashboard debug session to start'"),
-            usesNeverSettlingBrowserLaunch: nonblockingUnitTest.includes('new Promise<boolean>(() => { })'),
-            removedOptionalModalHelper: !vscodeHelpers.includes('export async function dismissModalDialogIfPresent('),
-        }, {
-            nonWindowsSkipPrecedesDashboardBrowserSetting: true,
-            hasIndependentValidationBudget: true,
-            hasIndependentCleanupBudget: true,
-            waitsForBrowserDebugSession: true,
-            requiresBrowserCleanup: true,
-            cancelsKnownLaunchFailureDialog: true,
-            rethrowsBrowserFailureBeforeCleanup: true,
-            completesEveryCleanupAfterStopFailure: true,
-            usesExplicitCleanupTimeouts: true,
-            hasNonblockingUnitTest: true,
-            usesNeverSettlingBrowserLaunch: true,
-            removedOptionalModalHelper: true,
+            const launchFailure = new Error('Browser startup failed.');
+            const dialogFailure = new Error('Launch dialog cleanup failed.');
+            const stopFailure = new Error('Stop command failed.');
+            const browserCleanupFailure = new Error('Browser session did not terminate.');
+            const cleanups: string[] = [];
+            const modalInteractions: Array<{ buttonTitle: string; expectedText: string | undefined }> = [];
+            const noOperation = () => undefined;
+            const helpers = {
+                runE2eTeardown,
+                getCommandInvocationCount: () => 0,
+                openAspireView: noOperation,
+                waitForRepositoryIdle: noOperation,
+                waitForWorkspaceAppHost: async () => ({ state: { workspaceAppHostPath: '/workspace/AppHost.csproj' } }),
+                waitForCommandOutcome: noOperation,
+                waitForDebugSessionStartup: noOperation,
+                waitForDebugDashboardUrl: noOperation,
+                waitForBrowserDebugSession: async () => { throw launchFailure; },
+                writeWorkspaceSetting: noOperation,
+                setCliUnavailableForE2E: noOperation,
+                setShowStatusDelayForE2E: noOperation,
+                resetDashboardDefaultChangedNotificationForE2E: noOperation,
+                restoreWorkspaceCliPath: noOperation,
+                executeE2eControlCommand: async (command: { name: string }) => {
+                    if (command.name === 'stopDebugging') {
+                        cleanups.push('stopDebugging');
+                        throw stopFailure;
+                    }
+                },
+                stopPrimaryAppHostIfRunning: async () => { cleanups.push('stopAppHost'); },
+                waitForNoDebugSessions: async () => { cleanups.push('waitForNoDebugSessions'); },
+                waitForNoBrowserDebugSessions: async () => {
+                    cleanups.push('waitForNoBrowserDebugSessions');
+                    throw browserCleanupFailure;
+                },
+                waitForNoRunningAppHost: async () => { cleanups.push('waitForNoRunningAppHost'); },
+                acceptModalDialog: async (buttonTitle: string, _timeoutMs: number, _screenshotName: string | undefined, expectedText: string | undefined) => {
+                    modalInteractions.push({ buttonTitle, expectedText });
+                    if (failDialogCleanup) {
+                        throw dialogFailure;
+                    }
+                },
+            };
+            const modules = new Map<string, unknown>([
+                ['assert', assert],
+                ['fs', fs],
+                ['path', path],
+                ['./helpers/assertions', helpers],
+                ['./helpers/extester', helpers],
+                ['./helpers/fixtures', helpers],
+                ['./helpers/paths', helpers],
+                ['./helpers/vscode', helpers],
+            ]);
+            const context = {
+                timeout: noOperation,
+                skip: () => assert.fail('The Windows browser scenario must execute.'),
+            };
+            type E2eCallback = (this: typeof context) => Promise<void>;
+            const tests = new Map<string, E2eCallback>();
+            const teardowns: E2eCallback[] = [];
+            vm.runInNewContext(ts.transpileModule(dashboardSource, { compilerOptions }).outputText, {
+                exports: {},
+                Error,
+                AggregateError,
+                process: { platform: 'win32' },
+                require: (name: string) => {
+                    assert.ok(modules.has(name), `Unexpected E2E import: ${name}`);
+                    return modules.get(name);
+                },
+                suite: (_name: string, body: () => void) => body.call(context),
+                test: (name: string, body: E2eCallback) => tests.set(name, body),
+                teardown: (body: E2eCallback) => teardowns.push(body),
+            });
+
+            const browserTest = tests.get('starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows');
+            assert.ok(browserTest);
+            assert.strictEqual(teardowns.length, 1);
+            await assert.rejects(browserTest.call(context), (error: unknown) => {
+                if (failDialogCleanup) {
+                    assert.ok(error instanceof AggregateError);
+                    assert.deepStrictEqual(Array.from(error.errors), [launchFailure, dialogFailure]);
+                }
+                else {
+                    assert.strictEqual(error, launchFailure);
+                }
+                return true;
+            });
+            await assert.rejects(teardowns[0].call(context), (error: unknown) => {
+                assert.ok(error instanceof AggregateError);
+                assert.deepStrictEqual(Array.from(error.errors), [
+                    `Error: ${stopFailure.message}`,
+                    `Error: ${browserCleanupFailure.message}`,
+                ]);
+                return true;
+            });
+            assert.deepStrictEqual(modalInteractions, [{ buttonTitle: 'Cancel', expectedText: 'Unable to launch browser' }]);
+            assert.deepStrictEqual([...cleanups].sort(), [
+                'stopDebugging',
+                'stopAppHost',
+                'waitForNoDebugSessions',
+                'waitForNoBrowserDebugSessions',
+                'waitForNoRunningAppHost',
+            ].sort());
         });
-    });
+    }
 
     test('keeps CLI status surface coverage in the deterministic ProgressNotifier unit test', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
