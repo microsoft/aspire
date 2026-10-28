@@ -2646,6 +2646,24 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext", func(h *handle, c *client) any {
 		return newTestReturnValueContextFromHandle(h, c)
 	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource", func(h *handle, c *client) any {
+		return newHandleWrapperBase(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString", func(h *handle, c *client) any {
+		return newHandleWrapperBase(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResourcePromise", func(h *handle, c *client) any {
+		return newHandleWrapperBase(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource", func(h *handle, c *client) any {
+		return newHandleWrapperBase(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise", func(h *handle, c *client) any {
+		return newHandleWrapperBase(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource", func(h *handle, c *client) any {
+		return newHandleWrapperBase(h, c)
+	})
 }
 
 // ============================================================================

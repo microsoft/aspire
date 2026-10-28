@@ -326,6 +326,11 @@ public class AtsGoCodeGeneratorTests
                     "time"
                 )
 
+                // hostTimeout bounds one read or write by the fake host, so a stuck exchange fails
+                // quickly instead of waiting for the go test timeout. It is applied per operation:
+                // a single deadline set at construction would also cut off a long loop on a slow runner.
+                const hostTimeout = 10 * time.Second
+
                 // fakeHost is the AppHost end of an in-memory connection to a client.
                 type fakeHost struct {
                     t      *testing.T
@@ -337,10 +342,6 @@ public class AtsGoCodeGeneratorTests
                     t.Helper()
                     c := newClient("")
                     server, peer := net.Pipe()
-                    // A stuck exchange fails quickly instead of waiting for the go test timeout.
-                    if err := peer.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
-                        t.Fatal(err)
-                    }
                     conn := newConnection(server, c, c.onConnectionClose)
                     c.conn = conn
                     conn.start()
@@ -353,6 +354,9 @@ public class AtsGoCodeGeneratorTests
 
                 func (h *fakeHost) read() map[string]any {
                     h.t.Helper()
+                    if err := h.peer.SetReadDeadline(time.Now().Add(hostTimeout)); err != nil {
+                        h.t.Fatal(err)
+                    }
                     msg, err := readMessage(h.reader)
                     if err != nil {
                         h.t.Fatalf("reading from the client: %v", err)
@@ -362,6 +366,9 @@ public class AtsGoCodeGeneratorTests
 
                 func (h *fakeHost) write(msg map[string]any) {
                     h.t.Helper()
+                    if err := h.peer.SetWriteDeadline(time.Now().Add(hostTimeout)); err != nil {
+                        h.t.Fatal(err)
+                    }
                     if err := writeMessage(h.peer, msg); err != nil {
                         h.t.Fatalf("writing to the client: %v", err)
                     }
@@ -1697,6 +1704,145 @@ public class AtsGoCodeGeneratorTests
             {
                 await process.WaitForExitAsync(timeout.Token);
                 Assert.True(process.ExitCode == 0, $"Go callback test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedRuntime_DecodesResourcesTaggedWithTheDeclaredInterface()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var process = new Process();
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "declared_interface_test.go"), """
+                package aspire
+
+                import (
+                    "bufio"
+                    "net"
+                    "os"
+                    "testing"
+                )
+
+                // connectResourceHost connects a client to an in-memory AppHost that answers the
+                // capabilities returning resources. The AppHost tags each handle it returns with the
+                // type its capability declares, and Resource has no generated implementation.
+                func connectResourceHost(t *testing.T, resourceType string) *client {
+                    t.Helper()
+                    clientEnd, serverEnd := net.Pipe()
+                    c := newClient("")
+                    registerWrappers(c)
+                    conn := newConnection(clientEnd, c, c.onConnectionClose)
+                    c.mu.Lock()
+                    c.conn = conn
+                    c.mu.Unlock()
+                    conn.start()
+                    t.Cleanup(c.disconnect)
+
+                    resource := func(id string) map[string]any {
+                        return map[string]any{"$handle": id, "$type": resourceType}
+                    }
+                    go func() {
+                        defer serverEnd.Close()
+                        reader := bufio.NewReader(serverEnd)
+                        for {
+                            msg, err := readMessage(reader)
+                            if err != nil {
+                                return
+                            }
+                            reply := map[string]any{"jsonrpc": "2.0", "id": msg["id"]}
+                            params, _ := msg["params"].([]any)
+                            switch {
+                            case len(params) > 0 && params[0] == "Aspire.Hosting/getResources":
+                                reply["result"] = []any{resource("resource-1"), resource("resource-2")}
+                            case len(params) > 0 && params[0] == "Aspire.Hosting/findResourceByName":
+                                reply["result"] = resource("resource-1")
+                            default:
+                                reply["error"] = map[string]any{"code": -32601, "message": "unexpected request"}
+                            }
+                            writeMessage(serverEnd, reply)
+                        }
+                    }()
+                    return c
+                }
+
+                func newTestModel(t *testing.T) DistributedApplicationModel {
+                    t.Helper()
+                    resourceType := os.Getenv("TEST_RESOURCE_TYPE")
+                    if resourceType == "" {
+                        t.Fatal("TEST_RESOURCE_TYPE is not set")
+                    }
+                    return newDistributedApplicationModelFromHandle(&handle{
+                        HandleID: "model",
+                        TypeID:   "Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel",
+                    }, connectResourceHost(t, resourceType))
+                }
+
+                func TestListOfResourcesDecodesIntoTheMarkerInterface(t *testing.T) {
+                    resources, err := newTestModel(t).GetResources()
+                    if err != nil {
+                        t.Fatalf("GetResources failed: %v", err)
+                    }
+                    if len(resources) != 2 {
+                        t.Fatalf("GetResources returned %d resources, want 2", len(resources))
+                    }
+                    for i, want := range []string{"resource-1", "resource-2"} {
+                        if resources[i] == nil || resources[i].getHandle().HandleID != want {
+                            t.Errorf("resource %d: got %v, want a wrapper for handle %s", i, resources[i], want)
+                        }
+                    }
+                }
+
+                func TestSingleResourceDecodesIntoTheMarkerInterface(t *testing.T) {
+                    model := newTestModel(t)
+                    found := model.FindResourceByName("api")
+                    if err := model.Err(); err != nil {
+                        t.Fatalf("FindResourceByName failed: %v", err)
+                    }
+                    if found == nil || found.getHandle().HandleID != "resource-1" {
+                        t.Fatalf("FindResourceByName returned %v, want a wrapper for handle resource-1", found)
+                    }
+                }
+                """, timeout.Token);
+
+            process.StartInfo = new ProcessStartInfo("go")
+            {
+                WorkingDirectory = directory.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                ArgumentList = { "test", "-timeout", "30s", "." },
+                // The same id the AppHost derives for the IResource type that GetResources declares.
+                Environment = { ["TEST_RESOURCE_TYPE"] = AtsTypeMapping.DeriveTypeId(typeof(IResource)) }
+            };
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go declared-interface test failed:{Environment.NewLine}{await stdout}{await stderr}");
             }
             finally
             {
