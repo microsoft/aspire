@@ -16,7 +16,7 @@ public class TrayResourceHealthTests
     [InlineData("Building", null, null, null, "warning")]
     [InlineData("Waiting", null, null, null, "warning")]
     [InlineData("Stopping", null, null, null, "warning")]
-    [InlineData("NotStarted", null, null, null, "warning")]
+    [InlineData("NotStarted", null, null, null, null)]
     [InlineData("ValueMissing", null, null, null, "warning")]
     [InlineData("Unknown", null, null, null, "warning")]
     [InlineData("FailedToStart", null, null, null, "unhealthy")]
@@ -80,6 +80,24 @@ public class TrayResourceHealthTests
         Assert.Null(TrayResourceHealth.Aggregate(resources));
         Assert.Equal("healthy", TrayResourceHealth.Aggregate(
             [.. resources, new() { Name = "api", State = "Running", HealthStatus = "Healthy" }]));
+    }
+
+    [Fact]
+    public void ExplicitStartResourcesThatAreNotStartedDoNotNeedAttention()
+    {
+        ResourceSnapshot[] resources =
+        [
+            new() { Name = "api", State = "Running", HealthStatus = "Healthy" },
+            // An explicit-start resource reports its never-run check as Unhealthy or pending.
+            new()
+            {
+                Name = "generator", State = "NotStarted", HealthStatus = "Unhealthy",
+                HealthReports = [new() { Name = "ready", Status = null }]
+            }
+        ];
+
+        Assert.Equal("healthy", TrayResourceHealth.Aggregate(resources));
+        Assert.Null(TrayResourceHealth.Aggregate(resources.Skip(1)));
     }
 
     [Theory]

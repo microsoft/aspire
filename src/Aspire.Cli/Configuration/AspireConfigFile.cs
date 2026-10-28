@@ -62,6 +62,11 @@ internal sealed class AspireConfigFile
     [JsonPropertyName("$schema")]
     public string? Schema { get; set; }
 
+    [JsonPropertyName(ConfigSource.SectionName)]
+    [Description("The Git repository, configuration path, optional branch or commit, and version last applied to this app.")]
+    [LocalAspireJsonConfigurationProperty]
+    public ConfigSource? ConfigSource { get; set; }
+
     /// <summary>
     /// AppHost entry point configuration.
     /// </summary>
@@ -189,13 +194,14 @@ internal sealed class AspireConfigFile
     /// <summary>
     /// Saves aspire.config.json to the specified directory.
     /// Uses relaxed JSON escaping so non-ASCII characters (CJK, etc.) are preserved as-is.
+    /// The file is written with the OS line break and a final newline.
     /// </summary>
     public void Save(string directory)
     {
         Directory.CreateDirectory(directory);
         var filePath = Path.Combine(directory, FileName);
         var json = JsonSerializer.Serialize(this, JsonSourceGenerationContext.RelaxedEscaping.AspireConfigFile);
-        File.WriteAllText(filePath, json);
+        File.WriteAllText(filePath, ConfigurationHelper.EnsureFinalNewline(json));
     }
 
     /// <summary>

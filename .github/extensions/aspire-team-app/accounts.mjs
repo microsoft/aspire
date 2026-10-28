@@ -54,27 +54,74 @@ function tokenHash(token) {
 // Candidate enumeration
 // ---------------------------------------------------------------------------
 
-async function ghAccounts() {
+async function readGhAccounts(run, env) {
   try {
-    const { stdout } = await execFileAsync("gh", ["auth", "status"], { timeout: 8000 });
-    const accounts = [];
-    const re = /Logged in to (\S+) account (\S+)/g;
-    let m;
-    while ((m = re.exec(stdout)) !== null) {
-      accounts.push({ host: m[1], login: m[2] });
+    // JSON status keeps all accounts even when one host fails authentication:
+    // { "hosts": { "github.com": [{ "host": "github.com", "login": "octo", "state": "success" }] } }.
+    // Human-readable status instead exits with 1 and moves its output to stderr.
+    const { stdout } = await run("gh", ["auth", "status", "--json", "hosts"], { timeout: 8000, env });
+    return Object.values(JSON.parse(stdout).hosts).flat()
+      .filter((account) => account.state === "success" && account.host && account.login)
+      .map(({ host, login }) => ({ host, login }));
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    if (!/unknown flag: --json\b/.test(error.stderr ?? "")) {
+      throw new Error("GitHub CLI account discovery failed. Check `gh auth status` in a terminal.");
     }
-    return accounts;
-  } catch {
-    return [];
   }
+
+  let output;
+  try {
+    output = await run("gh", ["auth", "status"], { timeout: 8000, env });
+  } catch (error) {
+    // Older gh versions have no JSON status. Exit 1 still includes healthy accounts
+    // alongside failures, on either stream: "Logged in to github.com account octo (keyring)".
+    if (error.code !== 1) {
+      throw new Error("GitHub CLI account discovery failed. Check `gh auth status` in a terminal.");
+    }
+    output = error;
+  }
+  return [...`${output.stdout ?? ""}\n${output.stderr ?? ""}`.matchAll(/Logged in to (\S+) account (\S+)/g)]
+    .map((match) => ({ host: match[1], login: match[2] }));
 }
 
-async function ghToken(host, login) {
+async function ghAccounts(run, env, platform) {
+  const accounts = await readGhAccounts(run, env);
+  if (accounts === null) return [];
+  const hasConfigLocation = Object.entries(env).some(([name, value]) =>
+    ["APPDATA", "GH_CONFIG_DIR", "XDG_CONFIG_HOME"].includes(name.toUpperCase()) && value);
+  if (accounts.length === 0 && platform === "win32" && !hasConfigLocation) {
+    // App-hosted canvases can omit APPDATA. gh then searches a different config directory
+    // and reports no accounts despite an existing Windows login. Resolve the actual known
+    // folder (which may be redirected), rather than guessing USERPROFILE\AppData\Roaming.
+    // gh configuration precedence: https://cli.github.com/manual/gh_help_environment
+    let appData;
+    try {
+      ({ stdout: appData } = await run(
+        "powershell.exe",
+        ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "[Environment]::GetFolderPath('ApplicationData')"],
+        { timeout: 8000, env },
+      ));
+    } catch {
+      throw new Error("Unable to locate Windows application data for GitHub CLI. Set GH_CONFIG_DIR to the existing GitHub CLI configuration directory.");
+    }
+    const folder = appData.trim();
+    if (!folder) {
+      throw new Error("Unable to locate Windows application data for GitHub CLI. Set GH_CONFIG_DIR to the existing GitHub CLI configuration directory.");
+    }
+    env.APPDATA = folder;
+    return ghAccounts(run, env, platform);
+  }
+
+  return accounts;
+}
+
+async function ghToken(host, login, run, env) {
   try {
-    const { stdout } = await execFileAsync(
+    const { stdout } = await run(
       "gh",
       ["auth", "token", "--hostname", host, "--user", login],
-      { timeout: 8000 },
+      { timeout: 8000, env },
     );
     return stdout.trim() || null;
   } catch {
@@ -105,7 +152,12 @@ function decodeCopilotAccount(varName) {
   return { host, login };
 }
 
-export async function detectCandidates() {
+export async function detectCandidates({ run = execFileAsync, env = process.env, platform = process.platform, diagnostics = [] } = {}) {
+  // Plain objects are case-sensitive even on Windows, unlike process.env and child
+  // process environments. Normalize once so both removal and collection agree.
+  if (platform === "win32") {
+    env = Object.fromEntries(Object.entries(env).map(([name, value]) => [name.toUpperCase(), value]));
+  }
   const out = [];
   const seenHash = new Set();
   const add = (source, token, login, host) => {
@@ -117,24 +169,40 @@ export async function detectCandidates() {
   };
 
   // gh CLI accounts (each may have distinct scopes / hosts).
-  const accounts = await ghAccounts();
+  // gh prioritizes environment tokens even with --user. Enumerate stored credentials
+  // independently so an app-injected, host-limited token cannot hide keyring accounts.
+  const ghEnv = { ...env };
+  for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"]) {
+    delete ghEnv[name];
+  }
+  let accounts = [];
+  try {
+    accounts = await ghAccounts(run, ghEnv, platform);
+  } catch (error) {
+    diagnostics.push(error);
+  }
   for (const a of accounts) {
-    add("gh", await ghToken(a.host, a.login), a.login, a.host);
+    add("gh", await ghToken(a.host, a.login, run, ghEnv), a.login, a.host);
   }
 
   // Plain env tokens (host from GH_HOST when targeting an enterprise instance).
-  const envHost = normalizeHost(process.env.GH_HOST || "github.com");
-  add("env", process.env.GH_TOKEN, null, envHost);
-  add("env", process.env.GITHUB_TOKEN, null, envHost);
+  const envHost = normalizeHost(env.GH_HOST || "github.com");
+  add("env", env.GH_TOKEN, null, envHost);
+  add("env", env.GITHUB_TOKEN, null, envHost);
+  if (isEnterpriseHost(envHost)) {
+    add("env", env.GH_ENTERPRISE_TOKEN, null, envHost);
+    add("env", env.GITHUB_ENTERPRISE_TOKEN, null, envHost);
+  }
 
   // Per-account Copilot tokens injected by the host (host encoded in the var name).
-  for (const [k, v] of Object.entries(process.env)) {
+  for (const [k, v] of Object.entries(env)) {
     if (k.startsWith("COPILOT_GH_ACCOUNT_") && v) {
       const { host, login } = decodeCopilotAccount(k);
       add("copilot", v, login, host);
     }
   }
 
+  if (out.length === 0 && diagnostics.length > 0) throw diagnostics[0];
   return out;
 }
 
@@ -315,13 +383,17 @@ const SOURCE_LABEL = { gh: "GitHub CLI", env: "Environment", copilot: "Copilot" 
 // return the chosen token per account. `reposForId(id)` returns the repos to probe
 // for a given account; `isActive(id)` reports whether the user enabled it.
 export async function resolveAccounts(reposForId, isActive) {
-  const candidates = await detectCandidates();
+  const diagnostics = [];
+  const candidates = await detectCandidates({ diagnostics });
 
   const idents = [];
   for (const c of candidates) {
     const p = await probeIdentity(c);
     p.token = c.token;
     idents.push(p);
+  }
+  if (!idents.some((identity) => identity.ok) && diagnostics.length > 0) {
+    throw diagnostics[0];
   }
 
   // Group every credential under its (host, login) account identity so accounts

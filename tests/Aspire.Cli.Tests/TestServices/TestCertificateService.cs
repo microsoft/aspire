@@ -7,8 +7,15 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestCertificateService : ICertificateService
 {
+    public Func<CancellationToken, Task<EnsureCertificatesTrustedResult>>? EnsureCertificatesTrustedAsyncCallback { get; set; }
+
     public Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {
+        if (EnsureCertificatesTrustedAsyncCallback is { } callback)
+        {
+            return callback(cancellationToken);
+        }
+
         return Task.FromResult(new EnsureCertificatesTrustedResult
         {
             EnvironmentVariables = new Dictionary<string, string>(),

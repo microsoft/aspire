@@ -48,6 +48,8 @@ import type * as vscode from 'vscode';
  * the `commonProperties` map in telemetry.ts) because the classification
  * catalog tracks (event, property) pairs — every common property duplicates
  * into a row for every event. The set is deliberately tiny.
+ * Workspace context follows the latest discovery snapshot independently of the
+ * one-shot engagement event. Pending/failed discovery is unknown, not absence.
  */
 export type CommonTelemetryProperty =
     | 'apphost_languages'

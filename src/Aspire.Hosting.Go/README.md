@@ -52,6 +52,12 @@ await builder.build().run();
 The method executes the package as `go run .` from the directory containing `go.mod`.
 Pass runtime arguments via `.WithAppArgs(...)` and pre-start module commands via `.WithModTidy()`, `.WithModVendor()`, `.WithModDownload()`, or `.WithVetTool()`.
 
+### Certificate trust
+
+On macOS and Windows, Go apps default to `CertificateTrustScope.System`, so the certificate bundle Aspire generates contains the system root certificates as well as the development certificate and any custom certificate authorities. Since [Go 1.27](https://go.dev/doc/go1.27), Go on those platforms uses only the certificates from `SSL_CERT_FILE` and `SSL_CERT_DIR` when either is set, instead of adding them to the system roots. On Linux, the default stays `CertificateTrustScope.Append`. Use `.WithCertificateTrustScope(...)` to choose a different scope.
+
+**Limitation:** on macOS and Windows, Go 1.26 and earlier ignore `SSL_CERT_FILE` and `SSL_CERT_DIR` for standard TLS certificate verification, and so do Go 1.27 modules that keep the older behavior (for example, modules that declare an older `go` version). In that case Aspire's generated bundle has no effect, whatever the trust scope. The development certificate must be trusted in the operating system's certificate store or loaded explicitly by the application.
+
 ### Build flags
 
 Build-time compiler options are parameters of `AddGoApp` itself:

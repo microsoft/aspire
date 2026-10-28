@@ -1756,12 +1756,19 @@ async function proveBlazorWasmDebugging(command: BlazorWasmDebugProofCommand, ap
   vscode.debug.addBreakpoints([breakpoint]);
 
   try {
-    const debugCommandElement = getResourceCommandElement(appHostTreeProvider, {
-      name: 'executeResourceCommandItem',
-      appHostPath,
-      resourceName,
-      commandName: 'debug-in-browser',
-    });
+    // A running resource can still have a disabled debug command.
+    // Executing that snapshot is a UI no-op, not a browser launch to wait for.
+    const debugCommandElement = await waitForProofValue(
+      `enabled 'debug-in-browser' command for resource '${resourceName}'`,
+      () => {
+        const element = getResourceCommandElement(appHostTreeProvider, {
+          name: 'executeResourceCommandItem',
+          appHostPath,
+          resourceName,
+          commandName: 'debug-in-browser',
+        });
+        return isEnabledCommand(element.commandJson as ResourceCommandJson) ? element : undefined;
+      });
     await runBeforeProofDeadline(
       `'debug-in-browser' command completion`,
       () => vscode.commands.executeCommand('aspire-vscode.executeResourceCommandItem', debugCommandElement));

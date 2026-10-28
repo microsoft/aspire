@@ -46,6 +46,15 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, new TestProcessExecutionFactory(), new TestEnvironment(), logger);
     }
 
+    [Fact]
+    public void DiscoveryIdentityMatchesTheExistingProjectPath()
+    {
+        var path = _workspace.CreateDirectory("App Path With Spaces").FullName;
+        var project = CreateProject(path);
+
+        Assert.Equal(project.GetInstanceIdentifier(), DotNetBasedAppHostServerProject.GetDefaultInstanceIdentifier(path));
+    }
+
         [Fact]
         public async Task CreateProjectFiles_RestoreRootConfigDirectory_PreservesRelativeSources()
         {

@@ -1,0 +1,3 @@
+﻿{
+  versions.json: {"sdk":"13.6.3","integration":"99.0.0"}
+}
