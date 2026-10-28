@@ -84,6 +84,60 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
+        public static string MetricsGroupByLabel {
+            get {
+                return ResourceManager.GetString("MetricsGroupByLabel", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortByLabel {
+            get {
+                return ResourceManager.GetString("MetricsSortByLabel", resourceCulture);
+            }
+        }
+
+        public static string MetricsGroupNone {
+            get {
+                return ResourceManager.GetString("MetricsGroupNone", resourceCulture);
+            }
+        }
+
+        public static string MetricsOrganizeResource {
+            get {
+                return ResourceManager.GetString("MetricsOrganizeResource", resourceCulture);
+            }
+        }
+
+        public static string MetricsOrganizeMeter {
+            get {
+                return ResourceManager.GetString("MetricsOrganizeMeter", resourceCulture);
+            }
+        }
+
+        public static string MetricsOrganizeType {
+            get {
+                return ResourceManager.GetString("MetricsOrganizeType", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortName {
+            get {
+                return ResourceManager.GetString("MetricsSortName", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortValueDescending {
+            get {
+                return ResourceManager.GetString("MetricsSortValueDescending", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortValueAscending {
+            get {
+                return ResourceManager.GetString("MetricsSortValueAscending", resourceCulture);
+            }
+        }
+
         public static string MetricsNoMatchingInstruments {
             get {
                 return ResourceManager.GetString("MetricsNoMatchingInstruments", resourceCulture);

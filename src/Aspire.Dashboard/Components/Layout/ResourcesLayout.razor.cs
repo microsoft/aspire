@@ -469,8 +469,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
             if (_fitPaneAfterInitialRender && _isLoaded && showResizer)
             {
-                _fitPaneAfterInitialRender = false;
-                await _jsModule.InvokeVoidAsync("fitPaneToActions", _layoutElement);
+                // Stay armed until rows with actions exist, e.g. when the resources arrive after the first render.
+                _fitPaneAfterInitialRender = !await _jsModule.InvokeAsync<bool>("fitPaneToActions", _layoutElement);
             }
         }
         catch (JSDisconnectedException)
@@ -1508,6 +1508,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 break;
         }
 
+        // Showing resources again adds row actions that may not fit the current width.
+        _fitPaneAfterInitialRender = true;
+
         var shown = new List<string>();
         if (_showResources)
         {
@@ -1750,6 +1753,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         else
         {
+            if (_selectedResourceNames is [var only] && string.Equals(only, resourceName, StringComparisons.ResourceName))
+            {
+                // Selecting the only selected row again deselects it, like toggling.
+                await ClearSelectionAsync();
+                return;
+            }
+
             selection = [resourceName];
             _selectionAnchor = resourceName;
         }
@@ -1769,7 +1779,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         groupResourceNames.Count == _selectedResourceNames.Count &&
         groupResourceNames.All(IsSelected);
 
-    private void OnResourceGroupClick(MouseEventArgs e, List<string> groupResourceNames)
+    private async Task OnResourceGroupClick(MouseEventArgs e, List<string> groupResourceNames)
     {
         if (groupResourceNames.Count == 0)
         {
@@ -1794,6 +1804,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         else
         {
+            if (IsResourceGroupSelected(groupResourceNames))
+            {
+                await ClearSelectionAsync();
+                return;
+            }
+
             selection = groupResourceNames;
         }
 
@@ -1808,6 +1824,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // Remember the cleared selection so entering the overview later doesn't select a resource again.
         await SetStoredSelectionAsync([]);
         NavigationManager.NavigateTo(DashboardClient.IsEnabled ? DashboardUrls.ResourceListUrl() : GetSelectionUrl([]));
+    }
+
+    /// <summary>
+    /// Deselects everything without leaving the current tab, e.g. clearing a selection on Metrics stays on Metrics.
+    /// </summary>
+    private async Task ClearSelectionAsync()
+    {
+        _selectionAnchor = null;
+        await SetStoredSelectionAsync([]);
+        NavigationManager.NavigateTo(GetSelectionUrl([]));
     }
 
     /// <summary>

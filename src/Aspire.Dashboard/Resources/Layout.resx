@@ -372,9 +372,6 @@
   <data name="ResourcePaneKindHide" xml:space="preserve">
     <value>Select to hide {0}</value>
   </data>
-  <data name="ResourcePaneSelectedCount" xml:space="preserve">
-    <value>{0} selected</value>
-  </data>
   <data name="ResourcePaneNoKindsHint" xml:space="preserve">
     <value>Turn on a type above to list it.</value>
   </data>
@@ -383,9 +380,6 @@
   </data>
   <data name="ResourcePaneKindsLandmark" xml:space="preserve">
     <value>Types to show</value>
-  </data>
-  <data name="ResourcePaneClearSelection" xml:space="preserve">
-    <value>Clear selection</value>
   </data>
   <data name="ResourceTabsMore" xml:space="preserve">
     <value>More views</value>

@@ -907,15 +907,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to {0} selected.
-        /// </summary>
-        public static string ResourcePaneSelectedCount {
-            get {
-                return ResourceManager.GetString("ResourcePaneSelectedCount", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to OK.
         /// </summary>
         public static string ResourcePaneFilterDone {
@@ -957,15 +948,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourcePaneKindsLandmark {
             get {
                 return ResourceManager.GetString("ResourcePaneKindsLandmark", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Clear selection.
-        /// </summary>
-        public static string ResourcePaneClearSelection {
-            get {
-                return ResourceManager.GetString("ResourcePaneClearSelection", resourceCulture);
             }
         }
 

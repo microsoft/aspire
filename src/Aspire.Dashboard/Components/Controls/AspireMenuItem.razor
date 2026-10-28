@@ -55,6 +55,17 @@ else
                     AdditionalAttributes="@AdditionalMenuItemAttributes"
                     Label="@(Item.StartIcon is null ? Item.Text : null)"
                     MenuItems="@nestedMenuItems">
+        @if (Item.Role is MenuItemRole.Checkbox or MenuItemRole.Radio)
+        {
+            @* Supplying the indicator slot replaces Fluent's leading fallback checkmark. Keeping the slot
+               for unchecked options reserves one trailing column, so labels and icons never shift. *@
+            <span slot="indicator" class="aspire-menu-item-indicator" aria-hidden="true">
+                @if (Item.Checked)
+                {
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Checkmark())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                }
+            </span>
+        }
         @if (Item.Icon is not null)
         {
             <span slot="@GetIconSlot(Item.Role)">

@@ -22,7 +22,7 @@
 
         @if (!hasText)
         {
-            <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" />
+            <FluentIcon Value="@CurrentIcon" Color="@IconColor" CustomColor="@IconCustomColor" />
         }
         else
         {
@@ -30,7 +30,7 @@
 
             @if (!HideIcon)
             {
-                <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" Slot="end" />
+                <FluentIcon Value="@CurrentIcon" Color="@IconColor" CustomColor="@IconCustomColor" Slot="end" />
             }
         }
     </FluentButton>

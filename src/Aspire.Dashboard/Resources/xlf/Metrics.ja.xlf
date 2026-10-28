@@ -17,6 +17,16 @@
         <target state="new">Metrics matching "{0}"</target>
         <note>{0} is the filter text</note>
       </trans-unit>
+      <trans-unit id="MetricsGroupByLabel">
+        <source>Group by</source>
+        <target state="new">Group by</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsGroupNone">
+        <source>None</source>
+        <target state="new">None</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MetricsGroupsLabel">
         <source>Metric groups</source>
         <target state="new">Metric groups</target>
@@ -107,6 +117,21 @@
         <target state="translated">選択したリソースのメトリックがありません</target>
         <note />
       </trans-unit>
+      <trans-unit id="MetricsOrganizeMeter">
+        <source>Meter</source>
+        <target state="new">Meter</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeResource">
+        <source>Resource</source>
+        <target state="new">Resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeType">
+        <source>Type</source>
+        <target state="new">Type</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MetricsOverviewNoData">
         <source>No data</source>
         <target state="new">No data</target>
@@ -145,6 +170,26 @@
       <trans-unit id="MetricsShowAllInstruments">
         <source>Show all instruments</source>
         <target state="new">Show all instruments</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortByLabel">
+        <source>Sort by</source>
+        <target state="new">Sort by</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortName">
+        <source>Name</source>
+        <target state="new">Name</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortValueAscending">
+        <source>Value (low to high)</source>
+        <target state="new">Value (low to high)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortValueDescending">
+        <source>Value (high to low)</source>
+        <target state="new">Value (high to low)</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsUnpinInstrument">

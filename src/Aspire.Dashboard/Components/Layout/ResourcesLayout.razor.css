@@ -472,35 +472,6 @@
     outline: 2px solid var(--colorStrokeFocus2);
     outline-offset: 1px;
 }
-.resource-selection-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin: 8px 4px 0;
-    color: var(--colorNeutralForeground2);
-    font-size: var(--fontSizeBase200);
-}
-
-.resource-selection-clear {
-    padding: 2px 6px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--colorBrandForegroundLink);
-    font: inherit;
-    cursor: pointer;
-}
-
-.resource-selection-clear:hover {
-    background: var(--colorNeutralBackground1Hover);
-    text-decoration: underline;
-}
-
-.resource-selection-clear:focus-visible {
-    outline: 2px solid var(--colorStrokeFocus2);
-    outline-offset: 1px;
-}
 
 .resource-row-all::after {
     content: "";
@@ -1015,7 +986,7 @@
 }
 
 .resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 32px;
     width: auto;
     height: 32px;
     min-height: 32px;
@@ -1029,6 +1000,10 @@
 
 .resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item::part(content) {
     grid-column: 1;
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item > .aspire-menu-item-indicator {
+    grid-column: 2;
 }
 
 .resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item[checked] {

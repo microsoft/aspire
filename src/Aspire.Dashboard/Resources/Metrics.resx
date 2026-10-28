@@ -185,6 +185,33 @@
   <data name="MetricsInstrumentTypeHistogram" xml:space="preserve">
     <value>Histogram</value>
   </data>
+  <data name="MetricsGroupByLabel" xml:space="preserve">
+    <value>Group by</value>
+  </data>
+  <data name="MetricsSortByLabel" xml:space="preserve">
+    <value>Sort by</value>
+  </data>
+  <data name="MetricsGroupNone" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="MetricsOrganizeResource" xml:space="preserve">
+    <value>Resource</value>
+  </data>
+  <data name="MetricsOrganizeMeter" xml:space="preserve">
+    <value>Meter</value>
+  </data>
+  <data name="MetricsOrganizeType" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="MetricsSortName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="MetricsSortValueDescending" xml:space="preserve">
+    <value>Value (high to low)</value>
+  </data>
+  <data name="MetricsSortValueAscending" xml:space="preserve">
+    <value>Value (low to high)</value>
+  </data>
   <data name="MetricsOverviewNoData" xml:space="preserve">
     <value>No data</value>
   </data>

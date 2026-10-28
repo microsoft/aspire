@@ -73,7 +73,6 @@
 
             @if (_isLoaded && DashboardClient.IsEnabled)
             {
-                var isAllSelected = _selectedResourceNames.Count == 0;
                 var allResources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources)).ToList();
                 var allResourceCount = allResources.Count(r => !r.IsParameter);
                 var allParameterCount = allResources.Count(r => r.IsParameter);
@@ -86,15 +85,6 @@
                         @KindToggle(PaneKind.Parameters, allParameterCount, new Icons.Regular.Size20.Key(), Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)])
                         @KindToggle(PaneKind.TelemetrySources, _telemetryOnlyResources.Count, new Icons.Regular.Size20.DataUsage(), Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)])
                     </div>
-                    @if (!isAllSelected)
-                    {
-                        <div class="resource-selection-bar">
-                            <span>@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneSelectedCount)], _selectedResourceNames.Count)</span>
-                            <button type="button" class="resource-selection-clear" @onclick="OnAllResourcesClickAsync">
-                                @Loc[nameof(Dashboard.Resources.Layout.ResourcePaneClearSelection)]
-                            </button>
-                        </div>
-                    }
                 </div>
             }
 
