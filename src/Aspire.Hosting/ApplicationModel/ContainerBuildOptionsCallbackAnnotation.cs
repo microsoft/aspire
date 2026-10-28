@@ -129,15 +129,16 @@ public sealed class ContainerBuildOptionsCallbackContext
     public string? LocalImageTag { get; set; }
 
     /// <summary>
-    /// Gets the list of additional arguments appended verbatim to the container
-    /// build command. Use this for builder flags that are not represented by the
-    /// typed properties above, such as BuildKit cache configuration
-    /// (<c>--cache-from</c>/<c>--cache-to</c>) or <c>--secret</c> mounts.
+    /// Gets additional arguments passed to the container build command.
+    /// Use this for builder flags that are not represented by the typed properties
+    /// above, such as BuildKit cache configuration (<c>--cache-from</c>/<c>--cache-to</c>)
+    /// or extra <c>--secret</c> options.
     /// </summary>
     /// <remarks>
-    /// Each entry must be a complete argument token, including its flag. For example,
-    /// to export build cache to a registry, add <c>"--cache-to"</c> followed by
-    /// <c>"type=registry,ref=myregistry/myimage:cache"</c>.
+    /// Each entry is one process argument. A flag and its value are separate entries,
+    /// and the value is not joined, split, or quoted by Aspire. Spaces, quotes, and
+    /// commas are preserved, so a cache spec such as
+    /// <c>type=local,dest=./build cache</c> stays a single argument.
     /// Entries are only applied to builder-based builds (docker buildx / podman build).
     /// They do not apply to project resources built via <c>dotnet publish /t:PublishContainer</c>,
     /// which does not invoke a container builder directly.

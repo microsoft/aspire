@@ -346,26 +346,43 @@ public class ContainerRuntimeBaseTests
     }
 
     [Fact]
-    public void BuildAdditionalArgumentsString_EmptyOrNull_ReturnsEmptyString()
+    public void AppendAdditionalArguments_EmptyOrNull_AddsNothing()
     {
-        Assert.Equal(string.Empty, TestContainerRuntime.BuildAdditionalArguments(null));
-        Assert.Equal(string.Empty, TestContainerRuntime.BuildAdditionalArguments([]));
+        var arguments = new List<string> { "build" };
+
+        TestContainerRuntime.AppendArguments(arguments, null);
+        TestContainerRuntime.AppendArguments(arguments, []);
+
+        Assert.Equal(["build"], arguments);
     }
 
     [Fact]
-    public void BuildAdditionalArgumentsString_AppendsEntriesVerbatim()
+    public void AppendAdditionalArguments_PreservesCommasSpacesAndQuotesAsTokens()
     {
-        // Entries must not be quoted or escaped: cache flags like
-        // --cache-to take comma-separated key=value lists that quoting would corrupt.
-        var result = TestContainerRuntime.BuildAdditionalArguments(
-        [
-            "--cache-from",
-            "type=registry,ref=cr.example.com/app:cache",
-            "--cache-to",
-            "type=registry,ref=cr.example.com/app:cache,mode=max"
-        ]);
+        // Commas in a cache spec are data, not separators. Spaces and quotes must also stay inside
+        // the token instead of being treated as shell syntax.
+        var arguments = new List<string>();
+        TestContainerRuntime.AppendArguments(
+            arguments,
+            [
+                "--cache-from",
+                "type=registry,ref=cr.example.com/app:cache",
+                "--cache-to",
+                "type=local,dest=/tmp/build cache",
+                "--opt",
+                "label=name\"quoted,mode=max"
+            ]);
 
-        Assert.Equal(" --cache-from type=registry,ref=cr.example.com/app:cache --cache-to type=registry,ref=cr.example.com/app:cache,mode=max", result);
+        Assert.Equal(
+            [
+                "--cache-from",
+                "type=registry,ref=cr.example.com/app:cache",
+                "--cache-to",
+                "type=local,dest=/tmp/build cache",
+                "--opt",
+                "label=name\"quoted,mode=max"
+            ],
+            arguments);
     }
 
     private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
@@ -396,9 +413,9 @@ public class ContainerRuntimeBaseTests
                 cancellationToken);
         }
 
-        public static string BuildAdditionalArguments(IReadOnlyList<string>? additionalArguments)
+        public static void AppendArguments(List<string> arguments, IReadOnlyList<string>? additionalArguments)
         {
-            return BuildAdditionalArgumentsString(additionalArguments);
+            AppendAdditionalArguments(arguments, additionalArguments);
         }
 
         public Task<string> RunCommandForOutputAsync(CancellationToken cancellationToken = default)

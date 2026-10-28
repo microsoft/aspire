@@ -5819,17 +5819,27 @@ type ContainerBuildOptionsCallbackContext interface {
 	SetOutputPath(value *string) ContainerBuildOptionsCallbackContext
 	SetTargetPlatform(value *ContainerTargetPlatform) ContainerBuildOptionsCallbackContext
 	TargetPlatform() (*ContainerTargetPlatform, error)
+	AdditionalArguments() *List[string]
 	Err() error
 }
 
 // containerBuildOptionsCallbackContext is the unexported impl of ContainerBuildOptionsCallbackContext.
 type containerBuildOptionsCallbackContext struct {
 	*resourceBuilderBase
+	additionalArguments *List[string]
 }
 
 // newContainerBuildOptionsCallbackContextFromHandle wraps an existing handle as ContainerBuildOptionsCallbackContext.
 func newContainerBuildOptionsCallbackContextFromHandle(h *handle, c *client) ContainerBuildOptionsCallbackContext {
 	return &containerBuildOptionsCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AdditionalArguments gets additional arguments passed to the container build command. Use this for builder flags that are not represented by the typed properties above, such as BuildKit cache configuration (`--cache-from`/`--cache-to`) or extra `--secret` options.
+func (s *containerBuildOptionsCallbackContext) AdditionalArguments() *List[string] {
+	if s.additionalArguments == nil {
+		s.additionalArguments = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.additionalArguments")
+	}
+	return s.additionalArguments
 }
 
 // CancellationToken gets the cancellation token.

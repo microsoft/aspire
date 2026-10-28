@@ -4859,6 +4859,15 @@ public class ContainerBuildOptionsCallbackContext extends HandleWrapperBase {
         return (ContainerBuildOptionsCallbackContext) result;
     }
 
+    /** Gets additional arguments passed to the container build command. Use this for builder flags that are not represented by the typed properties above, such as BuildKit cache configuration (`--cache-from`/`--cache-to`) or extra `--secret` options. */
+    private AspireList<String> additionalArgumentsField;
+    public AspireList<String> additionalArguments() {
+        if (additionalArgumentsField == null) {
+            additionalArgumentsField = new AspireList<>(getHandle(), getClient(), "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.additionalArguments");
+        }
+        return additionalArgumentsField;
+    }
+
 }
 
 // ===== aspire/ContainerFileSystemCallbackContext.java =====

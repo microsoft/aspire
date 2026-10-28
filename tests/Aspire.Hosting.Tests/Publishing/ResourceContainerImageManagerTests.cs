@@ -975,6 +975,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         await imageBuilder.BuildImageAsync(resource.Resource);
 
+        Assert.Equal(1, callbackCount);
         Assert.True(File.Exists(archivePath));
         Assert.Equal<byte>([0x1f, 0x8b], File.ReadAllBytes(archivePath)[..2]);
         Assert.Equal([$"{imageName}:{imageTag}"], TestContainerImageArchive.ReadDockerImageReferences(archivePath));
@@ -1004,7 +1005,6 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         Assert.Equal(
             new[] { $"{imageName}:{sdkTag}", $"{imageName}:{layeredOptions.Tag}" }.Order(StringComparer.Ordinal),
             containerRuntime.RemoveImageCalls.Order(StringComparer.Ordinal));
-        Assert.Equal(1, callbackCount);
         Assert.Empty(containerRuntime.TagImageCalls);
         Assert.False(Directory.Exists(layeredOptions.OutputPath));
     }
@@ -1635,9 +1635,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             ["MY_SECRET"] = new BuildImageSecretValue("secret-value", BuildImageSecretType.Environment)
         };
 
-        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecretsString(secrets);
+        var result = FormatBuildSecrets(secrets);
 
-        Assert.Equal(" --secret \"id=MY_SECRET,type=env,env=MY_SECRET\"", result);
+        Assert.Equal(["--secret", "id=MY_SECRET,type=env,env=MY_SECRET"], result);
     }
 
     [Fact]
@@ -1648,9 +1648,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             ["npmrc"] = new BuildImageSecretValue("/path/to/.npmrc", BuildImageSecretType.File)
         };
 
-        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecretsString(secrets);
+        var result = FormatBuildSecrets(secrets);
 
-        Assert.Equal(" --secret \"id=npmrc,type=file,src=/path/to/.npmrc\"", result);
+        Assert.Equal(["--secret", "id=npmrc,type=file,src=/path/to/.npmrc"], result);
     }
 
     [Fact]
@@ -1661,9 +1661,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             ["MY_SECRET"] = new BuildImageSecretValue(null, BuildImageSecretType.Environment)
         };
 
-        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecretsString(secrets, requireValue: true);
+        var result = FormatBuildSecrets(secrets, requireValue: true);
 
-        Assert.Equal(" --secret \"id=MY_SECRET,type=env\"", result);
+        Assert.Equal(["--secret", "id=MY_SECRET,type=env"], result);
     }
 
     [Fact]
@@ -1675,9 +1675,16 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             ["npmrc"] = new BuildImageSecretValue("/app/.npmrc", BuildImageSecretType.File)
         };
 
-        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecretsString(secrets);
+        var result = FormatBuildSecrets(secrets);
 
-        Assert.Equal(" --secret \"id=ENV_TOKEN,type=env,env=ENV_TOKEN\" --secret \"id=npmrc,type=file,src=/app/.npmrc\"", result);
+        Assert.Equal(
+            [
+                "--secret",
+                "id=ENV_TOKEN,type=env,env=ENV_TOKEN",
+                "--secret",
+                "id=npmrc,type=file,src=/app/.npmrc"
+            ],
+            result);
     }
 
     [Fact]
@@ -2223,6 +2230,13 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         Assert.True(
             File.Exists(expectedArchivePath),
             $"Expected an image archive at '{expectedArchivePath}'. '{outputPath}' contains: {actualArchives}.");
+    }
+
+    private static List<string> FormatBuildSecrets(Dictionary<string, BuildImageSecretValue> secrets, bool requireValue = false)
+    {
+        var arguments = new List<string>();
+        ContainerRuntimeBase<DockerContainerRuntime>.AppendBuildSecrets(arguments, secrets, requireValue);
+        return arguments;
     }
 }
 

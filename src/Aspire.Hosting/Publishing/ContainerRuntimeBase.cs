@@ -449,81 +449,72 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     }
 
     /// <summary>
-    /// Builds a string of build arguments for container build commands.
+    /// Appends <c>--build-arg</c> tokens. Each value stays one argument, including values that contain spaces.
     /// </summary>
-    /// <param name="buildArguments">The build arguments to include.</param>
-    /// <returns>A string containing the formatted build arguments.</returns>
-    protected static string BuildArgumentsString(Dictionary<string, string?> buildArguments)
+    protected static void AppendBuildArguments(List<string> arguments, Dictionary<string, string?> buildArguments)
     {
-        var result = string.Empty;
         foreach (var buildArg in buildArguments)
         {
-            result += buildArg.Value is not null
-                ? $" --build-arg \"{buildArg.Key}={buildArg.Value}\""
-                : $" --build-arg \"{buildArg.Key}\"";
+            arguments.Add("--build-arg");
+            arguments.Add(buildArg.Value is not null
+                ? $"{buildArg.Key}={buildArg.Value}"
+                : buildArg.Key);
         }
-        return result;
     }
 
     /// <summary>
-    /// Builds a string of build secrets for container build commands.
+    /// Appends <c>--secret</c> tokens. The <c>id=...</c> spec stays one argument so paths can contain spaces or quotes.
     /// </summary>
-    /// <param name="buildSecrets">The build secrets to include.</param>
-    /// <param name="requireValue">Whether to require a non-null value for secrets (default: false).</param>
-    /// <returns>A string containing the formatted build secrets.</returns>
-    internal static string BuildSecretsString(Dictionary<string, BuildImageSecretValue> buildSecrets, bool requireValue = false)
+    internal static void AppendBuildSecrets(List<string> arguments, Dictionary<string, BuildImageSecretValue> buildSecrets, bool requireValue = false)
     {
-        var result = string.Empty;
         foreach (var buildSecret in buildSecrets)
         {
+            arguments.Add("--secret");
             if (buildSecret.Value.Type == BuildImageSecretType.File)
             {
-                result += $" --secret \"id={buildSecret.Key},type=file,src={buildSecret.Value.Value}\"";
+                arguments.Add($"id={buildSecret.Key},type=file,src={buildSecret.Value.Value}");
             }
             else if (requireValue && buildSecret.Value.Value is null)
             {
-                result += $" --secret \"id={buildSecret.Key},type=env\"";
+                arguments.Add($"id={buildSecret.Key},type=env");
             }
             else
             {
-                result += $" --secret \"id={buildSecret.Key},type=env,env={buildSecret.Key.ToUpperInvariant()}\"";
+                arguments.Add($"id={buildSecret.Key},type=env,env={buildSecret.Key.ToUpperInvariant()}");
             }
         }
-        return result;
     }
 
     /// <summary>
-    /// Builds a string for the target stage in container build commands.
+    /// Appends the <c>--target</c> stage when one is configured.
     /// </summary>
-    /// <param name="stage">The target stage to include.</param>
-    /// <returns>A string containing the formatted target stage, or empty string if stage is null or empty.</returns>
-    protected static string BuildStageString(string? stage)
+    protected static void AppendBuildStage(List<string> arguments, string? stage)
     {
-        return !string.IsNullOrEmpty(stage) ? $" --target \"{stage}\"" : string.Empty;
+        if (!string.IsNullOrEmpty(stage))
+        {
+            arguments.Add("--target");
+            arguments.Add(stage);
+        }
     }
 
     /// <summary>
-    /// Builds a string of additional arguments for container build commands.
-    /// Entries are appended verbatim because each entry must be a complete argument
-    /// token (flag plus value), such as "--cache-from" or "type=registry,ref=img:cache".
-    /// Quoting them would corrupt flags like --cache-to whose values contain commas.
+    /// Appends caller-supplied build arguments as individual argv tokens.
+    /// Commas inside a cache spec are ordinary characters; they do not need quoting and quoting is not applied.
     /// </summary>
-    /// <param name="additionalArguments">The additional arguments to append.</param>
-    /// <returns>A string containing the space-joined arguments, or empty string if none are provided.</returns>
-    protected static string BuildAdditionalArgumentsString(IReadOnlyList<string>? additionalArguments)
+    protected static void AppendAdditionalArguments(List<string> arguments, IReadOnlyList<string>? additionalArguments)
     {
         if (additionalArguments is not { Count: > 0 })
         {
-            return string.Empty;
+            return;
         }
 
-        return " " + string.Join(" ", additionalArguments);
+        arguments.AddRange(additionalArguments);
     }
 
     /// <summary>
     /// Executes a container runtime command and returns the process result without throwing for non-zero exit codes.
     /// </summary>
-    protected async Task<ProcessResult> ExecuteContainerCommandWithResultAsync(
+    protected Task<ProcessResult> ExecuteContainerCommandWithResultAsync(
         string arguments,
         string errorLogTemplate,
         string successLogTemplate,
@@ -532,8 +523,44 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         Dictionary<string, string>? environmentVariables = null,
         bool retainOutput = false)
     {
-        var spec = CreateProcessSpec(arguments, retainOutput);
+        return ExecuteContainerCommandWithResultAsync(
+            CreateProcessSpec(arguments, retainOutput),
+            errorLogTemplate,
+            successLogTemplate,
+            cancellationToken,
+            logArguments,
+            environmentVariables);
+    }
 
+    /// <summary>
+    /// Executes a container runtime command from discrete argv tokens and returns the process result without throwing for non-zero exit codes.
+    /// </summary>
+    protected Task<ProcessResult> ExecuteContainerCommandWithResultAsync(
+        IReadOnlyList<string> argumentList,
+        string errorLogTemplate,
+        string successLogTemplate,
+        CancellationToken cancellationToken,
+        object[] logArguments,
+        Dictionary<string, string>? environmentVariables = null,
+        bool retainOutput = false)
+    {
+        return ExecuteContainerCommandWithResultAsync(
+            CreateProcessSpec(argumentList, retainOutput),
+            errorLogTemplate,
+            successLogTemplate,
+            cancellationToken,
+            logArguments,
+            environmentVariables);
+    }
+
+    private async Task<ProcessResult> ExecuteContainerCommandWithResultAsync(
+        ProcessSpec spec,
+        string errorLogTemplate,
+        string successLogTemplate,
+        CancellationToken cancellationToken,
+        object[] logArguments,
+        Dictionary<string, string>? environmentVariables)
+    {
         if (environmentVariables is not null)
         {
             foreach (var (key, value) in environmentVariables)
@@ -542,7 +569,10 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             }
         }
 
-        _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
+        _logger.LogDebug(
+            "Running {RuntimeName} with arguments: {ArgumentList}",
+            Name,
+            spec.ArgumentList ?? (object?)spec.Arguments);
         var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
