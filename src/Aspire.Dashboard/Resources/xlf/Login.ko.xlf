@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="SignOut">
         <source>Sign out</source>
-        <target state="new">Sign out</target>
+        <target state="translated">로그아웃</target>
         <note />
       </trans-unit>
       <trans-unit id="TextFieldPlaceholder">
