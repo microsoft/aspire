@@ -26,6 +26,13 @@ internal sealed class DestroyCommand : PipelineCommandBase
     {
         TreatUnmatchedTokensAsErrors = true;
         Options.Add(s_listStepsFormatOption);
+        Validators.Add(result =>
+        {
+            if (result.GetResult(s_listStepsFormatOption) is not null && !result.GetValue(s_listStepsOption))
+            {
+                result.AddError(SharedCommandStrings.PipelineFormatRequiresListSteps);
+            }
+        });
 
         _yesOption = new Option<bool>("--yes", "-y")
         {

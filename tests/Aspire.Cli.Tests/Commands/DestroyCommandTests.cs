@@ -66,6 +66,24 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
         Assert.False(appHostStarted);
     }
 
+    [Theory]
+    [InlineData("destroy --yes --format json")]
+    [InlineData("destroy --yes --format=json")]
+    public async Task DestroyCommandRejectsFormatWithoutListSteps(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(SharedCommandStrings.PipelineFormatRequiresListSteps, error.Message);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+    }
+
     [Fact]
     public async Task DestroyCommandFailsWithInvalidProjectFile()
     {
