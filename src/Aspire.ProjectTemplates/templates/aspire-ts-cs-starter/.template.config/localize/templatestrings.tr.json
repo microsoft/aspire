@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire Başlangıç Uygulaması (ASP.NET Core/Tepki Verme, C# AppHost)",
   "description": "İsteğe bağlı Redis önbelleğiyle bir React ön uç ve C# Minimal API arka uç hizmetini içeren bir Aspire uygulaması oluşturmak için proje şablonu.",
