@@ -60,7 +60,7 @@ var environment = builder.AddAzureContainerAppEnvironment("env");
 var frontDoor = builder.AddAzureFrontDoor("frontdoor");
 environment.WithAzureFrontDoorPrivateLink(frontDoor);
 
-var api = builder.AddProject<Projects.Api>("api")
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithExternalHttpEndpoints();
 
 frontDoor.WithOrigin(api);
@@ -131,7 +131,7 @@ var frontDoor = builder.AddAzureFrontDoor("frontdoor")
     });
 environment.WithAzureFrontDoorPrivateLink(frontDoor);
 
-var api = builder.AddProject<Projects.Api>("api")
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithExternalHttpEndpoints();
 
 frontDoor.WithOrigin(api);

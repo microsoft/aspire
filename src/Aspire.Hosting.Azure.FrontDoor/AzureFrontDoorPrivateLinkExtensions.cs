@@ -95,9 +95,9 @@ public static class AzureFrontDoorPrivateLinkExtensions
     /// var frontDoor = builder.AddAzureFrontDoor("frontdoor");
     /// environment.WithAzureFrontDoorPrivateLink(frontDoor);
     ///
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
     ///     .WithExternalHttpEndpoints();
-    /// var web = builder.AddProject&lt;Projects.Web&gt;("web")
+    /// var web = builder.AddDotnetProject("web", @"..\Web\Web.csproj")
     ///     .WithExternalHttpEndpoints()
     ///     .WithReference(api);
     /// frontDoor.WithOrigin(api).WithOrigin(web);

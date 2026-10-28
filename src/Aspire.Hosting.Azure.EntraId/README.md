@@ -160,10 +160,10 @@ var entraWeb = builder.AddEntraIdApplication("entra-web")
                       // Optional: consent for all users, so that nobody is prompted.
                       .WithAdminConsent(entraApi, "Weather.Read");
 
-var apiService = builder.AddProject<Projects.Api>("apiservice")
+var apiService = builder.AddDotnetProject("apiservice", "../Api/Api.csproj")
        .WithReference(entraApi);
 
-builder.AddProject<Projects.Web>("webfrontend")
+builder.AddDotnetProject("webfrontend", "../Web/Web.csproj")
        .WithReference(entraWeb)
        .WithReference(apiService);
 ```
