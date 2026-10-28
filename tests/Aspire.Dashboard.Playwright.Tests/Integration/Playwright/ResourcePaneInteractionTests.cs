@@ -43,13 +43,16 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
 
             var pane = page.Locator(".resource-pane");
             await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "resource-a", Exact = true })).ToBeVisibleAsync();
-            await page.GetByRole(AriaRole.Button, new() { Name = Resources.ControlsStrings.ChartContainerFiltersHeader }).ClickAsync();
-            await page.GetByRole(AriaRole.Menuitemcheckbox, new() { NameRegex = new Regex("^Telemetry sources") }).ClickAsync();
-            var telemetrySection = pane.GetByRole(AriaRole.Button, new() { NameRegex = new Regex("^Telemetry sources") });
-            await Assertions.Expect(telemetrySection).ToBeVisibleAsync();
-            if (await telemetrySection.GetAttributeAsync("aria-expanded") == "false")
+            var telemetryToggle = pane.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.NavMenuTelemetrySourcesTab, Exact = true });
+            if (await telemetryToggle.GetAttributeAsync("aria-pressed") != "true")
             {
-                await telemetrySection.ClickAsync();
+                await telemetryToggle.ClickAsync();
+            }
+            var telemetrySection = pane.Locator("button.resource-pane-section-header", new() { HasTextRegex = new Regex("^Telemetry sources") });
+            await Assertions.Expect(telemetrySection.First).ToBeVisibleAsync();
+            if (await telemetrySection.First.GetAttributeAsync("aria-expanded") == "false")
+            {
+                await telemetrySection.First.ClickAsync();
             }
             await Assertions.Expect(pane.GetByText("resource-a", new() { Exact = true }).Last).ToBeVisibleAsync();
 
@@ -82,14 +85,15 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
 
             var pane = page.Locator(".resource-pane");
             var title = page.Locator("h1.resource-title");
-            var allResourcesLink = pane.Locator(".resource-row-all a");
+            var selectionBar = pane.Locator(".resource-selection-bar");
             await Assertions.Expect(title).ToHaveTextAsync(resourceName);
-            await Assertions.Expect(allResourcesLink).Not.ToHaveAttributeAsync("aria-current", "page");
+            await Assertions.Expect(selectionBar).ToBeVisibleAsync();
 
-            await allResourcesLink.ClickAsync();
+            // With a selection, the pane offers to clear it. Clearing selects all resources again.
+            await selectionBar.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneClearSelection }).ClickAsync();
             await Assertions.Expect(title).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
-            await Assertions.Expect(allResourcesLink).ToHaveAttributeAsync("aria-current", "page");
-            await Assertions.Expect(pane.Locator("a[aria-current]")).ToHaveCountAsync(1);
+            await Assertions.Expect(selectionBar).ToHaveCountAsync(0);
+            await Assertions.Expect(pane.Locator("a[aria-current]")).ToHaveCountAsync(0);
 
             var overviewCards = page.Locator(".resource-card-grid");
             await Assertions.Expect(overviewCards.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = resourceName, Exact = true })).ToBeVisibleAsync();
@@ -103,7 +107,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             await page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.ResourceTabOverview }).ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
             await Assertions.Expect(overviewCards).ToBeVisibleAsync();
-            await Assertions.Expect(allResourcesLink).ToHaveAttributeAsync("aria-current", "page");
+            await Assertions.Expect(selectionBar).ToHaveCountAsync(0);
 
             // The cleared selection is remembered when entering the resources view again.
             await page.GotoAsync("/resources");
@@ -132,9 +136,12 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             var pane = page.Locator(".resource-pane");
             var title = page.Locator("h1.resource-title");
             await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "multi-a", Exact = true })).ToBeVisibleAsync();
-            await page.GetByRole(AriaRole.Button, new() { Name = Resources.ControlsStrings.ChartContainerFiltersHeader }).ClickAsync();
-            await page.GetByRole(AriaRole.Menuitemcheckbox, new() { NameRegex = new Regex("^Telemetry sources") }).ClickAsync();
-            var telemetrySection = pane.GetByRole(AriaRole.Button, new() { NameRegex = new Regex("^Telemetry sources") });
+            var telemetryToggle = pane.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.NavMenuTelemetrySourcesTab, Exact = true });
+            if (await telemetryToggle.GetAttributeAsync("aria-pressed") != "true")
+            {
+                await telemetryToggle.ClickAsync();
+            }
+            var telemetrySection = pane.Locator("button.resource-pane-section-header", new() { HasTextRegex = new Regex("^Telemetry sources") });
             if (await telemetrySection.CountAsync() > 0 &&
                 await telemetrySection.GetAttributeAsync("aria-expanded") == "false")
             {

@@ -98,16 +98,14 @@ public class DesktopNavMenuTests : DashboardTestContext
     }
 
     [Fact]
-    public void EmptyTelemetrySources_AreDisabledWithTheReason()
+    public void EmptyTelemetrySources_StayEnabled()
     {
         RenderNavMenu(DashboardUrls.ResourceListUrl());
-        var cut = Render<DesktopNavMenu>(builder => builder.Add(p => p.Availability, new NavigationAvailability(HasResourceTerminals: false, HasParameters: false, HasTelemetrySources: false)));
+        var cut = Render<DesktopNavMenu>();
 
-        Assert.Equal(["desktop-nav-telemetry"], cut.FindAll(".desktop-nav-item.disabled").Select(item => item.Id));
-        Assert.Equal(Resources.Layout.TelemetryPaneNoSources, cut.Find("#desktop-nav-telemetry").GetAttribute("aria-description"));
-
-        cut.Render(builder => builder.Add(p => p.Availability, new NavigationAvailability(HasResourceTerminals: false, HasParameters: true, HasTelemetrySources: true)));
-
+        var telemetry = cut.Find("#desktop-nav-telemetry");
+        Assert.Equal(DashboardUrls.TelemetrySourcesUrl(), telemetry.GetAttribute("href"));
+        Assert.Null(telemetry.GetAttribute("aria-disabled"));
         Assert.Empty(cut.FindAll(".desktop-nav-item.disabled"));
     }
 

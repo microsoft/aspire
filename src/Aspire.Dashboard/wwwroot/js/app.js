@@ -317,7 +317,8 @@ window.copyTextAndOpen = async function (text, url) {
 window.setDashboardExperience = function (experience, targetPath) {
     const secure = window.location.protocol === 'https:' ? '; Secure' : '';
     document.cookie = `Aspire_Dashboard_Experience=${experience}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
-    window.location.assign(targetPath);
+    // replace() keeps the page being left out of the history, so Back can't return to the other experience.
+    window.location.replace(targetPath);
 };
 
 function isActiveElementInput() {

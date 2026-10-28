@@ -322,6 +322,11 @@
         <target state="new">Started</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcePaneClearSelection">
+        <source>Clear selection</source>
+        <target state="new">Clear selection</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcePaneClose">
         <source>Hide resource list</source>
         <target state="new">Hide resource list</target>
@@ -345,6 +350,16 @@
       <trans-unit id="ResourcePaneExpand">
         <source>Expand resource list</source>
         <target state="new">Expand resource list</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneFilterDone">
+        <source>OK</source>
+        <target state="new">OK</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneFilterReset">
+        <source>Reset</source>
+        <target state="new">Reset</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneGroupReorderFailed">
@@ -377,6 +392,16 @@
         <target state="new">State</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcePaneKindTelemetry">
+        <source>Telemetry</source>
+        <target state="new">Telemetry</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneKindsLandmark">
+        <source>Types to show</source>
+        <target state="new">Types to show</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcePaneLandmark">
         <source>Resources</source>
         <target state="new">Resources</target>
@@ -396,6 +421,16 @@
         <source>{0} moved before {1}.</source>
         <target state="new">{0} moved before {1}.</target>
         <note>{0} is the moved resource name; {1} is the target resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoKindsHint">
+        <source>Turn on a type above to list it.</source>
+        <target state="new">Turn on a type above to list it.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoKindsShown">
+        <source>Nothing shown</source>
+        <target state="new">Nothing shown</target>
+        <note />
       </trans-unit>
       <trans-unit id="ResourcePaneNoTagsDescription">
         <source>Add tags to a resource from its overview to group related resources here.</source>
@@ -442,6 +477,11 @@
         <target state="new">Actions for {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcePaneSelectedCount">
+        <source>{0} selected</source>
+        <target state="new">{0} selected</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcePaneTagGroupLabel">
         <source>{0}, {1}</source>
         <target state="new">{0}, {1}</target>
@@ -485,6 +525,11 @@
       <trans-unit id="ResourceTabsLandmark">
         <source>Resource views</source>
         <target state="new">Resource views</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTabsMore">
+        <source>More views</source>
+        <target state="new">More views</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHeaderAllSources">

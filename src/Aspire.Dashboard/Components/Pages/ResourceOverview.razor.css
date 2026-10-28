@@ -67,6 +67,10 @@
 }
 
 /* Tags fit on one line next to the card title, so the card stays short. */
+.overview-parameter-tags {
+    margin-bottom: 14px;
+}
+
 .overview-tags-card {
     flex-direction: row;
     flex-wrap: wrap;
@@ -132,27 +136,6 @@
 }
 
 .overview-card-header ::deep .overview-card-action:hover::part(control) {
-    border-color: var(--colorNeutralStroke1Hover);
-    background: var(--colorNeutralBackground1Hover);
-}
-
-.overview-card-action-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    padding: 0;
-    border: 1px solid var(--colorNeutralStroke1);
-    border-radius: 6px;
-    background: var(--colorNeutralBackground1);
-    color: inherit;
-    font: inherit;
-    text-decoration: none;
-    cursor: pointer;
-}
-
-.overview-card-action-link:hover {
     border-color: var(--colorNeutralStroke1Hover);
     background: var(--colorNeutralBackground1Hover);
 }

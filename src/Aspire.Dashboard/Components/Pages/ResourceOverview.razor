@@ -30,7 +30,7 @@
     else if (ResourcesLayout.IsMultiSelection || ResourceName is null)
     {
         @* All resources, or several selected resources: summarize them, with their endpoints. *@
-        <ApplicationSummary ResourceNames="@(ResourcesLayout.IsMultiSelection ? ResourcesLayout.SelectedResourceNames : null)" />
+        <ApplicationSummary ResourceNames="@(ResourcesLayout.IsMultiSelection ? ResourcesLayout.SelectedResourceNames : ResourcesLayout.GetScopeResourceNames())" />
     }
     else if (Resource is { IsParameter: true } parameter && parameter.HasMissingParameterValueState())
     {
@@ -41,6 +41,10 @@
     }
     else if (Resource is { IsParameter: true } resolvedParameter)
     {
+        @* Parameters share the tags card of every other resource, so the tag UX is identical. *@
+        <div class="overview-grid overview-parameter-tags">
+            @TagsCard(resolvedParameter)
+        </div>
         <ParameterOverview Resource="resolvedParameter"
                            ResourceByName="ResourcesLayout.ResourceByName"
                            OnExecuteCommandAsync="ExecuteResourceCommandAsync"
@@ -102,17 +106,7 @@
         var cardLayout = OverviewCardLayout.Create(cardSpans);
 
         <div class="overview-grid">
-            <section class="overview-card overview-tags-card span-12" aria-labelledby="overview-tags-title">
-                <div class="overview-card-header">
-                    <span class="card-header-icon" aria-hidden="true">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.Tag())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
-                    </span>
-                    <h2 id="overview-tags-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceTagsLabel)]</h2>
-                </div>
-                @* Tags are keyed by display name so they apply to every replica and survive the random replica suffix changing between runs. *@
-                <ResourceTagEditor ResourceName="@resource.DisplayName" AppHostTags="@resource.AppHostTags"
-                                   AvailableTags="@(ResourcesLayout?.AvailableResourceTags ?? [])" />
-            </section>
+            @TagsCard(resource)
 
             <section class="overview-card" style="@cardLayout.Style(OverviewCard.Status)" aria-labelledby="overview-status-title">
                 <div class="overview-card-header">
@@ -282,21 +276,20 @@
                     </span>
                     <h2 id="overview-terminal-title">@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.TerminalTitle)]</h2>
                     <div class="overview-card-actions">
-                        <a class="overview-card-action-link"
-                           href="https://aka.ms/aspire/dashboard-terminal"
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           data-tooltip="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.TerminalDockMoreInformation)]"
-                           aria-label="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.TerminalDockMoreInformation)]">
+                        <FluentButton Appearance="ButtonAppearance.Transparent"
+                                      IconOnly="true"
+                                      Class="aspire-icon-button overview-card-action"
+                                      Href="https://aka.ms/aspire/dashboard-terminal"
+                                      Target="_blank"
+                                      rel="noopener noreferrer"
+                                      data-tooltip="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.TerminalDockMoreInformation)]"
+                                      aria-label="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.TerminalDockMoreInformation)]">
                             <FluentIcon Value="@(new Icons.Regular.Size16.Info())" Color="Color.Primary" />
-                        </a>
-                        <button type="button"
-                                class="overview-card-action-link"
-                                data-tooltip="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.MainLayoutToggleTerminalDock)]"
-                                aria-label="@TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.MainLayoutToggleTerminalDock)]"
-                                @onclick="ToggleTerminalDockAsync">
-                            <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="16px" Color="Color.Primary" />
-                        </button>
+                        </FluentButton>
+                        @CardActionButton(
+                            TerminalLoc[nameof(Dashboard.Resources.TerminalStrings.MainLayoutToggleTerminalDock)],
+                            new Icons.Regular.Size20.WindowConsole(),
+                            () => _ = ToggleTerminalDockAsync())
                     </div>
                 </div>
                 <div class="overview-terminal">
@@ -769,6 +762,21 @@
                 }
             </button>
         }
+    };
+
+    // Tags are keyed by display name so they apply to every replica and survive the random replica suffix changing between runs.
+    private RenderFragment TagsCard(ResourceViewModel resource) => __builder =>
+    {
+        <section class="overview-card overview-tags-card span-12" aria-labelledby="overview-tags-title">
+            <div class="overview-card-header">
+                <span class="card-header-icon" aria-hidden="true">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Tag())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                </span>
+                <h2 id="overview-tags-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceTagsLabel)]</h2>
+            </div>
+            <ResourceTagEditor ResourceName="@resource.DisplayName" AppHostTags="@resource.AppHostTags"
+                               AvailableTags="@(ResourcesLayout?.AvailableResourceTags ?? [])" />
+        </section>
     };
 
     private RenderFragment CardActionButton(string title, Icon icon, Action onClick) => __builder =>

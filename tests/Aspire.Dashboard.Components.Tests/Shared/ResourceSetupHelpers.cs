@@ -39,6 +39,8 @@ internal static class ResourceSetupHelpers
         module.SetupVoid("setTabListAriaLabel", _ => true).SetVoidResult();
         module.SetupVoid("registerResourceOrdering", _ => true).SetVoidResult();
         module.SetupVoid("unregisterResourceOrdering", _ => true).SetVoidResult();
+        module.SetupVoid("registerTabOverflow", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterTabOverflow", _ => true).SetVoidResult();
     }
 
     public static void SetupResourceDetails(BunitContext context)

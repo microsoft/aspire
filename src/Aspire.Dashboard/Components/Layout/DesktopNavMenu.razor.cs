@@ -54,12 +54,6 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
     [Parameter]
     public bool HasResourceTerminals { get; set; }
 
-    /// <summary>
-    /// Which entries have something to show. The others are displayed disabled, with a tooltip that says why.
-    /// </summary>
-    [Parameter]
-    public NavigationAvailability Availability { get; set; } = NavigationAvailability.Default;
-
     internal static Icon StructuredLogsIcon(bool active = false) =>
         active ? new Icons.Filled.Size24.SlideTextSparkle()
                   : new Icons.Regular.Size24.SlideTextSparkle();
@@ -153,8 +147,7 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
                 yield return new NavItem(NavSection.Terminals, DashboardUrls.TerminalsUrl(), Loc[nameof(Resources.Layout.NavMenuTerminalsTab)], TerminalsIcon(), TerminalsIcon(active: true));
             }
         }
-        yield return new NavItem(NavSection.Telemetry, DashboardUrls.TelemetrySourcesUrl(), Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)], TelemetryIcon(), TelemetryIcon(active: true),
-            DisabledText: Availability.HasTelemetrySources ? null : Loc[nameof(Resources.Layout.TelemetryPaneNoSources)].Value);
+        yield return new NavItem(NavSection.Telemetry, DashboardUrls.TelemetrySourcesUrl(), Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)], TelemetryIcon(), TelemetryIcon(active: true));
     }
 
     /// <summary>
@@ -222,5 +215,5 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
         Extensions
     }
 
-    private sealed record NavItem(NavSection Section, string Href, string Text, Icon Icon, Icon ActiveIcon, string? DisabledText = null);
+    private sealed record NavItem(NavSection Section, string Href, string Text, Icon Icon, Icon ActiveIcon);
 }

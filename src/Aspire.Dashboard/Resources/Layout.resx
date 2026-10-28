@@ -360,6 +360,33 @@
   <data name="ResourceTabsLandmark" xml:space="preserve">
     <value>Resource views</value>
   </data>
+  <data name="ResourcePaneFilterDone" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="ResourcePaneFilterReset" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="ResourcePaneKindTelemetry" xml:space="preserve">
+    <value>Telemetry</value>
+  </data>
+  <data name="ResourcePaneSelectedCount" xml:space="preserve">
+    <value>{0} selected</value>
+  </data>
+  <data name="ResourcePaneNoKindsHint" xml:space="preserve">
+    <value>Turn on a type above to list it.</value>
+  </data>
+  <data name="ResourcePaneNoKindsShown" xml:space="preserve">
+    <value>Nothing shown</value>
+  </data>
+  <data name="ResourcePaneKindsLandmark" xml:space="preserve">
+    <value>Types to show</value>
+  </data>
+  <data name="ResourcePaneClearSelection" xml:space="preserve">
+    <value>Clear selection</value>
+  </data>
+  <data name="ResourceTabsMore" xml:space="preserve">
+    <value>More views</value>
+  </data>
   <data name="ResourceTabUnavailable" xml:space="preserve">
     <value>Not available for this resource</value>
   </data>

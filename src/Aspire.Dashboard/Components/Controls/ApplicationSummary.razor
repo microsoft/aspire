@@ -7,16 +7,20 @@
     <div class="overview-header-actions">
         @if (GetMissingParameterCount() is > 0 and var missingParameterCount)
         {
+            var missingParametersText = string.Format(
+                CultureInfo.CurrentCulture,
+                Loc[missingParameterCount == 1
+                    ? nameof(Dashboard.Resources.Resources.MissingParameterCount)
+                    : nameof(Dashboard.Resources.Resources.MissingParametersCount)],
+                missingParameterCount);
             <a class="missing-parameters-link"
                href="@GetMissingParametersUrl()"
-               data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.MissingParametersReview)]">
+               aria-label="@missingParametersText"
+               data-tooltip="@missingParametersText. @Loc[nameof(Dashboard.Resources.Resources.MissingParametersReview)]">
                 <FluentIcon Value="@(new Icons.Regular.Size16.Key())" Color="Color.Custom" CustomColor="currentColor" />
-                @string.Format(
-                    CultureInfo.CurrentCulture,
-                    Loc[missingParameterCount == 1
-                        ? nameof(Dashboard.Resources.Resources.MissingParameterCount)
-                        : nameof(Dashboard.Resources.Resources.MissingParametersCount)],
-                    missingParameterCount)
+                @* The full text condenses to just the count when the header row has little room. *@
+                <span class="missing-parameters-label" aria-hidden="true">@missingParametersText</span>
+                <span class="missing-parameters-count" aria-hidden="true">@missingParameterCount</span>
             </a>
         }
         @if (ViewportInformation.IsDesktop)

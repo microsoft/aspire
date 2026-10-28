@@ -61,6 +61,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _isPaneCollapsed;
     private bool _isDrawerOpen;
     private bool _showTelemetryOnlyResources;
+    // Which kinds of items the pane lists, and so what "all resources" covers. Telemetry sources use
+    // _showTelemetryOnlyResources, which replaced the filter menu's telemetry-only option.
+    private bool _showResources = true;
+    private bool _showParameters = true;
     private bool _pendingLandingRedirect;
     private bool _hasLocation;
     private string? _lastLocation;
@@ -73,6 +77,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private int? _paneWidth;
     private ElementReference _layoutElement;
     private IJSObjectReference? _jsModule;
+    private bool _isTabOverflowRegistered;
+    private string[] _overflowTabIds = [];
     private DotNetObjectReference<ResourcesLayout>? _selfRef;
     private bool _isResizerRegistered;
     private bool _isOrderingRegistered;
@@ -251,6 +257,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneGrouping, _grouping.ToString());
         }
         await ViewPreferences.EnsureLoadedAsync();
+        var kindsResult = await LocalStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneKinds);
+        if (kindsResult.Success && kindsResult.Value is { } storedKinds)
+        {
+            var kinds = storedKinds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            _showResources = kinds.Contains(nameof(PaneKind.Resources), StringComparer.Ordinal);
+            _showParameters = kinds.Contains(nameof(PaneKind.Parameters), StringComparer.Ordinal);
+            _showTelemetryOnlyResources = kinds.Contains(nameof(PaneKind.TelemetrySources), StringComparer.Ordinal);
+        }
         await ApplyPaneModeFromLocationAsync(_lastLocation);
         if (cancellationToken.IsCancellationRequested)
         {
@@ -414,7 +428,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         var showResizer = ViewportInformation.IsDesktop && !_isPaneCollapsed;
         var registrationChanged = showResizer != _isResizerRegistered || !_isOrderingRegistered;
-        if (!registrationChanged && !(_fitPaneAfterInitialRender && _isLoaded && showResizer))
+        if (!registrationChanged && _isTabOverflowRegistered && !(_fitPaneAfterInitialRender && _isLoaded && showResizer))
         {
             return;
         }
@@ -423,6 +437,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", $"./{Assets["Components/Layout/ResourcesLayout.razor.js"]}");
             _selfRef ??= DotNetObjectReference.Create(this);
+            if (!_isTabOverflowRegistered)
+            {
+                _isTabOverflowRegistered = true;
+                await _jsModule.InvokeVoidAsync("registerTabOverflow", _selfRef);
+            }
             if (!_isOrderingRegistered)
             {
                 await _jsModule.InvokeVoidAsync("registerResourceOrdering", _layoutElement, _selfRef);
@@ -454,6 +473,24 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             // The circuit disconnected while rendering. There is nothing to register.
         }
     }
+
+    /// <summary>
+    /// Called by the tab strip when the tabs that no longer fit change. They move to the "..." menu.
+    /// </summary>
+    [JSInvokable]
+    public void SetOverflowTabs(string[] tabIds)
+    {
+        if (_isDisposed || _overflowTabIds.SequenceEqual(tabIds))
+        {
+            return;
+        }
+
+        _overflowTabIds = tabIds;
+        StateHasChanged();
+    }
+
+    private IList<MenuButtonItem> GetOverflowMenuItems() =>
+        GetTabMenuItems().Where(item => _overflowTabIds.Contains(item.Id!.Replace("-menu-item", string.Empty, StringComparison.Ordinal))).ToList();
 
     /// <summary>
     /// Called by the pane resizer after the user resizes the resource list.
@@ -828,6 +865,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     internal IEnumerable<ResourceGridViewModel> GetPaneRows()
     {
+        if (!_showResources)
+        {
+            return [];
+        }
+
         var positions = OrderStore.GetPositions();
         var filteredResources = _resourceByName.Values
             .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, _filter.TextFilter))
@@ -842,7 +884,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     private List<ResourceViewModel> GetParameterPaneRows() =>
-        _resourceByName.Values
+        !_showParameters ? [] : _resourceByName.Values
             .Where(r => r.IsParameter && _filter.FilterAllResourceKinds(r, _filter.TextFilter))
             .OrderBy(r => r.HasMissingParameterValueState() ? 0 : 1)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
@@ -853,6 +895,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     private List<ResourceGroup> GetResourceGroups()
     {
+        if (!_showResources)
+        {
+            return [];
+        }
+
         var groups = _grouping == ResourceGrouping.Tags ? GetTagGroups() : _resourceByName.Values
             .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
             .GroupBy(r => _grouping == ResourceGrouping.ResourceType ? r.ResourceType
@@ -1000,31 +1047,20 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         StateHasChanged();
     });
 
-    private List<MenuButtonItem> GetFilterMenuItems()
-    {
-        var items = new List<MenuButtonItem>();
-        if (DashboardClient.IsEnabled && _telemetryOnlyResources.Count > 0)
-        {
-            items.Add(CreateFilterMenuItem(
-                id: "resource-filter-telemetry-only",
-                renderKey: "telemetry-only",
-                text: Loc[nameof(Resources.Layout.ResourcePaneTelemetryOnlyGroup)],
-                isChecked: _showTelemetryOnlyResources,
-                onCheckedChanged: isChecked => _showTelemetryOnlyResources = isChecked,
-                count: _telemetryOnlyResources.Count));
-        }
-        AddFilterGroup(items, "types", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesResourceTypesHeader)], _filter.ResourceTypesToVisibility, r => [r.ResourceType]);
-        AddFilterGroup(items, "states", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesResourceStatesHeader)], _filter.ResourceStatesToVisibility, r => [r.State ?? string.Empty]);
-        AddFilterGroup(items, "health", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesDetailsHealthStateProperty)], _filter.ResourceHealthStatusesToVisibility, r => [r.HealthStatus?.Humanize() ?? string.Empty]);
-        AddFilterGroup(
-            items,
-            "tags",
+    private IReadOnlyList<ResourcePaneFilter.FilterGroup> GetFilterGroups() =>
+    [
+        new("types", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesResourceTypesHeader)], _filter.ResourceTypesToVisibility, r => [r.ResourceType]),
+        new("states", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesResourceStatesHeader)], _filter.ResourceStatesToVisibility, r => [r.State ?? string.Empty]),
+        new("health", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesDetailsHealthStateProperty)], _filter.ResourceHealthStatusesToVisibility, r => [r.HealthStatus?.Humanize() ?? string.Empty]),
+        new("tags",
             Loc[nameof(Resources.Layout.NavMenuTagsTab)],
             _filter.ResourceTagsToVisibility,
             r => _filter.ResourceTagsByResource.GetValueOrDefault(r.DisplayName) ?? [string.Empty],
-            key => string.IsNullOrEmpty(key) ? Loc[nameof(Resources.Layout.ResourcePaneUntaggedGroup)] : key);
-        return items;
-    }
+            key => string.IsNullOrEmpty(key) ? Loc[nameof(Resources.Layout.ResourcePaneUntaggedGroup)] : key)
+    ];
+
+    private IEnumerable<ResourceViewModel> GetFilterCountResources() =>
+        _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources));
 
     private void UpdateResourceTagFilters()
     {
@@ -1050,100 +1086,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         _filter.ResourceTagsByResource = tagsByResource;
-    }
-
-    private void AddFilterGroup(
-        List<MenuButtonItem> items,
-        string groupId,
-        string header,
-        ConcurrentDictionary<string, bool> values,
-        Func<ResourceViewModel, IEnumerable<string>> getKeys,
-        Func<string, string>? getText = null)
-    {
-        if (items.Count > 0)
-        {
-            items.Add(new MenuButtonItem { IsDivider = true, RenderKey = $"{groupId}-divider" });
-        }
-
-        items.Add(new MenuButtonItem
-        {
-            IsGroupHeader = true,
-            Text = header,
-            Tooltip = string.Empty,
-            Id = $"resource-filter-{groupId}-header",
-            RenderKey = $"{groupId}-header"
-        });
-
-        // The menu is regenerated after every toggle and the toggled item is refocused by id, so ids
-        // must be stable across regenerations. Values can contain characters that aren't valid in an
-        // id, so use the item's sorted position instead.
-        // OrderBy doesn't use thread safe APIs on ConcurrentDictionary. Call ToArray first.
-        var sortedValues = values.ToArray().OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase).ToList();
-
-        // Each value shows how many resources it matches, whatever the other filters, so hiding a value doesn't
-        // change the counts. The keys are those the filter itself uses, so the counts use the dictionary's comparer.
-        var counts = new Dictionary<string, int>(values.Comparer);
-        foreach (var resource in _resourceByName.Values)
-        {
-            if (!resource.IsResourceHidden(_filter.ShowHiddenResources))
-            {
-                foreach (var key in getKeys(resource))
-                {
-                    counts[key] = counts.GetValueOrDefault(key) + 1;
-                }
-            }
-        }
-
-        // A menu checkbox can't show an indeterminate state, so "All" is checked only when every value
-        // is visible. Checking it shows every value; unchecking it hides every value.
-        items.Add(CreateFilterMenuItem(
-            id: $"resource-filter-{groupId}-all",
-            renderKey: $"{groupId}-all",
-            text: ControlsStringsLoc[nameof(ControlsStrings.LabelAll)],
-            isChecked: sortedValues.All(pair => pair.Value),
-            count: null,
-            onCheckedChanged: isChecked =>
-            {
-                foreach (var key in values.Keys)
-                {
-                    values[key] = isChecked;
-                }
-            }));
-
-        for (var i = 0; i < sortedValues.Count; i++)
-        {
-            var (key, isVisible) = sortedValues[i];
-            items.Add(CreateFilterMenuItem(
-                id: $"resource-filter-{groupId}-{i}",
-                renderKey: $"{groupId}:{key}",
-                text: getText?.Invoke(key) ?? (string.IsNullOrEmpty(key) ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourceFilterOptionEmpty)] : key),
-                isChecked: isVisible,
-                onCheckedChanged: isChecked => values[key] = isChecked,
-                count: counts.GetValueOrDefault(key)));
-        }
-    }
-
-    private MenuButtonItem CreateFilterMenuItem(string id, string renderKey, string text, bool isChecked, Action<bool> onCheckedChanged, int? count)
-    {
-        return new MenuButtonItem
-        {
-            Id = id,
-            RenderKey = renderKey,
-            Text = text,
-            Tooltip = string.Empty,
-            Icon = s_checkmarkIcon,
-            Role = MenuItemRole.Checkbox,
-            Checked = isChecked,
-            Count = count,
-            OnCheckedChanged = value =>
-            {
-                onCheckedChanged(value);
-
-                // The toggle comes from the menu component, so re-render the pane to apply the filter.
-                StateHasChanged();
-                return Task.CompletedTask;
-            }
-        };
     }
 
     private bool NoFiltersSet =>
@@ -1429,9 +1371,140 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return keys;
     }
 
-    internal IReadOnlyList<ResourceKey> GetPaneTelemetryKeys() => IsTelemetryPane
-        ? _telemetryOnlyResources.Select(r => r.Resource.ResourceKey).Distinct().ToList()
-        : _resourceByName.Values.Select(GetTelemetryResource).OfType<OtlpResource>().Select(r => r.ResourceKey).Distinct().ToList();
+    internal IReadOnlyList<ResourceKey> GetPaneTelemetryKeys()
+    {
+        if (IsTelemetryPane)
+        {
+            return _telemetryOnlyResources.Select(r => r.Resource.ResourceKey).Distinct().ToList();
+        }
+
+        // "All resources" covers the kinds the pane lists. Parameters don't send telemetry.
+        IEnumerable<ResourceKey> keys = _showResources
+            ? _resourceByName.Values.Where(r => !r.IsParameter).Select(GetTelemetryResource).OfType<OtlpResource>().Select(r => r.ResourceKey)
+            : [];
+        if (_showTelemetryOnlyResources)
+        {
+            keys = keys.Concat(_telemetryOnlyResources.Select(r => r.Resource.ResourceKey));
+        }
+
+        return keys.Distinct().ToList();
+    }
+
+    internal enum PaneKind
+    {
+        Resources,
+        Parameters,
+        TelemetrySources
+    }
+
+    internal bool IsKindShown(PaneKind kind) => kind switch
+    {
+        PaneKind.Resources => _showResources,
+        PaneKind.Parameters => _showParameters,
+        _ => _showTelemetryOnlyResources
+    };
+
+    /// <summary>
+    /// Gets the names of the app model resources that "all resources" covers, or null when it covers every one of
+    /// them, which is the case with both resources and parameters shown.
+    /// </summary>
+    internal IReadOnlyList<string>? GetScopeResourceNames()
+    {
+        if (_showResources && _showParameters)
+        {
+            return null;
+        }
+
+        return [.. _resourceByName.Values
+            .Where(r => r.IsParameter ? _showParameters : _showResources)
+            .Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources))
+            .Select(GetResourceName)];
+    }
+
+    /// <summary>
+    /// Gets the title for the page when nothing is selected, naming the kinds of items it covers.
+    /// </summary>
+    private string GetScopeTitle()
+    {
+        if (!DashboardClient.IsEnabled)
+        {
+            return Loc[nameof(Resources.Layout.TelemetryHeaderAllSources)];
+        }
+
+        if (_showResources && _showParameters)
+        {
+            return Loc[nameof(Resources.Layout.ResourceHeaderAllResources)];
+        }
+
+        List<string> kinds = [];
+        if (_showResources)
+        {
+            kinds.Add(ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)]);
+        }
+        if (_showParameters)
+        {
+            kinds.Add(Loc[nameof(Resources.Layout.NavMenuParametersTab)]);
+        }
+        if (_showTelemetryOnlyResources)
+        {
+            kinds.Add(Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)]);
+        }
+
+        return kinds.Count > 0 ? string.Join(", ", kinds) : Loc[nameof(Resources.Layout.ResourcePaneNoKindsShown)];
+    }
+
+    private PaneKind GetKind(string name) =>
+        ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource)
+            ? (resource.IsParameter ? PaneKind.Parameters : PaneKind.Resources)
+            : PaneKind.TelemetrySources;
+
+    private async Task ToggleKindAsync(PaneKind kind)
+    {
+        switch (kind)
+        {
+            case PaneKind.Resources:
+                _showResources = !_showResources;
+                break;
+            case PaneKind.Parameters:
+                _showParameters = !_showParameters;
+                break;
+            default:
+                _showTelemetryOnlyResources = !_showTelemetryOnlyResources;
+                break;
+        }
+
+        var shown = new List<string>();
+        if (_showResources)
+        {
+            shown.Add(nameof(PaneKind.Resources));
+        }
+        if (_showParameters)
+        {
+            shown.Add(nameof(PaneKind.Parameters));
+        }
+        if (_showTelemetryOnlyResources)
+        {
+            shown.Add(nameof(PaneKind.TelemetrySources));
+        }
+        await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneKinds, string.Join(',', shown));
+
+        // A kind that's switched off is no longer part of the selection.
+        var remaining = _selectedResourceNames.Where(name => IsKindShown(GetKind(name))).ToList();
+        if (remaining.Count != _selectedResourceNames.Count)
+        {
+            if (remaining.Count == 0)
+            {
+                await OnAllResourcesClickAsync();
+            }
+            else
+            {
+                NavigationManager.NavigateTo(GetSelectionUrl(remaining));
+            }
+        }
+
+        ResourcesChanged?.Invoke();
+        StateHasChanged();
+    }
 
     private string GetPaneCountText(int resourceCount, int parameterCount, int telemetrySourceCount)
     {
@@ -1496,9 +1569,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         if (selection.Count == 0)
         {
-            // Standalone keeps Metrics reachable without a selection so the page can prompt for a service.
-            // AppHost mode only offers Metrics once resources have been selected.
-            return tab is not ResourceTab.Metrics || IsTelemetryPane;
+            // Without a selection the telemetry pages list every resource, so all of them are available.
+            return true;
         }
 
         // With several selected resources, a tab is available when any of them supports it.
@@ -1816,12 +1888,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         yield return CreateTab(ResourceTab.Traces, Loc[nameof(Resources.Layout.NavMenuTracesTab)], new Icons.Regular.Size24.GanttChart(),
             isVisible: true);
         yield return CreateTab(ResourceTab.Metrics, Loc[nameof(Resources.Layout.NavMenuMetricsTab)], new Icons.Regular.Size24.ChartMultiple(),
-            isVisible: !DashboardClient.IsEnabled || isTelemetryOnly || _selectedItems.Count > 0 || CurrentTab == ResourceTab.Metrics);
+            isVisible: true);
 
         TabItem CreateTab(ResourceTab tab, string text, Icon icon, bool isVisible, int errorCount = 0)
         {
-            var isAvailable = IsTabAvailable(tab);
-            return new TabItem(tab, text, icon, isVisible, isAvailable ? GetTabUrl(tab) : null, errorCount);
+            // Tabs are never disabled. A tab that doesn't apply to the selection still navigates, and the page explains why it is empty.
+            return new TabItem(tab, text, icon, isVisible, GetTabUrl(tab), errorCount, IsTabAvailable(tab));
         }
     }
 
@@ -1846,11 +1918,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 StartIcon = tab.Icon,
                 Role = MenuItemRole.Radio,
                 Checked = tab.Tab == CurrentTab,
-                IsDisabled = tab.Href is null,
-                Tooltip = tab.Href is null ? Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value : null,
-                OnClick = tab.Href is { } href
-                    ? () => { NavigationManager.NavigateTo(href); return Task.CompletedTask; }
-                    : null
+                Tooltip = tab.IsAvailable ? null : Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
+                OnClick = () => { NavigationManager.NavigateTo(tab.Href); return Task.CompletedTask; }
             });
         }
 
@@ -1888,6 +1957,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             {
                 await module.InvokeVoidAsync("unregisterPaneResizer", _layoutElement);
                 await module.InvokeVoidAsync("unregisterResourceOrdering", _layoutElement);
+                await module.InvokeVoidAsync("unregisterTabOverflow");
             }
             catch (JSDisconnectedException)
             {
@@ -1926,5 +1996,5 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private sealed record ResourceGroup(string? Value, List<ResourceViewModel> Resources);
 
-    private sealed record TabItem(ResourceTab Tab, string Text, Icon Icon, bool IsVisible, string? Href, int ErrorCount);
+    private sealed record TabItem(ResourceTab Tab, string Text, Icon Icon, bool IsVisible, string Href, int ErrorCount, bool IsAvailable);
 }

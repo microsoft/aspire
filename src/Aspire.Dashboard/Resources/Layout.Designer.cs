@@ -889,6 +889,87 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Telemetry.
+        /// </summary>
+        public static string ResourcePaneKindTelemetry {
+            get {
+                return ResourceManager.GetString("ResourcePaneKindTelemetry", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} selected.
+        /// </summary>
+        public static string ResourcePaneSelectedCount {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectedCount", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to OK.
+        /// </summary>
+        public static string ResourcePaneFilterDone {
+            get {
+                return ResourceManager.GetString("ResourcePaneFilterDone", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Reset.
+        /// </summary>
+        public static string ResourcePaneFilterReset {
+            get {
+                return ResourceManager.GetString("ResourcePaneFilterReset", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Turn on a type above to list it..
+        /// </summary>
+        public static string ResourcePaneNoKindsHint {
+            get {
+                return ResourceManager.GetString("ResourcePaneNoKindsHint", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Nothing shown.
+        /// </summary>
+        public static string ResourcePaneNoKindsShown {
+            get {
+                return ResourceManager.GetString("ResourcePaneNoKindsShown", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Types to show.
+        /// </summary>
+        public static string ResourcePaneKindsLandmark {
+            get {
+                return ResourceManager.GetString("ResourcePaneKindsLandmark", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Clear selection.
+        /// </summary>
+        public static string ResourcePaneClearSelection {
+            get {
+                return ResourceManager.GetString("ResourcePaneClearSelection", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to More views.
+        /// </summary>
+        public static string ResourceTabsMore {
+            get {
+                return ResourceManager.GetString("ResourceTabsMore", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Not available for this resource.
         /// </summary>
         public static string ResourceTabUnavailable {

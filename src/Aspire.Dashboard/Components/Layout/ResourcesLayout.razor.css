@@ -414,6 +414,139 @@
     margin-bottom: 9px;
 }
 
+/* The toggles sit between the search row and the list, outside the scrolling list. A scrollbar in the list never
+   changes their width (which would change which labels fit), and the divider marks where the scrolling begins. */
+.resource-pane-kinds {
+    flex: 0 0 auto;
+    /* The same inline padding as the search row, so the toggles line up with the search box on the left and the
+       grouping button on the right. */
+    padding: 2px 12px 10px;
+    border-bottom: 1px solid var(--colorNeutralStroke2);
+    container-type: inline-size;
+}
+/* Toggles for the kinds of items the pane lists, as one segmented control. Every segment is the same size in both
+   states (only color changes), so toggling never shifts the list. The label is always one line: icons, then icons and
+   labels, appear as the pane gets wider, and the full name is in the tooltip. */
+.resource-kind-toggles {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 10px;
+    background: var(--colorNeutralBackground1);
+}
+
+.resource-kind-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    height: 32px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--colorNeutralForeground2);
+    font: inherit;
+    font-size: 13px;
+    font-weight: var(--fontWeightSemibold);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.resource-kind-toggle:hover {
+    background: var(--colorNeutralBackground1Hover);
+    color: var(--colorNeutralForeground1);
+}
+
+/* On: filled with the brand tint and an inset ring, which doesn't take up any space. */
+.resource-kind-toggle.on {
+    background: var(--resource-brand-soft);
+    box-shadow: inset 0 0 0 1px var(--colorBrandStroke1);
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-kind-toggle.on .resource-kind-icon {
+    color: var(--colorBrandForeground1);
+}
+
+.resource-kind-toggle:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+.resource-kind-icon {
+    display: none;
+    flex: none;
+}
+
+.resource-kind-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resource-kind-count {
+    flex: none;
+    color: var(--colorNeutralForeground2);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--fontWeightRegular);
+}
+
+.resource-kind-toggle.on .resource-kind-count {
+    color: var(--colorNeutralForeground1);
+}
+
+@container (min-width: 420px) {
+    .resource-kind-icon {
+        display: inline-flex;
+    }
+}
+
+/* In a narrow pane there is room for an icon and a count, not for the name. */
+@container (max-width: 319px) {
+    .resource-kind-icon {
+        display: inline-flex;
+    }
+
+    .resource-kind-label {
+        display: none;
+    }
+}
+
+.resource-selection-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 8px 4px 0;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--fontSizeBase200);
+}
+
+.resource-selection-clear {
+    padding: 2px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--colorBrandForegroundLink);
+    font: inherit;
+    cursor: pointer;
+}
+
+.resource-selection-clear:hover {
+    background: var(--colorNeutralBackground1Hover);
+    text-decoration: underline;
+}
+
+.resource-selection-clear:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
 .resource-row-all::after {
     content: "";
     position: absolute;
@@ -656,6 +789,8 @@
     align-items: center;
     gap: 10px;
     min-width: 0;
+    /* Lets header actions (such as the missing parameters notice) condense with @container as the row narrows. */
+    container-type: inline-size;
 }
 
 .resource-header-icon {
@@ -840,8 +975,36 @@
     width: max-content;
     max-width: 100%;
     min-width: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
+    flex: 0 1 auto;
+    overflow: hidden;
+}
+
+/* Tabs that don't fit are hidden from the right by registerTabOverflow and listed in the "..." menu instead. */
+.resource-tabs-nav ::deep fluent-tab[data-tab-overflow] {
+    display: none;
+}
+
+.resource-tabs-overflow {
+    display: none;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+.resource-tabs-overflow.has-overflow {
+    display: flex;
+}
+
+.resource-tabs-nav .resource-tabs-overflow ::deep .aspire-menu-button {
+    display: inline-flex;
+}
+
+.resource-tabs-nav .resource-tabs-overflow ::deep .resource-tabs-overflow-button {
+    color: var(--colorNeutralForeground2);
+}
+
+/* The current page's tab is in the menu, so the button takes the active tab's accent. */
+.resource-tabs-overflow.has-active ::deep .resource-tabs-overflow-button {
+    color: var(--colorBrandForeground1);
 }
 
 /* Wraps the tab row in its own layout container so a container query can react to the row's
@@ -938,7 +1101,7 @@
     color: var(--colorBrandForeground1);
 }
 
-@container (max-width: 520px) {
+@container (max-width: 200px) {
     .resource-tabs-nav ::deep .resources-tab-header {
         display: none;
     }
@@ -946,25 +1109,10 @@
     .resource-tabs-nav ::deep .aspire-menu-button {
         display: inline-flex;
     }
-}
 
-/* Tabs the selected resource doesn't support (no telemetry) stay visible so the tab row keeps its
-   shape, but read as unavailable. */
-.resource-tabs-nav ::deep fluent-tab[disabled],
-.resource-tabs-nav ::deep fluent-tab[aria-disabled="true"] {
-    cursor: not-allowed;
-    opacity: 0.45;
-    pointer-events: auto;
-}
-
-.resource-tabs-nav ::deep fluent-tab[disabled] *,
-.resource-tabs-nav ::deep fluent-tab[aria-disabled="true"] * {
-    cursor: not-allowed;
-}
-
-.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item:state(disabled) {
-    cursor: not-allowed;
-    pointer-events: auto;
+    .resource-tabs-nav .resource-tabs-overflow.has-overflow {
+        display: none;
+    }
 }
 
 .resource-tabs-nav ::deep .resource-tab-error-count {

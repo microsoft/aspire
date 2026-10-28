@@ -86,7 +86,7 @@
                         </FluentMultiSplitterPane>
                         <FluentMultiSplitterPane Size="@_metricsContentPaneSize">
                             <div class="metrics-content">
-                                    @if (PageViewModel is { SelectedResource.Id: { } filterResourceId } && (PageViewModel.ShowFilterResults || (PageViewModel.ShowAll && PageViewModel.SelectedInstrument is null)))
+                                    @if ((PageViewModel.SelectedResource.Id is not null || IsAggregate) && (PageViewModel.ShowFilterResults || (PageViewModel.ShowAll && PageViewModel.SelectedInstrument is null)))
                                     {
                                         @* Filter results and the all-instruments view both list instruments from every meter, grouped by meter. *@
                                         var resultGroups = GetFilterResultGroups();
@@ -102,7 +102,8 @@
                                         {
                                             <section @key="resultGroup.Key" class="metrics-filter-results-group" aria-label="@resultGroup.Key">
                                                 <h4 class="metrics-filter-results-meter">@resultGroup.Key</h4>
-                                                <MeterOverview ResourceKey="@filterResourceId.GetResourceKey()"
+                                                <MeterOverview ResourceKey="@OverviewResourceKey"
+                                                               GetResourceLabel="@ResourceLabelProvider"
                                                                Instruments="@resultGroup.ToList()"
                                                                Duration="@PageViewModel.SelectedDuration.Id"
                                                                ShowMeterName="false"
@@ -125,13 +126,14 @@
                                             OnBackAsync="@NavigateBackAsync"
                                             Resources="@_resources" />
                                     }
-                                    else if (PageViewModel is { ShowPinned: true, SelectedResource.Id: { } pinnedResourceId })
+                                    else if (PageViewModel.ShowPinned && (PageViewModel.SelectedResource.Id is not null || IsAggregate))
                                     {
                                         var pinnedInstruments = GetOverviewInstruments();
                                         <h3 class="meter-name-title">@Loc[nameof(Dashboard.Resources.Metrics.MetricsPinnedHeader)]</h3>
                                         @if (pinnedInstruments.Count > 0)
                                         {
-                                            <MeterOverview ResourceKey="@pinnedResourceId.GetResourceKey()"
+                                            <MeterOverview ResourceKey="@OverviewResourceKey"
+                                                           GetResourceLabel="@ResourceLabelProvider"
                                                            Instruments="@pinnedInstruments"
                                                            Duration="@PageViewModel.SelectedDuration.Id"
                                                            ShowMeterName="true"
@@ -142,10 +144,11 @@
                                             <p class="metrics-pinned-empty">@Loc[nameof(Dashboard.Resources.Metrics.MetricsPinnedEmpty)]</p>
                                         }
                                     }
-                                    else if (PageViewModel is { SelectedMeter: not null, SelectedResource.Id: { } selectedResourceId })
+                                    else if (PageViewModel.SelectedMeter is not null && (PageViewModel.SelectedResource.Id is not null || IsAggregate))
                                     {
                                         <h3 class="meter-name-title">@PageViewModel.SelectedMeter</h3>
-                                        <MeterOverview ResourceKey="@selectedResourceId.GetResourceKey()"
+                                        <MeterOverview ResourceKey="@OverviewResourceKey"
+                                                       GetResourceLabel="@ResourceLabelProvider"
                                                        Instruments="@GetOverviewInstruments()"
                                                        Duration="@PageViewModel.SelectedDuration.Id"
                                                        ShowMeterName="false"

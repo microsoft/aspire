@@ -42,6 +42,33 @@
     background: color-mix(in srgb, var(--warning) 16%, transparent);
 }
 
+.missing-parameters-link {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.missing-parameters-count {
+    display: none;
+}
+
+/* Condense to the key icon and the count when the header row is short on room, so the notice stays readable and the
+   title and layout switcher keep their space. */
+@container (max-width: 700px) {
+    .missing-parameters-label {
+        display: none;
+    }
+
+    .missing-parameters-count {
+        display: inline;
+        min-width: 1ch;
+        text-align: center;
+    }
+
+    .missing-parameters-link {
+        padding: 0 8px;
+    }
+}
+
 .resource-card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));

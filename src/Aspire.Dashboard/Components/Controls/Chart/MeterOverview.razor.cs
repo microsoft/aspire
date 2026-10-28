@@ -28,6 +28,12 @@ public partial class MeterOverview : LiveSparklinesBase
     [Parameter, EditorRequired]
     public required Func<OtlpInstrumentSummary, string> GetInstrumentUrl { get; set; }
 
+    /// <summary>
+    /// Gets or sets the resource label shown as a pill on each card. Null hides it, for lists of a single resource.
+    /// </summary>
+    [Parameter]
+    public Func<OtlpInstrumentSummary, string>? GetResourceLabel { get; set; }
+
     private string? GetInstrumentTypeName(OtlpInstrumentType type) => type switch
     {
         OtlpInstrumentType.Gauge => Loc[nameof(MetricsResources.MetricsInstrumentTypeGauge)].Value,

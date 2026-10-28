@@ -10,32 +10,13 @@
     {
         var isActive = item.Section == displayedSection;
         var id = $"desktop-nav-{item.Section.ToString().ToLowerInvariant()}";
-        @if (item.DisabledText is { } disabledText && !isActive)
-        {
-            @* Kept in the rail so it doesn't move the entries below it when the page starts having content. It stays
-               focusable so keyboard users can read why it's unavailable. *@
-            <span id="@id"
-                  class="desktop-nav-item disabled"
-                  role="link"
-                  tabindex="0"
-                  aria-disabled="true"
-                  aria-label="@item.Text"
-                  aria-description="@disabledText">
-                <FluentIcon Value="@item.Icon" Width="24px" Color="Color.Custom" CustomColor="currentColor" />
-                  <span>@item.Text</span>
-            </span>
-            <FluentTooltip Anchor="@id" Positioning="Positioning.Below">@disabledText</FluentTooltip>
-        }
-        else
-        {
-            <a id="@id"
-               href="@item.Href"
-               class="desktop-nav-item @(isActive ? "active" : null)"
-               aria-label="@item.Text"
-               aria-current="@(isActive ? "page" : null)">
-                <FluentIcon Value="@(isActive ? item.ActiveIcon : item.Icon)" Width="20px" Color="Color.Custom" CustomColor="currentColor" />
-                <span>@item.Text</span>
-            </a>
-        }
+        <a id="@id"
+           href="@item.Href"
+           class="desktop-nav-item @(isActive ? "active" : null)"
+           aria-label="@item.Text"
+           aria-current="@(isActive ? "page" : null)">
+            <FluentIcon Value="@(isActive ? item.ActiveIcon : item.Icon)" Width="20px" Color="Color.Custom" CustomColor="currentColor" />
+            <span>@item.Text</span>
+        </a>
     }
 </nav>

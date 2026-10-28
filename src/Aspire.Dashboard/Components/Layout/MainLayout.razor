@@ -1,4 +1,4 @@
-@using Aspire.Dashboard.Components.CustomIcons
+﻿@using Aspire.Dashboard.Components.CustomIcons
 @using Aspire.Dashboard.Components.Dialogs
 @using Aspire.Dashboard.Components.Interactions
 @using Aspire.Dashboard.Resources
@@ -20,7 +20,7 @@
                     <AspireLogo />
                 </a>
             </div>
-            <a href="/" class="application-name" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
+            <a href="/" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="after" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
                 <ApplicationName/>
             </a>
             <div class="header-context">
@@ -84,7 +84,7 @@
             </a>
         </div>
         <header>
-            <a href="/" class="application-name" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
+            <a href="/" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="after" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
                 <ApplicationName/>
             </a>
             <div class="flex-filler"></div>
@@ -116,7 +116,6 @@
 
         <MobileNavMenu
             HasResourceTerminals="@_navigationAvailability.HasResourceTerminals"
-            Availability="@_navigationAvailability"
             IsNavMenuOpen="_isNavMenuOpen"
             CloseNavMenu="@CloseMobileNavMenu"
             LaunchHelpAsync="@LaunchHelpAsync"

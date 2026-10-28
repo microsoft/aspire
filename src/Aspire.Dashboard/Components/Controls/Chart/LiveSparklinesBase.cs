@@ -31,12 +31,16 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
     // race with disposal when the user switches resource, and CancellationTokenSource.Token throws
     // ObjectDisposedException once disposed.
     private readonly CancellationToken _disposeToken;
-    private Dictionary<OtlpInstrumentKey, SparklineData> _sparklines = new();
+    private Dictionary<(ResourceKey, OtlpInstrumentKey), SparklineData> _sparklines = new();
     private Task? _refreshTask;
-    private (ResourceKey, TimeSpan, string)? _loadedParameters;
+    private (ResourceKey?, TimeSpan, string)? _loadedParameters;
 
-    [Parameter, EditorRequired]
-    public required ResourceKey ResourceKey { get; set; }
+    /// <summary>
+    /// Gets or sets the resource the instruments belong to. When null, each instrument is read from the resource it
+    /// came from, so one list can show the instruments of several resources.
+    /// </summary>
+    [Parameter]
+    public ResourceKey? ResourceKey { get; set; }
 
     [Parameter, EditorRequired]
     public required IReadOnlyList<OtlpInstrumentSummary> Instruments { get; set; }
@@ -75,7 +79,7 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
 
         // Compare the instruments themselves, not just their count: unpinning one instrument and pinning another
         // keeps the pinned group's count but changes which sparklines need data.
-        var parameters = (ResourceKey, Duration, string.Join('\n', Instruments.Select(i => $"{i.Parent.Name}\t{i.Name}")));
+        var parameters = (ResourceKey, Duration, string.Join('\n', Instruments.Select(i => $"{GetResourceKey(i)}\t{i.Parent.Name}\t{i.Name}")));
         if (_loadedParameters != parameters)
         {
             _loadedParameters = parameters;
@@ -92,9 +96,11 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
         _refreshTask ??= RefreshPeriodicallyAsync(_disposeToken);
     }
 
+    protected ResourceKey GetResourceKey(OtlpInstrumentSummary instrument) => ResourceKey ?? instrument.ResourceView.ResourceKey;
+
     protected SparklineData GetSparkline(OtlpInstrumentSummary instrument)
     {
-        return _sparklines.TryGetValue(instrument.GetKey(), out var data) ? data : SparklineData.Empty;
+        return _sparklines.TryGetValue((GetResourceKey(instrument), instrument.GetKey()), out var data) ? data : SparklineData.Empty;
     }
 
     protected string FormatUnit(OtlpInstrumentSummary instrument, double value)
@@ -131,10 +137,10 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
 
     private async Task RefreshAsync(CancellationToken cancellationToken)
     {
-        var sparklines = new Dictionary<OtlpInstrumentKey, SparklineData>();
+        var sparklines = new Dictionary<(ResourceKey, OtlpInstrumentKey), SparklineData>();
         foreach (var instrument in Instruments)
         {
-            sparklines[instrument.GetKey()] = await GetSparklineDataAsync(instrument, cancellationToken);
+            sparklines[(GetResourceKey(instrument), instrument.GetKey())] = await GetSparklineDataAsync(instrument, cancellationToken);
         }
 
         // Swap the whole dictionary so a render never sees a partially refreshed set of sparklines.
@@ -147,7 +153,7 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
         if (TelemetryRepository.IsReadOnly)
         {
             // Imported telemetry is historical, so anchor each sparkline to that instrument's last data.
-            var latestEndTime = TelemetryRepository.GetInstrumentLatestEndTime(ResourceKey, instrument.Parent.Name, instrument.Name);
+            var latestEndTime = TelemetryRepository.GetInstrumentLatestEndTime(GetResourceKey(instrument), instrument.Parent.Name, instrument.Name);
             if (latestEndTime is null)
             {
                 return SparklineData.Empty;
@@ -168,7 +174,7 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
         var historyDuration = TimeSpan.FromTicks(Math.Max(TimeSpan.FromSeconds(30).Ticks, dataPointInterval.Ticks));
         var data = await TelemetryRepository.GetInstrumentAsync(new GetInstrumentRequest
         {
-            ResourceKey = ResourceKey,
+            ResourceKey = GetResourceKey(instrument),
             MeterName = instrument.Parent.Name,
             InstrumentName = instrument.Name,
             StartTime = endTime.Subtract(Duration + historyDuration),

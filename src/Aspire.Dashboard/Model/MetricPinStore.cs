@@ -72,8 +72,9 @@ public sealed class MetricPinStore
     /// </summary>
     public List<OtlpInstrumentSummary> GetPinnedInstruments(IEnumerable<OtlpInstrumentSummary> instruments)
     {
-        var instrumentsByKey = instruments.ToDictionary(i => i.GetKey());
-        return [.. GetPins().Select(key => instrumentsByKey.GetValueOrDefault(key)).OfType<OtlpInstrumentSummary>()];
+        // The same instrument can come from several resources, and each of them is pinned along with it.
+        var instrumentsByKey = instruments.ToLookup(i => i.GetKey());
+        return [.. GetPins().SelectMany(key => instrumentsByKey[key])];
     }
 
     public bool IsPinned(OtlpInstrumentKey key)

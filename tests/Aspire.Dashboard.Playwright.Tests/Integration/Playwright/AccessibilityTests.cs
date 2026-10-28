@@ -557,7 +557,8 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
             "/legacy/structuredlogs" => page.GetByText(StructuredLogs.StructuredLogsNoLogsFound, new PageGetByTextOptions { Exact = true }).First,
             "/traces" => page.GetByText(Traces.TracesNoTraces, new PageGetByTextOptions { Exact = true }).First,
             "/legacy/traces" => page.GetByText(Traces.TracesNoTraces, new PageGetByTextOptions { Exact = true }).First,
-            "/metrics" => page.GetByText(Metrics.MetricsSelectAResource, new PageGetByTextOptions { Exact = true }).First,
+            // Without a selected resource the page lists every resource's instruments, and the test app has none.
+            "/metrics" => page.GetByText(Metrics.MetricsNoMetricsForResource, new PageGetByTextOptions { Exact = true }).First,
             "/legacy/metrics" => page.GetByText(Metrics.MetricsSelectAResource, new PageGetByTextOptions { Exact = true }).First,
             _ => throw new InvalidOperationException($"No accessibility readiness signal is configured for '{relativeUrl}'.")
         };
