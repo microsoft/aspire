@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
 using Aspire.Hosting.RemoteHost.Diagnostics;
@@ -45,11 +46,10 @@ public class ApiReferenceExportTests
         Assert.NotEmpty(items);
 
         // The whole point of the export is that documented declarations are final TypeScript, not
-        // ATS type identifiers.
-        Assert.All(items, item => Assert.DoesNotContain(
-            "Aspire.Hosting/",
-            item.GetProperty("declaration").GetString()!,
-            StringComparison.Ordinal));
+        // ATS type identifiers, so each one declares the item's own TypeScript name.
+        Assert.All(items, item => Assert.Matches(
+            $@"^(export (interface|enum|namespace) |function ){Regex.Escape(item.GetProperty("name").GetString()!)}\b",
+            item.GetProperty("declaration").GetString()!));
 
         Assert.NotEmpty(export.GetProperty("declarations").EnumerateArray());
     }
@@ -187,11 +187,11 @@ public class ApiReferenceExportTests
             .ToList();
         Assert.NotEmpty(items);
 
-        // Documented declarations are the Go the generator emits, never ATS type identifiers.
-        Assert.All(items, item => Assert.DoesNotContain(
-            "Aspire.Hosting/",
-            item.GetProperty("declaration").GetString()!,
-            StringComparison.Ordinal));
+        // Documented declarations are the Go the generator emits, never ATS type identifiers, so each one
+        // declares the item's own Go name.
+        Assert.All(items, item => Assert.Matches(
+            $@"^(type|var|func) {Regex.Escape(item.GetProperty("name").GetString()!)}\b",
+            item.GetProperty("declaration").GetString()!));
 
         // The builder's Build() is written by the generator rather than discovered as a capability, so
         // seeing it proves the export is projected through the generator.

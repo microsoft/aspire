@@ -109,9 +109,11 @@ internal sealed partial class AtsGoCodeGenerator
 
     private static void ProjectRuntime(ApiExportScope scope)
     {
+        // The runtime is hand-written, so a construct the scanner cannot read has to fail the export
+        // instead of going missing from it.
         var transport = GetEmbeddedResource("transport.go");
-        var declarations = GoDeclarationScanner.Scan(transport, includeBodyDocs: false)
-            .Concat(GoDeclarationScanner.Scan(GetEmbeddedResource("base.go"), includeBodyDocs: false))
+        var declarations = GoDeclarationScanner.ScanRuntime(transport)
+            .Concat(GoDeclarationScanner.ScanRuntime(GetEmbeddedResource("base.go")))
             .ToList();
 
         // Every handle interface embeds handleReference, which requires Err(). The method is documented

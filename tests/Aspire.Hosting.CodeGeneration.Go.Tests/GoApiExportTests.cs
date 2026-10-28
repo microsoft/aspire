@@ -112,8 +112,11 @@ public class GoApiExportTests
             items.Where(item => item.Kind != GoApiItemKind.Augmentation),
             item => Assert.Equal(TestTypesAssemblyName, item.OwningAssemblyName));
 
-        // The builder entry point and the hand-written runtime belong to Aspire.Hosting.
-        Assert.DoesNotContain(items, item => item.Kind is GoApiItemKind.Type or GoApiItemKind.Function);
+        // The builder entry point and the hand-written runtime belong to Aspire.Hosting, so the only kinds
+        // a package that contributes handle members, options and values documents are these.
+        Assert.Equal(
+            [GoApiItemKind.Interface, GoApiItemKind.Augmentation, GoApiItemKind.Dto, GoApiItemKind.Options, GoApiItemKind.Enum, GoApiItemKind.Variable],
+            items.Select(item => item.Kind).Distinct().Order());
         Assert.Contains(model.Declarations, declaration => declaration.Id == $"{HostingAssemblyName}:opaque:DistributedApplicationBuilder");
         Assert.Contains(model.Declarations, declaration => declaration.Id == "aspire:runtime:base");
     }
@@ -248,7 +251,20 @@ public class GoApiExportTests
         var second = GoApiExportWriter.WriteToJson(BuildModel(TestTypesAssemblyName, HostingAssemblyName));
 
         Assert.Equal(first, second);
-        Assert.DoesNotContain("\\r", first, StringComparison.Ordinal);
+
+        // The runtime sources can be checked out with CRLF, so every string in the export has to come out
+        // with LF endings. Declarations span several lines, which proves there is something to normalize.
+        var strings = Strings(JsonNode.Parse(first)).ToList();
+        Assert.Contains(strings, text => text.Contains('\n'));
+        Assert.All(strings, text => Assert.Equal(text.ReplaceLineEndings("\n"), text));
+
+        static IEnumerable<string> Strings(JsonNode? node) => node switch
+        {
+            JsonObject json => json.SelectMany(property => Strings(property.Value)),
+            JsonArray array => array.SelectMany(Strings),
+            JsonValue value when value.TryGetValue<string>(out var text) => [text],
+            _ => []
+        };
     }
 
     [Fact]
@@ -331,6 +347,49 @@ public class GoApiExportTests
         Assert.Equal(generatedNames, variables.Select(variable => variable.Name).Order(StringComparer.Ordinal));
         Assert.All(variables, variable => Assert.Contains(variable.Declaration, generatedCode, StringComparison.Ordinal));
         Assert.All(variables, variable => Assert.NotEmpty(variable.Members));
+    }
+
+    [Fact]
+    public void ApiExport_ThroughTheExportFilter_NamesPackageMembersAsFullGenerationDoes()
+    {
+        // CodeGenerationService exports the context that AtsContextFilter.FilterForApiExport returns, and
+        // the generator derives every Go name from the context it is given. The test assembly declares no
+        // name that another assembly in the context also declares, so its types and members have to be
+        // named exactly as the full generation names them.
+        var filtered = AtsContextFilter.FilterForApiExport(s_context.Value, [TestTypesAssemblyName]);
+        var exported = new AtsGoCodeGenerator()
+            .BuildApiModel(filtered, TestTypesAssemblyName, PackageVersion, [TestTypesAssemblyName], CancellationToken.None)
+            .Modules.Single().Items;
+
+        // The full generation declares one interface per type, with the members of every package. What
+        // the package export lists as an augmentation is the package's share of that interface, and a
+        // member with no capability behind it (Err, ToMap, a field) belongs to the package that owns its type.
+        static bool IsOwnedByPackage(GoApiItem item, GoApiMember member)
+            => member.CapabilityId is null
+                ? item.OwningAssemblyName == TestTypesAssemblyName
+                : member.OwningAssemblyName == TestTypesAssemblyName;
+
+        // PipelineContext and TestCallbackContext take the same cancellation token options, so the generator
+        // declares a single SetCancellationTokenOptions for both. The full generation gives it to Aspire.Hosting,
+        // which comes first, while the filtered context holds only the package's capabilities, so the export
+        // gives it to the package. The name and the fields are the same either way, which is what is compared.
+        var full = s_everything.Value.Modules.Single().Items;
+        var sharedOptions = Assert.Single(full, item => item.Id == "options:SetCancellationTokenOptions");
+        Assert.Equal(HostingAssemblyName, sharedOptions.OwningAssemblyName);
+        Assert.Equal(TestTypesAssemblyName, Assert.Single(exported, item => item.Id == sharedOptions.Id).OwningAssemblyName);
+
+        var expected = full
+            .Select(item => (Item: item, Members: item.Members.Where(member => IsOwnedByPackage(item, member)).ToList()))
+            .Where(owned => owned.Item.OwningAssemblyName == TestTypesAssemblyName || owned.Members.Count > 0)
+            .SelectMany(owned => DescribeDeclarations(owned.Item, owned.Members))
+            .Concat(DescribeDeclarations(sharedOptions, sharedOptions.Members));
+        var actual = exported.SelectMany(item => DescribeDeclarations(item, item.Members));
+
+        Assert.Equal(expected.Order(StringComparer.Ordinal), actual.Order(StringComparer.Ordinal));
+
+        // Both sides come from the same model, so an export that lists nothing would also be equal.
+        Assert.Contains(exported, item => item.Id == "interface:TestRedisResource");
+        Assert.Contains(exported, item => item.Kind == GoApiItemKind.Augmentation && item.Members.Any(member => member.Name == "AddTestRedis"));
     }
 
     [Fact]
@@ -498,6 +557,55 @@ public class GoApiExportTests
     }
 
     [Theory]
+    [InlineData("var Default = newClient()", "var Default = newClient()")]
+    [InlineData("var (\n    Default = newClient()\n)", "var (")]
+    [InlineData("type (\n    Handle struct{}\n)", "type (")]
+    [InlineData("const Version = \"1\"", "const Version = \"1\"")]
+    [InlineData("func Run(ctx context.Context,\n    name string) error {\n}", "func Run(ctx context.Context,")]
+    [InlineData("func (c *Client) Run(\n    name string,\n) error {\n}", "func (c *Client) Run(")]
+    [InlineData("type Handle interface {\n    Err() error\n}", "type Handle interface {")]
+    [InlineData("type Handle interface { Err() error }", "type Handle interface { Err() error }")]
+    [InlineData("package aspire\r\n\r\nconst Version = \"1\"\r\n", "const Version = \"1\"")]
+    public void ScanRuntime_OfAnUnmodeledExportedConstruct_ThrowsNamingTheLine(string source, string line)
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() => GoDeclarationScanner.ScanRuntime(source));
+
+        Assert.Equal($"The Go source declares an exported construct the API export does not model: {line}", exception.Message);
+    }
+
+    [Fact]
+    public void ScanRuntime_OfModeledAndUnexportedConstructs_ReportsTheModeledOnes()
+    {
+        const string source = """
+            type Mode string
+
+            const (
+                ModeFast Mode = "fast"
+            )
+
+            var cache = map[string]int{}
+
+            const limit = 3
+
+            type reader interface {
+                Read() error
+            }
+
+            type Anything interface{}
+
+            func (m Mode) Valid() bool { return true }
+
+            func run(name string,
+                count int) {
+            }
+            """;
+
+        Assert.Equal(
+            ["Mode", "ModeFast", "Anything", "Valid"],
+            GoDeclarationScanner.ScanRuntime(source).Select(declaration => declaration.Name));
+    }
+
+    [Theory]
     [InlineData("Count() (int, error)", "(int, error)")]
     [InlineData("Err() error", "error")]
     [InlineData("Build()", null)]
@@ -629,6 +737,11 @@ public class GoApiExportTests
 
         return Assert.Single(item.Members, member => member.Name == memberName);
     }
+
+    // The declaration of an item and of the given members, each keyed by the Go name the item declares,
+    // so an interface and an augmentation of the same type describe alike, whoever owns the type.
+    private static IEnumerable<string> DescribeDeclarations(GoApiItem item, IEnumerable<GoApiMember> members)
+        => members.Select(member => $"{item.Name}: {member.Declaration}").Prepend($"{item.Name}: {item.Declaration}");
 
     // The declarations are Go source, so a type that one of them embeds has to be declared by one of them.
     // The generator embeds a type as a bare name on its own line:

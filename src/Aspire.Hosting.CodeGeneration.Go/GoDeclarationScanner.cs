@@ -122,6 +122,29 @@ internal static class GoDeclarationScanner
     }
 
     /// <summary>
+    /// Scans the hand-written runtime source like <see cref="Scan"/> without body documentation, but throws
+    /// when the source declares an exported construct that <see cref="Scan"/> does not model.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Scan"/> skips such a construct or reads only the first line of it, so the export would
+    /// silently leave it out or document a fragment of it. The text the generator emits legitimately holds
+    /// some of them, such as exported variables and handle interfaces with bodies, so only the runtime is
+    /// scanned this way.
+    /// </remarks>
+    /// <param name="source">The Go source.</param>
+    /// <exception cref="InvalidOperationException">The source declares an exported construct that is not modeled.</exception>
+    public static IReadOnlyList<GoDeclaration> ScanRuntime(string source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var unmodeled = source.ReplaceLineEndings("\n").Split('\n').FirstOrDefault(IsUnmodeledExport);
+
+        return unmodeled is null
+            ? Scan(source, includeBodyDocs: false)
+            : throw new InvalidOperationException($"The Go source declares an exported construct the API export does not model: {unmodeled}");
+    }
+
+    /// <summary>
     /// Returns the results of a function or method signature, or <see langword="null"/> when it declares
     /// none. For <c>Count() (int, error)</c> that is <c>(int, error)</c>.
     /// </summary>
@@ -431,6 +454,36 @@ internal static class GoDeclarationScanner
         }
 
         return end;
+    }
+
+    // Examples of the column-0 lines of exported constructs that Scan skips or reads only the first line of:
+    //   var Default = newClient()
+    //   type (
+    //   const Version = "1"
+    //   func (c *Client) Run(ctx context.Context,
+    //   type Handle interface {
+    // `const (` is modeled and unexported names are skipped on purpose, so neither is reported. Go ends a
+    // line inside a parenthesized list with `(` or `,`, because any other token would end the declaration
+    // there, so those endings are what tell that a signature goes on below its first line.
+    private static bool IsUnmodeledExport(string line)
+    {
+        var space = line.IndexOf(' ');
+        if (space <= 0)
+        {
+            return false;
+        }
+
+        var rest = line[(space + 1)..];
+
+        return line[..space] switch
+        {
+            "var" => rest.StartsWith('(') || IsExported(rest),
+            "const" => IsExported(rest),
+            "type" => rest.StartsWith('(') || (IsExported(rest) && CutBody(line).EndsWith(" interface", StringComparison.Ordinal)),
+            "func" => IsExported(rest.StartsWith('(') ? rest[(rest.IndexOf(')') + 1)..].TrimStart() : rest)
+                && TrimTrailingComment(line).TrimEnd() is [.., '(' or ','],
+            _ => false
+        };
     }
 
     // Go exports every identifier that starts with a Unicode upper case letter (category Lu), and the
