@@ -217,6 +217,11 @@
         <target state="translated">Başvurulan bir proje bu Aspire CLI’nin ({0}) sunduğundan daha yeni bir Aspire.Hosting sürümü gerektirdiğinden tümleştirme projesi oluşturulamadı. AppHost sunucusu CLI’nin kendisi olduğundan aspire.config.json dosyasındaki proje başvurularının CLI’nin sunduğuyla aynı sürümü hedeflemesi gerekir. Başvurulan projelerle eşleşen bir Aspire CLI kullanın veya yerel projeler yerine yayımlanmış paketlere başvurun.</target>
         <note>{0} is the version of the running Aspire CLI, for example "13.5.0".</note>
       </trans-unit>
+      <trans-unit id="InvalidIntegrationSource">
+        <source>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</source>
+        <target state="new">Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</target>
+        <note>{0} is the configuration key. Do not translate NuGet or *.</note>
+      </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
         <target state="translated">'{0}' yapılandırma dosyası geçersiz JSON içeriyor: {1}</target>

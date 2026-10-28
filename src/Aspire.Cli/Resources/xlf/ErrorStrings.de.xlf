@@ -217,6 +217,11 @@
         <target state="translated">Das Integrationsprojekt konnte nicht erstellt werden, da ein referenziertes Projekt eine neuere Version von Aspire.Hosting erfordert, als von dieser Aspire-CLI ({0}) bereitgestellt wird. Der AppHost-Server ist die CLI selbst. Daher müssen Projektverweise in aspire.config.json auf dieselbe Version verweisen, mit der die CLI ausgeliefert wird. Verwenden Sie entweder eine Aspire-CLI, die der Version der referenzierten Projekte entspricht, oder verweisen Sie auf veröffentlichte Pakete anstelle lokaler Projekte.</target>
         <note>{0} is the version of the running Aspire CLI, for example "13.5.0".</note>
       </trans-unit>
+      <trans-unit id="InvalidIntegrationSource">
+        <source>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</source>
+        <target state="new">Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</target>
+        <note>{0} is the configuration key. Do not translate NuGet or *.</note>
+      </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
         <target state="translated">Die Konfigurationsdatei „{0}“ enthält falsch formatiertes JSON.{1}</target>

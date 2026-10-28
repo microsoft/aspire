@@ -48,6 +48,7 @@ internal sealed class BundleNuGetPackageCache(
             configuration,
             "Aspire.ProjectTemplates",
             prerelease,
+            SearchTake,
             cancellationToken).ConfigureAwait(false);
 
         return packages.Where(package => package.Id.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase));
@@ -62,6 +63,7 @@ internal sealed class BundleNuGetPackageCache(
             configuration,
             "Aspire.Hosting",
             prerelease,
+            SearchTake,
             cancellationToken).ConfigureAwait(false);
 
         return FilterPackages(packages, filter: null);
@@ -76,6 +78,7 @@ internal sealed class BundleNuGetPackageCache(
             configuration,
             "Aspire.Cli",
             prerelease,
+            SearchTake,
             cancellationToken).ConfigureAwait(false);
 
         return packages.Where(package => package.Id.Equals("Aspire.Cli", StringComparison.OrdinalIgnoreCase));
@@ -89,10 +92,13 @@ internal sealed class BundleNuGetPackageCache(
         bool useCache,
         CancellationToken cancellationToken)
     {
+        // Allowed integration patterns are applied after searching, so a broad merged query
+        // must not lose matching packages behind unrelated results on the first page.
         var packages = await SearchAsync(
             configuration,
             packageId,
             prerelease,
+            filter is null ? SearchTake : int.MaxValue,
             cancellationToken).ConfigureAwait(false);
 
         return FilterPackages(packages, filter);
@@ -109,6 +115,7 @@ internal sealed class BundleNuGetPackageCache(
             configuration,
             exactPackageId,
             prerelease,
+            SearchTake,
             cancellationToken).ConfigureAwait(false);
 
         // The helper had no exact-match mode. The CLI ran an ordinary search for the package ID and expanded the
@@ -131,12 +138,14 @@ internal sealed class BundleNuGetPackageCache(
         NuGetPackageOperationConfiguration configuration,
         string query,
         bool prerelease,
+        int take,
         CancellationToken cancellationToken)
     {
         var results = await SearchClientAsync(
             configuration,
             query,
             prerelease,
+            take,
             cancellationToken).ConfigureAwait(false);
 
         return results.Select(package => new NuGetPackage
@@ -151,6 +160,7 @@ internal sealed class BundleNuGetPackageCache(
         NuGetPackageOperationConfiguration configuration,
         string query,
         bool prerelease,
+        int take,
         CancellationToken cancellationToken)
     {
         try
@@ -158,7 +168,7 @@ internal sealed class BundleNuGetPackageCache(
             return await nuGetClient.SearchAsync(
                 query,
                 prerelease,
-                SearchTake,
+                take,
                 explicitSources: [],
                 configuration.ExplicitConfigFile?.FullName,
                 configuration.EffectiveWorkingDirectory.FullName,

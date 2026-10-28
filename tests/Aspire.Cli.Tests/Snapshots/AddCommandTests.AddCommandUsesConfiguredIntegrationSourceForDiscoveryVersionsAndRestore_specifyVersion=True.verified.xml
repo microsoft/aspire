@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources><clear /><add key="sdk" value="https://example.com/sdk" /><add key="public" value="https://api.nuget.org/v3/index.json" />
+    <add key="aspire-integration-add" value="https://example.com/team" />
+  </packageSources>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="sdk">
+      <package pattern="Aspire*" />
+    </packageSource>
+    <packageSource key="public">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="aspire-integration-add">
+      <package pattern="Acme.Hosting.Redis" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>

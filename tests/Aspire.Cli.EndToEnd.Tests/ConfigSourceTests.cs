@@ -10,6 +10,16 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
+    public Task Add_UsesAllMaterializedIntegrationSources()
+        => ConfigSourceTestContext.RunAsync(output, async context =>
+        {
+            await context.CreateProjectAsync();
+            await context.AssertSourceAppliedAsync("original");
+            await context.AddAndAssertIntegrationSourcesAsync();
+        });
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
     public Task Init_SolutionModeBindsAndRefreshesAppHostConfiguration()
         => ConfigSourceTestContext.RunAsync(output, async context =>
         {

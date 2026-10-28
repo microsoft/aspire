@@ -1,0 +1,22 @@
+﻿{
+  "docs": {
+    "custom": "keep"
+  },
+  "INTEGRATIONSOURCES": {
+    "default": {
+      "enabled": false
+    },
+    "team": {
+      "source": "https://example.com/team",
+      "patterns": [
+        "Acme.*",
+        "Exact.Integration"
+      ]
+    }
+  },
+  "configSource": {
+    "repository": "https://git.example/organization/config",
+    "path": "teams/platform.json",
+    "appliedVersion": "version-1"
+  }
+}

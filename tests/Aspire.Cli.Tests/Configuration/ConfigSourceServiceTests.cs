@@ -849,6 +849,27 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task Materialize_CopiesEntireIntegrationSourcesSection()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(path, """
+            {"integrationSources":{"local":{"source":"https://example.com/old","patterns":["Old.*"]}},"docs":{"custom":"keep"}}
+            """);
+        var git = new TestConfigSourceRepository
+        {
+            ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
+                {"INTEGRATIONSOURCES":{"default":{"enabled":false},"team":{"source":"https://example.com/team","patterns":["Acme.*","Exact.Integration"]}},"docs":{"custom":"excluded"}}
+                """)!.AsObject()))
+        };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
+
+        await service.MaterializeAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
+
+        await Verify(await File.ReadAllTextAsync(path), "json");
+    }
+
+    [Fact]
     public async Task Update_ReplacesSkillSourcesAndPreservesExcludedDocs()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

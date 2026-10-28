@@ -217,6 +217,11 @@
         <target state="translated">Integrační projekt se nepovedlo sestavit, protože odkazovaný projekt vyžaduje novější verzi Aspire.Hosting, než poskytuje toto rozhraní příkazového řádku Aspire ({0}). Jako server AppHost funguje samotné rozhraní příkazového řádku, takže odkazy na projekty v souboru aspire.config.json musí cílit na stejnou verzi, která je součástí tohoto rozhraní. Použijte rozhraní příkazového řádku Aspire, které odpovídá odkazovaným projektům, nebo místo místních projektů odkazujte na publikované balíčky.</target>
         <note>{0} is the version of the running Aspire CLI, for example "13.5.0".</note>
       </trans-unit>
+      <trans-unit id="InvalidIntegrationSource">
+        <source>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</source>
+        <target state="new">Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</target>
+        <note>{0} is the configuration key. Do not translate NuGet or *.</note>
+      </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
         <target state="translated">Konfigurační soubor {0} obsahuje neplatný JSON: {1}</target>

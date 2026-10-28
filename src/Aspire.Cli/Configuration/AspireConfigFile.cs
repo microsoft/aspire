@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
@@ -119,6 +120,10 @@ internal sealed class AspireConfigFile
     [JsonPropertyName(SkillSource.SectionName)]
     [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled.")]
     public Dictionary<string, SkillSource>? SkillSources { get; set; }
+
+    [JsonPropertyName(IntegrationSourceConfiguration.SectionName)]
+    [Description("Named NuGet integration sources and allowed package patterns, merged across configuration layers.")]
+    public Dictionary<string, IntegrationSourceConfiguration>? IntegrationSources { get; set; }
 
     /// <summary>
     /// Developer certificate configuration.
@@ -470,6 +475,7 @@ internal sealed class AspireConfigFile
             config.Channel = settings.Channel;
             config.Features = settings.Features;
             config.SkillSources = settings.SkillSources;
+            config.IntegrationSources = settings.IntegrationSources;
 
             // Legacy settings.json stored packages as Dictionary<string,string> with an
             // ad-hoc ".csproj" suffix for project references. Translate to strong entries.
