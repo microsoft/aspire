@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire 測試專案 (MSTest)",
   "description": "包含 Aspire AppHost 專案之 MSTest 整合測試的專案。",

@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Application de démarrage Aspire (ASP.NET Core/Blazor)",
   "description": "Modèle de projet pour créer une application Aspire avec un front-end web Blazor et un service backend d’API web, avec une mise en cache Redis optionnelle.",

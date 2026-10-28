@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Testovací projekt Aspire (NUnit)",
   "description": "Projekt, který obsahuje integrační testy NUnit projektu Aspire AppHost.",
