@@ -27,15 +27,16 @@
                     <label class="aspire-field-label" for="dashboard-feedback-duration">
                         @Loc[nameof(Dialogs.DashboardFeedbackDurationLabel)]
                     </label>
-                    <select id="dashboard-feedback-duration"
-                            class="dashboard-feedback-select"
-                            @bind="Content.UsageDuration">
-                        <option value="@DashboardFeedbackUsageDuration.NotSpecified">@Loc[nameof(Dialogs.DashboardFeedbackDurationNotSpecified)]</option>
-                        <option value="@DashboardFeedbackUsageDuration.LessThanOneHour">@Loc[nameof(Dialogs.DashboardFeedbackDurationLessThanOneHour)]</option>
-                        <option value="@DashboardFeedbackUsageDuration.OneDay">@Loc[nameof(Dialogs.DashboardFeedbackDurationOneDay)]</option>
-                        <option value="@DashboardFeedbackUsageDuration.TwoToSevenDays">@Loc[nameof(Dialogs.DashboardFeedbackDurationTwoToSevenDays)]</option>
-                        <option value="@DashboardFeedbackUsageDuration.MoreThanOneWeek">@Loc[nameof(Dialogs.DashboardFeedbackDurationMoreThanOneWeek)]</option>
-                    </select>
+                    <FluentSelect TOption="DashboardFeedbackUsageDuration"
+                                  TValue="DashboardFeedbackUsageDuration"
+                                  Id="dashboard-feedback-duration"
+                                  Class="dashboard-feedback-select"
+                                  Items="@s_usageDurationOptions"
+                                  OptionText="@GetUsageDurationText"
+                                  Position="SelectPosition.Below"
+                                  Width="100%"
+                                  AriaLabel="@Loc[nameof(Dialogs.DashboardFeedbackDurationLabel)]"
+                                  @bind-Value="Content.UsageDuration" />
                 </section>
 
                 <fieldset class="dashboard-feedback-section dashboard-feedback-reasons">

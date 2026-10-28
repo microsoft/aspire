@@ -5,6 +5,7 @@ using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Bunit;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -80,6 +81,7 @@ public sealed class DashboardFeedbackTests : DashboardTestContext
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentList(this);
         JSInterop.Setup<bool>("copyTextAndOpen", _ => true).SetResult(true);
         var feedback = new DashboardFeedback
         {
@@ -99,8 +101,31 @@ public sealed class DashboardFeedbackTests : DashboardTestContext
         await cut.InvokeAsync(() => copyAndOpenButton.Click());
 
         var invocation = Assert.Single(JSInterop.Invocations["copyTextAndOpen"]);
-        Assert.Contains("A missing workflow.", Assert.IsType<string>(invocation.Arguments[0]));
-        Assert.Equal(DashboardFeedbackDialog.DiscussionUrl, invocation.Arguments[1]);
+        var markdown = Assert.IsType<string>(invocation.Arguments[0]);
+        Assert.Contains("A missing workflow.", markdown);
+        var discussionUrl = new Uri(Assert.IsType<string>(invocation.Arguments[1]));
+        var query = QueryHelpers.ParseQuery(discussionUrl.Query);
+        Assert.Equal("dashboard-feedback", query["category"]);
+        Assert.Equal("[Dashboard feedback] Dashboard experience feedback", query["title"]);
+        Assert.Equal(markdown, query["body"]);
+    }
+
+    [Fact]
+    public void DurationPicker_UsesFluentSelect()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentList(this);
+        var feedback = new DashboardFeedback { IsAppHost = true };
+        var cut = Render<DashboardFeedbackDialog>(builder => builder
+            .Add(p => p.Content, feedback)
+            .AddCascadingValue(CreateDialogInstance()));
+
+        Assert.Empty(cut.FindAll("select"));
+        var select = cut.FindComponent<FluentSelect<DashboardFeedbackUsageDuration, DashboardFeedbackUsageDuration>>();
+        Assert.NotNull(select.Find("fluent-dropdown"));
+        Assert.Equal(DashboardFeedbackUsageDuration.NotSpecified, select.Instance.Value);
+        Assert.Equal("Time using the new dashboard", select.Instance.AriaLabel);
     }
 
     [Fact]
@@ -108,6 +133,7 @@ public sealed class DashboardFeedbackTests : DashboardTestContext
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentList(this);
         JSInterop.Setup<bool>("copyTextAndOpen", _ => true).SetResult(false);
         var switched = false;
         var feedback = new DashboardFeedback

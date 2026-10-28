@@ -99,12 +99,7 @@ public partial class LegacySettingsDialog : IDisposable
             return;
         }
 
-        var current = new Uri(NavigationManager.Uri)
-            .GetComponents(UriComponents.PathAndQuery | UriComponents.Fragment, UriFormat.UriEscaped);
-        var target = current.StartsWith("/legacy", StringComparison.OrdinalIgnoreCase)
-            ? current["/legacy".Length..]
-            : current;
-        await JS.InvokeVoidAsync("setDashboardExperience", "modern", string.IsNullOrEmpty(target) ? "/" : target);
+        await JS.InvokeVoidAsync("setDashboardExperience", "modern", "/");
     }
 
     private async Task OnTimeFormatChanged()

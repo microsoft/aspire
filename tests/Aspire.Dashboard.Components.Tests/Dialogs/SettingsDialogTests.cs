@@ -90,4 +90,23 @@ public sealed class SettingsDialogTests : DashboardTestContext
         Assert.Equal(RecordingsStyle.Menu, preferences.RecordingsStyle);
         Assert.Equal(["Dark", "Comfortable", "Home", "System", "New dashboard"], cut.FindAll(".icon-toggle[aria-pressed='true']").Select(e => e.GetAttribute("aria-label")));
     }
+
+    [Theory]
+    [InlineData("modern", "/")]
+    [InlineData("legacy", "/legacy")]
+    public async Task SwitchDashboardExperience_UsesExperienceRoot(string experience, string expectedPath)
+    {
+        var themeManager = new ThemeManager(new TestThemeResolver());
+        await themeManager.EnsureInitializedAsync();
+        FluentUISetupHelpers.AddCommonDashboardServices(this, themeManager: themeManager);
+        FluentUISetupHelpers.SetupFluentList(this);
+        JSInterop.SetupVoid("setDashboardExperience", experience, expectedPath).SetVoidResult();
+        var cut = Render<SettingsDialog>();
+
+        await cut.InvokeAsync(() => cut.Instance.SwitchDashboardExperienceAsync(experience));
+
+        var invocation = Assert.Single(JSInterop.Invocations["setDashboardExperience"]);
+        Assert.Equal(experience, invocation.Arguments[0]);
+        Assert.Equal(expectedPath, invocation.Arguments[1]);
+    }
 }

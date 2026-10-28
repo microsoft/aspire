@@ -13,6 +13,9 @@ public partial class DashboardFeedbackDialog
 {
     internal const string DiscussionUrl = "https://github.com/microsoft/aspire/discussions/new?category=dashboard-feedback";
 
+    private static readonly IReadOnlyList<DashboardFeedbackUsageDuration> s_usageDurationOptions =
+        Enum.GetValues<DashboardFeedbackUsageDuration>();
+
     private int _step = 1;
     private string? _status;
 
@@ -70,11 +73,21 @@ public partial class DashboardFeedbackDialog
         _ => throw new ArgumentOutOfRangeException(nameof(reason))
     };
 
+    private string GetUsageDurationText(DashboardFeedbackUsageDuration duration) => duration switch
+    {
+        DashboardFeedbackUsageDuration.NotSpecified => Loc[nameof(Resources.Dialogs.DashboardFeedbackDurationNotSpecified)],
+        DashboardFeedbackUsageDuration.LessThanOneHour => Loc[nameof(Resources.Dialogs.DashboardFeedbackDurationLessThanOneHour)],
+        DashboardFeedbackUsageDuration.OneDay => Loc[nameof(Resources.Dialogs.DashboardFeedbackDurationOneDay)],
+        DashboardFeedbackUsageDuration.TwoToSevenDays => Loc[nameof(Resources.Dialogs.DashboardFeedbackDurationTwoToSevenDays)],
+        DashboardFeedbackUsageDuration.MoreThanOneWeek => Loc[nameof(Resources.Dialogs.DashboardFeedbackDurationMoreThanOneWeek)],
+        _ => throw new ArgumentOutOfRangeException(nameof(duration))
+    };
+
     private async Task CompleteAsync()
     {
         try
         {
-            var copied = await JS.InvokeAsync<bool>("copyTextAndOpen", Markdown, DiscussionUrl);
+            var copied = await JS.InvokeAsync<bool>("copyTextAndOpen", Markdown, BuildDiscussionUrl());
             if (Content.SwitchToLegacyAsync is not null)
             {
                 await Content.SwitchToLegacyAsync();
@@ -92,5 +105,11 @@ public partial class DashboardFeedbackDialog
         {
             _status = Loc[nameof(Resources.Dialogs.DashboardFeedbackCopyFailed)];
         }
+    }
+
+    internal string BuildDiscussionUrl()
+    {
+        var title = $"[Dashboard feedback] {Loc[nameof(Resources.Dialogs.DashboardFeedbackMarkdownTitle)]}";
+        return $"{DiscussionUrl}&title={Uri.EscapeDataString(title)}&body={Uri.EscapeDataString(Markdown)}";
     }
 }

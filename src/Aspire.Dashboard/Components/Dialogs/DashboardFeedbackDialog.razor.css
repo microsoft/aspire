@@ -65,7 +65,6 @@
     border: 0;
 }
 
-.dashboard-feedback-select,
 .dashboard-feedback-input,
 .dashboard-feedback-textarea {
     box-sizing: border-box;
@@ -77,10 +76,26 @@
     font: inherit;
 }
 
-.dashboard-feedback-select,
 .dashboard-feedback-input {
     min-height: 36px;
     padding: 5px 9px;
+}
+
+.dashboard-feedback-section > ::deep fluent-field.dashboard-feedback-select {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    row-gap: 0;
+}
+
+::deep .dashboard-feedback-select fluent-dropdown {
+    width: 100%;
+    min-width: 0;
+}
+
+::deep .dashboard-feedback-select fluent-dropdown::part(root) {
+    min-height: 38px;
+    border-radius: 6px;
 }
 
 .dashboard-feedback-textarea {
@@ -90,12 +105,15 @@
     resize: vertical;
 }
 
-.dashboard-feedback-select:focus-visible,
 .dashboard-feedback-input:focus-visible,
-.dashboard-feedback-textarea:focus-visible,
+.dashboard-feedback-textarea:focus-visible {
+    outline: 0;
+    box-shadow: inset 0 0 0 2px var(--colorStrokeFocus2);
+}
+
 .dashboard-feedback-reason:has(input:focus-visible) {
-    outline: 2px solid var(--colorStrokeFocus2);
-    outline-offset: 1px;
+    outline: 0;
+    box-shadow: inset 0 0 0 2px var(--colorStrokeFocus2);
 }
 
 .dashboard-feedback-reason-grid {
@@ -136,6 +154,10 @@
     accent-color: var(--colorBrandBackground);
 }
 
+.dashboard-feedback-reason > input:focus-visible {
+    outline: 0;
+}
+
 .dashboard-feedback-preview-disclosure {
     border: 1px solid var(--colorNeutralStroke3);
     border-radius: 8px;
@@ -144,9 +166,16 @@
 
 .dashboard-feedback-preview-disclosure > summary {
     padding: 10px 12px;
+    border-radius: 7px 7px 0 0;
     color: var(--colorBrandForegroundLink);
     font-size: 12.5px;
     cursor: pointer;
+}
+
+.dashboard-feedback-preview-disclosure > summary:focus-visible,
+.dashboard-feedback-preview:focus-visible {
+    outline: 0;
+    box-shadow: inset 0 0 0 2px var(--colorStrokeFocus2);
 }
 
 .dashboard-feedback-preview-header {

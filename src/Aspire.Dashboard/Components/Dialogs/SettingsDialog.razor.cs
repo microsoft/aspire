@@ -168,14 +168,8 @@ public partial class SettingsDialog : IDisposable
         await DialogService.ShowDialogAsync<DashboardFeedbackDialog>(feedback, parameters);
     }
 
-    private async Task SwitchDashboardExperienceAsync(string experience)
-    {
-        var current = new Uri(NavigationManager.Uri).GetComponents(UriComponents.PathAndQuery | UriComponents.Fragment, UriFormat.UriEscaped);
-        var target = experience == "legacy"
-            ? current.StartsWith("/legacy", StringComparison.OrdinalIgnoreCase) ? current : $"/legacy{current}"
-            : current.StartsWith("/legacy", StringComparison.OrdinalIgnoreCase) ? current["/legacy".Length..] : current;
-        await JS.InvokeVoidAsync("setDashboardExperience", experience, string.IsNullOrEmpty(target) ? "/" : target);
-    }
+    internal async Task SwitchDashboardExperienceAsync(string experience) =>
+        await JS.InvokeVoidAsync("setDashboardExperience", experience, experience == PreviousDashboardExperience ? "/legacy" : "/");
 
     private async Task OnTimeFormatChanged(TimeFormat timeFormat)
     {
