@@ -160,11 +160,16 @@ public sealed class EntraIdApi
     /// <c>https://contoso.onmicrosoft.com/orders</c>. It is shown as "Application ID URI" on the API's registration. It is
     /// not derived from <paramref name="applicationId"/> because an API can use any URI.
     /// </param>
+    /// <param name="baseUrl">
+    /// The API's root URL, such as <c>https://graph.microsoft.us</c>, which Aspire adds to the <c>DownstreamApis</c> entry as <c>BaseUrl</c>.
+    /// When <see langword="null"/>, no <c>BaseUrl</c> is set and the caller must supply the address itself.
+    /// </param>
     /// <returns>The API. Its permissions must be requested with explicit IDs.</returns>
     /// <exception cref="ArgumentException">
-    /// <paramref name="applicationId"/> is not a GUID, or <paramref name="resourceUri"/> is not a valid application ID URI.
+    /// <paramref name="applicationId"/> is not a GUID, <paramref name="resourceUri"/> is not a valid application ID URI, or
+    /// <paramref name="baseUrl"/> is not an absolute HTTP or HTTPS URL.
     /// </exception>
-    public static EntraIdApi FromApplicationId(string displayName, string applicationId, string resourceUri)
+    public static EntraIdApi FromApplicationId(string displayName, string applicationId, string resourceUri, string? baseUrl = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(displayName);
         ArgumentException.ThrowIfNullOrEmpty(applicationId);
@@ -180,9 +185,14 @@ public sealed class EntraIdApi
             throw new ArgumentException($"'{resourceUri}' is not a valid application ID URI. {uriError}", nameof(resourceUri));
         }
 
+        if (baseUrl is not null && !(Uri.TryCreate(baseUrl, UriKind.Absolute, out var url) && url.Scheme is "http" or "https"))
+        {
+            throw new ArgumentException($"'{baseUrl}' is not an absolute HTTP or HTTPS URL.", nameof(baseUrl));
+        }
+
         // Keep the URI as given: a trailing slash is part of the resource identifier, and tokens for it carry that audience.
         // See https://learn.microsoft.com/entra/identity-platform/scopes-oidc#trailing-slash-and-default.
-        return new(displayName, Guid.Parse(applicationId).ToString("D"), resourceUri, null, s_noPermissions, s_noPermissions, hasCatalog: false);
+        return new(displayName, Guid.Parse(applicationId).ToString("D"), resourceUri, baseUrl, s_noPermissions, s_noPermissions, hasCatalog: false);
     }
 
     // A permission value is appended to the resource identifier: "https://graph.microsoft.com/User.Read". When the identifier ends
@@ -425,6 +435,9 @@ internal readonly record struct EntraIdResolvedPermission
     public string Name { get; }
 
     public Guid Id => _fixedId ?? _owner!.GetScopeId(_scope!);
+
+    // The scope of a registration in the AppHost, whose settings can still change after the permission is declared.
+    public EntraIdScope? Scope => _scope;
 
     public static EntraIdResolvedPermission Fixed(EntraIdPermissionType type, string name, Guid id) => new(type, name, id, null, null);
 

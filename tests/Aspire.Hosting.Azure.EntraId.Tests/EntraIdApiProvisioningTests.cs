@@ -306,6 +306,39 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WithReference_UsesTheBaseUrlOfAnApiCreatedFromAnApplicationId()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var graph = EntraIdApi.FromApplicationId(
+            "Microsoft Graph", "00000003-0000-0000-c000-000000000000", "https://graph.microsoft.us", "https://graph.microsoft.us/v1.0");
+        var contoso = EntraIdApi.FromApplicationId("Contoso API", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://contoso");
+        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
+            .WithApiPermissions(graph, EntraIdApiPermission.Delegated("User.Read", new Guid("e1fe6dd8-ba31-4d61-89e7-88639da4683d")))
+            .WithApiPermissions(contoso, EntraIdApiPermission.Delegated("items.read", Guid.NewGuid()));
+        var project = builder.AddResource(new ProjectResource("web")).WithReference(web);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("https://graph.microsoft.us/User.Read", env["DownstreamApis__MicrosoftGraph__Scopes__0"]);
+        Assert.Equal("https://graph.microsoft.us/v1.0", env["DownstreamApis__MicrosoftGraph__BaseUrl"]);
+        Assert.Equal("api://contoso/items.read", env["DownstreamApis__ContosoAPI__Scopes__0"]);
+        Assert.DoesNotContain("DownstreamApis__ContosoAPI__BaseUrl", env.Keys);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("graph.microsoft.us")]
+    [InlineData("/v1.0")]
+    [InlineData("ftp://graph.microsoft.us")]
+    public void FromApplicationId_RejectsABaseUrlThatIsNotAnAbsoluteHttpUrl(string baseUrl)
+    {
+        var exception = Assert.Throws<ArgumentException>(
+            () => EntraIdApi.FromApplicationId("Contoso API", "99998888-aaaa-7777-bbbb-6666cccc5555", "api://contoso", baseUrl));
+
+        Assert.Equal("baseUrl", exception.ParamName);
+    }
+
+    [Fact]
     public async Task WithApiPermissions_Declares_ButDoesNotGrantOrConsent()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -412,6 +445,64 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
         Assert.Throws<ArgumentException>(() => web.WithApiPermissions(api, "retired"));
         Assert.Throws<ArgumentException>(() => api.WithApiPermissions(api, "access_as_user"));
         Assert.Empty(web.Resource.ApiAccess);
+    }
+
+    [Fact]
+    public void ScopeDisabledAfterItWasDeclared_IsRejectedWhenTheCallersTemplateIsGenerated()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var api = builder.AddEntraIdApplication("entra-api").WithScope("access_as_user", ScopeDescription);
+        var web = builder.AddEntraIdApplication("entra-web")
+            .WithApiPermissions(api, "access_as_user")
+            .WithAdminConsent(api, "access_as_user");
+
+        // The scope was enabled when it was declared, so the declaration was accepted.
+        Assert.Contains("access_as_user", web.Resource.GetBicepTemplateString());
+
+        api.Resource.Scopes[0].IsEnabled = false;
+
+        var template = Assert.Throws<InvalidOperationException>(web.Resource.GetBicepTemplateString);
+        Assert.Contains("'entra-web' declares permissions to the scope 'access_as_user' of 'entra-api'", template.Message);
+        Assert.Contains("disabled", template.Message);
+        var validation = Assert.Throws<InvalidOperationException>(web.Resource.ValidateApiAccess);
+        Assert.Equal(template.Message, validation.Message);
+    }
+
+    [Fact]
+    public void ScopeDisabledAfterItWasPreAuthorized_IsRejectedWhenTheApisTemplateIsGenerated()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = builder.AddEntraIdApplication("entra-web");
+        var api = builder.AddEntraIdApplication("entra-api")
+            .WithScope("access_as_user", ScopeDescription)
+            .WithPreAuthorizedApplication(web, "access_as_user");
+
+        Assert.Contains("preAuthorizedApplications", api.Resource.GetBicepTemplateString());
+
+        api.Resource.Scopes[0].IsEnabled = false;
+
+        var template = Assert.Throws<InvalidOperationException>(api.Resource.GetBicepTemplateString);
+        Assert.Contains("'entra-api' pre-authorizes 'entra-web' for the scope 'access_as_user'", template.Message);
+        Assert.Contains("disabled", template.Message);
+        Assert.Throws<InvalidOperationException>(api.Resource.ValidateApiAccess);
+    }
+
+    [Fact]
+    public void ScopeDisabledAfterItWasDeclared_IsRejectedForAnExistingApi()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var existingApi = builder.AddExistingEntraApplication("existing-api", TenantId, ClientId)
+            .WithApplicationIdUri("api://contoso-items")
+            .WithScope("items.read", "Read items.", scope => scope.Id = Guid.NewGuid());
+        var web = builder.AddExistingEntraApplication("entra-web", TenantId, ClientId)
+            .WithApiPermissions(existingApi, "items.read");
+
+        web.Resource.ValidateApiAccess();
+
+        existingApi.Resource.Scopes[0].IsEnabled = false;
+
+        var validation = Assert.Throws<InvalidOperationException>(web.Resource.ValidateApiAccess);
+        Assert.Contains("'entra-web' declares permissions to the scope 'items.read' of 'existing-api'", validation.Message);
     }
 
     [Fact]

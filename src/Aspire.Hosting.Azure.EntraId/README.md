@@ -159,17 +159,25 @@ builder.AddProject<Projects.Web>("webfrontend")
   ```
 
   `AddDownstreamApis(builder.Configuration.GetSection("DownstreamApis"))` registers every entry for `IDownstreamApi` by name instead.
-* **The API's own settings.** Referencing a registration that exposes scopes also sets `AzureAd__Scopes` to its enabled scope names, which `[RequiredScope]` reads.
+* **The API's own settings.** Referencing a registration that exposes scopes also sets `AzureAd__Scopes` to its enabled scope names. `[RequiredScope]` doesn't read that key unless you name it, and it enforces nothing without `[Authorize]`:
+
+  ```csharp
+  [Authorize]
+  [RequiredScope(RequiredScopesConfigurationKey = "AzureAd:Scopes")]
+  public class WeatherController : ControllerBase { /* ... */ }
+  ```
+
+  A minimal API endpoint takes the same two attributes on its handler.
 * **Application ID URI.** A registration with scopes uses `api://{clientId}`. The client ID exists only after creation, so Aspire sets the URI in a second update of the registration in the same deployment. `WithApplicationIdUri("api://contoso-orders")` sets a custom URI, which must be unique in the tenant. Aspire always sets `requestedAccessTokenVersion` to 2, which exempts the URI from the tenant's default policy, but a stricter policy fails the deployment ([details](https://aka.ms/identifier-uri-formatting-error)). `GetScopeUri` returns the full scope name.
 * **Stable scope IDs.** Scope IDs derive from the registration and scope names, so they are the same in every deployment and tenant. Set `EntraIdScope.Id` to adopt an existing scope.
-* **Retiring a scope.** Graph rejects removing or renaming an enabled scope, so retire it in two deployments: set `IsEnabled = false` in `WithScope`'s callback and deploy, then remove the scope. A disabled scope can't be requested, declared or pre-authorized. When retiring the last scope, keep `WithApplicationIdUri()` for the second deployment so the empty scope list is still sent.
+* **Retiring a scope.** Graph rejects removing or renaming an enabled scope, so retire it in two deployments. In the first, set `IsEnabled = false` in `WithScope`'s callback and remove every `WithApiPermissions`, `WithAdminConsent` and `WithPreAuthorizedApplication` reference to the scope: a disabled scope can't be requested, declared or pre-authorized, and Aspire fails the deployment if a reference remains. In the second, remove the scope. When retiring the last scope, keep `WithApplicationIdUri()` for the second deployment so the empty scope list is still sent.
 * **What a deployment removes.** Graph keeps properties that a deployment omits. While a registration is declared as an API (it has scopes or a `WithApplicationIdUri` call), its application ID URIs, scopes and pre-authorized clients are sent in full, even when empty, and Graph replaces each list: anything not listed is removed, such as a client pre-authorized in the portal. Removing the last `WithPreAuthorizedApplication` call therefore revokes it. Once nothing declares the API, nothing is sent, and earlier scopes, URIs, pre-authorized clients and `WithApiPermissions` declarations stay in the tenant, so remove pre-authorized clients first and keep `WithApplicationIdUri()` for one deployment.
 * **What consent replaces.** `WithAdminConsent` declares the all-users grant from a client to an API in full: the grant is set to exactly the scopes passed for that pair. Scopes granted to the pair in the portal are therefore revoked, and so is a scope that you remove from `WithAdminConsent` while others remain. Once no `WithAdminConsent` call remains for a pair, nothing is sent and the existing grant stays. Application permissions are granted differently, as one app role assignment per permission: Aspire creates an assignment when you consent to an application permission, but doesn't delete it if you later remove that consent, so remove it in the [Microsoft Entra admin center](https://entra.microsoft.com).
 * **One resource per token.** A token request covers the scopes of one API. Request the API's scopes and Microsoft Graph's separately; mixing them fails with `AADSTS28000`.
 
 #### Call Microsoft Graph and other first-party APIs
 
-An API that isn't an Aspire resource is identified by its application ID. `EntraIdApi.MicrosoftGraph`, `AzureResourceManager` and `AzureStorage` know their common permissions by name; pass other permissions with their ID. For other APIs use `EntraIdApi.FromApplicationId(displayName, applicationId, resourceUri)`, where `resourceUri` is the API's application ID URI (the prefix of its scopes). Unknown names are rejected when you write the AppHost.
+An API that isn't an Aspire resource is identified by its application ID. `EntraIdApi.MicrosoftGraph`, `AzureResourceManager` and `AzureStorage` know their common permissions by name; pass other permissions with their ID. For other APIs use `EntraIdApi.FromApplicationId(displayName, applicationId, resourceUri)`, where `resourceUri` is the API's application ID URI (the prefix of its scopes). Pass `baseUrl` to have Aspire set the API's `BaseUrl` in its `DownstreamApis` entry. Unknown names are rejected when you write the AppHost.
 
 ```csharp
 var entraWeb = builder.AddEntraIdApplication("entra-web")
@@ -428,6 +436,16 @@ To target a sovereign cloud instance such as Azure Government:
 ```csharp
 var entraApi = builder.AddExistingEntraApplication("entra-api", tenantId: tenantId, clientId: apiClientId)
                       .WithInstance("https://login.microsoftonline.us/");
+```
+
+`EntraIdApi.MicrosoftGraph` and the other built-in APIs use their global-cloud URLs. In a sovereign cloud, define the API yourself with the cloud's resource URI and base URL, and request its permissions by ID:
+
+```csharp
+var graph = EntraIdApi.FromApplicationId(
+    "Microsoft Graph", "00000003-0000-0000-c000-000000000000", "https://graph.microsoft.us", baseUrl: "https://graph.microsoft.us/v1.0");
+
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .WithApiPermissions(graph, EntraIdApiPermission.Delegated("User.Read", new Guid("e1fe6dd8-ba31-4d61-89e7-88639da4683d")));
 ```
 
 ## Current limitations

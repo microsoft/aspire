@@ -206,11 +206,39 @@ public class EntraIdApplicationResource : AzureProvisioningResource
     // Consumers are recorded as they reference the registration so that each one's own identity can be trusted.
     internal List<IResource> Consumers { get; } = [];
 
+    // A scope can still be disabled after WithApiPermissions or WithPreAuthorizedApplication accepted it, because EntraIdScope.IsEnabled is settable.
+    // Emitting such a reference would leave a client requesting a scope that the API no longer lets anyone request, so the references are checked
+    // again once the model is complete. Only the registration's own declarations are checked: each registration checks the ones it makes.
+    internal void ValidateScopeReferences()
+    {
+        foreach (var access in ApiAccess.Where(static a => a.Application is not null))
+        {
+            foreach (var scope in access.Declared.Select(static p => p.Scope).OfType<EntraIdScope>().Where(static s => !s.IsEnabled))
+            {
+                throw new InvalidOperationException(
+                    $"'{Name}' declares permissions to the scope '{scope.Name}' of '{access.DisplayName}', but the scope is disabled, so clients can't request it. " +
+                    $"Remove it from WithApiPermissions (and WithAdminConsent) on '{Name}', or enable the scope.");
+            }
+        }
+
+        foreach (var preAuthorized in PreAuthorizedClients)
+        {
+            foreach (var scope in preAuthorized.Scopes.Where(static s => !s.IsEnabled))
+            {
+                throw new InvalidOperationException(
+                    $"'{Name}' pre-authorizes '{preAuthorized.Client.Name}' for the scope '{scope.Name}', but the scope is disabled, so clients can't request it. " +
+                    $"Remove it from WithPreAuthorizedApplication on '{Name}', or enable the scope.");
+            }
+        }
+    }
+
     // Checks that the DownstreamApis entries that the registration's consumers receive can be built and are distinct. Only the
     // resources that reference this registration get entries, and an entry is named after a resource that references the API, so
     // this can only be checked once the whole model exists. Both the startup pipeline and the consumers' environment run it.
     internal void ValidateApiAccess()
     {
+        ValidateScopeReferences();
+
         if (Consumers.Count == 0)
         {
             return;
@@ -460,6 +488,8 @@ public class EntraIdApplicationResource : AzureProvisioningResource
         {
             application.AppRoles = [.. resource.AppRoles.Select(role => CreateAppRole(resource, role))];
         }
+
+        resource.ValidateScopeReferences();
 
         // Names for the API access settings are allocated against everything that the template already declares.
         var symbolNames = new EntraIdSymbolNames(infrastructure);
