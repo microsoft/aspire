@@ -98,6 +98,21 @@ public sealed class TestTriggerMapTests
         Assert.Equal(["Aspire.Templates.Tests"], result.TestProjects);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void GoHostingChangesSelectExtensionE2e(bool hasAffectedProject)
+    {
+        const string path = "src/Aspire.Hosting.Go/GoHostingExtensions.cs";
+        var result = hasAffectedProject
+            ? SelectWithRealMap(path, "Aspire.Hosting.Go")
+            : SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("job:extension-e2e", result.Jobs);
+    }
+
     // Repo-relative '/'-separated project paths listed in Aspire.slnx (the Layer 1 graph root).
     private static IReadOnlySet<string> LoadSolutionProjectPaths()
     {

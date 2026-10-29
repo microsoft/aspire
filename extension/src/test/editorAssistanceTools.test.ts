@@ -2616,6 +2616,8 @@ suite('Editor assistance AppHost services', () => {
                 values: Readonly<Record<string, unknown>>;
                 expectedPresentation: 'integratedBrowser' | 'externalBrowser' | 'debugBrowser' | 'notification';
                 expectedDebugType?: string;
+                expectedRuntimeArgs?: readonly string[];
+                expectedTimeout?: number;
             }> = [
                 {
                     // aspire.dashboardBrowser is entirely unset. Explicit handoff still needs to
@@ -2636,11 +2638,15 @@ suite('Editor assistance AppHost services', () => {
                     values: { dashboardBrowser: 'debugChrome' },
                     expectedPresentation: 'debugBrowser',
                     expectedDebugType: 'pwa-chrome',
+                    expectedRuntimeArgs: ['--allow-insecure-localhost'],
+                    expectedTimeout: 30000,
                 },
                 {
                     values: { dashboardBrowser: 'debugEdge' },
                     expectedPresentation: 'debugBrowser',
                     expectedDebugType: 'pwa-msedge',
+                    expectedRuntimeArgs: ['--allow-insecure-localhost'],
+                    expectedTimeout: 30000,
                 },
                 {
                     values: { dashboardBrowser: 'debugFirefox' },
@@ -2703,9 +2709,12 @@ suite('Editor assistance AppHost services', () => {
                     }
                     if (testCase.expectedPresentation === 'debugBrowser') {
                         assert.strictEqual(startDebugging.callCount, 1);
+                        const debugConfiguration = startDebugging.firstCall.args[1] as vscode.DebugConfiguration;
                         assert.strictEqual(
-                            (startDebugging.firstCall.args[1] as vscode.DebugConfiguration).type,
+                            debugConfiguration.type,
                             testCase.expectedDebugType);
+                        assert.deepStrictEqual(debugConfiguration.runtimeArgs, testCase.expectedRuntimeArgs);
+                        assert.strictEqual(debugConfiguration.timeout, testCase.expectedTimeout);
                     }
                     if (testCase.expectedPresentation === 'notification') {
                         assert.strictEqual(showInformationMessage.callCount, 1);
