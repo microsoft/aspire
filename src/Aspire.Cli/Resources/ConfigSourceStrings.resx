@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!--
+    Microsoft ResX Schema
+    Version 2.0
+    The primary goals of this format is to allow a simple XML format
+    that is mostly human readable. The generation and parsing of the
+    various data types are done through the TypeConverter classes
+    associated with the data types.
+    Example:
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+    There are any number of "resheader" rows that contain simple
+    name/value pairs.
+    Each data row contains a name, and value. The row also contains a
+    type or mimetype. Type corresponds to a .NET class that support
+    text/value conversion through the TypeConverter architecture.
+    Classes that don't support this are serialized and stored with the
+    mimetype set.
+    The mimetype is used for serialized objects, and tells the
+    ResXResourceReader how to depersist the object. This is currently not
+    extensible. For a given mimetype the value must be set accordingly:
+    Note - application/x-microsoft.net.object.binary.base64 is the format
+    that the ResXResourceWriter will generate, however the reader can
+    read any of the formats listed below.
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="UseSourceOptionDescription" xml:space="preserve">
+    <value>Accept or decline the proposed Git configuration source for this project.</value>
+  </data>
+  <data name="RefreshOptionDescription" xml:space="preserve">
+    <value>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</value>
+  </data>
+  <data name="InvalidRepository" xml:space="preserve">
+    <value>The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments.</value>
+  </data>
+  <data name="InvalidPath" xml:space="preserve">
+    <value>The configuration file must be a nonempty repository-relative path using '/' separators, without '.', '..', or empty path segments.</value>
+  </data>
+  <data name="InvalidRef" xml:space="preserve">
+    <value>The configuration source ref must be a branch name or full commit SHA, not an empty value, tag, revision expression, or command option.</value>
+  </data>
+  <data name="MissingFile" xml:space="preserve">
+    <value>The configuration file is missing or is not a regular file at the selected Git branch or commit.</value>
+  </data>
+  <data name="InvalidConfiguration" xml:space="preserve">
+    <value>The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</value>
+  </data>
+  <data name="NestedSource" xml:space="preserve">
+    <value>A source configuration file cannot declare another configSource.</value>
+    <comment>Do not translate "configSource".</comment>
+  </data>
+  <data name="GitTimeout" xml:space="preserve">
+    <value>The configuration source Git operation timed out. Check repository access and Git credentials, then retry.</value>
+  </data>
+  <data name="GitNotFound" xml:space="preserve">
+    <value>Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</value>
+    <comment>Do not translate "PATH".</comment>
+  </data>
+  <data name="AuthenticationFailed" xml:space="preserve">
+    <value>Git could not authenticate to the configuration source. Configure your Git credential helper or SSH authentication and retry.</value>
+  </data>
+  <data name="RepositoryUnavailable" xml:space="preserve">
+    <value>Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry.</value>
+  </data>
+  <data name="NoCandidate" xml:space="preserve">
+    <value>No configuration source is available. Set {0} to a Git repository address.</value>
+    <comment>{0} is the environment variable name.</comment>
+  </data>
+  <data name="Candidate" xml:space="preserve">
+    <value>Configuration source: {0}
+Configuration file: {1}
+Configuration ref: {2}
+Source origin: {3}</value>
+    <comment>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the branch name, commit SHA, or default-branch label, and {3} is the source origin (an environment variable name or Microsoft employee default).</comment>
+  </data>
+  <data name="DefaultBranch" xml:space="preserve">
+    <value>default branch</value>
+  </data>
+  <data name="EmployeeOrigin" xml:space="preserve">
+    <value>Microsoft employee default</value>
+  </data>
+  <data name="UseSourcePrompt" xml:space="preserve">
+    <value>Use configuration from this source?</value>
+  </data>
+  <data name="Accept" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="Decline" xml:space="preserve">
+    <value>No, use standard Aspire configuration</value>
+  </data>
+  <data name="ConsentRequired" xml:space="preserve">
+    <value>A configuration source is available. Specify --use-config-source true to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</value>
+    <comment>Do not translate "--use-config-source", "true", or "false".</comment>
+  </data>
+  <data name="NoBinding" xml:space="preserve">
+    <value>No configuration source to update.</value>
+  </data>
+  <data name="InvalidBinding" xml:space="preserve">
+    <value>The configSource binding must contain a Git repository address and a repository-relative configuration file path.</value>
+    <comment>Do not translate "configSource".</comment>
+  </data>
+  <data name="InvalidCache" xml:space="preserve">
+    <value>The configuration source cache is invalid. Restore or remove its cache entry and retry.</value>
+  </data>
+  <data name="UseNotice" xml:space="preserve">
+    <value>Configuration source {0} ({1}) at commit {2}: {3}.
+Settings file: {4}</value>
+    <comment>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the resolved Git commit SHA, {3} is the localized configuration update result, and {4} is the destination settings file path.</comment>
+  </data>
+  <data name="Refreshed" xml:space="preserve">
+    <value>configuration updated</value>
+  </data>
+  <data name="RefreshedUnchanged" xml:space="preserve">
+    <value>configuration already up to date</value>
+  </data>
+  <data name="UpdateAvailable" xml:space="preserve">
+    <value>A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</value>
+    <comment>Do not translate "aspire update --config-source".</comment>
+  </data>
+  <data name="AppliedVersionMissing" xml:space="preserve">
+    <value>A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</value>
+    <comment>Do not translate "aspire update --config-source".</comment>
+  </data>
+  <data name="CheckFailed" xml:space="preserve">
+    <value>The configuration source update check failed: {0} Continuing with the saved configuration.</value>
+    <comment>{0} is the configuration source check failure message.</comment>
+  </data>
+  <data name="CheckFailedWithoutDetails" xml:space="preserve">
+    <value>The configuration source update check failed. Continuing with the saved configuration.</value>
+  </data>
+  <data name="ConfigLockFailed" xml:space="preserve">
+    <value>The settings file could not be locked. No source settings were applied. Retry when other configuration writers have finished.</value>
+  </data>
+  <data name="BindingChanged" xml:space="preserve">
+    <value>The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</value>
+  </data>
+  <data name="IncompatibleOptions" xml:space="preserve">
+    <value>--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</value>
+    <comment>Do not translate the command-line option names.</comment>
+  </data>
+</root>

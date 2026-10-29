@@ -23,6 +23,7 @@
     <Compile Include="$(SharedDir)CompareHelpers.cs" Link="Utils\CompareHelpers.cs" />
     <Compile Include="$(SharedDir)CustomResourceSnapshotExtensions.cs" Link="CustomResourceSnapshotExtensions.cs" />
     <Compile Include="$(SharedDir)DirectoryHelper.cs" Link="Utils\DirectoryHelper.cs" />
+    <Compile Include="$(SharedDir)DcpEnvironmentVariables.cs" Link="Dcp\DcpEnvironmentVariables.cs" />
     <Compile Include="$(SharedDir)SocketPermissionHelper.cs" Link="Utils\SocketPermissionHelper.cs" />
     <Compile Include="$(SharedDir)SocketExceptionHelpers.cs" Link="Utils\SocketExceptionHelpers.cs" />
     <Compile Include="$(SharedDir)SocketDirectoryNames.cs" Link="Utils\SocketDirectoryNames.cs" />
@@ -116,6 +117,7 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Blazor" />
     <InternalsVisibleTo Include="Aspire.Hosting.Blazor.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Dotnet.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Go" />
     <InternalsVisibleTo Include="Aspire.Hosting.Go.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Java.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.JavaScript.Tests" />

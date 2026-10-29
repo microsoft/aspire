@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+#pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
 using Aspire.Hosting.Utils;
 using Azure.Provisioning;
 using Azure.Provisioning.Storage;
@@ -331,6 +332,34 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         var mainBicep = await File.ReadAllTextAsync(Path.Combine(outputPath, "main.bicep"));
         Assert.Contains("scope: tenant()", mainBicep);
         Assert.Contains("location: location", mainBicep);
+    }
+
+    [Fact]
+    public async Task AzurePublishingContext_PublishesBicepOutputReferenceProviderAsItsOutput()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, workspace.Path);
+
+        builder.AddAzureEnvironment();
+        var identity = builder.AddAzureUserAssignedIdentity("identity");
+        var module = builder.AddBicepTemplateString("mod",
+            """
+            param clientId string
+
+            output value string = clientId
+            """);
+        module.Resource.Parameters["clientId"] = new TestBicepOutputReferenceProvider(identity.Resource.ClientId);
+
+        using var app = builder.Build();
+
+        var outputPath = Path.Combine(workspace.Path, "provider");
+        var context = await CreatePublishingContextAsync(app, outputPath);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var environment = model.Resources.OfType<AzureEnvironmentResource>().Single();
+
+        await context.WriteModelAsync(model, environment, CancellationToken.None);
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(outputPath, "main.bicep")), "bicep");
     }
 
     /// <summary>

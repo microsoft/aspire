@@ -1,0 +1,14 @@
+﻿{
+  aspire.config.json: { "sdk": { "version": "17.0.0-preview.1.12345.1" } },
+  nuget.config:
+<configuration>
+  <packageSources>
+    <add key="aspire" value="https://api.nuget.org/v3/index.json" />
+  </packageSources>
+  <packageSourceMapping>
+    <packageSource key="aspire">
+      <package pattern="Aspire*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>
+}

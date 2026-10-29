@@ -4,312 +4,312 @@
     <body>
       <trans-unit id="MainLayoutToggleTerminalDock">
         <source>Toggle terminal (`)</source>
-        <target state="new">Toggle terminal (`)</target>
+        <target state="translated">터미널 토글(`)</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCloseTab">
         <source>Close tab</source>
-        <target state="new">Close tab</target>
+        <target state="translated">탭 닫기</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCopyFailed">
         <source>Could not copy to clipboard.</source>
-        <target state="new">Could not copy to clipboard.</target>
+        <target state="translated">클립보드에 복사할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCopyTitle">
         <source>Copy terminal title: {0}</source>
-        <target state="new">Copy terminal title: {0}</target>
+        <target state="translated">터미널 제목 복사: {0}</target>
         <note>{0} is the terminal title.</note>
       </trans-unit>
       <trans-unit id="TerminalCopyWorkingDirectory">
         <source>Copy working directory: {0}</source>
-        <target state="new">Copy working directory: {0}</target>
+        <target state="translated">작업 디렉터리 복사: {0}</target>
         <note>{0} is the working directory path.</note>
       </trans-unit>
       <trans-unit id="TerminalDisconnected">
         <source>The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</source>
-        <target state="new">The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</target>
+        <target state="translated">터미널 연결이 끊어졌으며 자동 다시 시도가 중지되었습니다. 리소스가 실행 중인지 확인한 후 다시 시도하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDisconnectedMessage">
         <source>Terminal disconnected. The last output has been preserved.</source>
-        <target state="new">Terminal disconnected. The last output has been preserved.</target>
+        <target state="translated">터미널 연결이 끊어졌습니다. 마지막 출력은 보존되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDisconnectedWithExitCode">
         <source>Terminal disconnected (exit code {0}). The last output has been preserved.</source>
-        <target state="new">Terminal disconnected (exit code {0}). The last output has been preserved.</target>
+        <target state="translated">터미널 연결이 끊겼습니다(종료 코드 {0}). 마지막 출력은 보존되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDismissError">
         <source>Dismiss</source>
-        <target state="new">Dismiss</target>
+        <target state="translated">해제</target>
         <note>Dismisses a terminal input, clipboard, or sizing error without reconnecting.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTab">
         <source>Close terminal '{0}'</source>
-        <target state="new">Close terminal '{0}'</target>
+        <target state="translated">터미널 '{0}' 닫기</target>
         <note>{0} is the terminal's display title.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTimedOutMessage">
         <source>Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</source>
-        <target state="new">Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</target>
+        <target state="translated">터미널 '{0}'가 종료되기를 기다리는 동안 시간이 초과되었습니다. 백그라운드에서 정리가 계속되고 있습니다.</target>
         <note>{0} is the terminal's display title.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTimedOutTitle">
         <source>Terminal close timed out</source>
-        <target state="new">Terminal close timed out</target>
+        <target state="translated">터미널 닫기 시간 초과</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetach">
         <source>Open terminal in a new window</source>
-        <target state="new">Open terminal in a new window</target>
+        <target state="translated">새 창에서 터미널 열기</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetachBlocked">
         <source>The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</source>
-        <target state="new">The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</target>
+        <target state="translated">브라우저에서 터미널 창을 차단했습니다. 대시보드의 팝업을 허용한 후 다시 시도하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetached">
         <source>This terminal is running in a separate window.</source>
-        <target state="new">This terminal is running in a separate window.</target>
+        <target state="translated">이 터미널은 별도의 창에서 실행 중입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockFocusWindow">
         <source>Focus window</source>
-        <target state="new">Focus window</target>
+        <target state="translated">포커스 창</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockHeight">
         <source>{0} pixels high</source>
-        <target state="new">{0} pixels high</target>
+        <target state="translated">높이 {0}픽셀</target>
         <note>{0} is the terminal dock height in CSS pixels.</note>
       </trans-unit>
       <trans-unit id="TerminalDockHide">
         <source>Hide terminal panel (`)</source>
-        <target state="new">Hide terminal panel (`)</target>
+        <target state="translated">터미널 패널 숨기기(`)</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockMoreInformation">
         <source>More information</source>
-        <target state="new">More information</target>
+        <target state="translated">추가 정보</target>
         <note>Link to documentation about dashboard terminals, shown when the terminal dock is empty.</note>
       </trans-unit>
       <trans-unit id="TerminalDockPanelHeading">
         <source>No docked terminals</source>
-        <target state="new">No docked terminals</target>
+        <target state="translated">도킹된 터미널 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockPanelHint">
         <source>Press the backtick key (`) to hide this panel.</source>
-        <target state="new">Press the backtick key (`) to hide this panel.</target>
+        <target state="translated">백틱 키(`)를 눌러 이 패널을 숨기세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockRecoveringWindow">
         <source>This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</source>
-        <target state="new">This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</target>
+        <target state="translated">이 터미널이 별도의 창에서 아직 열려 있을 수 있습니다. 해당 창에 포커스를 맞추거나 패널로 되돌린 후 계속하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockReorderHelp">
         <source>Drag to reorder tabs, or use Alt+Shift+Left or Alt+Shift+Right while a tab is focused.</source>
-        <target state="new">Drag to reorder tabs, or use Alt+Shift+Left or Alt+Shift+Right while a tab is focused.</target>
+        <target state="translated">탭을 드래그하여 순서를 변경하세요. 또는 탭에 포커스가 있을 때 Alt+Shift+왼쪽 또는 Alt+Shift+오른쪽을 사용하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockResizeHelp">
         <source>Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</source>
-        <target state="new">Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</target>
+        <target state="translated">위쪽 또는 아래쪽 화살표 키로 크기를 조정하세요. 더 큰 단위로 조정하려면 Shift 키를 사용하세요. 최소 높이로 설정하려면 Home 키를, 최대 높이로 설정하려면 End 키를 사용하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockReturnToDock">
         <source>Return to panel</source>
-        <target state="new">Return to panel</target>
+        <target state="translated">패널로 돌아가기</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockScrollLeft">
         <source>Scroll terminal tabs left</source>
-        <target state="new">Scroll terminal tabs left</target>
+        <target state="translated">터미널 탭을 왼쪽으로 스크롤</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockScrollRight">
         <source>Scroll terminal tabs right</source>
-        <target state="new">Scroll terminal tabs right</target>
+        <target state="translated">터미널 탭을 오른쪽으로 스크롤</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockTabs">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">터미널</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalFocusControlsDescription">
         <source>Focus terminal controls</source>
-        <target state="new">Focus terminal controls</target>
+        <target state="translated">터미널 컨트롤에 포커스</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalInputFailed">
         <source>The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</source>
-        <target state="new">The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</target>
+        <target state="translated">터미널에서 입력 또는 클립보드 작업을 완료할 수 없습니다. 브라우저 클립보드 권한을 확인하고 다시 시도하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalInputLabel">
         <source>Interactive terminal input</source>
-        <target state="new">Interactive terminal input</target>
+        <target state="translated">대화형 터미널 입력</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalMountFailed">
         <source>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</source>
-        <target state="new">The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</target>
+        <target state="translated">터미널에서 렌더러를 연결하거나 초기화할 수 없습니다. 리소스가 실행 중이고 브라우저가 WebGPU 또는 WebGL2를 지원하는지 확인한 다음 다시 연결하여 다시 시도하세요. 이 리소스의 콘솔 로그를 계속 볼 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPalette">
         <source>Terminal palette</source>
-        <target state="new">Terminal palette</target>
+        <target state="translated">터미널 팔레트</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteDark">
         <source>Dark</source>
-        <target state="new">Dark</target>
+        <target state="translated">어두움</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteLabel">
         <source>Palette</source>
-        <target state="new">Palette</target>
+        <target state="translated">색상표</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteLight">
         <source>Light</source>
-        <target state="new">Light</target>
+        <target state="translated">밝음</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteSaveFailed">
         <source>Unable to save the terminal palette. Check that browser storage is available and try again.</source>
-        <target state="new">Unable to save the terminal palette. Check that browser storage is available and try again.</target>
+        <target state="translated">터미널 팔레트를 저장할 수 없습니다. 브라우저 저장소를 사용할 수 있는지 확인하고 다시 시도하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalProgress">
         <source>Terminal progress</source>
-        <target state="new">Terminal progress</target>
+        <target state="translated">터미널 진행률</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalProgressError">
         <source>Error</source>
-        <target state="new">Error</target>
+        <target state="translated">오류</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalProgressWarning">
         <source>Warning</source>
-        <target state="new">Warning</target>
+        <target state="translated">경고</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalRestartResource">
         <source>Restart resource</source>
-        <target state="new">Restart resource</target>
+        <target state="translated">리소스 다시 시작</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalRetry">
         <source>Reconnect terminal</source>
-        <target state="new">Reconnect terminal</target>
+        <target state="translated">터미널 다시 연결</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalShowDisconnectedBanner">
         <source>Terminal disconnected. Show recovery actions</source>
-        <target state="new">Terminal disconnected. Show recovery actions</target>
+        <target state="translated">터미널 연결이 끊어졌습니다. 복구 작업 표시</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalShowDisconnectedBannerWithExitCode">
         <source>Terminal disconnected (exit code {0}). Show recovery actions</source>
-        <target state="new">Terminal disconnected (exit code {0}). Show recovery actions</target>
+        <target state="translated">터미널 연결이 끊어졌습니다(종료 코드 {0}). 복구 작업 표시</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalShowOutput">
         <source>Show terminal</source>
-        <target state="new">Show terminal</target>
+        <target state="translated">터미널 표시</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalSizeLabel">
         <source>Size</source>
-        <target state="new">Size</target>
+        <target state="translated">크기</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalSizingFailed">
         <source>The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</source>
-        <target state="new">The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</target>
+        <target state="translated">터미널의 크기 조정 제어권을 가져오거나 크기를 변경할 수 없습니다. 크기를 다시 선택해 보세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalTitle">
         <source>Terminal</source>
-        <target state="new">Terminal</target>
+        <target state="translated">터미널</target>
         <note>Default terminal title when no resource name is available.</note>
       </trans-unit>
       <trans-unit id="TerminalToolbarDecreaseFontSize">
         <source>Decrease font size</source>
-        <target state="new">Decrease font size</target>
+        <target state="translated">글꼴 크기 줄이기</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarGridSize">
         <source>Terminal dimensions</source>
-        <target state="new">Terminal dimensions</target>
+        <target state="translated">터미널 크기</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarGridSizeAuto">
         <source>Fit terminal to available space</source>
-        <target state="new">Fit terminal to available space</target>
+        <target state="translated">사용 가능한 공간에 맞게 터미널 크기 맞추기</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarIncreaseFontSize">
         <source>Increase font size</source>
-        <target state="new">Increase font size</target>
+        <target state="translated">글꼴 크기 늘리기</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarOpenInWindow">
         <source>Open in new window</source>
-        <target state="new">Open in new window</target>
+        <target state="translated">새 창에서 열기</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarOpenInWindowBlocked">
         <source>The browser blocked the terminal window. Allow pop-ups for this site and try again.</source>
-        <target state="new">The browser blocked the terminal window. Allow pop-ups for this site and try again.</target>
+        <target state="translated">브라우저가 터미널 창을 차단했습니다. 이 사이트에 대한 팝업을 허용하고 다시 시도하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarOpenInWindowFailed">
         <source>Unable to open the terminal window. Reload the dashboard and try again.</source>
-        <target state="new">Unable to open the terminal window. Reload the dashboard and try again.</target>
+        <target state="translated">터미널 창을 열 수 없습니다. 대시보드를 다시 로드한 후 다시 시도하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalWindowEnded">
         <source>This terminal has ended.</source>
-        <target state="new">This terminal has ended.</target>
+        <target state="translated">이 터미널은 종료되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalWindowTrackingFailed">
         <source>Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</source>
-        <target state="new">Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</target>
+        <target state="translated">터미널 창 상태를 복구할 수 없습니다. 브라우저 스토리지 권한을 확인하거나, 다시 로드하거나, 터미널을 패널로 명시적으로 되돌립니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsHeader">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">터미널</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsPageTitle">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">터미널</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsSelectAResource">
         <source>Select a resource to view its terminal</source>
-        <target state="new">Select a resource to view its terminal</target>
+        <target state="translated">터미널을 보려면 리소스를 선택하세요</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsSelectResourceToolbar">
         <source>Select resource</source>
-        <target state="new">Select resource</target>
+        <target state="translated">리소스 선택</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsSettings">
         <source>View options</source>
-        <target state="new">View options</target>
+        <target state="translated">보기 옵션</target>
         <note />
       </trans-unit>
     </body>

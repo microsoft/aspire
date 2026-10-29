@@ -20,6 +20,69 @@ namespace Aspire.Cli.Tests.NuGet;
 
 public class NuGetClientTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task GetPackageVersionsAsync_CombinesEveryEligibleFeedsVersionsInSemanticOrder()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var first = workspace.CreateDirectory("first");
+        var second = workspace.CreateDirectory("second");
+        NuGetTestHelper.CreatePackage(first, "Example.Package", "9.0.0", new Dictionary<string, string>());
+        NuGetTestHelper.CreatePackage(second, "Example.Package", "10.0.0-preview.2", new Dictionary<string, string>());
+        NuGetTestHelper.CreatePackage(second, "Example.Package", "10.0.0-preview.10", new Dictionary<string, string>());
+        NuGetTestHelper.CreatePackage(second, "Example.Package", "9.0.0", new Dictionary<string, string>());
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "nuget.config"), """
+            <configuration>
+              <packageSources><clear /><add key="first" value="first" /><add key="second" value="second" /></packageSources>
+              <packageSourceMapping><clear /></packageSourceMapping>
+            </configuration>
+            """);
+
+        var versions = await NuGetTestHelper.CreateClient().GetPackageVersionsAsync(
+            "example.package", workspace.Path, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["10.0.0-preview.10", "10.0.0-preview.2", "9.0.0"], versions.Select(version => version.ToNormalizedString()));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetPackageVersionsAsync_DoesNotContactExcludedSources(bool disabled)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feed = workspace.CreateDirectory("feed");
+        NuGetTestHelper.CreatePackage(feed, "Example.Package", "1.0.0", new Dictionary<string, string>());
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "nuget.config"), $$"""
+            <configuration>
+              <packageSources>
+                <clear /><add key="local" value="feed" /><add key="excluded" value="http://127.0.0.1:1/index.json" allowInsecureConnections="true" />
+              </packageSources>
+              {{(disabled ? "<disabledPackageSources><add key=\"excluded\" value=\"true\" /></disabledPackageSources>" : "")}}
+              <packageSourceMapping>
+                <clear /><packageSource key="local"><package pattern="Example.Package" /></packageSource>
+                <packageSource key="excluded"><package pattern="{{(disabled ? "Example.Package" : "Other.*")}}" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        var versions = await NuGetTestHelper.CreateClient().GetPackageVersionsAsync(
+            "Example.Package", workspace.Path, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["1.0.0"], versions.Select(version => version.ToNormalizedString()));
+    }
+
+    [Fact]
+    public async Task GetPackageVersionsAsync_EmptySourcePolicyDoesNotSynthesizeSources()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "nuget.config"),
+            "<configuration><packageSources><clear /></packageSources><packageSourceMapping><clear /></packageSourceMapping></configuration>");
+
+        var versions = await NuGetTestHelper.CreateClient().GetPackageVersionsAsync(
+            "Aspire.Hosting.Dotnet", workspace.Path, TestContext.Current.CancellationToken);
+
+        Assert.Empty(versions);
+    }
+
     [Theory]
     [InlineData(false, false, false)]
     [InlineData(false, true, false)]

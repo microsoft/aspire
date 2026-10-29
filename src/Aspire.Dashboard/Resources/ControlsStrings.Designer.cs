@@ -151,6 +151,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts..
+        /// </summary>
+        public static string ChartContainerIncompatibleHistogramBounds {
+            get {
+                return ResourceManager.GetString("ChartContainerIncompatibleHistogramBounds", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Options.
         /// </summary>
         public static string ChartContainerOptionsHeader {
@@ -183,15 +192,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ChartContainerOverflowTitle {
             get {
                 return ResourceManager.GetString("ChartContainerOverflowTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts..
-        /// </summary>
-        public static string ChartContainerIncompatibleHistogramBounds {
-            get {
-                return ResourceManager.GetString("ChartContainerIncompatibleHistogramBounds", resourceCulture);
             }
         }
 

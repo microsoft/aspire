@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Packaging;
@@ -25,6 +26,7 @@ using Aspire.TypeSystem;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 using Spectre.Console;
@@ -37,19 +39,51 @@ public class GuestAppHostProjectTests : IDisposable
     private readonly TemporaryWorkspace _workspace;
     private readonly IConfiguration _configuration;
     private readonly ProfilingTelemetry _profilingTelemetry;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly List<FileLoggerProvider> _fileLoggerProviders = [];
 
     public GuestAppHostProjectTests(ITestOutputHelper outputHelper)
     {
         _workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         _configuration = new ConfigurationBuilder().Build();
         _profilingTelemetry = new ProfilingTelemetry(_configuration);
+        _loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddXunit(outputHelper));
     }
 
     public void Dispose()
     {
+        foreach (var provider in _fileLoggerProviders)
+        {
+            provider.Dispose();
+        }
         _profilingTelemetry.Dispose();
         _workspace.Dispose();
+        _loggerFactory.Dispose();
         GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public async Task BuildAndGenerateSdkAsync_V2BootstrapWithoutProvidersDoesNotStartWorkloads()
+    {
+        var root = _workspace.WorkspaceRoot;
+        var executable = Path.Combine(root.FullName, "server");
+        await File.WriteAllTextAsync(executable, "");
+        new AspireConfigFile
+        {
+            Features = new() { [KnownFeatures.AppHostServerV2] = true }
+        }.Save(root.FullName);
+        var sessionFactory = new FakeAppHostServerSessionFactory();
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(
+                    new NativeAppHostServerProject(path, executable, new TestProcessExecutionFactory(), NullLogger.Instance))
+            },
+            serverSessionFactory: sessionFactory);
+
+        Assert.True(await project.BuildAndGenerateSdkAsync(root, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Collection(sessionFactory.CreatedSessionEnvironments,
+            environment => Assert.Equal("true", environment![KnownConfigNames.IntegrationHostBootstrap]));
     }
 
     [Theory]
@@ -334,7 +368,7 @@ public class GuestAppHostProjectTests : IDisposable
             """,
             """
             @echo off
-            powershell.exe -NoLogo -NoProfile -NonInteractive -Command "$child = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 300' -PassThru; Set-Content child.pid $child.Id; Set-Content parent.pid $PID; Wait-Process -Id $child.Id"
+            powershell.exe -NoLogo -NoProfile -NonInteractive -Command "$child = Start-Process -FilePath powershell.exe -NoNewWindow -ArgumentList '-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 300' -PassThru; Set-Content child.pid $child.Id; Set-Content parent.pid $PID; Wait-Process -Id $child.Id"
             """);
         using var installCts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var installTask = CreateGuestAppHostProject().InstallIntegrationHostPackageAsync(
@@ -1551,8 +1585,8 @@ public class GuestAppHostProjectTests : IDisposable
 
         var factory = new TestAppHostServerProjectFactory
         {
-            CreateAsyncCallback = (appPath, _) =>
-                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(appPath))
+            CreateAsyncCallback = (_, _) =>
+                throw new InvalidOperationException("Instance discovery must not acquire a server or bundle lease.")
         };
 
         var project = CreateGuestAppHostProject(appHostServerProjectFactory: factory);
@@ -1562,6 +1596,28 @@ public class GuestAppHostProjectTests : IDisposable
             new FileInfo(appHostPath),
             _workspace.WorkspaceRoot,
             CancellationToken.None);
+
+        Assert.Equal(RunningInstanceResult.NoRunningInstance, result);
+        Assert.False(File.Exists(socketPath));
+    }
+
+    [Fact]
+    public async Task FindAndStopRunningInstanceAsync_UsesFactoryIdentityWithoutCreatingAServer()
+    {
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.mts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+        var identity = Path.Combine(_workspace.WorkspaceRoot.FullName, "server", "AppHostServer.csproj");
+        var factory = new TestAppHostServerProjectFactory
+        {
+            GetInstanceIdentifierCallback = _ => identity,
+            CreateAsyncCallback = (_, _) =>
+                throw new InvalidOperationException("Instance discovery must not acquire a server or bundle lease.")
+        };
+        var project = CreateGuestAppHostProject(appHostServerProjectFactory: factory);
+        var socketPath = CreateMatchingSocketFile(identity, int.MaxValue - 1);
+
+        var result = await project.FindAndStopRunningInstanceAsync(
+            new FileInfo(appHostPath), _workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
 
         Assert.Equal(RunningInstanceResult.NoRunningInstance, result);
         Assert.False(File.Exists(socketPath));
@@ -2066,13 +2122,17 @@ public class GuestAppHostProjectTests : IDisposable
             }
         };
 
+        // The extension is faked, but its launcher still resolves the runtime executable.
+        // Use the test host so this lifecycle test does not require Node on PATH.
+        var runtimeExecutable = Environment.ProcessPath;
+        Assert.NotNull(runtimeExecutable);
         var runtimeSpec = new RuntimeSpec
         {
             Language = "typescript/nodejs",
             DisplayName = "TypeScript (Node.js)",
             CodeGenLanguage = "TypeScript",
             DetectionPatterns = ["apphost.ts"],
-            Execute = new CommandSpec { Command = "node", Args = ["apphost.js"] },
+            Execute = new CommandSpec { Command = runtimeExecutable, Args = ["apphost.js"] },
             ExtensionLaunchCapability = "node"
         };
         var serverSession = new FakeAppHostServerSession(new FakeAppHostRpcClient { RuntimeSpec = runtimeSpec });
@@ -2090,22 +2150,96 @@ public class GuestAppHostProjectTests : IDisposable
         {
             AppHostFile = appHostFile,
             WorkingDirectory = _workspace.WorkspaceRoot,
-            EnvironmentVariables = new Dictionary<string, string>(),
+            EnvironmentVariables = new Dictionary<string, string> { ["PATH"] = string.Empty },
             BuildCompletionSource = buildCompletionSource,
             BackchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously)
         };
         using var cancellationSource = new CancellationTokenSource();
 
         var runTask = project.RunAsync(context, cancellationSource.Token);
-        await launchStarted.Task.DefaultTimeout();
+        try
+        {
+            Assert.Same(launchStarted.Task, await Task.WhenAny(launchStarted.Task, runTask).DefaultTimeout());
+            await launchStarted.Task.DefaultTimeout();
 
-        Assert.False(buildCompletionSource.Task.IsCompleted);
+            Assert.False(buildCompletionSource.Task.IsCompleted);
 
-        allowLaunchToComplete.TrySetResult();
-        Assert.True(await buildCompletionSource.Task.DefaultTimeout());
+            allowLaunchToComplete.TrySetResult();
+            Assert.True(await buildCompletionSource.Task.DefaultTimeout());
+        }
+        finally
+        {
+            allowLaunchToComplete.TrySetResult();
+            await cancellationSource.CancelAsync();
+            await runTask.DefaultTimeout();
+        }
+        Assert.Equal(CliExitCodes.Cancelled, await runTask);
+    }
 
-        await cancellationSource.CancelAsync();
-        Assert.Equal(CliExitCodes.Cancelled, await runTask.DefaultTimeout());
+    [Theory]
+    [InlineData("publish", null, "publish")]
+    [InlineData("deploy", null, "publish")]
+    [InlineData("publish", "--operation", "inspect")]
+    [InlineData("deploy", "--operation", "inspect")]
+    [InlineData("publish", "--operation=inspect", "inspect")]
+    [InlineData("publish", "--operation=run", "publish")]
+    [InlineData("publish", "--operation=foo", "publish")]
+    [InlineData("deploy", "--operation=run", "publish")]
+    [InlineData("deploy", "--operation=foo", "publish")]
+    [InlineData(null, null, "publish")]
+    public async Task PublishAsync_V2ProjectsOperationIntoServerSession(string? step, string? inspectionArgument, string expectedOperation)
+    {
+        var root = _workspace.WorkspaceRoot;
+        var appHostFile = new FileInfo(Path.Combine(root.FullName, "apphost.mts"));
+        var executable = Path.Combine(root.FullName, "server");
+        await File.WriteAllTextAsync(appHostFile.FullName, "// test apphost");
+        await File.WriteAllTextAsync(executable, "");
+        new AspireConfigFile
+        {
+            Features = new() { [KnownFeatures.AppHostServerV2] = true }
+        }.Save(root.FullName);
+        var session = new FakeAppHostServerSession
+        {
+            GetRpcClientAsyncCallback = _ => Task.FromException<IAppHostRpcClient>(
+                new InvalidOperationException("Stop after capturing the native server session."))
+        };
+        var sessions = new FakeAppHostServerSessionFactory { Session = session };
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(
+                    new NativeAppHostServerProject(path, executable, new TestProcessExecutionFactory(), NullLogger.Instance))
+            },
+            serverSessionFactory: sessions);
+        string[] arguments = step is null ? [] : ["--operation", "publish", "--step", step];
+        if (inspectionArgument is not null)
+        {
+            arguments = inspectionArgument == "--operation"
+                ? [.. arguments, "--operation", "inspect", "--list-steps", "true"]
+                : [.. arguments, inspectionArgument, "--list-steps", "true"];
+        }
+        var context = new PublishContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = root,
+            Arguments = arguments,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                [NativeAppHostServerProject.OperationEnvironmentVariable] = "run"
+            }
+        };
+
+        var exitCode = await project.PublishAsync(context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.True(session.StartAsyncCalled);
+        Assert.Collection(sessions.CreatedSessionEnvironments, environment =>
+        {
+            Assert.Equal(expectedOperation, environment![NativeAppHostServerProject.OperationEnvironmentVariable]);
+            Assert.False(environment.ContainsKey(KnownConfigNames.IntegrationHostBootstrap));
+            Assert.NotEmpty(environment[KnownConfigNames.UnixSocketPath]);
+        });
+        Assert.Equal("run", context.EnvironmentVariables[NativeAppHostServerProject.OperationEnvironmentVariable]);
     }
 
     [Theory]
@@ -2460,6 +2594,8 @@ public class GuestAppHostProjectTests : IDisposable
         // ConsoleCancellationManager so the fixture doesn't register process-global OS signal handlers;
         // none of the tests here drive the launcher or AppHostServerSession paths that would fire it.
         var shutdownWindow = new TestGracefulShutdownWindow();
+        var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter());
+        _fileLoggerProviders.Add(fileLoggerProvider);
 
         return new GuestAppHostProject(
             language: language,
@@ -2468,7 +2604,8 @@ public class GuestAppHostProjectTests : IDisposable
             appHostServerProjectFactory: appHostServerProjectFactory ?? new TestAppHostServerProjectFactory(),
             certificateService: new TestCertificateService(),
             runner: new TestDotNetCliRunner(),
-            processExecutionFactory: TestProcessExecutionFactory.CreateForCliGuardian(effectiveEnvironment),
+            processExecutionFactory: TestProcessExecutionFactory.CreateForCliGuardian(
+                effectiveEnvironment, _loggerFactory.CreateLogger<ProcessExecutionFactory>()),
             packagingService: new TestPackagingService(),
             configuration: effectiveConfiguration,
             features: new Features(effectiveConfiguration, NullLogger<Features>.Instance),
@@ -2482,7 +2619,7 @@ public class GuestAppHostProjectTests : IDisposable
                 },
                 effectiveEnvironment),
             logger: NullLogger<GuestAppHostProject>.Instance,
-            fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
+            fileLoggerProvider: fileLoggerProvider,
             profilingTelemetry: _profilingTelemetry,
             gracefulShutdownSignaler: new NoOpGracefulSignaler(),
             shutdownService: shutdownWindow,

@@ -36,6 +36,31 @@ await builder.addKubernetesEnvironment("k8s");
 
 The dashboard container included in the published Helm chart opts out of dashboard usage and error telemetry by default (`ASPIRE_DASHBOARD_TELEMETRY_OPTOUT=true`). This does not affect the application's OpenTelemetry data sent to the dashboard.
 
+### Container registries
+
+Assign a registry to a project or Dockerfile-backed resource to include its registry-qualified image name in the published Helm chart:
+
+**C#**
+
+```csharp
+var registry = builder.AddContainerRegistry("registry", "registry.example.com", "apps");
+
+builder.AddProject<Projects.Api>("api")
+    .WithContainerRegistry(registry);
+```
+
+**TypeScript**
+
+```typescript
+const registry = await builder.addContainerRegistry("registry", "registry.example.com", "apps");
+const api = await builder.addNodeApp("api", "../api", "server.js");
+await api.withContainerRegistry(registry);
+```
+
+For this example, `aspire publish` writes `registry.example.com/apps/api:latest` to the image parameter in `values.yaml`. Image push options that customize the remote image name or tag are also respected. Existing container images, such as `redis:7`, are unchanged.
+
+Literal registry values and non-secret parameter defaults can be resolved during publishing. Registry values that require provisioning, secrets, or parameters without defaults remain deferred, with `<resource>:latest` as the published placeholder. `aspire deploy` resolves the image names again after provisioning and supplies them through a Helm values override file. If deploying the published chart yourself, supply the deferred image values to Helm.
+
 ### Volumes
 
 Use a target-neutral volume when the Kubernetes environment's default storage policy is sufficient:
@@ -89,6 +114,42 @@ When published or deployed, `DATA_PATH` contains `/data`. Applications can there
 ```shell
 aspire publish -o k8s-artifacts
 ```
+
+### Persistent volume claim customization
+
+Use `WithConfiguration` / `withConfiguration` to customize the generated claim after the environment defaults and fluent volume settings have been applied. Multiple callbacks run in registration order and see changes made by earlier callbacks.
+
+**C#**
+
+```csharp
+var data = k8s.AddPersistentVolume("data")
+    .WithConfiguration(claim =>
+    {
+        claim.Metadata.Labels["example.com/retention"] = "retain";
+        claim.Spec.VolumeMode = "Filesystem";
+        claim.Spec.StorageClassName = "";
+    });
+```
+
+**TypeScript**
+
+```typescript
+const data = await k8s.addPersistentVolume("data");
+await data.withConfiguration(async (claim) => {
+    const metadata = await claim.metadata.get();
+    await metadata.labels.set("example.com/retention", "retain");
+
+    const spec = await claim.spec.get();
+    await spec.volumeMode.set("Filesystem");
+    await spec.storageClassName.set("");
+});
+```
+
+TypeScript callbacks receive live remote objects: await property and collection operations rather than assigning JavaScript properties. The supported claim surface includes labels, annotations, storage class, volume name, volume mode, access modes, and resource requests. For example, use `await metadata.annotations()`, `await spec.accessModes()`, and `await (await spec.resources.get()).requests()` to access the corresponding mutable collections.
+
+Setting `storageClassName` to `""` requests a classless volume; setting it to `null` omits the field so Kubernetes can assign its default StorageClass. The fluent equivalents are `withStorageClass("")` and `withoutStorageClass()`. Use the existing parameterized fluent methods when storage class, capacity, or annotations should be resolved through Helm parameters; callbacks see the generated values.
+
+Other claim fields, including selectors, data sources, volume attributes classes, resource limits, and claim name/namespace customization, remain C#-only. Setting `volumeMode` to `"Block"` does not create the workload's required `volumeDevices` bindings; the persistent-volume mount APIs generate filesystem mounts.
 
 ### ACME certificates with cert-manager
 
@@ -192,18 +253,6 @@ If EAB Secret cleanup fails, destroy logs a warning and continues with Helm unin
 and infrastructure teardown. Remove any retained EAB Secret manually.
 Changing issuer names or namespaces after deployment requires manual cleanup of
 resources at their previous locations.
-
-ClusterIssuers read Secrets from cert-manager's **cluster resource namespace**, not the
-application namespace. The default is the Helm installation namespace, normally
-`cert-manager-chart`. If you customize it, use the chart's `clusterResourceNamespace`
-Helm value rather than overriding `--cluster-resource-namespace` through `extraArgs`:
-
-```csharp
-certManager.Resource.HelmChart.Values["clusterResourceNamespace"] = "certificate-accounts";
-```
-
-Ensure a custom cluster resource namespace already exists and that cert-manager can
-access Secrets there. Aspire also respects the chart's installation namespace override.
 
 #### Deployment pipelines and account lifecycle
 

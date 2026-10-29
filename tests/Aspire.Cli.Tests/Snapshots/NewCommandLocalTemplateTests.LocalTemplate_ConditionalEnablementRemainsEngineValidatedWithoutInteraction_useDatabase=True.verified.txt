@@ -1,0 +1,5 @@
+﻿{
+  DisplayedErrors: [
+    Could not create the local template (MissingMandatoryParam): ConnectionString
+  ]
+}

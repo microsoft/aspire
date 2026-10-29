@@ -197,6 +197,13 @@ jobs:
           name: cli-e2e-polyglot-java-image
           path: ${{ github.workspace }}/cli-e2e-image
 
+      - name: Download prebuilt CLI E2E Go Docker image
+        if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-e2e-polyglot-go-image
+          path: ${{ github.workspace }}/cli-e2e-image
+
       - name: Download prebuilt CLI E2E polyglot Docker image
         if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -213,7 +220,8 @@ jobs:
             --image-dir "${{ github.workspace }}/cli-e2e-image" \
             --require-dotnet true \
             --require-polyglot true \
-            --require-java true
+            --require-java true \
+            --require-go true
 
       - name: Unlock macOS keychain
         if: runner.os == 'macOS'

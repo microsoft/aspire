@@ -13,6 +13,9 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestNewCommandPrompter(IInteractionService interactionService) : NewCommandPrompter(interactionService)
 {
+    public override async Task<TemplateSelection> PromptForTemplateOrSearchAsync(ITemplate[] validTemplates, CancellationToken cancellationToken) =>
+        new(await PromptForTemplateAsync(validTemplates, cancellationToken));
+
     public Func<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>, (NuGetPackage Package, PackageChannel Channel)>? PromptForTemplatesVersionCallback { get; set; }
     public Func<ITemplate[], ITemplate>? PromptForTemplateCallback { get; set; }
     public Func<string, string>? PromptForProjectNameCallback { get; set; }

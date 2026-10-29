@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Shared;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Go;
@@ -32,7 +33,8 @@ internal sealed class GoLanguageSupport : ILanguageSupport
     {
         var files = new Dictionary<string, string>();
 
-        // Create apphost.go
+        // Create apphost.go. The blank line before the closing quotes is intentional: a raw string literal
+        // drops the last newline, and gofmt requires the file to end with one.
         files["apphost.go"] = """
             // Aspire Go AppHost
             // For more information, see: https://aspire.dev
@@ -41,6 +43,7 @@ internal sealed class GoLanguageSupport : ILanguageSupport
 
             import (
             	"log"
+
             	"apphost/modules/aspire"
             )
 
@@ -50,11 +53,14 @@ internal sealed class GoLanguageSupport : ILanguageSupport
             		log.Fatal(aspire.FormatError(err))
             	}
 
-            	// Add your resources here, for example:
+            	// Add your resources here. Each call records its failure on the handle that it returns,
+            	// so check every resource, for example:
             	// cache := builder.AddRedis("cache")
             	// db := builder.AddPostgres("db")
-            	// if err := builder.Err(); err != nil {
-            	// 	log.Fatal(aspire.FormatError(err))
+            	// for _, resource := range []aspire.Resource{cache, db} {
+            	// 	if err := resource.Err(); err != nil {
+            	// 		log.Fatal(aspire.FormatError(err))
+            	// 	}
             	// }
 
             	app, err := builder.Build()
@@ -65,6 +71,15 @@ internal sealed class GoLanguageSupport : ILanguageSupport
             		log.Fatal(aspire.FormatError(err))
             	}
             }
+
+            """;
+
+        // .aspire/modules holds the generated SDK. It is regenerated from the AppHost's integrations
+        // and is large, so it should not be committed. As with apphost.go, the blank line before the closing
+        // quotes is intentional: the file should end with a newline, like go-starter/.gitignore does.
+        files[".gitignore"] = """
+            .aspire/
+
             """;
 
         // Create go.mod with require and replace directives for local modules
@@ -84,26 +99,25 @@ internal sealed class GoLanguageSupport : ILanguageSupport
             ? new Random(request.PortSeed.Value)
             : Random.Shared;
 
-        var httpsPort = random.Next(10000, 65000);
-        var httpPort = random.Next(10000, 65000);
-        var otlpPort = random.Next(10000, 65000);
-        var resourceServicePort = random.Next(10000, 65000);
+        var ports = AppHostProfilePortGenerator.Generate(random);
 
         files["apphost.run.json"] = $$"""
             {
               "profiles": {
                 "https": {
-                  "applicationUrl": "https://localhost:{{httpsPort}};http://localhost:{{httpPort}}",
+                  "applicationUrl": "https://localhost:{{ports.DashboardHttpsPort}};http://localhost:{{ports.DashboardHttpPort}}",
                   "environmentVariables": {
-                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:{{otlpPort}}",
-                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:{{resourceServicePort}}"
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:{{ports.OtlpHttpsPort}}",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:{{ports.ResourceServiceHttpsPort}}"
                   }
                 }
               }
             }
             """;
 
-        return files;
+        // The literals above take the line endings of this source file (CRLF in a Windows checkout), and gofmt requires LF.
+        // Only CRLF is replaced, not every line ending: see AtsGoCodeGenerator.GenerateDistributedApplication for why.
+        return files.ToDictionary(file => file.Key, file => file.Value.Replace("\r\n", "\n"));
     }
 
     /// <inheritdoc />

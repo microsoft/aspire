@@ -27,6 +27,12 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ConfigInfo_AdvertisesDescribeAppHostPid()
+    {
+        Assert.Contains(KnownCapabilities.DescribeAppHostPid, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
     public void ConfigInfo_AdvertisesIsolatedLaunch()
     {
         Assert.Contains(KnownCapabilities.IsolatedLaunch, KnownCapabilities.GetAdvertisedCapabilities());
@@ -62,7 +68,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         var info = new Aspire.Cli.Commands.ConfigInfo(
             LocalSettingsPath: "local.json",
             GlobalSettingsPath: "global.json",
-            AvailableFeatures: [new Aspire.Cli.Commands.FeatureInfo("featureA", "Description", DefaultValue: false)],
+            AvailableFeatures: [new Aspire.Cli.Commands.FeatureInfo("featureA", "Description", DefaultValue: false, ProjectOnly: false)],
             LocalSettingsSchema: new Aspire.Cli.Commands.SettingsSchema([]),
             GlobalSettingsSchema: new Aspire.Cli.Commands.SettingsSchema([]),
             ConfigFileSchema: new Aspire.Cli.Commands.SettingsSchema([]),
@@ -139,6 +145,21 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         var settings = JsonNode.Parse(json)?.AsObject();
         Assert.NotNull(settings);
         Assert.Equal("bar", settings["foo"]?.ToString());
+    }
+
+    [Theory]
+    [InlineData("features.appHostServerV2")]
+    [InlineData("features:appHostServerV2")]
+    public async Task ConfigSetCommand_RejectsGlobalAppHostServerV2(string key)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        var exitCode = await command.Parse($"config set {key} true --global").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]

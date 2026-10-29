@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="it" original="../Dialogs.resx">
     <body>
@@ -25,28 +25,28 @@ This command configures skill files for your AI agent. The skill files tell the 
 Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
 
 For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</source>
-        <target state="new">Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
+        <target state="translated">Aspire offre agli agenti di sviluppo basati sull'IA un'osservabilità approfondita dell'app usando le stesse informazioni visibili nel dashboard. Gli agenti usano la telemetria per diagnosticare più rapidamente i problemi e verificare le correzioni con maggiore sicurezza. 🚀
 
-- 📦 Resource state, health checks, and relationships
-- 🖥️ Console logs
-- 📊 Distributed traces
-- 🪵 Structured logs
+- 📦 Stato delle risorse, controlli di integrità e relazioni
+- 🖥️ Log della console
+- 📊 Tracce distribuite
+- 🪵 Log strutturati
 
-## Getting started
+## Introduzione
 
-AI agents access dashboard telemetry through the Aspire CLI. If you haven't installed it yet, [install the Aspire CLI]({1}).
+Gli agenti IA accedono alla telemetria della dashboard tramite la CLI di Aspire. Se non è stata ancora installata, [installare l'interfaccia della riga di comando di Aspire]({1}).
 
-Initialize AI agent support in your project with:
+Inizializza il supporto per gli agenti IA nel progetto con:
 
 ```bash
 aspire agent init
 ```
 
-This command configures skill files for your AI agent. The skill files tell the agent how to use Aspire CLI commands like [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
+Questo comando configura i file di istruzioni per l'agente IA. Questi file spiegano all'agente come usare comandi dell'interfaccia della riga di comando di Aspire, ad esempio [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) e [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
 
-Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
+Una volta connessi, gli agenti possono avviare l'app, controllare lo stato delle risorse, recuperare log e tracce e molto altro.
 
-For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</target>
+Per altre informazioni sull'uso degli agenti IA con Aspire, ad esempio su come configurare i file di istruzioni, vedi [Agenti di sviluppo basati sull'IA]({0}).</target>
         <note>{0} is the learn more URL, {1} is the install CLI URL</note>
       </trans-unit>
       <trans-unit id="AIAgentsDialogStandaloneDescription">
@@ -68,29 +68,29 @@ aspire otel logs --dashboard-url {0}
 This is one example of how AI agents can access telemetry for your app. See [`aspire otel`](https://aspire.dev/reference/cli/commands/aspire-otel/) and [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/).
 
 For more information about using AI agents with the dashboard, including setting up skills, see [Standalone dashboard and AI coding agents]({1}).</source>
-        <target state="new">Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
+        <target state="translated">Aspire offre agli agenti di sviluppo basati sull'IA un'osservabilità approfondita dell'app usando le stesse informazioni visibili nel dashboard. Gli agenti usano la telemetria per diagnosticare più rapidamente i problemi e verificare le correzioni con maggiore sicurezza. 🚀
 
-- 📊 Distributed traces
-- 🔗 Trace spans
-- 🪵 Structured logs
-- 🗂️ Zip file export
+- 📊 Tracce distribuite
+- 🔗 Intervalli di traccia
+- 🪵 Log strutturati
+- 🗂️ Esportazione in un file ZIP
 
-AI agents access dashboard telemetry using the Aspire CLI. [Install the Aspire CLI]({2}) if you haven't already.
+Gli agenti basati sull'IA accedono alla telemetria della dashboard tramite l'interfaccia della riga di comando di Aspire. [Installare l'interfaccia della riga di comando di Aspire]({2}) se non è già presente.
 
-Use Aspire CLI commands to retrieve telemetry data directly in your terminal:
+Usare i comandi dell'interfaccia della riga di comando di Aspire per recuperare i dati di telemetria direttamente dal terminale:
 
 ```bash
 aspire otel logs --dashboard-url {0}
 ```
 
-This is one example of how AI agents can access telemetry for your app. See [`aspire otel`](https://aspire.dev/reference/cli/commands/aspire-otel/) and [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/).
+Questo è un esempio di come gli agenti basati sull'IA possono accedere alla telemetria dell'app. Vedi [`aspire otel`](https://aspire.dev/reference/cli/commands/aspire-otel/) e [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/).
 
-For more information about using AI agents with the dashboard, including setting up skills, see [Standalone dashboard and AI coding agents]({1}).</target>
+Per altre informazioni sull'uso degli agenti basati sull'IA con la dashboard, inclusa la configurazione delle capacità, vedi [Dashboard autonomo e agenti di codifica basati sull'IA]({1}).</target>
         <note>{0} is the dashboard URL, {1} is the learn more URL, {2} is the install CLI URL</note>
       </trans-unit>
       <trans-unit id="AIAgentsDialogTitle">
         <source>AI agents</source>
-        <target state="new">AI agents</target>
+        <target state="translated">Agenti IA</target>
         <note />
       </trans-unit>
       <trans-unit id="DialogCloseButtonText">
@@ -155,12 +155,12 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="FilterDialogDatePlaceholder">
         <source>e.g. 2024-01-15T09:30:00</source>
-        <target state="new">e.g. 2024-01-15T09:30:00</target>
+        <target state="translated">ad es. 2024-01-15T09:30:00</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogDateValueLabel">
         <source>Date and time</source>
-        <target state="new">Date and time</target>
+        <target state="translated">Data e ora</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogDisableAll">
@@ -185,7 +185,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="FilterDialogInvalidDate">
         <source>Invalid date format</source>
-        <target state="new">Invalid date format</target>
+        <target state="translated">Formato data non valido</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogParameterInputLabel">
@@ -195,7 +195,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="FilterDialogPickDateButtonTitle">
         <source>Pick date and time</source>
-        <target state="new">Pick date and time</target>
+        <target state="translated">Seleziona data e ora</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogRemoveFilterButtonText">
@@ -250,7 +250,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="GenAILLMBadgeText">
         <source>LLM</source>
-        <target state="new">LLM</target>
+        <target state="translated">LLM</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAIMessageCategoryMessage">
@@ -305,7 +305,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="GenAIMessageTreeLabel">
         <source>Generative AI messages</source>
-        <target state="new">Generative AI messages</target>
+        <target state="translated">Messaggi di IA generativa</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAINAText">
@@ -370,12 +370,12 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="GenAIToolCallButtonText">
         <source>Tool call</source>
-        <target state="new">Tool call</target>
+        <target state="translated">Chiamata dello strumento</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAIToolDefinitionButtonText">
         <source>Tool definition</source>
-        <target state="new">Tool definition</target>
+        <target state="translated">Definizione dello strumento</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAIToolNoParameters">
@@ -410,7 +410,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="GenAIUnexpectedOrTruncatedContent">
         <source>Unexpected or truncated message content.</source>
-        <target state="new">Unexpected or truncated message content.</target>
+        <target state="translated">Contenuto del messaggio imprevisto o troncato.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryNavigation">
@@ -470,7 +470,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="HelpDialogGoToTerminals">
         <source>Go to Terminals</source>
-        <target state="new">Go to Terminals</target>
+        <target state="translated">Vai ai terminali</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTraces">
@@ -505,7 +505,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="HelpDialogToggleTerminalDock">
         <source>Toggle terminal</source>
-        <target state="new">Toggle terminal</target>
+        <target state="translated">Attiva/Disattiva terminale</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionButtonCancel">
@@ -525,32 +525,32 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="InteractionFileExceedsMaxSize">
         <source>Exceeds the maximum size of {0}</source>
-        <target state="new">Exceeds the maximum size of {0}</target>
+        <target state="translated">Supera le dimensioni massime di {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionFilePlaceholder">
         <source>Choose a file</source>
-        <target state="new">Choose a file</target>
+        <target state="translated">Scegli un file</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionFilePlaceholderMultiple">
         <source>Choose files</source>
-        <target state="new">Choose files</target>
+        <target state="translated">Scegliere i file</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionFileUploadFailed">
         <source>Upload failed</source>
-        <target state="new">Upload failed</target>
+        <target state="translated">Caricamento non riuscito</target>
         <note />
       </trans-unit>
       <trans-unit id="ManageDataAllDataCheckboxLabel">
         <source>All data</source>
-        <target state="new">All data</target>
+        <target state="translated">Tutti i dati</target>
         <note />
       </trans-unit>
       <trans-unit id="ManageDataDataTypeForResourceCheckboxLabel">
         <source>{0} for {1}</source>
-        <target state="new">{0} for {1}</target>
+        <target state="translated">{0} per {1}</target>
         <note>{0} is the data type display name. {1} is the parent resource display name.</note>
       </trans-unit>
       <trans-unit id="ManageDataDialogTitle">
@@ -615,17 +615,17 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="NotificationCenterDismissAll">
         <source>Dismiss all</source>
-        <target state="new">Dismiss all</target>
+        <target state="translated">Ignora tutto</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationCenterEmpty">
         <source>No notifications</source>
-        <target state="new">No notifications</target>
+        <target state="translated">Nessuna notifica</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationEntryDismiss">
         <source>Dismiss notification</source>
-        <target state="new">Dismiss notification</target>
+        <target state="translated">Ignora notifica</target>
         <note />
       </trans-unit>
       <trans-unit id="OpenInTextVisualizer">
@@ -700,22 +700,22 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="SettingsDialogTimeFormat">
         <source>Time format</source>
-        <target state="new">Time format</target>
+        <target state="translated">Formato ora</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogTimeFormatSystem">
         <source>System</source>
-        <target state="new">System</target>
+        <target state="translated">Sistema</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogTimeFormatTwelveHour">
         <source>12-hour</source>
-        <target state="new">12-hour</target>
+        <target state="translated">12 ore</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogTimeFormatTwentyFourHour">
         <source>24-hour</source>
-        <target state="new">24-hour</target>
+        <target state="translated">24 ore</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogVersion">
@@ -750,41 +750,41 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="TelemetryHelpApiKeyDescription">
         <source>Set OTEL_EXPORTER_OTLP_HEADERS to x-otlp-api-key=&lt;your-api-key&gt;, replacing &lt;your-api-key&gt; with the dashboard's configured OTLP API key.</source>
-        <target state="new">Set OTEL_EXPORTER_OTLP_HEADERS to x-otlp-api-key=&lt;your-api-key&gt;, replacing &lt;your-api-key&gt; with the dashboard's configured OTLP API key.</target>
+        <target state="translated">Imposta OTEL_EXPORTER_OTLP_HEADERS su x-otlp-api-key=&lt;your-api-key&gt;, sostituendo &lt;your-api-key&gt; con la chiave API OTLP configurata per il dashboard.</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpButtonText">
         <source>Add telemetry</source>
-        <target state="new">Add telemetry</target>
+        <target state="translated">Aggiungi telemetria</target>
         <note>Inline link following TelemetryHelpMoreInformation. Opens the telemetry setup dialog.</note>
       </trans-unit>
       <trans-unit id="TelemetryHelpCertificateDescription">
         <source>Configure your OTLP exporter to present a client certificate trusted by the dashboard. Use your SDK's OTLP exporter settings to specify the certificate and private key.</source>
-        <target state="new">Configure your OTLP exporter to present a client certificate trusted by the dashboard. Use your SDK's OTLP exporter settings to specify the certificate and private key.</target>
+        <target state="translated">Configurare l'utilità di esportazione OTLP per presentare un certificato client attendibile dal dashboard. Usare le impostazioni dell'utilità di esportazione OTLP dell'SDK per specificare il certificato e la chiave privata.</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpContainerDescription">
         <source>The dashboard is running in a container. Access it from the host using port forwarding.</source>
-        <target state="new">The dashboard is running in a container. Access it from the host using port forwarding.</target>
+        <target state="translated">Il dashboard è in esecuzione in un contenitore. Accedervi dall'host usando port forwarding.</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpDialogTitle">
         <source>Add telemetry</source>
-        <target state="new">Add telemetry</target>
+        <target state="translated">Aggiungi telemetria</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpEndpointHeader">
         <source>Dashboard endpoint</source>
-        <target state="new">Dashboard endpoint</target>
+        <target state="translated">Endpoint del dashboard</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpImportDescription">
         <source>### 📥 Import telemetry from a file
 
 Import previously exported telemetry or OTLP JSON files by selecting **{0}** in the **{1}** dialog.</source>
-        <target state="new">### 📥 Import telemetry from a file
+        <target state="translated">### 📥 Importare i dati di telemetria da un file
 
-Import previously exported telemetry or OTLP JSON files by selecting **{0}** in the **{1}** dialog.</target>
+Importare i file JSON OTLP o di telemetria esportati in precedenza selezionando **{0}** nella finestra di dialogo **{1}**.</target>
         <note>Markdown. {0} is the localized import button text, {1} is the localized data management dialog title.</note>
       </trans-unit>
       <trans-unit id="TelemetryHelpIntroduction">
@@ -793,51 +793,51 @@ Import previously exported telemetry or OTLP JSON files by selecting **{0}** in 
 ### 📡 Send telemetry from your app
 
 Configure your app to export logs, traces, and metrics using [OTLP]({0}).</source>
-        <target state="new">Visualize logs, traces, and metrics in the dashboard. To see telemetry, first send it to the dashboard using OTLP or manually import telemetry JSON files.
+        <target state="translated">Visualizza log, tracce e metriche nel dashboard. Per visualizzare i dati di telemetria, inviarli prima al dashboard usando OTLP o importando manualmente i file JSON di telemetria.
 
-### 📡 Send telemetry from your app
+### Inviare dati di 📡 telemetria dall'app
 
-Configure your app to export logs, traces, and metrics using [OTLP]({0}).</target>
+Configurare l'app per esportare log, tracce e metriche usando [OTLP]({0}).</target>
         <note>Markdown. {0} is the OTLP specification URL.</note>
       </trans-unit>
       <trans-unit id="TelemetryHelpManageDataLink">
         <source>Learn about managing dashboard data</source>
-        <target state="new">Learn about managing dashboard data</target>
+        <target state="translated">Informazioni sulla gestione dei dati del dashboard</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpMessage">
         <source>Configure your app to send telemetry to the dashboard.</source>
-        <target state="new">Configure your app to send telemetry to the dashboard.</target>
+        <target state="translated">Consente di configurare l'app per inviare la telemetria al dashboard.</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpMoreInformation">
         <source>For setup instructions, see</source>
-        <target state="new">For setup instructions, see</target>
+        <target state="translated">Per istruzioni sulla configurazione, vedere</target>
         <note>Followed by the TelemetryHelpButtonText inline link and a period.</note>
       </trans-unit>
       <trans-unit id="TelemetryHelpNoEndpointsDescription">
         <source>No OTLP endpoints are configured. To receive live telemetry, configure an OTLP endpoint when starting the dashboard.</source>
-        <target state="new">No OTLP endpoints are configured. To receive live telemetry, configure an OTLP endpoint when starting the dashboard.</target>
+        <target state="translated">Non sono configurati endpoint OTLP. Per ricevere dati di telemetria in tempo reale, configurare un endpoint OTLP all'avvio del dashboard.</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpProtocolHeader">
         <source>Protocol</source>
-        <target state="new">Protocol</target>
+        <target state="translated">Protocollo</target>
         <note />
       </trans-unit>
       <trans-unit id="TelemetryHelpSendTelemetryLink">
         <source>Connect your app to the dashboard</source>
-        <target state="new">Connect your app to the dashboard</target>
+        <target state="translated">Connetti l'app al dashboard</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogJsonFormat">
         <source>JSON</source>
-        <target state="needs-review-translation">Formato JSON</target>
+        <target state="translated">JSON</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogMarkdownFormat">
         <source>Markdown</source>
-        <target state="new">Markdown</target>
+        <target state="translated">Markdown</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogPlaintextFormat">
@@ -847,12 +847,12 @@ Configure your app to export logs, traces, and metrics using [OTLP]({0}).</targe
       </trans-unit>
       <trans-unit id="TextVisualizerDialogSqlFormat">
         <source>SQL</source>
-        <target state="new">SQL</target>
+        <target state="translated">SQL</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogXmlFormat">
         <source>XML</source>
-        <target state="needs-review-translation">Formatta XML</target>
+        <target state="translated">XML</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningAcknowledge">
@@ -862,7 +862,7 @@ Configure your app to export logs, traces, and metrics using [OTLP]({0}).</targe
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningDescription">
         <source>Confirm you want to show this value. Once confirmed, the text visualizer in the browser will show values automatically</source>
-        <target state="needs-review-translation">Confermare di voler visualizzare il valore. In futuro, quando si apre il visualizzatore di testo, verranno mostrati automaticamente tutti i valori</target>
+        <target state="translated">Conferma di voler visualizzare questo valore. Una volta confermato, il visualizzatore di testo nel browser mostrerà automaticamente i valori</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningTitle">

@@ -165,6 +165,7 @@ suite('utils/strings tests', () => {
         const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
 
         const expectedStrings = {
+            blazorWasmDebugRelayFailed: 'Could not prepare Blazor WebAssembly debugging. See the Aspire output for details, then try again.',
             csharpExtensionMissingForBlazorDebugging: 'Debugging this Blazor client requires {0} version {1} or later. Install the C# extension, then start debugging again.',
             csharpExtensionOutdatedForBlazorDebugging: 'Debugging this Blazor client requires {0} version {2} or later. Installed version: {1}. Update the C# extension, then start debugging again.',
             missingBlazorClientProject: "The Blazor client project '{0}' does not exist. Restore or rebuild the AppHost, then start debugging again.",
@@ -230,6 +231,22 @@ suite('utils/strings tests', () => {
 
         const missingFromXlf = names.filter(name => !xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`));
         assert.deepStrictEqual(missingFromXlf, [], 'Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding package.nls.json entries.');
+    });
+
+    test('resource debugger strings are present in package.nls.json and the generated XLF catalog', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+        const expectedStrings = {
+            attachingDebugger: 'Attaching debugger to {0}...',
+            attachDebuggerAlreadyDebugging: 'A debugger is already attached to {0}.',
+        };
+
+        for (const [name, value] of Object.entries(expectedStrings)) {
+            const key = `aspire-vscode.strings.${name}`;
+            assert.strictEqual(packageNls[key], value);
+            assert.ok(xlf.includes(`<trans-unit id="${key}">`));
+        }
     });
 
     test('Java loc strings are present in package.nls.json and the generated XLF catalog', () => {

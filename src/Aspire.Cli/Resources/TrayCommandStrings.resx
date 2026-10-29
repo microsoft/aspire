@@ -22,7 +22,7 @@
     <value>Stop the tray without stopping AppHosts (Experimental)</value>
   </data>
   <data name="Started" xml:space="preserve">
-    <value>The experimental Aspire tray is ready.</value>
+    <value>The Aspire Tray is starting.</value>
   </data>
   <data name="Stopped" xml:space="preserve">
     <value>The Aspire tray is stopped. AppHosts were not stopped.</value>

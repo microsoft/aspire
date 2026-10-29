@@ -123,14 +123,25 @@ public sealed class KubernetesDeployWithCertManagerTests(ITestOutputHelper outpu
             var foreignBindingToRemove = typeScript
                 ? "await foreign.withExternalAccountBinding(keyId, hmac);"
                 : "foreign.WithExternalAccountBinding(keyId, hmac);";
+            var removedBindingToRemove = typeScript
+                ? "await removed.withExternalAccountBinding(keyId, hmac);"
+                : "removed.WithExternalAccountBinding(keyId, hmac);";
             Assert.Contains(bindingToRemove, content);
             Assert.Contains(foreignBindingToRemove, content);
+            Assert.Contains(removedBindingToRemove, content);
+            await auto.RunCommandAsync(
+                "kubectl get secret pebble-removed-eab -n cert-manager-chart -o name",
+                counter);
             await File.WriteAllTextAsync(
-                appHostPath, content.Replace(bindingToRemove, "").Replace(foreignBindingToRemove, ""), TestContext.Current.CancellationToken);
+                appHostPath,
+                content.Replace(removedBindingToRemove, "").Replace(bindingToRemove, "").Replace(foreignBindingToRemove, ""),
+                TestContext.Current.CancellationToken);
             await auto.RunCommandAsync("aspire deploy --non-interactive", counter, TimeSpan.FromMinutes(10));
             await auto.RunCommandAsync(
                 "kubectl wait clusterissuer/pebble-valid --for=condition=Ready --timeout=60s && " +
                 "BINDING=$(kubectl get clusterissuer pebble-invalid -o jsonpath='{.spec.acme.externalAccountBinding}') && test -z \"$BINDING\" && " +
+                "BINDING=$(kubectl get clusterissuer pebble-removed -o jsonpath='{.spec.acme.externalAccountBinding}') && test -z \"$BINDING\" && " +
+                "kubectl get secret pebble-removed-eab -n cert-manager-chart -o name && " +
                 "kubectl get secret pebble-invalid-eab -n cert-manager-chart -o name && " +
                 "kubectl delete secret pebble-foreign-eab -n cert-manager-chart && " +
                 "kubectl create secret generic pebble-foreign-eab -n cert-manager-chart --from-literal=unrelated=retain && " +
@@ -155,10 +166,11 @@ public sealed class KubernetesDeployWithCertManagerTests(ITestOutputHelper outpu
                 "else cat secret-delete-result.txt; break; fi; done; test \"$REJECTED\" = 1",
                 counter, TimeSpan.FromMinutes(2));
             await auto.AspireDestroyAsync(counter, TimeSpan.FromMinutes(5));
+            // The removed binding's Secret remains managed and deletable, unlike the denied and foreign Secrets.
             await auto.RunCommandAsync(
-                "ISSUERS=$(kubectl get clusterissuer pebble-valid pebble-invalid --ignore-not-found -o name) && " +
+                "ISSUERS=$(kubectl get clusterissuer pebble-valid pebble-invalid pebble-removed --ignore-not-found -o name) && " +
                 "test \"$ISSUERS\" = clusterissuer.cert-manager.io/pebble-valid && " +
-                "SECRETS=$(kubectl get secret pebble-valid-eab pebble-invalid-eab -n cert-manager-chart --ignore-not-found -o name) && test \"$SECRETS\" = secret/pebble-invalid-eab && " +
+                "SECRETS=$(kubectl get secret pebble-valid-eab pebble-invalid-eab pebble-removed-eab -n cert-manager-chart --ignore-not-found -o name) && test \"$SECRETS\" = secret/pebble-invalid-eab && " +
                 "RELEASES=$(helm list -n cert-manager-chart --short) && test -z \"$RELEASES\" && " +
                 "FOREIGN=$(kubectl get secret pebble-foreign-eab -n cert-manager-chart -o jsonpath='{.data.unrelated}') && test \"$FOREIGN\" = cmV0YWlu && " +
                 "test \"$EAB_ACCOUNT_UID\" = \"$(kubectl get secret pebble-valid-account-key -n cert-manager-chart -o jsonpath='{.metadata.uid}')\"",
@@ -243,6 +255,10 @@ public sealed class KubernetesDeployWithCertManagerTests(ITestOutputHelper outpu
             .WithAcmeServer(server, email)
             .WithHttp01Solver();
         foreign.WithExternalAccountBinding(keyId, hmac);
+        var removed = certManager.AddIssuer("pebble-removed")
+            .WithAcmeServer(server, email)
+            .WithHttp01Solver();
+        removed.WithExternalAccountBinding(keyId, hmac);
         """;
 
     private const string TypeScriptIssuers = """
@@ -271,5 +287,9 @@ public sealed class KubernetesDeployWithCertManagerTests(ITestOutputHelper outpu
         await foreign.withAcmeServer(server, email);
         await foreign.withExternalAccountBinding(keyId, hmac);
         await foreign.withHttp01Solver();
+        const removed = await certManager.addIssuer("pebble-removed");
+        await removed.withAcmeServer(server, email);
+        await removed.withExternalAccountBinding(keyId, hmac);
+        await removed.withHttp01Solver();
         """;
 }

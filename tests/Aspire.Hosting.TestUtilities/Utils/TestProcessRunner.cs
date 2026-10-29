@@ -155,10 +155,12 @@ internal sealed class TestProcessDisposable : IAsyncDisposable
 {
     public int DisposeCallCount { get; private set; }
 
+    public Func<ValueTask>? OnDisposeAsync { get; set; }
+
     public ValueTask DisposeAsync()
     {
         DisposeCallCount++;
 
-        return ValueTask.CompletedTask;
+        return OnDisposeAsync?.Invoke() ?? ValueTask.CompletedTask;
     }
 }

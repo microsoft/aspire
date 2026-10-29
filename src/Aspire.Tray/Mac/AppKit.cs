@@ -32,8 +32,24 @@ internal static partial class AppKit
     public static void Set(nint receiver, string selector, nint argument) => SendVoidPointer(receiver, Selector(selector), argument);
     public static void Release(nint value) => SendVoid(value, Selector("release"));
     public static nint Constant(string name) => Marshal.ReadIntPtr(NativeLibrary.GetExport(s_appKit, name));
-    public static bool Supports(nint receiver, string selector)
-        => SendReturningBool(receiver, Selector("respondsToSelector:"), Selector(selector)) != 0;
+    public static double DoubleConstant(string name) => BitConverter.Int64BitsToDouble(Marshal.ReadInt64(NativeLibrary.GetExport(s_appKit, name)));
+
+    /// <summary>
+    /// Returns an NSRect from a method. A 32-byte struct is returned through a hidden pointer on
+    /// x86-64, which needs objc_msgSend_stret; arm64 returns it in d0-d3 through plain objc_msgSend.
+    /// https://developer.apple.com/documentation/objectivec/1456730-objc_msgsend_stret
+    /// </summary>
+    public static unsafe NativeRect GetRect(nint receiver, string selector)
+    {
+        if (RuntimeInformation.ProcessArchitecture == Architecture.X64)
+        {
+            NativeRect result;
+            SendStret(&result, receiver, Selector(selector));
+            return result;
+        }
+        return SendReturningRect(receiver, Selector(selector));
+    }
+
     public static string Text(nint value)
         => Marshal.PtrToStringUTF8(Get(value, "UTF8String"))
             ?? throw new InvalidOperationException("AppKit returned a missing string.");
@@ -78,16 +94,10 @@ internal static partial class AppKit
     private static partial nint SendUtf8(nint receiver, nint selector, string argument);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
-    public static partial nint SendThreePointers(nint receiver, nint selector, nint first, nint second, nint third);
-
-    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial nint SendTwoPointers(nint receiver, nint selector, nint first, nint second);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial void SendVoidTwoPointers(nint receiver, nint selector, nint first, nint second);
-
-    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
-    public static partial byte PopUpMenu(nint receiver, nint selector, nint positioningItem, NativePoint location, nint view);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial nint SendInt64(nint receiver, nint selector, long argument);
@@ -181,11 +191,54 @@ internal static partial class AppKit
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial void PostEvent(nint receiver, nint selector, nint nativeEvent, byte atStart);
 
-    [LibraryImport(CoreFoundation)]
-    public static partial nint CFRunLoopGetMain();
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    private static partial NativeRect SendReturningRect(nint receiver, nint selector);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend_stret")]
+    private static unsafe partial void SendStret(NativeRect* result, nint receiver, nint selector);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void SendRectAndPointer(nint receiver, nint selector, NativeRect rect, nint argument);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial nint SendRectAndTwoPointers(nint receiver, nint selector, NativeRect rect, nint first, nint second);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial double GetDouble(nint receiver, nint selector);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void SendThreePoints(nint receiver, nint selector, NativePoint first, NativePoint second, NativePoint third);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void DrawWithRect(nint receiver, nint selector, NativeRect rect, nuint options, nint context);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void DrawImageRespectingFlipped(nint receiver, nint selector, NativeRect destination, NativeRect source,
+        nuint operation, double fraction, byte respectFlipped, nint hints);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial NativePoint ConvertPoint(nint receiver, nint selector, NativePoint point, nint view);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial NativePoint ConvertPointFromScreen(nint receiver, nint selector, NativePoint point);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void PerformSelectorAfterDelay(nint receiver, nint selector, nint action, nint argument, double delay);
+
+    [LibraryImport("/System/Library/Frameworks/AppKit.framework/AppKit", EntryPoint = "NSAccessibilityPostNotification")]
+    public static partial void PostAccessibilityNotification(nint element, nint notification);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void SetFrame(nint receiver, nint selector, NativeRect frame, byte display);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial nint CreateTrackingArea(nint receiver, nint selector, NativeRect rect, nuint options, nint owner, nint userInfo);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static unsafe partial nint CreateDictionary(nint receiver, nint selector, nint* objects, nint* keys, nuint count);
 
     [LibraryImport(CoreFoundation)]
-    public static partial nint CFRunLoopCopyCurrentMode(nint runLoop);
+    public static partial nint CFRunLoopGetMain();
 
     [LibraryImport(CoreFoundation)]
     public static partial nint CFRetain(nint value);

@@ -4,17 +4,17 @@
     <body>
       <trans-unit id="Description">
         <source>List running AppHosts</source>
-        <target state="needs-review-translation">Lista de host de aplicaciones Aspire en ejecución.</target>
+        <target state="translated">Lista de AppHosts en ejecución</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Keep running and emit updates as running AppHosts change. JSON output uses newline-delimited changed AppHost records by default, or full snapshots with --output snapshot.</source>
-        <target state="new">Keep running and emit updates as running AppHosts change. JSON output uses newline-delimited changed AppHost records by default, or full snapshots with --output snapshot.</target>
+        <target state="translated">Siga ejecutándose y emita actualizaciones a medida que se ejecuta el cambio de AppHosts. La salida JSON usa registros AppHost modificados delimitados por nuevas líneas de forma predeterminada o instantáneas completas con la instantánea --output.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowRequiresJson">
         <source>The --follow option only supports JSON output. Use --format json.</source>
-        <target state="new">The --follow option only supports JSON output. Use --format json.</target>
+        <target state="translated">La opción --follow solo admite la salida JSON. Use --format json.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
@@ -39,27 +39,27 @@
       </trans-unit>
       <trans-unit id="HeaderSdk">
         <source>SDK</source>
-        <target state="new">SDK</target>
+        <target state="translated">SDK</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidOutputMode">
         <source>The --output option must be default or snapshot.</source>
-        <target state="new">The --output option must be default or snapshot.</target>
+        <target state="translated">La opción --output debe ser predeterminada o instantánea.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">Salida en formato JSON.</target>
+        <target state="translated">Formato de salida (Tabla o JSON)</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputOptionDescription">
         <source>Output mode: default preserves the standard AppHost output; snapshot emits full AppHost snapshots with resource health, heartbeats, and errors. Snapshot requires --follow --format json.</source>
-        <target state="new">Output mode: default preserves the standard AppHost output; snapshot emits full AppHost snapshots with resource health, heartbeats, and errors. Snapshot requires --follow --format json.</target>
+        <target state="translated">Modo de salida: el valor predeterminado conserva la salida estándar de AppHost; la instantánea emite instantáneas de AppHost completas con el estado de los recursos, los latidos y los errores. La instantánea requiere --follow --format json.</target>
         <note />
       </trans-unit>
       <trans-unit id="SnapshotRequiresFollowJson">
         <source>The --output snapshot option requires --follow --format json.</source>
-        <target state="new">The --output snapshot option requires --follow --format json.</target>
+        <target state="translated">La opción --output snapshot requiere --follow --format json.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

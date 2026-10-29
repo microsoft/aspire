@@ -3,6 +3,7 @@
 
 using System.Xml.Linq;
 using Aspire.Cli.NuGet;
+using NuGet.Versioning;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.TestServices;
@@ -48,6 +49,12 @@ internal sealed class FakeNuGetClient : INuGetClient
         Task<IReadOnlyList<NuGetSearchResult>>>? SearchCallback { get; init; }
 
     public Func<string, byte[], NuGetSettingsInfo>? GetSettingsCallback { get; set; }
+    public Func<string, string, CancellationToken, Task<IReadOnlyList<NuGetVersion>>>? GetPackageVersionsCallback { get; set; }
+
+    public Task<IReadOnlyList<NuGetVersion>> GetPackageVersionsAsync(
+        string packageId, string workingDirectory, CancellationToken cancellationToken)
+        => GetPackageVersionsCallback?.Invoke(packageId, workingDirectory, cancellationToken)
+            ?? Task.FromResult<IReadOnlyList<NuGetVersion>>([]);
 
     public Action<NuGetConfigOverlay, string>? WriteNuGetConfigCallback { get; set; }
 

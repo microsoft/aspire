@@ -1,0 +1,9 @@
+﻿parameters:
+  parameterized:
+    backuptier: ""
+    capacity: ""
+    storageclass: ""
+secrets: {}
+config:
+  env_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
