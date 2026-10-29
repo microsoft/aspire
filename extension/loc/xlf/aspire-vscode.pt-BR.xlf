@@ -12,7 +12,7 @@
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.aspireCliVersion">
         <source xml:lang="en">Aspire CLI Version: {0}.</source>
-        <target state="translated">Versão da CLI do Azure: {0}.</target>
+        <target state="translated">Versão da CLI do Aspire: {0}.</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.aspireOutputChannelName">
         <source xml:lang="en">Aspire Extension</source>

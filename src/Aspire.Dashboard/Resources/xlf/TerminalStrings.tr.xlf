@@ -4,312 +4,312 @@
     <body>
       <trans-unit id="MainLayoutToggleTerminalDock">
         <source>Toggle terminal (`)</source>
-        <target state="new">Toggle terminal (`)</target>
+        <target state="translated">Terminali aç/kapat (`)</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCloseTab">
         <source>Close tab</source>
-        <target state="new">Close tab</target>
+        <target state="translated">Sekmeyi kapat</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCopyFailed">
         <source>Could not copy to clipboard.</source>
-        <target state="new">Could not copy to clipboard.</target>
+        <target state="translated">Panoya kopyalanamadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCopyTitle">
         <source>Copy terminal title: {0}</source>
-        <target state="new">Copy terminal title: {0}</target>
+        <target state="translated">Terminal başlığını kopyala: {0}</target>
         <note>{0} is the terminal title.</note>
       </trans-unit>
       <trans-unit id="TerminalCopyWorkingDirectory">
         <source>Copy working directory: {0}</source>
-        <target state="new">Copy working directory: {0}</target>
+        <target state="translated">Çalışma dizinini kopyala: {0}</target>
         <note>{0} is the working directory path.</note>
       </trans-unit>
       <trans-unit id="TerminalDisconnected">
         <source>The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</source>
-        <target state="new">The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</target>
+        <target state="translated">Terminal bağlantısı kesildi ve otomatik yeniden denemeler durduruldu. Kaynağın çalıştığından emin olun ve yeniden deneyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDisconnectedMessage">
         <source>Terminal disconnected. The last output has been preserved.</source>
-        <target state="new">Terminal disconnected. The last output has been preserved.</target>
+        <target state="translated">Terminal bağlantısı kesildi. Son çıkış korundu.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDisconnectedWithExitCode">
         <source>Terminal disconnected (exit code {0}). The last output has been preserved.</source>
-        <target state="new">Terminal disconnected (exit code {0}). The last output has been preserved.</target>
+        <target state="translated">Terminal bağlantısı kesildi (çıkış kodu {0}). Son çıkış korundu.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDismissError">
         <source>Dismiss</source>
-        <target state="new">Dismiss</target>
+        <target state="translated">Kapat</target>
         <note>Dismisses a terminal input, clipboard, or sizing error without reconnecting.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTab">
         <source>Close terminal '{0}'</source>
-        <target state="new">Close terminal '{0}'</target>
+        <target state="translated">'{0}' terminalini kapat</target>
         <note>{0} is the terminal's display title.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTimedOutMessage">
         <source>Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</source>
-        <target state="new">Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</target>
+        <target state="translated">Terminal '{0}' kapatılması beklenirken zaman aşımı oluştu. Temizleme arka planda devam ediyor.</target>
         <note>{0} is the terminal's display title.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTimedOutTitle">
         <source>Terminal close timed out</source>
-        <target state="new">Terminal close timed out</target>
+        <target state="translated">Terminal kapatma zaman aşımına uğradı</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetach">
         <source>Open terminal in a new window</source>
-        <target state="new">Open terminal in a new window</target>
+        <target state="translated">Terminali yeni bir pencerede aç</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetachBlocked">
         <source>The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</source>
-        <target state="new">The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</target>
+        <target state="translated">Tarayıcı terminal penceresini engelledi. Pano için açılır pencerelere izin verin ve yeniden deneyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetached">
         <source>This terminal is running in a separate window.</source>
-        <target state="new">This terminal is running in a separate window.</target>
+        <target state="translated">Bu terminal ayrı bir pencerede çalışıyor.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockFocusWindow">
         <source>Focus window</source>
-        <target state="new">Focus window</target>
+        <target state="translated">Odak penceresi</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockHeight">
         <source>{0} pixels high</source>
-        <target state="new">{0} pixels high</target>
+        <target state="translated">{0} piksel yüksekliğinde</target>
         <note>{0} is the terminal dock height in CSS pixels.</note>
       </trans-unit>
       <trans-unit id="TerminalDockHide">
         <source>Hide terminal panel (`)</source>
-        <target state="new">Hide terminal panel (`)</target>
+        <target state="translated">Terminal panelini gizle (`)</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockMoreInformation">
         <source>More information</source>
-        <target state="new">More information</target>
+        <target state="translated">Daha fazla bilgi</target>
         <note>Link to documentation about dashboard terminals, shown when the terminal dock is empty.</note>
       </trans-unit>
       <trans-unit id="TerminalDockPanelHeading">
         <source>No docked terminals</source>
-        <target state="new">No docked terminals</target>
+        <target state="translated">Yerleşik terminal yok</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockPanelHint">
         <source>Press the backtick key (`) to hide this panel.</source>
-        <target state="new">Press the backtick key (`) to hide this panel.</target>
+        <target state="translated">Bu paneli gizlemek için kesme işareti (`) tuşuna basın.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockRecoveringWindow">
         <source>This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</source>
-        <target state="new">This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</target>
+        <target state="translated">Bu terminal ayrı bir pencerede hala açık olabilir. Bu terminale odaklanın veya devam etmek için terminali panele geri getirin.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockReorderHelp">
         <source>Drag to reorder tabs, or use Alt+Shift+Left or Alt+Shift+Right while a tab is focused.</source>
-        <target state="new">Drag to reorder tabs, or use Alt+Shift+Left or Alt+Shift+Right while a tab is focused.</target>
+        <target state="translated">Sekmeleri yeniden sıralamak için sürükleyin veya sekme odaklanmış durumdayken Alt+Shift+Sol ya da Alt+Shift+Sağ kullanın.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockResizeHelp">
         <source>Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</source>
-        <target state="new">Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</target>
+        <target state="translated">Yeniden boyutlandırmak için Yukarı veya Aşağı ok tuşlarını, daha büyük adımlar için Shift tuşunu, minimum yükseklik için Home tuşunu ve maksimum yükseklik için End tuşunu kullanın.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockReturnToDock">
         <source>Return to panel</source>
-        <target state="new">Return to panel</target>
+        <target state="translated">Panele geri dön</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockScrollLeft">
         <source>Scroll terminal tabs left</source>
-        <target state="new">Scroll terminal tabs left</target>
+        <target state="translated">Terminal sekmelerini sola kaydır</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockScrollRight">
         <source>Scroll terminal tabs right</source>
-        <target state="new">Scroll terminal tabs right</target>
+        <target state="translated">Terminal sekmelerini sağa kaydır</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockTabs">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">Terminaller</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalFocusControlsDescription">
         <source>Focus terminal controls</source>
-        <target state="new">Focus terminal controls</target>
+        <target state="translated">Terminal denetimlerine odaklan</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalInputFailed">
         <source>The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</source>
-        <target state="new">The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</target>
+        <target state="translated">Terminal, giriş veya pano eylemini tamamlayamadı. Tarayıcı panosu izinlerini kontrol edin ve yeniden deneyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalInputLabel">
         <source>Interactive terminal input</source>
-        <target state="new">Interactive terminal input</target>
+        <target state="translated">Etkileşimli terminal girişi</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalMountFailed">
         <source>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</source>
-        <target state="new">The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</target>
+        <target state="translated">Terminal bağlanamadı veya işleyicisini başlatılamadı. Kaynağın çalışır durumda olduğundan ve tarayıcınızın WebGPU veya WebGL2’yi desteklediğinden emin olun, ardından tekrar denemek için yeniden bağlanın. Yine de bu kaynağın konsol günlüklerini görüntüleyebilirsiniz.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPalette">
         <source>Terminal palette</source>
-        <target state="new">Terminal palette</target>
+        <target state="translated">Terminal paleti</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteDark">
         <source>Dark</source>
-        <target state="new">Dark</target>
+        <target state="translated">Koyu</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteLabel">
         <source>Palette</source>
-        <target state="new">Palette</target>
+        <target state="translated">Palet</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteLight">
         <source>Light</source>
-        <target state="new">Light</target>
+        <target state="translated">Açık</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteSaveFailed">
         <source>Unable to save the terminal palette. Check that browser storage is available and try again.</source>
-        <target state="new">Unable to save the terminal palette. Check that browser storage is available and try again.</target>
+        <target state="translated">Terminal paleti kaydedilemiyor. Tarayıcı depolama alanının kullanılabilir olup olmadığını kontrol edin ve yeniden deneyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalProgress">
         <source>Terminal progress</source>
-        <target state="new">Terminal progress</target>
+        <target state="translated">Terminal ilerleme durumu</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalProgressError">
         <source>Error</source>
-        <target state="new">Error</target>
+        <target state="translated">Hata</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalProgressWarning">
         <source>Warning</source>
-        <target state="new">Warning</target>
+        <target state="translated">Uyarı</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalRestartResource">
         <source>Restart resource</source>
-        <target state="new">Restart resource</target>
+        <target state="translated">Kaynağı yeniden başlat</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalRetry">
         <source>Reconnect terminal</source>
-        <target state="new">Reconnect terminal</target>
+        <target state="translated">Terminali yeniden bağla</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalShowDisconnectedBanner">
         <source>Terminal disconnected. Show recovery actions</source>
-        <target state="new">Terminal disconnected. Show recovery actions</target>
+        <target state="translated">Terminal bağlantısı kesildi. Kurtarma eylemlerini göster</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalShowDisconnectedBannerWithExitCode">
         <source>Terminal disconnected (exit code {0}). Show recovery actions</source>
-        <target state="new">Terminal disconnected (exit code {0}). Show recovery actions</target>
+        <target state="translated">Terminal bağlantısı kesildi (çıkış kodu {0}). Kurtarma eylemlerini göster</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalShowOutput">
         <source>Show terminal</source>
-        <target state="new">Show terminal</target>
+        <target state="translated">Terminali göster</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalSizeLabel">
         <source>Size</source>
-        <target state="new">Size</target>
+        <target state="translated">Boyut</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalSizingFailed">
         <source>The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</source>
-        <target state="new">The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</target>
+        <target state="translated">Terminal yeniden boyutlandırma denetimini gerçekleştiremedi veya boyutlarını değiştiremedi. Boyutları seçmeyi tekrar deneyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalTitle">
         <source>Terminal</source>
-        <target state="new">Terminal</target>
+        <target state="translated">Terminal</target>
         <note>Default terminal title when no resource name is available.</note>
       </trans-unit>
       <trans-unit id="TerminalToolbarDecreaseFontSize">
         <source>Decrease font size</source>
-        <target state="new">Decrease font size</target>
+        <target state="translated">Yazı tipi boyutunu küçült</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarGridSize">
         <source>Terminal dimensions</source>
-        <target state="new">Terminal dimensions</target>
+        <target state="translated">Terminal boyutları</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarGridSizeAuto">
         <source>Fit terminal to available space</source>
-        <target state="new">Fit terminal to available space</target>
+        <target state="translated">Terminali kullanılabilir alana sığdır</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarIncreaseFontSize">
         <source>Increase font size</source>
-        <target state="new">Increase font size</target>
+        <target state="translated">Yazı tipi boyutunu artır</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarOpenInWindow">
         <source>Open in new window</source>
-        <target state="new">Open in new window</target>
+        <target state="translated">Yeni pencerede aç</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarOpenInWindowBlocked">
         <source>The browser blocked the terminal window. Allow pop-ups for this site and try again.</source>
-        <target state="new">The browser blocked the terminal window. Allow pop-ups for this site and try again.</target>
+        <target state="translated">Tarayıcı terminal penceresini engelledi. Bu sitede açılır pencerelere izin verin ve yeniden deneyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarOpenInWindowFailed">
         <source>Unable to open the terminal window. Reload the dashboard and try again.</source>
-        <target state="new">Unable to open the terminal window. Reload the dashboard and try again.</target>
+        <target state="translated">Terminal penceresi açılamıyor. Panoyu yeniden yükleyip tekrar deneyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalWindowEnded">
         <source>This terminal has ended.</source>
-        <target state="new">This terminal has ended.</target>
+        <target state="translated">Bu terminal sonlandırıldı.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalWindowTrackingFailed">
         <source>Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</source>
-        <target state="new">Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</target>
+        <target state="translated">Terminal penceresi durumu kurtarılamıyor. Tarayıcı depolama izinlerini kontrol edin, yeniden yükleyin veya terminali açıkça panele döndürün.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsHeader">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">Terminaller</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsPageTitle">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">Terminaller</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsSelectAResource">
         <source>Select a resource to view its terminal</source>
-        <target state="new">Select a resource to view its terminal</target>
+        <target state="translated">Terminalini görüntülemek istediğiniz kaynağı seçin</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsSelectResourceToolbar">
         <source>Select resource</source>
-        <target state="new">Select resource</target>
+        <target state="translated">Kaynak seç</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsSettings">
         <source>View options</source>
-        <target state="new">View options</target>
+        <target state="translated">Seçenekleri görüntüle</target>
         <note />
       </trans-unit>
     </body>

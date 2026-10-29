@@ -539,6 +539,8 @@ Progress and informational messages go to stderr, so redirection captures only M
 
 ### `aspire docs api`
 
+The `language` field in `aspire docs api` output is one of `csharp`, `typescript`, or `go`.
+
 `aspire docs api list <scope> --format json` emits an array of API items:
 
 ```json

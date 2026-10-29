@@ -8,6 +8,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 
 namespace Aspire.Hosting.Go.Tests;
@@ -1180,6 +1181,78 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"));
 
         await Verify(content);
+    }
+
+    [Fact]
+    public void AddGoApp_RequestsPlatformCertificateTrustScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory);
+
+        // On macOS and Windows, setting SSL_CERT_DIR makes Go load roots only from disk instead of the
+        // platform verifier, and those platforms have no default cert files. Under the default Append
+        // scope Go would then trust only Aspire's own certificates, so the bundle must include the
+        // system roots as well. Linux still loads its default bundle file, so Append works there.
+        var expectedScope = OperatingSystem.IsMacOS() || OperatingSystem.IsWindows()
+            ? CertificateTrustScope.System
+            : CertificateTrustScope.Append;
+        Assert.True(app.Resource.TryGetLastAnnotation<CertificateAuthorityCollectionAnnotation>(out var certAnnotation));
+        Assert.Equal(expectedScope, certAnnotation.Scope);
+    }
+
+    [Fact]
+    public void AddGoApp_ExplicitCertificateTrustScope_OverridesDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
+            .WithCertificateTrustScope(CertificateTrustScope.Append);
+
+        Assert.True(app.Resource.TryGetLastAnnotation<CertificateAuthorityCollectionAnnotation>(out var certAnnotation));
+        Assert.Equal(CertificateTrustScope.Append, certAnnotation.Scope);
+    }
+
+    [Fact]
+    public async Task AddGoApp_WithAppendCertificateTrustScope_LogsThatPublicRootsAreNotTrustedOnMacOSAndWindows()
+    {
+        // https://github.com/microsoft/aspire/issues/21198
+        Assert.SkipUnless(OperatingSystem.IsMacOS() || OperatingSystem.IsWindows(), "Go only replaces the platform roots on macOS and Windows.");
+
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var goApp = builder.AddGoApp("api", AppContext.BaseDirectory);
+
+        using var app = builder.Build();
+
+        Assert.True(goApp.Resource.TryGetLastAnnotation<CertificateTrustConfigurationCallbackAnnotation>(out var annotation));
+
+        await annotation.Callback(new CertificateTrustConfigurationCallbackAnnotationContext
+        {
+            ExecutionContext = new DistributedApplicationExecutionContext(
+                new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+                {
+                    Services = app.Services
+                }),
+            Resource = goApp.Resource,
+            Arguments = [],
+            EnvironmentVariables = new Dictionary<string, object>(),
+            CertificateBundlePath = ReferenceExpression.Create($"/aspire/cert.pem"),
+            CertificateDirectoriesPath = ReferenceExpression.Create($"/aspire/certs"),
+            Scope = CertificateTrustScope.Append,
+            CancellationToken = default
+        });
+
+        // WatchAsync replays the logs already written for the resource as its first batch.
+        var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        await using var logs = resourceLoggerService.WatchAsync(goApp.Resource).GetAsyncEnumerator();
+        Assert.True(await logs.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(30)));
+
+        // Log content is prefixed with a timestamp, for example "2026-10-22T06:54:13.6917970Z Certificate ...".
+        var content = Assert.Single(logs.Current).Content;
+        Assert.Equal(
+            "Certificate trust scope is set to 'Append', but since Go 1.27, Go on macOS and Windows trusts only the configured certificates instead of adding them to the system roots, so public certificate authorities will not be trusted. Use 'System' to trust both.",
+            content[(content.IndexOf(' ') + 1)..]);
     }
 
     private static async Task<GoLaunchConfiguration> CreateLaunchConfigurationAsync(IResource resource)

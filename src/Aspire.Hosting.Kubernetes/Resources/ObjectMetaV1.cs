@@ -18,6 +18,7 @@ namespace Aspire.Hosting.Kubernetes.Resources;
 /// - Creation and deletion timestamps, along with optional deletion grace period.
 /// It is a core component for properly managing Kubernetes resources and ensuring compliance with Kubernetes object standards.
 /// </remarks>
+[AspireExport]
 [YamlSerializable]
 public sealed class ObjectMetaV1
 {
@@ -127,6 +128,7 @@ public sealed class ObjectMetaV1
     /// They can be utilized by external tooling or for informational purposes. Unlike labels,
     /// annotations are not used to identify or group resources.
     /// </remarks>
+    [AspireExport]
     [YamlMember(Alias = "annotations")]
     public Dictionary<string, string> Annotations { get; } = [];
 
@@ -165,6 +167,7 @@ public sealed class ObjectMetaV1
     /// and group resources. These labels can be utilized by controllers for policy application and
     /// management operations and can also assist in search and filtering processes.
     /// </remarks>
+    [AspireExport]
     [YamlMember(Alias = "labels")]
     public Dictionary<string, string> Labels { get; set; } = [];
 

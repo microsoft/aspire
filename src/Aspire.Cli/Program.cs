@@ -167,7 +167,7 @@ public class Program
         return null;
     }
 
-    private static string GetGlobalSettingsPath(ILogger logger, bool migrate)
+    private static async Task<string> GetGlobalSettingsPathAsync(ILogger logger, bool migrate, CancellationToken cancellationToken)
     {
         var usersAspirePath = GetUsersAspirePath();
         var newPath = Path.Combine(usersAspirePath, Configuration.AspireConfigFile.FileName);
@@ -187,23 +187,33 @@ public class Program
         {
             try
             {
-                var legacyJson = File.ReadAllText(legacyPath);
-                var legacyConfig = JsonSerializer.Deserialize(legacyJson, JsonSourceGenerationContext.Default.AspireJsonConfiguration);
-                var config = AspireConfigFile.FromLegacy(legacyConfig, profiles: null);
-                // Drop the legacy global identity-channel field — the CLI's channel is now
-                // baked into the binary (AspireCliChannel assembly metadata) and never read
-                // from global config. The per-project channel migration in AspireConfigFile.FromLegacy
-                // remains for project-local aspire.config.json files.
-                config.Channel = null;
-                config.Save(usersAspirePath);
+                // Legacy and modern global writers share the modern destination's lock.
+                // Recheck both files after waiting so migration reads the latest completed edit.
+                using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
+                    GetCacheDirectory(), new FileInfo(newPath), logger, cancellationToken)
+                    ?? throw new IOException("Could not acquire the global configuration lock.");
+                if (!File.Exists(newPath) && File.Exists(legacyPath))
+                {
+                    var legacyJson = await File.ReadAllTextAsync(legacyPath, cancellationToken);
+                    var legacyConfig = JsonSerializer.Deserialize(legacyJson, JsonSourceGenerationContext.Default.AspireJsonConfiguration);
+                    var config = AspireConfigFile.FromLegacy(legacyConfig, profiles: null);
+                    // Drop the legacy global identity-channel field — the CLI's channel is now
+                    // baked into the binary (AspireCliChannel assembly metadata) and never read
+                    // from global config. The per-project channel migration in AspireConfigFile.FromLegacy
+                    // remains for project-local aspire.config.json files.
+                    config.Channel = null;
+                    var settings = JsonSerializer.SerializeToNode(config, JsonSourceGenerationContext.Default.AspireConfigFile)!.AsObject();
+                    await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(newPath, settings, cancellationToken);
+                }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // If migration fails, newPath will be created on first write.
                 logger.LogError(ex, "Failed to migrate legacy globalsettings.json to {NewPath}.", newPath);
             }
         }
 
+        // If migration fails, preserve the existing recovery path: log the failure
+        // and let a subsequent configuration edit create the modern file.
         return newPath;
     }
 
@@ -296,6 +306,10 @@ public class Program
     internal static async Task<IHost> BuildApplicationAsync(string[] args, CliStartupContext startupContext, Dictionary<string, string?>? configurationValues = null)
     {
         var isCompletion = CompletionInvocation.Matches(args);
+        // Source management must not migrate or normalize configuration before a
+        // read-only or rejected operation. Existing config commands retain normal startup.
+        var deferSettingsWrites = isCompletion ||
+            Commands.RootCommand.MatchesCommandPath(args, "template", "source");
         // Check for --non-interactive flag early
         var nonInteractive = args?.Any(a => a == CommonOptionNames.NonInteractive) ?? false;
 
@@ -313,11 +327,11 @@ public class Program
         var builder = Host.CreateEmptyApplicationBuilder(settings);
 
         // Set up settings with appropriate paths.
-        var globalSettingsFilePath = GetGlobalSettingsPath(startupContext.Logger, migrate: !isCompletion);
+        var globalSettingsFilePath = await GetGlobalSettingsPathAsync(
+            startupContext.Logger, migrate: !deferSettingsWrites, startupContext.CancellationManager.Token);
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !isCompletion);
-        builder.Services.AddSingleton<IConfigSourceGitClient, ConfigSourceGitClient>();
+        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !deferSettingsWrites);
         builder.Services.AddSingleton<ConfigSourceService>();
 
         if (configurationValues is not null)
@@ -569,7 +583,8 @@ public class Program
 
         // Git repository operations.
         builder.Services.AddSingleton<IGitRepository, GitRepository>();
-        builder.Services.AddSingleton<IGitRunner, GitRunner>();
+        builder.Services.AddSingleton<IGitCommandRunner, GitCommandRunner>();
+        builder.Services.AddSingleton<IGitClient, GitClient>();
 
         // OpenCode CLI operations.
         builder.Services.AddSingleton<IOpenCodeCliRunner, OpenCodeCliRunner>();
@@ -621,6 +636,9 @@ public class Program
         builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
         builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
         builder.Services.AddSingleton<PlaywrightCliInstaller>();
+        builder.Services.AddSingleton<IAgentClient, CopilotAgentClient>();
+        builder.Services.AddSingleton<IAgentClient, ClaudeCodeAgentClient>();
+        builder.Services.AddSingleton<IAgentClient, OpenCodeAgentClient>();
 
         // Agent environment detection.
         builder.Services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();
@@ -638,6 +656,8 @@ public class Program
         // Template factories.
         builder.Services.AddSingleton<TemplateNuGetConfigService>();
         builder.Services.AddSingleton<ITemplateProvider, TemplateProvider>();
+        builder.Services.AddSingleton<TemplateSourceStore>();
+        builder.Services.AddSingleton<ConfiguredTemplateSourceService>();
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, DotNetTemplateFactory>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, CliTemplateFactory>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, TemplateEngineFactory>());
@@ -659,6 +679,7 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostToolingCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, GoAppHostToolingCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();
@@ -704,6 +725,7 @@ public class Program
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();
+        builder.Services.AddTransient<TemplateManagementCommand>();
         builder.Services.AddTransient<CompletionsCommand>();
         builder.Services.AddTransient<CacheCommand>();
         builder.Services.AddTransient<CertificatesCommand>();

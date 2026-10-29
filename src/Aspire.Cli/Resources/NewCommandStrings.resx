@@ -146,7 +146,7 @@
     <value>Git could not be started. Install Git and ensure it is on PATH.</value>
   </data>
   <data name="TemplateRepositoryPathInvalid" xml:space="preserve">
-    <value>When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</value>
+    <value>Template repository paths must be relative and stay within the repository without traversing symbolic links.</value>
   </data>
   <data name="TemplateDirectoryNotFound" xml:space="preserve">
     <value>The template directory '{0}' does not exist.</value>
@@ -240,5 +240,116 @@
   </data>
   <data name="NoTemplateVersionsFoundInChannel" xml:space="preserve">
     <value>No template versions found in channel '{0}'.</value>
+  </data>
+  <data name="SearchForMoreTemplates" xml:space="preserve">
+    <value>Search for more templates</value>
+  </data>
+  <data name="ConfiguredTemplateConflictingOptions" xml:space="preserve">
+    <value>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</value>
+  </data>
+  <data name="TemplateSearchPrompt" xml:space="preserve">
+    <value>Search templates (leave empty to list all)</value>
+  </data>
+  <data name="SearchingTemplateSource" xml:space="preserve">
+    <value>Searching template source '{0}'...</value>
+  </data>
+  <data name="SearchTemplatesAgain" xml:space="preserve">
+    <value>Search again</value>
+  </data>
+  <data name="BackToDefaultTemplates" xml:space="preserve">
+    <value>Back to default templates</value>
+  </data>
+  <data name="NoMatchingConfiguredTemplates" xml:space="preserve">
+    <value>No matching templates were found in the configured sources.</value>
+  </data>
+  <data name="NoConfiguredTemplateSources" xml:space="preserve">
+    <value>No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path' or '--repository'. Sources are stored globally.</value>
+  </data>
+  <data name="TemplateSourceSearchFailed" xml:space="preserve">
+    <value>Could not search template source '{0}': {1}</value>
+  </data>
+  <data name="TemplateSourcesMustBeObject" xml:space="preserve">
+    <value>The global 'templateSources' setting must be an object containing named template sources.</value>
+  </data>
+  <data name="InvalidConfiguredTemplateSource" xml:space="preserve">
+    <value>Expected a source object with an absolute 'path', or a 'repository' and optional 'ref'/'path'. Use 'aspire template source add' to configure a source.</value>
+  </data>
+  <data name="TemplateSourceSettingInvalid" xml:space="preserve">
+    <value>Invalid template setting '{0}': {1}</value>
+  </data>
+  <data name="TemplateSourceUnknownField" xml:space="preserve">
+    <value>Unknown source field. Use an absolute 'path', or 'repository' with optional 'ref'/'path'.</value>
+  </data>
+  <data name="TemplateSourceStringRequired" xml:space="preserve">
+    <value>Expected a nonempty string without control characters.</value>
+  </data>
+  <data name="TemplateSourceInvalidRepository" xml:space="preserve">
+    <value>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</value>
+  </data>
+  <data name="TemplateSourceMissingLocation" xml:space="preserve">
+    <value>Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</value>
+  </data>
+  <data name="TemplateSourceNameRequired" xml:space="preserve">
+    <value>Template source names must be nonempty and must not contain dots, colons, or control characters.</value>
+  </data>
+  <data name="TemplateSourceCannotExtendString" xml:space="preserve">
+    <value>This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</value>
+  </data>
+  <data name="TemplateCommandDescription" xml:space="preserve">
+    <value>Manage project templates.</value>
+  </data>
+  <data name="TemplateSourceCommandDescription" xml:space="preserve">
+    <value>Manage global template sources.</value>
+  </data>
+  <data name="TemplateSourceAddDescription" xml:space="preserve">
+    <value>Add a named template source to global configuration.</value>
+  </data>
+  <data name="TemplateSourceRemoveDescription" xml:space="preserve">
+    <value>Remove a named template source from global configuration.</value>
+  </data>
+  <data name="TemplateSourceNameDescription" xml:space="preserve">
+    <value>The name of the template source.</value>
+  </data>
+  <data name="TemplateSourcePathDescription" xml:space="preserve">
+    <value>An absolute local template directory, or a repository-relative directory when --repository is specified.</value>
+  </data>
+  <data name="TemplateSourceRepositoryDescription" xml:space="preserve">
+    <value>An HTTPS or SSH Git repository URL containing templates.</value>
+  </data>
+  <data name="TemplateSourceRefDescription" xml:space="preserve">
+    <value>A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</value>
+  </data>
+  <data name="TemplateSourceAdded" xml:space="preserve">
+    <value>Template source '{0}' added to global configuration.</value>
+  </data>
+  <data name="TemplateSourceRemoved" xml:space="preserve">
+    <value>Template source '{0}' removed from global configuration.</value>
+  </data>
+  <data name="TemplateSourceAlreadyExists" xml:space="preserve">
+    <value>A template source with this name already exists. Remove it before adding a replacement.</value>
+  </data>
+  <data name="TemplateSourceNotFound" xml:space="preserve">
+    <value>Template source '{0}' was not found in global configuration.</value>
+  </data>
+  <data name="TemplateSourceWriteFailed" xml:space="preserve">
+    <value>Could not update global template sources. Check the configuration file's JSON format and file permissions.</value>
+  </data>
+  <data name="TemplateSourceListDescription" xml:space="preserve">
+    <value>List named template sources from global configuration without discovering templates.</value>
+  </data>
+  <data name="TemplateSourceListEmpty" xml:space="preserve">
+    <value>No template sources are configured. Use 'aspire template source add' to add one.</value>
+  </data>
+  <data name="TemplateSourceNameHeader" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="TemplateSourceConfigurationHeader" xml:space="preserve">
+    <value>Configuration</value>
+  </data>
+  <data name="TemplateSourceReadFailed" xml:space="preserve">
+    <value>Could not read global template sources. Check the configuration file's JSON format and file permissions.</value>
+  </data>
+  <data name="TemplateSourceLegacyConfiguration" xml:space="preserve">
+    <value>Template sources require aspire.config.json. Run 'aspire config info' to migrate your legacy global configuration, then retry.</value>
   </data>
 </root>
