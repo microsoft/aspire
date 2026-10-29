@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Engineering toolset update with no user impact",
+  "mergedAt": "2026-10-29T17:31:19Z",
+  "number": 21392,
+  "runDate": "2026-10-29T18:10:00Z",
+  "status": "excluded",
+  "title": "Update Arcade to fix the official build OneLoc break"
+}

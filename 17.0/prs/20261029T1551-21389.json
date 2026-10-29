@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Test-only change",
+  "mergedAt": "2026-10-29T15:51:39Z",
+  "number": 21389,
+  "runDate": "2026-10-29T18:10:00Z",
+  "status": "excluded",
+  "title": "Restore macOS CLI tests with serialized collections"
+}

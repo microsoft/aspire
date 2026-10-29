@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Publish now reports ignored entrypoint with existing Dockerfile",
+  "mergedAt": "2026-10-29T16:44:45Z",
+  "number": 21186,
+  "runDate": "2026-10-29T18:10:00Z",
+  "status": "included",
+  "title": "Warn for Go and fail for Python publish when an existing Dockerfile ignores the entrypoint"
+}

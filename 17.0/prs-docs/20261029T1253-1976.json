@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-10-29T12:53:02Z",
+  "number": 1976,
+  "runDate": "2026-10-29T18:10:00Z",
+  "status": "excluded",
+  "title": "Fix API incremental cache deployment metadata"
+}

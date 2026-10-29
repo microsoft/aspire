@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-10-29T12:54:00Z",
+  "number": 1977,
+  "runDate": "2026-10-29T18:10:00Z",
+  "status": "excluded",
+  "title": "Fix search result cursor flicker on row hover"
+}
