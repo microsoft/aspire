@@ -20,11 +20,17 @@ aspire add Aspire.Hosting.Azure.EntraId
 
 ## Usage example
 
-Then, in the AppHost, add an Entra ID application resource and reference it from another resource.
+Then, in a C# or TypeScript AppHost, add an Entra ID application resource and reference it from another resource.
+
+### Polyglot AppHosts
+
+The integration is available in TypeScript, Python, Go, Java, and Rust AppHosts, with the same behavior as C#. Method names follow each language's conventions, and optional arguments are passed as options objects or keyword arguments; for example, Python's generator abbreviates `Application` to `app` (`add_entra_id_app`, `with_app_owners`). The TypeScript examples in this README show the shapes. `withReference` applies the same configuration rules as C#, and `withEntraIdReference` is the explicit form that also sets the `DownstreamApis` prefix. Neither configures authentication middleware in the workload.
 
 ### Create registrations
 
 `AddEntraIdApplication` creates a registration and its service principal using the Microsoft Graph Bicep extension:
+
+**C#**
 
 ```csharp
 var entraApi = builder.AddEntraIdApplication("entra-api");
@@ -39,6 +45,24 @@ builder.AddProject<Projects.Api>("api")
 builder.AddProject<Projects.Web>("web")
        .WithReference(entraWeb);
 ```
+
+**TypeScript**
+
+```typescript
+import { createBuilder } from './.aspire/modules/aspire.mjs';
+
+const builder = await createBuilder();
+const entraWeb = await builder.addEntraIdApplication("entra-web")
+    .withRedirectUris("https://localhost:7123/signin-oidc");
+
+await builder.addContainer("web", "my-web-image")
+    .withReference(entraWeb, { connectionName: "AUTH" });
+
+await builder.build().run();
+```
+
+The TypeScript example supplies portable `AUTH_*` environment variables. The workload must read them into its
+authentication library's options; adding a reference does not install or configure a language-specific authentication library.
 
 For .NET program resources, `WithReference` injects environment variables in the form `AzureAd__{Key}` — for example `AzureAd__Instance`, `AzureAd__TenantId`, and `AzureAd__ClientId`. .NET's configuration system maps these to the `AzureAd` configuration section, so the referencing resource reads them as ordinary configuration with no glue code.
 
@@ -217,6 +241,37 @@ Each registration deploys as its own module. Pre-authorization makes the API's m
 
 Existing registrations are configuration only. On one, call `WithApplicationIdUri` and `WithScope` (with `EntraIdScope.Id` set to the ID the registration defines) so callers can declare permissions to it and build scope names with `GetScopeUri`. An existing client registration's declarations and consent aren't deployed.
 
+#### TypeScript
+
+The generated SDK exposes the same scopes, permissions, consent and pre-authorization. Optional arguments use an options object, and scope and permission names are passed as arrays:
+
+```typescript
+import { EntraIdPermissionType, EntraIdWellKnownApi } from './.aspire/modules/aspire.mjs';
+
+const entraApi = await builder.addEntraIdApplication("entra-api")
+    .withApplicationIdUri()
+    .withScope("Weather.Read", "Allows the app to read weather forecasts on behalf of the signed-in user.")
+    .withScope("Weather.Read.All", "Allows the app to read the forecasts of all users.", { requiresAdminConsent: true });
+
+const entraWeb = await builder.addEntraIdApplication("entra-web")
+    .withApiPermissions(entraApi, ["Weather.Read"])
+    .withAdminConsent(entraApi, ["Weather.Read"])
+    .withExternalApiPermissions(EntraIdWellKnownApi.MicrosoftGraph, [
+        { name: "User.Read" },
+        { name: "User.Read.All", type: EntraIdPermissionType.Application },
+    ])
+    .withExternalApiAdminConsent(EntraIdWellKnownApi.MicrosoftGraph, [{ name: "User.Read" }]);
+
+const entraDaemon = await builder.addEntraIdApplication("entra-daemon");
+await entraApi.withPreAuthorizedApplication(entraDaemon, ["Weather.Read"]);
+
+const scopeUri = await entraApi.getScopeUri("Weather.Read");
+```
+
+`withExternalApiPermissions` and `withExternalApiAdminConsent` take a well-known API (`EntraIdWellKnownApi`) or a custom API, given as `{ displayName, applicationId, resourceUri, baseUrl }`. A permission is delegated unless its `type` is `EntraIdPermissionType.Application`. A permission that a well-known API doesn't list by name, and every permission of a custom API, needs its `id`. `withScope` takes `{ displayName, userConsentDisplayName, userConsentDescription, requiresAdminConsent, isEnabled, id }` as options.
+
+`withReference` uses the default `DownstreamApis` prefix. To change it, reference the registration with `withEntraIdReference(entraWeb, { connectionName, downstreamApisPrefix })` instead.
+
 ### Assign explicit owners
 
 By default Aspire assigns no owners, so Microsoft Entra's default ownership behavior applies. To opt in, pass directory object IDs (users or service principals) as literals or parameters. Application and service principal ownership are configured separately:
@@ -241,6 +296,16 @@ var entraApi = builder.AddEntraIdApplication("entra-api")
                       .WithAppRole(new EntraIdAppRole("User", "User", "Can use the API."))
                       .WithAppRole(new EntraIdAppRole("Admin", "Administrator", "Can administer the API.",
                           ["User", "Application"]));
+```
+
+In TypeScript, pass the role's values directly. The optional member types, ID, and enabled state go in an options object:
+
+```typescript
+const entraApi = await builder.addEntraIdApplication("entra-api")
+    .withAppRole("User", "User", "Can use the API.")
+    .withAppRole("Admin", "Administrator", "Can administer the API.", {
+        allowedMemberTypes: ["User", "Application"],
+    });
 ```
 
 Role IDs are derived from the resource name and role value (or supplied with the `id` argument), so they stay stable across deployments. Changing a role's value or ID creates a different role. A role's value can be at most 120 characters, can't start with a period, and can contain only ASCII letters, digits and the punctuation that [Microsoft Graph allows](https://learn.microsoft.com/graph/api/resources/approle), so spaces and quotation marks are rejected when you write the AppHost.
@@ -291,6 +356,68 @@ var entraApi = builder.AddExistingEntraApplication("entra-api", tenantId: tenant
 
 This factory accepts parameters or literal IDs and does not enable Azure provisioning. Other Azure resources in the
 same AppHost still enable their normal provisioning behavior.
+
+In TypeScript, each ID independently accepts a literal or a parameter, so mixed inputs are supported:
+
+```typescript
+const clientId = await builder.addParameter("entra-client");
+const clientSecret = await builder.addParameter("entra-secret", { secret: true });
+
+const entraApi = await builder.addExistingEntraApplication(
+    "entra-api", "aaaabbbb-0000-cccc-1111-dddd2222eeee", clientId)
+    .withClientSecret(clientSecret);
+
+await builder.addExecutable("worker", "node", ".", ["worker.mjs"])
+    .withReference(entraApi, { connectionName: "AUTH" });
+```
+
+This top-level factory requires no Azure or Graph access. In contrast,
+`builder.addEntraIdApplication("entra-api").asExistingApplication(tenantId, clientId)` retains the Azure setup
+enabled by `addEntraIdApplication`, just like the C# fluent API.
+
+### TypeScript configuration
+
+The generated SDK supports the same sign-in audiences, consumer settings, credentials, owners, and deferred redirect
+values as the C# API. Optional arguments use an options object. Owner and redirect calls append in order; call them
+repeatedly for multiple values:
+
+```typescript
+import { EntraIdSignInAudience } from './.aspire/modules/aspire.mjs';
+
+// Assumes `entraWeb`, a registration created by Aspire with `addEntraIdApplication`, and `entraApi`,
+// an existing registration created with `addExistingEntraApplication`, as in the examples above.
+const ownerId = await builder.addParameter("entra-owner");
+const redirectUris = await builder.addParameter("redirect-uris");
+const redirectHost = await builder.addParameter("redirect-host");
+const certificatePassword = await builder.addParameter("certificate-password", { secret: true });
+
+await entraWeb.withSignInAudience(EntraIdSignInAudience.AzureADMultipleOrgs)
+    .withOwners(ownerId)
+    .withRedirectUris(redirectUris)
+    .withRedirectUris(redirectHost, { callbackPaths: ["/signin-oidc"] });
+
+const web = await builder.addContainer("frontend", "my-web-image")
+    .withHttpEndpoint({ targetPort: 8080 })
+    .withReference(entraWeb);
+
+await entraWeb.withRedirectUris(await web.getEndpoint("http"), {
+    callbackPaths: ["/signin-oidc", "/signout-callback-oidc"],
+});
+await entraWeb.publishWithFederatedManagedIdentityCredential({ identity: web });
+
+await entraApi.withCertificateFromFile("/certs/client.pfx", { password: certificatePassword });
+await entraApi.withSignedAssertionFile({ filePath: "/tokens/assertion" });
+```
+
+Endpoint redirects remain deferred: local run uses the allocated endpoint URL, while publish/deploy uses the compute
+environment's host. A parameter without callback paths contains comma-separated full URIs; with callback paths it contains
+a host name and produces HTTPS URIs. Certificate and assertion paths refer to files on the consumer, not the AppHost.
+Omit the signed assertion file path to use the consumer's `AZURE_FEDERATED_TOKEN_FILE` setting.
+
+For managed identity federation, omit `identity` to trust each referencing workload's identity, or pass an explicit
+user-assigned identity instead of a compute resource. Publishing federation is only supported for registrations created
+by Aspire and does not apply during local run. For an existing registration with trust configured separately, use
+`entraApi.withFederatedManagedIdentityCredential("00001111-aaaa-2222-bbbb-3333cccc4444", { tokenExchangeUrl: "api://AzureADTokenExchange" })`.
 
 ### Custom environment variable names
 

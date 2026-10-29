@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="cs" original="../NewCommandStrings.resx">
     <body>
+      <trans-unit id="BackToDefaultTemplates">
+        <source>Back to default templates</source>
+        <target state="new">Back to default templates</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChannelOptionDescription">
         <source>Channel to use for templates (stable, daily)</source>
         <target state="translated">Kanál, který se má použít pro šablony (stabilní, denní)</target>
@@ -15,6 +20,11 @@
       <trans-unit id="CloningTemplateRepository">
         <source>Cloning template repository...</source>
         <target state="new">Cloning template repository...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfiguredTemplateConflictingOptions">
+        <source>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</source>
+        <target state="new">Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
@@ -40,6 +50,11 @@
       <trans-unit id="EnterTheProjectName">
         <source>Enter the project name</source>
         <target state="translated">Zadejte název projektu.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidConfiguredTemplateSource">
+        <source>Expected a source object with an absolute 'path', or a 'repository' and optional 'ref'/'path'. Use 'aspire template source add' to configure a source.</source>
+        <target state="new">Expected a source object with an absolute 'path', or a 'repository' and optional 'ref'/'path'. Use 'aspire template source add' to configure a source.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidProjectName">
@@ -77,9 +92,19 @@
         <target state="translated">Nenašel se žádný kanál odpovídající hodnotě {0}. Platné jsou tyto možnosti: {1}.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoConfiguredTemplateSources">
+        <source>No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path' or '--repository'. Sources are stored globally.</source>
+        <target state="new">No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path' or '--repository'. Sources are stored globally.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
         <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
         <target state="new">No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoMatchingConfiguredTemplates">
+        <source>No matching templates were found in the configured sources.</source>
+        <target state="new">No matching templates were found in the configured sources.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
@@ -132,6 +157,21 @@
         <target state="translated">Překládá se verze šablony...</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchForMoreTemplates">
+        <source>Search for more templates</source>
+        <target state="new">Search for more templates</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchTemplatesAgain">
+        <source>Search again</source>
+        <target state="new">Search again</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchingTemplateSource">
+        <source>Searching template source '{0}'...</source>
+        <target state="new">Searching template source '{0}'...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
         <source>Select a template:</source>
         <target state="translated">Vyberte šablonu:</target>
@@ -160,6 +200,11 @@
       <trans-unit id="SourceWithCredentialsCannotBePersisted">
         <source>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
         <target state="translated">Adresa URL zadaná pomocí --source obsahuje přihlašovací údaje, řetězec dotazu nebo fragment a nelze ji zapsat do souboru NuGet.config projektu. Nakonfigurujte přihlašovací údaje pomocí poskytovatelů přihlašovacích údajů NuGet nebo konfigurace NuGet na úrovni uživatele a pak zadejte adresu URL zdroje balíčků bez vložených tajných kódů.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateCommandDescription">
+        <source>Manage project templates.</source>
+        <target state="new">Manage project templates.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateDirectoryNotFound">
@@ -198,8 +243,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryPathInvalid">
-        <source>When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</source>
-        <target state="new">When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</target>
+        <source>Template repository paths must be relative and stay within the repository without traversing symbolic links.</source>
+        <target state="new">Template repository paths must be relative and stay within the repository without traversing symbolic links.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefNotFound">
@@ -215,6 +260,146 @@
       <trans-unit id="TemplateRepositoryRefRequiresRepository">
         <source>--template-repository-ref requires --template-repository and a non-empty ref value.</source>
         <target state="new">--template-repository-ref requires --template-repository and a non-empty ref value.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSearchPrompt">
+        <source>Search templates (leave empty to list all)</source>
+        <target state="new">Search templates (leave empty to list all)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAddDescription">
+        <source>Add a named template source to global configuration.</source>
+        <target state="new">Add a named template source to global configuration.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAdded">
+        <source>Template source '{0}' added to global configuration.</source>
+        <target state="new">Template source '{0}' added to global configuration.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAlreadyExists">
+        <source>A template source with this name already exists. Remove it before adding a replacement.</source>
+        <target state="new">A template source with this name already exists. Remove it before adding a replacement.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceCannotExtendString">
+        <source>This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</source>
+        <target state="new">This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceCommandDescription">
+        <source>Manage global template sources.</source>
+        <target state="new">Manage global template sources.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceConfigurationHeader">
+        <source>Configuration</source>
+        <target state="new">Configuration</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceInvalidRepository">
+        <source>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</source>
+        <target state="new">Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceLegacyConfiguration">
+        <source>Template sources require aspire.config.json. Run 'aspire config info' to migrate your legacy global configuration, then retry.</source>
+        <target state="new">Template sources require aspire.config.json. Run 'aspire config info' to migrate your legacy global configuration, then retry.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceListDescription">
+        <source>List named template sources from global configuration without discovering templates.</source>
+        <target state="new">List named template sources from global configuration without discovering templates.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceListEmpty">
+        <source>No template sources are configured. Use 'aspire template source add' to add one.</source>
+        <target state="new">No template sources are configured. Use 'aspire template source add' to add one.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceMissingLocation">
+        <source>Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</source>
+        <target state="new">Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNameDescription">
+        <source>The name of the template source.</source>
+        <target state="new">The name of the template source.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNameHeader">
+        <source>Name</source>
+        <target state="new">Name</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNameRequired">
+        <source>Template source names must be nonempty and must not contain dots, colons, or control characters.</source>
+        <target state="new">Template source names must be nonempty and must not contain dots, colons, or control characters.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNotFound">
+        <source>Template source '{0}' was not found in global configuration.</source>
+        <target state="new">Template source '{0}' was not found in global configuration.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourcePathDescription">
+        <source>An absolute local template directory, or a repository-relative directory when --repository is specified.</source>
+        <target state="new">An absolute local template directory, or a repository-relative directory when --repository is specified.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceReadFailed">
+        <source>Could not read global template sources. Check the configuration file's JSON format and file permissions.</source>
+        <target state="new">Could not read global template sources. Check the configuration file's JSON format and file permissions.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRefDescription">
+        <source>A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</source>
+        <target state="new">A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRemoveDescription">
+        <source>Remove a named template source from global configuration.</source>
+        <target state="new">Remove a named template source from global configuration.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRemoved">
+        <source>Template source '{0}' removed from global configuration.</source>
+        <target state="new">Template source '{0}' removed from global configuration.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRepositoryDescription">
+        <source>An HTTPS or SSH Git repository URL containing templates.</source>
+        <target state="new">An HTTPS or SSH Git repository URL containing templates.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceSearchFailed">
+        <source>Could not search template source '{0}': {1}</source>
+        <target state="new">Could not search template source '{0}': {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceSettingInvalid">
+        <source>Invalid template setting '{0}': {1}</source>
+        <target state="new">Invalid template setting '{0}': {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceStringRequired">
+        <source>Expected a nonempty string without control characters.</source>
+        <target state="new">Expected a nonempty string without control characters.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceUnknownField">
+        <source>Unknown source field. Use an absolute 'path', or 'repository' with optional 'ref'/'path'.</source>
+        <target state="new">Unknown source field. Use an absolute 'path', or 'repository' with optional 'ref'/'path'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceWriteFailed">
+        <source>Could not update global template sources. Check the configuration file's JSON format and file permissions.</source>
+        <target state="new">Could not update global template sources. Check the configuration file's JSON format and file permissions.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourcesMustBeObject">
+        <source>The global 'templateSources' setting must be an object containing named template sources.</source>
+        <target state="new">The global 'templateSources' setting must be an object containing named template sources.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">

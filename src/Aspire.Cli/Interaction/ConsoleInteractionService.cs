@@ -215,7 +215,7 @@ internal class ConsoleInteractionService : IInteractionService
         }
     }
 
-    public async Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+    public async Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, bool logResponse = true, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(promptText, nameof(promptText));
 
@@ -246,7 +246,7 @@ internal class ConsoleInteractionService : IInteractionService
         // background debug output doesn't drown the prompt UI.
         using var promptScope = _logBufferContext.BeginInteractivePromptScope();
 
-        MessageLogger.LogInformation("Prompt: {PromptText} (default: {DefaultValue}, secret: {IsSecret})", promptText, isSecret ? "****" : defaultValue ?? "(none)", isSecret);
+        MessageLogger.LogInformation("Prompt: {PromptText} (default: {DefaultValue}, secret: {IsSecret})", promptText, isSecret || !logResponse ? "****" : defaultValue ?? "(none)", isSecret);
 
         var displayDefaultValue = defaultValue?.EscapeMarkup();
 
@@ -269,7 +269,7 @@ internal class ConsoleInteractionService : IInteractionService
         }
 
         var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
-        MessageLogger.LogInformation("Prompt result: {Result}", isSecret ? "****" : result);
+        MessageLogger.LogInformation("Prompt result: {Result}", isSecret || !logResponse ? "****" : result);
         if (defaultValue is not null && string.Equals(result, displayDefaultValue, StringComparison.Ordinal))
         {
             return defaultValue;
@@ -280,7 +280,7 @@ internal class ConsoleInteractionService : IInteractionService
 
     public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)
     {
-        return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
+        return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken: cancellationToken);
     }
 
     public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull

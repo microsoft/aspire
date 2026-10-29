@@ -36,6 +36,7 @@ internal sealed class NewCommand : BaseCommand
     private readonly IPackagingService _packagingService;
     private readonly AgentInitCommand _agentInitCommand;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly ConfiguredTemplateSourceService _configuredTemplateSources;
 
     internal static readonly Option<string?> s_nameOption = new("--name", "-n")
     {
@@ -86,6 +87,7 @@ internal sealed class NewCommand : BaseCommand
         IPackagingService packagingService,
         AgentInitCommand agentInitCommand,
         ICliHostEnvironment hostEnvironment,
+        ConfiguredTemplateSourceService configuredTemplateSources,
         IConfiguration configuration,
         CommonCommandServices services)
         : base("new", NewCommandStrings.Description, services)
@@ -96,6 +98,7 @@ internal sealed class NewCommand : BaseCommand
         _packagingService = packagingService;
         _agentInitCommand = agentInitCommand;
         _hostEnvironment = hostEnvironment;
+        _configuredTemplateSources = configuredTemplateSources;
 
         Options.Add(s_nameOption);
         Options.Add(s_outputOption);
@@ -316,7 +319,7 @@ internal sealed class NewCommand : BaseCommand
             .ToArray();
     }
 
-    private async Task<ITemplate?> GetProjectTemplateAsync(ITemplate[] availableTemplates, ParseResult parseResult, CancellationToken cancellationToken)
+    private async Task<(ITemplate? Template, bool IsConfigured)> GetProjectTemplateAsync(ITemplate[] availableTemplates, ParseResult parseResult, CancellationToken cancellationToken)
     {
         // If a subcommand was matched (e.g., aspire new aspire-starter), find the template by command name
         if (parseResult.CommandResult.Command != this)
@@ -324,20 +327,20 @@ internal sealed class NewCommand : BaseCommand
             var subcommandTemplate = availableTemplates.SingleOrDefault(t => t.Name.Equals(parseResult.CommandResult.Command.Name, StringComparison.OrdinalIgnoreCase));
             if (subcommandTemplate is not null)
             {
-                return subcommandTemplate;
+                return (subcommandTemplate, false);
             }
 
             // The template subcommand was parsed successfully but the template is
             // not available at runtime (e.g. .NET SDK is not installed).
             InteractionService.DisplayError($"Template '{parseResult.CommandResult.Command.Name}' is not available. Ensure the required runtime is installed.");
-            return null;
+            return (null, false);
         }
 
         var templatesForTemplateArgument = GetTemplatesForTemplateArgument(availableTemplates, parseResult);
-        if (templatesForTemplateArgument.Length == 0)
+        if (templatesForTemplateArgument.Length == 0 && !_hostEnvironment.SupportsInteractiveInput)
         {
             InteractionService.DisplayError("No templates are available for the current environment.");
-            return null;
+            return (null, false);
         }
 
         if (!_hostEnvironment.SupportsInteractiveInput)
@@ -349,15 +352,76 @@ internal sealed class NewCommand : BaseCommand
         }
 
         var templatesForPrompt = GetTemplatesForPrompt(availableTemplates, parseResult);
-        if (templatesForPrompt.Length == 0)
+        var configuredTemplatesAllowed = !new[] { s_sourceOption, s_versionOption, _channelOption, _languageOption }
+            .Any(option => parseResult.GetResult(option) is { Implicit: false });
+        if (!configuredTemplatesAllowed || (await _configuredTemplateSources.GetSourcesAsync(cancellationToken)).Count == 0)
         {
-            InteractionService.DisplayError("No templates are available for the current environment.");
-            return null;
+            if (templatesForPrompt.Length == 0)
+            {
+                InteractionService.DisplayError("No templates are available for the current environment.");
+                return (null, false);
+            }
+
+            return (await _prompter.PromptForTemplateAsync(templatesForPrompt, cancellationToken), false);
         }
 
-        var result = await _prompter.PromptForTemplateAsync(templatesForPrompt, cancellationToken);
+        while (true)
+        {
+            var selection = await _prompter.PromptForTemplateOrSearchAsync(templatesForPrompt, cancellationToken);
+            if (selection.Template is { } template)
+            {
+                return (template, false);
+            }
 
-        return result;
+            var configuredTemplate = await SearchConfiguredTemplatesAsync(cancellationToken);
+            if (configuredTemplate is not null)
+            {
+                return (configuredTemplate, true);
+            }
+        }
+    }
+
+    private async Task<ITemplate?> SearchConfiguredTemplatesAsync(CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var query = await InteractionService.PromptForStringAsync(
+                NewCommandStrings.TemplateSearchPrompt, logResponse: false, cancellationToken: cancellationToken);
+            var templates = await _configuredTemplateSources.SearchAsync(query, cancellationToken);
+            if (templates.Count == 0)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Information, NewCommandStrings.NoMatchingConfiguredTemplates);
+            }
+
+            List<TemplateSearchChoice> choices = [];
+            HashSet<string> labels = [NewCommandStrings.SearchTemplatesAgain, NewCommandStrings.BackToDefaultTemplates];
+            foreach (var result in templates)
+            {
+                var baseLabel = $"{result.Template.Description} ({result.Template.Name}) - {result.SourceName}";
+                var label = baseLabel;
+                var suffix = 2;
+                // Extension pickers use formatted labels as dictionary keys, so even distinct
+                // template identities with the same names must have unique display labels.
+                while (!labels.Add(label))
+                {
+                    label = string.Create(CultureInfo.InvariantCulture, $"{baseLabel} [{suffix++}]");
+                }
+                choices.Add(new(label, result.Template, TemplateSearchAction.Select));
+            }
+            choices.Add(new(NewCommandStrings.SearchTemplatesAgain, null, TemplateSearchAction.Search));
+            choices.Add(new(NewCommandStrings.BackToDefaultTemplates, null, TemplateSearchAction.Back));
+            var choice = await InteractionService.PromptForSelectionAsync(
+                NewCommandStrings.SelectAProjectTemplate, choices, choice => choice.Label.EscapeMarkup(),
+                cancellationToken: cancellationToken);
+            if (choice.Action is TemplateSearchAction.Back)
+            {
+                return null;
+            }
+            if (choice.Action is TemplateSearchAction.Select)
+            {
+                return choice.Template;
+            }
+        }
     }
 
     private sealed class ResolveTemplateVersionResult
@@ -572,10 +636,20 @@ internal sealed class NewCommand : BaseCommand
         // templates registered as subcommands.
         var availableTemplates = (await _templateProvider.GetTemplatesAsync(null, cancellationToken)).ToArray();
 
-        var template = await GetProjectTemplateAsync(availableTemplates, parseResult, cancellationToken);
+        var (template, isConfigured) = await GetProjectTemplateAsync(availableTemplates, parseResult, cancellationToken);
         if (template is null)
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand);
+        }
+        if (isConfigured)
+        {
+            if (new[] { s_sourceOption, s_versionOption, _channelOption, _languageOption }
+                .Any(option => parseResult.GetResult(option) is { Implicit: false }))
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, NewCommandStrings.ConfiguredTemplateConflictingOptions);
+            }
+
+            return await CreateFromSelectedSourceTemplateAsync(template, configSource, parseResult, cancellationToken);
         }
 
         var (languageResolutionSuccess, selectedLanguageId) = await ResolveSelectedLanguageAsync(template, parseResult, cancellationToken);
@@ -663,6 +737,25 @@ internal sealed class NewCommand : BaseCommand
             var template = templates.Length == 1
                 ? templates[0]
                 : await _prompter.PromptForTemplateAsync(templates, cancellationToken);
+
+            return await CreateFromSelectedSourceTemplateAsync(template, configSource, parseResult, cancellationToken);
+        }
+        catch (TemplateDiscoveryException ex)
+        {
+            return CommandResult.Failure(ex.ExitCode, ex.Message);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return CommandResult.Failure(CliExitCodes.FailedToCreateNewProject,
+                string.Format(CultureInfo.CurrentCulture, NewCommandStrings.LocalTemplateLoadFailed, ex.Message));
+        }
+    }
+
+    private async Task<CommandResult> CreateFromSelectedSourceTemplateAsync(
+        ITemplate template, ConfigSource? configSource, ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        try
+        {
             var result = await template.ApplyTemplateAsync(new TemplateInputs
             {
                 Name = parseResult.GetValue(s_nameOption),
@@ -757,10 +850,25 @@ internal sealed class NewCommand : BaseCommand
         // the same rule applied at the end of ResolveCliTemplateVersionAsync.
         return match?.ShouldPersistChannelName() is true ? match.Name : null;
     }
+
+    private enum TemplateSearchAction
+    {
+        Select,
+        Search,
+        Back
+    }
+
+    private sealed record TemplateSearchChoice(string Label, ITemplate? Template, TemplateSearchAction Action);
+}
+
+internal sealed record TemplateSelection(ITemplate? Template)
+{
+    public static TemplateSelection Search { get; } = new(Template: null);
 }
 
 internal interface INewCommandPrompter
 {
+    Task<TemplateSelection> PromptForTemplateOrSearchAsync(ITemplate[] validTemplates, CancellationToken cancellationToken);
     Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken);
     Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken);
     Task<string> PromptForOutputPath(string v, ParseResult parseResult, Func<string, ValidationResult>? validator = null, Func<string, string>? outputPathResolver = null, CancellationToken cancellationToken = default);
@@ -779,6 +887,15 @@ internal interface ITemplateVersionPrompter
 
 internal class NewCommandPrompter(IInteractionService interactionService) : INewCommandPrompter, ITemplateVersionPrompter
 {
+    public virtual Task<TemplateSelection> PromptForTemplateOrSearchAsync(ITemplate[] validTemplates, CancellationToken cancellationToken)
+    {
+        return interactionService.PromptForSelectionAsync(
+            NewCommandStrings.SelectAProjectTemplate,
+            validTemplates.Select(template => new TemplateSelection(template)).Append(TemplateSelection.Search),
+            choice => (choice.Template?.Description ?? NewCommandStrings.SearchForMoreTemplates).EscapeMarkup(),
+            cancellationToken: cancellationToken);
+    }
+
     public virtual async Task<(NuGetPackage Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(NuGetPackage Package, PackageChannel Channel)> candidatePackages, CancellationToken cancellationToken)
     {
         // Check if we should skip the channel selection prompt
