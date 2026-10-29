@@ -1641,14 +1641,14 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             sendCount++;
             if (cancelDuringSend)
             {
-                testOutputHelper.WriteLine("[cancellation-order] transport-canceled-before-response");
+                output.WriteLine("[cancellation-order] transport-canceled-before-response");
                 cancellationTokenSource.Cancel();
                 return Task.FromCanceled<HttpResponseMessage>(cancellationTokenSource.Token);
             }
 
             return Task.FromResult<HttpResponseMessage>(new CancelOnDisposeResponse(() =>
             {
-                testOutputHelper.WriteLine("[cancellation-order] forbidden-response-observed-and-disposed");
+                output.WriteLine("[cancellation-order] forbidden-response-observed-and-disposed");
                 cancellationTokenSource.Cancel();
             }));
         });
@@ -1667,7 +1667,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             },
             cancellationTokenSource.Token));
 
-        testOutputHelper.WriteLine($"[cancellation-order] sends={sendCount} ambiguous={exception.ResponseMayHaveBeenLost} original={exception.OriginalException.GetType().Name}");
+        output.WriteLine($"[cancellation-order] sends={sendCount} ambiguous={exception.ResponseMayHaveBeenLost} original={exception.OriginalException.GetType().Name}");
         Assert.Equal(1, sendCount);
         Assert.Equal(cancelDuringSend, exception.ResponseMayHaveBeenLost);
         Assert.IsType<TaskCanceledException>(exception.OriginalException);
