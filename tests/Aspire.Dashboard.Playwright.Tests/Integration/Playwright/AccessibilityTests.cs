@@ -485,6 +485,36 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
             Content = "*, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important; transition-duration: 0s !important; transition-delay: 0s !important; }"
         });
 
+        // The click that opened a surface leaves the pointer over it, where a control under the pointer (such as a
+        // dialog's primary button) transitions to its hover colors after the scan starts. Move the pointer away first.
+        await page.Mouse.MoveAsync(0, 0);
+
+        // The stylesheet doesn't reach shadow roots or script-driven animations, such as a Fluent dialog fading in,
+        // so also jump every running animation to its end and wait until none is running. Document.getAnimations()
+        // doesn't return animations inside shadow roots, so each shadow root is asked too. An infinite animation
+        // can't finish and is left as is.
+        await page.WaitForFunctionAsync("""
+            () => {
+                const animations = [...document.getAnimations()];
+                const pending = [document];
+                while (pending.length > 0) {
+                    for (const element of pending.pop().querySelectorAll('*')) {
+                        if (element.shadowRoot) {
+                            animations.push(...element.shadowRoot.getAnimations());
+                            pending.push(element.shadowRoot);
+                        }
+                    }
+                }
+                for (const animation of animations) {
+                    try {
+                        animation.finish();
+                    } catch {
+                    }
+                }
+                return animations.every(a => a.playState !== 'running' || a.effect?.getComputedTiming().iterations === Infinity);
+            }
+            """).DefaultTimeout();
+
         // Yield two animation frames so the freeze stylesheet above is applied and painted before axe
         // samples computed styles; otherwise axe can read a value still interpolating from the frame the
         // stylesheet was injected on.
