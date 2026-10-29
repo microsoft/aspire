@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Grouped into Go AppHost callback panics entry",
+  "mergedAt": "2026-10-28T18:31:34Z",
+  "number": 21194,
+  "runDate": "2026-10-29T00:10:00Z",
+  "status": "included",
+  "title": "Harden the Go runtime transport and decode lists of handles"
+}

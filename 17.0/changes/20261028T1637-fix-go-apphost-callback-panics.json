@@ -5,16 +5,17 @@
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
-  "description": "Fixed a panic on callback options, nil resource builders in callbacks, and added support for Go numbers in union parameters in the generated Go SDK.",
+  "description": "Fixed a panic on callback options, nil resource builders in callbacks, and added support for Go numbers in union parameters in the generated Go SDK. The Go runtime transport is also hardened against malformed server data, and lists and maps of handles (such as GetResources() and GetChildren()) now decode correctly.",
   "docsPrs": [],
   "docsRequired": false,
   "emoji": "\ud83d\udc1b",
   "firstMergedAt": "2026-10-28T16:37:27Z",
-  "lastMergedAt": "2026-10-28T16:37:34Z",
+  "lastMergedAt": "2026-10-28T18:31:34Z",
   "name": "Fix Go AppHost callback panics",
   "owner": "IEvangelist",
   "prs": [
     21188,
+    21194,
     21261
   ]
 }
