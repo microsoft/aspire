@@ -9,17 +9,17 @@
       </trans-unit>
       <trans-unit id="PackagesOverrideDirectoryHasDuplicateVersions">
         <source>The Aspire CLI packages override directory '{0}' contains more than one version of the same Aspire package, which is ambiguous because the highest version would be selected silently. Clean the directory so each Aspire* package appears exactly once. Conflicts: {1}.</source>
-        <target state="new">The Aspire CLI packages override directory '{0}' contains more than one version of the same Aspire package, which is ambiguous because the highest version would be selected silently. Clean the directory so each Aspire* package appears exactly once. Conflicts: {1}.</target>
+        <target state="translated">I pacchetti dell'interfaccia della riga di comando Aspire eseguono l'override della directory '{0}' contiene più di una versione dello stesso pacchetto Aspire, il che è ambiguo perché la versione più alta verrebbe selezionata automaticamente. Pulire la directory in modo che ogni pacchetto Aspire* venga visualizzato esattamente una volta. Conflitti: {1}.</target>
         <note>{0} is the packages override directory path. {1} is a semicolon-separated list of conflicting package ids with their versions, for example "Aspire.Hosting (13.4.1, 13.4.2)".</note>
       </trans-unit>
       <trans-unit id="PackagesOverrideDirectoryNotFound">
         <source>The Aspire CLI packages override directory '{0}' does not exist. Set ASPIRE_CLI_PACKAGES (or the install sidecar 'packages' field) to a directory that contains the .nupkg files to resolve Aspire* packages from.</source>
-        <target state="new">The Aspire CLI packages override directory '{0}' does not exist. Set ASPIRE_CLI_PACKAGES (or the install sidecar 'packages' field) to a directory that contains the .nupkg files to resolve Aspire* packages from.</target>
+        <target state="translated">La directory di override dei pacchetti dell'interfaccia della riga di comando Aspire '{0}' non esiste. Impostare ASPIRE_CLI_PACKAGES (o il campo 'packages' del sidecar di installazione) su una directory che contiene i file con estensione nupkg da cui risolvere Aspire* pacchetti.</target>
         <note>{0} is the configured packages override directory path. Shown when ASPIRE_CLI_PACKAGES or the sidecar 'packages' field points at a directory that is missing.</note>
       </trans-unit>
       <trans-unit id="StagingChannelUnavailableOnDailyCli">
         <source>The 'staging' channel cannot be resolved from a CLI with identity '{0}'. Daily, local, and per-PR CLI builds do not have a deterministic staging feed. Install a staging or stable Aspire CLI, or set 'overrideStagingFeed' (for example: aspire config set -g overrideStagingFeed &lt;feed-url&gt;) to point at the staging feed you want to use.</source>
-        <target state="new">The 'staging' channel cannot be resolved from a CLI with identity '{0}'. Daily, local, and per-PR CLI builds do not have a deterministic staging feed. Install a staging or stable Aspire CLI, or set 'overrideStagingFeed' (for example: aspire config set -g overrideStagingFeed &lt;feed-url&gt;) to point at the staging feed you want to use.</target>
+        <target state="translated">Non è possibile risolvere il canale ''staging'' da un'interfaccia della riga di comando con identità ''{0}''. Le build CLI giornaliere, locali e per PR non dispongono di un feed di staging deterministico. Installare una CLI di Aspire di staging o stabile, oppure impostare ''overrideStagingFeed'' (ad esempio: aspire config set -g overrideStagingFeed &lt;feed-url&gt;).</target>
         <note>{0} is the running CLI's baked identity channel (one of daily, local, or pr-N). Shown when --channel staging is requested on a CLI that cannot produce a real staging feed. Tracks https://github.com/microsoft/aspire/issues/16652.</note>
       </trans-unit>
     </body>

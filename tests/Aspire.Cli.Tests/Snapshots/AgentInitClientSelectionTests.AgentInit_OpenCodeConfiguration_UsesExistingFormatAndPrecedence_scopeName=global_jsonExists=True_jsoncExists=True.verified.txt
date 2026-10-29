@@ -1,0 +1,25 @@
+﻿{
+  opencode.json: {"model":"keep-json","mcp":{"other":{"command":["other"]}}},
+  opencode.jsonc:
+{
+  "model": "keep-jsonc",
+  "mcp": {
+    "other": {
+      "command": [
+        "other"
+      ]
+    },
+    "aspire": {
+      "type": "local",
+      "command": [
+        "aspire",
+        "agent",
+        "mcp"
+      ],
+      "enabled": true
+    }
+  },
+  "$schema": "https://opencode.ai/config.json"
+}
+
+}

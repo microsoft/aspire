@@ -16,6 +16,7 @@ import { createDefaultRustDebuggerExtension } from "./languages/rust";
 import { javaDebuggerExtension, parseJavaAppHostCommand, resolveJavaClassPaths } from "./languages/java";
 import { cleanupRun } from "./runCleanupRegistry";
 import { BrowserDebugSessionTermination } from "./browserDebugSessionTermination";
+import { registerBlazorWasmDebugRelay } from "./blazorWasmDebugRelay";
 import { runWithRunStartWrappers } from "./runStartRegistry";
 import AspireRpcServer from "../server/AspireRpcServer";
 import { AlreadyStartedResourceDebugSession, createDebugSessionConfiguration } from "./debuggerExtensions";
@@ -1786,6 +1787,9 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       const logConfig = getLoggableDebugConfiguration(debugConfig, this._terminalProvider.isDebugConfigEnvironmentLoggingEnabled());
       extensionLogOutputChannel.info(`Starting debug session with configuration: ${JSON.stringify(logConfig)}`);
       this.createDebugAdapterTrackerCore(debugConfig.type);
+      if (debugConfig.resourceType === 'browser' && debugConfig.type === 'blazorwasm') {
+        this.registerDisposable(registerBlazorWasmDebugRelay(debugConfig));
+      }
 
       let resolved = false;
       const disposable = vscode.debug.onDidStartDebugSession(session => {
@@ -1865,7 +1869,11 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
               }
             });
 
-            cleanupResource();
+            // Browser transports stay alive until confirmed termination: an acknowledged or
+            // rejected stop request does not establish that the root session has ended.
+            if (!browserTermination) {
+              cleanupResource();
+            }
 
             return stop;
           };

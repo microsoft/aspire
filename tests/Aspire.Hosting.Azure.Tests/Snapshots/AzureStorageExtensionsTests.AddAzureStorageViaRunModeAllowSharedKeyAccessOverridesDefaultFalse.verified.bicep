@@ -3,25 +3,25 @@ param location string = resourceGroup().location
 
 param storagesku string
 
-resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {
+resource storage 'Microsoft.Storage/storageAccounts@2026-06-01' = {
   name: take('storage${uniqueString(resourceGroup().id)}', 24)
-  kind: 'StorageV2'
-  location: location
-  sku: {
-    name: storagesku
+  tags: {
+    'aspire-resource-name': 'storage'
   }
+  location: location
   properties: {
-    accessTier: 'Hot'
-    allowSharedKeyAccess: true
     isHnsEnabled: false
     minimumTlsVersion: 'TLS1_2'
+    allowSharedKeyAccess: true
+    accessTier: 'Hot'
     networkAcls: {
       defaultAction: 'Allow'
     }
   }
-  tags: {
-    'aspire-resource-name': 'storage'
+  sku: {
+    name: storagesku
   }
+  kind: 'StorageV2'
 }
 
 output blobEndpoint string = storage.properties.primaryEndpoints.blob

@@ -10,7 +10,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// ===================================================================
@@ -21,20 +21,20 @@ func main() {
 	aks.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
 		cluster := infrastructure.GetContainerServiceManagedCluster()
 		if err := cluster.SetIsRbacEnabled(true).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if _, err := cluster.IsRbacEnabled(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	if aks.Err() != nil {
-		log.Fatalf(aspire.FormatError(aks.Err()))
+		log.Fatal(aspire.FormatError(aks.Err()))
 	}
 
 	// AddContainer (pre-existing)
 	container := builder.AddContainer("mycontainer", "nginx")
 	if err = container.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	genericOtlpProtocol := aspire.OtlpProtocolHttpJson
 	container.WithOtlpExporter(&aspire.WithOtlpExporterOptions{Protocol: &genericOtlpProtocol})
@@ -43,13 +43,13 @@ func main() {
 		Tag:   aspire.StringPtr("stable-alpine"),
 	})
 	if err = taggedContainer.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// AddDockerfile
 	dockerContainer := builder.AddDockerfile("dockerapp", "./app")
 	if err = dockerContainer.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	dockerfileFactory := func(factoryContext aspire.DockerfileFactoryContext) string {
 		_ = factoryContext.Resource()
@@ -61,7 +61,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	dockerFactoryContainer := builder.AddDockerfileFactory("dockerfactoryapp", "./app", dockerfileFactory,
 		&aspire.AddDockerfileFactoryOptions{Stage: aspire.StringPtr("runtime")})
 	if err = dockerFactoryContainer.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	configureDockerfileBuilder := func(dockerfileContext aspire.DockerfileBuilderCallbackContext) {
 		dockerfileBuilder := dockerfileContext.Builder()
@@ -77,7 +77,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	dockerBuilderContainer := builder.AddDockerfileBuilder("dockerbuilderapp", "./app", configureDockerfileBuilder,
 		&aspire.AddDockerfileBuilderOptions{Stage: aspire.StringPtr("runtime")})
 	if err = dockerBuilderContainer.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	dockerContainer.WithDockerfileBuilder("./app", configureDockerfileBuilder,
 		&aspire.WithDockerfileBuilderOptions{Stage: aspire.StringPtr("runtime")})
@@ -87,7 +87,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	// AddExecutable (pre-existing)
 	exe := builder.AddExecutable("myexe", "echo", ".", []string{"hello"})
 	if err = exe.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// AddProject (pre-existing)
@@ -95,11 +95,11 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		LaunchProfileOrOptions: "https",
 	})
 	if err = project.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	projectWithoutLaunchProfile := builder.AddProject("myproject-noprofile", "./src/MyProject")
 	if err = projectWithoutLaunchProfile.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	// ATS exports ReferenceEnvironmentInjectionFlags as a DTO-shaped object in TypeScript.
 	referenceEnvironmentOptions := &aspire.ReferenceEnvironmentInjectionOptions{
@@ -111,19 +111,19 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	// AddCSharpApp
 	csharpApp := builder.AddCSharpApp("csharpapp", "./src/CSharpApp")
 	if err = csharpApp.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// AddContainer
 	cache := builder.AddRedis("cache")
 	if err = cache.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// AddDotnetTool
 	tool := builder.AddDotnetTool("mytool", "dotnet-ef")
 	if err = tool.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// AddParameterFromConfiguration
@@ -133,32 +133,32 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	optionalParam := builder.AddParameter("optional-parameter").WithOptional()
 	optionalParam.WithRequired().WithRequired(&aspire.WithRequiredOptions{Required: aspire.BoolPtr(false)})
 	if err = optionalParam.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	var optionalValue *string
 	optionalValue, err = optionalParam.TryGetCurrentValue()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if optionalValue != nil {
 		log.Fatal("Expected an unset optional parameter")
 	}
 	if err = optionalParam.SetValueAsync(&aspire.SetValueAsyncOptions{Value: aspire.StringPtr("configured")}); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	optionalValue, err = optionalParam.TryGetCurrentValue()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if optionalValue == nil || *optionalValue != "configured" {
 		log.Fatal("Expected the configured optional parameter value")
 	}
 	if err = optionalParam.SetValueAsync(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	optionalValue, err = optionalParam.TryGetCurrentValue()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if optionalValue != nil {
 		log.Fatal("Expected the optional parameter to be cleared")
@@ -247,7 +247,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 
 	endpoint := dockerContainer.GetEndpoint("http")
 	if endpoint.Err() != nil {
-		log.Fatalf(aspire.FormatError(endpoint.Err()))
+		log.Fatal(aspire.FormatError(endpoint.Err()))
 	}
 	expr := aspire.RefExpr("Host=%v", endpoint)
 	endpointHost := endpoint.Property(aspire.EndpointPropertyHost)
@@ -319,7 +319,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			Data:        map[string]string{"custom": "value"},
 		}
 	}); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// WithIconName
@@ -368,7 +368,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		WithToolSource("https://api.nuget.org/v3/index.json").
 		WithToolVersion("8.0.0")
 	if err = tool.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// publishAsDockerFile
@@ -904,9 +904,9 @@ ENTRYPOINT ["dotnet", "App.dll"]
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

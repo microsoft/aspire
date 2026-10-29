@@ -21,7 +21,7 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
 public class AzureContainerAppEnvironmentResource :
-    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureInternalIngressResource
+    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureInternalIngressResource, IAzureCdnPrivateLinkTarget
 #pragma warning restore CS0618 // Type or member is obsolete
 {
     /// <inheritdoc />
@@ -32,6 +32,15 @@ public class AzureContainerAppEnvironmentResource :
 
     /// <inheritdoc />
     ReferenceExpression IAzureInternalIngressResource.StaticIp => ReferenceExpression.Create($"{ContainerAppStaticIp}");
+
+    /// <inheritdoc />
+    BicepOutputReference IAzureCdnPrivateLinkTarget.Id => ContainerAppEnvironmentId;
+
+    /// <inheritdoc />
+    BicepOutputReference IAzureCdnPrivateLinkTarget.Location => ContainerAppLocation;
+
+    /// <inheritdoc />
+    string IAzureCdnPrivateLinkTarget.PrivateLinkGroupId => "managedEnvironments";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureContainerAppEnvironmentResource"/> class.
@@ -263,6 +272,13 @@ public class AzureContainerAppEnvironmentResource :
 
     internal bool IsExpress { get; set; }
 
+    /// <summary>
+    /// Gets a value indicating whether the environment is the target of a private link, such as an Azure Front Door
+    /// Private Link connection. Public network access is disabled for such an environment, so apps in the
+    /// environment are reachable only through the private link.
+    /// </summary>
+    internal bool IsPublicNetworkAccessDisabled => this.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
     internal void ValidatePublicEndpointReference(EndpointReference endpointReference)
     {
         if (!endpointReference.EndpointAnnotation.IsExternal)
@@ -294,6 +310,13 @@ public class AzureContainerAppEnvironmentResource :
     /// Gets the private static IP address associated with an internal Container App Environment.
     /// </summary>
     internal BicepOutputReference ContainerAppStaticIp => new("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", this);
+
+    /// <summary>
+    /// Gets the Azure region of the Container App Environment.
+    /// </summary>
+    internal BicepOutputReference ContainerAppLocation => new(LocationOutputName, this);
+
+    internal const string LocationOutputName = "AZURE_CONTAINER_APPS_ENVIRONMENT_LOCATION";
 
     /// <summary>
     /// Gets the name of the associated Azure Container Registry.

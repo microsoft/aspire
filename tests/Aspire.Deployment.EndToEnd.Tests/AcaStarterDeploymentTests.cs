@@ -96,10 +96,6 @@ public sealed class AcaStarterDeploymentTests(ITestOutputHelper output)
 
             // aspire add may show a version selection prompt
             await auto.WaitForAspireAddCompletionAsync(counter);
-            if (useDotnetProject)
-            {
-                await DotnetProjectDeploymentHelpers.AddPackageAsync(auto, counter, "Aspire.Hosting.Dotnet");
-            }
 
             // Step 6: Modify AppHost.cs to add Azure Container App Environment
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
@@ -120,13 +116,14 @@ builder.Build().Run();
 """;
 
             content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, buildRunPattern, replacement);
-            if (useDotnetProject)
+            if (!useDotnetProject)
             {
+                // Exercise ProjectResource separately from the AddDotnetProject scenario.
                 foreach (var (suffix, resource) in new[] { ("ApiService", "apiservice"), ("Web", "webfrontend") })
                 {
                     content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
-                        $"AddProject<Projects.{projectName}_{suffix}>(\"{resource}\")",
-                        $"AddDotnetProject(\"{resource}\", \"../{projectName}.{suffix}/{projectName}.{suffix}.csproj\")");
+                        $"AddDotnetProject(\"{resource}\", \"../{projectName}.{suffix}/{projectName}.{suffix}.csproj\")",
+                        $"AddProject(\"{resource}\", \"../{projectName}.{suffix}/{projectName}.{suffix}.csproj\")");
                 }
             }
 

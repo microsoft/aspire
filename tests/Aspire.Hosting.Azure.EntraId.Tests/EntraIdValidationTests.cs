@@ -59,6 +59,25 @@ public class EntraIdValidationTests
     }
 
     [Theory]
+    [InlineData("00001111-aaaa-2222-bbbb-3333cccc4444")]
+    [InlineData("00001111-AAAA-2222-BBBB-3333CCCC4444")]
+    public void ValidateManagedIdentityClientId_AcceptsGuid(string clientId)
+    {
+        Assert.Null(EntraIdValidation.ValidateManagedIdentityClientId(clientId));
+    }
+
+    [Theory]
+    [InlineData("mi-client-id")]
+    [InlineData("00001111-aaaa-2222-bbbb-3333cccc4444 ")]
+    [InlineData("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/web")]
+    public void ValidateManagedIdentityClientId_RejectsOtherValues(string clientId)
+    {
+        Assert.Equal(
+            "Expected the Client ID of a user-assigned managed identity as a GUID, not its Azure resource ID.",
+            EntraIdValidation.ValidateManagedIdentityClientId(clientId));
+    }
+
+    [Theory]
     [InlineData("https://login.microsoftonline.com/")]
     [InlineData("https://login.microsoftonline.com")]
     [InlineData("https://contoso.ciamlogin.com/")]
@@ -87,6 +106,7 @@ public class EntraIdValidationTests
     {
         Assert.Equal("No value was provided.", EntraIdValidation.ValidateTenantId(value));
         Assert.Equal("No value was provided.", EntraIdValidation.ValidateClientId(value));
+        Assert.Equal("No value was provided.", EntraIdValidation.ValidateManagedIdentityClientId(value));
         Assert.Equal("No value was provided.", EntraIdValidation.ValidateInstance(value));
     }
 }

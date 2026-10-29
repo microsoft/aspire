@@ -4,72 +4,72 @@
     <body>
       <trans-unit id="CleanCancelled">
         <source>Certificate clean operation was cancelled by the user.</source>
-        <target state="new">Certificate clean operation was cancelled by the user.</target>
+        <target state="translated">Операция очистки сертификата отменена пользователем.</target>
         <note />
       </trans-unit>
       <trans-unit id="CleanDescription">
         <source>Remove all HTTPS development certificates</source>
-        <target state="new">Remove all HTTPS development certificates</target>
+        <target state="translated">Удалить все сертификаты разработки HTTPS</target>
         <note />
       </trans-unit>
       <trans-unit id="CleanFailure">
         <source>Failed to clean HTTPS development certificates.</source>
-        <target state="new">Failed to clean HTTPS development certificates.</target>
+        <target state="translated">Сбой очистки сертификатов разработки HTTPS.</target>
         <note />
       </trans-unit>
       <trans-unit id="CleanFailureDetailsFormat">
         <source>Certificate clean operation failed: {0}</source>
-        <target state="new">Certificate clean operation failed: {0}</target>
+        <target state="translated">Сбой операции очистки сертификата: {0}</target>
         <note>{0} is the error message from the failed operation</note>
       </trans-unit>
       <trans-unit id="CleanProgress">
         <source>Cleaning development certificates (may require elevated permissions)...</source>
-        <target state="new">Cleaning development certificates (may require elevated permissions)...</target>
+        <target state="translated">Очистка сертификатов разработки (могут потребоваться повышенные права доступа)...</target>
         <note />
       </trans-unit>
       <trans-unit id="CleanSuccess">
         <source>All HTTPS development certificates cleaned successfully.</source>
-        <target state="new">All HTTPS development certificates cleaned successfully.</target>
+        <target state="translated">Все сертификаты разработки HTTPS очищены.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage HTTPS development certificates</source>
-        <target state="new">Manage HTTPS development certificates</target>
+        <target state="translated">Управление сертификатами разработки HTTPS</target>
         <note />
       </trans-unit>
       <trans-unit id="TrustCancelled">
         <source>Certificate trust operation was cancelled by the user.</source>
-        <target state="new">Certificate trust operation was cancelled by the user.</target>
+        <target state="translated">Операция доверия сертификата отменена пользователем.</target>
         <note />
       </trans-unit>
       <trans-unit id="TrustDescription">
         <source>Trust the HTTPS development certificate, creating one if necessary</source>
-        <target state="new">Trust the HTTPS development certificate, creating one if necessary</target>
+        <target state="translated">Доверять сертификату разработки HTTPS, создавая его при необходимости</target>
         <note />
       </trans-unit>
       <trans-unit id="TrustFailure">
         <source>Failed to trust HTTPS development certificate.</source>
-        <target state="new">Failed to trust HTTPS development certificate.</target>
+        <target state="translated">Сбой доверия сертификату разработки HTTPS.</target>
         <note />
       </trans-unit>
       <trans-unit id="TrustFailureDetailsFormat">
         <source>Certificate trust operation returned: {0}</source>
-        <target state="new">Certificate trust operation returned: {0}</target>
+        <target state="translated">Возвращена операция доверия сертификата: {0}</target>
         <note>{0} is the EnsureCertificateResult value</note>
       </trans-unit>
       <trans-unit id="TrustPartialSuccess">
         <source>HTTPS development certificate was partially trusted. Continuing because partial trust is usable for CLI HTTPS diagnostics on Linux; browser trust may still be incomplete.</source>
-        <target state="new">HTTPS development certificate was partially trusted. Continuing because partial trust is usable for CLI HTTPS diagnostics on Linux; browser trust may still be incomplete.</target>
+        <target state="translated">Сертификат разработки HTTPS получил частичное доверие. Продолжение выполнения, так как частичное доверие пригодно для диагностики HTTPS в CLI в Linux, доверие браузера может быть неполным.</target>
         <note />
       </trans-unit>
       <trans-unit id="TrustProgress">
         <source>Trusting development certificate (may require elevated permissions)...</source>
-        <target state="new">Trusting development certificate (may require elevated permissions)...</target>
+        <target state="translated">Доверие к сертификату разработки (могут потребоваться повышенные права доступа)...</target>
         <note />
       </trans-unit>
       <trans-unit id="TrustSuccess">
         <source>HTTPS development certificate trusted successfully.</source>
-        <target state="new">HTTPS development certificate trusted successfully.</target>
+        <target state="translated">Сертификат разработки HTTPS доверен.</target>
         <note />
       </trans-unit>
     </body>

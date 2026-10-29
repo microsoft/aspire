@@ -600,6 +600,18 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         return false;
     }
 
+    [Fact]
+    public async Task BorrowedProjectSurvivesFailedBootstrapSessionDisposal()
+    {
+        using var project = new ThrowingAppHostServerProject();
+        await using (var session = CreateSession(project, TestContext.Current.CancellationToken, ownsProject: false))
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(session.StartAsync);
+        }
+
+        Assert.False(project.Disposed);
+    }
+
     private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)
     {
         return new ConfigurationBuilder()
@@ -621,7 +633,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler = null,
         IGracefulShutdownWindow? shutdownService = null,
         bool isolateConsole = false,
-        ILogger? logger = null) =>
+        ILogger? logger = null,
+        bool ownsProject = true) =>
         new(
             project,
             environmentVariables,
@@ -632,6 +645,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             gracefulShutdownSignaler,
             shutdownService,
             isolateConsole,
+            ownsProject,
             stopRequested);
 
     private static AppHostServerProjectFactory CreateAppHostServerProjectFactory()

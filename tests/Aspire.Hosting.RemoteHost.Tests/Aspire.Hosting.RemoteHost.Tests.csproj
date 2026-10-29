@@ -6,12 +6,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
     <Compile Include="$(TestsSharedDir)TestInteractionService.cs" LinkBase="shared" />
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared\TemporaryWorkspace.cs" />
     <Compile Include="$(TestsSharedDir)Logging\*.cs" LinkBase="shared/Logging" />
     <Compile Include="$(TestsSharedDir)Processes\*.cs" LinkBase="shared/Processes" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Kubernetes\Aspire.Hosting.Azure.Kubernetes.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.Go\Aspire.Hosting.CodeGeneration.Go.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.Java\Aspire.Hosting.CodeGeneration.Java.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.Python\Aspire.Hosting.CodeGeneration.Python.csproj" />

@@ -596,4 +596,56 @@ Once connected, agents can start your app, check resource health, fetch logs and
 For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</value>
     <comment>{0} is the learn more URL, {1} is the install CLI URL</comment>
   </data>
+  <data name="TelemetryHelpMessage" xml:space="preserve">
+    <value>Configure your app to send telemetry to the dashboard.</value>
+  </data>
+  <data name="TelemetryHelpMoreInformation" xml:space="preserve">
+    <value>For setup instructions, see</value>
+    <comment>Followed by the TelemetryHelpButtonText inline link and a period.</comment>
+  </data>
+  <data name="TelemetryHelpButtonText" xml:space="preserve">
+    <value>Add telemetry</value>
+    <comment>Inline link following TelemetryHelpMoreInformation. Opens the telemetry setup dialog.</comment>
+  </data>
+  <data name="TelemetryHelpDialogTitle" xml:space="preserve">
+    <value>Add telemetry</value>
+  </data>
+  <data name="TelemetryHelpIntroduction" xml:space="preserve">
+    <value>Visualize logs, traces, and metrics in the dashboard. To see telemetry, first send it to the dashboard using OTLP or manually import telemetry JSON files.
+
+### 📡 Send telemetry from your app
+
+Configure your app to export logs, traces, and metrics using [OTLP]({0}).</value>
+    <comment>Markdown. {0} is the OTLP specification URL.</comment>
+  </data>
+  <data name="TelemetryHelpProtocolHeader" xml:space="preserve">
+    <value>Protocol</value>
+  </data>
+  <data name="TelemetryHelpEndpointHeader" xml:space="preserve">
+    <value>Dashboard endpoint</value>
+  </data>
+  <data name="TelemetryHelpContainerDescription" xml:space="preserve">
+    <value>The dashboard is running in a container. Access it from the host using port forwarding.</value>
+  </data>
+  <data name="TelemetryHelpApiKeyDescription" xml:space="preserve">
+    <value>Set OTEL_EXPORTER_OTLP_HEADERS to x-otlp-api-key=&lt;your-api-key&gt;, replacing &lt;your-api-key&gt; with the dashboard's configured OTLP API key.</value>
+  </data>
+  <data name="TelemetryHelpCertificateDescription" xml:space="preserve">
+    <value>Configure your OTLP exporter to present a client certificate trusted by the dashboard. Use your SDK's OTLP exporter settings to specify the certificate and private key.</value>
+  </data>
+  <data name="TelemetryHelpNoEndpointsDescription" xml:space="preserve">
+    <value>No OTLP endpoints are configured. To receive live telemetry, configure an OTLP endpoint when starting the dashboard.</value>
+  </data>
+  <data name="TelemetryHelpSendTelemetryLink" xml:space="preserve">
+    <value>Connect your app to the dashboard</value>
+  </data>
+  <data name="TelemetryHelpImportDescription" xml:space="preserve">
+    <value>### 📥 Import telemetry from a file
+
+Import previously exported telemetry or OTLP JSON files by selecting **{0}** in the **{1}** dialog.</value>
+    <comment>Markdown. {0} is the localized import button text, {1} is the localized data management dialog title.</comment>
+  </data>
+  <data name="TelemetryHelpManageDataLink" xml:space="preserve">
+    <value>Learn about managing dashboard data</value>
+  </data>
 </root>

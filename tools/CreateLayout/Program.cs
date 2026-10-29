@@ -169,6 +169,7 @@ internal sealed class LayoutBuilder : IDisposable
 
         // Copy components
         CopyManaged();
+        CopyAppHostServer();
         CopyDashboard();
         CopyTerminalHost();
         CopyTray();
@@ -288,6 +289,27 @@ internal sealed class LayoutBuilder : IDisposable
         }
 
         Log("  Copied Native AOT terminal host to terminalhost/");
+    }
+
+    internal void CopyAppHostServer()
+    {
+        var publishPath = FindPublishPath("Aspire.Hosting.Native.Server", "net11.0", requireRidSpecific: true)
+            ?? throw new InvalidOperationException("AppHost Server v2 publish output not found.");
+        var extension = _rid.StartsWith("win-", StringComparison.Ordinal) ? ".exe" : "";
+        var source = Path.Combine(publishPath, "Aspire.Hosting.Native.Server" + extension);
+        foreach (var requiredFile in new[] { source, Path.Combine(publishPath, "ats-contract.json") })
+        {
+            if (!File.Exists(requiredFile) || new FileInfo(requiredFile).Length == 0)
+            {
+                throw new InvalidOperationException($"AppHost Server v2 payload missing or empty at {requiredFile}");
+            }
+        }
+        var destination = Path.Combine(_outputPath, "apphost-server");
+        CopyDirectory(publishPath, destination, excludeSymbols: true);
+        // Product naming is independent of the assembly identity used in ATS type IDs.
+        File.Move(Path.Combine(destination, Path.GetFileName(source)),
+            Path.Combine(destination, "aspire-apphost-server" + extension), overwrite: true);
+        Log("Copied AppHost Server v2 to apphost-server/");
     }
 
     internal void CopyDashboard()

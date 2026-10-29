@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="BannerArgumentDescription">
         <source>Display the animated Aspire CLI welcome banner</source>
-        <target state="needs-review-translation">애니메이션 Aspire CLI 환영 배너를 표시합니다.</target>
+        <target state="translated">애니메이션된 Aspire CLI 시작 배너 표시</target>
         <note />
       </trans-unit>
       <trans-unit id="BannerVersionFormat">
@@ -19,42 +19,42 @@
       </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">명령을 실행하기 전에 디버거가 연결되기를 기다리세요.</target>
+        <target state="translated">명령을 실행하기 전에 디버거가 연결되기를 기다립니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionScriptDescription">
         <source>Write a shell completion script to standard output</source>
-        <target state="new">Write a shell completion script to standard output</target>
+        <target state="translated">표준 출력으로 셸 자동 완성 스크립트 작성</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellDescription">
         <source>Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</source>
-        <target state="new">Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</target>
+        <target state="translated">스크립트를 생성할 셸입니다(bash, fish, pwsh, zsh). 기본값은 SHELL이며, Windows에서는 pwsh입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellRequired">
         <source>Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</source>
-        <target state="new">Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</target>
+        <target state="translated">지원되는 셸을 감지하지 못했습니다. bash, fish, pwsh 또는 zsh를 지정하세요. aspire completions script &lt;shell&gt;</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionsDescription">
         <source>Generate shell completion scripts</source>
-        <target state="new">Generate shell completion scripts</target>
+        <target state="translated">셸 자동 완성 스크립트 생성</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
         <source>Enable debug logging to the console</source>
-        <target state="needs-review-translation">콘솔에 디버그 로깅을 활성화하세요.</target>
+        <target state="translated">콘솔에 대한 디버그 로깅 사용</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugLevelArgumentDescription">
         <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
-        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
+        <target state="translated">콘솔 출력에 대한 최소 로그 수준 설정(추적, 디버그, 정보, 경고, 오류, 위험)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
-        <target state="needs-review-translation">Aspire CLI를 사용하여 Aspire 기반 애플리케이션을 만들고, 실행하고, 게시할 수 있습니다.</target>
+        <target state="translated">Aspire CLI를 사용하여 Aspire 기반 애플리케이션을 만들고, 실행하고, 게시할 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FirstTimeUseTelemetryNotice">
@@ -64,37 +64,37 @@
 The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
 
 Read more about Aspire CLI telemetry: {0}</source>
-        <target state="new">Telemetry
+        <target state="translated">원격 분석
 ---------
 
-The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
+Aspire CLI는 사용 데이터를 수집합니다. Microsoft에서 수집하며 사용자 환경을 개선하는 데 사용됩니다. 선호하는 셸을 사용하여 ASPIRE_CLI_TELEMETRY_OPTOUT 환경 변수를 '1' 또는 'true'로 설정하여 원격 분석을 옵트아웃할 수 있습니다.
 
-Read more about Aspire CLI telemetry: {0}</target>
+Aspire CLI 원격 분석에 대해 자세히 알아보기: {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
       <trans-unit id="IdentityOverrideNotice">
         <source>Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</source>
-        <target state="new">Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</target>
+        <target state="translated">Aspire CLI가 ID '{0}', 버전 '{1}'을(를) 에뮬레이트하고 있습니다. 설치된 빌드와 동작이 다를 수 있습니다. 환경 변수 또는 설치 사이드카를 통해 ID가 재정의되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidCompletionRequest">
         <source>Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</source>
-        <target state="new">Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</target>
+        <target state="translated">[suggest] 또는 [suggest:&lt;cursor&gt;] 다음에 커서가 있는 하나의 명령줄 문자열이 필요합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
         <source>Suppress the startup banner and telemetry notice</source>
-        <target state="needs-review-translation">시작 배너 및 원격 분석 알림을 표시하지 않습니다.</target>
+        <target state="translated">시작 배너 및 원격 분석 알림 표시 안 함</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveArgumentDescription">
         <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
-        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
+        <target state="translated">비대화형 모드에서 명령을 실행하여 모든 대화형 프롬프트 및 회전자를 사용하지 않도록 설정합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">명령을 실행하기 전에 디버거가 연결되기를 기다리세요.</target>
+        <target state="translated">명령을 실행하기 전에 디버거가 연결되기를 기다립니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

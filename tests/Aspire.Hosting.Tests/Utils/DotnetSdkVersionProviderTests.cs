@@ -19,7 +19,7 @@ public class DotnetSdkVersionProviderTests(ITestOutputHelper outputHelper)
     [InlineData("11.0.100-beta.1", false)]
     [InlineData("11.0.100-rc.0.1", false)]
     [InlineData("11.0.100-rc.1", true)]
-    [InlineData("11.0.100-rc.1.26425.128", true)]
+    [InlineData("11.0.100-rc.2.26504.105", true)]
     [InlineData("11.0.100-rc.2.1", true)]
     [InlineData("11.0.100", true)]
     [InlineData("11.0.101-servicing.1", true)]
@@ -43,7 +43,7 @@ public class DotnetSdkVersionProviderTests(ITestOutputHelper outputHelper)
     [InlineData(null, false)]
     [InlineData("10.0.999", false)]
     [InlineData("11.0.100-preview.7.25380.108", false)]
-    [InlineData("11.0.100-rc.1.26425.128", false)]
+    [InlineData("11.0.100-rc.2.26504.105", false)]
     [InlineData("11.0.100-rc.2.1", false)]
     [InlineData("11.0.100-rc.3.99999.1", false)]
     [InlineData("11.0.100-rtm.26473.103", false)]
@@ -68,14 +68,14 @@ public class DotnetSdkVersionProviderTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var processRunner = new TestProcessRunner();
-        processRunner.EnqueueResult(output: ["11.0.100-rc.1.26425.128"]);
+        processRunner.EnqueueResult(output: ["11.0.100-rc.2.26504.105"]);
         var provider = CreateProvider(processRunner);
 
         var version = await provider.TryGetVersionAsync(
             workspace.Path,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal("11.0.100-rc.1.26425.128", version?.ToString());
+        Assert.Equal("11.0.100-rc.2.26504.105", version?.ToString());
         var processSpec = Assert.Single(processRunner.ProcessSpecs);
         Assert.Equal("dotnet", processSpec.ExecutablePath);
         Assert.Equal(workspace.Path, processSpec.WorkingDirectory);

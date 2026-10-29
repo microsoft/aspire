@@ -5,6 +5,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
+using Dapper;
 using System.Diagnostics;
 using Google.Protobuf.Collections;
 using Microsoft.Data.Sqlite;
@@ -27,12 +28,37 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     private readonly IReadOnlyList<IOutgoingPeerResolver> _outgoingPeerResolvers;
     private readonly List<IDisposable> _outgoingPeerSubscriptions = [];
     private int _disposed;
+    private int _hasReceivedTelemetry = -1;
 
     private static string CreateContainsLikePattern(string value) => $"%{EscapeLikePattern(value)}%";
 
     private static string CreateStartsWithLikePattern(string value) => $"{EscapeLikePattern(value)}%";
 
     public bool IsReadOnly => _database.IsReadOnly;
+
+    public bool HasReceivedTelemetry
+    {
+        get
+        {
+            if (Volatile.Read(ref _hasReceivedTelemetry) == -1)
+            {
+                // Seed resumed databases from actual content, not resource envelopes, which can be empty.
+                // The latch belongs to this process and must survive all subsequent clears and cache resets.
+                using (_database.WriteLock.Lock())
+                {
+                    using var connection = _database.OpenConnection();
+                    var hasTelemetry = connection.QuerySingle<bool>("""
+                        SELECT EXISTS (SELECT 1 FROM telemetry_logs)
+                            OR EXISTS (SELECT 1 FROM telemetry_spans)
+                            OR EXISTS (SELECT 1 FROM telemetry_metric_points);
+                        """);
+                    Interlocked.CompareExchange(ref _hasReceivedTelemetry, hasTelemetry ? 1 : 0, -1);
+                }
+            }
+
+            return Volatile.Read(ref _hasReceivedTelemetry) == 1;
+        }
+    }
 
     private static string EscapeLikePattern(string value)
     {
@@ -96,7 +122,12 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         EnsureWritable();
         try
         {
-            NotifyLogsAdded(await AddLogsToDatabaseAsync(context, resourceLogs).ConfigureAwait(false));
+            var logs = await AddLogsToDatabaseAsync(context, resourceLogs).ConfigureAwait(false);
+            if (logs.Count > 0)
+            {
+                Interlocked.Exchange(ref _hasReceivedTelemetry, 1);
+            }
+            NotifyLogsAdded(logs);
         }
         catch
         {
@@ -121,6 +152,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         await AddMetricsToDatabaseAsync(context, resourceMetrics).ConfigureAwait(false);
         if (context.SuccessCount > successCount)
         {
+            Interlocked.Exchange(ref _hasReceivedTelemetry, 1);
             NotifyMetricsAdded();
         }
     }
@@ -136,7 +168,12 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         EnsureWritable();
         try
         {
-            NotifySpansAdded(await AddTracesToDatabaseAsync(context, resourceSpans).ConfigureAwait(false));
+            var spans = await AddTracesToDatabaseAsync(context, resourceSpans).ConfigureAwait(false);
+            if (spans.Count > 0)
+            {
+                Interlocked.Exchange(ref _hasReceivedTelemetry, 1);
+            }
+            NotifySpansAdded(spans);
         }
         catch
         {

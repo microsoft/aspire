@@ -128,7 +128,13 @@ void main() throws Exception {
             cluster.setIsRbacEnabled(true);
             var _rbacEnabled = cluster.isRbacEnabled();
         });
-        aks.addNodePool("system", new AddNodePoolOptions().vmSize(AksNodeVmSizes.StandardDSv5.StandardD2sV5));
+        aks.withSystemNodePool(pool -> {
+            pool.setOsSku("AzureLinux");
+        });
+        aks.addNodePool("workers", pool -> {
+            pool.setVmSize(AksNodeVmSizes.StandardDSv5.StandardD2sV5);
+            pool.setOsSku("AzureLinux");
+        });
         var aksVolume = aks.addPersistentVolume("aks-data");
         aksVolume.withCapacity("20Gi");
         var pipeline = builder.pipeline();

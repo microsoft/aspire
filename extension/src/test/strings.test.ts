@@ -165,6 +165,7 @@ suite('utils/strings tests', () => {
         const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
 
         const expectedStrings = {
+            blazorWasmDebugRelayFailed: 'Could not prepare Blazor WebAssembly debugging. See the Aspire output for details, then try again.',
             csharpExtensionMissingForBlazorDebugging: 'Debugging this Blazor client requires {0} version {1} or later. Install the C# extension, then start debugging again.',
             csharpExtensionOutdatedForBlazorDebugging: 'Debugging this Blazor client requires {0} version {2} or later. Installed version: {1}. Update the C# extension, then start debugging again.',
             missingBlazorClientProject: "The Blazor client project '{0}' does not exist. Restore or rebuild the AppHost, then start debugging again.",

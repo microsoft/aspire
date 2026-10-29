@@ -28,7 +28,10 @@
             </TemplateColumn>
         </ChildContent>
         <EmptyContent>
-            <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary" />&nbsp;@Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]
+            <div class="aspire-empty-message">
+                <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary" />
+                @Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]
+            </div>
         </EmptyContent>
     </FluentDataGrid>
 </div>

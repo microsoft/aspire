@@ -1,0 +1,10 @@
+﻿{
+  Agents: [
+    GitHub Copilot,
+    Claude Code,
+    OpenCode
+  ],
+  Locations:
+Installation locations:
+  MCP: ~/.copilot/mcp-config.json
+}

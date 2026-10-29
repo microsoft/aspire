@@ -9,6 +9,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -1407,6 +1408,26 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public async Task PromptForStringAsync_ResponseLoggingCanBeDisabledWithoutMaskingInput()
+    {
+        const string query = "private-template-search";
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "\n");
+        var sink = new TestSink();
+        using var loggerFactory = new TestLoggerFactory(sink, enabled: true);
+        var interaction = CreateInteractionService(console, loggerFactory: loggerFactory);
+
+        var result = await interaction.PromptForStringAsync(
+            "Search:", binding: PromptBinding.CreateDefault<string?>(query), logResponse: false).DefaultTimeout();
+
+        Assert.Equal(query, result);
+        Assert.Contains(query, output.ToString());
+        Assert.Equal(
+            ["Prompt: Search: (default: ****, secret: False)", "Prompt result: ****"],
+            sink.Writes.Select(write => write.Message));
+    }
+
+    [Fact]
     public async Task PromptForStringAsync_WhenUserAcceptsEscapedDisplayDefault_ReturnsRawDefault()
     {
         var output = new StringBuilder();
@@ -1956,6 +1977,28 @@ public class ConsoleInteractionServiceTests
         var result = await interactionService.PromptForSelectionsAsync("Select:", choices, x => x, binding: binding, cancellationToken: CancellationToken.None);
 
         Assert.Equal(2, result.Count);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionsAsync_AgentDefaults_MatchIdsWithLocalizedLabels()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var option = new Option<string?>("--agents");
+        var command = new RootCommand { option };
+        var binding = PromptBinding.Create(command.Parse(""), option, "copilot,claude,opencode");
+        TestItem[] clients = [
+            new("copilot", AgentCommandStrings.Environment_Copilot),
+            new("claude", AgentCommandStrings.Environment_ClaudeCode),
+            new("opencode", AgentCommandStrings.Environment_OpenCode)];
+
+        var result = await interactionService.PromptForSelectionsAsync(
+            AgentCommandStrings.InitCommand_SelectAgentsPrompt, clients,
+            static client => client.Display, binding: binding, cancellationToken: CancellationToken.None);
+
+        Assert.Equal(clients, result);
         Assert.Empty(output.ToString());
     }
 

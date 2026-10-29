@@ -4,8 +4,9 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <EnablePackageValidation>false</EnablePackageValidation>
+    <!-- No stable package has shipped yet to use as a compatibility baseline. -->
+    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
     <EnableAspireIntegrationAnalyzers>true</EnableAspireIntegrationAnalyzers>
     <PackageTags>aspire integration hosting azure kubernetes aks</PackageTags>
     <Description>Azure Kubernetes Service (AKS) resource types for Aspire.</Description>

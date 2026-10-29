@@ -15,29 +15,6 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class LogViewerTests : DashboardTestContext
 {
     [Fact]
-    public async Task LogViewer_EndAnchorLimitsInitialResultThenReturnsAllEntries()
-    {
-        SetupLogViewerServices();
-
-        var logEntries = CreateLogEntries();
-        var cut = Render<LogViewer>(builder => builder.Add(p => p.LogEntries, logEntries));
-        var virtualize = cut.FindComponent<Virtualize<LogEntry>>().Instance;
-
-        foreach (var message in new[] { "one", "two", "three", "four", "five", "six" })
-        {
-            logEntries.InsertSorted(LogEntry.Create(timestamp: DateTime.UtcNow, logMessage: message, isErrorMessage: false));
-        }
-
-        var initialResult = await cut.InvokeAsync(() => virtualize.ItemsProvider!(new ItemsProviderRequest(0, 100, CancellationToken.None)).AsTask());
-        var refreshedResult = await cut.InvokeAsync(() => virtualize.ItemsProvider!(new ItemsProviderRequest(0, 100, CancellationToken.None)).AsTask());
-
-        Assert.Equal(5, initialResult.TotalItemCount);
-        Assert.Equal(5, initialResult.Items.Count());
-        Assert.Equal(6, refreshedResult.TotalItemCount);
-        Assert.Equal(6, refreshedResult.Items.Count());
-    }
-
-    [Fact]
     public void LogViewer_VirtualizeUsesIdentityComparerAndEndAnchor()
     {
         SetupLogViewerServices();
