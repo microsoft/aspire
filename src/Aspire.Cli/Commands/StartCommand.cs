@@ -51,6 +51,7 @@ internal sealed class StartCommand : BaseCommand
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var explicitIsolated = AppHostLauncher.GetExplicitIsolated(parseResult);
         var launchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption);
+        var launchGroup = parseResult.GetValue(AppHostLauncher.s_launchGroupOption);
 
         var noBuild = parseResult.GetValue(s_noBuildOption);
         // The detached start path is always user-initiated. When invoked from the
@@ -110,6 +111,11 @@ internal sealed class StartCommand : BaseCommand
         if (!string.IsNullOrEmpty(launchProfile))
         {
             additionalArgs.Add($"{AppHostLauncher.s_launchProfileOption.Name}={launchProfile}");
+        }
+
+        if (launchGroup is not null)
+        {
+            additionalArgs.Add($"{AppHostLauncher.s_launchGroupOption.Name}={launchGroup}");
         }
 
         if (appHostArgs.Count > 0)

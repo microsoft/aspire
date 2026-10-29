@@ -47,9 +47,19 @@
         <target state="translated">출력에 숨겨진 리소스 포함</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidLaunchGroupName">
+        <source>The --launch-group option requires a single non-empty name without surrounding whitespace, commas, or semicolons.</source>
+        <target state="new">The --launch-group option requires a single non-empty name without surrounding whitespace, commas, or semicolons.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="IsolatedOptionDescription">
         <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
         <target state="translated">임의 포트 및 격리된 사용자 암호를 사용하여 격리된 모드에서 실행하여 여러 인스턴스를 동시에 실행할 수 있습니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LaunchGroupOptionDescription">
+        <source>The launch group to start, including its required dependencies</source>
+        <target state="new">The launch group to start, including its required dependencies</target>
         <note />
       </trans-unit>
       <trans-unit id="LaunchProfileNotSupported">

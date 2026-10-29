@@ -2295,6 +2295,24 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds a resource to a launch group. */
+    public CSharpAppResource withLaunchGroup(String launchGroupName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupName", AspireClient.serializeValue(launchGroupName));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroup", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to multiple launch groups. */
+    public CSharpAppResource withLaunchGroups(String[] launchGroupNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupNames", AspireClient.serializeValue(launchGroupNames));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroups", reqArgs);
+        return this;
+    }
+
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public CSharpAppResource withMcpServer(WithMcpServerOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -5509,6 +5527,24 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a resource to a launch group. */
+    public ContainerRegistryResource withLaunchGroup(String launchGroupName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupName", AspireClient.serializeValue(launchGroupName));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroup", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to multiple launch groups. */
+    public ContainerRegistryResource withLaunchGroups(String[] launchGroupNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupNames", AspireClient.serializeValue(launchGroupNames));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroups", reqArgs);
+        return this;
+    }
+
     public ContainerRegistryResource withRequiredCommand(String command) {
         return withRequiredCommand(command, null);
     }
@@ -6720,6 +6756,24 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("alias", AspireClient.serializeValue(alias));
         getClient().invokeCapability("Aspire.Hosting/withContainerNetworkAlias", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to a launch group. */
+    public ContainerResource withLaunchGroup(String launchGroupName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupName", AspireClient.serializeValue(launchGroupName));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroup", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to multiple launch groups. */
+    public ContainerResource withLaunchGroups(String[] launchGroupNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupNames", AspireClient.serializeValue(launchGroupNames));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroups", reqArgs);
         return this;
     }
 
@@ -9507,6 +9561,24 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds a resource to a launch group. */
+    public DotnetToolResource withLaunchGroup(String launchGroupName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupName", AspireClient.serializeValue(launchGroupName));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroup", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to multiple launch groups. */
+    public DotnetToolResource withLaunchGroups(String[] launchGroupNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupNames", AspireClient.serializeValue(launchGroupNames));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroups", reqArgs);
+        return this;
+    }
+
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public DotnetToolResource withMcpServer(WithMcpServerOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -11993,6 +12065,24 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a resource to a launch group. */
+    public ExecutableResource withLaunchGroup(String launchGroupName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupName", AspireClient.serializeValue(launchGroupName));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroup", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to multiple launch groups. */
+    public ExecutableResource withLaunchGroups(String[] launchGroupNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupNames", AspireClient.serializeValue(launchGroupNames));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroups", reqArgs);
+        return this;
+    }
+
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public ExecutableResource withMcpServer(WithMcpServerOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -13918,6 +14008,24 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
         }
         getClient().invokeCapability("Aspire.Hosting/withExternalServiceHttpHealthCheck", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to a launch group. */
+    public ExternalServiceResource withLaunchGroup(String launchGroupName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupName", AspireClient.serializeValue(launchGroupName));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroup", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to multiple launch groups. */
+    public ExternalServiceResource withLaunchGroups(String[] launchGroupNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupNames", AspireClient.serializeValue(launchGroupNames));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroups", reqArgs);
         return this;
     }
 
@@ -15949,6 +16057,15 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/build", reqArgs);
         return (DistributedApplication) result;
+    }
+
+    /** Defines the valid launch group names. */
+    public IDistributedApplicationBuilder defineLaunchGroups(String[] launchGroupNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupNames", AspireClient.serializeValue(launchGroupNames));
+        var result = getClient().invokeCapability("Aspire.Hosting/defineLaunchGroups", reqArgs);
+        return (IDistributedApplicationBuilder) result;
     }
 
     /** Adds a parameter resource */
@@ -18746,6 +18863,24 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a resource to a launch group. */
+    public ParameterResource withLaunchGroup(String launchGroupName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupName", AspireClient.serializeValue(launchGroupName));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroup", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to multiple launch groups. */
+    public ParameterResource withLaunchGroups(String[] launchGroupNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupNames", AspireClient.serializeValue(launchGroupNames));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroups", reqArgs);
+        return this;
+    }
+
     public ParameterResource withDescription(String description) {
         return withDescription(description, null);
     }
@@ -20395,6 +20530,24 @@ public class ProjectResource extends ResourceBuilderBase {
             reqArgs.put("runtimeImage", AspireClient.serializeValue(runtimeImage));
         }
         getClient().invokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to a launch group. */
+    public ProjectResource withLaunchGroup(String launchGroupName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupName", AspireClient.serializeValue(launchGroupName));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroup", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to multiple launch groups. */
+    public ProjectResource withLaunchGroups(String[] launchGroupNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupNames", AspireClient.serializeValue(launchGroupNames));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroups", reqArgs);
         return this;
     }
 
@@ -24021,6 +24174,24 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a resource to a launch group. */
+    public TestDatabaseResource withLaunchGroup(String launchGroupName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupName", AspireClient.serializeValue(launchGroupName));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroup", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to multiple launch groups. */
+    public TestDatabaseResource withLaunchGroups(String[] launchGroupNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupNames", AspireClient.serializeValue(launchGroupNames));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroups", reqArgs);
+        return this;
+    }
+
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public TestDatabaseResource withMcpServer(WithMcpServerOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -26300,6 +26471,24 @@ public class TestRedisResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("alias", AspireClient.serializeValue(alias));
         getClient().invokeCapability("Aspire.Hosting/withContainerNetworkAlias", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to a launch group. */
+    public TestRedisResource withLaunchGroup(String launchGroupName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupName", AspireClient.serializeValue(launchGroupName));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroup", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to multiple launch groups. */
+    public TestRedisResource withLaunchGroups(String[] launchGroupNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupNames", AspireClient.serializeValue(launchGroupNames));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroups", reqArgs);
         return this;
     }
 
@@ -28820,6 +29009,24 @@ public class TestVaultResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("alias", AspireClient.serializeValue(alias));
         getClient().invokeCapability("Aspire.Hosting/withContainerNetworkAlias", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to a launch group. */
+    public TestVaultResource withLaunchGroup(String launchGroupName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupName", AspireClient.serializeValue(launchGroupName));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroup", reqArgs);
+        return this;
+    }
+
+    /** Adds a resource to multiple launch groups. */
+    public TestVaultResource withLaunchGroups(String[] launchGroupNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchGroupNames", AspireClient.serializeValue(launchGroupNames));
+        getClient().invokeCapability("Aspire.Hosting/withLaunchGroups", reqArgs);
         return this;
     }
 

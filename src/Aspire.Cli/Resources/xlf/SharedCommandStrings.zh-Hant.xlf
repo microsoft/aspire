@@ -47,9 +47,19 @@
         <target state="translated">在輸出中包含隱藏的資源</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidLaunchGroupName">
+        <source>The --launch-group option requires a single non-empty name without surrounding whitespace, commas, or semicolons.</source>
+        <target state="new">The --launch-group option requires a single non-empty name without surrounding whitespace, commas, or semicolons.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="IsolatedOptionDescription">
         <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
         <target state="translated">在隔離模式中搭配隨機化連接埠和隔離的使用者袐密執行，允許同時執行多個執行個體</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LaunchGroupOptionDescription">
+        <source>The launch group to start, including its required dependencies</source>
+        <target state="new">The launch group to start, including its required dependencies</target>
         <note />
       </trans-unit>
       <trans-unit id="LaunchProfileNotSupported">

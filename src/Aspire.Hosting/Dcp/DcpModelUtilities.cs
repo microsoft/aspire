@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Net;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Orchestrator;
 
 namespace Aspire.Hosting.Dcp;
 
@@ -23,9 +24,11 @@ internal static class DcpModelUtilities
         // Explicit-start, non-persistent resources use manual snapshots for dashboard visibility.
         // Do not create corresponding DCP objects until the manual start path flips Spec.Start=true; creation
         // evaluates callbacks that can prompt for input or depend on start-time state.
+        // Partial runs also defer persistent resources: their configuration may await a dormant project build.
         return start == false &&
             modelResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _) &&
-            modelResource.GetLifetimeType() != Lifetime.Persistent;
+            (modelResource.GetLifetimeType() != Lifetime.Persistent ||
+             modelResource.HasAnnotationOfType<LaunchGroupDeferredAnnotation>());
     }
 
     internal static void ValidateEndpointPorts(IResource modelResource, EndpointAnnotation endpoint)

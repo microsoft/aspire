@@ -2045,8 +2045,12 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.Contains("after 0 seconds", exception.Message);
     }
 
-    [Fact]
-    public async Task RunAsync_PassesWorkloadIdToAppHostServerEnvironment()
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("catalog", false)]
+    [InlineData(null, true)]
+    [InlineData("catalog", true)]
+    public async Task RunAsync_PassesWorkloadIdAndLaunchGroupToAppHostServerEnvironment(string? launchGroup, bool useLaunchProfile)
     {
         const string image = "example.com/aspire-tunnel:configured";
 
@@ -2054,6 +2058,22 @@ public class GuestAppHostProjectTests : IDisposable
         await File.WriteAllTextAsync(appHostPath, "// test apphost");
         var appHostFile = new FileInfo(appHostPath);
         var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
+        if (useLaunchProfile)
+        {
+            var propertiesDirectory = Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+            await File.WriteAllTextAsync(Path.Combine(propertiesDirectory.FullName, "launchSettings.json"),
+                """
+                {
+                  "profiles": {
+                    "https": {
+                      "environmentVariables": {
+                        "Aspire__LaunchGroup": "basket"
+                      }
+                    }
+                  }
+                }
+                """);
+        }
 
         var projectFactory = new TestAppHostServerProjectFactory
         {
@@ -2083,6 +2103,7 @@ public class GuestAppHostProjectTests : IDisposable
         var context = new AppHostProjectContext
         {
             AppHostFile = appHostFile,
+            LaunchGroup = launchGroup,
             WorkingDirectory = _workspace.WorkspaceRoot,
             EnvironmentVariables = new Dictionary<string, string>()
         };
@@ -2094,6 +2115,15 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
         Assert.Equal(expectedWorkloadId, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWorkloadId]);
         Assert.Equal(image, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.ContainerTunnelBaseImage]);
+        var expectedLaunchGroup = launchGroup ?? (useLaunchProfile ? "basket" : null);
+        if (expectedLaunchGroup is null)
+        {
+            Assert.False(sessionFactory.CapturedEnvironmentVariables.ContainsKey("Aspire__LaunchGroup"));
+        }
+        else
+        {
+            Assert.Equal(expectedLaunchGroup, sessionFactory.CapturedEnvironmentVariables["Aspire__LaunchGroup"]);
+        }
     }
 
     [Fact]

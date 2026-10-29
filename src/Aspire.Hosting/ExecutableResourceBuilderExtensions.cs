@@ -62,13 +62,7 @@ public static class ExecutableResourceBuilderExtensions
 
         var executable = new ExecutableResource(name, command, workingDirectory);
         return builder.AddResource(executable)
-                      .WithArgs(context =>
-                      {
-                          if (args is not null)
-                          {
-                              context.Args.AddRange(args);
-                          }
-                      });
+                      .WithArgs(args ?? []);
     }
 
     /// <summary>

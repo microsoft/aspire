@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Resources;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -30,6 +31,8 @@ public class ResourceCommandService
     private readonly ResourceNotificationService _resourceNotificationService;
     private readonly ResourceLoggerService _resourceLoggerService;
     private readonly IServiceProvider _serviceProvider;
+    private readonly object _launchGroupStartLock = new();
+    private readonly Dictionary<string, (Task Prepared, Task Completed)> _launchGroupStarts = new(StringComparers.ResourceName);
 
     // Constructor is pureposefully internal so adding new dependencies in the future isn't a public API change.
     internal ResourceCommandService(ResourceNotificationService resourceNotificationService, ResourceLoggerService resourceLoggerService, IServiceProvider serviceProvider)
@@ -323,7 +326,10 @@ public class ResourceCommandService
         return await ExecuteCommandAsync(resource, commandName, result.Arguments, cancellationToken).ConfigureAwait(false);
     }
 
-    internal async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, IResource resource, string commandName, InteractionInputCollection arguments, bool argumentsProvided, bool nonInteractive, CancellationToken cancellationToken)
+    internal Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, IResource resource, string commandName, InteractionInputCollection arguments, bool argumentsProvided, bool nonInteractive, CancellationToken cancellationToken) =>
+        ExecuteCommandCoreAsync(resourceId, resource, commandName, arguments, argumentsProvided, nonInteractive, expandLaunchGroupDependencies: true, cancellationToken);
+
+    private async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, IResource resource, string commandName, InteractionInputCollection arguments, bool argumentsProvided, bool nonInteractive, bool expandLaunchGroupDependencies, CancellationToken cancellationToken)
     {
         var logger = _resourceLoggerService.GetLogger(resourceId);
 
@@ -377,7 +383,11 @@ public class ResourceCommandService
                 // not attempt to prompt the user.
                 using var _ = nonInteractive ? InteractionService.StartNonInteractiveScope() : default;
 
-                var result = await ExecuteCommandWithOptionalProgressAsync(annotation, context, cancellationToken).ConfigureAwait(false);
+                var result = expandLaunchGroupDependencies &&
+                    commandName == KnownResourceCommands.StartCommand &&
+                    _serviceProvider.GetService<LaunchGroupService>() is { IsActive: true }
+                    ? await ExecuteLaunchGroupStartAsync(resource, annotation, context, cancellationToken).ConfigureAwait(false)
+                    : await ExecuteCommandWithOptionalProgressAsync(annotation, context, cancellationToken).ConfigureAwait(false);
                 if (result.Success)
                 {
                     logger.LogInformation("Successfully executed command '{CommandName}'.", commandName);
@@ -408,6 +418,236 @@ public class ResourceCommandService
 
         logger.LogInformation("Command '{CommandName}' not available.", commandName);
         return new ExecuteCommandResult { Success = false, Message = $"Command '{commandName}' not available for resource '{resource.GetResolvedDisplayResourceName(resourceId)}'." };
+    }
+
+    private async Task<ExecuteCommandResult> ExecuteLaunchGroupStartAsync(
+        IResource resource,
+        ResourceCommandAnnotation annotation,
+        ExecuteCommandContext context,
+        CancellationToken cancellationToken)
+    {
+        // Start on a waiting resource is an explicit force-start. It must reach the lifecycle handler even
+        // while an earlier start is blocked on readiness, without expanding dependencies again.
+        if (_resourceNotificationService.TryGetCurrentState(context.ResourceName, out var current) &&
+            current.Snapshot.State?.Text == KnownResourceStates.Waiting)
+        {
+            return await ExecuteCommandWithOptionalProgressAsync(annotation, context, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Expand at the command boundary, not in DCP, so custom resources with a start command participate too.
+        var closure = LaunchGroupService.GetClosure([resource]);
+        using var startCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var startContext = new ExecuteCommandContext
+        {
+            ResourceName = context.ResourceName,
+            Services = context.Services,
+            CancellationToken = startCancellation.Token,
+            Logger = context.Logger,
+            Arguments = context.Arguments
+        };
+        var members = closure.Where(member => !ReferenceEquals(member, resource))
+            .SelectMany(member => member.GetResolvedResourceNames().Select(name => (Resource: member, Name: name)))
+            .Append((Resource: resource, Name: context.ResourceName)).ToArray();
+        var remainingPreparations = members.Length;
+        // All newly started members must retire their old snapshots before any handler evaluates waits.
+        var startsPrepared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ExecuteCommandResult? firstFailure = null;
+        var starts = new List<Task<ExecuteCommandResult>>();
+        foreach (var member in members)
+        {
+            starts.Add(StartAsync(member.Resource, member.Name, ReferenceEquals(member.Resource, resource)
+                ? () => ExecuteCommandWithOptionalProgressAsync(annotation, startContext, startCancellation.Token)
+                : null));
+        }
+
+        // References do not impose startup ordering. For example, A can reference B while B waits for A
+        // to start, so every member must be scheduled before awaiting readiness in any of its handlers.
+        var results = await Task.WhenAll(starts).ConfigureAwait(false);
+        return firstFailure ?? results.FirstOrDefault(result => !result.Success && !result.Canceled) ??
+            results.FirstOrDefault(result => !result.Success) ?? results[^1];
+
+        Task CancelStartsAsync(ExecuteCommandResult? failure)
+        {
+            if (failure is { Success: false, Canceled: false })
+            {
+                Interlocked.CompareExchange(ref firstFailure, failure, null);
+            }
+
+            return startCancellation.CancelAsync();
+        }
+
+        async Task<ExecuteCommandResult> StartAsync(IResource member, string name, Func<Task<ExecuteCommandResult>>? executeCommand)
+        {
+            var prepared = 0;
+            void MarkPrepared()
+            {
+                if (Interlocked.Exchange(ref prepared, 1) == 0 && Interlocked.Decrement(ref remainingPreparations) == 0)
+                {
+                    startsPrepared.TrySetResult();
+                }
+            }
+
+            try
+            {
+                var result = await ExecuteLaunchGroupResourceStartAsync(
+                    member, name, closure, executeCommand, MarkPrepared, startsPrepared.Task,
+                    CancelStartsAsync, startCancellation.Token).ConfigureAwait(false);
+                if (!result.Success)
+                {
+                    // Other members may be waiting for this resource's readiness. Do not leave them
+                    // blocked when its command fails without publishing a terminal state.
+                    await startCancellation.CancelAsync().ConfigureAwait(false);
+                }
+
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                await startCancellation.CancelAsync().ConfigureAwait(false);
+                return CommandResults.Canceled();
+            }
+            catch (Exception ex)
+            {
+                await startCancellation.CancelAsync().ConfigureAwait(false);
+                context.Logger.LogError(ex, "Error starting resource '{ResourceName}'.", name);
+                return new ExecuteCommandResult { Success = false, Message = ex.Message };
+            }
+            finally
+            {
+                MarkPrepared();
+            }
+        }
+    }
+
+    private async Task<ExecuteCommandResult> ExecuteLaunchGroupResourceStartAsync(
+        IResource resource,
+        string name,
+        IReadOnlyList<IResource> closure,
+        Func<Task<ExecuteCommandResult>>? executeCommand,
+        Action markPrepared,
+        Task startsPrepared,
+        Func<ExecuteCommandResult?, Task> cancelStarts,
+        CancellationToken cancellationToken)
+    {
+        // The requested resource uses its already validated arguments and invocation context.
+        // Dependencies construct their own command invocation only if they still need starting.
+        var isDependency = executeCommand is null;
+        Task precedingStart;
+        Task precedingPreparation;
+        bool precedingStartPending;
+        var preparation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_launchGroupStartLock)
+        {
+            var preceding = _launchGroupStarts.GetValueOrDefault(name, (Prepared: Task.CompletedTask, Completed: Task.CompletedTask));
+            precedingStart = preceding.Completed;
+            precedingPreparation = preceding.Prepared;
+            precedingStartPending = !precedingStart.IsCompleted;
+            _launchGroupStarts[name] = (preparation.Task, completion.Task);
+        }
+        IDisposable? startAttempt = null;
+        try
+        {
+            if (precedingStartPending)
+            {
+                // Registration can precede snapshot preparation. Wait for the predecessor to retire
+                // its old state, but not for its readiness-dependent command to finish.
+                await precedingPreparation.WaitAsync(cancellationToken).ConfigureAwait(false);
+                preparation.TrySetResult();
+                markPrepared();
+            }
+
+            // Only competing starts of this instance queue here. An unhealthy dependency must not block
+            // unrelated starts or the force-start command that releases its readiness wait.
+            await precedingStart.WaitAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            // Match lifecycle commands: a stopped container can report "Unknown".
+            // See https://github.com/microsoft/aspire/issues/5977.
+            // Custom resources without an initial state also need preparation before their start handler runs.
+            var startable = _resourceNotificationService.TryGetCurrentState(name, out var current) &&
+                (current.Snapshot.State?.Text is null ||
+                 current.Snapshot.State?.Text == KnownResourceStates.NotStarted ||
+                 current.Snapshot.State?.Text == "Unknown" ||
+                 KnownResourceStates.TerminalStates.Contains(current.Snapshot.State?.Text));
+            if ((isDependency || precedingStartPending) && !startable)
+            {
+                return CommandResults.Success();
+            }
+
+            if (isDependency)
+            {
+                var waits = closure.SelectMany(member => member.Annotations.OfType<WaitAnnotation>())
+                    .Where(wait => ReferenceEquals(wait.Resource, resource)).ToArray();
+                if (current!.Snapshot.State?.Text != KnownResourceStates.FailedToStart &&
+                    current.Snapshot.ExitCode is { } exitCode &&
+                    waits.Length > 0 &&
+                    waits.All(wait => wait.WaitType == WaitType.WaitForCompletion && wait.ExitCode == exitCode))
+                {
+                    return CommandResults.Success();
+                }
+
+                var commandName = KnownResourceCommands.StartCommand;
+                if (ResolveCommandAnnotation(resource, ref commandName) is not { } startCommand)
+                {
+                    if (resource is IResourceWithParent child &&
+                        child.Parent.GetResolvedResourceNames().Any(parentName =>
+                            _resourceNotificationService.IsResourceStartPending(child.Parent, parentName)))
+                    {
+                        // Passive children inherit their container's lifecycle but can have their own waits.
+                        // Retire their old state before those waits start, just as for the parent.
+                        using var childStart = await _resourceNotificationService.BeginResourceStartAsync(resource, name).ConfigureAwait(false);
+                    }
+
+                    return CommandResults.Success();
+                }
+
+                executeCommand = () => ExecuteCommandCoreAsync(
+                    name, resource, commandName, CreateArguments(startCommand.Arguments, argumentValues: null),
+                    argumentsProvided: false, nonInteractive: true, expandLaunchGroupDependencies: false,
+                    cancellationToken);
+            }
+
+            if (startable)
+            {
+                startAttempt = await _resourceNotificationService.BeginResourceStartAsync(resource, name).ConfigureAwait(false);
+            }
+            preparation.TrySetResult();
+            markPrepared();
+            await startsPrepared.WaitAsync(cancellationToken).ConfigureAwait(false);
+            var result = await executeCommand!().ConfigureAwait(false);
+            if (!result.Success)
+            {
+                await cancelStarts(result).ConfigureAwait(false);
+                await PublishFailureAsync().ConfigureAwait(false);
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            await cancelStarts(ex is OperationCanceledException ? null : new ExecuteCommandResult { Success = false, Message = ex.Message }).ConfigureAwait(false);
+            await PublishFailureAsync().ConfigureAwait(false);
+            throw;
+        }
+        finally
+        {
+            startAttempt?.Dispose();
+            _ = CompleteAfterAsync(precedingPreparation, preparation);
+            // A canceled queued request must not let its successor overtake the still-running predecessor.
+            _ = CompleteAfterAsync(precedingStart, completion);
+        }
+
+        Task PublishFailureAsync() => startAttempt is null ? Task.CompletedTask :
+            _resourceNotificationService.PublishUpdateAsync(resource, name, snapshot =>
+                snapshot.State?.Text == KnownResourceStates.Starting || snapshot.State?.Text == KnownResourceStates.Waiting
+                    ? snapshot with { State = KnownResourceStates.FailedToStart }
+                    : snapshot);
+    }
+
+    private static async Task CompleteAfterAsync(Task precedingStart, TaskCompletionSource completion)
+    {
+        await precedingStart.ConfigureAwait(false);
+        completion.TrySetResult();
     }
 
     private async Task<ExecuteCommandResult> ExecuteCommandWithOptionalProgressAsync(

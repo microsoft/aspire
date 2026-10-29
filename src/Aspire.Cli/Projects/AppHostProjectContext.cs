@@ -58,6 +58,8 @@ internal sealed class AppHostProjectContext
     /// </summary>
     public string? LaunchProfile { get; init; }
 
+    public string? LaunchGroup { get; init; }
+
     /// <summary>
     /// Gets additional environment variables to pass to the AppHost.
     /// </summary>

@@ -6,31 +6,39 @@ using Microsoft.Extensions.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+builder.DefineLaunchGroups("catalog", "basket", "frontend", "orders");
+
 var catalogDb = builder.AddPostgres("postgres")
+                       .WithLaunchGroup("catalog")
                        .WithDataVolume()
                        .WithPgAdmin(resource =>
                        {
+                           resource.WithLaunchGroup("catalog");
                            resource.WithUrlForEndpoint("http", u => u.DisplayText = "PG Admin");
                        })
                        .AddDatabase("catalogdb");
 
 var basketCache = builder.AddRedis("basketcache")
+                         .WithLaunchGroup("basket")
                          .WithDataVolume();
 
 #if !SKIP_DASHBOARD_REFERENCE
 basketCache.WithRedisCommander(c =>
             {
+                c.WithLaunchGroup("basket");
                 c.WithHostPort(33801);
                 c.WithUrlForEndpoint("http", u => u.DisplayText = "Redis Commander");
             })
            .WithRedisInsight(c =>
             {
+                c.WithLaunchGroup("basket");
                 c.WithHostPort(33802);
                 c.WithUrlForEndpoint("http", u => u.DisplayText = "Redis Insight");
             });
 #endif
 
-var catalogDbApp = builder.AddProject<Projects.CatalogDb>("catalogdbapp")
+var catalogDbApp = builder.AddDotnetProject("catalogdbapp", @"..\CatalogDb\CatalogDb.csproj")
+                          .WithLaunchGroup("catalog")
                           .WithReference(catalogDb)
                           .WaitFor(catalogDb)
                           .WithHttpHealthCheck("/health");
@@ -53,7 +61,8 @@ if (builder.Environment.IsDevelopment() && builder.ExecutionContext.IsRunMode)
                     });
 }
 
-var catalogService = builder.AddProject<Projects.CatalogService>("catalogservice")
+var catalogService = builder.AddDotnetProject("catalogservice", @"..\CatalogService\CatalogService.csproj")
+                            .WithLaunchGroups("catalog", "frontend")
                             .WithReference(catalogDb)
                             .WaitFor(catalogDb)
                             .WaitFor(catalogDbApp)
@@ -75,18 +84,21 @@ var catalogService = builder.AddProject<Projects.CatalogService>("catalogservice
                             .WithReplicas(2);
 
 var messaging = builder.AddRabbitMQ("messaging")
+                       .WithLaunchGroups("basket", "orders")
                        .WithDataVolume()
                        .WithPersistentLifetime()
                        .WithManagementPlugin()
                        .PublishAsContainer();
 
-var basketService = builder.AddProject("basketservice", @"..\BasketService\BasketService.csproj")
+var basketService = builder.AddDotnetProject("basketservice", @"..\BasketService\BasketService.csproj")
+                           .WithLaunchGroups("basket", "frontend")
                            .WithReference(basketCache)
                            .WaitFor(basketCache)
                            .WithReference(messaging)
                            .WaitFor(messaging);
 
-var frontend = builder.AddProject<Projects.MyFrontend>("frontend")
+var frontend = builder.AddDotnetProject("frontend", @"..\MyFrontend\MyFrontend.csproj")
+    .WithLaunchGroup("frontend")
     .WithExternalHttpEndpoints()
     .WithReference(basketService)
     .WaitFor(basketService)
@@ -100,19 +112,21 @@ var frontend = builder.AddProject<Projects.MyFrontend>("frontend")
     .WithUrlForEndpoint("https", ep => new() { Url = "/health", DisplayText = "Health", DisplayLocation = UrlDisplayLocation.DetailsOnly })
     .WithHttpHealthCheck("/health");
 
-builder.AddProject<Projects.OrderProcessor>("orderprocessor", launchProfileName: "OrderProcessor")
+builder.AddDotnetProject("orderprocessor", @"..\OrderProcessor\OrderProcessor.csproj", options => options.LaunchProfileName = "OrderProcessor")
+    .WithLaunchGroup("orders")
     .WithReference(messaging)
     .WaitFor(messaging);
 
 #if YARP_USE_CONFIG_FILE
 builder.AddYarp("apigateway")
+    .WithLaunchGroup("frontend")
     .WithConfigFile("yarp.json")
     .WithReference(basketService)
     .WaitFor(basketService)
     .WithReference(catalogService)
     .WaitFor(catalogService);
 #else
-var yarp = builder.AddYarp("apigateway");
+var yarp = builder.AddYarp("apigateway").WithLaunchGroup("frontend");
 yarp.WithReference(basketService)
     .WaitFor(basketService)
     .WithReference(catalogService)

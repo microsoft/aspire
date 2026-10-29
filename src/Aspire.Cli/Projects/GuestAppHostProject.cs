@@ -624,6 +624,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
                 args: context.UnmatchedTokens);
             await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(launchSettingsEnvVars, directory, cancellationToken);
+            // Launch-group selection belongs to the managed model, not the guest client process.
+            // Apply the explicit CLI option last so it overrides JSON and profile configuration.
+            if (context.LaunchGroup is { } launchGroup)
+            {
+                launchSettingsEnvVars["Aspire__LaunchGroup"] = launchGroup;
+            }
             launchSettingsEnvVars[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(appHostFile);
             if (appHostServerProject is NativeAppHostServerProject)
             {

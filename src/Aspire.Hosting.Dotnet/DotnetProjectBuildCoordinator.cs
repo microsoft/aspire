@@ -227,6 +227,8 @@ internal static class DotnetProjectBuildCoordinator
     {
         private readonly IDistributedApplicationBuilder _builder;
         private readonly object _materializationLock = new();
+        private readonly object _buildStartLock = new();
+        private Task _buildStartTail = Task.CompletedTask;
         private readonly List<ResourceRegistration> _registrations = [];
         private readonly List<DotnetProjectBuildResource> _ownedBuildResources = [];
         private readonly List<SharedBuildEnvironment> _sharedBuildEnvironments = [];
@@ -235,12 +237,19 @@ internal static class DotnetProjectBuildCoordinator
         private bool _materialized;
         private bool _materializationInProgress;
         private bool _disposed;
+        private bool _hasLaunchGroupSupport;
         private TaskCompletionSource _materializationCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public CoordinatorState(IDistributedApplicationBuilder builder)
         {
             _builder = builder;
             builder.Services.AddSingleton(_ => this);
+            builder.Pipeline.AddPipelineConfiguration(context =>
+            {
+                // Configuration-only definitions register this step at Build(), after this coordinator is created.
+                _hasLaunchGroupSupport = context.Steps.Any(step => step.Name == "configure-launch-groups");
+                return Task.CompletedTask;
+            });
             builder.Pipeline.WithFinalAction(
                 WellKnownPipelineSteps.BeforeStart,
                 stepContext => stepContext.Services
@@ -477,7 +486,22 @@ internal static class DotnetProjectBuildCoordinator
                 return;
             }
 
-            var buildSteps = CreateBuildSteps(buildEntries);
+            // The launch-group step validates the selection before this BeforeStart final action.
+            var partialRun = _hasLaunchGroupSupport && !string.IsNullOrEmpty(_builder.Configuration["Aspire:LaunchGroup"]);
+            // Validate duplicate project/output registrations across both initial and deferred batches.
+            _ = CreateBuildSteps(buildEntries);
+            var deferredEntries = partialRun
+                ? buildEntries.Where(entry => entry.Registration.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>()).ToArray()
+                : [];
+            var initialEntries = buildEntries.Except(deferredEntries).ToArray();
+            var buildSteps = CreateBuildSteps(initialEntries);
+            var initialBuildStepCount = buildSteps.Count;
+            // Give each excluded project its own dormant build. Starting one later must not build every
+            // other excluded project, and it must retain the same SDK/build-environment handling as startup.
+            foreach (var entry in deferredEntries)
+            {
+                buildSteps.AddRange(CreateBuildSteps([entry]));
+            }
             var restoreProjectsIndividually = _builder.Configuration.GetValue<bool>(RestoreProjectsIndividuallyConfigurationKey);
             var applicationLifetime = services.GetRequiredService<IHostApplicationLifetime>();
             var primaryBuildResource = PrimaryBuildResource!;
@@ -489,6 +513,7 @@ internal static class DotnetProjectBuildCoordinator
 
             try
             {
+                RemoveEagerBuildDependencies(deferredEntries.Select(entry => entry.Registration.Resource));
                 rollbackActions.Push(() =>
                     primaryBuildResource.ConfigureTraversalBuild(
                         originalPrimaryProjectPaths,
@@ -503,6 +528,13 @@ internal static class DotnetProjectBuildCoordinator
                     var buildResource = index == 0
                         ? primaryBuildResource
                         : CreateBuildResource(step.Configuration, index + 1);
+
+                    if (index >= initialBuildStepCount)
+                    {
+                        var explicitStart = new ExplicitStartupAnnotation();
+                        buildResource.Annotations.Add(explicitStart);
+                        rollbackActions.Push(() => buildResource.Annotations.Remove(explicitStart));
+                    }
 
                     if (index > 0)
                     {
@@ -575,9 +607,20 @@ internal static class DotnetProjectBuildCoordinator
 
                     buildResource.RegisterForShutdown(applicationLifetime);
                     buildResources.Add(buildResource);
+                    if (partialRun)
+                    {
+                        rollbackActions.Push(SerializeBuildStarts(buildResource, services, applicationLifetime));
+                        foreach (var entry in step.Projects)
+                        {
+                            if (FindRebuilder(model, entry.Registration.Resource) is { } rebuilder)
+                            {
+                                rollbackActions.Push(SerializeBuildStarts(rebuilder, services, applicationLifetime));
+                            }
+                        }
+                    }
                 }
 
-                for (var index = 1; index < buildResources.Count; index++)
+                for (var index = 1; index < initialBuildStepCount; index++)
                 {
                     if (AddBuildDependency(_builder, buildResources[index], buildResources[index - 1]) is { } rollback)
                     {
@@ -585,7 +628,19 @@ internal static class DotnetProjectBuildCoordinator
                     }
                 }
 
-                var finalBuildResource = buildResources[^1];
+                // Deferred builds wait for the initial batch, not for one another. The shared start gate
+                // serializes actual attempts so overlapping late starts cannot race on shared bin/obj outputs.
+                if (initialBuildStepCount > 0)
+                {
+                    foreach (var buildResource in buildResources.Skip(initialBuildStepCount))
+                    {
+                        if (AddBuildDependency(_builder, buildResource, buildResources[initialBuildStepCount - 1]) is { } rollback)
+                        {
+                            rollbackActions.Push(rollback);
+                        }
+                    }
+                }
+
                 foreach (var registration in activeRegistrations)
                 {
                     var resource = registration.Resource;
@@ -593,6 +648,10 @@ internal static class DotnetProjectBuildCoordinator
                         IsSupportedPath(metadata.ProjectPath) &&
                         File.Exists(metadata.ProjectPath))
                     {
+                        var deferredIndex = Array.FindIndex(deferredEntries, entry => ReferenceEquals(entry.Registration, registration));
+                        var finalBuildResource = deferredIndex >= 0
+                            ? buildResources[initialBuildStepCount + deferredIndex]
+                            : buildResources[initialBuildStepCount - 1];
                         var originalFinalBuildResource = registration.FinalBuildResource;
                         registration.FinalBuildResource = finalBuildResource;
                         rollbackActions.Push(() =>
@@ -638,8 +697,70 @@ internal static class DotnetProjectBuildCoordinator
                         [materializationException, .. rollbackExceptions]);
                 }
 
+                AddEagerBuildDependencies();
                 throw;
             }
+        }
+
+        private Action SerializeBuildStarts(IResource resource, IServiceProvider services, IHostApplicationLifetime lifetime)
+        {
+            var notifications = services.GetRequiredService<ResourceNotificationService>();
+            var logger = services.GetRequiredService<ResourceLoggerService>().GetLogger(resource);
+            var subscription = _builder.Eventing.Subscribe<BeforeResourceStartedEvent>(resource, async (@event, cancellationToken) =>
+            {
+                // Do not hold the gate while waiting for an earlier build to finish: that earlier build
+                // may not have acquired it yet. Preserve the existing build-success barrier as well.
+                await notifications.WaitForDependenciesAsync(resource, cancellationToken).ConfigureAwait(false);
+                Task precedingBuild;
+                var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                lock (_buildStartLock)
+                {
+                    precedingBuild = _buildStartTail;
+                    _buildStartTail = completion.Task;
+                }
+                try
+                {
+                    await precedingBuild.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    notifications.TryGetCurrentState(resource.Name, out var initial);
+                    _ = ReleaseWhenSettledAsync(initial?.Snapshot, completion);
+                }
+                catch
+                {
+                    _ = CompleteQueuedBuildAsync(precedingBuild, completion);
+                    throw;
+                }
+            });
+            return () => _builder.Eventing.Unsubscribe(subscription);
+
+            async Task ReleaseWhenSettledAsync(CustomResourceSnapshot? initialSnapshot, TaskCompletionSource completion)
+            {
+                try
+                {
+                    await notifications.WaitForResourceAsync(resource.Name,
+                        current => !ReferenceEquals(current.Snapshot, initialSnapshot) && IsSettledBuildSnapshot(current.Snapshot),
+                        lifetime.ApplicationStopping).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (lifetime.ApplicationStopping.IsCancellationRequested)
+                {
+                    // Shutdown ends queued build attempts.
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Could not monitor build '{ResourceName}'. Further builds are blocked to avoid concurrent writes.", resource.Name);
+                    await Task.Delay(Timeout.InfiniteTimeSpan, lifetime.ApplicationStopping)
+                        .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                }
+                finally
+                {
+                    completion.TrySetResult();
+                }
+            }
+        }
+
+        private static async Task CompleteQueuedBuildAsync(Task precedingBuild, TaskCompletionSource completion)
+        {
+            await precedingBuild.ConfigureAwait(false);
+            completion.TrySetResult();
         }
 
         private void RemoveEagerBuildDependencies(IEnumerable<DotnetProjectResource> resources)
