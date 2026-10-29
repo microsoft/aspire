@@ -1,0 +1,15 @@
+{
+  "id": "homebrew-cask-untrusted-tap-audit",
+  "type": "main-repository-breakage",
+  "title": "Homebrew cask audit refuses to load cask from untrusted local tap",
+  "error_pattern": "Refusing to load cask local/aspire/aspire from untrusted tap local/aspire.\nRun `brew trust --cask local/aspire/aspire` or `brew trust local/aspire` to trust it.",
+  "occurrences": [
+    {
+      "run_id": 40947925538,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/40947925538",
+      "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "pr_number": 0,
+      "observed_at": "2026-10-29T21:40:30Z"
+    }
+  ]
+}

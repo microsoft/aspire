@@ -1,0 +1,100 @@
+{
+  "run_id": 40947925538,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/40947925538",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-29T21:40:30Z",
+  "verdict": "mixed",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "88ff9ba57c2841cce759adffa849373f9406b0f5",
+    "failed_sha": "a43c69baac2cc3f6e799a5d9813a5dd947c066e8",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+      "id": 123709175071,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/40947925538/job/123709175071",
+      "classification": "flaky-test",
+      "reason": "TerminalHostControlShutdownUnlinksSockets got TaskCanceledException on Windows; 16 other tests passed.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.TerminalHost.Tests, TerminalHost, TerminalHost, tests/Aspire.Te... / TerminalHost (ubuntu-latest)",
+      "id": 123709177237,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/40947925538/job/123709177237",
+      "classification": "flaky-test",
+      "reason": "CancellationReachesServer timed out after 30s; matches known flaky cause.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+      "id": 123719069348,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/40947925538/job/123719069348",
+      "classification": "flaky-test",
+      "reason": "Windows resource-debug-tools E2E failed applying control revision after debugger traffic timeout.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 123721047813,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/40947925538/job/123721047813",
+      "classification": "main-repository-breakage",
+      "reason": "brew audit: Refusing to load cask local/aspire/aspire from untrusted tap local/aspire; deterministic workflow/brew behavior failure.",
+      "failed_steps": [
+        "Prepare Homebrew cask artifact"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.TerminalHost.Tests.TerminalHostControlJsonSerializerContextTests.CancellationReachesServer",
+      "job": "Tests / No-package tests (regular, Aspire.TerminalHost.Tests, TerminalHost, TerminalHost, tests/Aspire.Te... / TerminalHost (ubuntu-latest)",
+      "error": "System.TimeoutException : The operation at /_/tests/Aspire.TerminalHost.Tests/TerminalHostControlJsonSerializerContextTests.cs:115 timed out after reaching the limit of 30000ms.",
+      "stack_trace": "at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in /_/tests/Shared/AsyncTestHelpers.cs:line 201\n   at Aspire.TerminalHost.Tests.TerminalHostControlJsonSerializerContextTests.CancellationReachesServer() in /_/tests/Aspire.TerminalHost.Tests/TerminalHostControlJsonSerializerContextTests.cs:line 115\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same 30s timeout as known prior flaky cause; no related changes."
+    },
+    {
+      "name": "Aspire resource debug language model tool E2E attaches packaged .NET and Go debuggers, hits breakpoints, detaches, and tears down",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+      "error": "Failed to apply E2E control revision 1793306673276: E2E control command failed.",
+      "stack_trace": "Error: Failed to apply E2E control revision 1793306673276: E2E control command failed.\n    at applyE2eControl (out\\test-e2e\\test-e2e\\helpers\\assertions.js:355:15)\n    at async executeE2eControlCommand (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:170:12)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\resourceDebugTools.e2e.test.js:262:28)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Windows VS Code debugger E2E: first traffic attempt timed out and a control command failed intermittently."
+    },
+    {
+      "name": "Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostControlShutdownUnlinksSockets",
+      "job": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+      "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "at Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostControlShutdownUnlinksSockets() in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 118\n   at Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostControlShutdownUnlinksSockets() in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 130\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Timing-related task cancellation in a process shutdown test on Windows; other 16 tests passed."
+    }
+  ],
+  "causes": [
+    "aspire-terminalhost-tests-cancellationreachesserver-timeout",
+    "vscode-e2e-windows-resource-debug-tools-control-failure",
+    "aspire-managed-tests-terminalhostcontrolshutdownunlinkssockets-canceled",
+    "homebrew-cask-untrusted-tap-audit"
+  ]
+}

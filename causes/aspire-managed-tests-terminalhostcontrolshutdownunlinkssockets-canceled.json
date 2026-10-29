@@ -1,0 +1,16 @@
+{
+  "id": "aspire-managed-tests-terminalhostcontrolshutdownunlinkssockets-canceled",
+  "type": "flaky-test",
+  "title": "Flaky: TerminalHostSignalTests.TerminalHostControlShutdownUnlinksSockets throws TaskCanceledException on Windows",
+  "error_pattern": "System.Threading.Tasks.TaskCanceledException : A task was canceled.\n at Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostControlShutdownUnlinksSockets() line 118",
+  "test_name": "Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostControlShutdownUnlinksSockets",
+  "occurrences": [
+    {
+      "run_id": 40947925538,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/40947925538",
+      "job": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-29T21:40:30Z"
+    }
+  ]
+}
