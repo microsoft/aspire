@@ -153,7 +153,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     [SupplyParameterFromQuery(Name = DashboardUrls.ResourceSelectionQueryName)]
     public string[]? SelectedResourceNames { get; set; }
 
-    private record struct LogEntryToWrite(string ResourceName, LogEntry LogEntry, int? LineNumber);
+    // Entries keep the subscription that read them. Changing the selection cancels the old subscriptions and clears the
+    // displayed logs, but batches they already queued are still in the channel, so the reader drops those.
+    private record struct LogEntryToWrite(ConsoleLogsSubscription Subscription, LogEntry LogEntry, int? LineNumber);
 
     private readonly CancellationTokenSource _resourceSubscriptionCts = new();
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
@@ -358,10 +360,20 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             var hasNewLogEntry = false;
             lock (_updateLogsLock)
             {
+                // Insert the read entries together: initial loads of several resources interleave their histories,
+                // which LogEntries merges in one pass instead of moving the buffer for each entry.
+                var entriesToInsert = new List<LogEntry>();
                 foreach (var logBatch in batch)
                 {
-                    foreach (var (resourceName, logEntry, lineNumber) in logBatch)
+                    foreach (var (subscription, logEntry, lineNumber) in logBatch)
                     {
+                        // A canceled subscription's entries belong to a selection that's no longer displayed.
+                        if (subscription.CancellationToken.IsCancellationRequested)
+                        {
+                            continue;
+                        }
+
+                        var resourceName = subscription.Resource.Name;
                         // Console logs are filtered in the UI by the timestamp of the log entry.
                         var timestampFilterDate = ConsoleLogsManager.GetFilterDate(resourceName);
 
@@ -383,10 +395,22 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                             continue;
                         }
 
-                        _logEntries.InsertSorted(logEntry);
+                        if (logEntry.Type is LogEntryType.Pause)
+                        {
+                            // A pause filters the entries read after it, so it's inserted before them.
+                            _logEntries.InsertSortedRange(entriesToInsert);
+                            entriesToInsert.Clear();
+                            _logEntries.InsertSorted(logEntry);
+                        }
+                        else
+                        {
+                            entriesToInsert.Add(logEntry);
+                        }
                         hasNewLogEntry = true;
                     }
                 }
+
+                _logEntries.InsertSortedRange(entriesToInsert);
             }
 
             await InvokeAsync(async () =>
@@ -877,7 +901,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     if (pauseIntervals.Length > 0)
                     {
                         _logEntryChannel.Writer.TryWrite(pauseIntervals
-                            .Select(priorPause => new LogEntryToWrite(subscription.Resource.Name, LogEntry.CreatePause(GetResourceName(subscription.Resource), priorPause.Start, priorPause.End), LineNumber: null))
+                            .Select(priorPause => new LogEntryToWrite(subscription, LogEntry.CreatePause(GetResourceName(subscription.Resource), priorPause.Start, priorPause.End), LineNumber: null))
                             .ToArray());
                     }
                 }
@@ -897,7 +921,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     // Publish the source batch atomically. Publishing each parsed line separately
                     // lets the reader drain a partial batch and render an intermediate end anchor.
                     var logEntries = batch.Select(line => new LogEntryToWrite(
-                        subscription.Resource.Name,
+                        subscription,
                         logParser.CreateLogEntry(line.Content, line.IsErrorMessage, resourcePrefix),
                         line.LineNumber)).ToArray();
                     _logEntryChannel.Writer.TryWrite(logEntries);
@@ -1052,7 +1076,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     foreach (var subscription in _consoleLogsSubscriptions.Values)
                     {
                         Logger.LogDebug("Inserting new pause log entry for {Resource} starting at {StartTimestamp}.", subscription.Resource.Name, timestamp);
-                        _logEntryChannel.Writer.TryWrite([new LogEntryToWrite(subscription.Resource.Name, LogEntry.CreatePause(GetResourceName(subscription.Resource), timestamp), LineNumber: null)]);
+                        _logEntryChannel.Writer.TryWrite([new LogEntryToWrite(subscription, LogEntry.CreatePause(GetResourceName(subscription.Resource), timestamp), LineNumber: null)]);
                     }
                 }
                 else
