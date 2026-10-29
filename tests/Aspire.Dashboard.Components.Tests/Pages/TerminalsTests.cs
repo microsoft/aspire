@@ -28,7 +28,7 @@ public class TerminalsTests : DashboardTestContext
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ModernLayout_UsesRouteSelectionAndReconnectsWithoutClosingProducer(bool isDesktop)
+    public async Task ModernLayout_RedirectsRouteSelectionWithoutOpeningTemporaryViewer(bool isDesktop)
     {
         var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var client = CreateClient(
@@ -50,25 +50,23 @@ public class TerminalsTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Equal("first-instance", cut.FindComponent<TerminalView>().Instance.ResourceName);
+            Assert.Equal("http://localhost/resources/first?pane=tags&terminal=true#output", navigation.Uri);
             Assert.Equal(ResourceTab.Terminal, cut.Instance.CurrentTab);
         });
-        var viewer = cut.FindComponent<TerminalView>().Instance;
-        Assert.True(viewer.AutoFit);
-        Assert.True(viewer.ShowOpenInWindow);
-        Assert.Equal("first", viewer.WindowResourceName);
         Assert.Empty(cut.FindComponents<ResourceSelect>());
-        Assert.Single(cut.FindAll(".resource-tab-body .resource-terminal-page .terminal-view"));
-        Assert.Equal("http://localhost/resources/first?pane=tags&terminal=true#output", navigation.Uri);
+        Assert.Empty(cut.FindComponents<TerminalView>());
 
         resourceName = "second";
         navigation.NavigateTo(DashboardUrls.TerminalsUrl(resourceName));
         cut.Render();
-        cut.WaitForAssertion(() => Assert.Equal("second", viewer.ResourceName));
-        Assert.Same(viewer, cut.FindComponent<TerminalView>().Instance);
-        Assert.False(viewer.AutoFit);
+        cut.WaitForAssertion(() => Assert.Equal("http://localhost/resources/second?terminal=true", navigation.Uri));
+        Assert.Empty(cut.FindComponents<TerminalView>());
         Assert.Equal(["second"], cut.Instance.SelectedResourceNames);
-        Assert.Single(JSInterop.Invocations, i => i.Identifier == "reconnectTerminal");
+        Assert.All(JSInterop.Invocations, invocation =>
+        {
+            Assert.NotEqual("initTerminal", invocation.Identifier);
+            Assert.NotEqual("reconnectTerminal", invocation.Identifier);
+        });
 
         storage.OnSetAsync = (key, _) =>
         {
