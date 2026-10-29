@@ -190,7 +190,7 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
     public async Task AddAzureFunctionsProject_WorksWithMultipleProjects()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
-        using var shutdownCapture = ShutdownDiagnosticCapture.Attach(builder.Services, message => outputHelper.WriteLine(message));
+        using var shutdownCapture = ShutdownDiagnosticCapture.Attach(builder.Services, outputHelper.WriteLine);
         builder.AddAzureFunctionsProject<TestProject>("funcapp");
         builder.AddAzureFunctionsProject<TestProject>("funcapp2");
 
