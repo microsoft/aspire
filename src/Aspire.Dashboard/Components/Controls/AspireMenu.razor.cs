@@ -97,7 +97,10 @@ public partial class AspireMenu : FluentComponentBase
 
             if (_menu is not null)
             {
-                if (Open)
+                // Open can change while the popover is opened or closed below, e.g. when an item is chosen as the menu
+                // opens. Record the state that was applied, and apply the latest one after it.
+                var open = Open;
+                if (open)
                 {
                     // Trigger identifies either the button anchor or the cursor anchor. The parameterless
                     // path leaves placement to Fluent's CSS anchor positioning and viewport fallbacks.
@@ -113,7 +116,12 @@ public partial class AspireMenu : FluentComponentBase
                     await _menu.CloseMenuAsync();
                 }
 
-                _appliedOpen = Open;
+                _appliedOpen = open;
+                if (Open != open)
+                {
+                    _refreshMenuAfterRender = true;
+                    StateHasChanged();
+                }
             }
         }
 

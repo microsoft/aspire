@@ -12,6 +12,11 @@ span.aspire-menu-secondary-action-container {
 }
 
 /* Keep secondary text from touching the item text when the menu is at its maximum width. */
+/* Only stops clicks from reaching the item. It mustn't affect the layout. */
+span.aspire-menu-secondary-action-wrapper {
+    display: contents;
+}
+
 span.aspire-menu-secondary-action-container:has(.aspire-menu-item-description),
 span.aspire-menu-secondary-action-container:has(.aspire-menu-item-count) {
     padding-inline-start: 16px;

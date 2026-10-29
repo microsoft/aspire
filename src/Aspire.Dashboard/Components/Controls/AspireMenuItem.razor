@@ -95,15 +95,18 @@ else
                 }
                 @if (Item.SecondaryActionIcon is not null)
                 {
-                    <FluentButton Id="@SecondaryActionId"
-                                  Class="@($"aspire-menu-secondary-action{(Item.IsSecondaryActionSelected ? " selected" : null)}")"
-                                  Appearance="ButtonAppearance.Transparent"
-                                  data-tooltip="@Item.SecondaryActionAriaLabel"
-                                  aria-label="@Item.SecondaryActionAriaLabel"
-                                  aria-pressed="@(Item.IsSecondaryActionSelected ? "true" : "false")"
-                                  @onclick="HandleSecondaryActionClicked">
-                        <FluentIcon Value="@Item.SecondaryActionIcon" Width="16px" Color="Color.Primary" />
-                    </FluentButton>
+                    @* The click stops here, or the item it sits in would also be chosen by its click handler. *@
+                    <span class="aspire-menu-secondary-action-wrapper" @onclick:stopPropagation="true">
+                        <FluentButton Id="@SecondaryActionId"
+                                      Class="@($"aspire-menu-secondary-action{(Item.IsSecondaryActionSelected ? " selected" : null)}")"
+                                      Appearance="ButtonAppearance.Transparent"
+                                      data-tooltip="@Item.SecondaryActionAriaLabel"
+                                      aria-label="@Item.SecondaryActionAriaLabel"
+                                      aria-pressed="@(Item.IsSecondaryActionSelected ? "true" : "false")"
+                                      @onclick="HandleSecondaryActionClicked">
+                            <FluentIcon Value="@Item.SecondaryActionIcon" Width="16px" Color="Color.Primary" />
+                        </FluentButton>
+                    </span>
                 }
             </span>
         }

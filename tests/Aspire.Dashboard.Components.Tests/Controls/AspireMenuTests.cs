@@ -5,6 +5,7 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Bunit;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
@@ -446,8 +447,8 @@ public class AspireMenuTests : DashboardTestContext
         var itemClicked = false;
         var item = new MenuButtonItem
         {
-            Text = "Historical run",
-            Role = MenuItemRole.Radio,
+            Text = "Show hidden resources",
+            Role = MenuItemRole.Checkbox,
             OnClick = () =>
             {
                 itemClicked = true;
@@ -469,7 +470,7 @@ public class AspireMenuTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task ChangeRadioSelection_OnlyInvokesNewlyCheckedItemCallback()
+    public async Task ChangeRadioSelection_ChoosesByClickNotByChangeEvent()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -505,13 +506,55 @@ public class AspireMenuTests : DashboardTestContext
             builder.Add(p => p.Items, new[] { currentItem, historicalItem });
         });
 
+        // The web component raises change events when a re-render checks or unchecks an option, e.g. as the menu
+        // reopens, so they don't choose anything.
         var menuItems = menuHost.FindComponents<FluentMenuItem>();
         await menuHost.InvokeAsync(() => menuItems[0].Instance.CheckedChanged.InvokeAsync(false));
-        await menuHost.InvokeAsync(() => menuItems[0].Instance.OnClick.InvokeAsync(new MenuItemEventArgs()));
-        await menuHost.InvokeAsync(() => menuItems[1].Instance.OnClick.InvokeAsync(new MenuItemEventArgs()));
         await menuHost.InvokeAsync(() => menuItems[1].Instance.CheckedChanged.InvokeAsync(true));
+        Assert.Empty(selectedItems);
+        Assert.True(menuHost.Instance.Open);
+
+        menuHost.FindAll("fluent-menu-item")[1].Click();
 
         Assert.Equal(["historical"], selectedItems);
+        Assert.False(menuHost.Instance.Open);
+    }
+
+    [Theory]
+    [InlineData("Enter")]
+    [InlineData(" ")]
+    public async Task PressKeyOnRadioItem_InvokesItsCallbackAndClosesMenu(string key)
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var clicks = 0;
+        var item = new MenuButtonItem
+        {
+            Text = "Name",
+            Role = MenuItemRole.Radio,
+            OnClick = () =>
+            {
+                clicks++;
+                return Task.CompletedTask;
+            }
+        };
+        var menuHost = Render<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, new[] { item });
+        });
+
+        // Fluent's menu item handles Enter and Space itself, without a click.
+        await menuHost.Find("fluent-menu-item").KeyDownAsync(new KeyboardEventArgs { Key = "ArrowDown" });
+        Assert.Equal(0, clicks);
+
+        await menuHost.Find("fluent-menu-item").KeyDownAsync(new KeyboardEventArgs { Key = key });
+
+        Assert.Equal(1, clicks);
         Assert.False(menuHost.Instance.Open);
     }
 
