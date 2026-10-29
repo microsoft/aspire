@@ -1149,7 +1149,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         // redacting a secret whose value has since been replaced or whose owning resource has restarted.
         var secretParameterValues = await GetResolvedSecretParameterValuesAsync(cancellationToken).ConfigureAwait(false);
 
-        // Build environment variables. Values that match a secret parameter's value are
+        // Build environment variables. Values that match a known resolved secret value are
         // redacted so secrets don't leak through clients (e.g. aspire describe --format json).
         var environmentVariables = snapshot.EnvironmentVariables
             .Select(e => new ResourceSnapshotEnvironmentVariable
@@ -1230,15 +1230,15 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     }
 
     /// <summary>
-    /// Redacts an environment variable value when it matches a secret parameter's resolved value
+    /// Redacts an environment variable value when it matches a known resolved secret value
     /// so secrets don't leak through clients (e.g. <c>aspire describe --format json</c>).
     /// </summary>
     /// <remarks>
-    /// Matching is value-based: a value is redacted only when it is exactly equal to a resolved secret
-    /// parameter value. This has two known limitations:
+    /// Matching is value-based: a value is redacted only when it is exactly equal to a known resolved
+    /// secret value. This has two known limitations:
     /// <list type="bullet">
     /// <item>A non-secret value that coincidentally equals a secret value is also redacted (false positive).</item>
-    /// <item>A secret embedded as a substring of a larger composed value (e.g. a connection string) is not
+    /// <item>A secret embedded in a larger string without expression sensitivity metadata is not
     /// detected, because only exact-equality matches are redacted.</item>
     /// </list>
     /// </remarks>

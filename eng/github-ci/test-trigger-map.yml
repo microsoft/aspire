@@ -328,6 +328,7 @@ path_rules:
       - src/Aspire.Hosting.CodeGeneration.Java/**
       - src/Aspire.Hosting.CodeGeneration.TypeScript/**
       - src/Aspire.Hosting.Docker/**
+      - src/Aspire.Hosting.Go/**
       - src/Aspire.Hosting.Java/**
       - src/Aspire.Hosting.JavaScript/**
       - src/Aspire.Hosting.Redis/**
@@ -701,6 +702,7 @@ affected_project_rules:
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.Docker
       - Aspire.Hosting.Dotnet
+      - Aspire.Hosting.Go
       - Aspire.Hosting.Java
       - Aspire.Hosting.JavaScript
       - Aspire.Hosting.Redis

@@ -89,6 +89,26 @@ VS Code debugging is enabled automatically by `AddGoApp`. Install the
 Aspire "Start Debugging" flow. The extension launches its own `dlv-dap` process; the application
 continues to run as `go run .` and no extra setup is required.
 
+To attach later, use **Attach debugger** on a running Go resource in the Aspire VS Code
+resources tree. Local `AddGoApp` launches retain symbol tables and DWARF debug information by default,
+including when the AppHost was started with `aspire start` rather than from an IDE. No opt-in is required.
+Existing linker options in ambient, resource-provided, or persisted `GOFLAGS` are preserved
+and receive defaults that retain symbols and DWARF information. Explicit `-s` and `-w` choices remain
+authoritative, including the rule that `-s` implies `-w` unless overridden with `-w=false`.
+A binary without the required symbols cannot support source attachment.
+If the `go env` settings probe fails, a warning is logged and startup continues with the default
+debugger flags, preserving inherited `GOFLAGS` unless the resource explicitly overrides it.
+Settings stored only in Go's persisted environment file cannot be recovered when the probe fails.
+If a valid linker flag contains both single and double quotes, `GOFLAGS` is left unchanged and a
+warning is logged rather than preventing startup. Automatic debug-information retention is skipped
+for that resource.
+`GOFLAGS` supplied through a secret parameter retains its sensitivity when merged, including
+when assigned as a parameter builder in an environment callback, and is redacted from `aspire describe` output.
+When supplying custom `ldFlags`, include `-s=false -w=false` and avoid `-s` or `-w` if you need
+source breakpoints. Set `gcFlags: "all=-N -l"` for predictable stepping without compiler
+optimizations or inlining. Attachment and detachment do not restart the resource or AppHost.
+Published Docker builds keep their configured linker flags.
+
 #### GoLand or VS Code attach mode (headless Delve server)
 
 Use `WithDelveServer` when you need GoLand or a VS Code "attach to remote" configuration. The

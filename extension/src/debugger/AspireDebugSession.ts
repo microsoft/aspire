@@ -179,6 +179,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
 
   private _appHostDebugSession?: AspireResourceDebugSession = undefined;
   private _resourceDebugSessions: AspireResourceDebugSession[] = [];
+  private readonly _resourceDebugSessionProcessIds = new Map<string, number>();
   private readonly _editorResourceSessions = new Map<string, EditorResourceSessionSnapshot>();
   private _trackedDebugAdapters: string[] = [];
   private _rpcClient?: ICliRpcClient;
@@ -341,6 +342,12 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     return this._cliProcess?.pid;
   }
 
+  // Both DAP and already-started integrations report the debuggee PID. Only debugging-enabled
+  // sessions should claim that PID and prevent another attachment.
+  hasResourceDebugSessionProcess(processId: number): boolean {
+    return [...this._resourceDebugSessionProcessIds.values()].includes(processId);
+  }
+
   constructor(session: vscode.DebugSession, rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, removeAspireDebugSession: (session: AspireDebugSession) => void, trackAppHostDebugSession: AppHostDebugSessionTracker = () => { }, debugSessionId: string = generateDcpIdPrefix(), operationKind?: AspireOperationKind) {
     this._session = session;
     this._rpcServer = rpcServer;
@@ -358,6 +365,8 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     this.operationKind = operationKind ?? getOperationKind(this.configuration.command);
 
     this.debugSessionId = debugSessionId;
+    this._disposables.push(vscode.debug.onDidTerminateDebugSession(
+      terminatedSession => this._resourceDebugSessionProcessIds.delete(terminatedSession.id)));
   }
 
   /**
@@ -1436,7 +1445,17 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     }
 
     this._trackedDebugAdapters.push(debugAdapter);
-    this._disposables.push(createDebugAdapterTracker(this._dcpServer, debugAdapter, appHostTracker));
+    this._disposables.push(createDebugAdapterTracker(
+      this._dcpServer,
+      debugAdapter,
+      appHostTracker,
+      (session, processId) => {
+        if (processId === undefined || session.configuration.noDebug === true) {
+          this._resourceDebugSessionProcessIds.delete(session.id);
+        } else {
+          this._resourceDebugSessionProcessIds.set(session.id, processId);
+        }
+      }));
   }
 
   private static readonly _nodeAppHostExtensions = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];
@@ -1736,6 +1755,10 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       return undefined;
     }
 
+    if (debugConfig.noDebug !== true) {
+      this._resourceDebugSessionProcessIds.set(resourceDebugSession.id, resourceDebugSession.processId);
+    }
+
     if (debugConfig.debugSessionId === null) {
       extensionLogOutputChannel.warn(`Unable to report process start for run ${debugConfig.runId} because the DCP session ID is missing.`);
     }
@@ -1752,6 +1775,8 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
 
     this.trackEditorResourceSession(debugConfig, 'running');
     void resourceDebugSession.termination.then(exitCode => {
+      this._resourceDebugSessions = this._resourceDebugSessions.filter(session => session !== resourceDebugSession);
+      this._resourceDebugSessionProcessIds.delete(resourceDebugSession.id);
       this.removeEditorResourceSession(debugConfig.runId);
       if (debugConfig.debugSessionId === null) {
         extensionLogOutputChannel.warn(`Unable to report termination for run ${debugConfig.runId} because the DCP session ID is missing.`);
@@ -1833,6 +1858,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
             // stop that is still waiting for VS Code to confirm the same termination.
             terminated = true;
             this._resourceDebugSessions = this._resourceDebugSessions.filter(resourceSession => resourceSession.id !== session.id);
+            this._resourceDebugSessionProcessIds.delete(session.id);
             this.removeEditorResourceSession(debugConfig.runId);
             cleanupResource();
             resolveTermination();
@@ -2135,6 +2161,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     this.flushAppHostLogOutput();
     this._appHostLogOutput.reset();
     this._trackedDebugAdapters = [];
+    this._resourceDebugSessionProcessIds.clear();
     this._onDidSendDebugConsoleOutput.dispose();
     // Keep this disposed session tracked while its delayed CLI termination is pending, so
     // extension deactivation can still force-drain the process tree before VS Code exits.

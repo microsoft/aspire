@@ -6714,7 +6714,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         });
     });
 
-    test('tracks an already-started resource and reports its process without launching another debug session', async () => {
+    test('tracks an already-started run-only resource without claiming debugger ownership', async () => {
         const parentDebugSession = {
             id: 'aspire-session',
             type: 'aspire',
@@ -6738,6 +6738,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             type: 'coreclr',
             name: 'Azure Functions',
             request: 'launch',
+            noDebug: true,
         } as AspireResourceExtendedDebugConfiguration;
         const stopSession = sinon.stub();
         const alreadyStartedSession = {
@@ -6761,6 +6762,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         assert.strictEqual(result, alreadyStartedSession);
         assert.strictEqual(startDebuggingStub.called, false);
+        assert.strictEqual(aspireDebugSession.hasResourceDebugSessionProcess(4242), false);
         assert.deepStrictEqual(sendNotification.firstCall.args[0], {
             notification_type: 'processRestarted',
             session_id: 'run-1',
@@ -6816,6 +6818,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             stopSession: sinon.stub(),
             termination,
         });
+        assert.strictEqual(aspireDebugSession.hasResourceDebugSessionProcess(4242), true);
         completeSession!(17);
         await termination;
         await Promise.resolve();
@@ -6834,6 +6837,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
                 exit_code: 17,
             },
         ]);
+        assert.strictEqual(aspireDebugSession.hasResourceDebugSessionProcess(4242), false);
 
         aspireDebugSession.dispose();
     });
@@ -6878,6 +6882,65 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         assert.strictEqual(result, undefined);
         assert.strictEqual(stopSession.calledOnce, true);
+    });
+
+    test('counts only debugging-enabled DAP processes as debugger-owned while preserving run tracking', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/AppHost/AppHost.csproj',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isDebugConfigEnvironmentLoggingEnabled: () => false,
+        };
+        let trackerFactory: vscode.DebugAdapterTrackerFactory | undefined;
+        sinon.stub(vscode.debug, 'registerDebugAdapterTrackerFactory').callsFake((_type, factory) => {
+            trackerFactory = factory;
+            return new vscode.Disposable(() => { });
+        });
+        const sendNotification = sinon.stub();
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, { sendNotification } as any, terminalProvider as any, () => { });
+        aspireDebugSession.createDebugAdapterTrackerCore('coreclr');
+        assert.ok(trackerFactory);
+
+        for (const noDebug of [true, false]) {
+            const resourceSession = {
+                ...parentDebugSession,
+                id: `resource-session-${noDebug}`,
+                configuration: {
+                    type: 'coreclr',
+                    request: 'launch',
+                    name: 'Resource',
+                    runId: `resource-run-${noDebug}`,
+                    debugSessionId: 'debug-1',
+                    noDebug,
+                },
+            };
+            const tracker = await trackerFactory.createDebugAdapterTracker(resourceSession);
+            assert.ok(tracker?.onDidSendMessage);
+            tracker.onDidSendMessage({ type: 'event', event: 'process', body: { systemProcessId: 4242 } });
+
+            assert.strictEqual(aspireDebugSession.hasResourceDebugSessionProcess(4242), !noDebug);
+            assert.deepStrictEqual(sendNotification.lastCall.args[0], {
+                notification_type: 'processRestarted',
+                session_id: resourceSession.configuration.runId,
+                dcp_id: 'debug-1',
+                pid: 4242,
+            });
+
+            tracker.onDidSendMessage({ type: 'event', event: 'exited', body: { exitCode: 0 } });
+            assert.strictEqual(aspireDebugSession.hasResourceDebugSessionProcess(4242), false);
+        }
+        aspireDebugSession.dispose();
     });
 
     test('retries MAUI resource debug sessions when the first start attempt is canceled', async () => {
