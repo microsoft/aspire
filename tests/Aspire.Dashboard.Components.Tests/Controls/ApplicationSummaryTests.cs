@@ -6,6 +6,7 @@ using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
@@ -121,6 +122,20 @@ public class ApplicationSummaryTests : DashboardTestContext
         Assert.Empty(cut.FindAll(".home-resource-table"));
         Assert.Single(module.Invocations, invocation => invocation.Identifier == "initializeResourcesGraph");
         Assert.Contains(module.Invocations, invocation => invocation.Identifier == "updateResourcesGraph");
+    }
+
+    [Fact]
+    public async Task Render_GraphSettingWhenGraphDisabled_ShowsResourceCards()
+    {
+        Services.Configure<DashboardOptions>(options => options.UI.DisableResourceGraph = true);
+        var cut = RenderSummary();
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+
+        await cut.InvokeAsync(() => preferences.SetGroupOverviewAsync(GroupOverview.Graph));
+
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".resource-card").Count));
+        Assert.Equal(GroupOverview.Cards, preferences.GroupOverview);
+        Assert.True(cut.Find(".home-resource-graph-layout").HasAttribute("hidden"));
     }
 
     [Fact]

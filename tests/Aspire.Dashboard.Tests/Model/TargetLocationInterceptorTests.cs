@@ -77,6 +77,8 @@ public sealed class TargetLocationInterceptorTests
     [InlineData("/legacy", "/legacy/structuredlogs")]
     [InlineData("/legacy/", "/legacy/structuredlogs")]
     [InlineData("/LEGACY", "/legacy/structuredlogs")]
+    [InlineData("/legacy/resources", "/legacy/structuredlogs")]
+    [InlineData("/legacy/Resources/", "/legacy/structuredlogs")]
     [InlineData("/legacy/structuredlogs", null)]
     [InlineData("/legacy/traces", null)]
     [InlineData("/structuredlogs", null)]

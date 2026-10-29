@@ -15,8 +15,9 @@ internal static class TargetLocationInterceptor
 
     /// <summary>
     /// Gets the page that replaces an app model page when there is no resource service, or null when the page doesn't
-    /// need the resource service. The previous experience keeps main's behavior: only its resources root, which
-    /// requires the resource service, goes to its structured logs page.
+    /// need the resource service. The previous experience keeps main's behavior: only its resources page, which
+    /// requires the resource service, goes to its structured logs page. That page is routed at both /legacy and
+    /// /legacy/resources.
     /// </summary>
     public static string? GetStandaloneLocation(string path)
     {
@@ -25,7 +26,11 @@ internal static class TargetLocationInterceptor
             return StructuredLogsPath;
         }
 
-        return string.Equals(path.TrimEnd('/'), LegacyResourcesPath, StringComparisons.UrlPath) ? LegacyStructuredLogsPath : null;
+        var trimmedPath = path.TrimEnd('/');
+        return string.Equals(trimmedPath, LegacyResourcesPath, StringComparisons.UrlPath)
+            || string.Equals(trimmedPath, LegacyResourcesPath + "/resources", StringComparisons.UrlPath)
+            ? LegacyStructuredLogsPath
+            : null;
     }
 
     /// <summary>

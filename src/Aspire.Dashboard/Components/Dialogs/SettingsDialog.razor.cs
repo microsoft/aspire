@@ -92,12 +92,14 @@ public partial class SettingsDialog : IDisposable
             new(ResourceListDensity.Comfortable, new Icons.Regular.Size20.AppsListDetail(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogResourceListDensityComfortable)]),
             new(ResourceListDensity.Compact, new Icons.Regular.Size20.AppsList(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogResourceListDensityCompact)]),
         ];
-        _groupOverviewOptions =
-        [
+        _groupOverviewOptions = new IconToggleOption<GroupOverview>[]
+        {
             new(GroupOverview.Cards, new Icons.Regular.Size20.Grid(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewCards)]),
             new(GroupOverview.Summary, new Icons.Regular.Size20.Home(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
             new(GroupOverview.Graph, new Icons.Regular.Size20.ShareAndroid(), ResourcesLoc[nameof(Dashboard.Resources.Resources.GraphPageTitle)]),
-        ];
+        }
+        .Where(option => option.Value != GroupOverview.Graph || ViewPreferences.IsGraphEnabled)
+        .ToList();
         var dashboardExperienceOptions = new List<IconToggleOption<string>>
         {
             new(NewDashboardExperience, new Icons.Regular.Size24.Sparkle(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogDashboardExperienceNew)])

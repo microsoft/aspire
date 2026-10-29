@@ -59,7 +59,7 @@ internal static class ResourceSetupHelpers
         FluentUISetupHelpers.SetupFluentMenu(context);
 
         context.JSInterop.SetupVoid("scrollToTop", _ => true);
-        context.JSInterop.SetupVoid("focusElement", _ => true);
+        context.JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
 
         FluentUISetupHelpers.SetupFluentUIComponents(context);
     }

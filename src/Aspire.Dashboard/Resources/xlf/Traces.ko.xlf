@@ -39,7 +39,7 @@
       </trans-unit>
       <trans-unit id="TracesFullName">
         <source>Name: {0}</source>
-        <target state="new">Name: {0}</target>
+        <target state="translated">이름: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TracesHeader">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="TracesResourceSpans">
         <source>{0} spans</source>
-        <target state="new">{0} spans</target>
+        <target state="translated">{0} 범위</target>
         <note>{0} is a resource name</note>
       </trans-unit>
       <trans-unit id="TracesSpansColumnHeader">
@@ -74,17 +74,17 @@
       </trans-unit>
       <trans-unit id="TracesTotalErroredTraces">
         <source>Errored: {0}</source>
-        <target state="new">Errored: {0}</target>
+        <target state="translated">오류 발생: {0}</target>
         <note>{0} is a number</note>
       </trans-unit>
       <trans-unit id="TracesTotalTraces">
         <source>Total: {0}</source>
-        <target state="new">Total: {0}</target>
+        <target state="translated">합계: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TracesTraceId">
         <source>Trace Id: {0}</source>
-        <target state="new">Trace Id: {0}</target>
+        <target state="translated">추적 ID: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="VirtualizedLimitText">
