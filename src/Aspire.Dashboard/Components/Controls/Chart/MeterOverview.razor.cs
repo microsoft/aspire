@@ -4,6 +4,7 @@
 using Aspire.Dashboard.Otlp.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 using MetricsResources = Aspire.Dashboard.Resources.Metrics;
 
@@ -46,6 +47,59 @@ public partial class MeterOverview : LiveSparklinesBase
     /// </summary>
     [Parameter]
     public int? MaxCount { get; set; }
+
+    [Inject]
+    public required IJSRuntime JS { get; init; }
+
+    private ElementReference _container;
+    private IJSObjectReference? _jsModule;
+    private IJSObjectReference? _cardObserver;
+    private DotNetObjectReference<MeterOverview>? _selfReference;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        // The browser reports which cards are near the viewport, so only those keep refreshing. Without the report,
+        // for example when the module fails to load, every card keeps refreshing.
+        try
+        {
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["Components/Controls/Chart/MeterOverview.razor.js"]}");
+            _selfReference = DotNetObjectReference.Create(this);
+            _cardObserver = await _jsModule.InvokeAsync<IJSObjectReference>("observeCards", _container, _selfReference);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    [JSInvokable]
+    public Task OnVisibleCardsChanged(string[] instrumentIds) => SetVisibleInstrumentsAsync(instrumentIds);
+
+    protected override async ValueTask DisposeCoreAsync()
+    {
+        try
+        {
+            if (_cardObserver is not null)
+            {
+                await _cardObserver.InvokeVoidAsync("dispose");
+                await _cardObserver.DisposeAsync();
+            }
+            if (_jsModule is not null)
+            {
+                await _jsModule.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // The circuit is gone, and the browser's observer with it.
+        }
+
+        _selfReference?.Dispose();
+    }
 
     private IEnumerable<OtlpInstrumentSummary> GetOrderedInstruments()
     {

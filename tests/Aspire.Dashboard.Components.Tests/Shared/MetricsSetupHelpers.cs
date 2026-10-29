@@ -44,6 +44,9 @@ internal static class MetricsSetupHelpers
         metricsModule.Setup<bool>("registerMetricsSplitter", _ => true).SetResult(true);
         metricsModule.SetupVoid("unregisterMetricsSplitter", _ => true).SetVoidResult();
 
+        var meterOverviewModule = context.JSInterop.SetupModule("/Components/Controls/Chart/MeterOverview.razor.js");
+        meterOverviewModule.SetupModule("observeCards", _ => true).SetupVoid("dispose", _ => true).SetVoidResult();
+
         FluentUISetupHelpers.SetupFluentDivider(context);
         FluentUISetupHelpers.SetupFluentInputLabel(context);
         FluentUISetupHelpers.SetupFluentDataGrid(context);

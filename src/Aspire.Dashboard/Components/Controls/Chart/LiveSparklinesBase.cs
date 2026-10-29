@@ -35,6 +35,20 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
     private Task? _refreshTask;
     private (ResourceKey?, TimeSpan, string)? _loadedParameters;
 
+    // Refreshes run one at a time: the periodic refresh and a refresh of cards scrolled into view each replace the
+    // whole dictionary, and running them together would drop one of their updates.
+    // It isn't disposed: a refresh started by a parameter change can still hold it when the component is disposed, and
+    // a SemaphoreSlim that never created a wait handle has nothing to release.
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+
+    // The instruments shown near the viewport, or null when the derived component doesn't report them, in which case
+    // every instrument is refreshed. A long list refreshes only these: a query per instrument every few seconds for
+    // hundreds of cards keeps the server busy for cards nobody can see.
+    private HashSet<(ResourceKey, OtlpInstrumentKey)>? _visibleInstruments;
+
+    // Instruments a periodic refresh skipped because they were off screen. They're refreshed as soon as they're shown.
+    private readonly HashSet<(ResourceKey, OtlpInstrumentKey)> _staleInstruments = new();
+
     /// <summary>
     /// Gets or sets the resource the instruments belong to. When null, each instrument is read from the resource it
     /// came from, so one list can show the instruments of several resources.
@@ -85,7 +99,8 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
             _loadedParameters = parameters;
             try
             {
-                await RefreshAsync(_disposeToken);
+                // Every instrument is loaded once, even off screen: the list is ordered by the instruments' values.
+                await RefreshAsync(onlyVisible: false, _disposeToken);
             }
             catch (OperationCanceledException) when (_disposeToken.IsCancellationRequested)
             {
@@ -97,6 +112,46 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
     }
 
     protected ResourceKey GetResourceKey(OtlpInstrumentSummary instrument) => ResourceKey ?? instrument.ResourceView.ResourceKey;
+
+    /// <summary>
+    /// Gets a key for the instrument that's unique in the list, for a derived component to identify its cards.
+    /// </summary>
+    protected string GetInstrumentId(OtlpInstrumentSummary instrument)
+    {
+        var resourceKey = GetResourceKey(instrument);
+        return $"{resourceKey.Name}\n{resourceKey.InstanceId}\n{instrument.Parent.Name}\n{instrument.Name}";
+    }
+
+    /// <summary>
+    /// Sets the instruments shown near the viewport, identified by <see cref="GetInstrumentId"/>. Later periodic
+    /// refreshes skip the others, and shown instruments that missed a refresh are refreshed now.
+    /// </summary>
+    protected async Task SetVisibleInstrumentsAsync(IEnumerable<string> instrumentIds)
+    {
+        var ids = instrumentIds.ToHashSet(StringComparer.Ordinal);
+        var visible = Instruments
+            .Where(i => ids.Contains(GetInstrumentId(i)))
+            .Select(i => (GetResourceKey(i), i.GetKey()))
+            .ToHashSet();
+        _visibleInstruments = visible;
+
+        var toRefresh = Instruments.Where(i => _staleInstruments.Contains((GetResourceKey(i), i.GetKey()))).Where(i => visible.Contains((GetResourceKey(i), i.GetKey()))).ToList();
+        if (toRefresh.Count == 0 || _disposeToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        try
+        {
+            await RefreshInstrumentsAsync(toRefresh, replaceAll: false, _disposeToken);
+        }
+        catch (OperationCanceledException) when (_disposeToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
 
     protected SparklineData GetSparkline(OtlpInstrumentSummary instrument)
     {
@@ -121,7 +176,7 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
                     continue;
                 }
 
-                await RefreshAsync(cancellationToken);
+                await RefreshAsync(onlyVisible: true, cancellationToken);
                 await InvokeAsync(StateHasChanged);
             }
         }
@@ -135,16 +190,62 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
         }
     }
 
-    private async Task RefreshAsync(CancellationToken cancellationToken)
+    private Task RefreshAsync(bool onlyVisible, CancellationToken cancellationToken)
     {
-        var sparklines = new Dictionary<(ResourceKey, OtlpInstrumentKey), SparklineData>();
-        foreach (var instrument in Instruments)
+        if (!onlyVisible || _visibleInstruments is not { } visible)
         {
-            sparklines[(GetResourceKey(instrument), instrument.GetKey())] = await GetSparklineDataAsync(instrument, cancellationToken);
+            return RefreshInstrumentsAsync(Instruments, replaceAll: true, cancellationToken);
         }
 
-        // Swap the whole dictionary so a render never sees a partially refreshed set of sparklines.
-        _sparklines = sparklines;
+        var shown = new List<OtlpInstrumentSummary>();
+        foreach (var instrument in Instruments)
+        {
+            var key = (GetResourceKey(instrument), instrument.GetKey());
+            if (visible.Contains(key))
+            {
+                shown.Add(instrument);
+            }
+            else
+            {
+                _staleInstruments.Add(key);
+            }
+        }
+
+        return RefreshInstrumentsAsync(shown, replaceAll: false, cancellationToken);
+    }
+
+    /// <summary>
+    /// Loads the sparklines of the given instruments. <paramref name="replaceAll"/> drops the sparklines of every other
+    /// instrument, for when the given instruments are the whole list.
+    /// </summary>
+    private async Task RefreshInstrumentsAsync(IReadOnlyList<OtlpInstrumentSummary> instruments, bool replaceAll, CancellationToken cancellationToken)
+    {
+        await _refreshLock.WaitAsync(cancellationToken);
+        try
+        {
+            var refreshed = new List<((ResourceKey, OtlpInstrumentKey) Key, SparklineData Data)>(instruments.Count);
+            foreach (var instrument in instruments)
+            {
+                refreshed.Add(((GetResourceKey(instrument), instrument.GetKey()), await GetSparklineDataAsync(instrument, cancellationToken)));
+            }
+
+            // Swap the whole dictionary so a render never sees a partially refreshed set of sparklines.
+            var sparklines = replaceAll ? new Dictionary<(ResourceKey, OtlpInstrumentKey), SparklineData>() : new Dictionary<(ResourceKey, OtlpInstrumentKey), SparklineData>(_sparklines);
+            if (replaceAll)
+            {
+                _staleInstruments.Clear();
+            }
+            foreach (var (key, data) in refreshed)
+            {
+                sparklines[key] = data;
+                _staleInstruments.Remove(key);
+            }
+            _sparklines = sparklines;
+        }
+        finally
+        {
+            _refreshLock.Release();
+        }
     }
 
     private async Task<SparklineData> GetSparklineDataAsync(OtlpInstrumentSummary instrument, CancellationToken cancellationToken)
@@ -260,6 +361,11 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
             : FormatHelpers.FormatNumberWithOptionalDecimalPlaces(scaled, maxDecimalPlaces: 3, culture);
     }
 
+    /// <summary>
+    /// Releases the derived component's resources, after the refreshes stopped.
+    /// </summary>
+    protected virtual ValueTask DisposeCoreAsync() => ValueTask.CompletedTask;
+
     public async ValueTask DisposeAsync()
     {
         await _disposeCts.CancelAsync();
@@ -268,6 +374,7 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
             await task;
         }
         _disposeCts.Dispose();
+        await DisposeCoreAsync();
     }
 }
 

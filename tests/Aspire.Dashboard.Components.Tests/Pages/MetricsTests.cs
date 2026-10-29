@@ -1328,13 +1328,13 @@ public partial class MetricsTests : DashboardTestContext
         });
         Assert.Equal([new OtlpInstrumentKey("test-meter", "test-instrument-b")], Services.GetRequiredService<MetricPinStore>().GetPins());
 
-        // Selecting the pinned group shows the pinned instruments as cards, with their meter name.
+        // Selecting the pinned group shows the pinned instruments as cards, grouped by their meter.
         cut.Find(".metric-group.pinned").Click();
         cut.WaitForAssertion(() =>
         {
             Assert.True(cut.Instance.PageViewModel.ShowPinned);
             Assert.Equal(["test-instrument-b"], GetCardNames(cut));
-            Assert.Equal("test-meter", cut.Find(".meter-card-meter").TextContent);
+            Assert.Equal(["test-meter"], cut.FindAll(".metrics-section-title").Select(t => t.TextContent));
         });
 
         // Unpinning the last pin keeps the selected group, explaining how to pin instead of an empty pane.
@@ -1439,6 +1439,62 @@ public partial class MetricsTests : DashboardTestContext
         });
     }
 
+    [Fact]
+    public async Task MeterOverview_VisibleCardsReported_RefreshesOnlyVisibleCardsUntilOthersAreShown()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var timeProvider = (TestTimeProvider)Services.GetRequiredService<BrowserTimeProvider>();
+        timeProvider.UtcNow = s_testTime.AddMinutes(2);
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await AddCountersAsync(value: 10, s_testTime.AddMinutes(1));
+
+        var resource = Assert.Single(telemetryRepository.GetResources());
+        var cut = Render<MeterOverview>(builder =>
+        {
+            builder.Add(c => c.ResourceKey, resource.ResourceKey);
+            builder.Add(c => c.Instruments, telemetryRepository.GetInstrumentSummaries(resource.ResourceKey));
+            builder.Add(c => c.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(c => c.ShowMeterName, false);
+            builder.Add(c => c.SortBy, MetricSortBy.Instrument);
+            builder.Add(c => c.GetInstrumentUrl, instrument => $"/metrics/{instrument.Name}");
+        });
+        cut.WaitForAssertion(() => Assert.Equal(["first.count: 10", "second.count: 10"], GetCardValues()));
+
+        // Only the first card is on screen, so the periodic refresh leaves the second card's value as it was.
+        var cardIds = cut.FindAll(".meter-card").Select(card => card.GetAttribute("data-instrument-id")!).ToList();
+        await cut.InvokeAsync(() => cut.Instance.OnVisibleCardsChanged([cardIds[0]]));
+        await AddCountersAsync(value: 500, s_testTime.AddMinutes(1.5));
+        cut.WaitForAssertion(() => Assert.Equal(["first.count: 500", "second.count: 10"], GetCardValues()), TimeSpan.FromSeconds(10));
+
+        // Scrolling the second card into view refreshes it right away.
+        await cut.InvokeAsync(() => cut.Instance.OnVisibleCardsChanged([.. cardIds]));
+        cut.WaitForAssertion(() => Assert.Equal(["first.count: 500", "second.count: 500"], GetCardValues()));
+
+        Task AddCountersAsync(int value, DateTime time) => telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(metricName: "first.count", startTime: time, value: value),
+                            CreateSumMetric(metricName: "second.count", startTime: time, value: value)
+                        }
+                    }
+                }
+            }
+        });
+
+        List<string> GetCardValues() =>
+            [.. cut.FindAll(".meter-card").Select(card => $"{card.QuerySelector(".meter-card-name")!.TextContent}: {card.QuerySelector(".meter-card-value-number")?.TextContent}")];
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -1528,12 +1584,60 @@ public partial class MetricsTests : DashboardTestContext
         var menus = cut.FindComponents<AspireMenuButton>().Where(m => m.Instance.ButtonClass?.Contains("metrics-organize-button", StringComparison.Ordinal) == true).ToList();
         Assert.Collection(menus,
             group => Assert.Equal(["None", "Meter", "Instrument"], group.Instance.ItemsProvider().Where(i => !i.IsHeader).Select(i => i.Text)),
-            sort => Assert.Equal(["Instrument", "Value (high to low)", "Value (low to high)"], sort.Instance.ItemsProvider().Where(i => !i.IsHeader).Select(i => i.Text)));
+            sort => Assert.Equal(["Name", "Value (high to low)", "Value (low to high)"], sort.Instance.ItemsProvider().Where(i => !i.IsHeader).Select(i => i.Text)));
+
+        // Instruments are grouped by meter and sorted by name by default.
+        Assert.Equal("Meter", menus[0].Instance.ItemsProvider().Single(i => i.Checked).Text);
+        Assert.Equal("Name", menus[1].Instance.ItemsProvider().Single(i => i.Checked).Text);
 
         cut.Find(".metric-group-all").Click();
-        await cut.InvokeAsync(() => menus[0].Instance.ItemsProvider().Single(i => i.Text == "Meter").OnClick!());
-
         cut.WaitForAssertion(() => Assert.Equal(["test-meter1", "test-meter2"], cut.FindAll(".metrics-section-title").Select(t => t.TextContent)));
+    }
+
+    [Fact]
+    public async Task ShowAllInstruments_GroupByNone_ListsInstrumentsInSortOrderWithoutSections()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter1"),
+                        Metrics = { CreateSumMetric(metricName: "zeta.count", startTime: s_testTime.AddMinutes(1)) }
+                    },
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter2"),
+                        Metrics = { CreateSumMetric(metricName: "alpha.count", startTime: s_testTime.AddMinutes(1)) }
+                    }
+                }
+            }
+        });
+
+        var cut = Render<Metrics>(builder =>
+        {
+            builder.Add(m => m.ResourceName, "TestApp");
+            builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        cut.WaitForState(() => cut.Instance.PageViewModel.Instruments?.Count == 2);
+
+        var groupMenu = cut.FindComponents<AspireMenuButton>().First(m => m.Instance.ButtonClass?.Contains("metrics-organize-button", StringComparison.Ordinal) == true);
+        cut.Find(".metric-group-all").Click();
+        await cut.InvokeAsync(() => groupMenu.Instance.ItemsProvider().Single(i => i.Text == "None").OnClick!());
+
+        // One list across meters, sorted by instrument name, with each card naming its meter.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll(".metrics-section-title"));
+            Assert.Equal(["alpha.count", "zeta.count"], GetCardNames(cut));
+            Assert.Equal(["test-meter2", "test-meter1"], cut.FindAll(".meter-card-meter").Select(m => m.TextContent));
+        });
     }
 
     [Fact]

@@ -207,6 +207,11 @@
         <target state="new">Sort metrics</target>
         <note />
       </trans-unit>
+      <trans-unit id="MetricsSortName">
+        <source>Name</source>
+        <target state="new">Name</target>
+        <note>Sorts instruments by their name.</note>
+      </trans-unit>
       <trans-unit id="MetricsSortValueAscending">
         <source>Value (low to high)</source>
         <target state="new">Value (low to high)</target>

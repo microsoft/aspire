@@ -1187,6 +1187,25 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Standalone_ModifierClickAfterSelectAll_DeselectsOnlyThatResource()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: false));
+        await AddTelemetryAsync("api");
+        await AddTelemetryAsync("frontend");
+        await AddTelemetryAsync("worker");
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.MetricsUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Empty(cut.Instance.SelectedResourceNames));
+
+        cut.FindAll(".resource-row-link").Single(link => link.GetAttribute("href") == DashboardUrls.MetricsUrl("frontend")).Click(new Microsoft.AspNetCore.Components.Web.MouseEventArgs { MetaKey = true });
+        cut.Render();
+
+        Assert.Equal(["api", "worker"], cut.Instance.SelectedResourceNames);
+    }
+
+    [Fact]
     public async Task Standalone_ChangingViewportPreservesLayoutAndRoute()
     {
         var desktop = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
