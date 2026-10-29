@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Host dell'app a file singolo Aspire",
   "description": "AppHost Aspire minimo per scenari a file singolo (.NET 10+).",

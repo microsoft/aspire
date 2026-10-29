@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire 단일 파일 앱 호스트",
   "description": "단일 파일 시나리오(.NET 10+)를 위한 최소한의 Aspire AppHost입니다.",

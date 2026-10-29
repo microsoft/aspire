@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire 單一檔案主控處理程序",
   "description": "適用於單一檔案案例的精簡版 Aspire AppHost (.NET 10+)。",

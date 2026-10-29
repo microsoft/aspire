@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire 테스트 프로젝트(MSTest)",
   "description": "Aspire AppHost 프로젝트의 MSTest 통합 테스트를 포함하는 프로젝트입니다.",
