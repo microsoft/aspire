@@ -172,7 +172,8 @@ internal sealed class ConfigSourceTestContext
               "enabledPlugins": {
                 "aspire@aspire-skills": true,
                 "aspire@platform": true,
-                "original@team": true
+                "original@team": true,
+                "deployment@team": true
               }
             }
             """;
