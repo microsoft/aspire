@@ -594,7 +594,19 @@ export async function dismissModalDialogIfPresent(
     let match: Awaited<ReturnType<typeof getMatchingModalDialog>>;
     try {
         match = await VSBrowser.instance.driver.wait(
-            async () => await getMatchingModalDialog(expectedText) ?? false,
+            async () => {
+                try {
+                    return await getMatchingModalDialog(expectedText) ?? false;
+                }
+                catch (error) {
+                    if (error instanceof webDriverError.NoSuchElementError
+                        || error instanceof webDriverError.StaleElementReferenceError) {
+                        return false;
+                    }
+
+                    throw error;
+                }
+            },
             timeoutMs);
     }
     catch (error) {

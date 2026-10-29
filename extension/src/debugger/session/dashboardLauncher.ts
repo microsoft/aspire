@@ -727,11 +727,9 @@ export class DashboardLauncher implements vscode.Disposable {
       }
     }
 
-    const [stopResult] = await stopping;
-    if (stopResult.status === 'rejected') {
-      throw stopResult.reason;
-    }
-
+    // The final sweep joins late browser stops and retries only sessions still tracked.
+    // An eager failure may already have been superseded by termination or a background retry.
+    await stopping;
     await this._host.stopWithinBudget(
       () => this.closeDashboard(),
       this._dashboardDebugSessions.values().next().value?.session.name ?? aspireDashboard,

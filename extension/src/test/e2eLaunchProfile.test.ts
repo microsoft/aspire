@@ -6,7 +6,7 @@ import { spawnSync } from 'child_process';
 import { runInNewContext } from 'vm';
 import * as ts from 'typescript';
 import * as vm from 'vm';
-import { error as webDriverError } from 'selenium-webdriver';
+import { error as webDriverError, WebDriver } from 'selenium-webdriver';
 import { blazorWasmDebugProofResponseAllowanceMs, blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs, getBlazorWasmDebugProofControlTimeoutMs } from '../testing/blazorWasmDebugProofTimeouts';
 
 function removeDirectorySafely(directory: string): void {
@@ -919,7 +919,7 @@ suite('E2E launch profile', () => {
         });
     }
 
-    for (const dialogState of ['absent', 'unrelated', 'matching', 'missing details', 'driver failure', 'interaction failure']) {
+    for (const dialogState of ['absent', 'unrelated', 'matching', 'missing details', 'missing message once', 'stale message once', 'disappeared message', 'driver failure', 'interaction failure']) {
         test(`optional launch dialog cleanup handles ${dialogState}`, async () => {
             const helpers = fs.readFileSync(path.resolve(__dirname, '..', '..', 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
             const source = ts.createSourceFile('vscode.ts', helpers, ts.ScriptTarget.Latest, true);
@@ -931,12 +931,22 @@ suite('E2E launch profile', () => {
             }).outputText;
             const failure = new Error('Dialog interaction failed.');
             const interactions: string[] = [];
+            let messageReads = 0;
             const dismiss = vm.runInNewContext(`${compiled}\nexports.dismissModalDialogIfPresent;`, {
                 exports: {},
                 webDriverError,
                 By: { css: (selector: string) => selector },
                 ModalDialog: class {
-                    async getMessage() { return dialogState === 'unrelated' ? 'Start AppHost?' : 'Unable to launch browser'; }
+                    async getMessage() {
+                        messageReads++;
+                        if ((dialogState === 'missing message once' && messageReads === 1) || dialogState === 'disappeared message') {
+                            throw new webDriverError.NoSuchElementError('Dialog disappeared.');
+                        }
+                        if (dialogState === 'stale message once' && messageReads === 1) {
+                            throw new webDriverError.StaleElementReferenceError('Dialog was replaced.');
+                        }
+                        return dialogState === 'unrelated' ? 'Start AppHost?' : 'Unable to launch browser';
+                    }
                     async getDetails() {
                         if (dialogState === 'missing details') {
                             throw new webDriverError.NoSuchElementError('No dialog details.');
@@ -959,16 +969,10 @@ suite('E2E launch profile', () => {
                         }
                         return dialogState === 'absent' ? [] : [{}];
                     },
-                    wait: async (predicate: () => Promise<unknown>) => {
-                        const result = await predicate();
-                        if (!result) {
-                            throw new webDriverError.TimeoutError('No matching dialog.');
-                        }
-                        return result;
-                    },
+                    wait: WebDriver.prototype.wait,
                 } } },
             }) as (buttonTitle: string, timeoutMs: number, screenshotName: string, expectedText: string) => Promise<void>;
-            const cleanup = dismiss('Cancel', 10000, 'launch-failure', 'Unable to launch browser');
+            const cleanup = dismiss('Cancel', 1000, 'launch-failure', 'Unable to launch browser');
 
             if (dialogState === 'driver failure' || dialogState === 'interaction failure') {
                 await assert.rejects(cleanup, error => error === failure);
@@ -977,7 +981,7 @@ suite('E2E launch profile', () => {
                 await cleanup;
             }
 
-            assert.deepStrictEqual(interactions, ['matching', 'missing details', 'interaction failure'].includes(dialogState)
+            assert.deepStrictEqual(interactions, ['matching', 'missing details', 'missing message once', 'stale message once', 'interaction failure'].includes(dialogState)
                 ? ['Cancel']
                 : []);
         });

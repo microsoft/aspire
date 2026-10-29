@@ -23,6 +23,9 @@ suite('Aspire debug dashboard E2E', function () {
         requireBrowserDebugSessionCleanup = false;
 
         await runE2eTeardown([
+            // Initial launch failures are reported by the browser-start assertion.
+            // Teardown also checks after stopping the browser; late dialogs are dismissed
+            // to unblock the workbench, not used as a second launch-success assertion.
             () => failOnBrowserDebugSessionCleanup
                 ? dismissModalDialogIfPresent('Cancel', 10000, 'dashboard-debug-launch-failure', 'Unable to launch browser')
                 : undefined,
@@ -40,9 +43,6 @@ suite('Aspire debug dashboard E2E', function () {
             () => failOnBrowserDebugSessionCleanup
                 ? waitForNoBrowserDebugSessions()
                 : waitForNoBrowserDebugSessions(15000).catch(() => undefined),
-            // Browser events are the E2E lifecycle boundary, not a second copy of launch-request
-            // state. Check for the known modal after shutdown too, including failures outside
-            // the browser-start wait, without requiring a dialog on the successful path.
             () => failOnBrowserDebugSessionCleanup
                 ? dismissModalDialogIfPresent('Cancel', 10000, 'dashboard-debug-launch-failure', 'Unable to launch browser')
                 : undefined,
