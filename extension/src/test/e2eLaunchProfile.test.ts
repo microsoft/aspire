@@ -345,7 +345,7 @@ suite('E2E launch profile', () => {
 
             const missingSpec = path.join(fixtureRoot, 'usefulnessSurvey.e2e.test.js');
             assert.notStrictEqual(result.status, 0);
-            assert.ok(result.stderr.includes(`did not match compiled test files for: ${missingSpec}`), result.stderr);
+            assert.ok(result.stderr.includes(`did not match compiled test files for: ${missingSpec.split(path.sep).join('/')}`), result.stderr);
             assert.deepStrictEqual(fs.readdirSync(tempRoot), []);
             assert.ok(fs.existsSync(path.join(fixtureRoot, 'cliPathRejectionNotification.e2e.test.js')));
             assert.ok(!fs.existsSync(missingSpec));

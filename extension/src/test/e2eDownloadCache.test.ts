@@ -2337,9 +2337,15 @@ suite('E2E download cache', () => {
     });
 
     test('copies long Windows workbench paths into run-local storage without modifying cache', () => {
-        const root = createTestRoot('wp');
-        const workbenchRelativePath = path.join('1234567890', 'resources', 'app', 'out', 'vs', 'code', 'electron-browser', 'workbench', 'workbench.html');
-        const result = cache.ensureDownloadCache(getDefaultCacheOptions(path.join(root, 'c'), {
+        const root = fs.realpathSync.native(createTestRoot('wp'));
+        const cacheRoot = path.join(root, 'c');
+        const groupDirectory = cache.getDownloadCacheEntryGroupDirectory(cacheRoot, { ...defaultCacheKey, platform: 'win32' });
+        const cachedVsCodeDirectory = path.join(getCacheEntryDirectory(groupDirectory, 1), getVsCodeDirectoryName('win32', 'x64'));
+        const workbenchSuffix = path.join('resources', 'app', 'out', 'vs', 'code', 'electron-browser', 'workbench', 'workbench.html');
+        // Reach MAX_PATH even in a short checkout such as D:\a\aspire\aspire.
+        const versionDirectory = 'v'.repeat(Math.max(1, 260 - path.join(cachedVsCodeDirectory, workbenchSuffix).length - 1));
+        const workbenchRelativePath = path.join(versionDirectory, workbenchSuffix);
+        const result = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
             platform: 'win32',
             populate(stagingDirectory) {
                 const layout = populateFakeDownload(stagingDirectory, { platform: 'win32', architecture: 'x64' });
