@@ -309,9 +309,9 @@ function createDashboardDebugConfiguration(
     // target. Automatic Dashboard launches run in the background without delaying AppHost startup;
     // explicit handoffs await the browser launch.
     debugConfig.timeout = dashboardDebugBrowserStartTimeoutMs;
-    // Fresh or isolated environments can have a valid localhost development certificate that has
-    // not been trusted yet. Limit Chromium's certificate bypass to localhost instead of disabling
-    // certificate validation globally.
+    // Allow untrusted localhost development certificates without bypassing checks for other hosts.
+    // This affects page navigation, not debugger attachment; a started debug session does not
+    // establish that the Dashboard page loaded.
     debugConfig.runtimeArgs = ['--allow-insecure-localhost'];
   }
   else {
@@ -727,8 +727,9 @@ export class DashboardLauncher implements vscode.Disposable {
       }
     }
 
-    // The final sweep joins late browser stops and retries only sessions still tracked.
-    // An eager failure may already have been superseded by termination or a background retry.
+    // The final sweep reconciles eager failures with sessions still tracked. It still issues stops
+    // if launch draining exhausts the shared deadline, but cannot extend the wait: optional browser
+    // cleanup must preserve the AppHost/parent shutdown budget.
     await stopping;
     await this._host.stopWithinBudget(
       () => this.closeDashboard(),
