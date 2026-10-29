@@ -95,7 +95,8 @@ public class NativeAotDashboardTests(ITestOutputHelper outputHelper)
             Assert.Equal(HttpStatusCode.OK, (HttpStatusCode)response.Status);
             await page.GetByRole(AriaRole.Heading, new() { Name = "Structured logs" }).WaitForAsync();
 
-            await page.GetByTitle(Dialogs.HelpDialogCategoryNavigation).ClickAsync();
+            // The navigation button is named by aria-label. Its tooltip comes from data-tooltip, so it has no title.
+            await page.GetByRole(AriaRole.Button, new() { Name = Dialogs.HelpDialogCategoryNavigation, Exact = true }).ClickAsync();
             await page.GetByRole(AriaRole.Menuitem, new() { Name = Layout.MainLayoutLaunchSettings }).ClickAsync();
             var themeGroup = page.GetByRole(AriaRole.Group, new() { Name = Dialogs.SettingsDialogTheme });
             await themeGroup.GetByRole(AriaRole.Button, new() { Name = Dialogs.SettingsDialogDarkTheme, Exact = true }).ClickAsync();
