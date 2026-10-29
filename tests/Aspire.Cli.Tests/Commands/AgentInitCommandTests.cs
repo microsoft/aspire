@@ -207,6 +207,58 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("copilot")]
+    [InlineData("claude")]
+    [InlineData("opencode")]
+    [InlineData("copilot,claude,opencode")]
+    public async Task AgentInit_WarnsAboutSelectedClientSourcesBeforeSourcePrompt(string agents)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), """
+            {
+              "skillSources": {
+                "default": { "openCodeV1Catalog": "https://third-party.example/skills/" },
+                "team": {
+                  "repository": "example/team",
+                  "openCodeV1Catalog": "https://team.example/skills/",
+                  "openCodeV2Catalog": "https://team.example/skills/"
+                },
+                "pluginsOnly": { "repository": "example/plugins" },
+                "disabled": {
+                  "enabled": false,
+                  "repository": "example/disabled",
+                  "openCodeV1Catalog": "https://disabled.example/skills/"
+                }
+              }
+            }
+            """);
+        string[]? warningsBeforeSelection = null;
+        var interaction = new TestInteractionService();
+        interaction.PromptForSelectionCallback = (prompt, _, _, _) =>
+        {
+            Assert.Equal(AgentCommandStrings.InitCommand_ConfigureAspireSourcePrompt, prompt);
+            warningsBeforeSelection = interaction.DisplayedMessages
+                .Where(message => message.Emoji.Equals(KnownEmojis.Warning))
+                .Select(message => message.Message).ToArray();
+            return "remote";
+        };
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents {agents} --scope project --skills aspire");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.NotNull(warningsBeforeSelection);
+        Assert.Equal(warningsBeforeSelection, interaction.DisplayedMessages
+            .Where(message => message.Emoji.Equals(KnownEmojis.Warning))
+            .Select(message => message.Message));
+        await Verify(warningsBeforeSelection).UseParameters(agents);
+    }
+
+    [Theory]
     [InlineData("remote", true)]
     [InlineData("embedded", true)]
     [InlineData("remote", false)]
@@ -1317,12 +1369,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var config = JsonNode.Parse(await File.ReadAllTextAsync(expectedPath))!.AsObject();
         Assert.Equal(client == "opencode" ? ["skills"] : new[] { "enabledPlugins", "extraKnownMarketplaces" }, config.Select(property => property.Key).Order());
         Assert.Empty(messages);
+        var sourceUrls = client == "opencode"
+            ? string.Join(", ", SkillSource.DefaultV1Catalog, SkillSource.DefaultV2Catalog)
+            : AspireSkillsRemoteConfiguration.RepositoryUrl;
         Assert.Collection(interaction.DisplayedMessages,
             message =>
             {
                 Assert.Equal(KnownEmojis.Warning, message.Emoji);
                 Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_PluginRiskWarning,
-                    AspireSkillsRemoteConfiguration.RepositoryUrl), message.Message);
+                    sourceUrls), message.Message);
             },
             message =>
             {

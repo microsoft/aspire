@@ -292,7 +292,7 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
 Review the source before enabling it.
 
 Prefer skill files only? Choose Embedded, or install skills directly from {0}.</target>
-        <note>{0} is a configured skill source repository URL.</note>
+        <note>{0} lists the comma-separated configured skill source repository and/or catalog URLs for the selected agent clients.</note>
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>

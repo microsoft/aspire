@@ -10,6 +10,7 @@ using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
@@ -441,10 +442,27 @@ internal sealed class AgentInitCommand : BaseCommand
             if ((!sourceProvided && _hostEnvironment.SupportsInteractiveInput) ||
                 string.Equals(sourceProvided ? requestedSource : defaultSource, "remote", StringComparison.OrdinalIgnoreCase))
             {
+                var usesPlugins = selectedClients.Any(client => client.Id != OpenCodeAgentClient.ClientId);
+                var usesOpenCode = selectedClients.Any(client => client.Id == OpenCodeAgentClient.ClientId);
                 foreach (var skillSource in skillSources)
                 {
+                    var sourceUrls = new List<string>();
+                    if (usesPlugins)
+                    {
+                        sourceUrls.Add(skillSource.GetRepositoryUrl());
+                    }
+                    if (usesOpenCode)
+                    {
+                        sourceUrls.AddRange(new[] { skillSource.OpenCodeV1Catalog, skillSource.OpenCodeV2Catalog }.OfType<string>());
+                    }
+                    if (sourceUrls.Count == 0)
+                    {
+                        continue;
+                    }
+
                     InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture,
-                        AgentCommandStrings.InitCommand_PluginRiskWarning, skillSource.GetRepositoryUrl()));
+                        AgentCommandStrings.InitCommand_PluginRiskWarning,
+                        string.Join(", ", sourceUrls.Distinct(StringComparer.Ordinal))));
                     InteractionService.DisplayEmptyLine();
                 }
             }
