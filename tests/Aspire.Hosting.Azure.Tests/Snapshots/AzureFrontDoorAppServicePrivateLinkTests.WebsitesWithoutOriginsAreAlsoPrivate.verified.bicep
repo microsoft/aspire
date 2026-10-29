@@ -66,6 +66,6 @@ resource webapp 'Microsoft.Web/sites@2025-03-01' = {
   }
 }
 
-output privateLinkResourceId string = webapp.id
+output resourceId string = webapp.id
 
-output privateLinkLocation string = toLower(replace(webapp.location, ' ', ''))
+output resourceLocation string = toLower(replace(webapp.location, ' ', ''))

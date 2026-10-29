@@ -39,10 +39,10 @@ public class AzureAppServiceEnvironmentResource :
 
 #pragma warning disable ASPIREAZURE003 // Private networking APIs are experimental.
     BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkResourceId(IResource origin) =>
-        new("privateLinkResourceId", GetPrivateLinkWebsite(origin));
+        new("resourceId", GetPrivateLinkWebsite(origin));
 
     BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkLocation(IResource origin) =>
-        new("privateLinkLocation", GetPrivateLinkWebsite(origin));
+        new("resourceLocation", GetPrivateLinkWebsite(origin));
 
     string IAzureCdnPrivateLinkTarget.PrivateLinkGroupId => "sites";
 

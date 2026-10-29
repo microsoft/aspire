@@ -806,11 +806,11 @@ internal sealed class AzureAppServiceWebsiteContext(
         AddStickySlotSettings(deploymentSlot is null ? (WebSite)webSite : parentWebSite, stickyConfigNames);
 
         var websiteResource = (WebSite)webSite;
-        infra.Add(new ProvisioningOutput("privateLinkResourceId", typeof(string))
+        infra.Add(new ProvisioningOutput("resourceId", typeof(string))
         {
             Value = websiteResource.Id
         });
-        infra.Add(new ProvisioningOutput("privateLinkLocation", typeof(string))
+        infra.Add(new ProvisioningOutput("resourceLocation", typeof(string))
         {
             Value = new FunctionCallExpression(
                 new IdentifierExpression("toLower"),

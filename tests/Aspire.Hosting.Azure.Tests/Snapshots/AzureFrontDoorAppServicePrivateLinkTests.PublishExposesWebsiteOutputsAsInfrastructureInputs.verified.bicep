@@ -6,9 +6,9 @@ param location string
 
 param principalId string
 
-param api_website_privateLinkResourceId_input string
+param api_website_resourceId_input string
 
-param api_website_privateLinkLocation_input string
+param api_website_resourceLocation_input string
 
 resource rg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: resourceGroupName
@@ -39,8 +39,8 @@ module frontdoor 'frontdoor/frontdoor.bicep' = {
   params: {
     location: location
     api_host: 'api-${env.outputs.webSiteSuffix}.azurewebsites.net'
-    api_website_environment_id: api_website_privateLinkResourceId_input
-    api_website_location: api_website_privateLinkLocation_input
+    api_website_environment_id: api_website_resourceId_input
+    api_website_location: api_website_resourceLocation_input
   }
 }
 
