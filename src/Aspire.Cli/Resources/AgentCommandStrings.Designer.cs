@@ -461,7 +461,9 @@ namespace Aspire.Cli.Resources {
 
         /// <summary>
         ///   Looks up a localized string similar to Use the Aspire plugin at your own risk.
-        ///Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions..
+        ///Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions.
+        ///
+        ///Prefer skill files only? Install skills directly from {0}..
         /// </summary>
         internal static string InitCommand_PluginRiskWarning {
             get {

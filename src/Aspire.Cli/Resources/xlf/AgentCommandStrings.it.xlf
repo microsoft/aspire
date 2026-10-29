@@ -225,9 +225,13 @@
       </trans-unit>
       <trans-unit id="InitCommand_PluginRiskWarning">
         <source>Use the Aspire plugin at your own risk.
-Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions.</source>
+Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions.
+
+Prefer skill files only? Install skills directly from {0}.</source>
         <target state="new">Use the Aspire plugin at your own risk.
-Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions.</target>
+Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions.
+
+Prefer skill files only? Install skills directly from {0}.</target>
         <note>{0} is the official Aspire skills repository URL.</note>
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
