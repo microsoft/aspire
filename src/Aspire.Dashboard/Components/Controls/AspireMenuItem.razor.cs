@@ -35,10 +35,13 @@ public partial class AspireMenuItem
             attributes["data-tooltip"] = ItemTooltip;
             if (Item.Role is MenuItemRole.Radio)
             {
-                // FluentMenuItem raises OnClick and CheckedChanged from the web component's change event, which a
-                // radio option that is already checked doesn't raise. Without a native click handler, choosing the
-                // current option would leave the menu open.
+                // A radio option is chosen by its native click, or Enter or Space, rather than by the web component's
+                // change event. The web component raises that event only when its own checked state changes, and that
+                // state isn't reliable: it keeps an option checked after a re-render removes its checked attribute, so
+                // clicking that option again raises no event and the menu would ignore the choice. It also doesn't
+                // raise the event for the option that is already checked.
                 attributes["onclick"] = EventCallback.Factory.Create<MouseEventArgs>(this, HandleRadioClicked);
+                attributes["onkeydown"] = EventCallback.Factory.Create<KeyboardEventArgs>(this, HandleRadioKeyDown);
             }
 
             return attributes;
@@ -52,12 +55,11 @@ public partial class AspireMenuItem
             : OnItemActivated.InvokeAsync(Item);
     }
 
-    private Task HandleRadioClicked(MouseEventArgs args)
-    {
-        // Other radio options are activated by their change event (see HandleItemCheckedChanged). The menu ignores the
-        // click that follows it, since that activation already closed the menu.
-        return Item.Checked ? OnItemActivated.InvokeAsync(Item) : Task.CompletedTask;
-    }
+    private Task HandleRadioClicked(MouseEventArgs args) => OnItemActivated.InvokeAsync(Item);
+
+    // Fluent's menu item handles Enter and Space itself, without raising a click.
+    private Task HandleRadioKeyDown(KeyboardEventArgs args) =>
+        args.Key is "Enter" or " " ? OnItemActivated.InvokeAsync(Item) : Task.CompletedTask;
 
     private Task HandleItemCheckedChanged(bool? isChecked)
     {
@@ -72,7 +74,10 @@ public partial class AspireMenuItem
                 : OnItemToggled.InvokeAsync((Item, newValue));
         }
 
-        return isChecked is true && Item.Role is MenuItemRole.Checkbox or MenuItemRole.Radio
+        // Radio options are chosen by their click or key press (see AdditionalMenuItemAttributes). Their change event
+        // also fires when a re-render checks them, e.g. when the menu reopens with the option chosen last time, which
+        // isn't a choice.
+        return isChecked is true && Item.Role is MenuItemRole.Checkbox
             ? OnItemActivated.InvokeAsync(Item)
             : Task.CompletedTask;
     }
