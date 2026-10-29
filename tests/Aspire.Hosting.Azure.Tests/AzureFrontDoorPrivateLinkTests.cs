@@ -495,8 +495,8 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
 
         var target = Assert.IsAssignableFrom<IAzureCdnPrivateLinkTarget>(environment.Resource);
         Assert.Equal("managedEnvironments", target.PrivateLinkGroupId);
-        Assert.Equal("AZURE_CONTAINER_APPS_ENVIRONMENT_ID", target.Id.Name);
-        Assert.Equal("AZURE_CONTAINER_APPS_ENVIRONMENT_LOCATION", target.Location.Name);
+        Assert.Equal("AZURE_CONTAINER_APPS_ENVIRONMENT_ID", target.GetPrivateLinkResourceId(environment.Resource).Name);
+        Assert.Equal("AZURE_CONTAINER_APPS_ENVIRONMENT_LOCATION", target.GetPrivateLinkLocation(environment.Resource).Name);
     }
 
     private static IResource GetContainerApp(IResource resource)
@@ -526,9 +526,9 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
     private sealed class TestPrivateLinkTarget(string name)
         : AzureProvisioningResource(name, _ => { }), IAzureCdnPrivateLinkTarget
     {
-        public BicepOutputReference Id => new("id", this);
+        public BicepOutputReference GetPrivateLinkResourceId(IResource origin) => new("id", this);
 
-        public BicepOutputReference Location => new("location", this);
+        public BicepOutputReference GetPrivateLinkLocation(IResource origin) => new("location", this);
 
         public string PrivateLinkGroupId => "sites";
 

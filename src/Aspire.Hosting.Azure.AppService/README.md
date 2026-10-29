@@ -47,6 +47,19 @@ When deploying to Azure App Service, the following constraints apply:
 - **HTTP/HTTPS only**: Only HTTP and HTTPS endpoints are supported. Other protocols are not supported.
 - **Single endpoint**: App Service supports only a single target port. Resources with multiple external endpoints with different target ports are not supported. The default target port is 8000, which can be overridden using the `WithHttpEndpoint` extension method.
 
+### Private origins behind Azure Front Door
+
+Add the `Aspire.Hosting.Azure.FrontDoor` integration and connect the App Service environment with
+`environment.WithAzureFrontDoorPrivateLink(frontDoor)`, then add workloads with `frontDoor.WithOrigin(app)`.
+This experimental API disables public network access on all workload websites and uses Front Door Premium with a
+separate managed private endpoint per website. Approve each website's pending private endpoint connection after
+deployment. Existing plans are supported; deployment slots are not.
+
+The separately provisioned Aspire dashboard is unchanged. App-to-app calls require Front Door URLs or private
+networking and DNS; sharing an App Service plan does not bypass the public access restriction.
+See the [Front Door integration README](../Aspire.Hosting.Azure.FrontDoor/README.md#private-link-to-azure-app-service)
+for a complete example and approval commands.
+
 ### Connection string names
 
 Connection resource names remain logical .NET configuration names. For example, a resource named `my-db` is still read as `ConnectionStrings:my-db`. Aspire deploys its value to App Service with the portable physical name `ConnectionStrings__my_db`, because App Service removes hyphens from environment variable names.

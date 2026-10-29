@@ -151,12 +151,80 @@ Find the connection ID with `az network private-endpoint-connection list --type 
 Front Door can create more than one request, so approve each one whose description names the Front Door and the environment.
 Traffic starts flowing a few minutes after approval.
 
+## Private Link to Azure App Service
+
+The same API supports an Azure App Service environment:
+
+**C#**
+
+```csharp
+#pragma warning disable ASPIREAZURE003 // WithAzureFrontDoorPrivateLink is experimental.
+
+var environment = builder.AddAzureAppServiceEnvironment("env");
+var frontDoor = builder.AddAzureFrontDoor("frontdoor");
+environment.WithAzureFrontDoorPrivateLink(frontDoor);
+
+var api = builder.AddProject<Projects.Api>("api")
+    .WithExternalHttpEndpoints();
+var web = builder.AddProject<Projects.Web>("web")
+    .WithExternalHttpEndpoints();
+frontDoor.WithOrigin(api).WithOrigin(web);
+
+#pragma warning restore ASPIREAZURE003
+```
+
+**TypeScript**
+
+```typescript
+const environment = await builder.addAzureAppServiceEnvironment("env");
+const frontDoor = await builder.addAzureFrontDoor("frontdoor");
+await environment.withAzureFrontDoorPrivateLink(frontDoor);
+
+const api = await builder.addProject("api", "../Api/Api.csproj")
+    .withExternalHttpEndpoints();
+const web = await builder.addProject("web", "../Web/Web.csproj")
+    .withExternalHttpEndpoints();
+await frontDoor.withOrigin(api).withOrigin(web);
+```
+
+Add both the App Service and Front Door integrations to the AppHost. Each App Service origin connects to its own website
+(`Microsoft.Web/sites`, group ID `sites`), not to the App Service plan. The Front Door profile uses Premium, and the private
+endpoint region follows the same region mapping described above, using the website's location.
+
+`aspire deploy` deploys the websites before Front Door and resolves their resource IDs and locations automatically.
+`aspire publish` writes website modules separately from `main.bicep`; the latter exposes the required website IDs and
+locations as input parameters. When applying the published assets yourself, deploy the environment and website modules
+first, then supply those website outputs to the Front Door infrastructure.
+
+Public network access is disabled on **all workload websites** in the connected environment, including websites not added
+as Front Door origins. The separately provisioned Aspire dashboard is unchanged; disable it with `WithDashboard(false)`
+if it is not needed. Existing App Service plans are supported, since Aspire still provisions the websites.
+[Front Door Private Link does not support App Service deployment slots](https://learn.microsoft.com/azure/frontdoor/standard-premium/how-to-enable-private-link-web-app),
+so combining it with `WithDeploymentSlot` fails at publish time.
+
+After `aspire deploy`, approve the pending connection on **each website**, not on the plan:
+
+```bash
+az network private-endpoint-connection list --type Microsoft.Web/sites --name <website-name> --resource-group <resource-group>
+az network private-endpoint-connection approve --id <private-endpoint-connection-id>
+```
+
+Approve every request whose description names this Front Door and environment. Allow a few minutes for Front Door to
+propagate the approval. Direct requests to the website's `*.azurewebsites.net` URL are denied; use its Front Door URL.
+
+Unlike Container Apps, App Service does not provide environment-local ingress between apps. `WithReference` continues
+to use the website hostname, which is not publicly accessible in this configuration. Service-to-service callers must use
+the Front Door URLs (available through `frontDoor.Resource.GetEndpointUrl("api")`) or configure their own private
+networking and DNS. Passing a Front Door output back into one of its origins creates a deployment dependency cycle;
+configure such URLs separately after deployment.
+
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
 * https://aspire.dev/integrations/cloud/azure/azure-front-door/
 * https://learn.microsoft.com/azure/frontdoor/
 * https://learn.microsoft.com/azure/container-apps/how-to-integrate-with-azure-front-door
+* https://learn.microsoft.com/azure/frontdoor/standard-premium/how-to-enable-private-link-web-app
 
 ## Feedback & contributing
 

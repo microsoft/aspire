@@ -10,13 +10,13 @@ using Aspire.Hosting.Azure;
 namespace Aspire.Hosting;
 
 /// <summary>
-/// Extension methods for reaching a compute environment, such as Azure Container Apps, through Azure Front Door Private Link.
+/// Extension methods for reaching Azure Container Apps or Azure App Service through Azure Front Door Private Link.
 /// </summary>
 public static class AzureFrontDoorPrivateLinkExtensions
 {
     /// <summary>
     /// Connects an Azure Front Door to a compute environment, such as an Azure Container Apps environment, over Private
-    /// Link and disables public network access to the environment, so that the apps in the environment are reachable only
+    /// Link and disables public network access to its apps, so that the apps in the environment are reachable only
     /// through the Front Door.
     /// </summary>
     /// <typeparam name="T">The type of the compute environment, which implements <see cref="IAzureCdnPrivateLinkTarget"/>.</typeparam>
@@ -47,8 +47,17 @@ public static class AzureFrontDoorPrivateLinkExtensions
     /// environment.
     /// </para>
     /// <para>
+    /// For Azure App Service, each origin targets its own website with the <c>sites</c> group ID, not the App Service plan.
+    /// Public network access is disabled on all workload websites in the connected environment, including websites that
+    /// are not Front Door origins. The separately provisioned Aspire dashboard is unchanged. Existing App Service plans
+    /// are supported because Aspire still provisions the websites. Deployment slots are not supported by Front Door
+    /// Private Link. Unlike Container Apps, App Service does not provide an environment-local ingress route between apps:
+    /// service-to-service callers must use Front Door URLs or configure their own private network access and DNS.
+    /// </para>
+    /// <para>
     /// Front Door creates a connection request in the Pending state, and no traffic reaches the apps until the owner of
-    /// the environment approves it. Approve it in the Azure portal, under the environment's networking settings, or with
+    /// the target approves it. Approve it in the Azure portal, under the Container Apps environment's or each App Service
+    /// website's networking settings, or with
     /// the Azure CLI by finding the request with <c>az network private-endpoint-connection list</c> and approving it with
     /// <c>az network private-endpoint-connection approve</c>. Front Door can create more than one request; approve each
     /// one that has the message of this connection. Traffic starts flowing a few minutes after approval.
@@ -76,7 +85,10 @@ public static class AzureFrontDoorPrivateLinkExtensions
     /// </para>
     /// <para>
     /// Public network access to the environment is disabled, so the apps are reachable only through the Front Door. The
-    /// environment must be a workload profiles environment that Aspire provisions.
+    /// Container Apps environment must be a workload profiles environment that Aspire provisions. For App Service,
+    /// each origin targets its own website, all workload websites have public access disabled, and deployment slots
+    /// are not supported. The separately provisioned dashboard is unchanged. App Service callers must use Front Door
+    /// URLs or their own private networking for service-to-service traffic.
     /// </para>
     /// <para>
     /// Front Door creates a connection request in the Pending state, and no traffic reaches the apps until the owner of
@@ -85,7 +97,7 @@ public static class AzureFrontDoorPrivateLinkExtensions
     /// </ats-remarks>
     /// <exception cref="ArgumentNullException"><paramref name="environment"/> or <paramref name="frontDoor"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
-    /// Publishing fails when the environment is marked as existing or is an Express environment, when
+    /// Publishing fails for existing or Express Container Apps environments or App Service deployment slots, when
     /// <paramref name="frontDoor"/> has no origin in the environment, and when another Front Door has an origin in the
     /// environment without being connected to it.
     /// </exception>
@@ -104,6 +116,7 @@ public static class AzureFrontDoorPrivateLinkExtensions
     /// </code>
     /// </example>
     /// <seealso href="https://learn.microsoft.com/azure/container-apps/how-to-integrate-with-azure-front-door">Access a container app using Azure Front Door with Private Link</seealso>
+    /// <seealso href="https://learn.microsoft.com/azure/frontdoor/standard-premium/how-to-enable-private-link-web-app">Connect Azure Front Door to an App Service origin using Private Link</seealso>
     [AspireExport("withFrontDoorAzureFrontDoorPrivateLink", MethodName = "withAzureFrontDoorPrivateLink")]
     [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public static IResourceBuilder<T> WithAzureFrontDoorPrivateLink<T>(
