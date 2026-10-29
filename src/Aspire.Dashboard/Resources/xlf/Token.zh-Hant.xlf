@@ -9,17 +9,17 @@
       </trans-unit>
       <trans-unit id="HelpPopupText">
         <source>Look for the token in the console output:</source>
-        <target state="translated">在主控台輸出中尋找權杖：</target>
+        <target state="translated">在主控台輸出中尋找 Token：</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpScreenshotAltText">
         <source>Screenshot of console output showing where to find the dashboard frontend token</source>
-        <target state="translated">主控台輸出的螢幕擷取畫面，顯示儀表板前端權杖的位置</target>
+        <target state="translated">主控台輸出的螢幕擷取畫面，顯示儀表板前端 Token 的位置</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidTokenErrorMessage">
         <source>Invalid token. Please try again</source>
-        <target state="translated">無效的權杖。請再試一次</target>
+        <target state="translated">無效的 Token。請再試一次</target>
         <note />
       </trans-unit>
       <trans-unit id="LogInButtonText">
@@ -39,22 +39,22 @@
       </trans-unit>
       <trans-unit id="TextFieldPlaceholder">
         <source>Enter token to log in...</source>
-        <target state="translated">輸入權杖以登入...</target>
+        <target state="translated">輸入 Token 以登入...</target>
         <note />
       </trans-unit>
       <trans-unit id="TokenRequiredErrorMessage">
         <source>Token is required</source>
-        <target state="translated">需要權杖</target>
+        <target state="translated">需要 Token</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedValidationError">
         <source>Unexpected error when validating the token</source>
-        <target state="translated">驗證權杖時發生未預期的錯誤</target>
+        <target state="translated">驗證 Token 時發生未預期的錯誤</target>
         <note />
       </trans-unit>
       <trans-unit id="WhereIsMyTokenLinkText">
         <source>Where do I find the token?</source>
-        <target state="translated">我可以在哪裡可以找到權杖？</target>
+        <target state="translated">哪裡可以找到 Token?</target>
         <note />
       </trans-unit>
     </body>

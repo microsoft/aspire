@@ -188,6 +188,16 @@ the service principal, application, and resource group even when deployment fail
 are available. Deleting the resource group alone does not clean up Entra registrations. Directory
 deletion is a normal Graph soft delete, not a permanent purge.
 
+`AzureEntraIdStarterDeploymentTests.DeployStarterWithEntraApiAndWebRegistrations` runs as its own
+class so it can run in parallel with the scenario above. It deploys the Aspire starter application
+with Entra added: an API registration that exposes a delegated scope, and a web front end registration
+that declares permission to that scope and authenticates with a federated managed identity credential.
+It doesn't grant admin consent or pre-authorize the web app, so it doesn't cover consent. The sign-in
+flow can't be automated, so it verifies the registrations and the declared permission between them in
+Graph, the federated credential, and the `AzureAd` and downstream API settings of both deployed container
+apps, and the running web app reports those settings. Both classes share the harness and Graph/ARM
+helpers in `Helpers/EntraDeploymentHelpers.cs`.
+
 ### Polyglot provisioning SDK scenarios
 
 These TypeScript deployment scenarios exercise opt-in `Aspire.Hosting.Azure.Provisioning.*`

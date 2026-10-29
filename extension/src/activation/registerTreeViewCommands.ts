@@ -18,6 +18,7 @@ const treeElementCommands: ReadonlyArray<readonly [commandId: string, invoke: Tr
   ['aspire-vscode.stopResource', (p, e) => p.stopResource(e)],
   ['aspire-vscode.startResource', (p, e) => p.startResource(e)],
   ['aspire-vscode.restartResource', (p, e) => p.restartResource(e)],
+  ['aspire-vscode.attachDebuggerToResource', (p, e) => p.attachDebuggerToResource(e)],
   ['aspire-vscode.viewResourceLogs', (p, e) => p.viewResourceLogs(e)],
   ['aspire-vscode.openResourceTerminal', (p, e) => p.openResourceTerminal(e)],
   ['aspire-vscode.executeResourceCommand', (p, e) => p.executeResourceCommand(e)],

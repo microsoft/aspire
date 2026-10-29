@@ -1,10 +1,10 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Projet de test Aspire (NUnit)",
   "description": "Projet qui contient les tests d’intégration NUnit d’un projet Aspire AppHost.",
   "symbols/Framework/description": "Framework cible du projet.",
   "symbols/Framework/choices/net10.0/description": "Net10.0 cible",
-  "symbols/Framework/choices/net11.0/description": "Target net11.0",
+  "symbols/Framework/choices/net11.0/description": "Net11.0 cible",
   "symbols/skipRestore/description": "S’il est spécifié, ignore la restauration automatique du projet lors de la création.",
   "postActions/restore/description": "Restaurez les packages NuGet requis par ce projet.",
   "postActions/restore/manualInstructions/default/text": "Exécutez 'dotnet restore'"

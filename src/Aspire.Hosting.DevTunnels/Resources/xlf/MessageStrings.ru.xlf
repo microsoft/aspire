@@ -19,17 +19,17 @@
       </trans-unit>
       <trans-unit id="DevTunnelHostDisconnected">
         <source>The local host for dev tunnel '{0}' is disconnected.</source>
-        <target state="new">The local host for dev tunnel '{0}' is disconnected.</target>
+        <target state="translated">Локальный узел туннеля разработки '{0}' отключен.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevTunnelHostHealthy">
         <source>Dev tunnel '{0}' is connected and hosting all expected ports.</source>
-        <target state="new">Dev tunnel '{0}' is connected and hosting all expected ports.</target>
+        <target state="translated">Туннель разработчика "{0}" подключен и размещает все ожидаемые порты.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevTunnelHostNotReady">
         <source>Waiting for dev tunnel '{0}' to connect and expose its ports.</source>
-        <target state="new">Waiting for dev tunnel '{0}' to connect and expose its ports.</target>
+        <target state="translated">Ожидание подключения туннеля разработчика "{0}" и его портов.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevTunnelPortHealthy">
@@ -79,47 +79,47 @@
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandClose">
         <source>Close</source>
-        <target state="new">Close</target>
+        <target state="translated">Закрыть</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandDescription">
         <source>Opens available public, inspect, and local URLs for the dev tunnel port.</source>
-        <target state="new">Opens available public, inspect, and local URLs for the dev tunnel port.</target>
+        <target state="translated">Открывает доступные общедоступные, инспекционные и локальные URL-адреса для порта туннеля разработки.</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandDisplayName">
         <source>Show tunnel URLs</source>
-        <target state="new">Show tunnel URLs</target>
+        <target state="translated">Показать URL-адреса туннеля</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandInspectUrlLabel">
         <source>Inspect URL</source>
-        <target state="new">Inspect URL</target>
+        <target state="translated">Проверка URL-адреса</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandInteractionUnavailable">
         <source>Dev tunnel URLs can only be shown in an interactive environment.</source>
-        <target state="new">Dev tunnel URLs can only be shown in an interactive environment.</target>
+        <target state="translated">URL-адреса туннеля разработчика могут быть показаны только в интерактивной среде.</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandLocalEndpointUrlLabel">
         <source>Local endpoint URL</source>
-        <target state="new">Local endpoint URL</target>
+        <target state="translated">Локальный URL-адрес конечной точки</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandResultHeading">
         <source>Dev tunnel URLs</source>
-        <target state="new">Dev tunnel URLs</target>
+        <target state="translated">URL-адреса туннеля разработчика</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandTunnelUrlLabel">
         <source>Tunnel URL</source>
-        <target state="new">Tunnel URL</target>
+        <target state="translated">URL-адрес туннеля</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandUnavailable">
         <source>Dev tunnel URLs are not available yet.</source>
-        <target state="new">Dev tunnel URLs are not available yet.</target>
+        <target state="translated">URL-адреса туннеля разработчика пока недоступны.</target>
         <note />
       </trans-unit>
     </body>

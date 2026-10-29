@@ -98,6 +98,21 @@ public sealed class TestTriggerMapTests
         Assert.Equal(["Aspire.Templates.Tests"], result.TestProjects);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void GoHostingChangesSelectExtensionE2e(bool hasAffectedProject)
+    {
+        const string path = "src/Aspire.Hosting.Go/GoHostingExtensions.cs";
+        var result = hasAffectedProject
+            ? SelectWithRealMap(path, "Aspire.Hosting.Go")
+            : SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("job:extension-e2e", result.Jobs);
+    }
+
     // Repo-relative '/'-separated project paths listed in Aspire.slnx (the Layer 1 graph root).
     private static IReadOnlySet<string> LoadSolutionProjectPaths()
     {
@@ -857,6 +872,20 @@ public sealed class TestTriggerMapTests
         Assert.Equal(
             ["job:deployment-e2e", "job:homebrew-installer", "job:winget-installer"],
             result.Jobs.Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs")]
+    public void GoModTemplatesSelectCliMinimumGoVersionGuard(string path)
+    {
+        var result = SelectWithRealMap(path, "Aspire.Hosting.CodeGeneration.Go");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
     }
 
     [Fact]

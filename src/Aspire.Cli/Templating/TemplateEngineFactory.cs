@@ -29,13 +29,16 @@ internal sealed partial class TemplateEngineFactory(
     IInteractionService interactionService,
     INewCommandPrompter prompter,
     ICliHostEnvironment hostEnvironment,
-    IGitRunner gitRunner,
+    IGitClient git,
+    TimeProvider timeProvider,
     IPackagingService packagingService,
     TemplateNuGetConfigService templateNuGetConfigService,
     INuGetClient nuGetClient,
     ILogger<TemplateEngineFactory> logger) : ITemplateFactory, IDisposable
 {
+    private static readonly TimeSpan s_gitOperationTimeout = TimeSpan.FromMinutes(2);
     private readonly List<IDisposable> _resources = [];
+    private readonly Dictionary<string, ITemplate[]> _discoveredTemplates = new(StringComparer.Ordinal);
     private bool _disposed;
 
     public IEnumerable<ITemplate> GetTemplates() => [];
@@ -55,6 +58,34 @@ internal sealed partial class TemplateEngineFactory(
         var fullPath = source.Repository is null
             ? Path.GetFullPath(source.Path, executionContext.WorkingDirectory.FullName)
             : await GetRepositoryTemplateAsync(source.Repository, source.Path, source.RepositoryRef, cancellationToken);
+        if (_discoveredTemplates.TryGetValue(fullPath, out var cached))
+        {
+            return cached;
+        }
+
+        // Reuse engine sessions for unchanged directories and immutable Git checkouts.
+        // A ref can advance between searches; previously returned callbacks remain pinned.
+        var resourceCount = _resources.Count;
+        try
+        {
+            var templates = await DiscoverTemplatesAsync(fullPath, cancellationToken);
+            _discoveredTemplates.Add(fullPath, templates);
+            return templates;
+        }
+        catch
+        {
+            // Failed or cancelled installations have no callbacks that need their mounts.
+            for (var index = _resources.Count - 1; index >= resourceCount; index--)
+            {
+                _resources[index].Dispose();
+                _resources.RemoveAt(index);
+            }
+            throw;
+        }
+    }
+
+    private async Task<ITemplate[]> DiscoverTemplatesAsync(string fullPath, CancellationToken cancellationToken)
+    {
         if (!Directory.Exists(fullPath))
         {
             throw new TemplateDiscoveryException(CliExitCodes.InvalidCommand,
@@ -90,7 +121,10 @@ internal sealed partial class TemplateEngineFactory(
                 template.Name,
                 (context, name) => OutputPathHelper.GetUniqueDefaultOutputPath(name, context.WorkingDirectory.FullName),
                 _ => { },
-                (_, templateInputs, result, token) => ApplyAsync(settings, creator, template, templateInputs, result, token)))
+                (_, templateInputs, result, token) => ApplyAsync(settings, creator, template, templateInputs, result, token))
+            {
+                SearchDescription = template.Description
+            })
             .ToArray();
         cancellationToken.ThrowIfCancellationRequested();
         if (templates.Length == 0)
@@ -108,17 +142,13 @@ internal sealed partial class TemplateEngineFactory(
     {
         var cacheRoot = Path.Combine(executionContext.CacheDirectory.FullName, "git");
         var pathRoot = Path.Combine(cacheRoot, "repository");
-        var relativePath = Path.GetRelativePath(pathRoot, Path.GetFullPath(templatePath, pathRoot));
-        if (Path.IsPathRooted(templatePath) || relativePath == ".." ||
-            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-        {
-            throw new TemplateDiscoveryException(CliExitCodes.InvalidCommand, NewCommandStrings.TemplateRepositoryPathInvalid);
-        }
+        var relativePath = TemplateSource.GetRepositoryRelativePath(templatePath, pathRoot);
 
         try
         {
             var sha = await interactionService.ShowStatusAsync(NewCommandStrings.ResolvingTemplateRepository,
-                () => gitRunner.ResolveReferenceAsync(repository, reference, cancellationToken));
+                () => WithGitTimeoutAsync(
+                    token => git.ResolveReferenceAsync(repository, reference, executionContext.WorkingDirectory, GitCommandMode.Captured, token), cancellationToken));
             cancellationToken.ThrowIfCancellationRequested();
             // Different paths and refs at the same commit share the complete repository snapshot.
             // NUL separates the repository address and SHA without ambiguous delimiters.
@@ -135,7 +165,7 @@ internal sealed partial class TemplateEngineFactory(
             var repositoryRoot = new DirectoryInfo(Path.Combine(checkout.FullName, "repository"));
             await interactionService.ShowStatusAsync(NewCommandStrings.CloningTemplateRepository, async () =>
             {
-                await gitRunner.CloneAsync(repository, repositoryRoot, sha, cancellationToken);
+                await CheckoutRepositoryAsync(repository, repositoryRoot, sha, cancellationToken);
                 return true;
             });
             cancellationToken.ThrowIfCancellationRequested();
@@ -168,6 +198,54 @@ internal sealed partial class TemplateEngineFactory(
                 ? string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateRepositoryGitExited, exitCode, ex.Message)
                 : ex.Message;
             throw new TemplateDiscoveryException(CliExitCodes.FailedToInstallTemplates, message);
+        }
+    }
+
+    private Task CheckoutRepositoryAsync(string repository, DirectoryInfo destination, string commitSha, CancellationToken cancellationToken) =>
+        WithGitTimeoutAsync(async token =>
+        {
+            if (!GitClient.IsCommitSha(commitSha))
+            {
+                throw new ArgumentException("A full commit SHA is required.", nameof(commitSha));
+            }
+            if (!Path.IsPathRooted(repository) && !repository.Contains(':'))
+            {
+                var localPath = Path.GetFullPath(repository, executionContext.WorkingDirectory.FullName);
+                if (Directory.Exists(localPath))
+                {
+                    repository = localPath;
+                }
+            }
+
+            // Fetch the resolved SHA rather than a movable ref. Depth-one fetches also avoid
+            // local clone hard links, so cleanup cannot change source object attributes.
+            // https://git-scm.com/docs/git-fetch
+            var location = new GitRepositoryLocation(destination, IsBare: false);
+            await git.InitializeAsync(executionContext.WorkingDirectory, location,
+                commitSha.Length == 64 ? "sha256" : "sha1", GitCommandMode.Captured, token);
+            await git.FetchAsync(location, repository, commitSha, GitCommandMode.Captured, token);
+            await git.CheckoutAsync(location, GitCommandMode.Captured, token);
+            var actualSha = await git.GetCommitAsync(location, "HEAD", GitCommandMode.Captured, token);
+            if (!string.Equals(actualSha, commitSha, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new GitReferenceException(commitSha);
+            }
+
+            return true;
+        }, cancellationToken);
+
+    private async Task<T> WithGitTimeoutAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var deadline = new CancellationTokenSource(s_gitOperationTimeout, timeProvider);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        try
+        {
+            return await operation(linked.Token);
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new GitCommandException(GitFailure.TimedOut, null);
         }
     }
 
@@ -253,6 +331,7 @@ internal sealed partial class TemplateEngineFactory(
         }
 
         _resources.Clear();
+        _discoveredTemplates.Clear();
     }
 
     private async Task<TemplateResult> ApplyAsync(IEngineEnvironmentSettings settings, TemplateCreator creator, ITemplateInfo template, TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
+using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -40,8 +41,17 @@ app.MapGet("/", (HttpContext context, IAntiforgery antiforgery) =>
     }
 
     var antiforgeryTokens = antiforgery.GetAndStoreTokens(context);
+    // Microsoft.Identity.Web maps the ID token's roles claim to the role claim type, so check both spellings.
+    var roles = context.User.Claims
+        .Where(claim => claim.Type is "roles" or ClaimTypes.Role)
+        .Select(claim => claim.Value)
+        .ToArray();
+    var rolesText = roles.Length > 0
+        ? string.Join(", ", roles.Select(WebUtility.HtmlEncode))
+        : "none. Assign a role to this user in the Entra admin center, then sign in again.";
     return Page("Entra ID playground", $"""
         <p>Signed in as <strong>{WebUtility.HtmlEncode(identity.Name)}</strong>.</p>
+        <p>Roles: {rolesText}</p>
         <form method="post" action="/signout">
             <input type="hidden" name="{antiforgeryTokens.FormFieldName}" value="{antiforgeryTokens.RequestToken}">
             <button type="submit">Sign out</button>

@@ -45,6 +45,7 @@ internal sealed class TestInteractionService : IInteractionService
 
     // Call tracking
     public List<StringPromptCall> StringPromptCalls { get; } = [];
+    public List<bool> StringPromptLogResponses { get; } = [];
     public List<FilePathPromptCall> FilePathPromptCalls { get; } = [];
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
     public List<(string PromptText, string? DefaultValue, IReadOnlyList<object> PreSelected, bool Optional)> MultiSelectionPromptCalls { get; } = [];
@@ -115,7 +116,7 @@ internal sealed class TestInteractionService : IInteractionService
         action();
     }
 
-    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, bool logResponse = true, CancellationToken cancellationToken = default)
     {
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
@@ -124,6 +125,7 @@ internal sealed class TestInteractionService : IInteractionService
         }
 
         StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret, required));
+        StringPromptLogResponses.Add(logResponse);
 
         return PromptForResponseAsync(validator, binding, cancellationToken);
     }
@@ -209,6 +211,14 @@ internal sealed class TestInteractionService : IInteractionService
 
     public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
     {
+        var (wasProvided, value, _) = PromptBinding.Resolve(binding);
+        if (wasProvided && value is not null)
+        {
+            var matched = ConsoleInteractionService.MatchChoices(value, (bindingChoices ?? choices).ToArray(), choiceFormatter)
+                ?? throw new InvalidOperationException($"Invalid selection '{value}' for {promptText}");
+            return Task.FromResult(matched);
+        }
+
         lock (_displayLock)
         {
             MultiSelectionPromptCalls.Add((promptText, binding?.DefaultValue, preSelected?.Cast<object>().ToArray() ?? [], optional));

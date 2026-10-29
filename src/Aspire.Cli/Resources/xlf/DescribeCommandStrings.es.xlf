@@ -1,15 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="es" original="../DescribeCommandStrings.resx">
     <body>
       <trans-unit id="Description">
         <source>Describe resources in a running AppHost</source>
-        <target state="needs-review-translation">Muestra instantáneas de recursos de un apphost de Aspire en ejecución.</target>
+        <target state="translated">Describir los recursos de un AppHost en ejecución</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Continuously stream resource state changes</source>
-        <target state="new">Continuously stream resource state changes</target>
+        <target state="translated">Transmita continuamente los cambios de estado de los recursos</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderHealth">
@@ -34,32 +34,32 @@
       </trans-unit>
       <trans-unit id="HeaderURLs">
         <source>URLs</source>
-        <target state="new">URLs</target>
+        <target state="translated">Direcciones URL</target>
         <note />
       </trans-unit>
       <trans-unit id="IncludeHiddenOptionDescription">
         <source>Include hidden resources in the output</source>
-        <target state="new">Include hidden resources in the output</target>
+        <target state="translated">Incluir recursos ocultos en la salida</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table, Json, or Mermaid)</source>
-        <target state="needs-review-translation">Salida en formato JSON para el consumo de la máquina.</target>
+        <target state="translated">Formato de salida (tabla, JSON o Mermaid)</target>
         <note />
       </trans-unit>
       <trans-unit id="MermaidFollowNotSupported">
         <source>The Mermaid output format does not support --follow. Omit --follow to export a resource graph snapshot.</source>
-        <target state="new">The Mermaid output format does not support --follow. Omit --follow to export a resource graph snapshot.</target>
+        <target state="translated">El formato de salida de Mermaid no admite --follow. Omite --follow para exportar una instantánea de Resource Graph.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFound">
         <source>No AppHost project found.</source>
-        <target state="needs-review-translation">No se encontró ningún proyecto de AppHost.</target>
+        <target state="translated">No se encontró ningún proyecto de AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to display. If not specified, all resources are shown.</source>
-        <target state="needs-review-translation">Nombre del recurso que se va a mostrar. Si no se especifica, se muestran todos los recursos.</target>
+        <target state="translated">Nombre del recurso que se va a mostrar. Si no se especifica, se muestran todos los recursos.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">

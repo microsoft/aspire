@@ -4,77 +4,77 @@
     <body>
       <trans-unit id="BrowserLogsAmbiguousProfile">
         <source>Browser profile '{0}' matched multiple Chromium profiles under '{1}'. Specify the profile directory name instead.</source>
-        <target state="new">Browser profile '{0}' matched multiple Chromium profiles under '{1}'. Specify the profile directory name instead.</target>
+        <target state="translated">浏览器配置文件“{0}”与“{1}”下的多个 Chromium 配置文件匹配。请改为指定配置文件目录名称。</target>
         <note>{0} is the requested browser profile, {1} is the browser user data directory path</note>
       </trans-unit>
       <trans-unit id="BrowserLogsAppHostPathShaNotAvailable">
         <source>Cannot resolve the isolated browser user data directory because the AppHost path identifier is not available. Use '{0}' user data mode or run from a configured AppHost.</source>
-        <target state="new">Cannot resolve the isolated browser user data directory because the AppHost path identifier is not available. Use '{0}' user data mode or run from a configured AppHost.</target>
+        <target state="translated">无法解析独立浏览器用户数据目录，因为 AppHost 路径标识符不可用。使用 '{0}' 用户数据模式或从配置的 AppHost 运行。</target>
         <note>{0} is the user data mode that does not require an AppHost path identifier</note>
       </trans-unit>
       <trans-unit id="BrowserLogsDefaultProfileName">
         <source>(default)</source>
-        <target state="new">(default)</target>
+        <target state="translated">(默认)</target>
         <note />
       </trans-unit>
       <trans-unit id="BrowserLogsEmptyBrowserConfiguration">
         <source>Tracked browser configuration resolved an empty browser value.</source>
-        <target state="new">Tracked browser configuration resolved an empty browser value.</target>
+        <target state="translated">跟踪的浏览器配置解析了一个空的浏览器值。</target>
         <note />
       </trans-unit>
       <trans-unit id="BrowserLogsEmptyProfileConfiguration">
         <source>Tracked browser configuration resolved an empty profile value.</source>
-        <target state="new">Tracked browser configuration resolved an empty profile value.</target>
+        <target state="translated">跟踪的浏览器配置解析了一个空的配置文件值。</target>
         <note />
       </trans-unit>
       <trans-unit id="BrowserLogsEndpointNotAllocated">
         <source>Endpoint '{0}' for resource '{1}' has not been allocated yet.</source>
-        <target state="new">Endpoint '{0}' for resource '{1}' has not been allocated yet.</target>
+        <target state="translated">尚未分配资源“{1}”的终结点“{0}”。</target>
         <note>{0} is the endpoint name, {1} is the Aspire resource name</note>
       </trans-unit>
       <trans-unit id="BrowserLogsInvalidProfileMetadata">
         <source>Chromium profile metadata in '{0}' is invalid while resolving browser profile '{1}'.</source>
-        <target state="new">Chromium profile metadata in '{0}' is invalid while resolving browser profile '{1}'.</target>
+        <target state="translated">解析浏览器配置文件“{1}”时，“{0}”中的 Chromium 配置文件元数据无效。</target>
         <note>{0} is the Chromium Local State file path, {1} is the requested browser profile</note>
       </trans-unit>
       <trans-unit id="BrowserLogsInvalidUserDataModeConfiguration">
         <source>Tracked browser configuration value '{0}' is not a valid '{1}'. Expected '{2}' or '{3}'.</source>
-        <target state="new">Tracked browser configuration value '{0}' is not a valid '{1}'. Expected '{2}' or '{3}'.</target>
+        <target state="translated">跟踪的浏览器配置值“{0}”不是有效的“{1}”。应为“{2}”或“{3}”。</target>
         <note>{0} is the configured user data mode value, {1} is the user data mode configuration key, {2} and {3} are valid user data mode values</note>
       </trans-unit>
       <trans-unit id="BrowserLogsProfileNotFound">
         <source>Browser profile '{0}' was not found under '{1}'. Specify the profile directory name (for example 'Default' or 'Profile 1') or a browser profile name from Chromium's profile metadata.</source>
-        <target state="new">Browser profile '{0}' was not found under '{1}'. Specify the profile directory name (for example 'Default' or 'Profile 1') or a browser profile name from Chromium's profile metadata.</target>
+        <target state="translated">在“{1}”下找不到浏览器配置文件“{0}”。指定配置文件目录名称(例如“默认”或“配置文件 1”)或从 Chromium 的配置文件元数据指定浏览器配置文件名称。</target>
         <note>{0} is the requested browser profile, {1} is the browser user data directory path</note>
       </trans-unit>
       <trans-unit id="BrowserLogsProfileRequiresSharedUserDataMode">
         <source>Tracked browser configuration set '{0}' to '{1}' while '{2}' is '{3}'. Profiles can only be selected when '{2}' is '{4}'.</source>
-        <target state="new">Tracked browser configuration set '{0}' to '{1}' while '{2}' is '{3}'. Profiles can only be selected when '{2}' is '{4}'.</target>
+        <target state="translated">当“{2}”为“{3}”时，跟踪的浏览器配置已将“{0}”设置为“{1}”。只能在“{2}”为“{4}”时选择配置文件。</target>
         <note>{0} is the profile configuration key, {1} is the configured profile value, {2} is the user data mode configuration key, {3} is the configured user data mode, {4} is the required user data mode</note>
       </trans-unit>
       <trans-unit id="BrowserLogsResourceMissingHttpEndpoint">
         <source>Resource '{0}' does not have an HTTP or HTTPS endpoint. Browser logs require an endpoint to navigate to.</source>
-        <target state="new">Resource '{0}' does not have an HTTP or HTTPS endpoint. Browser logs require an endpoint to navigate to.</target>
+        <target state="translated">资源 '{0}' 没有 HTTP 或 HTTPS 终结点。浏览器日志需要要导航到的终结点。</target>
         <note>{0} is the Aspire resource name</note>
       </trans-unit>
       <trans-unit id="BrowserLogsTrackedBrowserProfileConflict">
         <source>A tracked browser is already running for user data directory '{0}' with profile '{1}'. The requested profile is '{2}'. Close the existing tracked browser session or use isolated user data mode.</source>
-        <target state="new">A tracked browser is already running for user data directory '{0}' with profile '{1}'. The requested profile is '{2}'. Close the existing tracked browser session or use isolated user data mode.</target>
+        <target state="translated">跟踪的浏览器已针对配置文件为 '{1}' 的用户数据目录 '{0}' 运行。请求的配置文件 '{2}'。关闭现有跟踪的浏览器会话或使用隔离用户数据模式。</target>
         <note>{0} is the browser user data directory path, {1} is the profile used by the running browser, {2} is the requested profile</note>
       </trans-unit>
       <trans-unit id="BrowserLogsUnableToLocateBrowser">
         <source>Unable to locate browser '{0}'. Specify an installed Chromium-based browser or an explicit executable path.</source>
-        <target state="new">Unable to locate browser '{0}'. Specify an installed Chromium-based browser or an explicit executable path.</target>
+        <target state="translated">找不到浏览器 '{0}'。指定已安装的基于 Chromium 的浏览器或显式可执行路径。</target>
         <note>{0} is the configured browser name or executable path</note>
       </trans-unit>
       <trans-unit id="BrowserLogsUnableToReadProfileMetadata">
         <source>Unable to read Chromium profile metadata from '{0}' while resolving browser profile '{1}'.</source>
-        <target state="new">Unable to read Chromium profile metadata from '{0}' while resolving browser profile '{1}'.</target>
+        <target state="translated">解析浏览器配置文件“{1}”时，无法从“{0}”读取 Chromium 配置文件元数据。</target>
         <note>{0} is the Chromium Local State file path, {1} is the requested browser profile</note>
       </trans-unit>
       <trans-unit id="BrowserLogsUserDataDirectoryNotFound">
         <source>Browser user data directory '{0}' was not found.</source>
-        <target state="new">Browser user data directory '{0}' was not found.</target>
+        <target state="translated">找不到浏览器用户数据目录“{0}”。</target>
         <note>{0} is the browser user data directory path</note>
       </trans-unit>
     </body>

@@ -4,112 +4,112 @@
     <body>
       <trans-unit id="ApiKeyOptionDescription">
         <source>API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</source>
-        <target state="new">API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</target>
+        <target state="translated">API-Schlüssel für die Authentifizierung beim Dashboard (optional, für Dashboards mit API-Schlüsselauthentifizierung)</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfiguredDashboardDisplayValue">
         <source>the configured dashboard</source>
-        <target state="new">the configured dashboard</target>
+        <target state="translated">das konfigurierte Dashboard</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardApiNotEnabled">
         <source>Could not fetch telemetry data from the dashboard. The dashboard at '{0}' does not have the telemetry API enabled.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. The dashboard at '{0}' does not have the telemetry API enabled.</target>
+        <target state="translated">Telemetriedaten konnten nicht aus dem Dashboard abgerufen werden. Für den Dashboard in '{0}' ist die Telemetrie-API nicht aktiviert.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardApiNotEnabledHint">
         <source>Start the dashboard with 'aspire dashboard run' or set Dashboard:Api:Enabled to true.</source>
-        <target state="new">Start the dashboard with 'aspire dashboard run' or set Dashboard:Api:Enabled to true.</target>
+        <target state="translated">Starten Sie das Dashboard mit „aspire dashboard run“ oder setzen Sie Dashboard:Api:Enabled auf TRUE.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardAuthFailed">
         <source>Could not fetch telemetry data from the dashboard. Authentication failed.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. Authentication failed.</target>
+        <target state="translated">Telemetriedaten konnten nicht vom Dashboard abgerufen werden. Bei der Authentifizierung ist ein Fehler aufgetreten.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardAuthFailedAnonymousHint">
         <source>Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</source>
-        <target state="new">Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</target>
+        <target state="translated">Alternativ können Sie den anonymen Zugriff mit „aspire dashboard run --allow-anonymous“ erlauben oder die Umgebungsvariable ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS auf TRUE setzen.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardAuthFailedHint">
         <source>Authenticate with the dashboard either with a --dashboard-url including a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or with an --api-key matching the dashboard's configured API key.</source>
-        <target state="new">Authenticate with the dashboard either with a --dashboard-url including a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or with an --api-key matching the dashboard's configured API key.</target>
+        <target state="translated">Authentifizieren Sie sich beim Dashboard entweder mit einer --dashboard-url, die ein gültiges Anmeldetoken enthält (z. B. http://localhost:18888/login?t=TOKEN), oder mit einem --api-key, der dem für das Dashboard konfigurierten API-Schlüssel entspricht.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardConnectionFailed">
         <source>Could not fetch telemetry data from the dashboard. Unable to connect to '{0}'.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. Unable to connect to '{0}'.</target>
+        <target state="translated">Telemetriedaten konnten nicht aus dem Dashboard abgerufen werden. Es kann keine Verbindung mit '{0}' hergestellt werden.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardConnectionFailedHint">
         <source>Verify the dashboard is running and the URL is correct.</source>
-        <target state="new">Verify the dashboard is running and the URL is correct.</target>
+        <target state="translated">Überprüfen Sie, ob das Dashboard ausgeführt wird und die URL korrekt ist.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardConnectionLost">
         <source>The connection to the dashboard was lost.</source>
-        <target state="new">The connection to the dashboard was lost.</target>
+        <target state="translated">Die Verbindung mit dem Dashboard wurde unterbrochen.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardLoginTokenFailed">
         <source>Could not fetch telemetry data from the dashboard. The login token in the URL is invalid or expired.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. The login token in the URL is invalid or expired.</target>
+        <target state="translated">Telemetriedaten konnten nicht aus dem Dashboard abgerufen werden. Das Anmeldetoken in der URL ist ungültig oder abgelaufen.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardLoginTokenFailedAnonymousHint">
         <source>Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</source>
-        <target state="new">Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</target>
+        <target state="translated">Alternativ können Sie den anonymen Zugriff mit „aspire dashboard run --allow-anonymous“ erlauben oder die Umgebungsvariable ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS auf TRUE setzen.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardLoginTokenFailedHint">
         <source>Ensure you are using the login URL from the currently running dashboard instance.</source>
-        <target state="new">Ensure you are using the login URL from the currently running dashboard instance.</target>
+        <target state="translated">Stellen Sie sicher, dass Sie die Anmelde-URL der aktuell ausgeführten Dashboard-Instanz verwenden.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardNotAvailable">
         <source>Could not fetch telemetry data from the dashboard. The dashboard is not available.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. The dashboard is not available.</target>
+        <target state="translated">Telemetriedaten konnten nicht aus dem Dashboard abgerufen werden. Das Dashboard ist nicht verfügbar.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardNotAvailableHint">
         <source>Ensure the AppHost is running with the dashboard enabled.</source>
-        <target state="new">Ensure the AppHost is running with the dashboard enabled.</target>
+        <target state="translated">Stellen Sie sicher, dass der AppHost mit aktiviertem Dashboard ausgeführt wird.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlAndAppHostExclusive">
         <source>The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</source>
-        <target state="new">The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</target>
+        <target state="translated">Die Optionen --dashboard-url und --apphost können nicht gemeinsam verwendet werden. Geben Sie entweder Portnummer oder die benannte Instanz an.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlInvalid">
         <source>Could not fetch telemetry data from the dashboard. The value '{0}' is not a valid URL.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. The value '{0}' is not a valid URL.</target>
+        <target state="translated">Telemetriedaten konnten nicht aus dem Dashboard abgerufen werden. Der Wert '{0}' ist keine gültige URL.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlInvalidHint">
         <source>Specify an absolute URL like 'http://localhost:18888'.</source>
-        <target state="new">Specify an absolute URL like 'http://localhost:18888'.</target>
+        <target state="translated">Geben Sie eine absolute URL wie „http://localhost:18888“ an.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlNotReachable">
         <source>Could not fetch telemetry data from the dashboard. The specified URL '{0}' does not appear to be a valid dashboard address.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. The specified URL '{0}' does not appear to be a valid dashboard address.</target>
+        <target state="translated">Telemetriedaten konnten nicht aus dem Dashboard abgerufen werden. Die angegebene URL '{0}' scheint keine gültige Dashboard Adresse zu sein.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlNotReachableHint">
         <source>Verify the URL is correct.</source>
-        <target state="new">Verify the URL is correct.</target>
+        <target state="translated">Überprüfen Sie, ob die URL korrekt ist.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlOptionDescription">
         <source>Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized.</source>
-        <target state="new">Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized.</target>
+        <target state="translated">Basis-URL eines eigenständigen Aspire-Dashboards (z. B. http://localhost:18888). Anmelde-URLs werden ebenfalls akzeptiert und automatisch normalisiert.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>View OpenTelemetry data (logs, spans, traces) from a running AppHost</source>
-        <target state="needs-review-translation">Zeigen Sie Telemetriedaten (Protokolle, Spans, Traces) einer laufenden Aspire-Anwendung an.</target>
+        <target state="translated">Zeigen Sie OpenTelemetry-Daten (Protokolle, Spans, Traces) von einem laufenden AppHost an.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToFetchTelemetry">
@@ -119,17 +119,17 @@
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Stream telemetry in real-time as it arrives</source>
-        <target state="needs-review-translation">Streamen Sie Telemetriedaten in Echtzeit, sobald sie eintreffen.</target>
+        <target state="translated">Streamen Sie Telemetriedaten in Echtzeit, sobald sie eintreffen.</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">Ausgabeformat (Tabelle oder JSON).</target>
+        <target state="translated">Ausgabeformat (Tabelle oder JSON)</target>
         <note />
       </trans-unit>
       <trans-unit id="HasErrorOptionDescription">
         <source>Filter by error status (true to show only errors, false to exclude errors)</source>
-        <target state="needs-review-translation">Filtern Sie nach Fehlerstatus (true, um nur Fehler anzuzeigen; false, um Fehler auszuschließen).</target>
+        <target state="translated">Filtern Sie nach Fehlerstatus (true, um nur Fehler anzuzeigen; false, um Fehler auszuschließen).</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderDuration">
@@ -159,7 +159,7 @@
       </trans-unit>
       <trans-unit id="InvalidDashboardUrlDisplayValue">
         <source>not an absolute HTTP(S) URL</source>
-        <target state="new">not an absolute HTTP(S) URL</target>
+        <target state="translated">keine absolute HTTP(S)-URL</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitMustBePositive">
@@ -169,22 +169,22 @@
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
         <source>Maximum number of items to return</source>
-        <target state="needs-review-translation">Maximale Anzahl zurückzugebender Elemente.</target>
+        <target state="translated">Maximale Anzahl zurückzugebender Elemente.</target>
         <note />
       </trans-unit>
       <trans-unit id="LogsDescription">
         <source>View structured logs from the Dashboard telemetry API</source>
-        <target state="needs-review-translation">Zeigen Sie strukturierte Protokolle aus der Dashboard-Telemetrie-API an.</target>
+        <target state="translated">Zeigen Sie strukturierte Protokolle aus der Dashboard-Telemetrie-API an.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>Filter by resource name</source>
-        <target state="needs-review-translation">Filtern Sie nach Ressourcennamen.</target>
+        <target state="translated">Nach Ressourcenname filtern</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchOptionDescription">
         <source>Search and filter telemetry fields such as log messages, attribute values, names, source, and IDs. Supports full-text search and field filters. See https://aka.ms/aspire/cli-search for more details</source>
-        <target state="new">Search and filter telemetry fields such as log messages, attribute values, names, source, and IDs. Supports full-text search and field filters. See https://aka.ms/aspire/cli-search for more details</target>
+        <target state="translated">Durchsuchen und filtern Sie Telemetriefelder wie Protokollmeldungen, Attributwerte, Namen, Quelle und IDs. Unterstützt die Volltextsuche und Feldfilter. Weitere Informationen finden Sie https://aka.ms/aspire/cli-search</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -194,22 +194,22 @@
       </trans-unit>
       <trans-unit id="SeverityOptionDescription">
         <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical)</source>
-        <target state="needs-review-translation">Filtern Sie Protokolle nach minimaler Schwere (Trace, Debug, Information, Warnung, Fehler, Kritisch).</target>
+        <target state="translated">Filtern Sie Protokolle nach minimaler Schwere (Trace, Debug, Information, Warnung, Fehler, Kritisch).</target>
         <note />
       </trans-unit>
       <trans-unit id="SpansDescription">
         <source>View spans from the Dashboard telemetry API</source>
-        <target state="needs-review-translation">Zeigen Sie Bereiche aus der Dashboard-Telemetrie-API an.</target>
+        <target state="translated">Zeigen Sie Bereiche aus der Dashboard-Telemetrie-API an.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdArgumentDescription">
         <source>The trace ID to view. If not specified, lists all traces.</source>
-        <target state="needs-review-translation">Die anzuzeigende Trace-ID. Wenn keine angegeben wird, werden alle Traces aufgelistet.</target>
+        <target state="translated">Die anzuzeigende Trace-ID. Wenn keine angegeben wird, werden alle Traces aufgelistet.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdOptionDescription">
         <source>Filter by trace ID</source>
-        <target state="needs-review-translation">Nach Ablaufverfolgungs-ID filtern.</target>
+        <target state="translated">Nach Ablaufverfolgungs-ID filtern.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceNotFound">
@@ -219,12 +219,12 @@
       </trans-unit>
       <trans-unit id="TracesDescription">
         <source>View traces from the Dashboard telemetry API</source>
-        <target state="needs-review-translation">Zeigen Sie Ablaufverfolgungen aus der Dashboard-Telemetrie-API an.</target>
+        <target state="translated">Zeigen Sie Ablaufverfolgungen aus der Dashboard-Telemetrie-API an.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedContentType">
         <source>Dashboard API returned unexpected content type '{0}'. Expected JSON response.</source>
-        <target state="new">Dashboard API returned unexpected content type '{0}'. Expected JSON response.</target>
+        <target state="translated">Die Dashboard-API hat einen unerwarteten Inhaltstyp „{0}“ zurückgegeben. JSON-Antwort erwartet.</target>
         <note />
       </trans-unit>
     </body>

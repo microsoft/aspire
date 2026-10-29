@@ -4,312 +4,312 @@
     <body>
       <trans-unit id="MainLayoutToggleTerminalDock">
         <source>Toggle terminal (`)</source>
-        <target state="new">Toggle terminal (`)</target>
+        <target state="translated">切換終端機 (`)</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCloseTab">
         <source>Close tab</source>
-        <target state="new">Close tab</target>
+        <target state="translated">關閉索引標籤</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCopyFailed">
         <source>Could not copy to clipboard.</source>
-        <target state="new">Could not copy to clipboard.</target>
+        <target state="translated">無法複製到剪貼簿。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCopyTitle">
         <source>Copy terminal title: {0}</source>
-        <target state="new">Copy terminal title: {0}</target>
+        <target state="translated">複製終端機標題: {0}</target>
         <note>{0} is the terminal title.</note>
       </trans-unit>
       <trans-unit id="TerminalCopyWorkingDirectory">
         <source>Copy working directory: {0}</source>
-        <target state="new">Copy working directory: {0}</target>
+        <target state="translated">複製工作目錄: {0}</target>
         <note>{0} is the working directory path.</note>
       </trans-unit>
       <trans-unit id="TerminalDisconnected">
         <source>The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</source>
-        <target state="new">The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</target>
+        <target state="translated">終端機已中斷連線，且自動重試已停止。檢查資源是否正在執行，然後重試。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDisconnectedMessage">
         <source>Terminal disconnected. The last output has been preserved.</source>
-        <target state="new">Terminal disconnected. The last output has been preserved.</target>
+        <target state="translated">終端已中斷連線。上次的輸出內容已保留。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDisconnectedWithExitCode">
         <source>Terminal disconnected (exit code {0}). The last output has been preserved.</source>
-        <target state="new">Terminal disconnected (exit code {0}). The last output has been preserved.</target>
+        <target state="translated">終端機已中斷連線 (結束碼 {0})。上次的輸出內容已保留。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDismissError">
         <source>Dismiss</source>
-        <target state="new">Dismiss</target>
+        <target state="translated">關閉</target>
         <note>Dismisses a terminal input, clipboard, or sizing error without reconnecting.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTab">
         <source>Close terminal '{0}'</source>
-        <target state="new">Close terminal '{0}'</target>
+        <target state="translated">關閉終端機 '{0}'</target>
         <note>{0} is the terminal's display title.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTimedOutMessage">
         <source>Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</source>
-        <target state="new">Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</target>
+        <target state="translated">等候終端機 '{0}' 關閉時逾時。正在背景中繼續清除。</target>
         <note>{0} is the terminal's display title.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTimedOutTitle">
         <source>Terminal close timed out</source>
-        <target state="new">Terminal close timed out</target>
+        <target state="translated">終端機關閉逾時</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetach">
         <source>Open terminal in a new window</source>
-        <target state="new">Open terminal in a new window</target>
+        <target state="translated">在新視窗中開啟終端機</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetachBlocked">
         <source>The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</source>
-        <target state="new">The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</target>
+        <target state="translated">瀏覽器已封鎖終端機視窗。允許儀表板的快顯項目，然後再試一次。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetached">
         <source>This terminal is running in a separate window.</source>
-        <target state="new">This terminal is running in a separate window.</target>
+        <target state="translated">此終端機正在個別視窗中執行。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockFocusWindow">
         <source>Focus window</source>
-        <target state="new">Focus window</target>
+        <target state="translated">聚焦視窗</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockHeight">
         <source>{0} pixels high</source>
-        <target state="new">{0} pixels high</target>
+        <target state="translated">{0} 高像素</target>
         <note>{0} is the terminal dock height in CSS pixels.</note>
       </trans-unit>
       <trans-unit id="TerminalDockHide">
         <source>Hide terminal panel (`)</source>
-        <target state="new">Hide terminal panel (`)</target>
+        <target state="translated">隱藏終端機面板 (`)</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockMoreInformation">
         <source>More information</source>
-        <target state="new">More information</target>
+        <target state="translated">詳細資訊</target>
         <note>Link to documentation about dashboard terminals, shown when the terminal dock is empty.</note>
       </trans-unit>
       <trans-unit id="TerminalDockPanelHeading">
         <source>No docked terminals</source>
-        <target state="new">No docked terminals</target>
+        <target state="translated">沒有停駐的終端機</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockPanelHint">
         <source>Press the backtick key (`) to hide this panel.</source>
-        <target state="new">Press the backtick key (`) to hide this panel.</target>
+        <target state="translated">按反引號鍵 (`) 以隱藏此面板。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockRecoveringWindow">
         <source>This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</source>
-        <target state="new">This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</target>
+        <target state="translated">此終端機可能仍在個別視窗中開啟。將焦點放在其上或讓它返回面板以繼續。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockReorderHelp">
         <source>Drag to reorder tabs, or use Alt+Shift+Left or Alt+Shift+Right while a tab is focused.</source>
-        <target state="new">Drag to reorder tabs, or use Alt+Shift+Left or Alt+Shift+Right while a tab is focused.</target>
+        <target state="translated">拖曳以重新排序索引標籤，或在聚焦索引標籤時使用 Alt+Shift+向左鍵或 Alt+Shift+向右鍵。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockResizeHelp">
         <source>Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</source>
-        <target state="new">Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</target>
+        <target state="translated">使用向上或向下來重設大小、針對較多步驟使用 Shift、針對最小高度使用 Home，以及針對最大高度使用 End。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockReturnToDock">
         <source>Return to panel</source>
-        <target state="new">Return to panel</target>
+        <target state="translated">返回面板</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockScrollLeft">
         <source>Scroll terminal tabs left</source>
-        <target state="new">Scroll terminal tabs left</target>
+        <target state="translated">向左捲動終端機索引標籤</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockScrollRight">
         <source>Scroll terminal tabs right</source>
-        <target state="new">Scroll terminal tabs right</target>
+        <target state="translated">向右捲動終端機索引標籤</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockTabs">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">終端機</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalFocusControlsDescription">
         <source>Focus terminal controls</source>
-        <target state="new">Focus terminal controls</target>
+        <target state="translated">聚焦終端機控制項</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalInputFailed">
         <source>The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</source>
-        <target state="new">The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</target>
+        <target state="translated">終端機無法完成輸入或剪貼簿動作。請檢查瀏覽器的剪貼簿權限，然後再試一次。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalInputLabel">
         <source>Interactive terminal input</source>
-        <target state="new">Interactive terminal input</target>
+        <target state="translated">互動式終端機輸入</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalMountFailed">
         <source>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</source>
-        <target state="new">The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</target>
+        <target state="translated">終端機無法連線或初始化其轉譯器。檢查資源是否正在執行，且您的瀏覽器支援 WebGPU 或 WebGL2，然後重新連線以再試一次。您仍然可以檢視此資源的控制台記錄。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPalette">
         <source>Terminal palette</source>
-        <target state="new">Terminal palette</target>
+        <target state="translated">終端機調色盤</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteDark">
         <source>Dark</source>
-        <target state="new">Dark</target>
+        <target state="translated">深色</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteLabel">
         <source>Palette</source>
-        <target state="new">Palette</target>
+        <target state="translated">調色盤</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteLight">
         <source>Light</source>
-        <target state="new">Light</target>
+        <target state="translated">淺色</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteSaveFailed">
         <source>Unable to save the terminal palette. Check that browser storage is available and try again.</source>
-        <target state="new">Unable to save the terminal palette. Check that browser storage is available and try again.</target>
+        <target state="translated">無法儲存終端機調色盤。檢查瀏覽器儲存體是否可用，然後再試一次。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalProgress">
         <source>Terminal progress</source>
-        <target state="new">Terminal progress</target>
+        <target state="translated">終端機進度</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalProgressError">
         <source>Error</source>
-        <target state="new">Error</target>
+        <target state="translated">錯誤</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalProgressWarning">
         <source>Warning</source>
-        <target state="new">Warning</target>
+        <target state="translated">警告</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalRestartResource">
         <source>Restart resource</source>
-        <target state="new">Restart resource</target>
+        <target state="translated">重新啟動資源</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalRetry">
         <source>Reconnect terminal</source>
-        <target state="new">Reconnect terminal</target>
+        <target state="translated">重新連線終端機</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalShowDisconnectedBanner">
         <source>Terminal disconnected. Show recovery actions</source>
-        <target state="new">Terminal disconnected. Show recovery actions</target>
+        <target state="translated">終端已中斷連線。顯示復原動作</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalShowDisconnectedBannerWithExitCode">
         <source>Terminal disconnected (exit code {0}). Show recovery actions</source>
-        <target state="new">Terminal disconnected (exit code {0}). Show recovery actions</target>
+        <target state="translated">終端機已中斷連線 (結束碼 {0})。顯示復原動作</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalShowOutput">
         <source>Show terminal</source>
-        <target state="new">Show terminal</target>
+        <target state="translated">顯示終端機</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalSizeLabel">
         <source>Size</source>
-        <target state="new">Size</target>
+        <target state="translated">大小</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalSizingFailed">
         <source>The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</source>
-        <target state="new">The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</target>
+        <target state="translated">終端機無法採用調整大小控制項或變更其維度。再次嘗試選取維度。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalTitle">
         <source>Terminal</source>
-        <target state="new">Terminal</target>
+        <target state="translated">終端機</target>
         <note>Default terminal title when no resource name is available.</note>
       </trans-unit>
       <trans-unit id="TerminalToolbarDecreaseFontSize">
         <source>Decrease font size</source>
-        <target state="new">Decrease font size</target>
+        <target state="translated">縮小字型大小</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarGridSize">
         <source>Terminal dimensions</source>
-        <target state="new">Terminal dimensions</target>
+        <target state="translated">終端機維度</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarGridSizeAuto">
         <source>Fit terminal to available space</source>
-        <target state="new">Fit terminal to available space</target>
+        <target state="translated">讓終端機適合可用的空間</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarIncreaseFontSize">
         <source>Increase font size</source>
-        <target state="new">Increase font size</target>
+        <target state="translated">放大字型大小</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarOpenInWindow">
         <source>Open in new window</source>
-        <target state="new">Open in new window</target>
+        <target state="translated">在新視窗中開啟</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarOpenInWindowBlocked">
         <source>The browser blocked the terminal window. Allow pop-ups for this site and try again.</source>
-        <target state="new">The browser blocked the terminal window. Allow pop-ups for this site and try again.</target>
+        <target state="translated">瀏覽器已封鎖終端機視窗。允許此網站的快顯視窗，然後再試一次。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarOpenInWindowFailed">
         <source>Unable to open the terminal window. Reload the dashboard and try again.</source>
-        <target state="new">Unable to open the terminal window. Reload the dashboard and try again.</target>
+        <target state="translated">無法開啟終端機視窗。重新載入儀表板，然後再試一次。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalWindowEnded">
         <source>This terminal has ended.</source>
-        <target state="new">This terminal has ended.</target>
+        <target state="translated">此終端機已結束。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalWindowTrackingFailed">
         <source>Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</source>
-        <target state="new">Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</target>
+        <target state="translated">無法復原終端機視窗狀態。檢查瀏覽器儲存體權限、重新載入或明確讓終端機返回面板。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsHeader">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">終端機</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsPageTitle">
         <source>Terminals</source>
-        <target state="new">Terminals</target>
+        <target state="translated">終端機</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsSelectAResource">
         <source>Select a resource to view its terminal</source>
-        <target state="new">Select a resource to view its terminal</target>
+        <target state="translated">選取資源以檢視其終端機</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsSelectResourceToolbar">
         <source>Select resource</source>
-        <target state="new">Select resource</target>
+        <target state="translated">選取資源</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsSettings">
         <source>View options</source>
-        <target state="new">View options</target>
+        <target state="translated">檢視選項</target>
         <note />
       </trans-unit>
     </body>

@@ -4,72 +4,72 @@
     <body>
       <trans-unit id="DashboardNotAvailable">
         <source>Dashboard is not available. Telemetry data (structured logs, traces) will not be included in the export.</source>
-        <target state="new">Dashboard is not available. Telemetry data (structured logs, traces) will not be included in the export.</target>
+        <target state="translated">Pulpit nawigacyjny jest niedostępny. Dane telemetryczne (dzienniki strukturalne, ślady) nie zostaną uwzględnione w eksporcie.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Export telemetry and resource data to a zip file</source>
-        <target state="new">Export telemetry and resource data to a zip file</target>
+        <target state="translated">Eksportowanie danych telemetrycznych i danych zasobów do pliku zip</target>
         <note />
       </trans-unit>
       <trans-unit id="ExportComplete">
         <source>Export saved to {0}</source>
-        <target state="new">Export saved to {0}</target>
+        <target state="translated">Eksport zapisany w {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToExport">
         <source>Failed to export resource and telemetry data: {0}</source>
-        <target state="new">Failed to export resource and telemetry data: {0}</target>
+        <target state="translated">Nie można wyeksportować danych zasobów i danych telemetrycznych: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="GatheringConsoleLogs">
         <source>Gathering console logs...</source>
-        <target state="new">Gathering console logs...</target>
+        <target state="translated">Trwa zbieranie dzienników konsoli...</target>
         <note />
       </trans-unit>
       <trans-unit id="GatheringResources">
         <source>Gathering resource data...</source>
-        <target state="new">Gathering resource data...</target>
+        <target state="translated">Trwa zbieranie danych zasobów...</target>
         <note />
       </trans-unit>
       <trans-unit id="GatheringStructuredLogs">
         <source>Gathering structured logs...</source>
-        <target state="new">Gathering structured logs...</target>
+        <target state="translated">Trwa zbieranie dzienników strukturalnych...</target>
         <note />
       </trans-unit>
       <trans-unit id="GatheringTraces">
         <source>Gathering traces...</source>
-        <target state="new">Gathering traces...</target>
+        <target state="translated">Trwa zbieranie śladów...</target>
         <note />
       </trans-unit>
       <trans-unit id="IncludeHiddenOptionDescription">
         <source>Include hidden resources in the output</source>
-        <target state="new">Include hidden resources in the output</target>
+        <target state="translated">Uwzględnij ukryte zasoby w danych wyjściowych</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
         <source>No resources found.</source>
-        <target state="new">No resources found.</target>
+        <target state="translated">Nie znaleziono żadnych zasobów.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputOptionDescription">
         <source>The output file path for the export zip file</source>
-        <target state="new">The output file path for the export zip file</target>
+        <target state="translated">Ścieżka pliku wyjściowego dla pliku zip eksportu</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
         <source>Resource '{0}' not found.</source>
-        <target state="new">Resource '{0}' not found.</target>
+        <target state="translated">Nie znaleziono „{0}” zasobu.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOptionDescription">
         <source>Export data only for the specified resource</source>
-        <target state="new">Export data only for the specified resource</target>
+        <target state="translated">Eksportuj dane tylko dla określonego zasobu</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>export data from</source>
-        <target state="new">export data from</target>
+        <target state="translated">eksportowanie danych z</target>
         <note />
       </trans-unit>
     </body>

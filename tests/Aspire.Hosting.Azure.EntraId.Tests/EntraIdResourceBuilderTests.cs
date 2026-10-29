@@ -1322,7 +1322,7 @@ public class EntraIdResourceBuilderTests
         var container = appBuilder.AddContainer("api", "myimage");
 
         Assert.Throws<ArgumentNullException>(() =>
-            container.WithReference(source: null!, connectionName: "AzureAd"));
+            container.WithReference(source: (IResourceBuilder<EntraIdApplicationResource>)null!, connectionName: "AzureAd"));
     }
 
     [Fact]
