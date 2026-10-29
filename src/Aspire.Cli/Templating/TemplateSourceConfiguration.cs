@@ -11,6 +11,21 @@ namespace Aspire.Cli.Templating;
 
 internal static class TemplateSourceConfiguration
 {
+    internal static Dictionary<string, T> MergeSources<T>(
+        IEnumerable<KeyValuePair<string, T>> inherited, IEnumerable<KeyValuePair<string, T>> configured)
+    {
+        var sources = new Dictionary<string, T>(StringComparers.TemplateSourceName);
+        foreach (var (name, source) in inherited.Concat(configured))
+        {
+            // Replace the entire definition, not individual fields: a local directory
+            // override must not retain an inherited repository or branch.
+            sources.Remove(name);
+            sources.Add(name, source);
+        }
+
+        return sources;
+    }
+
     public static ConfiguredTemplateSource Parse(JsonElement value, string settingPath, bool requireComplete)
     {
         if (value.ValueKind is not JsonValueKind.Object)

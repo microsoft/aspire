@@ -13,14 +13,17 @@ namespace Aspire.Cli.Templating;
 internal sealed class TemplateSourceStore(
     IConfigurationService configurationService,
     CliExecutionContext executionContext,
-    ILogger<TemplateSourceStore> logger)
+    ILogger<TemplateSourceStore> logger,
+    ConfigSourceService configSources)
 {
     public async Task<JsonObject> ListAsync(CancellationToken cancellationToken)
     {
         var settings = await ReadAsync(GetSettingsFilePath(), cancellationToken);
         // Listing is configuration management, not discovery. Keep incomplete sources visible
         // so users can inspect and finish objects created through stepwise config edits.
-        return GetSources(settings);
+        var inherited = await configSources.GetTemplateSourcesAsync(cancellationToken);
+        return new JsonObject(TemplateSourceConfiguration.MergeSources(inherited, GetSources(settings))
+            .Select(source => new KeyValuePair<string, JsonNode?>(source.Key, source.Value?.DeepClone())));
     }
 
     public async Task AddAsync(string name, JsonObject source, CancellationToken cancellationToken)

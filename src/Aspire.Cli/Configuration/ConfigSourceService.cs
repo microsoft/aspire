@@ -11,6 +11,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Aspire.Shared.Telemetry;
@@ -217,6 +218,47 @@ internal sealed class ConfigSourceService(
         EnsureSameProject(projectDirectory);
         var snapshot = await AcquireAsync(source, force: false, cancellationToken);
         await ApplySnapshotAsync(source, snapshot, Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName), cancellationToken);
+    }
+
+    internal async Task<JsonObject> GetTemplateSourcesAsync(CancellationToken cancellationToken)
+    {
+        // An explicitly configured URL authorizes runtime template inheritance, not
+        // project-file materialization. Do not infer this authority from employee detection.
+        var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
+        if (repository is null)
+        {
+            return new JsonObject();
+        }
+
+        var source = new ConfigSource
+        {
+            Repository = repository,
+            Path = environment.GetEnvironmentVariable(CliConfigNames.InitSourcePath) ?? AspireConfigFile.FileName,
+            Ref = environment.GetEnvironmentVariable(CliConfigNames.InitSourceRef)
+        };
+        var snapshot = await AcquireAsync(source, force: false, cancellationToken);
+        var sources = new JsonObject();
+        foreach (var (key, value) in snapshot.Configuration)
+        {
+            if (!key.Equals("templateSources", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            if (value is not JsonObject section)
+            {
+                throw new TemplateSourceConfigurationException("templateSources", NewCommandStrings.TemplateSourcesMustBeObject);
+            }
+            foreach (var (name, definition) in section)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                TemplateSourceConfiguration.ValidateName(name);
+                using var document = JsonDocument.Parse(definition?.ToJsonString() ?? "null");
+                TemplateSourceConfiguration.Parse(document.RootElement, $"templateSources.{name}", requireComplete: true);
+                sources.Add(name, definition?.DeepClone());
+            }
+        }
+
+        return sources;
     }
 
     private async Task ApplySnapshotAsync(ConfigSource source, ConfigSourceSnapshot snapshot, string path, CancellationToken cancellationToken)

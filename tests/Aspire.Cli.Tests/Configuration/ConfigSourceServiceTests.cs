@@ -22,6 +22,95 @@ namespace Aspire.Cli.Tests.Configuration;
 
 public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task TemplateSources_UsesExplicitEnvironmentSelectorWithoutMaterializingSettings()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliConfigNames.InitSourceUrl] = "https://git.example/configuration",
+            [CliConfigNames.InitSourcePath] = "teams/platform.json",
+            [CliConfigNames.InitSourceRef] = "config-preview"
+        });
+        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var git = new TestConfigSourceRepository
+        {
+            ReadConfiguration = (source, _) =>
+            {
+                Assert.Equal("https://git.example/configuration", source.Repository);
+                Assert.Equal("teams/platform.json", source.Path);
+                Assert.Equal("config-preview", source.Ref);
+                return Task.FromResult(("version-1", JsonNode.Parse("""
+                    {
+                      "templateSources:enterprise:repository": "https://git.example/templates",
+                      "templateSources:enterprise:ref": "template-preview",
+                      "templateSources:enterprise:path": "templates",
+                      "docs": { "llmsTxtUrl": "https://docs.example/llms.txt" },
+                      "features": { "unrelated": true }
+                    }
+                    """)!.AsObject()));
+            }
+        };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
+            git: git, environment: environment, detector: detector);
+
+        var sources = await service.GetTemplateSourcesAsync(CancellationToken.None);
+        await service.GetTemplateSourcesAsync(CancellationToken.None);
+
+        Assert.Equal(0, detector.Calls);
+        Assert.Equal(1, git.Calls);
+        var definition = Assert.Single(sources);
+        Assert.Equal("enterprise", definition.Key);
+        Assert.Equal("https://git.example/templates", definition.Value!["repository"]!.GetValue<string>());
+        Assert.Equal("template-preview", definition.Value["ref"]!.GetValue<string>());
+        Assert.Equal("templates", definition.Value["path"]!.GetValue<string>());
+        Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+    }
+
+    [Fact]
+    public async Task TemplateSources_WithoutExplicitUrlIgnoresDetectionAndOverrides()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliConfigNames.InitSourcePath] = "../invalid",
+            [CliConfigNames.InitSourceRef] = ""
+        });
+        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var git = new TestConfigSourceRepository();
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
+            git: git, environment: environment, detector: detector);
+
+        Assert.Empty(await service.GetTemplateSourcesAsync(CancellationToken.None));
+
+        Assert.Equal(0, git.Calls);
+        Assert.Equal(0, detector.Calls);
+    }
+
+    [Theory]
+    [InlineData("""{"templateSources":null}""")]
+    [InlineData("""{"templateSources":{"invalid.name":{"repository":"https://git.example/templates"}}}""")]
+    [InlineData("""{"templateSources":{"enterprise":{}}}""")]
+    [InlineData("""{"templateSources":{"enterprise":{"path":"relative"}}}""")]
+    public async Task TemplateSources_InvalidInheritedDefinitionsFailWithoutWritingSettings(string json)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliConfigNames.InitSourceUrl] = "https://git.example/configuration"
+        });
+        var git = new TestConfigSourceRepository
+        {
+            ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse(json)!.AsObject()))
+        };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, environment: environment);
+
+        await Assert.ThrowsAsync<Aspire.Cli.Templating.TemplateSourceConfigurationException>(
+            () => service.GetTemplateSourcesAsync(CancellationToken.None));
+
+        Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+    }
+
     [Theory]
     [InlineData(false, true)]
     [InlineData(true, true)]
