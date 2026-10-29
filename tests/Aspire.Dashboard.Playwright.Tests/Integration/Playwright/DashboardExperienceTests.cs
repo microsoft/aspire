@@ -16,44 +16,56 @@ public sealed class DashboardExperienceTests : PlaywrightTestsBase<DashboardServ
     {
     }
 
+    // Pages that both experiences have keep their path, so links to them work in either experience. Other pages go
+    // to the experience's root.
     [Theory]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    [InlineData("/resources")]
-    [InlineData("/consolelogs")]
-    [InlineData("/structuredlogs")]
-    [InlineData("/traces")]
-    [InlineData("/metrics")]
-    [InlineData("/does-not-exist")]
-    [InlineData("/legacyish")]
-    public Task PreviousDashboard_RedirectsModernRoutesToLegacyRoot(string modernPath)
-        => AssertExperienceRouteAsync("legacy", modernPath, "/legacy", expectLegacy: true);
+    [InlineData("/resources", "/legacy")]
+    [InlineData("/consolelogs", "/legacy/consolelogs")]
+    [InlineData("/structuredlogs", "/legacy/structuredlogs")]
+    [InlineData("/traces", "/legacy/traces")]
+    [InlineData("/metrics", "/legacy/metrics")]
+    [InlineData("/does-not-exist", "/legacy")]
+    [InlineData("/legacyish", "/legacy")]
+    public Task PreviousDashboard_RedirectsModernRoutesToLegacyPages(string modernPath, string expectedPath)
+        => AssertExperienceRouteAsync("legacy", modernPath, expectedPath, expectLegacy: true);
 
     [Theory]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    [InlineData("/legacy/resources")]
-    [InlineData("/legacy/consolelogs")]
-    [InlineData("/legacy/structuredlogs")]
-    [InlineData("/legacy/traces")]
-    [InlineData("/legacy/metrics")]
-    [InlineData("/legacy/does-not-exist")]
-    public Task NewDashboard_RedirectsLegacyRoutesToModernRoot(string legacyPath)
-        => AssertExperienceRouteAsync("modern", legacyPath, "/resources", expectLegacy: false);
+    [InlineData("/legacy/resources", "/resources")]
+    [InlineData("/legacy/consolelogs", "/consolelogs")]
+    [InlineData("/legacy/structuredlogs", "/structuredlogs")]
+    [InlineData("/legacy/traces", "/traces")]
+    [InlineData("/legacy/metrics", "/metrics")]
+    [InlineData("/legacy/does-not-exist", "/resources")]
+    public Task NewDashboard_RedirectsLegacyRoutesToModernPages(string legacyPath, string expectedPath)
+        => AssertExperienceRouteAsync("modern", legacyPath, expectedPath, expectLegacy: false);
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task CrossExperienceRedirect_DiscardsQueryAndFragment()
+    public async Task CrossExperienceRedirect_KeepsSharedPageQueryAndDiscardsFragment()
     {
         await RunTestAsync(async page =>
         {
+            // A shared page keeps its query string. The fragment is always discarded. The page can then rewrite its query,
+            // for example dropping an unknown resource, so the redirect itself is checked for the query.
             await SetExperienceAsync(page, "legacy");
+            Assert.Equal("/legacy/traces?resource=api#", await GetRedirectLocationAsync(page, "/traces?resource=api"));
             await NavigateAcrossExperienceAsync(page, "/traces?resource=api#details");
-            await page.WaitForFunctionAsync(
-                "() => location.pathname === '/legacy' && location.search === '' && location.hash === ''");
+            await page.WaitForFunctionAsync("() => location.pathname === '/legacy/traces' && location.hash === ''");
 
             await SetExperienceAsync(page, "modern");
+            Assert.Equal("/traces?resource=api#", await GetRedirectLocationAsync(page, "/legacy/traces?resource=api"));
+            // The page is already at this URL without the fragment, where navigating would only change the fragment.
+            await page.GotoAsync("about:blank");
             await NavigateAcrossExperienceAsync(page, "/legacy/traces?resource=api#details");
+            await page.WaitForFunctionAsync("() => location.pathname === '/traces' && location.hash === ''");
+
+            // Other pages go to the experience's root, without the query string.
+            await SetExperienceAsync(page, "legacy");
+            await NavigateAcrossExperienceAsync(page, "/resources?resource=api#details");
             await page.WaitForFunctionAsync(
-                "() => location.pathname === '/resources' && location.search === '' && location.hash === ''");
+                "() => location.pathname === '/legacy' && location.search === '' && location.hash === ''");
         });
     }
 
@@ -97,6 +109,19 @@ public sealed class DashboardExperienceTests : PlaywrightTestsBase<DashboardServ
             Value = experience,
             Url = baseUrl
         }]);
+    }
+
+    private static async Task<string?> GetRedirectLocationAsync(IPage page, string url)
+    {
+        // The context's request API sends the page's cookies, including the selected experience. Only page requests,
+        // which accept HTML, are redirected.
+        var response = await page.Context.APIRequest.GetAsync(url, new()
+        {
+            MaxRedirects = 0,
+            Headers = new Dictionary<string, string> { ["Accept"] = "text/html" }
+        });
+        Assert.Equal(302, response.Status);
+        return response.Headers.GetValueOrDefault("location");
     }
 
     private static async Task NavigateAcrossExperienceAsync(IPage page, string url)
