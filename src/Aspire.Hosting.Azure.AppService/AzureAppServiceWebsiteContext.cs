@@ -805,24 +805,21 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         AddStickySlotSettings(deploymentSlot is null ? (WebSite)webSite : parentWebSite, stickyConfigNames);
 
-        if (environmentContext.Environment.IsPublicNetworkAccessDisabled)
+        var websiteResource = (WebSite)webSite;
+        infra.Add(new ProvisioningOutput("privateLinkResourceId", typeof(string))
         {
-            var site = (WebSite)webSite;
-            infra.Add(new ProvisioningOutput("privateLinkResourceId", typeof(string))
-            {
-                Value = site.Id
-            });
-            infra.Add(new ProvisioningOutput("privateLinkLocation", typeof(string))
-            {
-                Value = new FunctionCallExpression(
-                    new IdentifierExpression("toLower"),
-                    new FunctionCallExpression(
-                        new IdentifierExpression("replace"),
-                        site.Location.ToBicepExpression(),
-                        new StringLiteralExpression(" "),
-                        new StringLiteralExpression("")))
-            });
-        }
+            Value = websiteResource.Id
+        });
+        infra.Add(new ProvisioningOutput("privateLinkLocation", typeof(string))
+        {
+            Value = new FunctionCallExpression(
+                new IdentifierExpression("toLower"),
+                new FunctionCallExpression(
+                    new IdentifierExpression("replace"),
+                    websiteResource.Location.ToBicepExpression(),
+                    new StringLiteralExpression(" "),
+                    new StringLiteralExpression("")))
+        });
     }
 
     /// <summary>
