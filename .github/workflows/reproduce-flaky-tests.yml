@@ -28,11 +28,11 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+  TEST_FILTER: '--filter-method "*.DistributedApplicationTests.BeforeResourceStartedEvent_*" --filter-method "*.DistributedApplicationTests.ExplicitStart_StartExecutable" --filter-method "*.DistributedApplicationTests.StartAsync_ThrowsWhen*" --filter-method "*.DistributedApplicationTests.RunAsync_ThrowsWhenCancelled" --filter-method "*.DistributedApplicationTests.RunAsync_DoesNotThrowWhenStopped" --filter-method "*.DistributedApplicationTests.DistributedApplicationLifecycle_StopAsyncDisposesHostStartupActivityWhenStartupDoesNotComplete" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true" --report-trx'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
+  TARGET_OSES: "windows-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
@@ -364,6 +364,10 @@ jobs:
                 $result = 8
               }
             }
+            # Retain successful as well as failed native case results for repair qualification.
+            $iterationResults = Join-Path "${{ github.workspace }}/all-results" "iteration-$i"
+            New-Item -ItemType Directory -Path $iterationResults -Force | Out-Null
+            Copy-Item "${{ github.workspace }}/testresults/*.trx" $iterationResults -ErrorAction Stop
             Remove-Item $iterOutput -ErrorAction SilentlyContinue
 
             if ($result -eq 0) {
@@ -390,10 +394,10 @@ jobs:
           if ($fail -gt 0) { exit 1 }
 
       - name: Upload failure logs
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: failures-${{ matrix.os }}-${{ matrix.index }}
+          name: validation-${{ matrix.os }}-${{ matrix.index }}
           path: all-results/
           if-no-files-found: ignore
 
