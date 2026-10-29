@@ -11,13 +11,16 @@
         : legacyAvailable && cookieValue === 'legacy'
             ? 'legacy'
             : 'modern';
+    // Routes are matched case-insensitively, like DashboardExperienceRedirectMiddleware and Blazor routing, so
+    // /LEGACY/traces is a legacy page and /ERROR is excluded. Destination URLs keep the original spelling.
     const path = window.location.pathname;
-    const isLegacyPath = path === '/legacy' || path.startsWith('/legacy/');
-    const excluded = path === '/login'
-        || path.startsWith('/error')
-        || path.startsWith('/api/')
-        || path.startsWith('/_')
-        || path.startsWith('/terminal-window');
+    const lowerPath = path.toLowerCase();
+    const isLegacyPath = lowerPath === '/legacy' || lowerPath.startsWith('/legacy/');
+    const excluded = lowerPath === '/login'
+        || lowerPath.startsWith('/error')
+        || lowerPath.startsWith('/api/')
+        || lowerPath.startsWith('/_')
+        || lowerPath.startsWith('/terminal-window');
 
     if (excluded) {
         return;
