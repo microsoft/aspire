@@ -6,6 +6,7 @@ import { spawnSync } from 'child_process';
 import { runInNewContext } from 'vm';
 import * as ts from 'typescript';
 import * as vm from 'vm';
+import { error as webDriverError, WebDriver } from 'selenium-webdriver';
 import { blazorWasmDebugProofResponseAllowanceMs, blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs, getBlazorWasmDebugProofControlTimeoutMs } from '../testing/blazorWasmDebugProofTimeouts';
 
 function removeDirectorySafely(directory: string): void {
@@ -934,38 +935,149 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
         });
     }
 
-    for (const dialogText of [
-        { message: 'Unable to launch browser', details: '' },
-        { message: '', details: 'Unable to launch browser: "Could not attach to main target"' },
+    for (const dialogCase of [
+        {
+            description: 'dismisses a launch error dialog with text in its heading',
+            message: 'Unable to launch browser',
+            details: '',
+            expectedMatch: true,
+        },
+        {
+            description: 'dismisses a launch error dialog with text in its details',
+            message: '',
+            details: 'Unable to launch browser: "Could not attach to main target"',
+            expectedMatch: true,
+        },
+        {
+            description: 'does not dismiss an unrelated modal dialog',
+            message: 'Start Aspire AppHost',
+            details: 'Start this AppHost?',
+            expectedMatch: false,
+        },
     ]) {
-        test(`dismisses a launch error dialog with text in its ${dialogText.message ? 'heading' : 'details'}`, async () => {
+        test(dialogCase.description, async () => {
             const helpers = fs.readFileSync(path.resolve(__dirname, '..', '..', 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
             const source = ts.createSourceFile('vscode.ts', helpers, ts.ScriptTarget.Latest, true);
-            const declaration = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'interactWithModalDialog');
-            assert.ok(declaration);
-            const compiled = ts.transpileModule(declaration.getText(source), {
+            const declarations = source.statements.filter((statement): statement is ts.FunctionDeclaration =>
+                ts.isFunctionDeclaration(statement) && ['getMatchingModalDialog', 'interactWithModalDialog'].includes(statement.name?.text ?? ''));
+            assert.strictEqual(declarations.length, 2);
+            const compiled = ts.transpileModule(declarations.map(declaration => declaration.getText(source)).join('\n'), {
                 compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
             }).outputText;
-            const exported: { interactWithModalDialog?: (buttonTitle: string) => Promise<{ message: string; details: string }> } = {};
+            const exported: {
+                interactWithModalDialog?: (
+                    buttonTitle: string,
+                    timeoutMs?: number,
+                    screenshotName?: string,
+                    expectedText?: string) => Promise<{ message: string; details: string }>;
+            } = {};
             const pressed: string[] = [];
             vm.runInNewContext(compiled, {
                 exports: exported,
+                webDriverError,
+                By: { css: (selector: string) => selector },
                 ModalDialog: class {
-                    async getMessage() { return dialogText.message; }
-                    async getDetails() { return dialogText.details; }
+                    async getMessage() { return dialogCase.message; }
+                    async getDetails() { return dialogCase.details; }
                     async pushButton(title: string) { pressed.push(title); }
                 },
-                VSBrowser: { instance: { driver: { wait: async (predicate: () => Promise<unknown>) => {
+                VSBrowser: { instance: { driver: {
+                    findElements: async () => [{}],
+                    wait: async (predicate: () => Promise<unknown>) => {
                     const result = await predicate();
-                    assert.ok(result, 'A visible launch error must not be ignored because its heading is empty.');
+                    if (!dialogCase.expectedMatch) {
+                        assert.strictEqual(result, false);
+                        throw new Error('No matching dialog.');
+                    }
+
+                    assert.ok(result, 'A matching launch error must be returned.');
                     return result;
                 } } } },
             });
             assert.ok(exported.interactWithModalDialog);
-            const accepted = await exported.interactWithModalDialog('Cancel');
-            assert.strictEqual(accepted.message, dialogText.message);
-            assert.strictEqual(accepted.details, dialogText.details);
-            assert.deepStrictEqual(pressed, ['Cancel']);
+            const interaction = exported.interactWithModalDialog(
+                'Cancel',
+                120000,
+                undefined,
+                'Unable to launch browser');
+            if (dialogCase.expectedMatch) {
+                const accepted = await interaction;
+                assert.strictEqual(accepted.message, dialogCase.message);
+                assert.strictEqual(accepted.details, dialogCase.details);
+                assert.deepStrictEqual(pressed, ['Cancel']);
+            }
+            else {
+                await assert.rejects(interaction, /No matching dialog/);
+                assert.deepStrictEqual(pressed, []);
+            }
+        });
+    }
+
+    for (const dialogState of ['absent', 'unrelated', 'matching', 'missing details', 'missing message once', 'stale message once', 'disappeared message', 'driver failure', 'interaction failure']) {
+        test(`optional launch dialog cleanup handles ${dialogState}`, async () => {
+            const helpers = fs.readFileSync(path.resolve(__dirname, '..', '..', 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
+            const source = ts.createSourceFile('vscode.ts', helpers, ts.ScriptTarget.Latest, true);
+            const declarations = source.statements.filter((statement): statement is ts.FunctionDeclaration =>
+                ts.isFunctionDeclaration(statement) && ['getMatchingModalDialog', 'dismissModalDialogIfPresent'].includes(statement.name?.text ?? ''));
+            assert.strictEqual(declarations.length, 2);
+            const compiled = ts.transpileModule(declarations.map(declaration => declaration.getText(source)).join('\n'), {
+                compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+            }).outputText;
+            const failure = new Error('Dialog interaction failed.');
+            const interactions: string[] = [];
+            let messageReads = 0;
+            const dismiss = vm.runInNewContext(`${compiled}\nexports.dismissModalDialogIfPresent;`, {
+                exports: {},
+                webDriverError,
+                By: { css: (selector: string) => selector },
+                ModalDialog: class {
+                    async getMessage() {
+                        messageReads++;
+                        if ((dialogState === 'missing message once' && messageReads === 1) || dialogState === 'disappeared message') {
+                            throw new webDriverError.NoSuchElementError('Dialog disappeared.');
+                        }
+                        if (dialogState === 'stale message once' && messageReads === 1) {
+                            throw new webDriverError.StaleElementReferenceError('Dialog was replaced.');
+                        }
+                        return dialogState === 'unrelated' ? 'Start AppHost?' : 'Unable to launch browser';
+                    }
+                    async getDetails() {
+                        if (dialogState === 'missing details') {
+                            throw new webDriverError.NoSuchElementError('No dialog details.');
+                        }
+                        return '';
+                    }
+                    async pushButton(title: string) {
+                        interactions.push(title);
+                        if (dialogState === 'interaction failure') {
+                            throw failure;
+                        }
+                    }
+                },
+                VSBrowser: { instance: {
+                    takeScreenshot: async () => undefined,
+                    driver: {
+                    findElements: async () => {
+                        if (dialogState === 'driver failure') {
+                            throw failure;
+                        }
+                        return dialogState === 'absent' ? [] : [{}];
+                    },
+                    wait: WebDriver.prototype.wait,
+                } } },
+            }) as (buttonTitle: string, timeoutMs: number, screenshotName: string, expectedText: string) => Promise<void>;
+            const cleanup = dismiss('Cancel', 1000, 'launch-failure', 'Unable to launch browser');
+
+            if (dialogState === 'driver failure' || dialogState === 'interaction failure') {
+                await assert.rejects(cleanup, error => error === failure);
+            }
+            else {
+                await cleanup;
+            }
+
+            assert.deepStrictEqual(interactions, ['matching', 'missing details', 'missing message once', 'stale message once', 'interaction failure'].includes(dialogState)
+                ? ['Cancel']
+                : []);
         });
     }
 
@@ -1633,35 +1745,132 @@ builder.Build().Run();
         assert.ok(debugDashboard.includes('await resetDashboardDefaultChangedNotificationForE2E();'));
     });
 
-    test('scopes real debug browser cleanup to Windows while retaining deterministic nonblocking coverage', () => {
-        const extensionRoot = path.resolve(__dirname, '..', '..');
-        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
-        const vscodeHelpers = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
-        const aspireDebugSessionTests = fs.readFileSync(path.join(extensionRoot, 'src', 'test', 'aspireDebugSession.test.ts'), 'utf8');
-        const debugBrowserTest = getTestBlock(debugDashboard, 'starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows');
-        const normalizedDebugBrowserTest = debugBrowserTest.replace(/\r\n/g, '\n');
-        const nonblockingUnitTest = getTestBlock(aspireDebugSessionTests, 'openDashboard does not wait for a dashboard debug session to start');
-        const nonWindowsSkip = `if (process.platform !== 'win32') {
-            this.skip();
-        }`;
+    for (const { failurePhase, failDialogCleanup } of ['before browser start', 'after browser start'].flatMap(
+        failurePhase => [false, true].map(failDialogCleanup => ({ failurePhase, failDialogCleanup })))) {
+        test(`preserves dashboard failures ${failurePhase} and finishes teardown when dialog cleanup ${failDialogCleanup ? 'fails' : 'succeeds'}`, async () => {
+            const extensionRoot = path.resolve(__dirname, '..', '..');
+            const dashboardSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
+            const fixturesSource = ts.createSourceFile(
+                'fixtures.ts',
+                fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8'),
+                ts.ScriptTarget.Latest,
+                true);
+            const cleanupFunctionNames = new Set(['runE2eTeardown', 'formatE2eTeardownFailureMessage', 'redactE2eTeardownFailure']);
+            const cleanupDeclarations = fixturesSource.statements.filter((statement): statement is ts.FunctionDeclaration =>
+                ts.isFunctionDeclaration(statement) && statement.name !== undefined && cleanupFunctionNames.has(statement.name.text));
+            assert.strictEqual(cleanupDeclarations.length, cleanupFunctionNames.size);
+            const compilerOptions = { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 };
+            const compiledCleanup = ts.transpileModule(
+                cleanupDeclarations.map(declaration => declaration.getText(fixturesSource)).join('\n'),
+                { compilerOptions }).outputText;
+            const runE2eTeardown = vm.runInNewContext(`${compiledCleanup}\nrunE2eTeardown;`, { exports: {}, Error, AggregateError });
 
-        assert.deepStrictEqual({
-            nonWindowsSkipPrecedesDashboardBrowserSetting: normalizedDebugBrowserTest.indexOf(nonWindowsSkip) >= 0
-                && normalizedDebugBrowserTest.indexOf(nonWindowsSkip) < normalizedDebugBrowserTest.indexOf("writeWorkspaceSetting('aspire.dashboardBrowser', 'debugChrome')"),
-            waitsForBrowserDebugSession: debugBrowserTest.includes('await waitForBrowserDebugSession()'),
-            waitsForNoBrowserDebugSessions: debugBrowserTest.includes('await waitForNoBrowserDebugSessions()'),
-            hasNonblockingUnitTest: aspireDebugSessionTests.includes("test('openDashboard does not wait for a dashboard debug session to start'"),
-            usesNeverSettlingBrowserLaunch: nonblockingUnitTest.includes('new Promise<boolean>(() => { })'),
-            removedOptionalModalHelper: !vscodeHelpers.includes('export async function dismissModalDialogIfPresent('),
-        }, {
-            nonWindowsSkipPrecedesDashboardBrowserSetting: true,
-            waitsForBrowserDebugSession: true,
-            waitsForNoBrowserDebugSessions: true,
-            hasNonblockingUnitTest: true,
-            usesNeverSettlingBrowserLaunch: true,
-            removedOptionalModalHelper: true,
+            const launchFailure = new Error('Browser startup failed.');
+            const dialogFailure = new Error('Launch dialog cleanup failed.');
+            const stopFailure = new Error('Stop command failed.');
+            const browserCleanupFailure = new Error('Browser session did not terminate.');
+            const cleanups: string[] = [];
+            const modalInteractions: Array<{ buttonTitle: string; expectedText: string | undefined }> = [];
+            const noOperation = () => undefined;
+            const helpers = {
+                runE2eTeardown,
+                getCommandInvocationCount: () => 0,
+                openAspireView: noOperation,
+                waitForRepositoryIdle: noOperation,
+                waitForWorkspaceAppHost: async () => ({ state: { workspaceAppHostPath: '/workspace/AppHost.csproj' } }),
+                waitForCommandOutcome: noOperation,
+                waitForDebugSessionStartup: noOperation,
+                waitForDebugDashboardUrl: noOperation,
+                waitForBrowserDebugSession: async () => {
+                    if (failurePhase === 'before browser start') {
+                        throw launchFailure;
+                    }
+                    return { id: 'browser-session' };
+                },
+                getBrowserDebugSessions: () => { throw launchFailure; },
+                writeWorkspaceSetting: noOperation,
+                setCliUnavailableForE2E: noOperation,
+                setShowStatusDelayForE2E: noOperation,
+                resetDashboardDefaultChangedNotificationForE2E: noOperation,
+                restoreWorkspaceCliPath: noOperation,
+                executeE2eControlCommand: async (command: { name: string }) => {
+                    if (command.name === 'stopDebugging') {
+                        cleanups.push('stopDebugging');
+                        throw stopFailure;
+                    }
+                },
+                stopPrimaryAppHostIfRunning: async () => { cleanups.push('stopAppHost'); },
+                waitForNoDebugSessions: async () => { cleanups.push('waitForNoDebugSessions'); },
+                waitForNoBrowserDebugSessions: async () => {
+                    cleanups.push('waitForNoBrowserDebugSessions');
+                    throw browserCleanupFailure;
+                },
+                waitForNoRunningAppHost: async () => { cleanups.push('waitForNoRunningAppHost'); },
+                dismissModalDialogIfPresent: async (buttonTitle: string, _timeoutMs: number, _screenshotName: string | undefined, expectedText: string | undefined) => {
+                    modalInteractions.push({ buttonTitle, expectedText });
+                    if (failDialogCleanup) {
+                        throw dialogFailure;
+                    }
+                },
+            };
+            const modules = new Map<string, unknown>([
+                ['assert', assert],
+                ['fs', fs],
+                ['path', path],
+                ['./helpers/assertions', helpers],
+                ['./helpers/extester', helpers],
+                ['./helpers/fixtures', helpers],
+                ['./helpers/paths', helpers],
+                ['./helpers/vscode', helpers],
+            ]);
+            const context = {
+                timeout: noOperation,
+                skip: () => assert.fail('The Windows browser scenario must execute.'),
+            };
+            type E2eCallback = (this: typeof context) => Promise<void>;
+            const tests = new Map<string, E2eCallback>();
+            const teardowns: E2eCallback[] = [];
+            vm.runInNewContext(ts.transpileModule(dashboardSource, { compilerOptions }).outputText, {
+                exports: {},
+                Error,
+                AggregateError,
+                process: { platform: 'win32' },
+                require: (name: string) => {
+                    assert.ok(modules.has(name), `Unexpected E2E import: ${name}`);
+                    return modules.get(name);
+                },
+                suite: (_name: string, body: () => void) => body.call(context),
+                test: (name: string, body: E2eCallback) => tests.set(name, body),
+                teardown: (body: E2eCallback) => teardowns.push(body),
+            });
+
+            const browserTest = tests.get('starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows');
+            assert.ok(browserTest);
+            assert.strictEqual(teardowns.length, 1);
+            await assert.rejects(browserTest.call(context), error => error === launchFailure);
+            await assert.rejects(teardowns[0].call(context), (error: unknown) => {
+                assert.ok(error instanceof AggregateError);
+                assert.deepStrictEqual(Array.from(error.errors), [
+                    ...(failDialogCleanup ? [`Error: ${dialogFailure.message}`] : []),
+                    `Error: ${stopFailure.message}`,
+                    `Error: ${browserCleanupFailure.message}`,
+                    ...(failDialogCleanup ? [`Error: ${dialogFailure.message}`] : []),
+                ]);
+                return true;
+            });
+            assert.deepStrictEqual(modalInteractions, [
+                { buttonTitle: 'Cancel', expectedText: 'Unable to launch browser' },
+                { buttonTitle: 'Cancel', expectedText: 'Unable to launch browser' },
+            ]);
+            assert.deepStrictEqual([...cleanups].sort(), [
+                'stopDebugging',
+                'stopAppHost',
+                'waitForNoDebugSessions',
+                'waitForNoBrowserDebugSessions',
+                'waitForNoRunningAppHost',
+            ].sort());
         });
-    });
+    }
 
     test('keeps CLI status surface coverage in the deterministic ProgressNotifier unit test', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
