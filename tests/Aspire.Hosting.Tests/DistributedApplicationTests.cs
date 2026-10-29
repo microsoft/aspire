@@ -305,8 +305,10 @@ public class DistributedApplicationTests
         await app.StopAsync(token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
-    [Fact]
-    public async Task BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation(bool cancelStartupAfterStart)
     {
         const string testName = "before-start-event-explicit-start";
         using var testProgram = CreateTestProgram(testName, randomizePorts: false);
@@ -340,17 +342,16 @@ public class DistributedApplicationTests
         using var app = testProgram.Build();
         var rns = app.Services.GetRequiredService<ResourceNotificationService>();
 
-        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestTimeout);
-        var token = cts.Token;
+        using var startupCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestTimeout);
+        var token = startupCts.Token;
 
-        // Start app in background - it won't complete because of explicit start resource
-        _ = app.StartAsync(token);
+        var startTask = app.StartAsync(token);
 
         var normalResourceName = $"{testName}-serviceb";
         var explicitStartResourceName = $"{testName}-servicea";
 
         // Wait for normal resource to be running
-        await rns.WaitForResourceAsync(normalResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        var normalResource = await rns.WaitForResourceAsync(normalResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
 
         // Wait for explicit start resource to be NotStarted
         await rns.WaitForResourceAsync(explicitStartResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
@@ -362,7 +363,26 @@ public class DistributedApplicationTests
         Assert.Equal(1, normalEventCount);
         Assert.Equal(0, explicitStartEventCount);
 
-        await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await startTask.DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        var servicePid = Assert.IsType<int>(GetResourcePropertyValue(normalResource, KnownProperties.Executable.Pid));
+        using var serviceProcess = Process.GetProcessById(servicePid);
+        Assert.False(serviceProcess.HasExited);
+        var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+        Assert.False(lifetime.ApplicationStopped.IsCancellationRequested);
+
+        if (cancelStartupAfterStart)
+        {
+            // Exercise an expired startup budget deterministically, after startup has settled.
+            startupCts.Cancel();
+        }
+
+        // A slow startup must not consume the shutdown phase's cancellation budget.
+        using var shutdownCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestTimeout);
+        await app.StopAsync(shutdownCts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await serviceProcess.WaitForExitAsync(shutdownCts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        Assert.True(serviceProcess.HasExited);
+        Assert.True(lifetime.ApplicationStopped.IsCancellationRequested);
     }
 
     [Fact]
