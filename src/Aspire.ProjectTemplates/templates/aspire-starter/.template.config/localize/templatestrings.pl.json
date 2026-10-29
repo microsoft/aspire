@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aplikacja startowa Aspire (ASP.NET Core/Blazor)",
   "description": "Szablon projektu na potrzeby tworzenia aplikacji Aspire z frontonem internetowym platformy Blazor i usługą wewnętrznej bazy danych internetowego interfejsu API, z opcjonalnym buforowaniem Redis.",
