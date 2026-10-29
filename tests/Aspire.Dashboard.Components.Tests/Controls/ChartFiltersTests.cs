@@ -350,7 +350,7 @@ public class ChartFiltersTests : DashboardTestContext
     [InlineData(OtlpInstrumentType.Sum, true, true)]
     [InlineData(OtlpInstrumentType.Sum, false, false)]
     [InlineData(OtlpInstrumentType.Gauge, false, false)]
-    public void Render_Counter_ShowsChangePerIntervalOption(OtlpInstrumentType instrumentType, bool isCounter, bool expectOption)
+    public async Task Render_Counter_ShowsChangePerIntervalOption(OtlpInstrumentType instrumentType, bool isCounter, bool expectOption)
     {
         SetupChartFilters();
         bool? changedValue = null;
@@ -374,7 +374,7 @@ public class ChartFiltersTests : DashboardTestContext
 
         var optionSwitch = Assert.Single(switches);
         Assert.True(optionSwitch.Instance.Value);
-        cut.InvokeAsync(() => optionSwitch.Instance.ValueChanged.InvokeAsync(false));
+        await cut.InvokeAsync(() => optionSwitch.Instance.ValueChanged.InvokeAsync(false));
         Assert.False(changedValue);
     }
 
