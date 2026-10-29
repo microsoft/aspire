@@ -21,7 +21,9 @@ function element(tagName, activeElement, parentElement = null) {
         shadowRoot: activeElement ? { activeElement, children: [activeElement] } : null,
         closest(selector) {
             for (let current = this; current; current = current.parentElement) {
-                if (current.tagName.toLowerCase() === selector) {
+                if (selector.startsWith(".")
+                    ? current.className?.split(/\s+/).includes(selector.slice(1))
+                    : current.tagName.toLowerCase() === selector) {
                     return current;
                 }
             }
@@ -64,6 +66,22 @@ function shortcutsFor(activeElement, events = dashboardKeys) {
 
 test("terminal textarea focus inside a non-Fluent shadow host suppresses dashboard shortcuts", () => {
     assert.deepEqual(shortcutsFor(element("DIV", element("TEXTAREA"))), []);
+});
+
+test("terminal viewport focus suppresses dashboard shortcuts without a focused textarea", () => {
+    const container = element("DIV");
+    container.className = "terminal-container";
+    const terminal = element("DIV", null, container);
+    for (const target of [terminal, element("CANVAS", null, terminal), element("DIV", element("BUTTON"), container)]) {
+        assert.deepEqual(shortcutsFor(target), []);
+    }
+});
+
+test("terminal footer buttons keep dashboard shortcuts available after F6 leaves terminal input", () => {
+    const footer = element("DIV");
+    footer.className = "terminal-footer";
+    const button = element("FLUENT-BUTTON", null, footer);
+    assert.deepEqual(shortcutsFor(button, [backquote, { key: "c" }]), [400, 210]);
 });
 
 test("nested shadow input focus suppresses dashboard shortcuts", () => {

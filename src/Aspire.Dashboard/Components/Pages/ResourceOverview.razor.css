@@ -16,6 +16,30 @@
     color: var(--colorNeutralForeground2);
 }
 
+.resource-overview.terminal-focused {
+    display: flex;
+    overflow: hidden;
+    padding-bottom: var(--layout-top-padding);
+}
+
+.terminal-focused > .overview-grid {
+    flex: 1;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* Keep the cards and terminal mounted so minimizing restores their state without reconnecting. */
+.terminal-focused > .overview-grid > :not(.overview-terminal-card) {
+    display: none;
+}
+
+.resource-overview.terminal-focused > .overview-grid > .overview-terminal-card {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+}
+
 .overview-grid {
     display: grid;
     grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -133,6 +157,14 @@
     border: 1px solid var(--colorNeutralStroke1);
     border-radius: 6px;
     background: var(--colorNeutralBackground1);
+}
+
+.overview-card-header a.overview-card-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    text-decoration: none;
 }
 
 .overview-card-header ::deep .overview-card-action:hover::part(control) {
@@ -465,8 +497,6 @@ a.overview-stat:hover .overview-stat-label {
 .overview-terminal ::deep .terminal-footer {
     min-height: 36px;
     padding: 3px 8px;
-    border-top: 1px solid var(--colorNeutralStroke3);
-    background: color-mix(in srgb, var(--terminal-background, var(--colorNeutralBackground1)) 82%, var(--colorNeutralBackground2));
 }
 
 .overview-terminal ::deep .terminal-focus-hint {

@@ -61,6 +61,33 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Persistent.
+        /// </summary>
+        public static string ResourcePersistentLifetime {
+            get {
+                return ResourceManager.GetString("ResourcePersistentLifetime", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data..
+        /// </summary>
+        public static string ResourcePersistentLifetimeDescription {
+            get {
+                return ResourceManager.GetString("ResourcePersistentLifetimeDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} (persistent).
+        /// </summary>
+        public static string ResourcePersistentType {
+            get {
+                return ResourceManager.GetString("ResourcePersistentType", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Graph.
         /// </summary>
         public static string GraphPageTitle {

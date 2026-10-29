@@ -779,6 +779,7 @@
 }
 
 .resource-header-icon {
+    position: relative;
     display: inline-flex;
     flex: 0 0 32px;
     align-items: center;
@@ -1364,17 +1365,11 @@
     justify-content: center;
 }
 
-/* The name and, for a persistent container, its pin. The name truncates so the pin always stays visible. */
 .resource-row-title {
     display: flex;
     align-items: center;
     gap: 4px;
     min-width: 0;
-}
-
-.resource-row-title ::deep .persistent-container-icon,
-.density-compact .resource-row-text ::deep .persistent-container-icon {
-    flex-shrink: 0;
 }
 
 .resource-row-toggle-spacer {
@@ -1390,6 +1385,11 @@
     width: 64px;
     text-align: right;
     white-space: nowrap;
+}
+
+/* Keep type columns aligned, reserving room for resource names when the pane is narrow. */
+.density-compact:has(.resource-row-type-persistent) .resource-row-meta .resource-row-type {
+    width: clamp(48px, calc(100cqw - 180px), 128px);
 }
 
 .density-compact .resource-row-toggle,
@@ -1442,26 +1442,27 @@
     background: var(--colorSubtleBackgroundHover);
 }
 
+/* Override the direct-anchor display rule as well as Fluent button styles when disclosing actions. */
 @container resource-pane (max-width: 239px) {
-    .resource-row-actions ::deep .resource-row-action-priority-0 {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-0 {
         display: none;
     }
 }
 
 @container resource-pane (max-width: 299px) {
-    .resource-row-actions ::deep .resource-row-action-priority-1 {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-1 {
         display: none;
     }
 }
 
 @container resource-pane (max-width: 359px) {
-    .resource-row-actions ::deep .resource-row-action-priority-2 {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-2 {
         display: none;
     }
 }
 
 @container resource-pane (max-width: 419px) {
-    .resource-row-actions ::deep .resource-row-action-priority-3 {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-3 {
         display: none;
     }
 }

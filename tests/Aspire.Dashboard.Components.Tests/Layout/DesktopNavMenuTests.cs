@@ -17,11 +17,9 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 public class DesktopNavMenuTests : DashboardTestContext
 {
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public void Navigation_ReflectsAppHostMode(bool enabled, bool hasTerminals)
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Navigation_ReflectsAppHostMode(bool enabled)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -36,26 +34,20 @@ public class DesktopNavMenuTests : DashboardTestContext
         }
         Services.GetRequiredService<NavigationManager>().NavigateTo(enabled ? "/terminals/resource/shell" : "/traces/detail/abc");
         Render<FluentTooltipProvider>();
-        var cut = Render<DesktopNavMenu>(builder => builder.Add(p => p.HasResourceTerminals, hasTerminals));
+        var cut = Render<DesktopNavMenu>();
         var expected = new List<string>();
         if (enabled)
         {
-            expected.Add(DashboardUrls.ResourceListUrl());
-            if (hasTerminals)
-            {
-                expected.Add(DashboardUrls.TerminalsUrl());
-            }
+            expected.Add(DashboardUrls.ResourceOverviewUrl("shell"));
         }
         expected.Add(DashboardUrls.TelemetrySourcesUrl());
         var links = cut.FindAll("nav.desktop-nav-menu > a");
         Assert.Equal(expected, links.Select(link => link.GetAttribute("href")));
-        if (enabled && hasTerminals)
+        if (enabled)
         {
-            var terminalLink = Assert.Single(links, link => link.GetAttribute("href") == DashboardUrls.TerminalsUrl());
-            Assert.Equal(Resources.Layout.NavMenuTerminalsTab, terminalLink.GetAttribute("aria-label"));
-            Assert.Equal("page", terminalLink.GetAttribute("aria-current"));
+            Assert.Equal("desktop-nav-resources", cut.Find("a[aria-current='page']").Id);
         }
-        else if (!enabled)
+        if (!enabled)
         {
             var structuredLogsLink = Assert.Single(links, link => link.GetAttribute("href") == DashboardUrls.TelemetrySourcesUrl());
             Assert.Equal(Resources.Layout.NavMenuTelemetrySourcesTab, structuredLogsLink.GetAttribute("aria-label"));
@@ -66,6 +58,7 @@ public class DesktopNavMenuTests : DashboardTestContext
     [Theory]
     [InlineData("/consolelogs")]
     [InlineData("/consolelogs/resource/api")]
+    [InlineData("/terminals/resource/shell")]
     [InlineData("/structuredlogs/resource/api")]
     [InlineData("/traces/detail/abc")]
     [InlineData("/metrics/resource/api")]

@@ -140,6 +140,34 @@ internal static class DashboardUrls
     public const string ResourcePaneQueryName = "pane";
 
     /// <summary>
+    /// The query string parameter that focuses the selected resource's terminal instead of its overview cards.
+    /// </summary>
+    public const string ResourceTerminalQueryName = "terminal";
+
+    /// <summary>
+    /// Changes terminal focus without changing the resource, resource pane, other query parameters or fragment.
+    /// </summary>
+    public static string SetResourceTerminalFocus(string url, bool focused)
+    {
+        var fragmentIndex = url.IndexOf('#');
+        var fragment = fragmentIndex >= 0 ? url[fragmentIndex..] : string.Empty;
+        var pathAndQuery = fragmentIndex >= 0 ? url[..fragmentIndex] : url;
+        var queryIndex = pathAndQuery.IndexOf('?');
+        var path = queryIndex >= 0 ? pathAndQuery[..queryIndex] : pathAndQuery;
+        var query = HttpUtility.ParseQueryString(queryIndex >= 0 ? pathAndQuery[(queryIndex + 1)..] : string.Empty);
+        if (focused)
+        {
+            query[ResourceTerminalQueryName] = "true";
+        }
+        else
+        {
+            query.Remove(ResourceTerminalQueryName);
+        }
+
+        return $"{path}{(query.Count > 0 ? $"?{query}" : string.Empty)}{fragment}";
+    }
+
+    /// <summary>
     /// The <see cref="ResourcePaneQueryName"/> value that lists resources.
     /// </summary>
     public const string ResourcePaneResourcesValue = "resources";

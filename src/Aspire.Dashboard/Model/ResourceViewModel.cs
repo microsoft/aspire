@@ -78,6 +78,10 @@ public sealed class ResourceViewModel
         lifetime.Value.HasStringValue &&
         string.Equals(lifetime.Value.StringValue, "Persistent", StringComparison.Ordinal);
 
+    internal string GetResourceTypeDisplayName(IStringLocalizer<Resources.Resources> localizer) => IsPersistentContainer
+        ? string.Format(CultureInfo.CurrentCulture, localizer[nameof(Resources.Resources.ResourcePersistentType)], ResourceType)
+        : ResourceType;
+
     /// <summary>
     /// Gets the cached addresses for this resource that can be used for peer matching.
     /// This includes addresses extracted from URLs, connection strings, and parameter values.

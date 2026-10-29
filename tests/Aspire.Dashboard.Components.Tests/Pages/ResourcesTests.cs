@@ -43,6 +43,28 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class ResourcesTests : DashboardTestContext
 {
     [Theory]
+    [InlineData("Persistent", "Container (persistent)")]
+    [InlineData("Session", "Container")]
+    [InlineData(null, "Container")]
+    public void Resources_TypeColumnIncludesPersistentLifetime(string? lifetime, string expectedType)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resource = ModelTestHelpers.CreateResource("cache", properties: lifetime is null ? [] : new()
+        {
+            [KnownProperties.Container.Lifetime] = new(KnownProperties.Container.Lifetime, ProtobufValue.ForString(lifetime), false, null, 0, null, false)
+        });
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [resource], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var cut = Render<Components.Pages.Resources>(p => p.AddCascadingValue(viewport));
+        var column = Assert.Single(cut.FindComponents<AspirePropertyColumn<ResourceGridViewModel, string>>(),
+            column => column.Instance.Title == "Type").Instance;
+        var row = new ResourceGridViewModel { Resource = resource };
+
+        Assert.Equal(expectedType, column.Property!.Compile()(row));
+        Assert.Equal(expectedType, column.TooltipText!(row));
+    }
+
+    [Theory]
     [InlineData(Components.Pages.Resources.ResourceViewKind.Graph)]
     [InlineData(Components.Pages.Resources.ResourceViewKind.Parameters)]
     public async Task Resources_TelemetryRecordsSelectedView(Components.Pages.Resources.ResourceViewKind viewKind)
