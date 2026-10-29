@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Resources;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
@@ -46,6 +47,11 @@ internal sealed class VersionCheckService : BackgroundService
         _userSecretsManager = userSecretsManager;
 
         _appHostVersion = packageVersionProvider.GetPackageVersion();
+    }
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        return ShutdownDiagnostics.TraceTask("VersionCheckService.StopAsync", cancellationToken, () => base.StopAsync(cancellationToken));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

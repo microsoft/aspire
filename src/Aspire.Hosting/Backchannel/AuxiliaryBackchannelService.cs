@@ -41,6 +41,11 @@ internal sealed class AuxiliaryBackchannelService(
     /// </remarks>
     internal Task ListeningTask => _listeningTcs.Task;
 
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        return ShutdownDiagnostics.TraceTask("AuxiliaryBackchannelService.StopAsync", cancellationToken, () => base.StopAsync(cancellationToken));
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try

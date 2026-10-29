@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Cli;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.Configuration;
@@ -24,6 +25,11 @@ internal sealed class PipelineExecutor(
     IPipelineActivityReporter pipelineActivityReporter,
     IConfiguration configuration) : BackgroundService
 {
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        return ShutdownDiagnostics.TraceTask("PipelineExecutor.StopAsync", cancellationToken, () => base.StopAsync(cancellationToken));
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (executionContext.IsPublishMode)

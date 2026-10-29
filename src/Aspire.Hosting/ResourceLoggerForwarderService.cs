@@ -4,6 +4,7 @@
 #pragma warning disable IDE0005 // Using directive is unnecessary. This warning happens when building this file in Aspire.Hosting.Tests.csproj
 using Aspire.Hosting.ApplicationModel;
 #pragma warning restore IDE0005 // Using directive is unnecessary.
+using Aspire.Hosting.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -24,6 +25,11 @@ internal sealed class ResourceLoggerForwarderService(
     /// Used for testing.
     /// </summary>
     public Action<string>? OnResourceLog { get; set; }
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        return ShutdownDiagnostics.TraceTask("ResourceLoggerForwarderService.StopAsync", cancellationToken, () => base.StopAsync(cancellationToken));
+    }
 
     /// <inheritdoc/>
     protected override Task ExecuteAsync(CancellationToken stoppingToken)

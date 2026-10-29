@@ -207,6 +207,8 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
         outputHelper.WriteLine($"Functions shutdown diagnostic: startup settled at {elapsed.Elapsed}; task={startTask.Status}");
         var hostOptions = host.Services.GetRequiredService<IOptions<HostOptions>>().Value;
         outputHelper.WriteLine($"Functions shutdown diagnostic: runtime={Environment.Version}; hosting={typeof(IHost).Assembly.FullName}; stopConcurrently={hostOptions.ServicesStopConcurrently}; callerToken=CancellationToken.None");
+        var hostingImplementation = typeof(Host).Assembly;
+        outputHelper.WriteLine($"Functions shutdown diagnostic: loaded hosting implementation={hostingImplementation.FullName}; informational={hostingImplementation.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion}");
         outputHelper.WriteLine($"Functions shutdown diagnostic: services in registration order={string.Join(", ", host.Services.GetServices<IHostedService>().Select(service => service.GetType().FullName))}");
 
         // Assert that the default storage resource is not present

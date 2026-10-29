@@ -21,6 +21,8 @@ env:
   # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
   # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
   TEST_PROJECT: "Hosting.Azure"
+  # MTP accepts one project per invocation; qualify the real terminal contract in a separate job.
+  TERMINAL_TEST_PROJECT: "Hosting"
 
   # Test filter arguments passed to dotnet test (after the -- separator).
   # Use quotes around wildcard patterns to prevent shell glob expansion.
@@ -28,7 +30,7 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  # Match the failing regular Hosting.Azure lane; the isolated matrix arm adds only the two method filters.
+  # Both jobs retain the normal exclusions and add exactly one method filter.
   TEST_FILTER: '--filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true" --report-trx'
 
   # Target operating systems (comma-separated)
@@ -37,7 +39,7 @@ env:
 
   # Number of parallel runners per OS per contrast arm
   # Total jobs = RUNNERS_PER_OS × number of OSes × 2 arms (must be ≤ 256)
-  RUNNERS_PER_OS: "2"
+  RUNNERS_PER_OS: "1"
 
   # Number of test iterations each runner executes
   ITERATIONS_PER_RUNNER: "1"
@@ -112,10 +114,12 @@ jobs:
           ENTRIES=""
           for os in "${OSES[@]}"; do
             os=$(echo "$os" | xargs)
-            for context in isolated regular-project; do
+            for context in selected terminal-contract; do
+              PROJECT="${{ env.TEST_PROJECT }}"
+              if [ "$context" = "terminal-contract" ]; then PROJECT="${{ env.TERMINAL_TEST_PROJECT }}"; fi
               for i in $(seq 1 "$RUNNERS"); do
                 if [ -n "$ENTRIES" ]; then ENTRIES="$ENTRIES,"; fi
-                ENTRIES="${ENTRIES}{\"os\":\"${os}\",\"index\":${i},\"context\":\"${context}\"}"
+                ENTRIES="${ENTRIES}{\"os\":\"${os}\",\"index\":${i},\"context\":\"${context}\",\"project\":\"${PROJECT}\"}"
               done
             done
           done
@@ -127,8 +131,8 @@ jobs:
           echo "Generated matrix: $TOTAL runners across ${#OSES[@]} OS(es)"
           echo "Each runner will execute ${{ env.ITERATIONS_PER_RUNNER }} iterations"
           echo "Total native invocations: $(( TOTAL * ${{ env.ITERATIONS_PER_RUNNER }} ))"
-          echo "Selected cases planned: 4; adjacent cases planned: 4."
-          echo "Regular-project total is measured from TRX (prior baseline: 2115 per invocation)."
+          echo "Selected Azure cases planned: 1; terminal contract theory rows planned: 2."
+          echo "Two native invocations; three planned cases, not actual outcomes."
 
   build_cli_e2e_image:
     name: Build CLI E2E Docker image
@@ -235,7 +239,7 @@ jobs:
       - name: Compute test project path
         shell: pwsh
         run: |
-          $testShortName = "${{ env.TEST_PROJECT }}"
+          $testShortName = "${{ matrix.project }}"
           $projectPath1 = "${{ github.workspace }}/tests/$testShortName.Tests/$testShortName.Tests.csproj"
           $projectPath2 = "${{ github.workspace }}/tests/Aspire.$testShortName.Tests/Aspire.$testShortName.Tests.csproj"
 
@@ -272,10 +276,15 @@ jobs:
           FAIL=0
           ITERATIONS=${{ env.ITERATIONS_PER_RUNNER }}
           METHOD_FILTER=()
-          if [ "${{ matrix.context }}" = "isolated" ]; then
-            METHOD_FILTER=(--filter-method "*.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects" --filter-method "*.AzureFunctionsTests.AddAzureFunctionsProject_RemoveDefaultHostStorageWhenUseHostStorageIsUsed")
+          if [ "${{ matrix.context }}" = "selected" ]; then
+            METHOD_FILTER=(--filter-method "*.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects")
+          elif [ "${{ matrix.context }}" = "terminal-contract" ]; then
+            METHOD_FILTER=(--filter-method "*.TerminalServiceTests.AppHostStop_StopsTerminalsBeforeDisposalAndCancellationOnlyBoundsWait")
+          else
+            echo "::error::Unknown diagnostic context."
+            exit 1
           fi
-          echo "Contrast arm: ${{ matrix.context }}; only method selection differs."
+          echo "Diagnostic context: ${{ matrix.context }}; project: ${{ matrix.project }}."
 
           for i in $(seq 1 "$ITERATIONS"); do
             echo "::group::Iteration $i/$ITERATIONS"
@@ -357,6 +366,13 @@ jobs:
           $pass = 0
           $fail = 0
           $iterations = [int]"${{ env.ITERATIONS_PER_RUNNER }}"
+          if ("${{ matrix.context }}" -eq "selected") {
+            $methodFilter = @("--filter-method", "*.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects")
+          } elseif ("${{ matrix.context }}" -eq "terminal-contract") {
+            $methodFilter = @("--filter-method", "*.TerminalServiceTests.AppHostStop_StopsTerminalsBeforeDisposalAndCancellationOnlyBoundsWait")
+          } else {
+            throw "Unknown diagnostic context."
+          }
 
           for ($i = 1; $i -le $iterations; $i++) {
             Write-Host "::group::Iteration $i/$iterations"
@@ -374,7 +390,7 @@ jobs:
               -- `
               --timeout 10m `
               --results-directory "${{ github.workspace }}/testresults" `
-              ${{ env.TEST_FILTER }} *> $iterOutput
+              ${{ env.TEST_FILTER }} @methodFilter *> $iterOutput
             $result = $LASTEXITCODE
             Get-Content $iterOutput
 
@@ -415,7 +431,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: causal-${{ matrix.context }}-${{ matrix.os }}-${{ matrix.index }}
+          name: observer-${{ matrix.context }}-${{ matrix.os }}-${{ matrix.index }}
           path: all-results/
           if-no-files-found: ignore
 
@@ -434,12 +450,13 @@ jobs:
           echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Test Project | \`${{ env.TEST_PROJECT }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Terminal contract project | \`${{ env.TERMINAL_TEST_PROJECT }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Filter | \`${{ env.TEST_FILTER }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| OSes | ${{ env.TARGET_OSES }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Runners per OS per arm | ${{ env.RUNNERS_PER_OS }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Iterations per runner | ${{ env.ITERATIONS_PER_RUNNER }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Contrast | isolated pair vs normal regular-project load; same source/runtime/probes |" >> $GITHUB_STEP_SUMMARY
-          echo "| Selected cases planned | 4 (2 per arm); outcomes require TRX |" >> $GITHUB_STEP_SUMMARY
+          echo "| Experiment | selected Azure observer + existing real terminal cancellation/join contract |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cases planned | 1 Azure + 2 terminal theory rows; outcomes require TRX |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ needs.reproduce.result }}" = "success" ]; then

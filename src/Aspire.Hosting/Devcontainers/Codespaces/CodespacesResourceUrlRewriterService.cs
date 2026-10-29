@@ -3,6 +3,7 @@
 
 using System.Collections.Immutable;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -11,6 +12,11 @@ namespace Aspire.Hosting.Devcontainers.Codespaces;
 
 internal sealed class CodespacesResourceUrlRewriterService(ILogger<CodespacesResourceUrlRewriterService> logger, IOptions<CodespacesOptions> options, CodespacesUrlRewriter codespaceUrlRewriter, ResourceNotificationService resourceNotificationService) : BackgroundService
 {
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        return ShutdownDiagnostics.TraceTask("CodespacesResourceUrlRewriterService.StopAsync", cancellationToken, () => base.StopAsync(cancellationToken));
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!options.Value.IsCodespace)

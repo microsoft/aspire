@@ -64,14 +64,20 @@ internal sealed class DistributedApplicationLifecycle(
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        DisposeHostStartupActivity();
-        return Task.CompletedTask;
+        return ShutdownDiagnostics.TraceTask("DistributedApplicationLifecycle.StopAsync", cancellationToken, () =>
+        {
+            DisposeHostStartupActivity();
+            return Task.CompletedTask;
+        });
     }
 
     public Task StoppedAsync(CancellationToken cancellationToken)
     {
-        DisposeHostStartupActivity();
-        return Task.CompletedTask;
+        return ShutdownDiagnostics.TraceTask("DistributedApplicationLifecycle.StoppedAsync", cancellationToken, () =>
+        {
+            DisposeHostStartupActivity();
+            return Task.CompletedTask;
+        });
     }
 
     public Task StoppingAsync(CancellationToken cancellationToken)

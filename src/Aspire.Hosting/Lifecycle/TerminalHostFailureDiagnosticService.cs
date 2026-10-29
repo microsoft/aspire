@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Shared;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -46,6 +47,11 @@ internal sealed class TerminalHostFailureDiagnosticService(
         KnownResourceStates.Finished,
         KnownResourceStates.Exited,
     ];
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        return ShutdownDiagnostics.TraceTask("TerminalHostFailureDiagnosticService.StopAsync", cancellationToken, () => base.StopAsync(cancellationToken));
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

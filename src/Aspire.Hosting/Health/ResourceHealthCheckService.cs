@@ -4,6 +4,7 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
@@ -18,6 +19,11 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
     // Internal for testing.
     internal TimeSpan HealthyHealthCheckInterval { get; set; } = TimeSpan.FromSeconds(30);
     internal TimeSpan NonHealthyHealthCheckStepInterval { get; set; } = TimeSpan.FromSeconds(1);
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        return ShutdownDiagnostics.TraceTask("ResourceHealthCheckService.StopAsync", cancellationToken, () => base.StopAsync(cancellationToken));
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

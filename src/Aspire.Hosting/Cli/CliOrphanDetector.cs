@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -24,6 +25,11 @@ internal sealed class CliOrphanDetector(IConfiguration configuration, IHostAppli
     {
         return ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(pid, expectedStartTimeUnix, ProcessStartTimeHelper.LegacyStartTimeMatchTolerance);
     };
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        return ShutdownDiagnostics.TraceTask("CliOrphanDetector.StopAsync", cancellationToken, () => base.StopAsync(cancellationToken));
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

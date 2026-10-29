@@ -26,6 +26,56 @@ internal static class ShutdownDiagnostics
         return s_capture.Value is { } capture ? new Observation(capture, stage, token) : null;
     }
 
+    internal static Task TraceTask(string stage, CancellationToken token, Func<Task> operation, Func<string>? taskDetails = null)
+    {
+        if (s_capture.Value is not { } capture)
+        {
+            return operation();
+        }
+
+        var observation = new Observation(capture, stage, token);
+        Task task;
+        try
+        {
+            task = operation();
+        }
+        catch (Exception ex)
+        {
+            WriteException(capture, stage, ex, token);
+            observation.Dispose();
+            throw;
+        }
+
+        return CompleteAsync();
+
+        async Task CompleteAsync()
+        {
+            try
+            {
+                await task.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                WriteException(capture, stage, ex, token);
+                throw;
+            }
+            finally
+            {
+                capture.Write($"{stage}.task={task.Status}{(taskDetails is null ? "" : $"; {taskDetails()}")}", token);
+                observation.Dispose();
+            }
+        }
+    }
+
+    private static void WriteException(CaptureState capture, string stage, Exception exception, CancellationToken token)
+    {
+        capture.Write($"{stage}.exception={exception.GetType().FullName}", token);
+        if (exception is OperationCanceledException cancellation)
+        {
+            capture.Write($"{stage}.exception-token", cancellation.CancellationToken);
+        }
+    }
+
     private sealed class CaptureState(Action<string> write)
     {
         private readonly Stopwatch _elapsed = Stopwatch.StartNew();
