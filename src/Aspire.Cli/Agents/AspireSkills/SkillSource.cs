@@ -126,7 +126,7 @@ internal sealed class SkillSource
             {
                 throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.repository");
             }
-            if (!GitSourceValidator.IsValidRepository(source.RepositoryUrl) || !GitSourceValidator.IsValidRef(source.Ref))
+            if (!GitHelpers.IsValidRepository(source.RepositoryUrl) || !GitHelpers.IsValidRef(source.Ref))
             {
                 throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.repository/ref");
             }
