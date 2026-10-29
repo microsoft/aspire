@@ -52,7 +52,7 @@ internal sealed class ConfigSource
         {
             throw new ConfigSourceException(ConfigSourceStrings.InvalidBinding);
         }
-        if (!GitSourceValidator.IsValidRepository(Repository))
+        if (!GitHelpers.IsValidRepository(Repository))
         {
             throw new ConfigSourceException(ConfigSourceStrings.InvalidRepository);
         }
@@ -64,7 +64,7 @@ internal sealed class ConfigSource
             throw new ConfigSourceException(ConfigSourceStrings.InvalidPath);
         }
 
-        if (!GitSourceValidator.IsValidRef(Ref))
+        if (!GitHelpers.IsValidRef(Ref))
         {
             throw new ConfigSourceException(ConfigSourceStrings.InvalidRef);
         }
