@@ -77,7 +77,7 @@ For more information about using AI agents with the dashboard, including setting
 
 Агенты ИИ получают доступ к данным телеметрии панели мониторинга с помощью Aspire CLI. [Установите Aspire CLI]({2}), если вы еще не сделали этого.
 
-Используйте команды Aspire CLI для получения данных телеметрии прямо в терминале:
+Используйте команды Aspire CLI для получения данных телеметрии прямо в терминале: 
 
 ```bash
 aspire otel logs --dashboard-url {0}
