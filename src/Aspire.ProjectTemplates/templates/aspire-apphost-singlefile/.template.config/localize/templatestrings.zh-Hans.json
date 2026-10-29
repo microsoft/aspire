@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire 单文件应用主机",
   "description": "适用于单文件方案的最小 Aspire AppHost (.NET 10+)。",

@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Hôte d’application à fichier unique Aspire",
   "description": "AppHost minimal pour les scénarios à fichier unique (.NET 10+).",

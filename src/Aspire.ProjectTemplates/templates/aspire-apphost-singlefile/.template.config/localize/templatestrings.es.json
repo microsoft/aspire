@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Host de aplicaciones de Aspire de un solo archivo",
   "description": "AppHost mínimo para escenarios de archivo único (.NET 10+).",
