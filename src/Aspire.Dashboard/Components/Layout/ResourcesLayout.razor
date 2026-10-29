@@ -9,13 +9,13 @@
 @using Microsoft.AspNetCore.Components.Sections
 
 @{
-    var isGrouped = DashboardClient.IsEnabled && _grouping != ResourceGrouping.None;
+    var isGrouped = DashboardClient.IsEnabled && _grouping != ResourcePaneGrouping.None;
     var paneRows = isGrouped ? new List<ResourceGridViewModel>() : GetPaneRows().ToList();
     var parameterRows = GetParameterPaneRows();
     var groups = isGrouped ? GetResourceGroups() : new List<ResourceGroup>();
     var telemetryRows = GetVisibleTelemetryResources().ToList();
     // Grouping by tags puts parameters in the groups (see GetTagGroups). Other groupings list them in their own section.
-    var parametersInGroups = isGrouped && _grouping == ResourceGrouping.Tags;
+    var parametersInGroups = isGrouped && _grouping == ResourcePaneGrouping.Tags;
     var groupedItems = groups.SelectMany(g => g.Resources).DistinctBy(r => r.Name).ToList();
     var paneResourceCount = isGrouped ? groupedItems.Count(r => !r.IsParameter) : paneRows.Count;
     var paneParameterCount = parametersInGroups ? groupedItems.Count(r => r.IsParameter) : parameterRows.Count;
@@ -54,7 +54,7 @@
                                         OnChanged="@(() => Task.CompletedTask)" />
                     <AspireMenuButton MenuButtonId="@GroupingButtonId"
                                       ButtonClass="resource-pane-button"
-                                      ButtonAppearance="@(_grouping == ResourceGrouping.None ? ButtonAppearance.Default : ButtonAppearance.Primary)"
+                                      ButtonAppearance="@(_grouping == ResourcePaneGrouping.None ? ButtonAppearance.Default : ButtonAppearance.Primary)"
                                       Icon="@(new Icons.Regular.Size20.GroupList())"
                                       IconColor="Color.Custom"
                                       IconCustomColor="currentColor"
@@ -84,9 +84,9 @@
                    width or layout. They decide what the list shows and what "all resources" covers. *@
                 <div class="resource-pane-kinds">
                     <div class="resource-kind-toggles" role="group" aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneKindsLandmark)]">
-                        @KindToggle(PaneKind.Resources, allResourceCount, new Icons.Regular.Size20.AppFolder(), ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)])
-                        @KindToggle(PaneKind.Parameters, allParameterCount, new Icons.Regular.Size20.Key(), Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)])
-                        @KindToggle(PaneKind.TelemetrySources, _telemetryOnlyResources.Count, new Icons.Regular.Size20.DataUsage(), Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)])
+                        @KindToggle(ResourcePaneKind.Resources, allResourceCount, new Icons.Regular.Size20.AppFolder(), ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)])
+                        @KindToggle(ResourcePaneKind.Parameters, allParameterCount, new Icons.Regular.Size20.Key(), Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)])
+                        @KindToggle(ResourcePaneKind.TelemetrySources, _telemetryOnlyResources.Count, new Icons.Regular.Size20.DataUsage(), Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)])
                     </div>
                     @* Selects every item again, like the "All resources" row. It stays pressed while everything is selected,
                        so it also tells whether a selection narrows the pages, without a line that appears and moves the list. *@
@@ -115,7 +115,7 @@
                         <FluentSpinner Size="SpinnerSize.Small" />
                     </div>
                 }
-                else if (paneItemCount == 0 && !(isGrouped && _grouping == ResourceGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0) && !DashboardClient.IsEnabled)
+                else if (paneItemCount == 0 && !(isGrouped && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0) && !DashboardClient.IsEnabled)
                 {
                     <div class="resource-pane-message">@Loc[nameof(Dashboard.Resources.Layout.TelemetryPaneNoSources)]</div>
                 }
@@ -155,7 +155,7 @@
 
                 }
 
-                @if (_isLoaded && DashboardClient.IsEnabled && paneItemCount == 0 && !(isGrouped && _grouping == ResourceGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0))
+                @if (_isLoaded && DashboardClient.IsEnabled && paneItemCount == 0 && !(isGrouped && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0))
                 {
                     @* Below the toggles, which are the way to bring items back when every kind is off. *@
                     <div class="resource-pane-message">
@@ -167,7 +167,7 @@
 
                 @if (isGrouped)
                 {
-                    @if (_isLoaded && _grouping == ResourceGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0)
+                    @if (_isLoaded && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0)
                     {
                         <div class="resource-tags-empty">
                             <FluentIcon Value="@(new Icons.Regular.Size24.TagMultiple())" Width="24px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
@@ -182,7 +182,7 @@
                         var isGroupCollapsed = IsGroupCollapsed(group);
                         var countText = string.Format(CultureInfo.CurrentCulture, group.Resources.Count == 1 ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCountSingular)] : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCountPlural)], group.Resources.Count);
 
-                        <div class="resource-tag-group @(_grouping == ResourceGrouping.Tags && group.Value is null ? "untagged" : string.Empty)"
+                        <div class="resource-tag-group @(_grouping == ResourcePaneGrouping.Tags && group.Value is null ? "untagged" : string.Empty)"
                              role="group"
                              aria-label="@groupName"
                              data-resource-group-key="@GetGroupKey(group)"
@@ -203,11 +203,11 @@
                                        aria-keyshortcuts="@(CanReorderGroups ? "Alt+ArrowUp Alt+ArrowDown" : null)"
                                        @onclick="@(e => OnResourceGroupClick(e, groupResourceNames))"
                                        @onclick:preventDefault="true">
-                                        @if (_grouping == ResourceGrouping.State)
+                                        @if (_grouping == ResourcePaneGrouping.State)
                                         {
                                             <span class="state-dot @GetStateClass(group.Resources[0])"></span>
                                         }
-                                        else if (_grouping == ResourceGrouping.ResourceType)
+                                        else if (_grouping == ResourcePaneGrouping.ResourceType)
                                         {
                                             <FluentIcon Value="@ResourceIconHelpers.GetIconForResource(IconResolver, group.Resources[0], IconSize.Size16)" Width="16px" Color="Color.Primary" />
                                         }
@@ -485,13 +485,13 @@
         </div>
     };
 
-    private RenderFragment KindToggle(PaneKind kind, int count, Icon icon, string fullLabel) => __builder =>
+    private RenderFragment KindToggle(ResourcePaneKind kind, int count, Icon icon, string fullLabel) => __builder =>
     {
         var isOn = IsKindShown(kind);
         var countText = kind switch
         {
-            PaneKind.Resources => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneCountPlural)], count),
-            PaneKind.Parameters => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountPlural)], count),
+            ResourcePaneKind.Resources => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneCountPlural)], count),
+            ResourcePaneKind.Parameters => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountPlural)], count),
             _ => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.TelemetryPaneCountSingular) : nameof(Dashboard.Resources.Layout.TelemetryPaneCountPlural)], count)
         };
 

@@ -26,6 +26,7 @@ function createClipboard(duration = 1500) {
         getElementById: () => button,
         querySelector: () => ({ children: [tooltip] }),
         addEventListener() {},
+        body: {},
     };
     const window = { document };
     runInNewContext(source, {
@@ -39,6 +40,8 @@ function createClipboard(duration = 1500) {
         },
         customElements: { define() {} },
         CSSStyleSheet: class { replaceSync() {} },
+        // app.js keeps Fluent control roles current as the page changes.
+        MutationObserver: class { observe() {} },
         setTimeout(callback, delay) {
             assert.equal(delay, duration);
             const id = nextTimer++;

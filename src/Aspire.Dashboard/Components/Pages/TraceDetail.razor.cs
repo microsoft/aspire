@@ -187,7 +187,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         return TraceDetailPageViewModel.ApplySpanFilters(PageViewModel.SpanWaterfallViewModels, PageViewModel.ContextFilterMatches, PageViewModel.DurationFilterMatches);
     }
 
-    private string TracesListUrl => ResourcesLayout?.GetTabUrl(ResourcesLayout.ResourceTab.Traces) ?? DashboardUrls.TracesUrl();
+    private string TracesListUrl => ResourcesLayout?.GetTabUrl(ResourceTab.Traces) ?? DashboardUrls.TracesUrl();
 
     internal string? GetPageTitle()
     {

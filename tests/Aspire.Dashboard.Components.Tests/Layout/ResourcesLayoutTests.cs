@@ -1183,7 +1183,7 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         Assert.Equal(["api", "worker"], cut.Instance.SelectedResourceNames);
         Assert.Equal(2, cut.Instance.GetSelectionTelemetryKeys(cut.Instance.SelectedResourceNames)?.Count);
-        Assert.Equal("/traces?resource=api&resource=worker", cut.Instance.GetTabUrl(ResourcesLayout.ResourceTab.Traces));
+        Assert.Equal("/traces?resource=api&resource=worker", cut.Instance.GetTabUrl(ResourceTab.Traces));
     }
 
     [Fact]
@@ -1248,7 +1248,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.True(cut.Instance.IsTelemetryPane);
-            Assert.Equal("/traces/resource/browser", cut.Instance.GetTabUrl(ResourcesLayout.ResourceTab.Traces));
+            Assert.Equal("/traces/resource/browser", cut.Instance.GetTabUrl(ResourceTab.Traces));
             Assert.Equal("/metrics/resource/browser?duration=15&pane=telemetry",
                 cut.Instance.AddSelectionToUrl("/metrics/resource/browser?duration=15"));
             Assert.Null(cut.Instance.GetSelectionTelemetryKeys(null));

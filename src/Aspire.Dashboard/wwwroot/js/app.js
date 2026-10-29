@@ -548,10 +548,11 @@ function updateFluentCheckboxSemantics(checkbox) {
 }
 
 function applyFluentControlRoles(root) {
-    if (root instanceof Element && root.matches("fluent-button")) {
+    // Mutation records also report text nodes and the document, which have no matches().
+    if (root.matches?.("fluent-button")) {
         updateFluentButtonSemantics(root);
     }
-    if (root instanceof Element && root.matches("fluent-checkbox")) {
+    if (root.matches?.("fluent-checkbox")) {
         updateFluentCheckboxSemantics(root);
     }
 
