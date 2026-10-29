@@ -250,6 +250,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Prompt default &apos;{0}&apos; must target an optional, empty-default string parameter and reference its native coalesce symbol, depending only on the project name and regex/coalesce symbols. It cannot also specify a computed value source..
+        /// </summary>
+        internal static string InvalidTemplatePromptDefault {
+            get {
+                return ResourceManager.GetString("InvalidTemplatePromptDefault", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Computed value &apos;{0}&apos; must target a non-reserved string parameter and specify kind &apos;nugetPackageVersion&apos;, a valid &apos;packageId&apos; and &apos;versionRange&apos;, an optional Boolean &apos;allowPrerelease&apos;, and an optional output-relative &apos;workingDirectory&apos;..
         /// </summary>
         internal static string InvalidTemplateValueSource {

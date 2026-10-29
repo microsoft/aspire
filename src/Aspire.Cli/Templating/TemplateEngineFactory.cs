@@ -378,6 +378,7 @@ internal sealed partial class TemplateEngineFactory(
         }
         try
         {
+            var promptDefaults = TemplatePromptDefaults.Load(settings, template, hostConfiguration, name, cancellationToken);
             var promptState = (hostEnvironment.SupportsInteractiveInput || computedParameters.Count > 0) && template.ParameterDefinitions.Any(parameter =>
                 !string.IsNullOrEmpty(parameter.Precedence.IsEnabledCondition) || !string.IsNullOrEmpty(parameter.Precedence.IsRequiredCondition))
                 ? new TemplateParameterPromptState(settings, template, name, logger, computedParameters)
@@ -425,9 +426,16 @@ internal sealed partial class TemplateEngineFactory(
                 }
                 else
                 {
+                    var defaultValue = promptDefaults.GetValueOrDefault(parameter.Name);
                     value = await PromptForParameterAsync(
                         parameter, promptState?.IsRequired(parameter) ?? parameter.Precedence.IsRequired,
-                        hostConfiguration.GetDisplayName(parameter.Name), cancellationToken);
+                        hostConfiguration.GetDisplayName(parameter.Name), defaultValue ?? parameter.DefaultValue, cancellationToken);
+                    if (defaultValue is not null && value == defaultValue)
+                    {
+                        // Accepting a projected fallback must remain omission: submitting it as
+                        // user input changes native coalesce and suppliedness semantics.
+                        continue;
+                    }
                 }
 
                 if (value is null)
@@ -502,7 +510,7 @@ internal sealed partial class TemplateEngineFactory(
         return channel;
     }
 
-    private async Task<string?> PromptForParameterAsync(ITemplateParameter parameter, bool required, string? displayName, CancellationToken cancellationToken)
+    private async Task<string?> PromptForParameterAsync(ITemplateParameter parameter, bool required, string? displayName, string? defaultValue, CancellationToken cancellationToken)
     {
         var prompt = (!string.IsNullOrWhiteSpace(displayName) ? displayName
             : !string.IsNullOrWhiteSpace(parameter.DisplayName)
@@ -512,7 +520,7 @@ internal sealed partial class TemplateEngineFactory(
         {
             var value = await interactionService.PromptConfirmAsync(
                 prompt,
-                binding: PromptBinding.CreateDefault(bool.TryParse(parameter.DefaultValue, out var defaultValue) && defaultValue),
+                binding: PromptBinding.CreateDefault(bool.TryParse(defaultValue, out var booleanDefault) && booleanDefault),
                 cancellationToken: cancellationToken);
             return value ? "true" : "false";
         }
@@ -520,8 +528,8 @@ internal sealed partial class TemplateEngineFactory(
         if (parameter.Choices is { Count: > 0 } choices)
         {
             // Multi-choice defaults accept "web|worker" or "web,worker"; single-choice keys are literal.
-            var defaults = parameter.DefaultValue is { } defaultValue
-                ? parameter.AllowMultipleValues ? defaultValue.Split(MultiValueParameter.MultiValueSeparators) : [defaultValue]
+            var defaults = defaultValue is { } choiceDefault
+                ? parameter.AllowMultipleValues ? choiceDefault.Split(MultiValueParameter.MultiValueSeparators) : [choiceDefault]
                 : [];
             var keys = choices.Keys.OrderByDescending(key => defaults.Contains(key, StringComparer.OrdinalIgnoreCase)).ToArray();
             string FormatChoice(string key) => (string.IsNullOrWhiteSpace(choices[key].DisplayName) ? key : choices[key].DisplayName).EscapeMarkup();
@@ -535,7 +543,7 @@ internal sealed partial class TemplateEngineFactory(
                 return string.Join('|', selected);
             }
 
-            if (!required && string.IsNullOrEmpty(parameter.DefaultValue))
+            if (!required && string.IsNullOrEmpty(defaultValue))
             {
                 // The extension identifies choices by display text, so the skip label must also be unique.
                 var skipLabel = TemplatingStrings.Skip.EscapeMarkup();
@@ -558,7 +566,7 @@ internal sealed partial class TemplateEngineFactory(
         return await interactionService.PromptForStringAsync(
             prompt,
             required: required,
-            binding: PromptBinding.CreateDefault<string?>(parameter.DefaultValue ?? string.Empty),
+            binding: PromptBinding.CreateDefault<string?>(defaultValue ?? string.Empty),
             cancellationToken: cancellationToken);
     }
 
