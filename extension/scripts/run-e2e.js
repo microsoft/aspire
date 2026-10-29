@@ -1793,9 +1793,6 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzur
   const goPackageReference = includeResourceDebug
     ? `    <PackageReference Include="Aspire.Hosting.Go" Version="${resolvedAppHostSdkVersion}" />\n`
     : '';
-  const winUiProjectReference = includeWinUi
-    ? '    <ProjectReference Include="../AspireE2E.WinUI/AspireE2E.WinUI.csproj" />\n'
-    : '';
   fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="${projectSdk}">
 
   <PropertyGroup>
@@ -1806,8 +1803,7 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzur
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../AspireE2E.Worker/AspireE2E.Worker.csproj" />
-${winUiProjectReference}${appHostPackageReference}${azureFunctionsPackageReference}    <PackageReference Include="Aspire.Hosting.Dotnet" Version="${resolvedAppHostSdkVersion}" />
+${appHostPackageReference}${azureFunctionsPackageReference}    <PackageReference Include="Aspire.Hosting.Dotnet" Version="${resolvedAppHostSdkVersion}" />
 ${goPackageReference}  </ItemGroup>
 
 </Project>

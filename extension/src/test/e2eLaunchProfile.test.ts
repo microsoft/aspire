@@ -821,6 +821,7 @@ suite('E2E launch profile', () => {
         { shard: 'azure-functions', specs: [], expected: ['runtime', 'csharp', 'resources', 'functions'] },
         { shard: 'azure-functions-node', specs: [], expected: ['runtime', 'csharp'] },
         { shard: 'winui', specs: [], expected: ['runtime', 'csharp'] },
+        { shard: 'resource-debug', specs: [], expected: ['runtime', 'csharp', 'go'] },
     ]) {
         test(`provisions only the required debugger VSIXes for ${scenario.shard}`, () => {
             const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
@@ -837,12 +838,15 @@ suite('E2E launch profile', () => {
                 ['ASPIRE_EXTENSION_E2E_CSHARP_VSIX', 'csharp'],
                 ['ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX', 'resources'],
                 ['ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX', 'functions'],
+                ['ASPIRE_EXTENSION_E2E_GO_VSIX', 'go'],
             ]);
             const sandbox = {
                 path,
                 shardName: scenario.shard,
                 matchedTestSpecs: scenario.specs,
                 installAzureFunctionsVsix: scenario.shard === 'azure-functions',
+                enableAzureFunctionsE2E: scenario.shard === 'azure-functions',
+                enableResourceDebugE2E: scenario.shard === 'resource-debug',
                 enableBrowserDebuggerE2E: scenario.shard === 'browser-debugger',
                 enableNodeFunctionsE2E: scenario.shard === 'azure-functions-node',
                 enableWinUiE2E: scenario.shard === 'winui',
@@ -860,15 +864,20 @@ result = resolveDebuggerVsixPaths();`, sandbox);
         });
     }
 
-    for (const [includeAzureFunctions, includeWinUi] of [[false, false], [true, false], [false, true]]) {
-        test(`generates V2 path resources with Dotnet references (Functions=${includeAzureFunctions}, WinUI=${includeWinUi})`, () => {
+    for (const [includeAzureFunctions, includeWinUi, includeResourceDebug] of [
+        [false, false, false],
+        [true, false, false],
+        [false, true, false],
+        [false, false, true],
+    ]) {
+        test(`generates V2 path resources with Dotnet references (Functions=${includeAzureFunctions}, WinUI=${includeWinUi}, ResourceDebug=${includeResourceDebug})`, () => {
             const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
             const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
             const writer = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'writeAppHostProject');
             assert.ok(writer);
             const files = new Map<string, string>();
             vm.runInNewContext(`${writer.getText(source)}
-writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includeWinUi});`, {
+writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includeWinUi}, ${includeResourceDebug});`, {
                 path,
                 workspaceRoot: 'workspace',
                 csharpFileHeader: '',
@@ -884,6 +893,7 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
             assert.strictEqual(project.match(/<Project Sdk="([^"]+)">/)?.[1], includeAzureFunctions ? 'Aspire.AppHost.Sdk/13.6.0-test' : 'Microsoft.NET.Sdk');
             assert.deepStrictEqual([...project.matchAll(/<PackageReference Include="Aspire.Hosting.AppHost" Version="([^"]+)"/g)].map(match => match[1]), includeAzureFunctions ? [] : ['13.6.0-test']);
             assert.match(project, /<PackageReference Include="Aspire.Hosting.Dotnet" Version="13.6.0-test"/);
+            assert.deepStrictEqual([...project.matchAll(/<PackageReference Include="Aspire.Hosting.Go" Version="([^"]+)"/g)].map(match => match[1]), includeResourceDebug ? ['13.6.0-test'] : []);
             assert.deepStrictEqual([...project.matchAll(/<ProjectReference Include="([^"]+)"/g)].map(match => match[1]), []);
             assert.deepStrictEqual([...appHost.matchAll(/builder\.AddDotnetProject\("([^"]+)", "([^"]+)"/g)].map(match => [match[1], match[2]]), [
                 ['e2e-worker', '../AspireE2E.Worker/AspireE2E.Worker.csproj'],
@@ -892,6 +902,7 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
             ]);
             assert.strictEqual(appHost.includes('options => options.LaunchProfileName = "E2E"'), includeWinUi);
             assert.strictEqual(appHost.includes('builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj")'), includeAzureFunctions);
+            assert.strictEqual(appHost.includes('builder.AddGoApp("e2e-go", "../AspireE2E.Go", gcFlags: "all=-N -l")'), includeResourceDebug);
         });
     }
 
