@@ -177,6 +177,82 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             .UseParameters(agent, localOverride);
     }
 
+    [Theory]
+    [InlineData("copilot")]
+    [InlineData("claude")]
+    [InlineData("opencode")]
+    public async Task AgentInit_AfterSolutionInit_UsesAppHostSkillSources(string agent)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Test.sln"), "Fake solution file");
+        var services = CreateCreationServices(workspace);
+        services.AddSingleton(workspace.CreateExecutionContext(identityChannel: "default"));
+        var cache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                    [new() { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = "17.0.0" }])
+        };
+        services.AddSingleton<Aspire.Cli.Packaging.IPackagingService>(new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<Aspire.Cli.Packaging.PackageChannel>>(
+                [Aspire.Cli.Packaging.PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance)])
+        });
+        services.AddSingleton<Aspire.Cli.DotNet.IDotNetCliRunner>(new TestDotNetCliRunner
+        {
+            NewProjectAsyncCallback = (_, name, outputPath, _, _) =>
+            {
+                Directory.CreateDirectory(outputPath);
+                File.WriteAllText(Path.Combine(outputPath, $"{name}.csproj"), "<Project />");
+                File.WriteAllText(Path.Combine(outputPath, AspireConfigFile.FileName), $$"""
+                    {
+                      "appHost": { "path": "{{name}}.csproj" }
+                    }
+                    """);
+                return 0;
+            }
+        });
+        using (var provider = services.BuildServiceProvider())
+        {
+            var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+            git.ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
+                {
+                  "skillSources": {
+                    "default": { "enabled": false },
+                    "team": {
+                      "repository": "example/team",
+                      "plugins": ["deployment"],
+                      "openCodeV2Catalog": "https://team.example/skills/"
+                    }
+                  }
+                }
+                """)!.AsObject()));
+            var result = provider.GetRequiredService<RootCommand>().Parse(
+                "init --language csharp --suppress-agent-init --use-config-source true --non-interactive");
+            Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+            Assert.Equal(1, git.Calls);
+        }
+        Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+        var appHostConfigPath = Path.Combine(workspace.Path, "Test.AppHost", AspireConfigFile.FileName);
+        var appHostConfiguration = await File.ReadAllTextAsync(appHostConfigPath);
+
+        var agentServices = CreateCreationServices(workspace);
+        agentServices.AddSingleton<IAppHostProjectFactory>(new TestAppHostProjectFactory());
+        using var agentProvider = agentServices.BuildServiceProvider();
+        var agentGit = Assert.IsType<TestConfigSourceRepository>(agentProvider.GetRequiredService<IGitClient>());
+        var agentResult = agentProvider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --workspace-root \"{workspace.Path}\" --agents {agent} --scope project --skills aspire --non-interactive");
+        Assert.Equal(CliExitCodes.Success, await agentResult.InvokeAsync().DefaultTimeout());
+
+        var path = agentProvider.GetServices<IAgentClient>().Single(client => client.Id == agent)
+            .GetIntegrationConfigPath(AgentConfigurationScope.Project, workspace.WorkspaceRoot);
+        await Verify(await File.ReadAllTextAsync(path), "json").UseParameters(agent);
+        Assert.Equal(appHostConfiguration, await File.ReadAllTextAsync(appHostConfigPath));
+        Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+        Assert.Equal(0, agentGit.Calls);
+        Assert.Equal(0, agentGit.CheckCalls);
+    }
+
     [Fact]
     public async Task UpdateConfigSource_RefreshesFreshCacheWithoutUpdatingPackages()
     {
