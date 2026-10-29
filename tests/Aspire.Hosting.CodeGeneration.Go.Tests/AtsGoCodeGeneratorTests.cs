@@ -290,6 +290,760 @@ public class AtsGoCodeGeneratorTests
 
     [Fact]
     [RequiresTools(["go"])]
+    public async Task GeneratedRuntime_PassesGoRuntimeHardeningTests()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        try
+        {
+            // The tests only exercise transport.go and base.go, so an empty model is enough.
+            var files = _generator.GenerateDistributedApplication(new AtsContext
+            {
+                Capabilities = [],
+                HandleTypes = [],
+                EnumTypes = [],
+                DtoTypes = []
+            });
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "transport_hardening_test.go"), """
+                package aspire
+
+                import (
+                    "bufio"
+                    "bytes"
+                    "context"
+                    "errors"
+                    "net"
+                    "runtime"
+                    "strconv"
+                    "strings"
+                    "sync"
+                    "testing"
+                    "time"
+                )
+
+                // hostTimeout bounds one read or write by the fake host, so a stuck exchange fails
+                // quickly instead of waiting for the go test timeout. It is applied per operation:
+                // a single deadline set at construction would also cut off a long loop on a slow runner.
+                const hostTimeout = 10 * time.Second
+
+                // fakeHost is the AppHost end of an in-memory connection to a client.
+                type fakeHost struct {
+                    t      *testing.T
+                    peer   net.Conn
+                    reader *bufio.Reader
+                }
+
+                func newFakeHost(t *testing.T) (*client, *fakeHost) {
+                    t.Helper()
+                    c := newClient("")
+                    server, peer := net.Pipe()
+                    conn := newConnection(server, c, c.onConnectionClose)
+                    c.conn = conn
+                    conn.start()
+                    t.Cleanup(func() {
+                        c.disconnect()
+                        peer.Close()
+                    })
+                    return c, &fakeHost{t: t, peer: peer, reader: bufio.NewReader(peer)}
+                }
+
+                func (h *fakeHost) read() map[string]any {
+                    h.t.Helper()
+                    if err := h.peer.SetReadDeadline(time.Now().Add(hostTimeout)); err != nil {
+                        h.t.Fatal(err)
+                    }
+                    msg, err := readMessage(h.reader)
+                    if err != nil {
+                        h.t.Fatalf("reading from the client: %v", err)
+                    }
+                    return msg
+                }
+
+                func (h *fakeHost) write(msg map[string]any) {
+                    h.t.Helper()
+                    if err := h.peer.SetWriteDeadline(time.Now().Add(hostTimeout)); err != nil {
+                        h.t.Fatal(err)
+                    }
+                    if err := writeMessage(h.peer, msg); err != nil {
+                        h.t.Fatalf("writing to the client: %v", err)
+                    }
+                }
+
+                func callbackRequest(id int, callbackID string, args any) map[string]any {
+                    return map[string]any{"jsonrpc": "2.0", "id": id, "method": "invokeCallback", "params": []any{callbackID, args}}
+                }
+
+                func TestPanickingCallbackIsAnsweredWithError(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    var nilMap map[string]int
+                    cases := []struct {
+                        name     string
+                        callback func(...any) any
+                        want     string
+                    }{
+                        {"string", func(...any) any { panic("boom") }, "Callback execution failed: boom"},
+                        {"error", func(...any) any { panic(errors.New("bad input")) }, "Callback execution failed: bad input"},
+                        {"runtime error", func(...any) any { nilMap["k"] = 1; return nil }, "Callback execution failed: assignment to entry in nil map"},
+                    }
+                    for i, tc := range cases {
+                        host.write(callbackRequest(i+1, c.registerCallback(tc.callback), nil))
+                        response := host.read()
+                        errObj, _ := response["error"].(map[string]any)
+                        if response["id"] != float64(i+1) || errObj == nil || response["result"] != nil {
+                            t.Fatalf("%s: got %v, want an error response", tc.name, response)
+                        }
+                        if errObj["code"] != float64(-32603) || errObj["message"] != tc.want {
+                            t.Errorf("%s: got error %v, want code -32603 and message %q", tc.name, errObj, tc.want)
+                        }
+                    }
+
+                    healthy := c.registerCallback(func(...any) any { return "still alive" })
+                    host.write(callbackRequest(100, healthy, nil))
+                    if response := host.read(); response["result"] != "still alive" {
+                        t.Fatalf("callback after a panic: got %v", response)
+                    }
+                }
+
+                func TestCallbackWithMalformedHandleArgumentIsAnsweredWithError(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    called := false
+                    id := c.registerCallback(func(...any) any { called = true; return nil })
+
+                    host.write(callbackRequest(1, id, map[string]any{"p0": map[string]any{"$handle": 1, "$type": nil}}))
+                    response := host.read()
+                    errObj, _ := response["error"].(map[string]any)
+                    message, _ := errObj["message"].(string)
+                    if !strings.Contains(message, "malformed handle") {
+                        t.Fatalf("got %v, want a malformed handle error", response)
+                    }
+                    if called {
+                        t.Fatal("the callback ran with a malformed argument")
+                    }
+                }
+
+                func TestRegisterCancellationIDsAreUnique(t *testing.T) {
+                    c := newClient("")
+                    const count = 5000
+                    ids := make([]string, count)
+                    var wg sync.WaitGroup
+                    for i := range count {
+                        wg.Add(1)
+                        go func() {
+                            defer wg.Done()
+                            ids[i] = c.registerCancellation(NewCancellationToken())
+                        }()
+                    }
+                    wg.Wait()
+
+                    seen := make(map[string]bool, count)
+                    for _, id := range ids {
+                        if id == "" || seen[id] {
+                            t.Fatalf("cancellation ID %q is empty or was handed out twice", id)
+                        }
+                        seen[id] = true
+                    }
+                }
+
+                func TestRegisterCancellationDoesNotParkGoroutinePerToken(t *testing.T) {
+                    c := newClient("")
+                    before := runtime.NumGoroutine()
+                    for range 1000 {
+                        c.registerCancellation(NewCancellationToken())
+                    }
+                    if grown := runtime.NumGoroutine() - before; grown > 50 {
+                        t.Fatalf("registering 1000 tokens left %d more goroutines running", grown)
+                    }
+                }
+
+                func TestCancellationNotifiesHostUntilCallReturns(t *testing.T) {
+                    c, host := newFakeHost(t)
+
+                    token := NewCancellationToken()
+                    id := c.registerCancellation(token)
+                    token.Cancel()
+                    request := host.read()
+                    params, _ := request["params"].([]any)
+                    if request["method"] != "cancelToken" || len(params) != 1 || params[0] != id {
+                        t.Fatalf("got %v, want a cancelToken request for %s", request, id)
+                    }
+                    host.write(map[string]any{"jsonrpc": "2.0", "id": request["id"], "result": true})
+
+                    // Once the capability call that carried the ID has returned, canceling
+                    // the token must no longer notify the host.
+                    token = NewCancellationToken()
+                    id = c.registerCancellation(token)
+                    done := make(chan error, 1)
+                    go func() {
+                        _, err := c.invokeCapability(context.Background(), "Test/capability", map[string]any{"cancellationToken": id})
+                        done <- err
+                    }()
+                    request = host.read()
+                    if request["method"] != "invokeCapability" {
+                        t.Fatalf("got %v, want an invokeCapability request", request)
+                    }
+                    host.write(map[string]any{"jsonrpc": "2.0", "id": request["id"], "result": nil})
+                    if err := <-done; err != nil {
+                        t.Fatal(err)
+                    }
+
+                    c.cancellationsMu.Lock()
+                    _, watching := c.cancellations[id]
+                    c.cancellationsMu.Unlock()
+                    if watching {
+                        t.Fatal("the cancellation watcher outlived the call")
+                    }
+
+                    token.Cancel()
+                    if err := host.peer.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+                        t.Fatal(err)
+                    }
+                    if msg, err := readMessage(host.reader); err == nil {
+                        t.Fatalf("the host received %v after the call returned", msg)
+                    }
+                }
+
+                func TestCancellationDuringCallReturnsNotifiesHostAndReleasesRegistration(t *testing.T) {
+                    c, host := newFakeHost(t)
+
+                    // Like generated code, every call uses its token's own context, and the host
+                    // never answers the capability request, so only the cancellation can end a call.
+                    // The returning call races the watcher that notifies the host and only some
+                    // interleavings lose the notification, hence the repetitions.
+                    for i := range 2000 {
+                        token := NewCancellationToken()
+                        id := c.registerCancellation(token)
+                        done := make(chan error, 1)
+                        go func() {
+                            _, err := c.invokeCapability(token.Context(), "Test/capability", map[string]any{"cancellationToken": id})
+                            done <- err
+                        }()
+                        request := host.read()
+                        if request["method"] != "invokeCapability" {
+                            t.Fatalf("pass %d: got %v, want an invokeCapability request", i, request)
+                        }
+
+                        token.Cancel()
+                        select {
+                        case err := <-done:
+                            if !errors.Is(err, context.Canceled) {
+                                t.Fatalf("pass %d: got %v, want context.Canceled", i, err)
+                            }
+                        case <-time.After(5 * time.Second):
+                            t.Fatalf("pass %d: the call did not return after the token was canceled", i)
+                        }
+
+                        c.cancellationsMu.Lock()
+                        registered := len(c.cancellations)
+                        c.cancellationsMu.Unlock()
+                        if registered != 0 {
+                            t.Fatalf("pass %d: %d cancellation registrations outlived the call", i, registered)
+                        }
+
+                        if err := host.peer.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+                            t.Fatal(err)
+                        }
+                        request, err := readMessage(host.reader)
+                        if err != nil {
+                            t.Fatalf("pass %d: the host was not told about the cancellation: %v", i, err)
+                        }
+                        params, _ := request["params"].([]any)
+                        if request["method"] != "cancelToken" || len(params) != 1 || params[0] != id {
+                            t.Fatalf("pass %d: got %v, want a cancelToken request for %s", i, request, id)
+                        }
+                        host.write(map[string]any{"jsonrpc": "2.0", "id": request["id"], "result": true})
+                    }
+                }
+
+                func TestReadMessageRejectsInvalidContentLength(t *testing.T) {
+                    for _, length := range []string{
+                        strconv.Itoa(maxMessageSize + 1),
+                        "9223372036854775807",
+                        "9223372036854775808",
+                        "-1",
+                        "0",
+                        "abc",
+                        "",
+                    } {
+                        var before, after runtime.MemStats
+                        runtime.ReadMemStats(&before)
+                        _, err := readMessage(bufio.NewReader(strings.NewReader("Content-Length: " + length + "\r\n\r\n{}")))
+                        runtime.ReadMemStats(&after)
+                        if err == nil {
+                            t.Errorf("Content-Length %q: expected an error", length)
+                        }
+                        if grown := after.TotalAlloc - before.TotalAlloc; grown > 1<<20 {
+                            t.Errorf("Content-Length %q: allocated %d bytes before rejecting the frame", length, grown)
+                        }
+                    }
+
+                    var frame bytes.Buffer
+                    if err := writeMessage(&frame, map[string]any{"jsonrpc": "2.0", "id": 1, "result": "ok"}); err != nil {
+                        t.Fatal(err)
+                    }
+                    msg, err := readMessage(bufio.NewReader(&frame))
+                    if err != nil || msg["result"] != "ok" {
+                        t.Fatalf("a valid frame: got %v, %v", msg, err)
+                    }
+                }
+
+                func TestWrapIfHandleRejectsMalformedHandle(t *testing.T) {
+                    c := newClient("")
+                    malformed := map[string]any{"$handle": float64(1), "$type": nil}
+                    for name, value := range map[string]any{
+                        "direct":   malformed,
+                        "in slice": []any{malformed},
+                        "in map":   map[string]any{"nested": malformed},
+                    } {
+                        if _, err := wrapIfHandle(value, c); err == nil {
+                            t.Errorf("%s: expected an error", name)
+                        }
+                    }
+
+                    wrapped, err := wrapIfHandle(map[string]any{"$handle": "h1", "$type": "Test/Type"}, c)
+                    if h, ok := wrapped.(*handle); err != nil || !ok || h.HandleID != "h1" || h.TypeID != "Test/Type" {
+                        t.Fatalf("a valid handle: got %v, %v", wrapped, err)
+                    }
+                }
+
+                func TestExtractResultKeepsErrorCodeAndData(t *testing.T) {
+                    // Decode through the wire format so the code arrives as float64, as it does from the host.
+                    var frame bytes.Buffer
+                    if err := writeMessage(&frame, map[string]any{
+                        "jsonrpc": "2.0",
+                        "id":      1,
+                        "error":   map[string]any{"code": -32601, "message": "Method not found", "data": map[string]any{"method": "nope"}},
+                    }); err != nil {
+                        t.Fatal(err)
+                    }
+                    response, err := readMessage(bufio.NewReader(&frame))
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+
+                    _, err = extractResult(response)
+                    if err == nil || err.Error() != "Method not found" {
+                        t.Fatalf("got %v, want the message alone", err)
+                    }
+                    var coded interface{ Code() int }
+                    if !errors.As(err, &coded) || coded.Code() != -32601 {
+                        t.Fatalf("the code was not preserved: %v", err)
+                    }
+                    var withData interface{ Data() any }
+                    if !errors.As(err, &withData) {
+                        t.Fatalf("the data was not preserved: %v", err)
+                    }
+                    if data, _ := withData.Data().(map[string]any); data["method"] != "nope" {
+                        t.Fatalf("got data %v", withData.Data())
+                    }
+
+                    cases := []struct {
+                        name     string
+                        response map[string]any
+                        message  string
+                        code     int
+                    }{
+                        {"code from connection.close", map[string]any{"error": map[string]any{"code": -32000, "message": "connection closed"}}, "connection closed", -32000},
+                        {"missing message", map[string]any{"error": map[string]any{"code": float64(-32603)}}, "AppHost returned a JSON-RPC error (code -32603)", -32603},
+                        {"error is not an object", map[string]any{"error": "oops"}, "AppHost returned a JSON-RPC error (code 0)", 0},
+                    }
+                    for _, tc := range cases {
+                        _, err := extractResult(tc.response)
+                        if err == nil || err.Error() != tc.message {
+                            t.Errorf("%s: got %v, want %q", tc.name, err, tc.message)
+                        }
+                        if !errors.As(err, &coded) || coded.Code() != tc.code {
+                            t.Errorf("%s: got code %v, want %d", tc.name, coded, tc.code)
+                        }
+                    }
+
+                    if result, err := extractResult(map[string]any{"result": "ok"}); err != nil || result != "ok" {
+                        t.Errorf("success response: got %v, %v", result, err)
+                    }
+                }
+
+                func TestRequestErrorKeepsHostErrorCode(t *testing.T) {
+                    c, host := newFakeHost(t)
+                    done := make(chan error, 1)
+                    go func() {
+                        _, err := c.ping(context.Background())
+                        done <- err
+                    }()
+                    request := host.read()
+                    host.write(map[string]any{"jsonrpc": "2.0", "id": request["id"], "error": map[string]any{"code": -32601, "message": "Method not found"}})
+
+                    err := <-done
+                    var coded interface{ Code() int }
+                    if !errors.As(err, &coded) || coded.Code() != -32601 {
+                        t.Fatalf("got %v, want an error carrying code -32601", err)
+                    }
+                }
+                """, timeout.Token);
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "decode_test.go"), """
+                package aspire
+
+                import (
+                    "encoding/json"
+                    "reflect"
+                    "strconv"
+                    "strings"
+                    "testing"
+                )
+
+                const decodeTestTypeID = "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource"
+
+                // decodeTestResource stands in for a generated handle interface such as Resource.
+                type decodeTestResource interface {
+                    handleReference
+                }
+
+                // decodeTestWrapper stands in for the generated wrapper registered for decodeTestTypeID.
+                type decodeTestWrapper struct{ *resourceBuilderBase }
+
+                type decodeTestKey string
+
+                type decodeTestDto struct {
+                    Name  string `json:"name"`
+                    Count int    `json:"count"`
+                }
+
+                func newDecodeTestClient() *client {
+                    c := newClient("")
+                    c.registerHandleWrapper(decodeTestTypeID, func(h *handle, c *client) any {
+                        return &decodeTestWrapper{newResourceBuilderBase(h, c)}
+                    })
+                    return c
+                }
+
+                func decodeTestHandle(id string) string {
+                    return `{"$handle":"` + id + `","$type":"` + decodeTestTypeID + `"}`
+                }
+
+                func decodeTestHandles(ids ...string) string {
+                    handles := make([]string, len(ids))
+                    for i, id := range ids {
+                        handles[i] = decodeTestHandle(id)
+                    }
+                    return "[" + strings.Join(handles, ",") + "]"
+                }
+
+                // decodeTestIDs lists the handle ids of items in order, with <nil> for a nil item.
+                func decodeTestIDs(items []decodeTestResource) string {
+                    ids := make([]string, len(items))
+                    for i, item := range items {
+                        if item == nil {
+                            ids[i] = "<nil>"
+                            continue
+                        }
+                        ids[i] = item.getHandle().HandleID
+                    }
+                    return strings.Join(ids, ",")
+                }
+
+                // decodeWire takes a JSON-RPC result through the steps a capability result takes:
+                // parse it, wrap its handles, decode it into T.
+                func decodeWire[T any](t *testing.T, c *client, payload string) (T, error) {
+                    t.Helper()
+                    var raw any
+                    if err := json.Unmarshal([]byte(payload), &raw); err != nil {
+                        t.Fatal(err)
+                    }
+                    wrapped, err := wrapIfHandle(raw, c)
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+                    return decodeAs[T](wrapped)
+                }
+
+                func decodeTestExpectError(t *testing.T, name string, err error, want ...string) {
+                    t.Helper()
+                    if err == nil {
+                        t.Errorf("%s: got no error, want one mentioning %q", name, want)
+                        return
+                    }
+                    for _, fragment := range want {
+                        if !strings.Contains(err.Error(), fragment) {
+                            t.Errorf("%s: error %q does not mention %q", name, err, fragment)
+                        }
+                    }
+                }
+
+                func TestDecodeListOfHandles(t *testing.T) {
+                    c := newDecodeTestClient()
+                    cases := []struct{ name, payload, ids string }{
+                        {"one handle", decodeTestHandles("1"), "1"},
+                        {"several handles", decodeTestHandles("1", "2", "3"), "1,2,3"},
+                        {"null element", "[" + decodeTestHandle("1") + ",null]", "1,<nil>"},
+                    }
+                    for _, tc := range cases {
+                        got, err := decodeWire[[]decodeTestResource](t, c, tc.payload)
+                        if err != nil {
+                            t.Errorf("%s: %v", tc.name, err)
+                            continue
+                        }
+                        if ids := decodeTestIDs(got); ids != tc.ids {
+                            t.Errorf("%s: got handles %s, want %s", tc.name, ids, tc.ids)
+                        }
+                        if _, ok := got[0].(*decodeTestWrapper); !ok {
+                            t.Errorf("%s: first element is %T, want the registered wrapper", tc.name, got[0])
+                        }
+                    }
+                }
+
+                func TestDecodeListsOfValues(t *testing.T) {
+                    c := newDecodeTestClient()
+
+                    dtos, err := decodeWire[[]decodeTestDto](t, c, `[{"name":"a","count":1},{"name":"b","count":2}]`)
+                    if err != nil || !reflect.DeepEqual(dtos, []decodeTestDto{{"a", 1}, {"b", 2}}) {
+                        t.Errorf("DTOs: got %v, %v", dtos, err)
+                    }
+
+                    pointers, err := decodeWire[[]*decodeTestDto](t, c, `[{"name":"a","count":1},null]`)
+                    if err != nil || !reflect.DeepEqual(pointers, []*decodeTestDto{{"a", 1}, nil}) {
+                        t.Errorf("DTO pointers: got %v, %v", pointers, err)
+                    }
+
+                    names, err := decodeWire[[]string](t, c, `["a","b"]`)
+                    if err != nil || !reflect.DeepEqual(names, []string{"a", "b"}) {
+                        t.Errorf("strings: got %v, %v", names, err)
+                    }
+
+                    numbers, err := decodeWire[[]int](t, c, `[1,2,3]`)
+                    if err != nil || !reflect.DeepEqual(numbers, []int{1, 2, 3}) {
+                        t.Errorf("ints: got %v, %v", numbers, err)
+                    }
+
+                    floats, err := decodeWire[[]float64](t, c, `[1.5,2]`)
+                    if err != nil || !reflect.DeepEqual(floats, []float64{1.5, 2}) {
+                        t.Errorf("floats: got %v, %v", floats, err)
+                    }
+
+                    mixed, err := decodeWire[[]any](t, c, "["+decodeTestHandle("1")+`,{"name":"a"},7,"x",null]`)
+                    if err != nil || len(mixed) != 5 {
+                        t.Fatalf("mixed list: got %v, %v", mixed, err)
+                    }
+                    if _, ok := mixed[0].(*decodeTestWrapper); !ok {
+                        t.Errorf("mixed list: first element is %T, want the registered wrapper", mixed[0])
+                    }
+                    if want := []any{map[string]any{"name": "a"}, float64(7), "x", nil}; !reflect.DeepEqual(mixed[1:], want) {
+                        t.Errorf("mixed list: got %v, want %v", mixed[1:], want)
+                    }
+                }
+
+                func TestDecodeEmptyList(t *testing.T) {
+                    c := newDecodeTestClient()
+
+                    list, err := decodeWire[[]decodeTestResource](t, c, `[]`)
+                    if err != nil || list == nil || len(list) != 0 {
+                        t.Errorf("empty list: got %#v, %v, want an empty slice", list, err)
+                    }
+
+                    entries, err := decodeWire[map[string]decodeTestResource](t, c, `{}`)
+                    if err != nil || entries == nil || len(entries) != 0 {
+                        t.Errorf("empty map: got %#v, %v, want an empty map", entries, err)
+                    }
+                }
+
+                func TestDecodeNilResult(t *testing.T) {
+                    if got, err := decodeAs[[]decodeTestResource](nil); got != nil || err != nil {
+                        t.Errorf("nil list: got %#v, %v, want nil", got, err)
+                    }
+                    if got, err := decodeAs[map[string]decodeTestResource](nil); got != nil || err != nil {
+                        t.Errorf("nil map: got %#v, %v, want nil", got, err)
+                    }
+
+                    // Typed nils are not nil interfaces, so they reach the element loop and must not panic.
+                    if got, err := decodeAs[[]decodeTestResource]([]any(nil)); err != nil || len(got) != 0 {
+                        t.Errorf("nil []any: got %#v, %v, want an empty list", got, err)
+                    }
+                    if got, err := decodeAs[map[string]decodeTestResource](map[string]any(nil)); err != nil || len(got) != 0 {
+                        t.Errorf("nil map[string]any: got %#v, %v, want an empty map", got, err)
+                    }
+                    if got, err := decodeAs[[]decodeTestResource]([]any{(*decodeTestWrapper)(nil)}); err != nil || len(got) != 1 {
+                        t.Errorf("nil wrapper element: got %#v, %v, want one element", got, err)
+                    }
+                }
+
+                func TestDecodeMapOfHandles(t *testing.T) {
+                    c := newDecodeTestClient()
+                    payload := `{"a":` + decodeTestHandle("1") + `,"b":` + decodeTestHandle("2") + `}`
+
+                    got, err := decodeWire[map[string]decodeTestResource](t, c, payload)
+                    if err != nil || len(got) != 2 {
+                        t.Fatalf("map of handles: got %v, %v", got, err)
+                    }
+                    for key, id := range map[string]string{"a": "1", "b": "2"} {
+                        if item, ok := got[key]; !ok || item.getHandle().HandleID != id {
+                            t.Errorf("map of handles: got %v for %q, want handle %s", item, key, id)
+                        }
+                    }
+
+                    named, err := decodeWire[map[decodeTestKey]decodeTestResource](t, c, payload)
+                    if err != nil || len(named) != 2 || named["a"] == nil || named["b"] == nil {
+                        t.Errorf("map with a named key type: got %v, %v", named, err)
+                    }
+
+                    dtos, err := decodeWire[map[string]decodeTestDto](t, c, `{"x":{"name":"a","count":1}}`)
+                    if err != nil || !reflect.DeepEqual(dtos, map[string]decodeTestDto{"x": {"a", 1}}) {
+                        t.Errorf("map of DTOs: got %v, %v", dtos, err)
+                    }
+
+                    counts, err := decodeWire[map[string]int](t, c, `{"x":1,"y":2}`)
+                    if err != nil || !reflect.DeepEqual(counts, map[string]int{"x": 1, "y": 2}) {
+                        t.Errorf("map of ints: got %v, %v", counts, err)
+                    }
+                }
+
+                func TestDecodeNestedLists(t *testing.T) {
+                    c := newDecodeTestClient()
+
+                    nested, err := decodeWire[[][]decodeTestResource](t, c, "["+decodeTestHandles("1", "2")+",[],"+decodeTestHandles("3")+"]")
+                    if err != nil || len(nested) != 3 || decodeTestIDs(nested[0]) != "1,2" || len(nested[1]) != 0 || decodeTestIDs(nested[2]) != "3" {
+                        t.Errorf("list of lists: got %v, %v", nested, err)
+                    }
+
+                    grouped, err := decodeWire[map[string][]decodeTestResource](t, c, `{"x":`+decodeTestHandles("1", "2")+`}`)
+                    if err != nil || decodeTestIDs(grouped["x"]) != "1,2" {
+                        t.Errorf("map of lists: got %v, %v", grouped, err)
+                    }
+
+                    maps, err := decodeWire[[]map[string]decodeTestResource](t, c, `[{"a":`+decodeTestHandle("1")+`}]`)
+                    if err != nil || len(maps) != 1 || maps[0]["a"] == nil {
+                        t.Errorf("list of maps: got %v, %v", maps, err)
+                    }
+                }
+
+                func TestDecodeNamesTheElementThatFailed(t *testing.T) {
+                    c := newDecodeTestClient()
+                    unregistered := `{"$handle":"9","$type":"Aspire.Hosting/Aspire.Hosting.Unregistered"}`
+
+                    _, err := decodeWire[[]decodeTestResource](t, c, "["+decodeTestHandle("1")+",7]")
+                    decodeTestExpectError(t, "number in a handle list", err, "element 1 of []aspire.decodeTestResource")
+
+                    _, err = decodeWire[[]decodeTestResource](t, c, "["+decodeTestHandle("1")+","+unregistered+"]")
+                    decodeTestExpectError(t, "handle without a wrapper", err, "element 1 of []aspire.decodeTestResource")
+
+                    _, err = decodeWire[[]string](t, c, `["a","b",3]`)
+                    decodeTestExpectError(t, "number in a string list", err, "element 2 of []string")
+
+                    _, err = decodeWire[map[string]decodeTestResource](t, c, `{"a":`+decodeTestHandle("1")+`,"b":7}`)
+                    decodeTestExpectError(t, "number in a handle map", err, `entry "b" of map[string]aspire.decodeTestResource`)
+
+                    _, err = decodeWire[[][]decodeTestResource](t, c, "["+decodeTestHandles("1")+",[7]]")
+                    decodeTestExpectError(t, "number in a nested list", err, "element 1 of [][]aspire.decodeTestResource", "element 0 of []aspire.decodeTestResource")
+
+                    _, err = decodeWire[[][]string](t, c, `[[["a"]]]`)
+                    decodeTestExpectError(t, "data nested deeper than the type", err, "element 0 of [][]string")
+                }
+
+                func TestDecodeSingleValuesAreUnchanged(t *testing.T) {
+                    c := newDecodeTestClient()
+
+                    resource, err := decodeWire[decodeTestResource](t, c, decodeTestHandle("1"))
+                    if err != nil || resource == nil || resource.getHandle().HandleID != "1" {
+                        t.Errorf("single handle: got %v, %v", resource, err)
+                    }
+
+                    dto, err := decodeWire[decodeTestDto](t, c, `{"name":"a","count":1}`)
+                    if err != nil || dto != (decodeTestDto{"a", 1}) {
+                        t.Errorf("DTO: got %v, %v", dto, err)
+                    }
+
+                    pointer, err := decodeWire[*decodeTestDto](t, c, `{"name":"a","count":1}`)
+                    if err != nil || pointer == nil || *pointer != (decodeTestDto{"a", 1}) {
+                        t.Errorf("DTO pointer: got %v, %v", pointer, err)
+                    }
+
+                    // A DTO field of the wrong type is skipped instead of failing the whole value.
+                    partial, err := decodeWire[decodeTestDto](t, c, `{"name":5,"count":3}`)
+                    if err != nil || partial != (decodeTestDto{"", 3}) {
+                        t.Errorf("DTO with a bad field: got %v, %v", partial, err)
+                    }
+
+                    // []byte arrives as a base64 string and a map with integer keys is not a string-keyed
+                    // map, so both keep the JSON round trip.
+                    data, err := decodeWire[[]byte](t, c, `"aGk="`)
+                    if err != nil || string(data) != "hi" {
+                        t.Errorf("bytes: got %q, %v", data, err)
+                    }
+                    byNumber, err := decodeWire[map[int]string](t, c, `{"1":"a"}`)
+                    if err != nil || !reflect.DeepEqual(byNumber, map[int]string{1: "a"}) {
+                        t.Errorf("map with integer keys: got %v, %v", byNumber, err)
+                    }
+
+                    if _, err := decodeWire[[]string](t, c, `"oops"`); err == nil {
+                        t.Error("a string decoded into a list without an error")
+                    }
+                    if _, err := decodeWire[map[string]string](t, c, `["a"]`); err == nil {
+                        t.Error("a list decoded into a map without an error")
+                    }
+                }
+
+                func TestDecodeListOfHandlesDoesNotRoundTripThroughJSON(t *testing.T) {
+                    c := newDecodeTestClient()
+                    ids := make([]string, 100)
+                    for i := range ids {
+                        ids[i] = strconv.Itoa(i)
+                    }
+                    var raw any
+                    if err := json.Unmarshal([]byte(decodeTestHandles(ids...)), &raw); err != nil {
+                        t.Fatal(err)
+                    }
+                    wrapped, err := wrapIfHandle(raw, c)
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+
+                    allocs := testing.AllocsPerRun(10, func() {
+                        if _, err := decodeAs[[]decodeTestResource](wrapped); err != nil {
+                            t.Error(err)
+                        }
+                    })
+                    // Wrappers are assigned as they are, so the result slice is the only allocation that
+                    // grows with the list. Re-encoding each element would take hundreds.
+                    if allocs > 10 {
+                        t.Errorf("decoding 100 handles allocated %v times, want a handful", allocs)
+                    }
+                }
+                """, timeout.Token);
+
+            using var process = Process.Start(new ProcessStartInfo("go")
+            {
+                WorkingDirectory = directory.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                ArgumentList = { "test", "-timeout", "30s", "." }
+            })!;
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go runtime hardening test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
     public async Task GeneratedRuntime_PassesGoTests()
     {
         var directory = Directory.CreateTempSubdirectory();
@@ -950,6 +1704,145 @@ public class AtsGoCodeGeneratorTests
             {
                 await process.WaitForExitAsync(timeout.Token);
                 Assert.True(process.ExitCode == 0, $"Go callback test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedRuntime_DecodesResourcesTaggedWithTheDeclaredInterface()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var process = new Process();
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "declared_interface_test.go"), """
+                package aspire
+
+                import (
+                    "bufio"
+                    "net"
+                    "os"
+                    "testing"
+                )
+
+                // connectResourceHost connects a client to an in-memory AppHost that answers the
+                // capabilities returning resources. The AppHost tags each handle it returns with the
+                // type its capability declares, and Resource has no generated implementation.
+                func connectResourceHost(t *testing.T, resourceType string) *client {
+                    t.Helper()
+                    clientEnd, serverEnd := net.Pipe()
+                    c := newClient("")
+                    registerWrappers(c)
+                    conn := newConnection(clientEnd, c, c.onConnectionClose)
+                    c.mu.Lock()
+                    c.conn = conn
+                    c.mu.Unlock()
+                    conn.start()
+                    t.Cleanup(c.disconnect)
+
+                    resource := func(id string) map[string]any {
+                        return map[string]any{"$handle": id, "$type": resourceType}
+                    }
+                    go func() {
+                        defer serverEnd.Close()
+                        reader := bufio.NewReader(serverEnd)
+                        for {
+                            msg, err := readMessage(reader)
+                            if err != nil {
+                                return
+                            }
+                            reply := map[string]any{"jsonrpc": "2.0", "id": msg["id"]}
+                            params, _ := msg["params"].([]any)
+                            switch {
+                            case len(params) > 0 && params[0] == "Aspire.Hosting/getResources":
+                                reply["result"] = []any{resource("resource-1"), resource("resource-2")}
+                            case len(params) > 0 && params[0] == "Aspire.Hosting/findResourceByName":
+                                reply["result"] = resource("resource-1")
+                            default:
+                                reply["error"] = map[string]any{"code": -32601, "message": "unexpected request"}
+                            }
+                            writeMessage(serverEnd, reply)
+                        }
+                    }()
+                    return c
+                }
+
+                func newTestModel(t *testing.T) DistributedApplicationModel {
+                    t.Helper()
+                    resourceType := os.Getenv("TEST_RESOURCE_TYPE")
+                    if resourceType == "" {
+                        t.Fatal("TEST_RESOURCE_TYPE is not set")
+                    }
+                    return newDistributedApplicationModelFromHandle(&handle{
+                        HandleID: "model",
+                        TypeID:   "Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel",
+                    }, connectResourceHost(t, resourceType))
+                }
+
+                func TestListOfResourcesDecodesIntoTheMarkerInterface(t *testing.T) {
+                    resources, err := newTestModel(t).GetResources()
+                    if err != nil {
+                        t.Fatalf("GetResources failed: %v", err)
+                    }
+                    if len(resources) != 2 {
+                        t.Fatalf("GetResources returned %d resources, want 2", len(resources))
+                    }
+                    for i, want := range []string{"resource-1", "resource-2"} {
+                        if resources[i] == nil || resources[i].getHandle().HandleID != want {
+                            t.Errorf("resource %d: got %v, want a wrapper for handle %s", i, resources[i], want)
+                        }
+                    }
+                }
+
+                func TestSingleResourceDecodesIntoTheMarkerInterface(t *testing.T) {
+                    model := newTestModel(t)
+                    found := model.FindResourceByName("api")
+                    if err := model.Err(); err != nil {
+                        t.Fatalf("FindResourceByName failed: %v", err)
+                    }
+                    if found == nil || found.getHandle().HandleID != "resource-1" {
+                        t.Fatalf("FindResourceByName returned %v, want a wrapper for handle resource-1", found)
+                    }
+                }
+                """, timeout.Token);
+
+            process.StartInfo = new ProcessStartInfo("go")
+            {
+                WorkingDirectory = directory.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                ArgumentList = { "test", "-timeout", "30s", "." },
+                // The same id the AppHost derives for the IResource type that GetResources declares.
+                Environment = { ["TEST_RESOURCE_TYPE"] = AtsTypeMapping.DeriveTypeId(typeof(IResource)) }
+            };
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go declared-interface test failed:{Environment.NewLine}{await stdout}{await stderr}");
             }
             finally
             {

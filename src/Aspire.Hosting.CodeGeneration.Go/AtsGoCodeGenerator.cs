@@ -899,12 +899,19 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     // type fall back to the marker interface, which any concrete satisfies
     // trivially.
 
-    private void GenerateMarkerInterfaces(Dictionary<string, List<AtsCapabilityInfo>> capabilitiesByDirectTarget)
+    // The interface-metadata types that get only a marker interface because no concrete impl is
+    // generated for them, ordered by Go name.
+    private List<KeyValuePair<string, string>> GetMarkerInterfaces()
     {
-        var interfaceTypeIds = _interfaceNames
+        return _interfaceNames
             .Where(kv => _isInterfaceType.TryGetValue(kv.Key, out var isI) && isI && !_implNames.ContainsKey(kv.Key))
             .OrderBy(kv => kv.Value, StringComparer.Ordinal)
             .ToList();
+    }
+
+    private void GenerateMarkerInterfaces(Dictionary<string, List<AtsCapabilityInfo>> capabilitiesByDirectTarget)
+    {
+        var interfaceTypeIds = GetMarkerInterfaces();
 
         if (interfaceTypeIds.Count == 0)
         {
@@ -1811,8 +1818,9 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     // The host tags a handle argument with the callback's declared CLR parameter type. For
     // IResourceBuilder<T> that is a closed generic type id that has no registered wrapper, so the
     // transport delivers a raw *handle. Building the declared wrapper from it, as the TypeScript
-    // SDK does, keeps the user's callback from receiving nil. Handle types without a generated
-    // constructor (marker interfaces) and shims with no client in scope keep callbackArg.
+    // SDK does, keeps the user's callback from receiving nil. Marker interfaces have no generated
+    // constructor, but registerWrappers registers a wrapper for their type id, so they keep
+    // callbackArg, as do shims with no client in scope.
     private string GetCallbackArgExpression(AtsTypeRef type, int index, string? clientExpression)
     {
         if (clientExpression is not null
@@ -2172,6 +2180,18 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             var interfaceName = _interfaceNames[typeId];
             WriteLine($"\tc.registerHandleWrapper(\"{typeId}\", func(h *handle, c *client) any {{");
             WriteLine($"\t\treturn new{interfaceName}FromHandle(h, c)");
+            WriteLine("\t})");
+        }
+
+        // The AppHost tags a handle with the type its capability declares, so a result such as
+        // IResource[] arrives with the IResource type id. A marker interface has no generated
+        // constructor, and without a registered wrapper wrapIfHandle leaves a raw *handle that no
+        // marker interface accepts. The bare wrapper satisfies every marker, as the TypeScript
+        // SDK's registration of its interface wrappers does.
+        foreach (var (typeId, _) in GetMarkerInterfaces())
+        {
+            WriteLine($"\tc.registerHandleWrapper(\"{typeId}\", func(h *handle, c *client) any {{");
+            WriteLine("\t\treturn newHandleWrapperBase(h, c)");
             WriteLine("\t})");
         }
         WriteLine("}");

@@ -38,6 +38,7 @@ internal static class StringComparers
     public static StringComparer NuGetPackageId => StringComparer.OrdinalIgnoreCase;
     public static StringComparer FullTextSearch => StringComparer.OrdinalIgnoreCase;
     public static StringComparer ChannelName => StringComparer.OrdinalIgnoreCase;
+    public static StringComparer TemplateSourceName => StringComparer.OrdinalIgnoreCase;
     public static StringComparer ContainerRuntime => StringComparer.OrdinalIgnoreCase;
 
     // Azure control-plane values are protocol identifiers rather than user text. ARM treats these
@@ -86,6 +87,7 @@ internal static class StringComparisons
     public static StringComparison NuGetPackageId => StringComparison.OrdinalIgnoreCase;
     public static StringComparison FullTextSearch => StringComparison.OrdinalIgnoreCase;
     public static StringComparison ChannelName => StringComparison.OrdinalIgnoreCase;
+    public static StringComparison TemplateSourceName => StringComparison.OrdinalIgnoreCase;
     public static StringComparison ContainerRuntime => StringComparison.OrdinalIgnoreCase;
 
     // Azure control-plane values are protocol identifiers rather than user text. ARM treats these

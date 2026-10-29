@@ -38,6 +38,7 @@ internal sealed partial class TemplateEngineFactory(
 {
     private static readonly TimeSpan s_gitOperationTimeout = TimeSpan.FromMinutes(2);
     private readonly List<IDisposable> _resources = [];
+    private readonly Dictionary<string, ITemplate[]> _discoveredTemplates = new(StringComparer.Ordinal);
     private bool _disposed;
 
     public IEnumerable<ITemplate> GetTemplates() => [];
@@ -57,6 +58,34 @@ internal sealed partial class TemplateEngineFactory(
         var fullPath = source.Repository is null
             ? Path.GetFullPath(source.Path, executionContext.WorkingDirectory.FullName)
             : await GetRepositoryTemplateAsync(source.Repository, source.Path, source.RepositoryRef, cancellationToken);
+        if (_discoveredTemplates.TryGetValue(fullPath, out var cached))
+        {
+            return cached;
+        }
+
+        // Reuse engine sessions for unchanged directories and immutable Git checkouts.
+        // A ref can advance between searches; previously returned callbacks remain pinned.
+        var resourceCount = _resources.Count;
+        try
+        {
+            var templates = await DiscoverTemplatesAsync(fullPath, cancellationToken);
+            _discoveredTemplates.Add(fullPath, templates);
+            return templates;
+        }
+        catch
+        {
+            // Failed or cancelled installations have no callbacks that need their mounts.
+            for (var index = _resources.Count - 1; index >= resourceCount; index--)
+            {
+                _resources[index].Dispose();
+                _resources.RemoveAt(index);
+            }
+            throw;
+        }
+    }
+
+    private async Task<ITemplate[]> DiscoverTemplatesAsync(string fullPath, CancellationToken cancellationToken)
+    {
         if (!Directory.Exists(fullPath))
         {
             throw new TemplateDiscoveryException(CliExitCodes.InvalidCommand,
@@ -92,7 +121,10 @@ internal sealed partial class TemplateEngineFactory(
                 template.Name,
                 (context, name) => OutputPathHelper.GetUniqueDefaultOutputPath(name, context.WorkingDirectory.FullName),
                 _ => { },
-                (_, templateInputs, result, token) => ApplyAsync(settings, creator, template, templateInputs, result, token)))
+                (_, templateInputs, result, token) => ApplyAsync(settings, creator, template, templateInputs, result, token))
+            {
+                SearchDescription = template.Description
+            })
             .ToArray();
         cancellationToken.ThrowIfCancellationRequested();
         if (templates.Length == 0)
@@ -110,12 +142,7 @@ internal sealed partial class TemplateEngineFactory(
     {
         var cacheRoot = Path.Combine(executionContext.CacheDirectory.FullName, "git");
         var pathRoot = Path.Combine(cacheRoot, "repository");
-        var relativePath = Path.GetRelativePath(pathRoot, Path.GetFullPath(templatePath, pathRoot));
-        if (Path.IsPathRooted(templatePath) || relativePath == ".." ||
-            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-        {
-            throw new TemplateDiscoveryException(CliExitCodes.InvalidCommand, NewCommandStrings.TemplateRepositoryPathInvalid);
-        }
+        var relativePath = TemplateSource.GetRepositoryRelativePath(templatePath, pathRoot);
 
         try
         {
@@ -304,6 +331,7 @@ internal sealed partial class TemplateEngineFactory(
         }
 
         _resources.Clear();
+        _discoveredTemplates.Clear();
     }
 
     private async Task<TemplateResult> ApplyAsync(IEngineEnvironmentSettings settings, TemplateCreator creator, ITemplateInfo template, TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)

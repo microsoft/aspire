@@ -9,6 +9,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -1404,6 +1405,26 @@ public class ConsoleInteractionServiceTests
         var result = await interactionService.PromptForStringAsync("Enter value:", validator: validator, binding: binding, cancellationToken: CancellationToken.None);
 
         Assert.Equal("good-value", result);
+    }
+
+    [Fact]
+    public async Task PromptForStringAsync_ResponseLoggingCanBeDisabledWithoutMaskingInput()
+    {
+        const string query = "private-template-search";
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "\n");
+        var sink = new TestSink();
+        using var loggerFactory = new TestLoggerFactory(sink, enabled: true);
+        var interaction = CreateInteractionService(console, loggerFactory: loggerFactory);
+
+        var result = await interaction.PromptForStringAsync(
+            "Search:", binding: PromptBinding.CreateDefault<string?>(query), logResponse: false).DefaultTimeout();
+
+        Assert.Equal(query, result);
+        Assert.Contains(query, output.ToString());
+        Assert.Equal(
+            ["Prompt: Search: (default: ****, secret: False)", "Prompt result: ****"],
+            sink.Writes.Select(write => write.Message));
     }
 
     [Fact]

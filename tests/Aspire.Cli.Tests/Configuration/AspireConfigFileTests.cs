@@ -40,6 +40,38 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LoadAndSave_PreservesTypedTemplateSourcesAndUnmodeledSettings()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(path, """
+            {
+              "TemplateSources": {
+                "local": { "Path": "/templates" },
+                "git": { "repository": "https://example.test/templates", "ref": null, "path": null },
+                "unfinished": { "ref": "main" }
+              },
+              "unrelated": { "enabled": true }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.Path);
+
+        Assert.NotNull(config);
+        Assert.NotNull(config.TemplateSources);
+        Assert.Equal(["local", "git", "unfinished"], config.TemplateSources.Keys);
+        Assert.Equal("/templates", config.TemplateSources["local"]?.Path);
+        Assert.Equal("https://example.test/templates", config.TemplateSources["git"]?.Repository);
+        Assert.Null(config.TemplateSources["git"]?.Ref);
+        Assert.Null(config.TemplateSources["git"]?.Path);
+        Assert.Equal("main", config.TemplateSources["unfinished"]?.Ref);
+
+        config.Save(workspace.Path);
+
+        await Verify(await File.ReadAllTextAsync(path), "json");
+    }
+
+    [Fact]
     public void Load_ReturnsConfig_WhenFileContainsDocsSourceConfiguration()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

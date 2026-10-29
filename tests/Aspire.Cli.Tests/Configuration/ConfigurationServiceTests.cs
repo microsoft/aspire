@@ -4,6 +4,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Templating;
+using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -36,6 +38,117 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
         var service = new ConfigurationService(configuration, executionContext, globalSettingsFile, logger);
 
         return (service, settingsFilePath);
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_MigratesLegacySettingsAndProfilesWithRequestedEdit()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, destination) = CreateService(workspace);
+        var legacyPath = Path.Combine(workspace.Path, ".aspire", "settings.json");
+        const string original = """
+            {
+                "appHostPath": "../original/AppHost.csproj",
+                "language": "csharp",
+                "sdkVersion": "17.0.0",
+                "features": { "defaultWatchEnabled": false }
+            }
+            """;
+        const string profiles = """
+            {
+                "profiles": {
+                    "default": {
+                        "applicationUrl": "https://localhost:5001",
+                        "environmentVariables": { "EXAMPLE": "value" }
+                    }
+                }
+            }
+            """;
+        var profilesPath = Path.Combine(workspace.Path, "apphost.run.json");
+        await File.WriteAllTextAsync(legacyPath, original);
+        await File.WriteAllTextAsync(profilesPath, profiles);
+
+        await service.SetConfigurationAsync("appHost.path", "updated/AppHost.csproj");
+
+        await Verify(await File.ReadAllTextAsync(destination), "json");
+        Assert.Equal(original, await File.ReadAllTextAsync(legacyPath));
+        Assert.Equal(profiles, await File.ReadAllTextAsync(profilesPath));
+    }
+
+    [Theory]
+    [InlineData("set")]
+    [InlineData("delete")]
+    [InlineData("source-add")]
+    [InlineData("source-remove")]
+    public async Task ConfigurationMutations_PreserveLinuxAccessAcl(string mutation)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("Linux POSIX ACL validation.");
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, _) = CreateService(workspace);
+        var path = service.GetSettingsFilePath(isGlobal: true);
+        await File.WriteAllTextAsync(path, """{"custom":"original","templateSources":{"company":{"repository":"https://example.test/templates"}}}""");
+        // The ACL mask makes the group mode r--, but group::--- denies the owning group access.
+        TestPosixAcl.Set(path, "user::rw-,user:65534:r--,group::---,mask::r--,other::---");
+        var acl = TestPosixAcl.Get(path);
+        var mode = File.GetUnixFileMode(path);
+        var store = new TemplateSourceStore(service, workspace.CreateExecutionContext(), NullLogger<TemplateSourceStore>.Instance);
+
+        switch (mutation)
+        {
+            case "set":
+                await service.SetConfigurationAsync("custom", "updated", isGlobal: true);
+                break;
+            case "delete":
+                Assert.True(await service.DeleteConfigurationAsync("custom", isGlobal: true));
+                break;
+            case "source-add":
+                await store.AddAsync("added", new JsonObject { ["repository"] = "https://example.test/added" }, CancellationToken.None);
+                break;
+            case "source-remove":
+                Assert.True(await store.RemoveAsync("company", CancellationToken.None));
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mutation));
+        }
+
+        Assert.Equal(acl, TestPosixAcl.Get(path));
+        Assert.Equal(mode, File.GetUnixFileMode(path));
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        Assert.Equal(mutation == "delete" ? null : mutation == "set" ? "updated" : "original", settings["custom"]?.GetValue<string>());
+        Assert.Equal(mutation switch
+        {
+            "source-add" => ["company", "added"],
+            "source-remove" => [],
+            _ => new[] { "company" }
+        }, settings["templateSources"]?.AsObject().Select(source => source.Key).ToArray() ?? []);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ConfigurationMutations_UnavailableLockPreservesFile(bool global, bool delete)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string original = """{ /* unchanged */ "features:defaultWatchEnabled": true, }""";
+        var (service, _) = CreateService(workspace, original);
+        var path = service.GetSettingsFilePath(global);
+        await File.WriteAllTextAsync(path, original);
+        var cache = workspace.CreateExecutionContext().CacheDirectory;
+        cache.Create();
+        await File.WriteAllTextAsync(Path.Combine(cache.FullName, "workspace-config-locks"), "Blocks lock directory creation.");
+
+        await Assert.ThrowsAsync<IOException>(() => delete
+            ? service.DeleteConfigurationAsync("features.defaultWatchEnabled", global)
+            : service.SetConfigurationAsync("features.defaultWatchEnabled", "false", global));
+
+        Assert.Equal(original, await File.ReadAllTextAsync(path));
     }
 
     [Theory]
