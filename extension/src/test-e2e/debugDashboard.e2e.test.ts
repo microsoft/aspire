@@ -5,7 +5,7 @@ import { getBrowserDebugSessions, getCommandInvocationCount, getDebugLaunchCount
 import { VSBrowser } from './helpers/extester';
 import { executeE2eControlCommand, resetDashboardDefaultChangedNotificationForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceSetting } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { acceptModalDialog, getNotificationMessages, openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { dismissModalDialogIfPresent, getNotificationMessages, openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
 suite('Aspire debug dashboard E2E', function () {
     this.timeout(240000);
@@ -23,6 +23,9 @@ suite('Aspire debug dashboard E2E', function () {
         requireBrowserDebugSessionCleanup = false;
 
         await runE2eTeardown([
+            () => failOnBrowserDebugSessionCleanup
+                ? dismissModalDialogIfPresent('Cancel', 10000, 'dashboard-debug-launch-failure', 'Unable to launch browser')
+                : undefined,
             () => setCliUnavailableForE2E(false),
             () => setShowStatusDelayForE2E(undefined),
             () => resetDashboardDefaultChangedNotificationForE2E(),
@@ -37,6 +40,12 @@ suite('Aspire debug dashboard E2E', function () {
             () => failOnBrowserDebugSessionCleanup
                 ? waitForNoBrowserDebugSessions()
                 : waitForNoBrowserDebugSessions(15000).catch(() => undefined),
+            // Browser events are the E2E lifecycle boundary, not a second copy of launch-request
+            // state. Check for the known modal after shutdown too, including failures outside
+            // the browser-start wait, without requiring a dialog on the successful path.
+            () => failOnBrowserDebugSessionCleanup
+                ? dismissModalDialogIfPresent('Cancel', 10000, 'dashboard-debug-launch-failure', 'Unable to launch browser')
+                : undefined,
             () => waitForNoRunningAppHost().catch(() => undefined),
         ], 'Debug dashboard E2E teardown failed.');
     });
@@ -132,24 +141,7 @@ suite('Aspire debug dashboard E2E', function () {
         // look like a missing browser session.
         await waitForDebugDashboardUrl();
 
-        let browserSession;
-        try {
-            browserSession = await waitForBrowserDebugSession();
-        }
-        catch (error) {
-            // js-debug can leave this modal open after a launch failure. Cancel only that known
-            // dialog so it cannot block teardown or every later Selenium interaction.
-            try {
-                await acceptModalDialog('Cancel', 10000, 'dashboard-debug-launch-failure', 'Unable to launch browser');
-            }
-            catch (dialogError) {
-                throw new AggregateError(
-                    [error, dialogError],
-                    `${error instanceof Error ? error.message : String(error)}\nLaunch-dialog cleanup failed: ${dialogError instanceof Error ? dialogError.message : String(dialogError)}`);
-            }
-
-            throw error;
-        }
+        const browserSession = await waitForBrowserDebugSession();
 
         assert.deepStrictEqual(
             getBrowserDebugSessions().filter(session => session.parentSessionType === 'aspire').map(session => ({ id: session.id, type: session.type })),

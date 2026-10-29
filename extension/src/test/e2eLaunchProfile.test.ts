@@ -6,6 +6,7 @@ import { spawnSync } from 'child_process';
 import { runInNewContext } from 'vm';
 import * as ts from 'typescript';
 import * as vm from 'vm';
+import { error as webDriverError } from 'selenium-webdriver';
 import { blazorWasmDebugProofResponseAllowanceMs, blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs, getBlazorWasmDebugProofControlTimeoutMs } from '../testing/blazorWasmDebugProofTimeouts';
 
 function removeDirectorySafely(directory: string): void {
@@ -863,9 +864,10 @@ suite('E2E launch profile', () => {
         test(dialogCase.description, async () => {
             const helpers = fs.readFileSync(path.resolve(__dirname, '..', '..', 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
             const source = ts.createSourceFile('vscode.ts', helpers, ts.ScriptTarget.Latest, true);
-            const declaration = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'interactWithModalDialog');
-            assert.ok(declaration);
-            const compiled = ts.transpileModule(declaration.getText(source), {
+            const declarations = source.statements.filter((statement): statement is ts.FunctionDeclaration =>
+                ts.isFunctionDeclaration(statement) && ['getMatchingModalDialog', 'interactWithModalDialog'].includes(statement.name?.text ?? ''));
+            assert.strictEqual(declarations.length, 2);
+            const compiled = ts.transpileModule(declarations.map(declaration => declaration.getText(source)).join('\n'), {
                 compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
             }).outputText;
             const exported: {
@@ -878,12 +880,16 @@ suite('E2E launch profile', () => {
             const pressed: string[] = [];
             vm.runInNewContext(compiled, {
                 exports: exported,
+                webDriverError,
+                By: { css: (selector: string) => selector },
                 ModalDialog: class {
                     async getMessage() { return dialogCase.message; }
                     async getDetails() { return dialogCase.details; }
                     async pushButton(title: string) { pressed.push(title); }
                 },
-                VSBrowser: { instance: { driver: { wait: async (predicate: () => Promise<unknown>) => {
+                VSBrowser: { instance: { driver: {
+                    findElements: async () => [{}],
+                    wait: async (predicate: () => Promise<unknown>) => {
                     const result = await predicate();
                     if (!dialogCase.expectedMatch) {
                         assert.strictEqual(result, false);
@@ -910,6 +916,70 @@ suite('E2E launch profile', () => {
                 await assert.rejects(interaction, /No matching dialog/);
                 assert.deepStrictEqual(pressed, []);
             }
+        });
+    }
+
+    for (const dialogState of ['absent', 'unrelated', 'matching', 'missing details', 'driver failure', 'interaction failure']) {
+        test(`optional launch dialog cleanup handles ${dialogState}`, async () => {
+            const helpers = fs.readFileSync(path.resolve(__dirname, '..', '..', 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
+            const source = ts.createSourceFile('vscode.ts', helpers, ts.ScriptTarget.Latest, true);
+            const declarations = source.statements.filter((statement): statement is ts.FunctionDeclaration =>
+                ts.isFunctionDeclaration(statement) && ['getMatchingModalDialog', 'dismissModalDialogIfPresent'].includes(statement.name?.text ?? ''));
+            assert.strictEqual(declarations.length, 2);
+            const compiled = ts.transpileModule(declarations.map(declaration => declaration.getText(source)).join('\n'), {
+                compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+            }).outputText;
+            const failure = new Error('Dialog interaction failed.');
+            const interactions: string[] = [];
+            const dismiss = vm.runInNewContext(`${compiled}\nexports.dismissModalDialogIfPresent;`, {
+                exports: {},
+                webDriverError,
+                By: { css: (selector: string) => selector },
+                ModalDialog: class {
+                    async getMessage() { return dialogState === 'unrelated' ? 'Start AppHost?' : 'Unable to launch browser'; }
+                    async getDetails() {
+                        if (dialogState === 'missing details') {
+                            throw new webDriverError.NoSuchElementError('No dialog details.');
+                        }
+                        return '';
+                    }
+                    async pushButton(title: string) {
+                        interactions.push(title);
+                        if (dialogState === 'interaction failure') {
+                            throw failure;
+                        }
+                    }
+                },
+                VSBrowser: { instance: {
+                    takeScreenshot: async () => undefined,
+                    driver: {
+                    findElements: async () => {
+                        if (dialogState === 'driver failure') {
+                            throw failure;
+                        }
+                        return dialogState === 'absent' ? [] : [{}];
+                    },
+                    wait: async (predicate: () => Promise<unknown>) => {
+                        const result = await predicate();
+                        if (!result) {
+                            throw new webDriverError.TimeoutError('No matching dialog.');
+                        }
+                        return result;
+                    },
+                } } },
+            }) as (buttonTitle: string, timeoutMs: number, screenshotName: string, expectedText: string) => Promise<void>;
+            const cleanup = dismiss('Cancel', 10000, 'launch-failure', 'Unable to launch browser');
+
+            if (dialogState === 'driver failure' || dialogState === 'interaction failure') {
+                await assert.rejects(cleanup, error => error === failure);
+            }
+            else {
+                await cleanup;
+            }
+
+            assert.deepStrictEqual(interactions, ['matching', 'missing details', 'interaction failure'].includes(dialogState)
+                ? ['Cancel']
+                : []);
         });
     }
 
@@ -1419,8 +1489,9 @@ builder.Build().Run();
         assert.ok(debugDashboard.includes('await resetDashboardDefaultChangedNotificationForE2E();'));
     });
 
-    for (const failDialogCleanup of [false, true]) {
-        test(`preserves dashboard browser launch failures and finishes teardown when dialog cleanup ${failDialogCleanup ? 'fails' : 'succeeds'}`, async () => {
+    for (const { failurePhase, failDialogCleanup } of ['before browser start', 'after browser start'].flatMap(
+        failurePhase => [false, true].map(failDialogCleanup => ({ failurePhase, failDialogCleanup })))) {
+        test(`preserves dashboard failures ${failurePhase} and finishes teardown when dialog cleanup ${failDialogCleanup ? 'fails' : 'succeeds'}`, async () => {
             const extensionRoot = path.resolve(__dirname, '..', '..');
             const dashboardSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
             const fixturesSource = ts.createSourceFile(
@@ -1454,7 +1525,13 @@ builder.Build().Run();
                 waitForCommandOutcome: noOperation,
                 waitForDebugSessionStartup: noOperation,
                 waitForDebugDashboardUrl: noOperation,
-                waitForBrowserDebugSession: async () => { throw launchFailure; },
+                waitForBrowserDebugSession: async () => {
+                    if (failurePhase === 'before browser start') {
+                        throw launchFailure;
+                    }
+                    return { id: 'browser-session' };
+                },
+                getBrowserDebugSessions: () => { throw launchFailure; },
                 writeWorkspaceSetting: noOperation,
                 setCliUnavailableForE2E: noOperation,
                 setShowStatusDelayForE2E: noOperation,
@@ -1473,7 +1550,7 @@ builder.Build().Run();
                     throw browserCleanupFailure;
                 },
                 waitForNoRunningAppHost: async () => { cleanups.push('waitForNoRunningAppHost'); },
-                acceptModalDialog: async (buttonTitle: string, _timeoutMs: number, _screenshotName: string | undefined, expectedText: string | undefined) => {
+                dismissModalDialogIfPresent: async (buttonTitle: string, _timeoutMs: number, _screenshotName: string | undefined, expectedText: string | undefined) => {
                     modalInteractions.push({ buttonTitle, expectedText });
                     if (failDialogCleanup) {
                         throw dialogFailure;
@@ -1514,25 +1591,21 @@ builder.Build().Run();
             const browserTest = tests.get('starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows');
             assert.ok(browserTest);
             assert.strictEqual(teardowns.length, 1);
-            await assert.rejects(browserTest.call(context), (error: unknown) => {
-                if (failDialogCleanup) {
-                    assert.ok(error instanceof AggregateError);
-                    assert.deepStrictEqual(Array.from(error.errors), [launchFailure, dialogFailure]);
-                }
-                else {
-                    assert.strictEqual(error, launchFailure);
-                }
-                return true;
-            });
+            await assert.rejects(browserTest.call(context), error => error === launchFailure);
             await assert.rejects(teardowns[0].call(context), (error: unknown) => {
                 assert.ok(error instanceof AggregateError);
                 assert.deepStrictEqual(Array.from(error.errors), [
+                    ...(failDialogCleanup ? [`Error: ${dialogFailure.message}`] : []),
                     `Error: ${stopFailure.message}`,
                     `Error: ${browserCleanupFailure.message}`,
+                    ...(failDialogCleanup ? [`Error: ${dialogFailure.message}`] : []),
                 ]);
                 return true;
             });
-            assert.deepStrictEqual(modalInteractions, [{ buttonTitle: 'Cancel', expectedText: 'Unable to launch browser' }]);
+            assert.deepStrictEqual(modalInteractions, [
+                { buttonTitle: 'Cancel', expectedText: 'Unable to launch browser' },
+                { buttonTitle: 'Cancel', expectedText: 'Unable to launch browser' },
+            ]);
             assert.deepStrictEqual([...cleanups].sort(), [
                 'stopDebugging',
                 'stopAppHost',

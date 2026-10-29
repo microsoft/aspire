@@ -528,6 +528,30 @@ export async function captureScreenshot(name: string): Promise<void> {
     await VSBrowser.instance.takeScreenshot(name).catch(() => undefined);
 }
 
+async function getMatchingModalDialog(expectedText: string | undefined): Promise<{ dialog: ModalDialog; message: string; details: string } | undefined> {
+    const dialogs = await VSBrowser.instance.driver.findElements(By.css('.monaco-dialog-box'));
+    if (dialogs.length === 0) {
+        return undefined;
+    }
+
+    const dialog = new ModalDialog();
+    const message = await dialog.getMessage();
+    const details = await dialog.getDetails().catch(error => {
+        if (error instanceof webDriverError.NoSuchElementError) {
+            return '';
+        }
+
+        throw error;
+    });
+    // Debug launch errors can have an empty heading with the entire
+    // "Unable to launch browser: ..." message in the details element.
+    if ((!message && !details) || (expectedText && !`${message}\n${details}`.includes(expectedText))) {
+        return undefined;
+    }
+
+    return { dialog, message, details };
+}
+
 export async function interactWithModalDialog(
     buttonTitle: string,
     timeoutMs = 120000,
@@ -537,17 +561,8 @@ export async function interactWithModalDialog(
     const expectedTextDescription = expectedText ? ` containing '${expectedText}'` : '';
     const interaction = await VSBrowser.instance.driver.wait(async () => {
         try {
-            const dialog = new ModalDialog();
-            const message = await dialog.getMessage();
-            const details = await dialog.getDetails().catch(() => '');
-            // Debug launch errors can have an empty heading with the entire
-            // "Unable to launch browser: ..." message in the details element.
-            if (!message && !details) {
-                return false;
-            }
-            // A modal from another flow can use the same button title. Match caller-provided text
-            // before interacting so failure cleanup cannot dismiss an unrelated prompt.
-            if (expectedText && !`${message}\n${details}`.includes(expectedText)) {
+            const match = await getMatchingModalDialog(expectedText);
+            if (!match) {
                 return false;
             }
 
@@ -555,6 +570,7 @@ export async function interactWithModalDialog(
                 await VSBrowser.instance.takeScreenshot(screenshotName).catch(() => undefined);
             }
 
+            const { dialog, message, details } = match;
             await dialog.pushButton(buttonTitle);
             return { message, details };
         }
@@ -569,6 +585,30 @@ export async function interactWithModalDialog(
 
 export type AcceptedModalDialog = ModalDialogInteraction;
 export const acceptModalDialog = interactWithModalDialog;
+
+export async function dismissModalDialogIfPresent(
+    buttonTitle: string,
+    timeoutMs: number,
+    screenshotName: string,
+    expectedText: string): Promise<void> {
+    let match: Awaited<ReturnType<typeof getMatchingModalDialog>>;
+    try {
+        match = await VSBrowser.instance.driver.wait(
+            async () => await getMatchingModalDialog(expectedText) ?? false,
+            timeoutMs);
+    }
+    catch (error) {
+        if (error instanceof webDriverError.TimeoutError) {
+            return;
+        }
+
+        throw error;
+    }
+
+    // Absence is expected during successful teardown; an interaction failure is not.
+    await VSBrowser.instance.takeScreenshot(screenshotName).catch(() => undefined);
+    await match.dialog.pushButton(buttonTitle);
+}
 
 export async function getOpenEditorTitles(): Promise<string[]> {
     return await new EditorView().getOpenEditorTitles();

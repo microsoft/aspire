@@ -699,6 +699,13 @@ export class DashboardLauncher implements vscode.Disposable {
 
   async stopDashboardWithinBudget(shutdownDeadline: number): Promise<void> {
     const deadline = Math.min(shutdownDeadline, Date.now() + DashboardLauncher._dashboardStopTimeoutMs);
+    // A start event can already have supplied a browser while its launch request is still pending.
+    // Give that browser the stop budget now rather than spending it all on launch completion.
+    const stopping = Promise.allSettled([this._host.stopWithinBudget(
+      () => this.closeDashboard(),
+      this._dashboardDebugSessions.values().next().value?.session.name ?? aspireDashboard,
+      deadline,
+      () => this.resetDashboardStopAttempts())]);
 
     while (this._pendingDashboardDebugSessionStarts.size > 0) {
       const pendingStarts = [...this._pendingDashboardDebugSessionStarts];
@@ -718,6 +725,11 @@ export class DashboardLauncher implements vscode.Disposable {
           extensionLogOutputChannel.warn(`Dashboard debug session launch did not settle before shutdown: ${describeStopFailure((results[index] as PromiseRejectedResult).reason)}`);
         }
       }
+    }
+
+    const [stopResult] = await stopping;
+    if (stopResult.status === 'rejected') {
+      throw stopResult.reason;
     }
 
     await this._host.stopWithinBudget(
@@ -761,6 +773,9 @@ export class DashboardLauncher implements vscode.Disposable {
     }
 
     const stopRequest = startStop(() => vscode.debug.stopDebugging(tracked.session));
+    // A completed VS Code stop request is sufficient; do not require a second notification
+    // round trip. Natural termination also completes shutdown when the request never settles.
+    // https://code.visualstudio.com/api/references/vscode-api#debug.stopDebugging
     const attempt = Promise.race([stopRequest, tracked.terminationPromise]).then(
       () => {
         this.clearDashboardDebugSession(tracked.session);
