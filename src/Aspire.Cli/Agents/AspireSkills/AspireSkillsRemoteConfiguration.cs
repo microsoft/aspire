@@ -20,7 +20,7 @@ internal static class AspireSkillsRemoteConfiguration
     public static bool HasPluginRegistration(IEnumerable<string> settings, IReadOnlyList<SkillSource> sources)
     {
         // Disabling new registrations does not disable a plugin already active in an agent.
-        var pluginNames = sources.SelectMany(source => source.PluginNames).Prepend(PluginName).Distinct(StringComparer.Ordinal).ToArray();
+        var pluginNames = sources.SelectMany(source => source.GetPluginNames()).Prepend(PluginName).Distinct(StringComparer.Ordinal).ToArray();
         var enabled = new HashSet<string>(StringComparer.Ordinal);
         foreach (var path in settings)
         {
@@ -167,7 +167,7 @@ internal static class AspireSkillsRemoteConfiguration
     private static void ApplyPlugin(JsonObject root, IReadOnlyList<JsonObject> settings, SkillSource skillSource)
     {
         var marketplaceName = skillSource.Marketplace!;
-        var pluginNames = skillSource.PluginNames.ToArray();
+        var pluginNames = skillSource.GetPluginNames().ToArray();
         JsonObject? selectedSource = null;
         foreach (var config in settings.Append(root))
         {
@@ -316,10 +316,10 @@ internal static class AspireSkillsRemoteConfiguration
         {
             "github" => String(source["repo"]) is { } repository &&
                 string.Equals(NormalizeRepositoryUrl($"https://github.com/{repository}"),
-                    NormalizeRepositoryUrl(configuration.RepositoryUrl), StringComparison.OrdinalIgnoreCase),
+                    NormalizeRepositoryUrl(configuration.GetRepositoryUrl()), StringComparison.OrdinalIgnoreCase),
             "git" => String(source["url"]) is { } url &&
-                string.Equals(NormalizeRepositoryUrl(url), NormalizeRepositoryUrl(configuration.RepositoryUrl),
-                    Uri.TryCreate(configuration.RepositoryUrl, UriKind.Absolute, out var repositoryUri) &&
+                string.Equals(NormalizeRepositoryUrl(url), NormalizeRepositoryUrl(configuration.GetRepositoryUrl()),
+                    Uri.TryCreate(configuration.GetRepositoryUrl(), UriKind.Absolute, out var repositoryUri) &&
                         repositoryUri.Scheme == Uri.UriSchemeHttps && repositoryUri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
                         ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal),
             _ => false

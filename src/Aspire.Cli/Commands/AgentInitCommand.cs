@@ -416,7 +416,7 @@ internal sealed class AgentInitCommand : BaseCommand
                 foreach (var skillSource in skillSources)
                 {
                     InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture,
-                        AgentCommandStrings.InitCommand_PluginRiskWarning, skillSource.RepositoryUrl));
+                        AgentCommandStrings.InitCommand_PluginRiskWarning, skillSource.GetRepositoryUrl()));
                     InteractionService.DisplayEmptyLine();
                 }
             }
