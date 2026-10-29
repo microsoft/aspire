@@ -19,7 +19,7 @@ namespace Aspire.Dashboard.Resources {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Columns {
@@ -61,20 +61,20 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to This container is persistent and won&apos;t be stopped when the app host is shut down..
-        /// </summary>
-        public static string PersistentContainerIconTooltip {
-            get {
-                return ResourceManager.GetString("PersistentContainerIconTooltip", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Hidden by default. Visible when &quot;Show hidden resources&quot; is enabled..
         /// </summary>
         public static string HiddenResourceIconTooltip {
             get {
                 return ResourceManager.GetString("HiddenResourceIconTooltip", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to This container is persistent and won&apos;t be stopped when the app host is shut down..
+        /// </summary>
+        public static string PersistentContainerIconTooltip {
+            get {
+                return ResourceManager.GetString("PersistentContainerIconTooltip", resourceCulture);
             }
         }
 
