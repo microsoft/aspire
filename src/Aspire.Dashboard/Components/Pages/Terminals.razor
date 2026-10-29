@@ -12,14 +12,7 @@
 @if (ResourcesLayout is not null)
 {
     <div class="resource-terminal-page">
-        @if (GetSelectedResource() is { } resource && ResourceSelectHelpers.HasUsableTerminal(resource))
-        {
-            <TerminalView ResourceName="@resource.Name" ShowOpenInWindow="true"
-                          AutoFit="@resource.ShouldAutoFitTerminal()"
-                          WindowResourceName="@GetResourceName(PageViewModel.SelectedResource)"
-                          ResourceIcon="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)" />
-        }
-        else if (_resources is not null && !_redirected)
+        @if (_resources is not null && !_redirected && GetSelectedResource() is null)
         {
             <div class="aspire-empty-content aspire-empty-message" role="status">
                 @Loc[nameof(TerminalStrings.TerminalsSelectAResource)]

@@ -64,7 +64,6 @@ public class ResourceOverviewTerminalTests : DashboardTestContext
             page.Find(".overview-terminal-card .overview-card-action:not([href])").Click();
             Assert.Equal("http://localhost" + focused, navigation.Uri);
             cut.Render();
-            page.Render();
         }
 
         Assert.Contains("terminal-focused", page.Find(".resource-overview").ClassList);
@@ -76,7 +75,6 @@ public class ResourceOverviewTerminalTests : DashboardTestContext
         minimize.Click();
         Assert.Equal("http://localhost" + overview, navigation.Uri);
         cut.Render();
-        page.Render();
 
         Assert.False(page.Find(".resource-overview").ClassList.Contains("terminal-focused"));
         Assert.Equal(ResourceTab.Overview, cut.Instance.CurrentTab);
@@ -92,7 +90,6 @@ public class ResourceOverviewTerminalTests : DashboardTestContext
         // Router parameter updates on browser Back/Forward restore focus without replacing the viewer.
         navigation.NavigateTo(focused);
         cut.Render();
-        page.Render();
         Assert.Contains("terminal-focused", page.Find(".resource-overview").ClassList);
         Assert.Same(viewer, cut.FindComponent<TerminalView>().Instance);
         await cut.InvokeAsync(() => page.Instance.DisposeAsync().AsTask());

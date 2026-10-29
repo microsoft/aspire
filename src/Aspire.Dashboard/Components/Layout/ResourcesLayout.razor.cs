@@ -417,6 +417,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         _lastLocation = location;
         _navigatingToTab = null;
+        var previousTab = CurrentTab;
         var previousSelection = _selectedResourceNames;
         UpdateFromLocation(location);
         await ApplyPaneModeFromLocationAsync(location);
@@ -424,10 +425,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         await TryRedirectLandingAsync();
         await PersistSelectedResourcesAsync();
 
-        if (!previousSelection.SequenceEqual(_selectedResourceNames, StringComparers.ResourceName))
+        if (previousTab != CurrentTab || !previousSelection.SequenceEqual(_selectedResourceNames, StringComparers.ResourceName))
         {
-            // Pages that render the selection, such as the overview, aren't always given new parameters when only
-            // the selection changes, so notify them.
+            // Selection and query-only terminal focus changes can reuse the page's parameters.
+            // Notify it so the mounted terminal changes layout even when no resource updates arrive.
             ResourcesChanged?.Invoke();
         }
     }
