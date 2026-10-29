@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Manage named global template sources (local directories and Git repositories) from the CLI and search them from `aspire new` to discover reusable templates.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\uddc2\ufe0f",
+  "firstMergedAt": "2026-10-29T01:45:31Z",
+  "lastMergedAt": "2026-10-29T01:45:31Z",
+  "name": "Global template sources",
+  "owner": "mitchdenny",
+  "prs": [
+    21329
+  ]
+}

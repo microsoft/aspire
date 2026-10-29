@@ -1,0 +1,9 @@
+{
+  "author": "spboyer",
+  "comment": "destroy rejects unknown arguments",
+  "mergedAt": "2026-10-29T01:50:49Z",
+  "number": 21379,
+  "runDate": "2026-10-29T06:05:00Z",
+  "status": "included",
+  "title": "Reject unknown arguments in aspire destroy"
+}

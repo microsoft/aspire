@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "CI test-lane change only",
+  "mergedAt": "2026-10-29T00:27:15Z",
+  "number": 21385,
+  "runDate": "2026-10-29T06:05:00Z",
+  "status": "excluded",
+  "title": "Temporarily disable the macOS CLI unit-test lane"
+}

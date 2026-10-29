@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire docs api` now supports Go, so `list`, `search` and `get` accept `--language go` and the `go` scope once the Go API reference is published on aspire.dev.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udc39",
+  "firstMergedAt": "2026-10-29T01:40:20Z",
+  "lastMergedAt": "2026-10-29T01:40:20Z",
+  "name": "Go support for aspire docs api",
+  "owner": "IEvangelist",
+  "prs": [
+    21173
+  ]
+}

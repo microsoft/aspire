@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Internal telemetry agent detection; not clearly user-facing",
+  "mergedAt": "2026-10-29T03:13:24Z",
+  "number": 21384,
+  "runDate": "2026-10-29T06:05:00Z",
+  "status": "excluded",
+  "title": "Detect newer OpenCode calling-agent environment markers"
+}
