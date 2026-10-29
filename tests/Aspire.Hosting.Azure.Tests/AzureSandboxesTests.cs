@@ -1639,6 +1639,98 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.IsType<OperationCanceledException>(exception.OriginalException);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DiagnosticAzureDevComputeCreateCancellationOrdering(bool cancelDuringSend)
+    {
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var sendCount = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            sendCount++;
+            if (cancelDuringSend)
+            {
+                output.WriteLine("[cancellation-order] transport-canceled-before-response");
+                cancellationTokenSource.Cancel();
+                return Task.FromCanceled<HttpResponseMessage>(cancellationTokenSource.Token);
+            }
+
+            return Task.FromResult<HttpResponseMessage>(new DisposeCallbackResponse(HttpStatusCode.Forbidden, () =>
+            {
+                output.WriteLine("[cancellation-order] forbidden-response-observed-and-disposed");
+                cancellationTokenSource.Cancel();
+            }));
+        });
+        var client = new AzureDevComputeClient(
+            new HttpClient(handler),
+            new RecordingTokenCredential(),
+            NullLogger.Instance,
+            TimeSpan.FromMinutes(1));
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Name = "disk-image",
+                Source = CreateDiskImageSource()
+            },
+            cancellationTokenSource.Token));
+
+        output.WriteLine($"[cancellation-order] sends={sendCount} ambiguous={exception.ResponseMayHaveBeenLost} original={exception.OriginalException.GetType().Name}");
+        Assert.Equal(1, sendCount);
+        Assert.Equal(cancelDuringSend, exception.ResponseMayHaveBeenLost);
+        Assert.IsType<TaskCanceledException>(exception.OriginalException);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DiagnosticAzureDevComputeRejectedCreateCancellationPhase(bool cancelDuringBuffering)
+    {
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var sendCount = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            sendCount++;
+            output.WriteLine("[cancellation-phase] forbidden-response-returned-by-handler");
+            return Task.FromResult<HttpResponseMessage>(new DisposeCallbackResponse(HttpStatusCode.Forbidden, () =>
+            {
+                if (!cancelDuringBuffering)
+                {
+                    output.WriteLine("[cancellation-phase] observed-forbidden-before-arming-10ms");
+                    cancellationTokenSource.CancelAfter(TimeSpan.FromMilliseconds(10));
+                }
+            })
+            {
+                Content = new QualificationBufferingContent(cancellationTokenSource, cancelDuringBuffering, () =>
+                {
+                    output.WriteLine("[cancellation-phase] buffering-before-client-observation");
+                    Assert.False(cancellationTokenSource.IsCancellationRequested);
+                }),
+            });
+        });
+        var client = new AzureDevComputeClient(
+            new HttpClient(handler),
+            new RecordingTokenCredential(),
+            NullLogger.Instance,
+            TimeSpan.FromMinutes(1));
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Name = "disk-image",
+                Source = CreateDiskImageSource()
+            },
+            cancellationTokenSource.Token));
+
+        output.WriteLine($"[cancellation-phase] beforeObservation={cancelDuringBuffering} sends={sendCount} ambiguous={exception.ResponseMayHaveBeenLost} original={exception.OriginalException.GetType().Name}");
+        Assert.Equal(1, sendCount);
+        Assert.Equal(cancelDuringBuffering, exception.ResponseMayHaveBeenLost);
+        Assert.IsType<TaskCanceledException>(exception.OriginalException);
+    }
+
     [Fact]
     public async Task AzureDevComputeClientTreatsMissingDeletedResourcesAsSuccess()
     {
@@ -3658,6 +3750,28 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             }
 
             base.Dispose(disposing);
+        }
+    }
+
+    private sealed class QualificationBufferingContent(
+        CancellationTokenSource cancellation, bool cancelDuringBuffering, Action onBuffering) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            onBuffering();
+            if (cancelDuringBuffering)
+            {
+                cancellation.Cancel();
+                return Task.FromCanceled(cancellation.Token);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
         }
     }
 
