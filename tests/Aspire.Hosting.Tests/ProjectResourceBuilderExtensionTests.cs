@@ -43,6 +43,64 @@ public class ProjectResourceBuilderExtensionTests
     }
 
     [Fact]
+    public void WithDotnetBaseDefaultsIsExperimental()
+    {
+        var method = typeof(ProjectResourceBuilderExtensions).GetMethod(nameof(ProjectResourceBuilderExtensions.WithDotnetBaseDefaults))!;
+        var attribute = Assert.IsType<ExperimentalAttribute>(method.GetCustomAttribute<ExperimentalAttribute>());
+
+        Assert.Equal("ASPIREPROJECTS001", attribute.DiagnosticId);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public async Task BaseDefaultsApplyProfilesAndRebuildWithoutWebConfiguration(DistributedApplicationOperation operation)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        var metadata = new TestProject
+        {
+            LaunchSettings = new LaunchSettings
+            {
+                Profiles = new Dictionary<string, LaunchProfile>
+                {
+                    ["custom"] = new()
+                    {
+                        CommandName = "Project",
+                        ApplicationUrl = "https://localhost:7443;http://localhost:5080",
+                        EnvironmentVariables = new Dictionary<string, string> { ["PROFILE_VALUE"] = "from-profile" }
+                    }
+                }
+            }
+        };
+        var resource = builder.AddResource(new ProjectResource("base-defaults"))
+            .WithAnnotation<IProjectMetadata>(metadata)
+            .WithDotnetBaseDefaults(new ProjectResourceOptions());
+
+        Assert.Empty(resource.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.Equal(operation == DistributedApplicationOperation.Run ? 1 : 0,
+            builder.Resources.OfType<ProjectRebuilderResource>().Count());
+        Assert.Throws<InvalidOperationException>(() => resource.WithProjectDefaults(new ProjectResourceOptions()));
+        Assert.Throws<InvalidOperationException>(() => resource.WithDotnetBaseDefaults(new ProjectResourceOptions()));
+
+        resource.WithHttpsEndpoint(targetPort: 8181).WithEnvironment("PROFILE_VALUE", "explicit");
+        using var app = await builder.BuildAsync();
+        var environment = new ExecutionConfigurationGathererContext();
+        await new EnvironmentVariablesExecutionConfigurationGatherer()
+            .GatherAsync(environment, resource.Resource, NullLogger.Instance, builder.ExecutionContext);
+
+        var relevant = environment.EnvironmentVariables
+            .Where(item => item.Key is "DOTNET_LAUNCH_PROFILE" or "PROFILE_VALUE" ||
+                item.Key.StartsWith("ASPNETCORE_", StringComparison.Ordinal) ||
+                item.Key.StartsWith("Kestrel__", StringComparison.Ordinal))
+            .OrderBy(item => item.Key)
+            .Select(item => (item.Key, item.Value));
+        var expected = operation == DistributedApplicationOperation.Run
+            ? new (string, object)[] { ("DOTNET_LAUNCH_PROFILE", "custom"), ("PROFILE_VALUE", "explicit") }
+            : [("PROFILE_VALUE", "explicit")];
+        Assert.Equal(expected, relevant);
+    }
+
+    [Fact]
     public void WithPersistentLifetimeAddsPersistenceAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -539,6 +597,8 @@ public class ProjectResourceBuilderExtensionTests
     private sealed class TestProject : IProjectMetadata
     {
         public string ProjectPath => "test.csproj";
+
+        public LaunchSettings? LaunchSettings { get; init; }
     }
 
     private sealed class OverrideTestProject : IProjectMetadata

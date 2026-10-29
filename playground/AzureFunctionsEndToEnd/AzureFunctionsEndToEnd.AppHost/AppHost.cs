@@ -21,7 +21,7 @@ database.AddContainer("mycontainer", "/id");
 
 #endif
 
-var funcApp = builder.AddAzureFunctionsProject<Projects.AzureFunctionsEndToEnd_Functions>("funcapp")
+var funcApp = builder.AddAzureFunctions("funcapp", "../AzureFunctionsEndToEnd.Functions/AzureFunctionsEndToEnd.Functions.csproj")
     .WithExternalHttpEndpoints()
     .WithReference(eventHub).WaitFor(eventHub)
 #if !SKIP_UNSTABLE_EMULATORS
@@ -32,8 +32,7 @@ var funcApp = builder.AddAzureFunctionsProject<Projects.AzureFunctionsEndToEnd_F
     .WithReference(blob)
     .WithReference(queue);
 
-#pragma warning disable CS0618 // Preserve the staged Azure Functions end-to-end scenario until #21345.
-builder.AddProject<Projects.AzureFunctionsEndToEnd_ApiService>("apiservice")
+builder.AddDotnetProject("apiservice", "../AzureFunctionsEndToEnd.ApiService/AzureFunctionsEndToEnd.ApiService.csproj")
     .WithExternalHttpEndpoints()
     .WithReference(eventHub).WaitFor(eventHub)
 #if !SKIP_UNSTABLE_EMULATORS
@@ -43,6 +42,5 @@ builder.AddProject<Projects.AzureFunctionsEndToEnd_ApiService>("apiservice")
     .WithReference(queue)
     .WithReference(blob)
     .WithReference(funcApp);
-#pragma warning restore CS0618
 
 builder.Build().Run();

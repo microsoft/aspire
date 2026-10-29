@@ -1,0 +1,6 @@
+﻿{
+  Entrypoint: [
+    /opt/startup/start_nonappservice.sh
+  ],
+  WorkingDirectory: /home/site/wwwroot
+}

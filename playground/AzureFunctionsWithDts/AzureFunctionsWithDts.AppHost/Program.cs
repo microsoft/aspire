@@ -8,7 +8,7 @@ var scheduler = builder.AddDurableTaskScheduler("scheduler").RunAsEmulator();
 
 var taskHub = scheduler.AddTaskHub("taskhub");
 
-builder.AddAzureFunctionsProject<Projects.AzureFunctionsWithDts_Functions>("funcapp")
+builder.AddAzureFunctions("funcapp", "../AzureFunctionsWithDts.Functions/AzureFunctionsWithDts.Functions.csproj")
     .WithHostStorage(storage)
     .WithReference(taskHub);
 

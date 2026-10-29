@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZUREFUNCTIONS001 // Tests exercise the experimental directory-based Functions APIs.
+#pragma warning disable CS0618 // Deliberate coverage of the retained legacy Azure Functions API.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
@@ -41,12 +43,126 @@ public class FunctionsPublicApiTests(ITestOutputHelper testOutputHelper)
     public void ProjectBasedFunctionsApisAreNotExperimental()
     {
         Assert.Null(typeof(AzureFunctionsProjectResource).GetCustomAttribute<ExperimentalAttribute>());
+        Assert.Null(typeof(AzureFunctionsResource).GetCustomAttribute<ExperimentalAttribute>());
 
         var methods = typeof(AzureFunctionsProjectResourceExtensions).GetMethods()
-            .Where(method => method.ReturnType == typeof(IResourceBuilder<AzureFunctionsProjectResource>));
+            .Where(method => method.ReturnType == typeof(IResourceBuilder<AzureFunctionsProjectResource>)
+                || method.ReturnType == typeof(IResourceBuilder<AzureFunctionsResource>));
 
         Assert.NotEmpty(methods);
         Assert.All(methods, method => Assert.Null(method.GetCustomAttribute<ExperimentalAttribute>()));
+    }
+
+    [Fact]
+    public void LegacyProjectFunctionsApisRetainInheritanceAndAreObsoleteWithoutErrors()
+    {
+        Assert.Equal(typeof(ProjectResource), typeof(AzureFunctionsProjectResource).BaseType);
+        Assert.Equal(typeof(DotnetProjectResource), typeof(AzureFunctionsResource).BaseType);
+        var members = typeof(AzureFunctionsProjectResourceExtensions).GetMethods()
+            .Where(method => method.ReturnType == typeof(IResourceBuilder<AzureFunctionsProjectResource>))
+            .Cast<MemberInfo>()
+            .Append(typeof(AzureFunctionsProjectResource));
+
+        foreach (var member in members)
+        {
+            var obsolete = Assert.IsType<ObsoleteAttribute>(member.GetCustomAttribute<ObsoleteAttribute>());
+            Assert.False(obsolete.IsError);
+            Assert.Contains("AddAzureFunctions", obsolete.Message);
+        }
+
+        var legacyPathFactory = typeof(AzureFunctionsProjectResourceExtensions).GetMethod(
+            nameof(AzureFunctionsProjectResourceExtensions.AddAzureFunctionsProject),
+            [typeof(IDistributedApplicationBuilder), typeof(string), typeof(string)])!;
+        Assert.NotNull(legacyPathFactory.GetCustomAttribute<AspireExportAttribute>());
+        Assert.Null(legacyPathFactory.GetCustomAttribute<AspireExportIgnoreAttribute>());
+        var legacyHostStorage = typeof(AzureFunctionsProjectResourceExtensions).GetMethod(
+            nameof(AzureFunctionsProjectResourceExtensions.WithHostStorage),
+            [typeof(IResourceBuilder<AzureFunctionsProjectResource>), typeof(IResourceBuilder<AzureStorageResource>)])!;
+        Assert.NotNull(legacyHostStorage.GetCustomAttribute<AspireExportAttribute>());
+        Assert.Null(legacyHostStorage.GetCustomAttribute<AspireExportIgnoreAttribute>());
+    }
+
+    [Fact]
+    public void FunctionsExportsUseUniqueCapabilitiesAndFriendlyTypedNames()
+    {
+        var exports = typeof(AzureFunctionsProjectResourceExtensions).GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+            .SelectMany(method => method.GetCustomAttributes<AspireExportAttribute>().Select(export => (method, export)))
+            .ToArray();
+        var ids = exports.Select(item => item.export.Id ?? char.ToLowerInvariant(item.method.Name[0]) + item.method.Name[1..]).ToArray();
+        Assert.Equal(ids.Length, ids.Distinct(StringComparer.Ordinal).Count());
+
+        var hostStorage = Assert.Single(exports, item => item.export.Id == "withAzureFunctionsHostStorage");
+        Assert.Equal("withHostStorage", hostStorage.export.MethodName);
+        Assert.Equal(typeof(IResourceBuilder<AzureFunctionsResource>), hostStorage.method.ReturnType);
+        var buildEnvironment = Assert.Single(exports, item => item.export.Id == "withAzureFunctionsBuildEnvironment");
+        Assert.Equal("withBuildEnvironment", buildEnvironment.export.MethodName);
+        Assert.Equal(typeof(IResourceBuilder<AzureFunctionsResource>), buildEnvironment.method.ReturnType);
+    }
+
+    [Theory]
+    [InlineData("builder")]
+    [InlineData("name")]
+    [InlineData("projectPath")]
+    public void AddAzureFunctionsValidatesNullArguments(string argument)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            AzureFunctionsProjectResourceExtensions.AddAzureFunctions(
+                argument == "builder" ? null! : builder,
+                argument == "name" ? null! : "functions",
+                argument == "projectPath" ? null! : "Functions.csproj"));
+
+        Assert.Equal(argument, exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData("name")]
+    [InlineData("projectPath")]
+    public void AddAzureFunctionsValidatesEmptyArguments(string argument)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            builder.AddAzureFunctions(argument == "name" ? "" : "functions", argument == "projectPath" ? "" : "Functions.csproj"));
+
+        Assert.Equal(argument, exception.ParamName);
+    }
+
+    [Fact]
+    public void NewFunctionsFluentApisValidateArgumentsAndPreserveBuilderType()
+    {
+        IResourceBuilder<AzureFunctionsResource> missing = null!;
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var path = AzureFunctionsTestHelpers.CreateProject(workspace.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var functions = builder.AddAzureFunctions("functions", path);
+        var storage = builder.AddAzureStorage("storage");
+
+        Assert.Equal("builder", Assert.Throws<ArgumentNullException>(() => missing.WithHostStorage(storage)).ParamName);
+        Assert.Equal("storage", Assert.Throws<ArgumentNullException>(() => functions.WithHostStorage(null!)).ParamName);
+        Assert.Equal("source", Assert.Throws<ArgumentNullException>(() =>
+            AzureFunctionsProjectResourceExtensions.WithReference(functions, (IResourceBuilder<AzureBlobStorageResource>)null!)).ParamName);
+        Assert.Equal("builder", Assert.Throws<ArgumentNullException>(() => missing.WithBuildEnvironment("SETTING", "value")).ParamName);
+        Assert.Equal("name", Assert.Throws<ArgumentException>(() => functions.WithBuildEnvironment("", "value")).ParamName);
+        Assert.Equal("value", Assert.Throws<ArgumentNullException>(() => functions.WithBuildEnvironment("SETTING", null!)).ParamName);
+        Assert.Equal("callback", Assert.Throws<ArgumentNullException>(() => functions.WithBuildEnvironment((Action<EnvironmentCallbackContext>)null!)).ParamName);
+        Assert.Equal("callback", Assert.Throws<ArgumentNullException>(() => functions.WithBuildEnvironment((Func<EnvironmentCallbackContext, Task>)null!)).ParamName);
+        Assert.Same(functions, functions.WithReplicas(2).DisableForwardedHeaders().WithEndpointsInEnvironment(endpoint => endpoint.Name == "http").WithHostStorage(storage));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CtorAzureFunctionsResourceValidatesName(bool isNull)
+    {
+        var name = isNull ? null! : string.Empty;
+
+        var exception = isNull
+            ? Assert.Throws<ArgumentNullException>(() => new AzureFunctionsResource(name, "."))
+            : Assert.Throws<ArgumentException>(() => new AzureFunctionsResource(name, "."));
+
+        Assert.Equal(nameof(name), exception.ParamName);
     }
 
     [Fact]

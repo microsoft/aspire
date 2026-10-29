@@ -704,41 +704,46 @@ suite('AspireCodeLensProvider resource lens anchoring', () => {
         }
     });
 
-    test('emits an Azure Functions install lens when one required debugger extension is missing', async () => {
-        const getExtensionStub = sinon.stub(vscode.extensions, 'getExtension').callsFake(extensionId =>
-            extensionId === 'ms-dotnettools.csharp'
-                ? { id: extensionId } as vscode.Extension<unknown>
-                : undefined);
-        const docPath = p('repo', 'AppHost', 'AppHost.cs');
-        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
-        const harness = createHarness({
-            workspaceAppHostPath: hostPath,
-            workspaceResources: [
-                makeResource('functions', {
-                    properties: { [launchConfigurationTypePropertyName]: 'azure-functions' },
-                }),
-            ],
-        });
-
-        try {
-            const doc = createMockDocument(
-                'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddAzureFunctionsProject("functions", "../functions");',
-                docPath);
-            const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
-            const installLenses = lenses.filter(lens => lens.command?.command === 'aspire-vscode.installDebuggerExtension');
-
-            assert.strictEqual(installLenses.length, 1);
-            assert.strictEqual(installLenses[0].command?.title, '⚠️ Set up Azure Functions debugger');
-            assert.deepStrictEqual(installLenses[0].command?.arguments?.[0], {
-                debuggerName: 'Azure Functions',
-                debuggerType: 'azure-functions',
-                extensionIds: ['ms-dotnettools.csharp', 'ms-azuretools.vscode-azurefunctions'],
+    for (const [method, launchType] of [
+        ['AddAzureFunctionsProject', 'azure-functions'],
+        ['AddAzureFunctions', 'azure-functions-with-external-build.v1'],
+    ]) {
+        test(`emits an Azure Functions install lens for ${method} when one debugger prerequisite is missing`, async () => {
+            const getExtensionStub = sinon.stub(vscode.extensions, 'getExtension').callsFake(extensionId =>
+                extensionId === 'ms-dotnettools.csharp'
+                    ? { id: extensionId } as vscode.Extension<unknown>
+                    : undefined);
+            const docPath = p('repo', 'AppHost', 'AppHost.cs');
+            const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+            const harness = createHarness({
+                workspaceAppHostPath: hostPath,
+                workspaceResources: [
+                    makeResource('functions', {
+                        properties: { [launchConfigurationTypePropertyName]: launchType },
+                    }),
+                ],
             });
-        } finally {
-            harness.dispose();
-            getExtensionStub.restore();
-        }
-    });
+
+            try {
+                const doc = createMockDocument(
+                    `var builder = DistributedApplication.CreateBuilder(args);\nbuilder.${method}("functions", "../functions/Functions.csproj");`,
+                    docPath);
+                const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+                const installLenses = lenses.filter(lens => lens.command?.command === 'aspire-vscode.installDebuggerExtension');
+
+                assert.strictEqual(installLenses.length, 1);
+                assert.strictEqual(installLenses[0].command?.title, '⚠️ Set up Azure Functions debugger');
+                assert.deepStrictEqual(installLenses[0].command?.arguments?.[0], {
+                    debuggerName: 'Azure Functions',
+                    debuggerType: 'azure-functions',
+                    extensionIds: ['ms-dotnettools.csharp', 'ms-azuretools.vscode-azurefunctions'],
+                });
+            } finally {
+                harness.dispose();
+                getExtensionStub.restore();
+            }
+        });
+    }
 
     test('emits resource state and action lenses for a running Rust AppHost', async () => {
         const appHostPath = p('repo', 'AppHost', 'apphost.rs');

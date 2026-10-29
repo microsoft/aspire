@@ -22,4 +22,20 @@ internal static class DotnetProjectTestHelpers
         extension.Equals(".fsproj", StringComparison.OrdinalIgnoreCase)
             ? """<ItemGroup><Compile Include="Program.fs" /></ItemGroup>"""
             : "";
+
+    public static string CreateProject(string workspacePath, string name)
+    {
+        var directory = Directory.CreateDirectory(Path.Combine(workspacePath, name));
+        var projectPath = Path.Combine(directory.FullName, $"{name}.csproj");
+        File.WriteAllText(projectPath, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+
+        return projectPath;
+    }
 }
+
+internal sealed class TestDotnetProjectResource(string name, string workingDirectory)
+    : DotnetProjectResource(name, workingDirectory);

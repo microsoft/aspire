@@ -172,6 +172,19 @@ suite('debugger install hints', () => {
             });
     });
 
+    test('shares the Functions debugger hint across legacy and external-build launch types', () => {
+        const getExtension = sinon.stub(vscode.extensions, 'getExtension').returns(undefined);
+        const legacyHint = getDebuggerInstallHintForResource(createResource('azure-functions'));
+        assert.ok(legacyHint);
+
+        assert.deepStrictEqual(getDebuggerInstallHintForResource(createResource('azure-functions-with-external-build.v1')), legacyHint);
+        getExtension.callsFake(extensionId =>
+            extensionId === 'ms-azuretools.vscode-azurefunctions' ? { id: extensionId } as vscode.Extension<unknown> : undefined);
+        assert.deepStrictEqual(getDebuggerInstallHintForResource(createResource('azure-functions-with-external-build.v1')), legacyHint);
+        getExtension.callsFake(extensionId => ({ id: extensionId } as vscode.Extension<unknown>));
+        assert.strictEqual(getDebuggerInstallHintForResource(createResource('azure-functions-with-external-build.v1')), undefined);
+    });
+
     test('keeps debugger product names out of localization resources', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;

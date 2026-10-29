@@ -531,6 +531,59 @@ public static class ProjectResourceBuilderExtensions
     public static IResourceBuilder<TProjectResource> WithProjectDefaults<TProjectResource>(this IResourceBuilder<TProjectResource> builder, ProjectResourceOptions options)
         where TProjectResource : class, IResourceWithEnvironment, IResourceWithEndpoints, IResourceWithArgs
     {
+        return WithProjectDefaultsCore(builder, options, configureWebDefaults: true);
+    }
+
+    /// <summary>
+    /// Applies base .NET project defaults without configuring ASP.NET endpoints or web-server settings.
+    /// </summary>
+    /// <typeparam name="TResource">The resource type.</typeparam>
+    /// <param name="builder">The resource builder carrying the project's metadata.</param>
+    /// <param name="options">The launch-profile options. Kestrel endpoint options have no effect on base defaults.</param>
+    /// <returns>The same resource builder for additional framework-specific configuration.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> or <paramref name="options"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Project metadata is missing, or project defaults have already been applied.</exception>
+    /// <remarks>
+    /// <para>
+    /// This integration-authoring method configures launch-profile selection and runtime environment, common
+    /// telemetry and console logging, project metadata validation, and the Rebuild command's infrastructure.
+    /// It does not discover Kestrel or launch-profile application URLs, inject listening-port environment
+    /// variables, or configure web-server certificates. Framework integrations supply those settings themselves.
+    /// </para>
+    /// <para>
+    /// The caller must attach exactly one <see cref="IProjectMetadata"/> annotation before calling this method
+    /// and must not replace it afterward. This method does not create metadata, coordinate initial builds,
+    /// select the SDK process invocation, or enable container publishing. Those responsibilities belong to
+    /// the language integration's resource factory.
+    /// </para>
+    /// <para>
+    /// Apply either this method or <see cref="WithProjectDefaults{TResource}"/>, once per resource.
+    /// The latter includes these base defaults and adds ordinary ASP.NET configuration.
+    /// </para>
+    /// <example>
+    /// Configure common defaults before applying an integration's own endpoints and debug support:
+    /// <code lang="csharp">
+    /// resource.WithDotnetBaseDefaults(new ProjectResourceOptions());
+    /// resource.WithHttpEndpoint();
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Integration-authoring API that requires .NET project metadata; not an AppHost SDK export.")]
+    public static IResourceBuilder<TResource> WithDotnetBaseDefaults<TResource>(
+        this IResourceBuilder<TResource> builder,
+        ProjectResourceOptions options)
+        where TResource : class, IResourceWithEnvironment, IResourceWithEndpoints, IResourceWithArgs
+    {
+        return WithProjectDefaultsCore(builder, options, configureWebDefaults: false);
+    }
+
+    private static IResourceBuilder<TProjectResource> WithProjectDefaultsCore<TProjectResource>(
+        IResourceBuilder<TProjectResource> builder,
+        ProjectResourceOptions options,
+        bool configureWebDefaults)
+        where TProjectResource : class, IResourceWithEnvironment, IResourceWithEndpoints, IResourceWithArgs
+    {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(options);
 
@@ -607,7 +660,10 @@ public static class ProjectResourceBuilderExtensions
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode && builder.ApplicationBuilder.Environment.IsDevelopment())
         {
             // Disable URL query redaction, e.g. ?myvalue=Redacted
-            builder.WithEnvironment(KnownOtelConfigNames.DotnetExperimentalAspNetCoreDisableUrlQueryRedaction, "true");
+            if (configureWebDefaults)
+            {
+                builder.WithEnvironment(KnownOtelConfigNames.DotnetExperimentalAspNetCoreDisableUrlQueryRedaction, "true");
+            }
             builder.WithEnvironment(KnownOtelConfigNames.DotnetExperimentalHttpClientDisableUrlQueryRedaction, "true");
         }
 
@@ -640,38 +696,41 @@ public static class ProjectResourceBuilderExtensions
             return Task.CompletedTask;
         });
 
-        builder.WithHttpsCertificateConfiguration(ctx =>
+        if (configureWebDefaults)
         {
-            if (!ctx.Resource.Annotations.OfType<EndpointAnnotation>().Any(e => e.TlsEnabled))
+            builder.WithHttpsCertificateConfiguration(ctx =>
             {
+                if (!ctx.Resource.Annotations.OfType<EndpointAnnotation>().Any(e => e.TlsEnabled))
+                {
+                    return Task.CompletedTask;
+                }
+
+                // Preserve an explicit certificate selection as a group. Replacing a PEM Path with a PFX
+                // path while retaining KeyPath makes Kestrel load incompatible files.
+                // https://github.com/microsoft/aspire/issues/20019
+                if (ctx.EnvironmentVariables.Keys.Any(name =>
+                    string.Equals(name, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath, StringComparisons.EnvironmentVariableName) ||
+                    string.Equals(name, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultKeyPath, StringComparisons.EnvironmentVariableName) ||
+                    string.Equals(name, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultSubject, StringComparisons.EnvironmentVariableName)))
+                {
+                    return Task.CompletedTask;
+                }
+
+                // Kestrel's default certificate configuration accepts PFX paths directly. This avoids
+                // PEM key-pair path handling differences in local development environments.
+                ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath] = ctx.PfxPath;
+                if (ctx.Password is not null)
+                {
+                    ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword] = ctx.Password;
+                }
+                else
+                {
+                    ctx.EnvironmentVariables.Remove(KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword);
+                }
+
                 return Task.CompletedTask;
-            }
-
-            // Preserve an explicit certificate selection as a group. Replacing a PEM Path with a PFX
-            // path while retaining KeyPath makes Kestrel load incompatible files.
-            // https://github.com/microsoft/aspire/issues/20019
-            if (ctx.EnvironmentVariables.Keys.Any(name =>
-                string.Equals(name, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath, StringComparisons.EnvironmentVariableName) ||
-                string.Equals(name, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultKeyPath, StringComparisons.EnvironmentVariableName) ||
-                string.Equals(name, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultSubject, StringComparisons.EnvironmentVariableName)))
-            {
-                return Task.CompletedTask;
-            }
-
-            // Kestrel's default certificate configuration accepts PFX paths directly. This avoids
-            // PEM key-pair path handling differences in local development environments.
-            ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath] = ctx.PfxPath;
-            if (ctx.Password is not null)
-            {
-                ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword] = ctx.Password;
-            }
-            else
-            {
-                ctx.EnvironmentVariables.Remove(KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword);
-            }
-
-            return Task.CompletedTask;
-        });
+            });
+        }
 
         var projectResource = builder.Resource;
 
@@ -681,7 +740,7 @@ public static class ProjectResourceBuilderExtensions
             AddRebuilderResource(builder, projectResource, launchDefaults);
         }
 
-        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        if (configureWebDefaults && builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
             builder.WithEnvironment(context =>
             {
@@ -713,6 +772,33 @@ public static class ProjectResourceBuilderExtensions
 
         var effectiveLaunchProfile = options.ExcludeLaunchProfile ? null : projectResource.GetEffectiveLaunchProfile(throwIfNotFound: true);
         var launchProfile = effectiveLaunchProfile?.LaunchProfile;
+
+        void ConfigureLaunchProfileEnvironment()
+        {
+            if (effectiveLaunchProfile is null)
+            {
+                return;
+            }
+
+            builder.WithEnvironment(context =>
+            {
+                context.EnvironmentVariables.TryAdd("DOTNET_LAUNCH_PROFILE", effectiveLaunchProfile.Name);
+                foreach (var envVar in effectiveLaunchProfile.LaunchProfile.EnvironmentVariables)
+                {
+                    context.EnvironmentVariables.TryAdd(envVar.Key, Environment.ExpandEnvironmentVariables(envVar.Value));
+                }
+            });
+        }
+
+        if (!configureWebDefaults)
+        {
+            if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+            {
+                ConfigureLaunchProfileEnvironment();
+            }
+
+            return builder;
+        }
 
         // Get all the endpoints from the Kestrel configuration
         var config = GetConfiguration(projectResource);
@@ -866,20 +952,7 @@ public static class ProjectResourceBuilderExtensions
                 }
             }
 
-            builder.WithEnvironment(context =>
-            {
-                // Populate DOTNET_LAUNCH_PROFILE environment variable for consistency with "dotnet run" and "dotnet watch".
-                if (effectiveLaunchProfile is not null)
-                {
-                    context.EnvironmentVariables.TryAdd("DOTNET_LAUNCH_PROFILE", effectiveLaunchProfile.Name);
-                }
-
-                foreach (var envVar in launchProfile.EnvironmentVariables)
-                {
-                    var value = Environment.ExpandEnvironmentVariables(envVar.Value);
-                    context.EnvironmentVariables.TryAdd(envVar.Key, value);
-                }
-            });
+            ConfigureLaunchProfileEnvironment();
 
             // NOTE: the launch profile command line arguments will be processed by ApplicationExecutor.PrepareProjectExecutables() (either by the IDE or manually passed to run)
         }

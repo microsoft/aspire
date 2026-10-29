@@ -5,6 +5,7 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import { getLaunchConfigurationTargetPath, type AzureFunctionsExternalBuildLaunchConfiguration } from '../dcp/types';
 import { getHotReloadDiagnostics, type HotReloadDiagnostics } from '../debugger/hotReload';
 import { openDashboardInBrowser } from '../debugger/session/dashboardLauncher';
 import {
@@ -1080,6 +1081,46 @@ suite('Editor assistance AppHost services', () => {
                 resource: createExpectedResource(path.basename(requestedProjectPath)),
             });
             assert.deepStrictEqual(resourceRepository.authoritativeRequests, [appHostProjectPath, appHostProjectPath]);
+        });
+
+        test('correlates an external-build Functions worker through its typed project target', async () => {
+            const projectPath = path.join(workspaceRoot, 'Functions', 'Functions.csproj');
+            const launchConfiguration: AzureFunctionsExternalBuildLaunchConfiguration = {
+                type: 'azure-functions-with-external-build.v1',
+                mode: 'Debug',
+                project_path: projectPath,
+                build_working_directory: path.join(workspaceRoot, 'sdk-context'),
+                build_environment: { PRIVATE_BUILD: 'never-returned' },
+                suppress_build: true,
+            };
+            resourceRepository.resourcesByAppHost.set(path.resolve(appHostProjectPath), [
+                createResource('functions', projectPath),
+            ]);
+            addEditorAppHostRunSession(appHostProjectPath);
+            const targetPath = getLaunchConfigurationTargetPath(launchConfiguration);
+            assert.ok(targetPath);
+            resourceSessions.push({
+                appHostPath: appHostProjectPath,
+                targetPath,
+                state: 'running',
+                mode: 'debug',
+            });
+
+            assert.deepStrictEqual(
+                await service.getDebugSessionStatus(
+                    { appHostPath: 'AppHost/AppHost.csproj', resourceName: 'functions' },
+                    new vscode.CancellationTokenSource().token),
+                {
+                    success: true,
+                    tool: aspireDebugSessionStatusToolName,
+                    outcome: 'running',
+                    scope: 'resource',
+                    controller: 'editor',
+                    mode: 'debug',
+                    appHost: 'AppHost/AppHost.csproj',
+                    resourceName: 'functions',
+                    resource: createExpectedResource('Functions.csproj'),
+                });
         });
 
         for (const [label, otherDisplayName, displayName, selector] of [

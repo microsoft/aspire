@@ -5,17 +5,20 @@ import * as path from 'path';
 import * as net from 'node:net';
 import * as vscode from 'vscode';
 import { azureFunctionsExtensionId, csharpExtensionId } from '../../capabilities';
-import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration, isAzureFunctionsNodeLaunchConfiguration } from '../../dcp/types';
+import { AspireResourceExtendedDebugConfiguration, AzureFunctionsExternalBuildLaunchConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration, isAzureFunctionsNodeLaunchConfiguration } from '../../dcp/types';
 import {
     azureFunctionsCmdDelayedExpansion,
     azureFunctionsCmdPercentArgument,
+    azureFunctionsExternalBuildEvaluationFailed,
     azureFunctionsHostStartupTimedOut,
+    azureFunctionsInvalidExternalBuildConfiguration,
     azureFunctionsInvalidProcessId,
     azureFunctionsNodeInspectorPortAllocationFailed,
     azureFunctionsTaskExitedBeforeStartup,
     azureFunctionsUnsupportedTaskShell,
     azureFunctionsWorkerStartupTimedOut,
-    invalidLaunchConfiguration
+    invalidLaunchConfiguration,
+    prebuiltProjectOutputMissing
 } from '../../loc/strings';
 import { assertNoTerminalControlCharacters, quoteShellArg } from '../../utils/AspireTerminalProvider';
 import { quoteCmdArgument } from '../../utils/cmdShim';
@@ -606,7 +609,18 @@ function quoteFuncHostArgument(argument: string, shell: FuncHostTaskShell): stri
         return `'${argument.replace(/[\\']/g, value => `\\${value}`)}'`;
     }
 
-    return quoteShellArg(argument, shell === 'powershell' ? 'win32' : 'linux');
+    if (shell === 'powershell') {
+        // A task invokes pwsh -Command, not an interactive terminal's sendText.
+        // Windows consumes native double quotes first, so keep 'p@ss''\word' as a
+        // PowerShell literal and preserve embedded double quotes through native argv.
+        // https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_quoting_rules
+        const literal = `'${argument.replace(/'/g, "''")}'`;
+        return process.platform === 'win32'
+            ? literal.replace(/(\\*)"/g, (_match: string, backslashes: string) => `${backslashes}${backslashes}\\"`)
+            : literal;
+    }
+
+    return quoteShellArg(argument, 'linux');
 }
 
 function getFuncHostTaskShell(): FuncHostTaskShell {
@@ -870,14 +884,19 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
     getSupportedFileTypes: () => ['.cs', '.csproj'],
     getProjectFile: (launchConfig) => {
         if (isAzureFunctionsLaunchConfiguration(launchConfig)) {
+            if (launchConfig.type === 'azure-functions-with-external-build.v1') {
+                validateFunctionsExternalBuildMetadata(launchConfig);
+            }
             return launchConfig.project_path;
         }
-        throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+        throw new Error(invalidLaunchConfiguration('Azure Functions'));
     },
     createDebugSessionConfigurationCallback: async (launchConfig, args, env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<AlreadyStartedResourceDebugSession | void> => {
         if (!isAzureFunctionsLaunchConfiguration(launchConfig)) {
-            extensionLogOutputChannel.info(`The resource type was not azure-functions for ${JSON.stringify(launchConfig)}`);
-            throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+            throw new Error(invalidLaunchConfiguration('Azure Functions'));
+        }
+        if (launchConfig.type === 'azure-functions-with-external-build.v1') {
+            validateFunctionsExternalBuildMetadata(launchConfig);
         }
 
         const rawArgs = [...(args ?? [])];
@@ -888,16 +907,42 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
         const runId = debugConfiguration.runId;
         const projectPath = launchConfig.project_path;
         const dotNetService = new DotNetService(launchOptions.debugSession);
-        // project_path from the hosting integration is currently a .csproj file path
-        // (resolved by AzureFunctionsProjectMetadata.ResolveProjectPath). If Aspire
-        // later supports non-.NET Functions resources, that launch config should carry
-        // an explicit language/build contract instead of reusing this .NET project path.
-        // Always build because path-based Functions resources do not have to be ProjectReferences
-        // of the AppHost, so an existing target can be stale even after the AppHost was rebuilt.
-        extensionLogOutputChannel.info(`Building Azure Functions project before starting func host: ${projectPath}`);
-        await dotNetService.buildDotNetProject(projectPath);
-        const targetPath = await dotNetService.getDotNetTargetPath(projectPath);
-        const buildOutputPath = path.dirname(targetPath);
+        let buildOutputPath: string;
+        if (launchConfig.type === 'azure-functions-with-external-build.v1') {
+            // This contract is emitted only after Aspire's coordinated build completes.
+            // Even forceBuild must not replace that build or evaluate with runtime-only env.
+            // ComputeRunArguments supplies the Functions SDK's host directory; its arguments
+            // are already materialized by Aspire and must not be added a second time here.
+            let properties: Awaited<ReturnType<DotNetService['getDotNetProjectRunProperties']>>;
+            try {
+                properties = await dotNetService.getDotNetProjectRunProperties(
+                    projectPath,
+                    launchConfig.build_configuration,
+                    launchConfig.build_environment,
+                    launchConfig.build_working_directory);
+            } catch {
+                // MSBuild diagnostics can echo build properties, including secrets. Do not
+                // serialize the launch payload or propagate its raw evaluation error.
+                throw new Error(azureFunctionsExternalBuildEvaluationFailed(projectPath));
+            }
+            if (!isAbsoluteFunctionsPath(properties.targetPath) || !isAbsoluteFunctionsPath(properties.runWorkingDirectory)) {
+                throw new Error(azureFunctionsInvalidExternalBuildConfiguration);
+            }
+            if (!fs.existsSync(properties.targetPath)) {
+                throw new Error(prebuiltProjectOutputMissing(projectPath, properties.targetPath));
+            }
+            buildOutputPath = properties.runWorkingDirectory;
+            if (!fs.existsSync(buildOutputPath)) {
+                throw new Error(prebuiltProjectOutputMissing(projectPath, buildOutputPath));
+            }
+        } else {
+            // Legacy hosting packages do not coordinate Functions builds. Always build,
+            // since path resources need not be AppHost ProjectReferences and may be stale.
+            extensionLogOutputChannel.info(`Building Azure Functions project before starting func host: ${projectPath}`);
+            await dotNetService.buildDotNetProject(projectPath);
+            const targetPath = await dotNetService.getDotNetTargetPath(projectPath);
+            buildOutputPath = path.dirname(targetPath);
+        }
         extensionLogOutputChannel.info(`Starting Azure Functions project with a registered func task: ${projectPath} (buildPath: ${buildOutputPath})`);
 
         // ShellExecution inherits the VS Code process environment. Only add the
@@ -1108,3 +1153,32 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
         }
     }
 };
+
+export const externalBuildAzureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
+    ...azureFunctionsDebuggerExtension,
+    resourceType: 'azure-functions-with-external-build.v1',
+    getSupportedFileTypes: () => ['.csproj', '.fsproj', '.vbproj']
+};
+
+function isAbsoluteFunctionsPath(value: unknown): value is string {
+    return typeof value === 'string' && value.trim().length > 0 && !value.includes('\0') && path.isAbsolute(value);
+}
+
+function validateFunctionsExternalBuildMetadata(configuration: AzureFunctionsExternalBuildLaunchConfiguration): void {
+    const environment = configuration.build_environment;
+    if (configuration.suppress_build !== true ||
+        !isAbsoluteFunctionsPath(configuration.project_path) ||
+        !isAbsoluteFunctionsPath(configuration.build_working_directory) ||
+        (configuration.mode !== undefined && configuration.mode !== 'Debug' && configuration.mode !== 'NoDebug') ||
+        (configuration.build_configuration !== undefined &&
+            (typeof configuration.build_configuration !== 'string' ||
+                configuration.build_configuration.trim().length === 0 ||
+                /[\0\r\n]/.test(configuration.build_configuration))) ||
+        (environment !== undefined &&
+            (!environment || typeof environment !== 'object' || Array.isArray(environment) ||
+                Object.entries(environment).some(([name, value]) =>
+                    name.trim().length === 0 || /[=\0]/.test(name) ||
+                    typeof value !== 'string' || value.includes('\0'))))) {
+        throw new Error(azureFunctionsInvalidExternalBuildConfiguration);
+    }
+}

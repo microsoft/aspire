@@ -1,0 +1,8 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "functions-roles-funcstorage634f8.module.bicep",
+  "params": {
+    "funcstorage634f8_outputs_name": "{funcstorage634f8.outputs.name}",
+    "principalId": "{functions-identity.outputs.principalId}"
+  }
+}

@@ -2930,7 +2930,7 @@ async function runAspireCliForE2E(
  * breakpoint and never gets a response, so awaiting it would deadlock against the wait it is meant
  * to satisfy; each attempt is abandoned after a short timeout and another is sent behind it.
  */
-async function withResourceTraffic<T>(
+export async function withResourceTraffic<T>(
   requestUrl: string,
   resourceName: string,
   waitForHit: () => Promise<T>
@@ -2942,10 +2942,27 @@ async function withResourceTraffic<T>(
   const driver = (async () => {
     while (driving) {
       try {
-        const response = await fetch(requestUrl, { signal: AbortSignal.timeout(2000) });
+        let statusCode: number | undefined;
+        if (new URL(requestUrl).protocol === 'https:') {
+          // HTTPS fixtures export a per-run self-signed certificate. Allow it only on
+          // this test request; fetch would otherwise reject TLS before reaching the breakpoint.
+          statusCode = await new Promise<number | undefined>((resolve, reject) => {
+            const request = https.get(requestUrl, {
+              rejectUnauthorized: false,
+              signal: AbortSignal.timeout(2000),
+            }, response => {
+              response.once('error', reject);
+              response.once('end', () => resolve(response.statusCode));
+              response.resume();
+            });
+            request.once('error', reject);
+          });
+        } else {
+          statusCode = (await fetch(requestUrl, { signal: AbortSignal.timeout(2000) })).status;
+        }
         if (firstAttempt) {
           firstAttempt = false;
-          extensionLogOutputChannel.info(`Resource debug E2E first traffic response for resource '${resourceName}': HTTP ${response.status}.`);
+          extensionLogOutputChannel.info(`Resource debug E2E first traffic response for resource '${resourceName}': HTTP ${statusCode}.`);
         }
       }
       catch (error) {

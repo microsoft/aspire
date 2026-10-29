@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet;
@@ -350,13 +351,100 @@ public static class DotnetProjectHostingExtensions
         var options = new ProjectResourceOptions();
         configure(options);
 
+        return builder.AddDotnetProject(
+            name,
+            path,
+            static (resourceName, directory) => new DotnetProjectResource(resourceName, directory),
+            KnownLaunchConfigurationTypes.ProjectWithExternalBuild,
+            resource => resource.WithProjectDefaults(options));
+    }
+
+    /// <summary>
+    /// Adds a specialized .NET project resource using the shared build, launch, and publishing infrastructure.
+    /// </summary>
+    /// <typeparam name="TResource">The specialized .NET project resource type.</typeparam>
+    /// <param name="builder">The distributed application builder.</param>
+    /// <param name="name">The resource name passed to <paramref name="resourceFactory"/>.</param>
+    /// <param name="path">The project file, supported project directory, or file-based app path, relative to the AppHost directory or absolute.</param>
+    /// <param name="resourceFactory">
+    /// Creates an unregistered resource. Its arguments are the resource name and the resolved default working directory.
+    /// The returned resource must retain the requested name and must not already belong to the application model.
+    /// </param>
+    /// <param name="externalBuildCapability">
+    /// The integration-specific IDE launch capability that promises to honor externally built output.
+    /// Ordinary .NET projects use <c>project-with-external-build.v1</c>; specialized launchers must negotiate their own contract.
+    /// </param>
+    /// <param name="configureResource">
+    /// Applies framework defaults and debug support after managed metadata is attached, but before final launch wiring.
+    /// The callback must not remove, replace, or add project metadata, or register the resource again.
+    /// </param>
+    /// <returns>The specialized resource builder for further configuration.</returns>
+    /// <exception cref="ArgumentNullException">A required argument is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="name"/> or <paramref name="externalBuildCapability"/> is empty.</exception>
+    /// <exception cref="InvalidOperationException">The factory returns an invalid resource or the callback changes project metadata.</exception>
+    /// <remarks>
+    /// <para>
+    /// This method is for integration authors. Ordinary applications should use the non-generic
+    /// <c>AddDotnetProject</c> overloads. The same resource object and managed metadata remain in use for
+    /// defaults, coordinated builds, SDK invocation, IDE metadata, Rebuild, and container publishing.
+    /// </para>
+    /// <list type="table">
+    /// <listheader><term>Shared factory</term><description>Integration callback</description></listheader>
+    /// <item><term>Resolves paths and attaches managed metadata.</term><description>Chooses base or full framework defaults.</description></item>
+    /// <item><term>Constructs and registers one resource.</term><description>Configures framework endpoints, storage, and additional telemetry.</description></item>
+    /// <item><term>Coordinates builds using the supplied capability.</term><description>Selects compatible IDE debug support and produces its launch payload.</description></item>
+    /// <item><term>Resolves the SDK process invocation and owns tool arguments.</term><description>Custom IDE launchers consume the supplied program arguments, including launch-profile arguments.</description></item>
+    /// <item><term>Enables SDK container publishing.</term><description>Adds framework-specific deployment annotations.</description></item>
+    /// </list>
+    /// <para>
+    /// CLI and process-fallback runs coordinate initial builds. For an IDE-launched resource, Aspire coordinates
+    /// its build only when the IDE advertises <paramref name="externalBuildCapability"/>. Specialized IDE-built
+    /// fallback resources are not build inputs, but wait for an existing coordinated initial-build batch before
+    /// launching. An unrelated failed build can therefore block that fallback. Build-only environment values
+    /// are not automatically runtime settings.
+    /// </para>
+    /// <para>
+    /// The callback normally applies <c>WithDotnetBaseDefaults</c> or <c>WithProjectDefaults</c> exactly once,
+    /// then supplies specialized debug support. Known project launchers apply their own launch-profile
+    /// arguments; custom launchers receive those arguments from Aspire and must not apply them a second time.
+    /// Build resources are run-only and do not appear in publish output.
+    /// </para>
+    /// <example>
+    /// Configure an integration's resource before final launch wiring:
+    /// <code lang="csharp">
+    /// builder.AddDotnetProject(
+    ///     "worker", "../Worker/Worker.csproj",
+    ///     static (name, directory) => new CustomDotnetResource(name, directory),
+    ///     "custom-dotnet-with-external-build.v1",
+    ///     resource => ConfigureCustomFramework(resource));
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Integration-authoring API with resource-factory and configuration delegates; not an AppHost SDK export.")]
+    public static IResourceBuilder<TResource> AddDotnetProject<TResource>(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        string path,
+        Func<string, string, TResource> resourceFactory,
+        string externalBuildCapability,
+        Action<IResourceBuilder<TResource>> configureResource)
+        where TResource : DotnetProjectResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(resourceFactory);
+        ArgumentException.ThrowIfNullOrEmpty(externalBuildCapability);
+        ArgumentNullException.ThrowIfNull(configureResource);
+
         path = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, path));
 
         // The app host's own build configuration (Debug/Release) is propagated to every child launch
         // so process and IDE launchers resolve the output produced by the coordinated build.
         var configuration = builder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
         var projectMetadata = new DotnetProjectMetadata(path, configuration, name);
-        var buildCoordinator = DotnetProjectBuildCoordinator.Prepare(builder, projectMetadata);
+        var buildCoordinator = DotnetProjectBuildCoordinator.Prepare(builder, projectMetadata, externalBuildCapability);
 
         // ExecutableResource requires a working directory. Use the project/app directory so the process
         // launches from the same place a ProjectResource would (DCP used Path.GetDirectoryName(ProjectPath)).
@@ -370,13 +458,18 @@ public static class DotnetProjectHostingExtensions
             _ => "CodeCsRectangle"
         };
 
-        var app = new DotnetProjectResource(name, workingDirectory);
+        var app = resourceFactory(name, workingDirectory);
+        if (app is null || !string.Equals(app.Name, name, StringComparison.Ordinal) || builder.Resources.Contains(app))
+        {
+            throw new InvalidOperationException("The .NET resource factory must return an unregistered resource with the requested name.");
+        }
 
         var resource = builder.AddResource(app)
                               .WithAnnotation(projectMetadata)
-                              .WithIconName(iconName)
-                              .WithProjectDefaults(options)
-                              .WithDotnetProgramPublishing();
+                              .WithIconName(iconName);
+        configureResource(resource);
+        ValidateMetadata();
+        resource.WithDotnetProgramPublishing();
         var projectLaunchConfigurationType = resource.Resource.Annotations
             .OfType<SupportsDebuggingAnnotation>()
             .LastOrDefault()
@@ -482,9 +575,9 @@ public static class DotnetProjectHostingExtensions
         {
             // Project launch configurations carry the selected launch profile, so the IDE applies its command-line arguments.
             if (!builder.ExecutionContext.IsRunMode
-                || options.ExcludeLaunchProfile
+                || resource.HasAnnotationOfType<ExcludeLaunchProfileAnnotation>()
                 || (resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
-                    && debugAnnotation.LaunchConfigurationType == projectLaunchConfigurationType))
+                    && debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project or KnownLaunchConfigurationTypes.ProjectWithExternalBuild))
             {
                 return [];
             }
@@ -497,13 +590,29 @@ public static class DotnetProjectHostingExtensions
 
         resource.OnBeforeResourceStarted((r, e, ct) =>
         {
+            ValidateMetadata();
             projectMetadata.ValidateProjectPath();
 
             // The minimum-SDK check for file-based apps is applied by WithProjectDefaults.
             return Task.CompletedTask;
         });
 
+        builder.OnBeforeStart((_, _) =>
+        {
+            ValidateMetadata();
+            return Task.CompletedTask;
+        });
+
         return resource;
+
+        void ValidateMetadata()
+        {
+            if (!ReferenceEquals(app.GetProjectMetadata(), projectMetadata))
+            {
+                throw new InvalidOperationException(
+                    $"Project metadata for resource '{name}' must remain the managed metadata supplied by {nameof(AddDotnetProject)}.");
+            }
+        }
     }
 
     internal static async Task<DotnetProjectRunProperties> ResolveRunPropertiesAfterBuildAsync(

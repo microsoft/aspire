@@ -1330,10 +1330,13 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("8080", setValue);
     }
 
-    [Fact]
-    public async Task DeployAsync_WithAzureFunctionsProject_Works()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeployAsync_WithAzureFunctionsProject_Works(bool useV2)
     {
         // Arrange
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var mockProcessRunner = new MockProcessRunner();
         var fakeContainerRuntime = new FakeContainerRuntime();
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper, step: WellKnownPipelineSteps.Deploy);
@@ -1401,9 +1404,13 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         var storage = builder.AddAzureStorage("funcstorage");
         var hostStorage = builder.AddAzureStorage("hoststorage");
         var blobs = storage.AddBlobs("blobs");
-        var funcApp = builder.AddAzureFunctionsProject<TestFunctionsProject>("funcapp")
-            .WithReference(blobs)
-            .WithHostStorage(hostStorage);
+        IResourceBuilder<IResource> funcApp = useV2
+            ? builder.AddAzureFunctions("funcapp", AzureFunctionsTestHelpers.CreateProject(workspace.Path))
+                .WithReference(blobs)
+                .WithHostStorage(hostStorage)
+            : builder.AddAzureFunctionsProject<TestFunctionsProject>("funcapp")
+                .WithReference(blobs)
+                .WithHostStorage(hostStorage);
 
         // Act
         using var app = builder.Build();
