@@ -1629,6 +1629,50 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.IsType<OperationCanceledException>(exception.OriginalException);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DiagnosticAzureDevComputeCreateCancellationOrdering(bool cancelDuringSend)
+    {
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var sendCount = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            sendCount++;
+            if (cancelDuringSend)
+            {
+                testOutputHelper.WriteLine("[cancellation-order] transport-canceled-before-response");
+                cancellationTokenSource.Cancel();
+                return Task.FromCanceled<HttpResponseMessage>(cancellationTokenSource.Token);
+            }
+
+            return Task.FromResult<HttpResponseMessage>(new CancelOnDisposeResponse(() =>
+            {
+                testOutputHelper.WriteLine("[cancellation-order] forbidden-response-observed-and-disposed");
+                cancellationTokenSource.Cancel();
+            }));
+        });
+        var client = new AzureDevComputeClient(
+            new HttpClient(handler),
+            new RecordingTokenCredential(),
+            NullLogger.Instance,
+            TimeSpan.FromMinutes(1));
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Name = "disk-image",
+                Source = CreateDiskImageSource()
+            },
+            cancellationTokenSource.Token));
+
+        testOutputHelper.WriteLine($"[cancellation-order] sends={sendCount} ambiguous={exception.ResponseMayHaveBeenLost} original={exception.OriginalException.GetType().Name}");
+        Assert.Equal(1, sendCount);
+        Assert.Equal(cancelDuringSend, exception.ResponseMayHaveBeenLost);
+        Assert.IsType<TaskCanceledException>(exception.OriginalException);
+    }
+
     [Fact]
     public async Task AzureDevComputeClientTreatsMissingDeletedResourcesAsSuccess()
     {
@@ -3635,6 +3679,19 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             return handler(request);
+        }
+    }
+
+    private sealed class CancelOnDisposeResponse(Action onDispose) : HttpResponseMessage(HttpStatusCode.Forbidden)
+    {
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                onDispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 
