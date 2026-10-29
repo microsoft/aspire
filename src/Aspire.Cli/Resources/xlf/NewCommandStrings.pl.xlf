@@ -268,8 +268,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceAddDescription">
-        <source>Add a named template source to global configuration.</source>
-        <target state="new">Add a named template source to global configuration.</target>
+        <source>Add a named template source to global configuration after confirming you trust it.</source>
+        <target state="new">Add a named template source to global configuration after confirming you trust it.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceAdded">
@@ -387,6 +387,11 @@
         <target state="new">Expected a nonempty string without control characters.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TemplateSourceTrustPrompt">
+        <source>Templates can run code. Do you trust template source '{0}' ({1})?</source>
+        <target state="new">Templates can run code. Do you trust template source '{0}' ({1})?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TemplateSourceUnknownField">
         <source>Unknown source field. Use an absolute 'path', or 'repository' with optional 'ref'/'path'.</source>
         <target state="new">Unknown source field. Use an absolute 'path', or 'repository' with optional 'ref'/'path'.</target>
@@ -395,6 +400,11 @@
       <trans-unit id="TemplateSourceWriteFailed">
         <source>Could not update global template sources. Check the configuration file's JSON format and file permissions.</source>
         <target state="new">Could not update global template sources. Check the configuration file's JSON format and file permissions.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceYesOptionDescription">
+        <source>Trust the template source and skip confirmation.</source>
+        <target state="new">Trust the template source and skip confirmation.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourcesMustBeObject">

@@ -63,8 +63,8 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
 
         if (configured)
         {
-            await auto.RunCommandAsync("aspire template source add company --path \"$PWD/template\" --nologo", counter);
-            await auto.RunCommandAsync("aspire template source add git-example --repository https://example.test/templates --ref main --path templates --nologo", counter);
+            await auto.RunCommandAsync("aspire template source add company --path \"$PWD/template\" --yes --nologo", counter);
+            await auto.RunCommandAsync("aspire template source add git-example --repository https://example.test/templates --ref main --path templates --yes --nologo", counter);
             // Do not suppress the banner explicitly: JSON mode must keep redirected stdout parseable.
             await auto.RunCommandAsync("aspire template source list --format json > sources.json", counter);
             var listed = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "sources.json")))!.AsObject();
@@ -79,7 +79,7 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
             Assert.Contains("company", table);
             Assert.Contains("git-example", table);
             await auto.RunCommandAsync("cp \"$HOME/.aspire/aspire.config.json\" before.json", counter);
-            await auto.RunCommandAsync($"aspire template source add COMPANY --repository https://example.test/replacement --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
+            await auto.RunCommandAsync($"aspire template source add COMPANY --repository https://example.test/replacement --yes --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
             await auto.RunCommandAsync("cmp before.json \"$HOME/.aspire/aspire.config.json\"", counter);
             await auto.RunCommandAsync($"aspire config set templateSources.company.path ../escape --global --nologo; test $? -eq {CliExitCodes.InvalidCommand}", counter);
             await auto.RunCommandAsync("cmp before.json \"$HOME/.aspire/aspire.config.json\"", counter);
