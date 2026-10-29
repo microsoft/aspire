@@ -208,7 +208,7 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
                 // A counter reports a running total. Convert it to the increase in each interval, using the same
                 // calculation as the counter's card. The table reads these traces too, so both views agree.
                 var trace = data.Traces.Single();
-                var increases = ChartDataCalculator.CalculateCounterIncreases(trace.Values, InstrumentViewModel.Instrument!.AggregationTemporality);
+                var increases = calculator.CalculateCounterIncreaseValues(InstrumentViewModel.MatchedDimensions, _currentDataStartTime, InstrumentViewModel.Instrument!.AggregationTemporality);
                 trace.Values.Clear();
                 trace.Values.AddRange(increases);
                 trace.DiffValues.Clear();

@@ -20,7 +20,7 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
     [Fact]
     public void SetPinned_PersistsInPinnedOrderAcrossInstances()
     {
-        var databasePath = Path.Combine(_workspace.Path, ResourceTagStore.DatabaseFileName);
+        var databasePath = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
         var store = new MetricPinStore(databasePath, NullLogger.Instance);
 
         Assert.True(store.SetPinned(s_heap, pinned: true));
@@ -57,15 +57,18 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
     }
 
     [Fact]
-    public void SetPinned_UnreadableDatabase_LeavesPinsUnchanged()
+    public void SetPinned_UnreadableDatabase_KeepsPinsInMemory()
     {
         // A directory where the database file should be makes opening it fail.
-        var databasePath = Path.Combine(_workspace.Path, ResourceTagStore.DatabaseFileName);
+        var databasePath = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
         Directory.CreateDirectory(databasePath);
         var store = new MetricPinStore(databasePath, NullLogger.Instance);
 
-        Assert.False(store.SetPinned(s_heap, pinned: true));
-        Assert.Empty(store.GetPins());
+        // Like the other settings stores, pins keep working for the rest of the process without touching the file.
+        Assert.True(store.SetPinned(s_heap, pinned: true));
+        Assert.Equal([s_heap], store.GetPins());
+        Assert.True(Directory.Exists(databasePath));
+        Assert.Empty(Directory.GetFileSystemEntries(databasePath));
     }
 
     [Fact]

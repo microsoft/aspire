@@ -3,8 +3,6 @@
 
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Otlp.Model;
-using Aspire.Shared;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Dashboard.Model;
@@ -19,34 +17,21 @@ namespace Aspire.Dashboard.Model;
 /// </remarks>
 public sealed class MetricPinStore
 {
+    private const string SettingsName = "pinned metrics";
+
     private readonly Lock _lock = new();
-    private readonly ILogger _logger;
     private readonly List<OtlpInstrumentKey> _pins = [];
-    private readonly string? _databasePath;
-    private readonly string? _connectionString;
+    private readonly DashboardSettingsDatabase _database;
     private bool _loaded;
-    private bool _loadFailed;
 
     public MetricPinStore(IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
-        : this(ResourceTagStore.GetDatabasePath(options.Value), logger)
+        : this(DashboardSettingsDatabase.GetDatabasePath(options.Value), logger)
     {
     }
 
     internal MetricPinStore(string? databasePath, ILogger logger)
     {
-        _databasePath = databasePath;
-        _logger = logger;
-        if (databasePath is not null)
-        {
-            _connectionString = new SqliteConnectionStringBuilder
-            {
-                DataSource = databasePath,
-                Mode = SqliteOpenMode.ReadWriteCreate,
-                // Pins change rarely. Not pooling avoids keeping the settings file open between changes.
-                Pooling = false,
-                DefaultTimeout = 5
-            }.ToString();
-        }
+        _database = new DashboardSettingsDatabase(databasePath, logger);
     }
 
     /// <summary>
@@ -125,15 +110,9 @@ public sealed class MetricPinStore
             return;
         }
         _loaded = true;
-        if (_connectionString is null)
-        {
-            return;
-        }
 
-        try
+        _database.Load(SettingsName, connection =>
         {
-            DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.GetDirectoryName(_databasePath)!);
-            using var connection = OpenConnection();
             using var command = connection.CreateCommand();
             // pin_id is the rowid, which increases with each insert, so ordering by it lists pins in the
             // order they were pinned.
@@ -151,29 +130,13 @@ public sealed class MetricPinStore
             {
                 _pins.Add(new OtlpInstrumentKey(reader.GetString(0), reader.GetString(1)));
             }
-        }
-        catch (Exception ex) when (ex is SqliteException or IOException or UnauthorizedAccessException)
-        {
-            // Don't write over a database that couldn't be read; pinning stays unavailable for this run.
-            _loadFailed = true;
-            _logger.LogWarning(ex, "Unable to load pinned metrics from '{DatabasePath}'.", _databasePath);
-        }
+        });
     }
 
     private bool Save(OtlpInstrumentKey key, bool pinned)
     {
-        if (_loadFailed)
+        return _database.TrySave(SettingsName, connection =>
         {
-            return false;
-        }
-        if (_connectionString is null)
-        {
-            return true;
-        }
-
-        try
-        {
-            using var connection = OpenConnection();
             using var command = connection.CreateCommand();
             command.CommandText = pinned
                 ? "INSERT OR IGNORE INTO metric_pins (meter_name, instrument_name) VALUES ($meter, $instrument);"
@@ -181,19 +144,6 @@ public sealed class MetricPinStore
             command.Parameters.AddWithValue("$meter", key.MeterName);
             command.Parameters.AddWithValue("$instrument", key.InstrumentName);
             command.ExecuteNonQuery();
-            return true;
-        }
-        catch (SqliteException ex)
-        {
-            _logger.LogWarning(ex, "Unable to save pinned metrics to '{DatabasePath}'.", _databasePath);
-            return false;
-        }
-    }
-
-    private SqliteConnection OpenConnection()
-    {
-        var connection = new SqliteConnection(_connectionString);
-        connection.Open();
-        return connection;
+        });
     }
 }

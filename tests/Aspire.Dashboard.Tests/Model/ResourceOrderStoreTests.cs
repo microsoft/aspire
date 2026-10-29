@@ -15,7 +15,7 @@ public sealed class ResourceOrderStoreTests(ITestOutputHelper testOutputHelper) 
     [Fact]
     public void AppHostDefaultsSeedOrderingAndSavedMovesTakePrecedence()
     {
-        var databasePath = Path.Combine(_workspace.Path, ResourceTagStore.DatabaseFileName);
+        var databasePath = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
         var store = new ResourceOrderStore(databasePath, NullLogger.Instance);
         var name = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardPosition;
         var api = ModelTestHelpers.CreateResource("api", properties: new()
@@ -51,7 +51,7 @@ public sealed class ResourceOrderStoreTests(ITestOutputHelper testOutputHelper) 
     [Fact]
     public void GroupOrder_UpgradesExistingSettingsAndPersistsIndependentScopes()
     {
-        var path = Path.Combine(_workspace.Path, ResourceTagStore.DatabaseFileName);
+        var path = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
         using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
         {
             connection.Open();
@@ -101,7 +101,7 @@ public sealed class ResourceOrderStoreTests(ITestOutputHelper testOutputHelper) 
     [Fact]
     public void GroupOrder_SaveFailurePreservesGroupAndResourcePositions()
     {
-        var path = Path.Combine(_workspace.Path, ResourceTagStore.DatabaseFileName);
+        var path = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
         var store = new ResourceOrderStore(path, NullLogger.Instance);
         store.EnsureGroups("Tags", ["backend", "frontend"]);
         store.EnsureResources(["api_0", "cache_0"]);
@@ -121,7 +121,7 @@ public sealed class ResourceOrderStoreTests(ITestOutputHelper testOutputHelper) 
     [Fact]
     public void Order_PersistsAlongsideTagsAndAppendsNewResources()
     {
-        var path = Path.Combine(_workspace.Path, ResourceTagStore.DatabaseFileName);
+        var path = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
         var tags = new ResourceTagStore(path, NullLogger.Instance);
         tags.AddTag("api", "backend");
         var store = new ResourceOrderStore(path, NullLogger.Instance);
@@ -174,7 +174,7 @@ public sealed class ResourceOrderStoreTests(ITestOutputHelper testOutputHelper) 
     [Fact]
     public void TryMove_SaveFailureKeepsOriginalOrder()
     {
-        var path = Path.Combine(_workspace.Path, ResourceTagStore.DatabaseFileName);
+        var path = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
         var store = new ResourceOrderStore(path, NullLogger.Instance);
         store.EnsureResources(["api_0", "cache_0"]);
         using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))

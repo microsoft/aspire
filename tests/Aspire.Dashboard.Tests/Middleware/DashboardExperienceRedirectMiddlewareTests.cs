@@ -12,14 +12,24 @@ namespace Aspire.Dashboard.Tests.Middleware;
 public sealed class DashboardExperienceRedirectMiddlewareTests
 {
     [Theory]
-    [InlineData("legacy", "/traces", "/legacy#")]
-    [InlineData("modern", "/legacy/traces", "/#")]
-    public async Task InvokeAsync_CrossExperienceHtmlNavigation_RedirectsToRoot(
+    [InlineData("legacy", "/", "", "/legacy#")]
+    [InlineData("legacy", "/resources/api", "", "/legacy#")]
+    [InlineData("legacy", "/traces", "", "/legacy/traces#")]
+    [InlineData("legacy", "/traces/detail/abc123", "", "/legacy/traces/detail/abc123#")]
+    [InlineData("legacy", "/consolelogs/resource/api", "", "/legacy/consolelogs/resource/api#")]
+    [InlineData("legacy", "/structuredlogs/resource/my api", "?logLevel=error", "/legacy/structuredlogs/resource/my%20api?logLevel=error#")]
+    [InlineData("modern", "/legacy", "", "/#")]
+    [InlineData("modern", "/legacy/resources", "", "/#")]
+    [InlineData("modern", "/legacy/traces", "", "/traces#")]
+    [InlineData("modern", "/legacy/metrics/resource/api/meter/System.Runtime", "?duration=5", "/metrics/resource/api/meter/System.Runtime?duration=5#")]
+    public async Task InvokeAsync_CrossExperienceHtmlNavigation_RedirectsToSamePageOrRoot(
         string experience,
         string path,
+        string query,
         string expectedLocation)
     {
         var context = CreateContext(experience, path, "text/html");
+        context.Request.QueryString = new QueryString(query);
         var middleware = CreateMiddleware();
 
         await middleware.InvokeAsync(context);
@@ -55,7 +65,7 @@ public sealed class DashboardExperienceRedirectMiddlewareTests
         await middleware.InvokeAsync(context);
 
         Assert.Equal(StatusCodes.Status302Found, context.Response.StatusCode);
-        Assert.Equal("/legacy#", context.Response.Headers.Location);
+        Assert.Equal("/legacy/traces#", context.Response.Headers.Location);
     }
 
     [Fact]

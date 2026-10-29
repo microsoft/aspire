@@ -18,10 +18,12 @@
             <FluentSpinner Size="SpinnerSize.Small" />
         </div>
     }
-    else if (ResourcesLayout.IsMultiSelection &&
+    else if ((ResourcesLayout.IsMultiSelection || ResourceName is null) &&
              ResourcesLayout.SelectedResources.ToList() is { Count: > 0 } selectedResources &&
              selectedResources.All(resource => resource.IsParameter))
     {
+        @* Parameters selected in the query string, for example /resources?resource=a&resource=b. A single parameter
+           selected this way gets the same panel as several, rather than the summary of all resources. *@
         <MissingParametersPanel Parameters="selectedResources"
                                 OnExecuteCommandAsync="ExecuteResourceCommandAsync"
                                 OnExecuteCommandWithOptionsAsync="ExecuteResourceCommandAsync"

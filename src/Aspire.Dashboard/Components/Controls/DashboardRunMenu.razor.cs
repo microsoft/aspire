@@ -57,7 +57,7 @@ public partial class DashboardRunMenu : ComponentBase
 
     private IList<MenuButtonItem> LoadRuns()
     {
-        var runs = GetSortedRuns(RunStore.GetRuns());
+        var runs = DashboardRunSelect.GetSortedRuns(RunStore.GetRuns());
 
         var menuItems = new List<MenuButtonItem>();
         foreach (var run in runs)
@@ -101,40 +101,6 @@ public partial class DashboardRunMenu : ComponentBase
             tooltip: Loc[nameof(LayoutResources.DashboardRunMenuHelpTooltip)]));
 
         return menuItems;
-    }
-
-    internal static List<DashboardRunDescriptor> GetSortedRuns(IReadOnlyList<DashboardRunDescriptor> storedRuns)
-    {
-        var runs = new List<DashboardRunDescriptor>(storedRuns.Count);
-        foreach (var run in storedRuns)
-        {
-            if (!run.IsPruned && (run.IsSelectable || !run.IsCompatible))
-            {
-                runs.Add(run);
-            }
-        }
-        runs.Sort(CompareRuns);
-
-        return runs;
-    }
-
-    private static int CompareRuns(DashboardRunDescriptor left, DashboardRunDescriptor right)
-    {
-        var result = right.IsCurrent.CompareTo(left.IsCurrent);
-        if (result == 0)
-        {
-            result = right.IsPinned.CompareTo(left.IsPinned);
-        }
-        if (result == 0)
-        {
-            result = right.StartedAtUtc.CompareTo(left.StartedAtUtc);
-        }
-        if (result == 0)
-        {
-            result = string.Compare(left.RunId, right.RunId, StringComparison.Ordinal);
-        }
-
-        return result;
     }
 
     private void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
