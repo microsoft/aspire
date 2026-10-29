@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>Aspire standup | October 28, 2026, 20:00 Pacific</title>
+    <style>
+        :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.6; }
+        body { max-width: 56rem; margin: auto; padding: 1.5rem; }
+        h1, h2 { line-height: 1.25; }
+        h2 { margin-top: 2rem; }
+        a { color: #3559c7; text-underline-offset: .15em; overflow-wrap: anywhere; }
+        .summary { border-inline-start: .25rem solid #6554c0; padding-inline-start: 1rem; }
+        dt { font-weight: bold; }
+        dd { margin: 0 0 1rem; }
+        footer { margin-top: 2rem; border-top: 1px solid #888; padding-top: 1rem; }
+        @media (prefers-color-scheme: dark) { a { color: #b6c7ff; } }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Aspire standup</h1>
+        <p><time datetime="2026-10-28T20:00:00-07:00">October 28, 2026, 20:00 America/Los_Angeles (PDT)</time><br>
+            <time datetime="2026-10-29T03:00:00Z">October 29, 2026, 03:00 UTC</time> reporting slot.</p>
+        <p>Evidence snapshot: supplied workstream results; Aspire.dev verified at
+            <time datetime="2026-10-29T02:50:37Z">02:50:37 UTC</time>.
+            This is a point-in-time report, not a live health dashboard.</p>
+        <p class="summary"><strong>Navigation fix ready for review, not merged.</strong>
+            Aspire.dev production validation passed. Skills changes remain local with live validation blocked.
+            Aspire main CI repair has no verified delivery.</p>
+    </header>
+    <main>
+        <section aria-labelledby="navigation">
+            <h2 id="navigation">Verified: Aspire.dev navigation preservation</h2>
+            <p><a href="https://github.com/microsoft/aspire.dev/pull/1976">PR #1976</a> is ready for review.
+                The API incremental cache restored stale deployment/source metadata, causing hard reloads
+                and loss of session navigation history. The fix preserves navigation while reusing cache
+                entries with the same identity.</p>
+            <p>Controlled reproduction: <strong>30/30 baseline failures; 30/30 fixed cases preserved navigation</strong>.
+                Original navigation/history scenarios passed on desktop, tablet and mobile.</p>
+            <p><a href="https://github.com/microsoft/aspire.dev/actions/runs/40805377771">Full production workflow, attempt 1: successful</a>.
+                All six browser shards completed with <strong>1,390 first-attempt passes, 95 existing skips,
+                1,485 registered tests, zero retries and zero failures</strong>.
+                Required ci-gate, final report and frontend checks were green:
+                18 successful checks, one scope skip, none pending at verification.</p>
+            <p>Build context: 32,203 pages in 5m44s (build step 5m45s); 24,059 API pages regenerated,
+                zero restored; 534 Open Graph items restored. This run invalidated the initial cache
+                implementation. It does not establish a matched steady-state performance improvement
+                or a global flake-rate reduction.</p>
+            <p><strong>Pending:</strong> human review, approval and merge. Verified head:
+                <code>7bd82d0985b1bed59b455b0235c4c2160cfcd3f2</code>, targeting <code>main</code>.
+                No merged fix is claimed.</p>
+        </section>
+        <section aria-labelledby="skills">
+            <h2 id="skills">Local only: skills model defaults</h2>
+            <p>A five-file repair updates remaining deployment, monitoring and orchestration defaults
+                from <code>gpt-5-mini</code> to <code>gpt-5.6-sol</code>, matching the prior model change.
+                Offline validation: <strong>387 passed, zero failed, two existing Windows skips</strong>.</p>
+            <p><strong>Blocked:</strong> the live trial stopped on endpoint DNS resolution before trajectory
+                execution or grading; the redaction prerequisite was unavailable. Live outcome and
+                skill/model effectiveness remain unverified. The change is preserved locally only;
+                there is no public branch or PR to review.</p>
+            <p>The independent skills cycle at <time datetime="2026-10-29T02:29:24Z">02:29:24 UTC</time>
+                found no new material independent candidate; no speculative edit was made.</p>
+        </section>
+        <section aria-labelledby="main-ci">
+            <h2 id="main-ci">Blocked: Aspire main CI repair</h2>
+            <p>Delivery is blocked by uncertain prior worker execution. There is no reproduced fix
+                or implementation evidence, so neither recovery nor current main CI health is established.
+                This reporting publication does not replay or replace that repair.</p>
+        </section>
+        <section aria-labelledby="next">
+            <h2 id="next">Next authorized actions</h2>
+            <dl>
+                <dt>Aspire.dev</dt>
+                <dd>Obtain human review of PR #1976; retain the production and controlled-reproduction evidence.</dd>
+                <dt>Skills</dt>
+                <dd>Retain the local patch; establish the redaction prerequisite and restore trial connectivity
+                    before rerunning live validation or making effectiveness claims.</dd>
+                <dt>Aspire main CI</dt>
+                <dd>The owning coordinator must reconcile prior execution before any further repair action.
+                    No owner infrastructure decision is needed.</dd>
+                <dt>Report publication</dt>
+                <dd>Keep one reusable draft publication PR and update only <code>reports/latest.html</code>
+                    for future snapshots. Follow normal PR CI, including Final Results; HTML is not CI-exempt.
+                    This report is draft-branch HTML source, not merged main content or a hosted rendered page.
+                    GitHub Pages remains disabled.</dd>
+            </dl>
+        </section>
+    </main>
+    <footer><p><strong>&#129302; Posted by AspireAgent (AI Agent)</strong></p></footer>
+</body>
+</html>
