@@ -126,6 +126,64 @@ public sealed class ParameterInteractionStateTests
     }
 
     [Fact]
+    public void SetDialogInteraction_PanelMountedLater_TakesInteractionFromDialog()
+    {
+        var state = new ParameterInteractionState();
+        var interaction = CreateInputsInteraction(1, "first", ParameterInteractionState.SaveToUserSecretsInputName);
+        var closeCount = 0;
+        state.SetDialogInteraction(interaction, () =>
+        {
+            closeCount++;
+            return Task.CompletedTask;
+        });
+        Assert.Null(state.Current);
+
+        // After a reload on the form, the prompt is replayed before the form is rendered.
+        using var panel = state.RegisterPanel();
+        panel.SetParameterNames(["first"]);
+
+        Assert.Same(interaction, state.Current);
+        Assert.Equal(1, closeCount);
+    }
+
+    [Fact]
+    public void SetDialogInteraction_PanelShowsSomeInputs_KeepsDialog()
+    {
+        var state = new ParameterInteractionState();
+        var closeCount = 0;
+        state.SetDialogInteraction(CreateInputsInteraction(1, "first", "second"), () =>
+        {
+            closeCount++;
+            return Task.CompletedTask;
+        });
+
+        using var panel = state.RegisterPanel();
+        panel.SetParameterNames(["first"]);
+
+        Assert.Null(state.Current);
+        Assert.Equal(0, closeCount);
+    }
+
+    [Fact]
+    public void ClearDialogInteraction_DialogClosed_PanelDoesNotTakeInteraction()
+    {
+        var state = new ParameterInteractionState();
+        var closeCount = 0;
+        state.SetDialogInteraction(CreateInputsInteraction(1, "first"), () =>
+        {
+            closeCount++;
+            return Task.CompletedTask;
+        });
+        state.ClearDialogInteraction(1);
+
+        using var panel = state.RegisterPanel();
+        panel.SetParameterNames(["first"]);
+
+        Assert.Null(state.Current);
+        Assert.Equal(0, closeCount);
+    }
+
+    [Fact]
     public async Task BeginInteractionAsync_PanelShowsEveryParameter_AcceptsNotificationOnce()
     {
         var state = new ParameterInteractionState();

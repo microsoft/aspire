@@ -149,6 +149,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
             await waitForInteractionAvailableTask.WaitAsync(_cts.Token).ConfigureAwait(false);
 
             DashboardDialogReference? currentDialogReference = null;
+            InteractionsInputsDialogViewModel? parameterDialogInteraction = null;
 
             await _semaphore.WaitAsync(_cts.Token).ConfigureAwait(false);
             try
@@ -223,6 +224,8 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                         {
                             continue;
                         }
+
+                        parameterDialogInteraction = vm;
                     }
 
                     var dialogParameters = CreateDialogParameters(item, intent: null);
@@ -271,6 +274,14 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
                 Debug.Assert(currentDialogReference != null, "Dialog should have been created in UI thread.");
                 _interactionDialogReference = new InteractionDialogReference(item.InteractionId, currentDialogReference, CreateTelemetryContext(dialogComponentId));
+
+                if (parameterDialogInteraction is not null)
+                {
+                    // A parameter form mounted later can take the prompt from the dialog. Closing the dialog without a
+                    // cancelled result doesn't answer the interaction, the same as when the AppHost completes it.
+                    var dialogReference = currentDialogReference;
+                    await InvokeAsync(() => ParameterInteractionState.SetDialogInteraction(parameterDialogInteraction, dialogReference.CloseAsync));
+                }
             }
             finally
             {
@@ -282,6 +293,10 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                 if (currentDialogReference != null)
                 {
                     await currentDialogReference.Result.WaitAsync(_cts.Token);
+                    if (parameterDialogInteraction is not null)
+                    {
+                        await InvokeAsync(() => ParameterInteractionState.ClearDialogInteraction(parameterDialogInteraction.Interaction.InteractionId));
+                    }
 
                     await _semaphore.WaitAsync(_cts.Token).ConfigureAwait(false);
                     try

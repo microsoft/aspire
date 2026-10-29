@@ -731,8 +731,11 @@ public sealed class ParameterProcessor(
 
                 foreach (var (parameter, version) in unresolvedParametersSnapshot)
                 {
-                    // Create an input for each unresolved parameter.
-                    var input = parameter.CreateInput();
+                    // Create an input for each unresolved parameter. The input is named after the parameter, like the
+                    // set-parameter command names its input, rather than whatever name a WithCustomInput generator
+                    // chose: the dashboard matches the prompt's inputs to parameters by name to show them in the
+                    // parameter form, and two custom inputs could otherwise share a name in the same prompt.
+                    var input = parameter.CreateInput(name: parameter.Name);
                     resourceInputs.Add((parameter, input, version));
                 }
 
