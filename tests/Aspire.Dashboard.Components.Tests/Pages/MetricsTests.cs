@@ -282,11 +282,14 @@ public partial class MetricsTests : DashboardTestContext
         });
 
         table.FindAll("fluent-button").Single(button => button.TextContent.Trim() == "2").Click();
-        var dialog = Assert.Single(dialogs);
-        Assert.Same(instrumentViewModel.Instrument, dialog.Instrument);
-        Assert.Equal([2d, 22d], dialog.Exemplars.Select(exemplar => exemplar.Value).Order());
         var expectedExemplarTime = timeProvider.ToLocalDateTimeOffset(new DateTimeOffset(time.AddMilliseconds(500)));
-        Assert.All(dialog.Exemplars, exemplar => Assert.Equal(expectedExemplarTime, exemplar.Start));
+        cut.WaitForAssertion(() =>
+        {
+            var dialog = Assert.Single(dialogs);
+            Assert.Same(instrumentViewModel.Instrument, dialog.Instrument);
+            Assert.Equal([2d, 22d], dialog.Exemplars.Select(exemplar => exemplar.Value).Order());
+            Assert.All(dialog.Exemplars, exemplar => Assert.Equal(expectedExemplarTime, exemplar.Start));
+        });
 
         void AddPoints(DateTime start, bool compatibleBounds, double exemplarValue)
         {
