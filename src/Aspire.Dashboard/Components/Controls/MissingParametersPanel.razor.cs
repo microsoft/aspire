@@ -18,11 +18,13 @@ namespace Aspire.Dashboard.Components.Controls;
 
 public partial class MissingParametersPanel : IAsyncDisposable
 {
-    private const string SaveToUserSecretsName = "SaveToUserSecrets";
+    private const string SaveToUserSecretsName = ParameterInteractionState.SaveToUserSecretsInputName;
 
     private readonly CancellationTokenSource _disposalCts = new();
+    private ParameterInteractionState.PanelRegistration? _registration;
     private IReadOnlyList<ParameterEditor> _editors = [];
     private InputViewModel? _saveInput;
+    private bool _saveToUserSecrets;
 
     [Inject]
     public required IStringLocalizer<Resources.Resources> Loc { get; init; }
@@ -52,46 +54,70 @@ public partial class MissingParametersPanel : IAsyncDisposable
 
     private MarkdownProcessor MarkdownProcessor { get; set; } = null!;
 
+    // With the AppHost's interaction, the choice is the interaction's own input. Without it, the choice is passed to
+    // each parameter's command.
     private bool SaveToUserSecrets
     {
-        get => _saveInput?.IsChecked == true;
-        set => _saveInput?.IsChecked = value;
+        get => _saveInput?.IsChecked ?? _saveToUserSecrets;
+        set
+        {
+            if (_saveInput is not null)
+            {
+                _saveInput.IsChecked = value;
+            }
+            else
+            {
+                _saveToUserSecrets = value;
+            }
+        }
     }
 
     private bool IsSubmitDisabled =>
         Editors.Count == 0 ||
         Editors.Any(editor => IsEditorDisabled(editor) || IsMissingRequiredValue(editor.ValueInput));
 
+    // The AppHost's inputs interaction, when it's shown in this panel. The interaction is submitted as a whole, so the
+    // panel uses it only when it shows every parameter the interaction asks for. Otherwise each parameter is set with
+    // its own command.
+    private InteractionsInputsDialogViewModel? Interaction =>
+        ParameterInteractionState.Current is { } current && _registration?.Shows(current) == true ? current : null;
+
     protected override void OnInitialized()
     {
         MarkdownProcessor = InteractionMarkdownHelper.CreateProcessor(ControlsStringsLoc);
+        _registration = ParameterInteractionState.RegisterPanel();
         ParameterInteractionState.Changed += OnParameterInteractionChanged;
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        await ParameterInteractionState.BeginInteractionAsync();
+        // The registered parameters decide whether the interaction is shown here, so update them before the editors.
+        _registration!.SetParameterNames(Parameters
+            .Where(parameter => GetSetParameterCommand(parameter) is not null)
+            .Select(parameter => parameter.Name));
+        SyncEditors();
+
+        await ParameterInteractionState.BeginInteractionAsync(_registration);
     }
 
-    protected override void OnParametersSet()
-    {
-        SyncEditors();
-    }
+    private static CommandViewModel? GetSetParameterCommand(ResourceViewModel parameter) =>
+        parameter.Commands.FirstOrDefault(command =>
+            string.Equals(command.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName) &&
+            command.State != CommandViewModelState.Hidden);
 
     private void SyncEditors()
     {
         var existingEditors = _editors.ToDictionary(editor => editor.Resource.Name, StringComparers.ResourceName);
         var editors = new List<ParameterEditor>();
-        var interactionInputs = ParameterInteractionState.Current?.Inputs
+        var interaction = Interaction;
+        var interactionInputs = interaction?.Inputs
             .ToDictionary(input => input.Name, StringComparers.InteractionInputName);
 
         foreach (var parameter in Parameters
             .Where(parameter => parameter.HasMissingParameterValueState())
             .OrderBy(parameter => parameter.DisplayName, StringComparers.ResourceName))
         {
-            var command = parameter.Commands.FirstOrDefault(command =>
-                string.Equals(command.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName) &&
-                command.State != CommandViewModelState.Hidden);
+            var command = GetSetParameterCommand(parameter);
             var valueInput = interactionInputs?.GetValueOrDefault(parameter.Name) ??
                 command?.ArgumentInputs.FirstOrDefault(input =>
                     !string.Equals(input.Name, SaveToUserSecretsName, StringComparisons.InteractionInputName));
@@ -116,12 +142,17 @@ public partial class MissingParametersPanel : IAsyncDisposable
 
         _editors = editors;
 
-        var interactionSaveInput = ParameterInteractionState.Current?.Inputs.FirstOrDefault(input =>
+        var interactionSaveInput = interaction?.Inputs.FirstOrDefault(input =>
             string.Equals(input.Name, SaveToUserSecretsName, StringComparisons.InteractionInputName));
         if (interactionSaveInput is not null)
         {
             _saveInput ??= new InputViewModel(interactionSaveInput);
             _saveInput.SetInput(interactionSaveInput);
+        }
+        else
+        {
+            // The interaction completed, or moved to a dialog.
+            _saveInput = null;
         }
     }
 
@@ -142,7 +173,7 @@ public partial class MissingParametersPanel : IAsyncDisposable
             return;
         }
 
-        if (ParameterInteractionState.Current is { } interaction)
+        if (Interaction is { } interaction)
         {
             await interaction.OnSubmitCallback(interaction.Interaction, false);
             return;
@@ -172,7 +203,7 @@ public partial class MissingParametersPanel : IAsyncDisposable
 
     private async Task OnInputFileChangeAsync(ParameterEditor editor, InputFileChangeEventArgs args)
     {
-        if (ParameterInteractionState.Current is not { } interaction)
+        if (Interaction is not { } interaction)
         {
             return;
         }
@@ -257,15 +288,16 @@ public partial class MissingParametersPanel : IAsyncDisposable
     {
         _ = InvokeAsync(async () =>
         {
-            await ParameterInteractionState.BeginInteractionAsync();
             SyncEditors();
             StateHasChanged();
+            await ParameterInteractionState.BeginInteractionAsync(_registration!);
         });
     }
 
     public ValueTask DisposeAsync()
     {
         ParameterInteractionState.Changed -= OnParameterInteractionChanged;
+        _registration?.Dispose();
         _disposalCts.Cancel();
         _disposalCts.Dispose();
         return ValueTask.CompletedTask;

@@ -1300,6 +1300,27 @@ public class ParameterProcessorTests
     }
 
     [Fact]
+    public async Task InitializeParametersAsync_WithMissingParameterValues_NotificationNamesUnresolvedParameters()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var resolvedParameter = CreateParameterResource("resolvedParam", "value");
+        var firstParameter = CreateParameterWithMissingValue("firstParam");
+        var secondParameter = CreateParameterWithMissingValue("secondParam");
+
+        await parameterProcessor.InitializeParametersAsync([resolvedParameter, firstParameter, secondParameter]).DefaultTimeout();
+
+        // The notification keeps its button for clients that don't know the parameter names, and names the
+        // parameters so the dashboard can offer its own form for them.
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(InteractionStrings.ParametersBarTitle, notificationInteraction.Title);
+        var options = Assert.IsType<NotificationInteractionOptions>(notificationInteraction.Options);
+        Assert.Equal(InteractionStrings.ParametersBarPrimaryButtonText, options.PrimaryButtonText);
+        Assert.Null(options.LinkUrl);
+        Assert.Equal(["firstParam", "secondParam"], options.UnresolvedParameterNames);
+    }
+
+    [Fact]
     public async Task SetParameterCoreAsync_CalledTwice_UpdatesPreviousValueAndSavedState()
     {
         var capturingStateManager = new CapturingMockDeploymentStateManager();

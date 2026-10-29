@@ -38,21 +38,53 @@ internal sealed class DashboardExperienceRedirectMiddleware(
                 ? cookieValue
                 : "modern";
 
+        // An explicit empty fragment prevents browsers from carrying the source URL's fragment across
+        // the HTTP redirect. The browser normalizes the final URL to the URL without '#'. The redirect uses the
+        // escaped path so resource names with reserved characters survive it.
+        var escapedPath = context.Request.Path.ToUriComponent();
         if (experience == "legacy" && !isLegacyPath)
         {
-            // An explicit empty fragment prevents browsers from carrying the source URL's fragment across
-            // the HTTP redirect. The browser normalizes the final URL to /legacy.
-            context.Response.Redirect("/legacy#");
+            context.Response.Redirect($"{context.Request.PathBase.ToUriComponent()}{GetLegacyUrl(escapedPath, context.Request.QueryString.Value)}#");
             return Task.CompletedTask;
         }
 
         if (experience == "modern" && isLegacyPath)
         {
-            context.Response.Redirect("/#");
+            context.Response.Redirect($"{context.Request.PathBase.ToUriComponent()}{GetModernUrl(escapedPath, context.Request.QueryString.Value)}#");
             return Task.CompletedTask;
         }
 
         return next(context);
+    }
+
+    // Pages that both experiences have, with the same route and query string below the experience's root, for example
+    // /traces/detail/{traceId} and /legacy/traces/detail/{traceId}. Links to them, such as links from the CLI or a
+    // shared trace link, keep working in either experience. Other pages, such as the resources pages, differ between
+    // the experiences, so they go to the experience's root.
+    // Keep in sync with wwwroot/js/app-dashboard-experience.js.
+    private static readonly string[] s_sharedPageSegments = ["consolelogs", "structuredlogs", "traces", "metrics", "terminals"];
+
+    internal static string GetLegacyUrl(string path, string? query) =>
+        IsSharedPage(path) ? $"/legacy{path}{query}" : "/legacy";
+
+    internal static string GetModernUrl(string path, string? query)
+    {
+        // "/legacy/traces/detail/abc" -> "/traces/detail/abc", "/legacy" -> "".
+        var modernPath = path["/legacy".Length..];
+        return IsSharedPage(modernPath) ? $"{modernPath}{query}" : "/";
+    }
+
+    private static bool IsSharedPage(string path)
+    {
+        // The first segment of "/traces/detail/abc" is "traces".
+        var segment = path.TrimStart('/');
+        var separatorIndex = segment.IndexOf('/');
+        if (separatorIndex >= 0)
+        {
+            segment = segment[..separatorIndex];
+        }
+
+        return s_sharedPageSegments.Contains(segment, StringComparer.OrdinalIgnoreCase);
     }
 
     private static bool IsExcludedPath(string path) =>

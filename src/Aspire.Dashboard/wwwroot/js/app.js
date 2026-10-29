@@ -561,13 +561,47 @@ function applyFluentControlRoles(root) {
 }
 
 applyFluentControlRoles(document);
+
+// The observer sees every node the dashboard adds, including streamed console log lines and grid rows, which can be
+// thousands per second. Scanning each added subtree as it arrives puts that work on the busiest paths, so added
+// elements are collected and scanned together a little later. Text nodes, which most log output is, are skipped
+// without any work. A timer is used rather than requestAnimationFrame because animation frames don't run in a
+// background tab, where the pending set would otherwise keep growing.
+const pendingFluentControlRoots = new Set();
+let pendingFluentControlTimer = null;
+
+function applyPendingFluentControlRoles() {
+    pendingFluentControlTimer = null;
+    for (const root of pendingFluentControlRoots) {
+        // Rows of a virtualized grid or log viewer are often removed again before the scan runs.
+        if (root.isConnected) {
+            applyFluentControlRoles(root);
+        }
+    }
+    pendingFluentControlRoots.clear();
+}
+
 new MutationObserver(records => {
     for (const record of records) {
         if (record.type === "attributes") {
-            applyFluentControlRoles(record.target);
-        } else {
-            record.addedNodes.forEach(applyFluentControlRoles);
+            // Only "disabled" is observed, and it changes the semantics of the element itself, not its children.
+            if (record.target.matches("fluent-button")) {
+                updateFluentButtonSemantics(record.target);
+            } else if (record.target.matches("fluent-checkbox")) {
+                updateFluentCheckboxSemantics(record.target);
+            }
+            continue;
         }
+
+        for (const node of record.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                pendingFluentControlRoots.add(node);
+            }
+        }
+    }
+
+    if (pendingFluentControlRoots.size > 0 && pendingFluentControlTimer === null) {
+        pendingFluentControlTimer = setTimeout(applyPendingFluentControlRoles, 50);
     }
 }).observe(document.body, { attributes: true, attributeFilter: ["disabled"], childList: true, subtree: true });
 

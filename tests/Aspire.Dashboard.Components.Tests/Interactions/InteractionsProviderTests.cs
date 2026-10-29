@@ -367,6 +367,109 @@ public partial class InteractionsProviderTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task ReceiveData_ParameterInputsShownInlineAndFormRemoved_OpenDialog()
+    {
+        var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, interactionChannelProvider: () => interactionsChannel);
+        var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.CompletedTask);
+
+        SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
+
+        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var instance = cut.Instance;
+        var state = Services.GetRequiredService<ParameterInteractionState>();
+
+        ParameterInteractionState.PanelRegistration? panel = null;
+        await cut.InvokeAsync(() =>
+        {
+            panel = state.RegisterPanel();
+            panel.SetParameterNames(["first"]);
+        });
+
+        var inputsDialog = new InteractionInputsDialog();
+        inputsDialog.InputItems.Add(new InteractionInput { Name = "first", InputType = InputType.Text });
+        await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            InputsDialog = inputsDialog
+        });
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => state.Current?.Interaction.InteractionId == 1,
+            "Wait for the prompt to be shown in the parameter form.");
+        Assert.Null(instance._interactionDialogReference);
+
+        // Navigating away removes the form. The prompt must still be visible, so it moves to a dialog.
+        await cut.InvokeAsync(() => panel!.Dispose());
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => instance._interactionDialogReference?.InteractionId == 1,
+            "Wait for the prompt to be shown in a dialog.");
+        Assert.Null(state.Current);
+
+        await instance.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ReceiveData_UnresolvedParametersNotification_PrimaryActionOpensParameterForm()
+    {
+        var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var sendInteractionUpdatesChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            interactionChannelProvider: () => interactionsChannel,
+            sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
+
+        SetupInteractionProviderServices(dashboardClient: dashboardClient);
+
+        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var instance = cut.Instance;
+        var state = Services.GetRequiredService<ParameterInteractionState>();
+        var navigationManager = Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+
+        var notification = new InteractionNotification { Intent = MessageIntent.Warning };
+        notification.UnresolvedParameterNames.Add(["first", "second"]);
+        await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            PrimaryButtonText = "Enter values",
+            Notification = notification
+        });
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => instance.OpenMessageBars.SingleOrDefault()?.InteractionId == 1,
+            "Wait for message created.");
+
+        // The button opens the parameter form without answering the notification.
+        _messageBarProvider!.WaitForElement(".dashboard-message-bar-action").Click();
+
+        Assert.Equal("http://localhost/resources?resource=first&resource=second", navigationManager.Uri);
+        Assert.Equal(1, instance.OpenMessageBars.Single().InteractionId);
+        Assert.False(sendInteractionUpdatesChannel.Reader.TryRead(out _));
+
+        // The form accepts the notification once it shows every parameter.
+        await cut.InvokeAsync(async () =>
+        {
+            using var panel = state.RegisterPanel();
+            panel.SetParameterNames(["first", "second"]);
+            await state.BeginInteractionAsync(panel);
+        });
+
+        var update = await sendInteractionUpdatesChannel.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(1, update.InteractionId);
+        Assert.Equal(WatchInteractionsRequestUpdate.KindOneofCase.Notification, update.KindCase);
+        Assert.True(update.Notification.Result);
+
+        await instance.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task ReceiveData_NotificationReceivedTwice_IgnoreReplayedNotification()
     {
         // Arrange
@@ -731,11 +834,9 @@ public partial class InteractionsProviderTests : DashboardTestContext
         Services.AddFluentUIComponents();
         Services.AddSingleton<ILoggerFactory>(loggerFactory);
 
-        var liveDashboardClient = dashboardClient ?? new TestDashboardClient();
         Services.AddSingleton<IDialogService>(dialogService ?? new TestDialogService());
         Services.AddSingleton<IDashboardClient>(selectedDashboardClient ?? new TestDashboardClient());
-        Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, liveDashboardClient);
-        Services.AddSingleton<IResourceRepository>(liveDashboardClient);
+        Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, dashboardClient ?? new TestDashboardClient());
         Services.AddSingleton<DashboardTelemetryService>();
         Services.AddSingleton(new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = false });
         Services.AddSingleton<ComponentTelemetryContextProvider>();

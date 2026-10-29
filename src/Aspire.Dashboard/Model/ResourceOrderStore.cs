@@ -3,7 +3,6 @@
 
 using System.Globalization;
 using Aspire.Dashboard.Configuration;
-using Aspire.Shared;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 
@@ -14,36 +13,24 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 public sealed class ResourceOrderStore
 {
+    private const string SettingsName = "resource and group order";
+
     private readonly Lock _lock = new();
-    private readonly ILogger _logger;
     private readonly Dictionary<string, long> _positions = new(StringComparers.ResourceName);
     private readonly Dictionary<string, long> _defaultPositions = new(StringComparers.ResourceName);
     private readonly Dictionary<string, Dictionary<string, long>> _groupPositions = new(StringComparer.Ordinal);
-    private readonly string? _databasePath;
-    private readonly string? _connectionString;
+    private readonly DashboardSettingsDatabase _database;
     private bool _loaded;
-    private bool _loadFailed;
     private bool _hasCustomResourceOrder;
 
     public ResourceOrderStore(IOptions<DashboardOptions> options, ILogger<ResourceOrderStore> logger)
-        : this(ResourceTagStore.GetDatabasePath(options.Value), logger)
+        : this(DashboardSettingsDatabase.GetDatabasePath(options.Value), logger)
     {
     }
 
     internal ResourceOrderStore(string? databasePath, ILogger logger)
     {
-        _databasePath = databasePath;
-        _logger = logger;
-        if (databasePath is not null)
-        {
-            _connectionString = new SqliteConnectionStringBuilder
-            {
-                DataSource = databasePath,
-                Mode = SqliteOpenMode.ReadWriteCreate,
-                Pooling = false,
-                DefaultTimeout = 5
-            }.ToString();
-        }
+        _database = new DashboardSettingsDatabase(databasePath, logger);
     }
 
     public event Action? Changed;
@@ -203,15 +190,9 @@ public sealed class ResourceOrderStore
             return;
         }
         _loaded = true;
-        if (_connectionString is null)
-        {
-            return;
-        }
 
-        try
+        _database.Load(SettingsName, connection =>
         {
-            DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.GetDirectoryName(_databasePath)!);
-            using var connection = OpenConnection();
             using var command = connection.CreateCommand();
             command.CommandText = """
                 CREATE TABLE IF NOT EXISTS resource_order (
@@ -254,28 +235,13 @@ public sealed class ResourceOrderStore
             {
                 GetScopePositions(groupReader.GetString(0)).Add(groupReader.GetString(1), groupReader.GetInt64(2));
             }
-        }
-        catch (Exception ex) when (ex is SqliteException or IOException or UnauthorizedAccessException)
-        {
-            _loadFailed = true;
-            _logger.LogWarning(ex, "Unable to load resource and group order from '{DatabasePath}'.", _databasePath);
-        }
+        });
     }
 
     private bool Save(string? grouping, IReadOnlyDictionary<string, long> positions, bool isUserMove)
     {
-        if (_loadFailed)
+        return _database.TrySave(SettingsName, connection =>
         {
-            return false;
-        }
-        if (_connectionString is null)
-        {
-            return true;
-        }
-
-        try
-        {
-            using var connection = OpenConnection();
             using var transaction = connection.BeginTransaction();
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
@@ -301,19 +267,6 @@ public sealed class ResourceOrderStore
                 command.ExecuteNonQuery();
             }
             transaction.Commit();
-            return true;
-        }
-        catch (SqliteException ex)
-        {
-            _logger.LogWarning(ex, "Unable to save resource or group order to '{DatabasePath}'.", _databasePath);
-            return false;
-        }
-    }
-
-    private SqliteConnection OpenConnection()
-    {
-        var connection = new SqliteConnection(_connectionString);
-        connection.Open();
-        return connection;
+        });
     }
 }

@@ -153,6 +153,44 @@ internal sealed class ChartDataCalculator
     internal static bool IsMonotonicCounter(OtlpInstrumentSummary instrument)
         => instrument.Type == OtlpInstrumentType.Sum && instrument.IsMonotonic;
 
+    /// <summary>
+    /// Calculates a counter's increase in each interval of <see cref="CalculateChartValues"/>.
+    /// </summary>
+    public List<double?> CalculateCounterIncreaseValues(List<DimensionScope> dimensions, DateTimeOffset startTime, OtlpAggregationTemporality temporality)
+    {
+        if (temporality == OtlpAggregationTemporality.Delta)
+        {
+            return [.. CalculateChartValues(dimensions, startTime, static t => t, string.Empty).Traces[0].Values];
+        }
+
+        // A cumulative counter has a running total per dimension (attribute set). The increases are calculated per
+        // dimension and then added up, rather than calculated from the sum of the totals. A dimension can be missing
+        // from an interval, for example when it's exported less often, and a sum of A=10,000 and B=5,000 that drops
+        // to 10,000 without B would otherwise look like a counter reset followed by an increase of 10,000.
+        List<double?>? total = null;
+        foreach (var dimension in dimensions)
+        {
+            var values = CalculateChartValues([dimension], startTime, static t => t, string.Empty).Traces[0].Values;
+            var increases = CalculateCounterIncreases(values, temporality);
+            if (total is null)
+            {
+                total = increases;
+                continue;
+            }
+
+            for (var i = 0; i < total.Count; i++)
+            {
+                total[i] = (total[i], increases[i]) switch
+                {
+                    (null, null) => null,
+                    var (current, increase) => (current ?? 0) + (increase ?? 0)
+                };
+            }
+        }
+
+        return total ?? [.. Enumerable.Repeat<double?>(null, _pointCount + 2)];
+    }
+
     internal static List<double?> CalculateCounterIncreases(IReadOnlyList<double?> values, OtlpAggregationTemporality temporality)
     {
         // Delta counters already report the change per export, so their values are the increases.

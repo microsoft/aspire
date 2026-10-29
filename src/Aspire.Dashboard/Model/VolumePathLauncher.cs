@@ -34,13 +34,12 @@ internal sealed class VolumePathLauncher : IVolumePathLauncher
 
         try
         {
-            var startInfo = OperatingSystem.IsWindows()
-                ? new ProcessStartInfo("explorer.exe", $"\"{path}\"")
-                : OperatingSystem.IsMacOS()
-                    ? new ProcessStartInfo("open", $"\"{path}\"")
-                    : new ProcessStartInfo("xdg-open", $"\"{path}\"");
-
-            startInfo.UseShellExecute = false;
+            var fullPath = Path.GetFullPath(path);
+            var startInfo = CreateStartInfo(fullPath, Directory.Exists(fullPath), GetCurrentPlatform());
+            if (startInfo is null)
+            {
+                return false;
+            }
 
             using var process = Process.Start(startInfo);
             return process is not null;
@@ -53,4 +52,60 @@ internal sealed class VolumePathLauncher : IVolumePathLauncher
             return false;
         }
     }
+
+    /// <summary>
+    /// Creates the command that shows the path in the platform's file explorer without opening it. Opening a mounted
+    /// file with its default handler could run it, for example a <c>.command</c> file on macOS or a <c>.desktop</c>
+    /// file on Linux, so a file is selected in its folder instead:
+    /// <list type="bullet">
+    /// <item>Windows: <c>explorer.exe /select,"C:\src\init.sql"</c>, or <c>explorer.exe "C:\src\data"</c> for a folder.</item>
+    /// <item>macOS: <c>open -R /src/init.sql</c> selects the file or folder in Finder.</item>
+    /// <item>Linux: <c>xdg-open</c> can't select a file, so it opens the file's folder, or the folder itself.</item>
+    /// </list>
+    /// </summary>
+    internal static ProcessStartInfo? CreateStartInfo(string fullPath, bool isDirectory, VolumePathPlatform platform)
+    {
+        ProcessStartInfo startInfo;
+        switch (platform)
+        {
+            case VolumePathPlatform.Windows:
+                // explorer.exe parses its own command line, and only accepts the path quoted after "/select,", so
+                // ArgumentList's quoting can't be used. Windows paths can't contain '"', so reject one rather than
+                // let it end the quoted path early.
+                if (fullPath.Contains('"'))
+                {
+                    return null;
+                }
+
+                startInfo = new ProcessStartInfo("explorer.exe", isDirectory ? $"\"{fullPath}\"" : $"/select,\"{fullPath}\"");
+                break;
+            case VolumePathPlatform.MacOS:
+                startInfo = new ProcessStartInfo("open") { ArgumentList = { "-R", fullPath } };
+                break;
+            default:
+                var folder = isDirectory ? fullPath : Path.GetDirectoryName(fullPath);
+                if (string.IsNullOrEmpty(folder))
+                {
+                    return null;
+                }
+
+                startInfo = new ProcessStartInfo("xdg-open") { ArgumentList = { folder } };
+                break;
+        }
+
+        startInfo.UseShellExecute = false;
+        return startInfo;
+    }
+
+    private static VolumePathPlatform GetCurrentPlatform() =>
+        OperatingSystem.IsWindows() ? VolumePathPlatform.Windows
+        : OperatingSystem.IsMacOS() ? VolumePathPlatform.MacOS
+        : VolumePathPlatform.Linux;
+}
+
+internal enum VolumePathPlatform
+{
+    Windows,
+    MacOS,
+    Linux
 }

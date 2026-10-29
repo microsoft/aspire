@@ -225,7 +225,10 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
         // - Gauges and up-down counters are levels, which is what a line shows best.
         if (ChartDataCalculator.IsMonotonicCounter(instrument))
         {
-            var increases = ChartDataCalculator.CalculateCounterIncreases(values, instrument.AggregationTemporality);
+            // The increases share the chart's intervals, so the same trailing points are dropped.
+            var increases = calculator.CalculateCounterIncreaseValues(data.Dimensions, endTimeOffset, instrument.AggregationTemporality)
+                .Where((_, i) => chartData.XValues[i] <= endTimeOffset)
+                .ToList();
             return new SparklineData(latestValue, SparklineKind.Bars, SparklinePath.BuildBars(increases, SparklineWidth, SparklineHeight), string.Empty);
         }
 

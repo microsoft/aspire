@@ -1,11 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Net;
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.Markdown;
@@ -42,6 +42,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
     private readonly KeyedInteractionCollection _pendingInteractions = new();
+    private readonly ConcurrentDictionary<int, byte> _releasedInteractionIds = new();
     private readonly KeyedMessageCollection _openMessageBars = new();
     private MarkdownProcessor _markdownProcessor = default!;
     private Task? _dialogDisplayTask;
@@ -74,9 +75,6 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
     [Inject]
     public required DashboardMessageBarService MessageService { get; init; }
-
-    [Inject]
-    public required IResourceRepository ResourceRepository { get; init; }
 
     [Inject]
     public required ParameterInteractionState ParameterInteractionState { get; init; }
@@ -114,6 +112,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
         }
 
         _markdownProcessor = InteractionMarkdownHelper.CreateProcessor(ControlsStringsLoc);
+        ParameterInteractionState.Released += OnParameterInteractionReleased;
 
         _dialogDisplayTask = Task.Run(async () =>
         {
@@ -214,10 +213,16 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                 else if (item.InputsDialog is not null)
                 {
                     var vm = CreateInputsViewModel(item);
-                    if (IsNewDashboard && IsParameterInputsInteraction(item))
+                    if (IsNewDashboard)
                     {
-                        await InvokeAsync(() => ParameterInteractionState.SetCurrent(vm));
-                        continue;
+                        // A mounted parameter form that shows every input displays the prompt inline instead of a
+                        // dialog. Without one, the dialog is shown so the prompt is always visible.
+                        var shownInline = false;
+                        await InvokeAsync(() => shownInline = ParameterInteractionState.TrySetCurrent(vm));
+                        if (shownInline)
+                        {
+                            continue;
+                        }
                     }
 
                     var dialogParameters = CreateDialogParameters(item, intent: null);
@@ -339,22 +344,46 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
             }
         };
 
-    private bool IsParameterInputsInteraction(WatchInteractionsResponseUpdate item)
-    {
-        var inputNames = item.InputsDialog?.InputItems
-            .Where(input => !string.Equals(input.Name, "SaveToUserSecrets", StringComparisons.InteractionInputName))
-            .Select(input => input.Name)
-            .ToList();
-        if (inputNames is not { Count: > 0 })
-        {
-            return false;
-        }
+    private static string GetParametersUrl(IReadOnlyList<string> parameterNames) =>
+        parameterNames.Count == 1
+            ? DashboardUrls.ResourceOverviewUrl(parameterNames[0])
+            : DashboardUrls.AddResourceSelection(DashboardUrls.ResourceListUrl(), parameterNames);
 
-        var missingParameterNames = ResourceRepository.GetResources()
-            .Where(resource => resource.IsParameter && resource.HasMissingParameterValueState())
-            .Select(resource => resource.Name)
-            .ToHashSet(StringComparers.ResourceName);
-        return inputNames.All(missingParameterNames.Contains);
+    private void OnParameterInteractionReleased(InteractionsInputsDialogViewModel interaction)
+    {
+        // The inline form that showed the prompt is gone, for example because the user navigated away. Queue the
+        // prompt again so it's shown as a dialog. This handler runs on the renderer and can't wait on the semaphore,
+        // so the prompt is queued in the background. The AppHost can complete the interaction meanwhile: the watcher
+        // removes the id from _releasedInteractionIds when it does, and the prompt isn't queued.
+        var interactionId = interaction.Interaction.InteractionId;
+        _releasedInteractionIds.TryAdd(interactionId, 0);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _semaphore.WaitAsync(_cts.Token).ConfigureAwait(false);
+                try
+                {
+                    // A newer version of the prompt is already queued or shown when the AppHost updated it meanwhile.
+                    var item = interaction.Interaction;
+                    if (_releasedInteractionIds.TryRemove(interactionId, out _) &&
+                        !_pendingInteractions.Contains(interactionId) &&
+                        _interactionDialogReference?.InteractionId != interactionId)
+                    {
+                        _pendingInteractions.Insert(0, item);
+                        NotifyInteractionAvailable();
+                    }
+                }
+                finally
+                {
+                    _semaphore.Release();
+                }
+            }
+            catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+            {
+                // The provider is being disposed.
+            }
+        });
     }
 
     private async Task WatchInteractionsAsync()
@@ -424,6 +453,15 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                             break;
                         }
 
+                        // The AppHost names the parameters of the unresolved parameters notification. The modern dashboard
+                        // enters their values in the parameter form of the resources page: its button opens the form,
+                        // and the form accepts the notification once it shows every parameter. The legacy dashboard,
+                        // and older AppHosts that don't send the names, use the notification's button and the dialog.
+                        var parameterNames = notification.UnresolvedParameterNames.ToList();
+                        var parametersUrl = IsNewDashboard && parameterNames.Count > 0
+                            ? GetParametersUrl(parameterNames)
+                            : null;
+
                         DashboardMessageBarReference? message = null;
                         await InvokeAsync(async () =>
                         {
@@ -444,9 +482,11 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                                     AllowDismiss = item.ShowDismiss,
                                     LinkText = notification.LinkText,
                                     LinkUrl = notification.LinkUrl,
-                                    LinkAsAction = notification.LinkUrl?.StartsWith("/", StringComparison.Ordinal) == true,
-                                    LinkActionResult = notification.LinkUrl?.StartsWith("/resources?resource=", StringComparison.OrdinalIgnoreCase) == true ? true : null,
+                                    // A relative link is a dashboard page, so it's opened in the dashboard rather than a
+                                    // new tab. Following it doesn't answer the notification.
+                                    LinkAsAction = notification.LinkUrl?.StartsWith('/') == true,
                                     PrimaryAction = primaryButtonText,
+                                    PrimaryActionUrl = parametersUrl,
                                     SecondaryAction = secondaryButtonText
                                 },
                                 MapMessageIntent(notification.Intent),
@@ -456,20 +496,32 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                         Debug.Assert(message != null, "Message should have been created in UI thread.");
                         _openMessageBars.Add(new InteractionMessageBarReference(item.InteractionId, message, CreateTelemetryContext(TelemetryComponentIds.InteractionMessageBar)));
 
-                        if (IsNewDashboard &&
-                            notification.LinkUrl?.StartsWith("/resources?resource=", StringComparison.OrdinalIgnoreCase) == true)
+                        if (parametersUrl is not null)
                         {
                             var parameterNotification = notification.Clone();
-                            await InvokeAsync(() => ParameterInteractionState.SetBeginInteraction(async () =>
+                            await InvokeAsync(() => ParameterInteractionState.SetNotification(item.InteractionId, parameterNames, async () =>
                             {
+                                // The parameter form accepts the notification while it renders, so a lost connection
+                                // must not fail the page. The form still sets values with commands without it.
                                 parameterNotification.Result = true;
-                                await DashboardClient.SendInteractionRequestAsync(
-                                    new WatchInteractionsRequestUpdate
-                                    {
-                                        InteractionId = item.InteractionId,
-                                        Notification = parameterNotification
-                                    },
-                                    _cts.Token).ConfigureAwait(false);
+                                try
+                                {
+                                    await DashboardClient.SendInteractionRequestAsync(
+                                        new WatchInteractionsRequestUpdate
+                                        {
+                                            InteractionId = item.InteractionId,
+                                            Notification = parameterNotification
+                                        },
+                                        _cts.Token).ConfigureAwait(false);
+                                }
+                                catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+                                {
+                                    // The provider is being disposed.
+                                }
+                                catch (Exception ex)
+                                {
+                                    Logger.LogWarning(ex, "Unable to accept unresolved parameters notification {InteractionId}.", item.InteractionId);
+                                }
                             }));
                         }
 
@@ -480,6 +532,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     case WatchInteractionsResponseUpdate.KindOneofCase.Complete:
                         // Complete interaction.
                         _pendingInteractions.Remove(item.InteractionId);
+                        _releasedInteractionIds.TryRemove(item.InteractionId, out _);
                         await InvokeAsync(() => ParameterInteractionState.Clear(item.InteractionId));
 
                         // Close the interaction's dialog if it is open.
@@ -729,6 +782,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        ParameterInteractionState.Released -= OnParameterInteractionReleased;
         _cts.Cancel();
 
         await TaskHelpers.WaitIgnoreCancelAsync(_dialogDisplayTask);

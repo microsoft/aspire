@@ -690,10 +690,6 @@ public sealed class ParameterProcessor(
 
             if (showNotification)
             {
-                var parametersUrl = "/resources?" + string.Join(
-                    "&",
-                    unresolvedParameters.Select(parameter => $"resource={Uri.EscapeDataString(parameter.Name)}"));
-
                 // First we show a notification that there are unresolved parameters.
                 var result = await interactionService.PromptNotificationAsync(
                     InteractionStrings.ParametersBarTitle,
@@ -701,8 +697,8 @@ public sealed class ParameterProcessor(
                     new NotificationInteractionOptions
                     {
                         Intent = MessageIntent.Warning,
-                        LinkText = InteractionStrings.ParametersBarPrimaryButtonText,
-                        LinkUrl = parametersUrl
+                        PrimaryButtonText = InteractionStrings.ParametersBarPrimaryButtonText,
+                        UnresolvedParameterNames = [.. GetUnresolvedParametersSnapshot(unresolvedParameters).Select(p => p.Parameter.Name)]
                     },
                     allParametersResolvedToken).ConfigureAwait(false);
 

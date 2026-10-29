@@ -3,7 +3,6 @@
 
 using System.Text;
 using Aspire.Dashboard.Configuration;
-using Aspire.Shared;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 
@@ -21,54 +20,33 @@ namespace Aspire.Dashboard.Model;
 /// </remarks>
 public sealed class ResourceTagStore
 {
-    internal const string DatabaseFileName = "dashboard-settings.db";
     internal const int MaxTagLength = 50;
+    private const string SettingsName = "resource tags";
 
     private readonly Lock _lock = new();
-    private readonly ILogger _logger;
+    private readonly DashboardSettingsDatabase _database;
     private readonly Dictionary<string, List<string>> _tagsByResource = new(StringComparers.ResourceName);
-    private string? _connectionString;
     private bool _loaded;
 
     public ResourceTagStore(IOptions<DashboardOptions> options, ILogger<ResourceTagStore> logger)
-        : this(GetDatabasePath(options.Value), logger)
+        : this(DashboardSettingsDatabase.GetDatabasePath(options.Value), logger)
     {
     }
 
     internal ResourceTagStore(string? databasePath, ILogger logger)
     {
-        _logger = logger;
-        DatabasePath = databasePath;
-
-        if (databasePath is not null)
-        {
-            _connectionString = new SqliteConnectionStringBuilder
-            {
-                DataSource = databasePath,
-                Mode = SqliteOpenMode.ReadWriteCreate,
-                // Tags change rarely. Not pooling connections avoids keeping the file open between changes, so the
-                // data directory can be deleted while the dashboard is running.
-                Pooling = false,
-                DefaultTimeout = 5
-            }.ToString();
-        }
+        _database = new DashboardSettingsDatabase(databasePath, logger);
     }
 
     /// <summary>
     /// Gets the path of the settings database, or <see langword="null"/> when tags are only kept in memory.
     /// </summary>
-    internal string? DatabasePath { get; }
+    internal string? DatabasePath => _database.DatabasePath;
 
     /// <summary>
     /// Raised after tags are added or removed. Handlers can be invoked on any thread.
     /// </summary>
     public event Action? Changed;
-
-    internal static string? GetDatabasePath(DashboardOptions options) => options.Data.PersistenceMode switch
-    {
-        DashboardPersistenceMode.None => null,
-        _ => Path.Combine(DashboardRunStore.GetApplicationSettingsDirectory(options.Data.Directory, options.GetApplicationNameOrDefault()), DatabaseFileName)
-    };
 
     /// <summary>
     /// Gets the tags of a resource in the order they were added.
@@ -254,17 +232,8 @@ public sealed class ResourceTagStore
         }
 
         _loaded = true;
-        if (_connectionString is null)
+        _database.Load(SettingsName, connection =>
         {
-            return;
-        }
-
-        try
-        {
-            // Settings can include resource names, so restrict them to the current user like run data.
-            DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.GetDirectoryName(DatabasePath)!);
-
-            using var connection = OpenConnection();
             using (var createCommand = connection.CreateCommand())
             {
                 // The tag column uses NOCASE so a tag can't be stored twice for a resource with different casing.
@@ -293,39 +262,18 @@ public sealed class ResourceTagStore
 
                 tags.Add(reader.GetString(1));
             }
-        }
-        catch (Exception ex) when (ex is SqliteException or IOException or UnauthorizedAccessException)
-        {
-            // Tags are a convenience. Keep them in memory rather than failing pages that display them.
-            _logger.LogWarning(ex, "Unable to load resource tags from '{DatabasePath}'. Tags won't be saved.", DatabasePath);
-            _connectionString = null;
-        }
+        });
     }
 
     private void Persist(Action<SqliteCommand> configureCommand)
     {
-        if (_connectionString is null)
+        // A tag that couldn't be saved is still shown for the rest of the run. Tags are a convenience, so it isn't
+        // worth failing the edit for.
+        _database.TrySave(SettingsName, connection =>
         {
-            return;
-        }
-
-        try
-        {
-            using var connection = OpenConnection();
             using var command = connection.CreateCommand();
             configureCommand(command);
             command.ExecuteNonQuery();
-        }
-        catch (SqliteException ex)
-        {
-            _logger.LogWarning(ex, "Unable to save resource tags to '{DatabasePath}'.", DatabasePath);
-        }
-    }
-
-    private SqliteConnection OpenConnection()
-    {
-        var connection = new SqliteConnection(_connectionString);
-        connection.Open();
-        return connection;
+        });
     }
 }

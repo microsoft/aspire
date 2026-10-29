@@ -94,7 +94,7 @@ public sealed class ResourceTagStoreTests(ITestOutputHelper testOutputHelper) : 
     [Fact]
     public void Tags_PersistAcrossStoreInstances()
     {
-        var databasePath = Path.Combine(_workspace.Path, ResourceTagStore.DatabaseFileName);
+        var databasePath = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
 
         var store = new ResourceTagStore(databasePath, NullLogger.Instance);
         store.AddTag("api", "backend");
@@ -127,7 +127,7 @@ public sealed class ResourceTagStoreTests(ITestOutputHelper testOutputHelper) : 
         var options = new DashboardOptions();
         options.Data.PersistenceMode = DashboardPersistenceMode.None;
 
-        Assert.Null(ResourceTagStore.GetDatabasePath(options));
+        Assert.Null(DashboardSettingsDatabase.GetDatabasePath(options));
     }
 
     [Theory]
@@ -149,7 +149,7 @@ public sealed class ResourceTagStoreTests(ITestOutputHelper testOutputHelper) : 
     }
 
     private ResourceTagStore CreateStore() =>
-        new(Path.Combine(_workspace.Path, ResourceTagStore.DatabaseFileName), NullLogger.Instance);
+        new(Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName), NullLogger.Instance);
 
     public void Dispose()
     {
