@@ -338,7 +338,7 @@ internal sealed class ConfigSourceTestContext
                 },
                 "team": {
                   "repository": "example/team-skills",
-                  "plugin": "{{version}}",
+                  "plugins": ["{{version}}", "deployment"],
                   "openCodeV2Catalog": "https://skills.example/{{version}}/"
                 }
               },
@@ -373,7 +373,7 @@ internal sealed class ConfigSourceTestContext
               "platform": { "repository": "example/platform-skills", "ref": "{{version}}" },
               "team": {
                 "repository": "example/team-skills",
-                "plugin": "{{version}}",
+                "plugins": ["{{version}}", "deployment"],
                 "openCodeV2Catalog": "https://skills.example/{{version}}/"
               }
             }

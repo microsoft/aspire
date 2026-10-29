@@ -330,7 +330,7 @@ Skills, templates, and integrations are acquired according to the application's 
     "aspire1p": {
       "repository": "https://git.example.com/platform/skills.git",
       "marketplace": "aspire1p",
-      "plugin": "aspire",
+      "plugins": ["aspire", "deployment"],
       "ref": "main",
       "openCodeV1Catalog": "https://skills.example.com/opencode/v1/",
       "openCodeV2Catalog": "https://skills.example.com/opencode/v2/"
@@ -341,7 +341,7 @@ Skills, templates, and integrations are acquired according to the application's 
 
 Sources and their fields merge by name across configuration layers, case-insensitively. Agent initialization reads fresh global settings and the selected app's nearest local settings file; it does not retain local settings from a different launch directory. Additional sources do not replace the built-in `default` source, which registers `aspire@aspire-skills` from `microsoft/aspire-skills` and the official OpenCode catalogs. Override its fields to change that source, or set `"default": { "enabled": false }` to omit it. Setting `enabled` to false does not remove previously installed registrations or bypass the embedded-mode conflict check for an active built-in plugin or catalog.
 
-Each additional source requires a GitHub `owner/repository` or Git repository address. The marketplace identifier defaults to the source name and the plugin defaults to `aspire`; marketplace identifiers must be unique. An optional `ref` selects a branch or full commit for newly registered marketplaces. Copilot and Claude use native marketplace/plugin registration. OpenCode uses the catalog for its existing settings format, falling back to the other catalog when only one is supplied; sources without catalog URLs are not registered with OpenCode. Catalog URLs must use HTTPS. The CLI registers sources without acquiring their content; agent clients perform acquisition and authentication.
+Each additional source requires a GitHub `owner/repository` or Git repository address. The marketplace identifier defaults to the source name; marketplace identifiers must be unique. The `plugins` array selects one or more plugin names within that marketplace and defaults to `["aspire"]` when omitted. Empty lists and invalid plugin identifiers are rejected. Like other configuration arrays, plugin entries merge by index across configuration layers. An optional `ref` selects a branch or full commit for newly registered marketplaces. Copilot and Claude register each marketplace once and enable each selected plugin (for example, `aspire@aspire1p` and `deployment@aspire1p`). OpenCode uses the catalog for its existing settings format, falling back to the other catalog when only one is supplied; sources without catalog URLs are not registered with OpenCode. Plugin selections do not filter OpenCode catalogs. Catalog URLs must use HTTPS. The CLI registers sources without acquiring their content; agent clients perform acquisition and authentication.
 
 Existing matching registrations and agent-side pins are retained. GitHub shorthand and the equivalent HTTPS repository URL match an existing native GitHub registration, including URLs with a `.git` suffix. Explicitly disabled plugins, mismatched marketplace repositories, and existing marketplace policies are conflicts rather than permission to overwrite user settings. Each target file is updated atomically, so a conflict in any source leaves that target unchanged. The source-review warning displays every configured repository.
 

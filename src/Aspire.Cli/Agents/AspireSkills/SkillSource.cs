@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.ComponentModel;
+using System.Globalization;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Git;
 using Aspire.Cli.Utils;
@@ -20,7 +21,7 @@ internal sealed class SkillSource
     {
         Repository = AspireSkillsRemoteConfiguration.Repository,
         Marketplace = AspireSkillsRemoteConfiguration.MarketplaceName,
-        Plugin = "aspire",
+        Plugins = ["aspire"],
         OpenCodeV1Catalog = DefaultV1Catalog,
         OpenCodeV2Catalog = DefaultV2Catalog
     };
@@ -37,9 +38,9 @@ internal sealed class SkillSource
     [Description("Agent marketplace identifier. Defaults to the source name, or aspire-skills for the default source.")]
     public string? Marketplace { get; init; }
 
-    [JsonPropertyName("plugin")]
-    [Description("Plugin name within the marketplace. Defaults to aspire.")]
-    public string? Plugin { get; init; }
+    [JsonPropertyName("plugins")]
+    [Description("Plugin names within the marketplace. Defaults to [\"aspire\"].")]
+    public string[] Plugins { get; init; } = ["aspire"];
 
     [JsonPropertyName("ref")]
     [Description("Optional marketplace Git ref. Existing agent-side pins are preserved.")]
@@ -54,7 +55,7 @@ internal sealed class SkillSource
     public string? OpenCodeV2Catalog { get; init; }
 
     [JsonIgnore]
-    internal string PluginName => $"{Plugin}@{Marketplace}";
+    internal IEnumerable<string> PluginNames => Plugins.Select(plugin => $"{plugin}@{Marketplace}");
 
     [JsonIgnore]
     internal string RepositoryUrl => IsGitHubRepository(Repository!)
@@ -96,18 +97,30 @@ internal sealed class SkillSource
             }
 
             var isDefault = name.Equals(DefaultName, StringComparison.OrdinalIgnoreCase);
+            var pluginsSection = settings.GetSection("plugins");
+            var pluginEntries = pluginsSection.GetChildren().ToArray();
+            var plugins = settings.GetChildren().Any(child => child.Key.Equals("plugins", StringComparison.OrdinalIgnoreCase))
+                ? pluginEntries.Select(child => child.Value ?? string.Empty).ToArray()
+                : ["aspire"];
+            if (pluginsSection.Value is not null || plugins.Length == 0 ||
+                plugins.Any(plugin => !IsIdentifier(plugin)) ||
+                pluginEntries.Where((child, index) =>
+                    child.Key != index.ToString(CultureInfo.InvariantCulture) || child.GetChildren().Any()).Any())
+            {
+                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.plugins");
+            }
             var source = new SkillSource
             {
                 Repository = settings["repository"] ?? (isDefault ? BuiltIn.Repository : null),
                 Marketplace = settings["marketplace"] ?? (isDefault ? AspireSkillsRemoteConfiguration.MarketplaceName : name),
-                Plugin = settings["plugin"] ?? "aspire",
+                Plugins = plugins,
                 Ref = settings["ref"],
                 OpenCodeV1Catalog = settings["openCodeV1Catalog"] ?? (isDefault ? BuiltIn.OpenCodeV1Catalog : null),
                 OpenCodeV2Catalog = settings["openCodeV2Catalog"] ?? (isDefault ? BuiltIn.OpenCodeV2Catalog : null)
             };
-            if (!IsIdentifier(source.Marketplace) || !IsIdentifier(source.Plugin) || !marketplaces.Add(source.Marketplace))
+            if (!IsIdentifier(source.Marketplace) || !marketplaces.Add(source.Marketplace))
             {
-                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.marketplace/plugin");
+                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.marketplace");
             }
             if (string.IsNullOrWhiteSpace(source.Repository))
             {

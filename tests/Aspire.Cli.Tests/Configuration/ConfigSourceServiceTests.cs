@@ -833,7 +833,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(path, """
-            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/old","plugin":"existing"},"local":{"repository":"example/local"}}}
+            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/old","plugins":["existing"]},"local":{"repository":"example/local"}}}
             """);
         var git = new TestConfigSourceRepository
         {
@@ -855,7 +855,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.local.repository", "example/local");
-        await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.local.plugin", "existing");
+        await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.local.plugins.0", "existing");
         await ConfigurationService.SetConfigurationInFileAsync(path, "docs.llmsTxtUrl", "https://local.example/docs");
         var git = new TestConfigSourceRepository
         {
