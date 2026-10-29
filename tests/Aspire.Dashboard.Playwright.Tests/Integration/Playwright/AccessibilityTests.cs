@@ -442,14 +442,15 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
             $"html[data-theme='{theme.ToLowerInvariant()}']",
             new PageWaitForSelectorOptions { State = WaitForSelectorState.Attached }).DefaultTimeout();
 
-        // Readiness signal that content has rendered. On desktop every page renders an <h1> in the main
-        // region; some pages (e.g. the home page) keep it visually hidden, so wait for it to be attached
-        // rather than visible. At/below MobileCutoffPixelWidth the page title isn't rendered as an <h1>,
-        // so fall back to the always-present <main> region.
+        // Readiness signal that content has rendered. On desktop every page renders an <h1>: the new experience keeps
+        // it visually hidden in the main region, so wait for it to be attached rather than visible, and the previous
+        // experience shows it in the top header, like main. At/below MobileCutoffPixelWidth the page title isn't
+        // rendered as an <h1>, so fall back to the always-present <main> region.
         await Assertions.Expect(page.Locator("main.custom-body-content")).ToBeVisibleAsync();
         if (viewport.Width > MobileCutoffPixelWidth)
         {
-            await Assertions.Expect(page.Locator("main.custom-body-content h1").First).ToBeAttachedAsync();
+            var title = experience == "legacy" ? page.Locator("header .page-title-slot h1") : page.Locator("main.custom-body-content h1");
+            await Assertions.Expect(title.First).ToBeAttachedAsync();
         }
 
         await WaitForPageContentAsync(page, relativeUrl);

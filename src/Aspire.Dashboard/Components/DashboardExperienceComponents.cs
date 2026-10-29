@@ -42,7 +42,11 @@ internal static class DashboardExperienceComponents
     private static bool IsLegacyPage(Type pageType) =>
         pageType.Namespace?.StartsWith(LegacyNamespacePrefix, StringComparison.Ordinal) == true;
 
-    private static bool IsLegacyLocation(NavigationManager navigationManager)
+    /// <summary>
+    /// Gets whether the current page belongs to the previous experience, for shared components that must keep main's
+    /// behavior there, such as its resource URLs.
+    /// </summary>
+    internal static bool IsLegacyLocation(NavigationManager navigationManager)
     {
         var path = navigationManager.ToBaseRelativePath(navigationManager.Uri);
         return string.Equals(path, "legacy", StringComparison.OrdinalIgnoreCase) ||

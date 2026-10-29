@@ -10,6 +10,23 @@ internal static class TargetLocationInterceptor
 {
     public const string ResourcesPath = "/";
     public const string StructuredLogsPath = "/structuredlogs";
+    public const string LegacyResourcesPath = "/legacy";
+    public const string LegacyStructuredLogsPath = "/legacy/structuredlogs";
+
+    /// <summary>
+    /// Gets the page that replaces an app model page when there is no resource service, or null when the page doesn't
+    /// need the resource service. The previous experience keeps main's behavior: only its resources root, which
+    /// requires the resource service, goes to its structured logs page.
+    /// </summary>
+    public static string? GetStandaloneLocation(string path)
+    {
+        if (IsResourceServicePath(path))
+        {
+            return StructuredLogsPath;
+        }
+
+        return string.Equals(path.TrimEnd('/'), LegacyResourcesPath, StringComparisons.UrlPath) ? LegacyStructuredLogsPath : null;
+    }
 
     /// <summary>
     /// Returns a value indicating whether the path is a page that displays the app model. These pages can't be shown
@@ -53,13 +70,7 @@ internal static class TargetLocationInterceptor
             path = originalTargetLocation;
         }
 
-        if (IsResourceServicePath(path))
-        {
-            newTargetLocation = StructuredLogsPath;
-            return true;
-        }
-
-        newTargetLocation = null;
-        return false;
+        newTargetLocation = GetStandaloneLocation(path);
+        return newTargetLocation is not null;
     }
 }
