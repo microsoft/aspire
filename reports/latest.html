@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <title>Aspire standup | October 29, 2026, 12:00 Pacific</title>
+    <title>Aspire standup | October 29, 2026, 16:00 Pacific</title>
     <style>
         :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.6; }
         body { max-width: 56rem; margin: auto; padding: 1.5rem; }
@@ -21,16 +21,16 @@
 <body>
     <header>
         <h1>Aspire standup</h1>
-        <p><time datetime="2026-10-29T12:00:00-07:00">October 29, 2026, 12:00 America/Los_Angeles (PDT)</time><br>
-            <time datetime="2026-10-29T19:00:00Z">October 29, 2026, 19:00 UTC</time> reporting slot.</p>
-        <p>Since the previous slot: October 29, 15:00-19:00 UTC. Workstream results below are supplied
-            verified snapshots, not fresh cross-repository checks. Skills #117 cutoff: 18:47 UTC;
-            Azure diagnostics cutoff: 18:43 UTC; Aspire.dev observation ends 18:28:17 UTC.
-            This is a point-in-time report, not a live health dashboard.</p>
-        <p class="summary"><strong>Ready for review: a scoped shutdown fix and qualified skills improvements.</strong>
-            Core #21397 is ready after CI retry recovery; skills #117 passed three-OS tests.
-            Neither is claimed merged. Azure diagnostics remain pending, with zero verified results
-            at the supplied cutoff.</p>
+        <p><time datetime="2026-10-29T16:00:00-07:00">October 29, 2026, 16:00 America/Los_Angeles (PDT)</time><br>
+            <time datetime="2026-10-29T23:00:00Z">October 29, 2026, 23:00 UTC</time> reporting slot.</p>
+        <p>Window: October 29, 19:00-23:00 UTC. Frozen evidence cutoffs: skills 22:23:47 UTC;
+            Aspire.dev 22:24 UTC; sandbox experiment 22:49:26 UTC. Core #21397 was checked
+            during publication after 23:00 UTC. Cross-repository results are supplied verified
+            snapshots, not fresh reads. This is not a live health dashboard.</p>
+        <p class="summary"><strong>Skills improvements delivered; core shutdown repair awaits human review.</strong>
+            Skills #113-117 are human-merged. Core #21397 remains ready, not merged.
+            Two diagnostic protocols closed inconclusive; a new sandbox boundary experiment
+            is pending, not a demonstrated fix.</p>
     </header>
     <main>
         <section aria-labelledby="core">
@@ -41,44 +41,58 @@
                 it does not repair startup Docker/WSL cancellation stalls.</p>
             <p><a href="https://github.com/microsoft/aspire/actions/runs/40922625873">Normal CI</a>
                 succeeded on automated GitHub Actions <strong>attempt 2</strong>:
-                46 successful checks, 29 skips. The first-attempt Azure failure remains part of the evidence;
-                this is not first-pass green. Actual Hosting repair rows passed:
-                <strong>Windows 28; Ubuntu 63</strong>.</p>
+                <strong>47 successful checks, 29 skips</strong>. The first-attempt Azure failure remains
+                part of the evidence; this is not first-pass green. The PR is open, mergeable and
+                blocked on <strong>human approval</strong>; no new actionable feedback was found.</p>
             <p>Qualification boundary:
                 <a href="https://github.com/microsoft/aspire/actions/runs/40913395606">earlier run 40913395606</a>
                 failed overall, with <strong>60 actual passes and 30 unknown outcomes</strong> after communication
                 loss, not 90 passes. Passing observed rows does not establish a broader startup repair.</p>
         </section>
-        <section aria-labelledby="azure">
-            <h2 id="azure">Pending: Azure #21245 diagnostics</h2>
-            <p><a href="https://github.com/microsoft/aspire/issues/21245">Azure #21245</a> has
-                <a href="https://github.com/microsoft/aspire/actions/runs/40933417146">diagnostic run 40933417146</a>,
-                attempt 1, with 18 planned cases at
-                <a href="https://github.com/microsoft/aspire/commit/4173d68e02c4e03ecaea7e2c8a9a0ddd7bf62661">the diagnostic head</a>.
-                At 18:43 UTC runners were in checkout: <strong>zero actual results verified</strong>.</p>
-            <p>Results remain pending until the separate investigation returns. Planned cases are not executed
-                results; no failure, success, root cause or fix is inferred. This report does not extend
-                the shutdown repair claim to the Azure startup issue.</p>
+        <section aria-labelledby="sandbox">
+            <h2 id="sandbox">Investigating: sandbox cancellation boundary</h2>
+            <p><a href="https://github.com/microsoft/aspire/issues/20931">#20931</a> concerns a
+                10 ms cancellation test whose intended phase may not be guaranteed by its timer.
+                <a href="https://github.com/microsoft/aspire/actions/runs/40965875779">Corrected native experiment</a>,
+                attempt 1: build passed with zero warnings/errors; <strong>five actual cases passed</strong>.
+                The unchanged timer case passed in 19 ms. Controls confirmed canceled send is ambiguous,
+                while cancellation after the client observes a rejected response is definite.
+                This establishes contract semantics, not the historical flake's cause.</p>
+            <p>One new <a href="https://github.com/microsoft/aspire/actions/runs/40968736046">buffering-boundary experiment</a>
+                at <a href="https://github.com/microsoft/aspire/commit/f884f0aa05d0b84001ee11b0511d81758b372c85">exact diagnostic source</a>
+                retains the original assertion to distinguish handler-returned from client-observed rejection.
+                At 22:49:26 UTC, native build was pending: <strong>six planned outcomes unknown,
+                zero actual results verified</strong>. A controlled mismatch would not itself reproduce
+                historical timing or constitute repair. The earlier diagnostic
+                <a href="https://github.com/microsoft/aspire/actions/runs/40958031076">compile failure</a>
+                executed <strong>zero tests</strong>, not failed test cases.</p>
+        </section>
+        <section aria-labelledby="closed">
+            <h2 id="closed">Closed experiments: all-pass, inconclusive</h2>
+            <p><a href="https://github.com/microsoft/aspire/issues/21245">Azure #21245</a>:
+                <a href="https://github.com/microsoft/aspire/actions/runs/40942035510">native qualification</a>
+                recorded 4,224 passes, ten skips and four successful builds.
+                The <a href="https://github.com/microsoft/aspire/actions/runs/40948062998">later selected experiment</a>
+                passed all three actual cases on Host 10.0.8. External Docker pressure is
+                <strong>not a proven root cause</strong>.</p>
+            <p><a href="https://github.com/microsoft/aspire/actions/runs/40951650993">Extension diagnostic-logs experiment</a>:
+                both original cases passed first attempt (<code>currentRetry=0</code>), zero failures/skips,
+                all eight observed stages completed. Neither protocol delivered a repair;
+                unchanged reruns are not the next action.</p>
         </section>
         <section aria-labelledby="skills">
-            <h2 id="skills">Skills: qualified performance fix, acceptance still scoped</h2>
-            <p>Supplied 18:47 UTC snapshot: skills #117 is <strong>ready and mergeable</strong> at
-                <code>faa190863cffbe5c70ea6cfc0789e84ecc4118c3</code>.
-                Test run 40931720744, attempt 1: Ubuntu and macOS each <strong>401 passes / two skips</strong>;
-                Windows <strong>376 passes / one skip</strong>; zero failures or retries.
-                Catalog runs 40931720762 and 40931815395 were green.</p>
-            <p><strong>Measured impact:</strong> both 64k-whitespace regressions stayed within the unchanged
-                one-second limit. Ubuntu / macOS / Windows render times: 10.61 / 7.46 / 188.17 ms;
-                model times: 1.48 / 0.943 / 1.98 ms. Actual CI merge parents confirmed current
-                <code>dev</code> at <code>1a257a41debb16e2eb912db0a66559596b27f62a</code>.
-                Manual host acceptance on the new head is <strong>unperformed</strong>; a human reviewer
-                thread remains unresolved and the approval applies to the parent, not this new head.</p>
-            <p>Other supplied skills status: #113 and #115 were human-merged. #114 is ready and green at
-                <code>8d14a4a74bbe6fc7bcb843aa653ec14c2e04e96a</code>, with human approval and
-                reviewer-reported Doctor host smoke, not execution by this reporting agent.
-                #116 is ready at <code>173bb8c5c70d9a4106983af399c51541d428d581</code>,
-                with integrated three-OS checks green. Cross-repository IDs here are supplied evidence
-                references; they were not independently fetched for this publication.</p>
+            <h2 id="skills">Delivered: skills #113-117 human-merged</h2>
+            <p>The supplied 22:23:47 UTC snapshot confirms all five merges. Latest #117 merged at
+                21:32:17 UTC (<code>3f9e1aa9fd2aed6c0c060c929885fbfd4775aebb</code>);
+                #116 merged at 21:55:32 UTC, with supplied <code>dev</code>
+                <code>6ed12211be956e92a9371c5d18e50820a17e735d</code>.
+                Both post-merge Tests/catalog checks succeeded on attempt 1;
+                a human resolved #117's review threads. Earlier approval/CI blockers are obsolete.</p>
+            <p><strong>Why it matters:</strong> these improvements are now integrated, rather than awaiting
+                review. Historical #117 qualification kept both 64k-whitespace regressions within the
+                unchanged one-second limit; render times were 10.61 / 7.46 / 188.17 ms on
+                Ubuntu / macOS / Windows. Those measurements are not new post-merge benchmarks
+                or a claim of manual host acceptance by this reporting agent.</p>
         </section>
         <section aria-labelledby="navigation">
             <h2 id="navigation">Previously delivered: Aspire.dev navigation and search</h2>
@@ -88,30 +102,28 @@
                 Historical measured impact: <strong>30/30 baseline hard reloads versus 30/30 preserved
                 navigation/history</strong>; the scoped search hover target shrank from
                 <strong>550 to 84 px</strong>.</p>
-            <p>The bounded 16:30-18:28:17 UTC observation found no independent new candidate.
-                New ForbiddenWords jobs are not frontend qualification.
-                The earlier Twoslash timeout remains an investigation, not a delivered fix;
-                recovered retries do not prove repair.</p>
+            <p>The supplied 22:24 UTC check identifies updater run 40956457111 as the known
+                #1960 / owned #1961 work, not a new repair. Earlier Twoslash timeout analysis
+                remains an investigation, not a delivered fix; recovered retries do not prove repair.</p>
         </section>
         <section aria-labelledby="next">
             <h2 id="next">Next authorized actions</h2>
             <dl>
-                <dt>Core and Azure</dt>
-                <dd>Keep shutdown ownership and startup-stall claims separate; await actual Azure diagnostic
-                    results from the ongoing investigation before drawing conclusions.</dd>
-                <dt>Skills</dt>
-                <dd>Resolve #117's reviewer thread and obtain new-head manual host acceptance.
-                    Parent approval and automated performance results are not substitutes.</dd>
-                <dt>Aspire.dev</dt>
-                <dd>Retain merged-fix evidence; reopen Twoslash only for comparable new evidence.</dd>
+                <dt>Core</dt>
+                <dd>Human review remains the gate for #21397. The separate sandbox owner will read the
+                    existing experiment once after 23:05 UTC; repair requires causal evidence and native
+                    before/after plus adjacent coverage, not an all-pass inventory.</dd>
+                <dt>Delivered work and closed protocols</dt>
+                <dd>Retain merged skills/site evidence. Reopen closed Azure, extension or Twoslash
+                    investigations only on genuinely distinguishing evidence.</dd>
                 <dt>Report publication</dt>
                 <dd>Keep one reusable draft publication PR and update only <code>reports/latest.html</code>
                     for future snapshots. Follow normal PR CI, including Final Results; HTML is not CI-exempt.
                     Preserve explicit draft status even when green. This is branch HTML source, not merged
                     main content, deployment or a hosted rendered page; GitHub Pages remains disabled.
                     Previous-head report CI
-                    <a href="https://github.com/microsoft/aspire/actions/runs/40898067719">40898067719</a>
-                    succeeded on automated attempt 2 (438 successful checks, three skips at 16:25 UTC);
+                    <a href="https://github.com/microsoft/aspire/actions/runs/40936529111">40936529111</a>
+                    succeeded on automated attempt 2 (439 successful checks, three skips);
                     attempt 1 failed. That green result does not validate this new report head.</dd>
             </dl>
         </section>
