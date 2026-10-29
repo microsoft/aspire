@@ -95,6 +95,7 @@
     <!-- Central transitive pins do not flow to out-of-tree ProjectReference consumers.
          Keep this explicit security pin until https://github.com/microsoft/aspire/issues/21050 is resolved. -->
     <PackageReference Include="MessagePack" />
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />

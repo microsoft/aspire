@@ -1939,6 +1939,15 @@ export interface WithOtlpExporterOptions {
     protocol?: OtlpProtocol | null;
 }
 
+export interface WithOutputDiffingOptions {
+    /** The step whose completed output is compared. Defaults to `publish`. */
+    targetStep?: string;
+    /** The comparison target name. When null, uses the target name followed by `-and-diff`. */
+    diffStepName?: string;
+    /** An optional description of the comparison target. */
+    description?: string;
+}
+
 export interface WithPersistenceOptions {
     mode?: TestPersistenceMode;
 }
@@ -10940,6 +10949,12 @@ export interface DistributedApplicationPipeline {
      */
     disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise;
     /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The pipeline for chaining.
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationPipelinePromise;
+    /**
      * Adds an application-level pipeline step in a TypeScript-friendly shape.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
@@ -10963,6 +10978,12 @@ export interface DistributedApplicationPipelinePromise extends PromiseLike<Distr
      * @returns The distributed application pipeline for chaining.
      */
     disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise;
+    /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The pipeline for chaining.
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationPipelinePromise;
     /**
      * Adds an application-level pipeline step in a TypeScript-friendly shape.
      * @param stepName The unique name of the pipeline step.
@@ -11008,6 +11029,31 @@ class DistributedApplicationPipelineImpl implements DistributedApplicationPipeli
      */
     disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise {
         return new DistributedApplicationPipelinePromiseImpl(this._disableBuildOnlyContainerValidationInternal(), this._client);
+    }
+
+    /** @internal */
+    async _withOutputDiffingInternal(targetStep?: string, diffStepName?: string, description?: string): Promise<DistributedApplicationPipeline> {
+        const rpcArgs: Record<string, unknown> = { pipeline: this._handle };
+        if (targetStep !== undefined) rpcArgs.targetStep = targetStep;
+        if (diffStepName !== undefined) rpcArgs.diffStepName = diffStepName;
+        if (description !== undefined) rpcArgs.description = description;
+        const result = await this._client.invokeCapability<IDistributedApplicationPipelineHandle>(
+            'Aspire.Hosting/withOutputDiffing',
+            rpcArgs
+        );
+        return new DistributedApplicationPipelineImpl(result, this._client);
+    }
+
+    /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The pipeline for chaining.
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationPipelinePromise {
+        const targetStep = options?.targetStep;
+        const diffStepName = options?.diffStepName;
+        const description = options?.description;
+        return new DistributedApplicationPipelinePromiseImpl(this._withOutputDiffingInternal(targetStep, diffStepName, description), this._client);
     }
 
     /** @internal */
@@ -11067,6 +11113,7 @@ class DistributedApplicationPipelineImpl implements DistributedApplicationPipeli
 /** @internal */
 const DistributedApplicationPipelinePromiseImpl = $aspireCreateFluentPromiseClass<DistributedApplicationPipeline, DistributedApplicationPipelinePromise>((): $aspireFluentPromiseTransitions => ({
     ["disableBuildOnlyContainerValidation"]: () => DistributedApplicationPipelinePromiseImpl,
+    ["withOutputDiffing"]: () => DistributedApplicationPipelinePromiseImpl,
     ["addStep"]: () => DistributedApplicationPipelinePromiseImpl,
     ["configure"]: () => DistributedApplicationPipelinePromiseImpl,
 }));

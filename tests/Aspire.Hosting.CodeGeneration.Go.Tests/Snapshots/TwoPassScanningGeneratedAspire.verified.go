@@ -16667,6 +16667,15 @@ type DistributedApplicationPipeline interface {
 	// Returns: The distributed application pipeline for chaining.
 	DisableBuildOnlyContainerValidation() DistributedApplicationPipeline
 
+	// WithOutputDiffing adds an opt-in target that checks for stale generated
+	// pipeline output.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOutputDiffingOptions].
+	//
+	// Returns: The pipeline for chaining.
+	WithOutputDiffing(options ...*WithOutputDiffingOptions) DistributedApplicationPipeline
+
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
 	// resolved successfully and no chained operation has failed.
 	Err() error
@@ -16740,6 +16749,25 @@ func (s *distributedApplicationPipeline) DisableBuildOnlyContainerValidation() D
 		"pipeline": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/disableBuildOnlyContainerValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithOutputDiffing adds an opt-in target that checks for stale generated
+// pipeline output.
+func (s *distributedApplicationPipeline) WithOutputDiffing(options ...*WithOutputDiffingOptions) DistributedApplicationPipeline {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"pipeline": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithOutputDiffingOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOutputDiffing", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -45076,6 +45104,27 @@ type SetCancellationTokenOptions struct {
 func (o *SetCancellationTokenOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
+	return m
+}
+
+// WithOutputDiffingOptions carries optional parameters for WithOutputDiffing.
+type WithOutputDiffingOptions struct {
+	// TargetStep is the step whose completed output is compared. Defaults to
+	// publish.
+	TargetStep *string `json:"targetStep,omitempty"`
+	// DiffStepName is the comparison target name. When null, uses the target name
+	// followed by -and-diff.
+	DiffStepName *string `json:"diffStepName,omitempty"`
+	// Description is an optional description of the comparison target.
+	Description *string `json:"description,omitempty"`
+}
+
+func (o *WithOutputDiffingOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.TargetStep != nil { m["targetStep"] = serializeValue(o.TargetStep) }
+	if o.DiffStepName != nil { m["diffStepName"] = serializeValue(o.DiffStepName) }
+	if o.Description != nil { m["description"] = serializeValue(o.Description) }
 	return m
 }
 

@@ -12357,6 +12357,24 @@ impl IDistributedApplicationPipeline {
         Ok(IDistributedApplicationPipeline::new(handle, self.client.clone()))
     }
 
+    /// Adds an opt-in target that checks for stale generated pipeline output.
+    pub fn with_output_diffing(&self, target_step: Option<&str>, diff_step_name: Option<&str>, description: Option<&str>) -> Result<IDistributedApplicationPipeline, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("pipeline".to_string(), self.handle.to_json());
+        if let Some(ref v) = target_step {
+            args.insert("targetStep".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = diff_step_name {
+            args.insert("diffStepName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = description {
+            args.insert("description".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withOutputDiffing", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IDistributedApplicationPipeline::new(handle, self.client.clone()))
+    }
+
     /// Adds an application-level pipeline step in a TypeScript-friendly shape.
     pub fn add_step(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
