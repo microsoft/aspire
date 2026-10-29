@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire 入门应用(ASP.NET Core/React，C# AppHost)",
   "description": "用于使用 React 前端和 C# Minimal API 后端服务创建 Aspire 应用的项目模板，可选择使用 Redis 缓存。",
