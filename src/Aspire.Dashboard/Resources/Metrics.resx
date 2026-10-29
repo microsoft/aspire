@@ -228,6 +228,10 @@
   <data name="MetricsSortValueAscending" xml:space="preserve">
     <value>Value (low to high)</value>
   </data>
+  <data name="MetricsSortName" xml:space="preserve">
+    <value>Name</value>
+    <comment>Sorts instruments by their name.</comment>
+  </data>
   <data name="MetricsOverviewNoData" xml:space="preserve">
     <value>No data</value>
   </data>

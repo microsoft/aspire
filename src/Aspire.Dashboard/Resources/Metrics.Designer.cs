@@ -162,6 +162,12 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
+        public static string MetricsSortName {
+            get {
+                return ResourceManager.GetString("MetricsSortName", resourceCulture);
+            }
+        }
+
         public static string MetricsNoMatchingInstruments {
             get {
                 return ResourceManager.GetString("MetricsNoMatchingInstruments", resourceCulture);

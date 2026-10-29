@@ -88,7 +88,8 @@
                             <div class="metrics-content">
                                     @if ((PageViewModel.SelectedResource.Id is not null || IsAggregate) && (PageViewModel.ShowFilterResults || (PageViewModel.ShowAll && PageViewModel.SelectedInstrument is null)))
                                     {
-                                        @* Filter results and the all-instruments view both list instruments from every meter, grouped by meter. *@
+                                        @* Filter results and the all-instruments view both list instruments from every meter. Cards show their
+                                           meter unless the section titles already do. *@
                                         var resultGroups = GetFilterResultGroups();
                                         var resultsTitle = PageViewModel.TextFilter.Trim().Length > 0
                                             ? string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Metrics.MetricsFilterResultsTitle)], PageViewModel.TextFilter.Trim())
@@ -98,7 +99,7 @@
                                         {
                                             <p class="metrics-pinned-empty">@Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMatchingInstruments)]</p>
                                         }
-                                        @RenderSections(resultGroups, IsAggregate && EffectiveGroupBy != MetricGroupBy.Meter)
+                                        @RenderSections(resultGroups, EffectiveGroupBy != MetricGroupBy.Meter)
                                     }
                                     else if (PageViewModel.SelectedResource.Id?.ReplicaSetName != null && PageViewModel is { SelectedMeter: not null, SelectedInstrument: not null })
                                     {
@@ -121,7 +122,7 @@
                                         <h3 class="meter-name-title">@Loc[nameof(Dashboard.Resources.Metrics.MetricsPinnedHeader)]</h3>
                                         @if (pinnedInstruments.Count > 0)
                                         {
-                                            @RenderSections(GetSections(pinnedInstruments, splitByMeterByDefault: false), !IsAggregate || EffectiveGroupBy != MetricGroupBy.Meter)
+                                            @RenderSections(GetSections(pinnedInstruments, isSingleMeter: false), EffectiveGroupBy != MetricGroupBy.Meter)
                                         }
                                         else
                                         {
@@ -131,7 +132,7 @@
                                     else if (PageViewModel.SelectedMeter is not null && (PageViewModel.SelectedResource.Id is not null || IsAggregate))
                                     {
                                         <h3 class="meter-name-title">@PageViewModel.SelectedMeter</h3>
-                                        @RenderSections(GetSections(GetOverviewInstruments(), splitByMeterByDefault: false), false)
+                                        @RenderSections(GetSections(GetOverviewInstruments(), isSingleMeter: true), false)
                                     }
                                     else
                                     {

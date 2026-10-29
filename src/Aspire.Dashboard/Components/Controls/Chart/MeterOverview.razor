@@ -7,7 +7,7 @@
 
 @inject IStringLocalizer<MetricsResources> Loc
 
-<div class="meter-overview">
+<div class="meter-overview" @ref="_container">
     @* Instruments without data go last, so the cards worth reading come first. The sort is stable,
        so each group keeps its own order (alphabetical, or the order instruments were pinned). *@
     @foreach (var instrument in GetOrderedInstruments())
@@ -17,7 +17,7 @@
 
         @* The pin button sits beside the link rather than inside it: interactive content isn't allowed
            inside <a>, and nesting would make clicking the pin also navigate to the instrument. *@
-        <div @key="instrument" class="meter-card @(cardData.LatestValue is null ? "no-data" : null)">
+        <div @key="instrument" class="meter-card @(cardData.LatestValue is null ? "no-data" : null)" data-instrument-id="@GetInstrumentId(instrument)">
         <a class="meter-card-link" href="@GetInstrumentUrl(instrument)">
             @if (GetResourceLabel is not null || ShowMeterName)
             {

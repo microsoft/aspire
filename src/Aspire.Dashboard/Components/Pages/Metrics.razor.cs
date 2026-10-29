@@ -392,8 +392,10 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     /// </summary>
     internal const int MaxRenderedInstruments = 200;
 
-    private MetricGroupBy _groupBy;
-    private MetricSortBy _sortBy;
+    // Instruments are grouped by meter unless the user picks another grouping, which matches the meters listed in the
+    // groups pane. None lists every instrument in one list, in the chosen sort order.
+    private MetricGroupBy _groupBy = MetricGroupBy.Meter;
+    private MetricSortBy _sortBy = MetricSortBy.Instrument;
 
     /// <summary>
     /// Gets whether the page lists instruments, for one resource or several, so they can be grouped and sorted.
@@ -413,7 +415,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         var stored = await SessionStorage.GetAsync<OrganizeState>(BrowserStorageKeys.MetricsOrganize);
         if (stored.Success && stored.Value is { } state)
         {
-            _groupBy = Enum.IsDefined(state.GroupBy) ? state.GroupBy : MetricGroupBy.None;
+            _groupBy = Enum.IsDefined(state.GroupBy) ? state.GroupBy : MetricGroupBy.Meter;
             _sortBy = Enum.IsDefined(state.SortBy) ? state.SortBy : MetricSortBy.Instrument;
         }
     }
@@ -421,12 +423,18 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     private async Task SetGroupByAsync(MetricGroupBy groupBy)
     {
         _groupBy = groupBy;
+
+        // The organize menus run this from their own click handler, which only re-renders the menu.
+        StateHasChanged();
         await SessionStorage.SetAsync(BrowserStorageKeys.MetricsOrganize, new OrganizeState(_groupBy, _sortBy));
     }
 
     private async Task SetSortByAsync(MetricSortBy sortBy)
     {
         _sortBy = sortBy;
+
+        // The organize menus run this from their own click handler, which only re-renders the menu.
+        StateHasChanged();
         await SessionStorage.SetAsync(BrowserStorageKeys.MetricsOrganize, new OrganizeState(_groupBy, _sortBy));
     }
 
@@ -443,7 +451,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         MetricSortBy.Resource => nameof(Dashboard.Resources.Metrics.MetricsOrganizeResource),
         MetricSortBy.ValueDescending => nameof(Dashboard.Resources.Metrics.MetricsSortValueDescending),
         MetricSortBy.ValueAscending => nameof(Dashboard.Resources.Metrics.MetricsSortValueAscending),
-        _ => nameof(Dashboard.Resources.Metrics.MetricsOrganizeInstrument)
+        _ => nameof(Dashboard.Resources.Metrics.MetricsSortName)
     }];
 
     private string GetGroupByTooltip() => Loc[nameof(Dashboard.Resources.Metrics.MetricsGroupByTooltip)];
@@ -499,14 +507,16 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         .ToList();
 
     /// <summary>
-    /// Splits instruments into titled sections for the selected grouping. Where the list already spans meters (all instruments, filter results) an ungrouped list is split by meter.
+    /// Splits instruments into titled sections for the selected grouping. None returns a single untitled section.
     /// </summary>
-    private List<IGrouping<string, OtlpInstrumentSummary>> GetSections(IEnumerable<OtlpInstrumentSummary> instruments, bool splitByMeterByDefault)
+    /// <param name="instruments">The instruments to show.</param>
+    /// <param name="isSingleMeter">Whether the list shows one meter, whose name is already the page's title, so grouping by meter would only repeat it.</param>
+    private List<IGrouping<string, OtlpInstrumentSummary>> GetSections(IEnumerable<OtlpInstrumentSummary> instruments, bool isSingleMeter)
     {
         var groupBy = EffectiveGroupBy;
-        if (groupBy == MetricGroupBy.None && splitByMeterByDefault)
+        if (groupBy == MetricGroupBy.Meter && isSingleMeter)
         {
-            groupBy = MetricGroupBy.Meter;
+            groupBy = MetricGroupBy.None;
         }
 
         Func<OtlpInstrumentSummary, string> keySelector = groupBy switch
@@ -863,7 +873,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     /// </summary>
     private List<IGrouping<string, OtlpInstrumentSummary>> GetFilterResultGroups()
     {
-        return GetSections((PageViewModel.Instruments ?? []).Where(i => MetricFilter.Matches(i, PageViewModel.TextFilter)).OrderBy(i => i.Name, StringComparer.Ordinal), splitByMeterByDefault: true);
+        return GetSections((PageViewModel.Instruments ?? []).Where(i => MetricFilter.Matches(i, PageViewModel.TextFilter)).OrderBy(i => i.Name, StringComparer.Ordinal), isSingleMeter: false);
     }
 
     private string GetInstrumentUrl(OtlpInstrumentSummary instrument)

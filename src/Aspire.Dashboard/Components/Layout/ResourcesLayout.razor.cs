@@ -1765,7 +1765,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         else if (e.CtrlKey || e.MetaKey)
         {
-            var toggled = _selectedResourceNames.ToList();
+            var toggled = GetToggleBaseSelection();
             if (toggled.RemoveAll(n => string.Equals(n, resourceName, StringComparisons.ResourceName)) == 0)
             {
                 toggled.Add(resourceName);
@@ -1813,14 +1813,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (e.CtrlKey || e.MetaKey)
         {
             // Like rows, a modifier click toggles the group's resources in the current selection.
-            var toggled = _selectedResourceNames.ToList();
-            if (groupResourceNames.All(IsSelected))
+            var toggled = GetToggleBaseSelection();
+            if (groupResourceNames.All(n => toggled.Contains(n, StringComparers.ResourceName)))
             {
                 toggled.RemoveAll(n => groupResourceNames.Contains(n, StringComparers.ResourceName));
             }
             else
             {
-                toggled.AddRange(groupResourceNames.Where(n => !IsSelected(n)));
+                toggled.AddRange(groupResourceNames.Where(n => !toggled.Contains(n, StringComparers.ResourceName)));
             }
 
             selection = toggled;
@@ -1850,6 +1850,28 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // On the overview, selecting everything shows the resource list. Other tabs stay where they are and list
         // every resource.
         NavigationManager.NavigateTo(DashboardClient.IsEnabled && CurrentTab == ResourceTab.Overview ? DashboardUrls.ResourceListUrl() : GetSelectionUrl([]));
+    }
+
+    /// <summary>
+    /// Gets the selection a Ctrl+click (Cmd+click on macOS) adds a resource to or removes it from. "Select all" is an
+    /// empty selection, and toggling a resource then starts from every resource it stands for, so the click deselects
+    /// that resource instead of selecting it alone.
+    /// </summary>
+    private List<string> GetToggleBaseSelection()
+    {
+        if (!IsAllSelected)
+        {
+            return _selectedResourceNames.ToList();
+        }
+
+        // Resources that only send telemetry are listed in their own section, and are part of everything too.
+        var names = GetAllResourceNames();
+        if (DashboardClient.IsEnabled)
+        {
+            names.AddRange(_telemetryOnlyResources.Select(r => r.Name).Where(n => !names.Contains(n, StringComparers.ResourceName)));
+        }
+
+        return names;
     }
 
     /// <summary>
