@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <title>Aspire standup | October 28, 2026, 20:00 Pacific</title>
+    <title>Aspire standup | October 29, 2026, 08:00 Pacific</title>
     <style>
         :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.6; }
         body { max-width: 56rem; margin: auto; padding: 1.5rem; }
@@ -21,71 +21,107 @@
 <body>
     <header>
         <h1>Aspire standup</h1>
-        <p><time datetime="2026-10-28T20:00:00-07:00">October 28, 2026, 20:00 America/Los_Angeles (PDT)</time><br>
-            <time datetime="2026-10-29T03:00:00Z">October 29, 2026, 03:00 UTC</time> reporting slot.</p>
-        <p>Evidence snapshot: supplied workstream results; Aspire.dev verified at
-            <time datetime="2026-10-29T02:50:37Z">02:50:37 UTC</time>.
-            This is a point-in-time report, not a live health dashboard.</p>
-        <p class="summary"><strong>Navigation fix ready for review, not merged.</strong>
-            Aspire.dev production validation passed. Skills changes remain local with live validation blocked.
-            Aspire main CI repair has no verified delivery.</p>
+        <p><time datetime="2026-10-29T08:00:00-07:00">October 29, 2026, 08:00 America/Los_Angeles (PDT)</time><br>
+            <time datetime="2026-10-29T15:00:00Z">October 29, 2026, 15:00 UTC</time> reporting slot.</p>
+        <p>Since the previous slot: October 29, 03:00-15:00 UTC. Supplied historical workstream evidence
+            is labeled below; Aspire maintenance cutoff is 14:28:52 UTC and skills cutoff is 14:28:22 UTC.
+            A separate report-time Aspire check is labeled current. This is not a live health dashboard.</p>
+        <p class="summary"><strong>Delivered: navigation preservation and precise search hovering.</strong>
+            Both Aspire.dev fixes were human-approved and merged. The Twoslash timeout remains unexplained,
+            not fixed; Aspire native repair and live skills acceptance remain unverified.</p>
     </header>
     <main>
         <section aria-labelledby="navigation">
-            <h2 id="navigation">Verified: Aspire.dev navigation preservation</h2>
-            <p><a href="https://github.com/microsoft/aspire.dev/pull/1976">PR #1976</a> is ready for review.
-                The API incremental cache restored stale deployment/source metadata, causing hard reloads
-                and loss of session navigation history. The fix preserves navigation while reusing cache
-                entries with the same identity.</p>
-            <p>Controlled reproduction: <strong>30/30 baseline failures; 30/30 fixed cases preserved navigation</strong>.
-                Original navigation/history scenarios passed on desktop, tablet and mobile.</p>
-            <p><a href="https://github.com/microsoft/aspire.dev/actions/runs/40805377771">Full production workflow, attempt 1: successful</a>.
-                All six browser shards completed with <strong>1,390 first-attempt passes, 95 existing skips,
-                1,485 registered tests, zero retries and zero failures</strong>.
-                Required ci-gate, final report and frontend checks were green:
-                18 successful checks, one scope skip, none pending at verification.</p>
-            <p>Build context: 32,203 pages in 5m44s (build step 5m45s); 24,059 API pages regenerated,
-                zero restored; 534 Open Graph items restored. This run invalidated the initial cache
-                implementation. It does not establish a matched steady-state performance improvement
-                or a global flake-rate reduction.</p>
-            <p><strong>Pending:</strong> human review, approval and merge. Verified head:
-                <code>7bd82d0985b1bed59b455b0235c4c2160cfcd3f2</code>, targeting <code>main</code>.
-                No merged fix is claimed.</p>
+            <h2 id="navigation">Delivered: Aspire.dev navigation and search</h2>
+            <p>Supplied historical evidence: IEvangelist approved and merged
+                <a href="https://github.com/microsoft/aspire.dev/pull/1976">#1976</a> at 12:53:02 UTC and
+                <a href="https://github.com/microsoft/aspire.dev/pull/1977">#1977</a> at 12:54:00 UTC.
+                Both merge commits were verified as ancestors of the recorded source snapshot.</p>
+            <p><strong>Why it matters:</strong> repairing stale API cache deployment/source metadata prevents
+                hard reloads and lost navigation history: <strong>30/30 baseline hard reloads versus
+                30/30 fixed cases preserving navigation/history</strong>. A six-line scoped search filter
+                override reduced the original hover target from <strong>550 to 84 px</strong>;
+                #1977 includes genuine hosted before/after screenshots.</p>
+            <p>Qualification, each workflow attempt 1:
+                <a href="https://github.com/microsoft/aspire.dev/actions/runs/40805377771">#1976</a>
+                had 1,390 first-pass tests, zero retries, 95 skips / 1,485 registered;
+                <a href="https://github.com/microsoft/aspire.dev/actions/runs/40824342803">#1977</a>
+                had 1,395 first-pass tests, one retry recovery, 95 skips / 1,491 registered.
+                All 51 search tests passed first try.</p>
+            <p>Four post-merge workflow-attempt-1 samples:
+                <a href="https://github.com/microsoft/aspire.dev/actions/runs/40876990440">1,390 first-pass / zero retry</a>,
+                <a href="https://github.com/microsoft/aspire.dev/actions/runs/40877126573">1,396 / zero</a>,
+                <a href="https://github.com/microsoft/aspire.dev/actions/runs/40877372710">1,396 / zero</a>,
+                <a href="https://github.com/microsoft/aspire.dev/actions/runs/40881829113">1,395 / one recovered retry</a>.
+                Each had 95 skips (1,485 registered in the first; 1,491 in the others) and
+                1,108 unit passes, one unit skip across 82 files.
+                These samples do not establish a global flake-rate reduction.</p>
+        </section>
+        <section aria-labelledby="twoslash">
+            <h2 id="twoslash">Investigated, not fixed: Twoslash timeout</h2>
+            <p>Historical run 40881829113, desktop Chromium shard 2 test 100, cumulatively exhausted
+                its 120-second deadline near the final token; no single operation hung.
+                Retry 1 passed in 114,578 ms. One local original-case body passed in 97,630.716 ms,
+                but fidelity gaps prevent treating it as comparable CI validation.</p>
+            <p>Follow-up found sibling overlap in <strong>both failure and retry</strong>, so contention
+                is not isolated as the cause. Zero new experiment attempts; no code, fix or PR.
+                Preserve all 174 hovers, checks and the deadline. Reopen only for comparable new evidence,
+                not unchanged isolated reruns. A recovered CI retry is not a repair.</p>
         </section>
         <section aria-labelledby="skills">
-            <h2 id="skills">Local only: skills model defaults</h2>
-            <p>A five-file repair updates remaining deployment, monitoring and orchestration defaults
-                from <code>gpt-5-mini</code> to <code>gpt-5.6-sol</code>, matching the prior model change.
-                Offline validation: <strong>387 passed, zero failed, two existing Windows skips</strong>.</p>
-            <p><strong>Blocked:</strong> the live trial stopped on endpoint DNS resolution before trajectory
-                execution or grading; the redaction prerequisite was unavailable. Live outcome and
-                skill/model effectiveness remain unverified. The change is preserved locally only;
-                there is no public branch or PR to review.</p>
-            <p>The independent skills cycle at <time datetime="2026-10-29T02:29:24Z">02:29:24 UTC</time>
-                found no new material independent candidate; no speculative edit was made.</p>
+            <h2 id="skills">Drafts and local only: skills</h2>
+            <p>Supplied snapshot at 14:28:22 UTC: drafts #113-117 remain unchanged. Repairs cover valid
+                <code>..apphost</code> traversal, UTF-8 chunks, POSIX literal backslashes, mixed-case root
+                discovery and command-default exact data, respectively. Historical successful check counts:
+                6 / 6 / 6 / 7 / 5; <strong>real host/editor acceptance is still missing</strong>.</p>
+            <p>The separate five-file evaluation patch remains unpublished:
+                <strong>387 offline passes, zero failures, two skips</strong>. Live evaluation stopped with
+                <code>ENOTFOUND</code> for runtime-selected <code>api.enterprise.githubcopilot.com</code>
+                before grading; the sanctioned redaction prerequisite is absent.
+                No push or PR, no live effectiveness claim and no replay of uncertain worker environments.</p>
         </section>
         <section aria-labelledby="main-ci">
-            <h2 id="main-ci">Blocked: Aspire main CI repair</h2>
-            <p>Delivery is blocked by uncertain prior worker execution. There is no reproduced fix
-                or implementation evidence, so neither recovery nor current main CI health is established.
-                This reporting publication does not replay or replace that repair.</p>
+            <h2 id="main-ci">Aspire CI: evidence, not a delivered repair</h2>
+            <p><strong>Frozen broad review: October 22, 00:00 through October 29, 07:36:10 UTC.</strong>
+                7,778 runs enumerated / 1,890 selected; 26,408 jobs, 2,796 archives, 153,324 TRX files,
+                468 failed methods. Gaps: 324 incomplete histories and 69 unavailable logs;
+                Mocha coverage was biased (197 / 13,353). These are not current health or prevalence estimates.</p>
+            <p><a href="https://github.com/microsoft/aspire/issues/18880">#18880</a> failed in
+                79/79 historical observations: persistent in that sample, not established intermittent.
+                Maintenance at 14:28:52 UTC covered 30/30 new main runs.
+                <a href="https://github.com/microsoft/aspire/actions/runs/40870484023">Quarantine run 40870484023</a>
+                was workflow-success on attempt 1 despite Windows Failed (5.0464156 s) and Ubuntu
+                Failed (5.0989197 s). Quarantine intentionally ignores test failures.</p>
+            <p><strong>Current scoped read, 15:03 UTC:</strong>
+                <a href="https://github.com/microsoft/aspire/actions/runs/40887847520">run 40887847520</a>,
+                still building at the maintenance cutoff, completed successfully on attempt 1 at 14:48:35 UTC.
+                Hosting.Sdk logs now show Windows one pass / zero failures and Ubuntu one skip / zero passes.
+                This changes the observed job outcome, not the frozen analysis; a skip is not a test pass,
+                and no method-level repair or cause is established.</p>
+            <p><strong>Blocked:</strong> the native reproducer hit fatal NU1900/NU1905 against configured
+                audit source <code>data.nuget.org</code>; no native baseline or repair.
+                Local Go #21204 and installer #17589 patches have offline/native-shell evidence only:
+                required .NET-wrapper and installer suites remain unexecuted. Unpublished is not delivered.</p>
         </section>
         <section aria-labelledby="next">
             <h2 id="next">Next authorized actions</h2>
             <dl>
                 <dt>Aspire.dev</dt>
-                <dd>Obtain human review of PR #1976; retain the production and controlled-reproduction evidence.</dd>
+                <dd>Retain merged-fix evidence; reopen Twoslash only with comparable new evidence.</dd>
                 <dt>Skills</dt>
-                <dd>Retain the local patch; establish the redaction prerequisite and restore trial connectivity
-                    before rerunning live validation or making effectiveness claims.</dd>
+                <dd>Obtain real host/editor acceptance for the drafts; establish sanctioned redaction and
+                    trial connectivity before any authorized live evaluation.</dd>
                 <dt>Aspire main CI</dt>
-                <dd>The owning coordinator must reconcile prior execution before any further repair action.
-                    No owner infrastructure decision is needed.</dd>
+                <dd>Resolve the native audit-source blocker and reconcile uncertain environments before
+                    authorized repair validation. Current workflow green alone is insufficient.</dd>
                 <dt>Report publication</dt>
                 <dd>Keep one reusable draft publication PR and update only <code>reports/latest.html</code>
                     for future snapshots. Follow normal PR CI, including Final Results; HTML is not CI-exempt.
                     This report is draft-branch HTML source, not merged main content or a hosted rendered page.
-                    GitHub Pages remains disabled.</dd>
+                    GitHub Pages remains disabled. The previous report CI run
+                    <a href="https://github.com/microsoft/aspire/actions/runs/40809920735">40809920735</a>
+                    failed on attempt 1 (timeout), then succeeded on automated attempt 2;
+                    it was not first-attempt green. New-head checks are separate.</dd>
             </dl>
         </section>
     </main>
