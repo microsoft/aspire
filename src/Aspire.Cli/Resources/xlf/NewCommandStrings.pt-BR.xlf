@@ -19,7 +19,7 @@
       </trans-unit>
       <trans-unit id="CloningTemplateRepository">
         <source>Cloning template repository...</source>
-        <target state="new">Cloning template repository...</target>
+        <target state="translated">Clonando repositório de modelos...</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfiguredTemplateConflictingOptions">
@@ -69,17 +69,17 @@
       </trans-unit>
       <trans-unit id="LocalTemplateCreationFailed">
         <source>Could not create the local template ({0}): {1}</source>
-        <target state="new">Could not create the local template ({0}): {1}</target>
+        <target state="translated">Não foi possível criar o modelo local ({0}): {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateLoadFailed">
         <source>Could not load the local template: {0}</source>
-        <target state="new">Could not load the local template: {0}</target>
+        <target state="translated">Não foi possível carregar o modelo local: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalTemplateSelectionRequiresInteraction">
         <source>The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</source>
-        <target state="new">The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</target>
+        <target state="translated">O diretório contém vários modelos. Execute interativamente para selecionar um ou aponte --template-path em um único diretório de modelos.</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
@@ -99,7 +99,7 @@
       </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
         <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
-        <target state="new">No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</target>
+        <target state="translated">Nenhum modelo .NET foi encontrado no '{0}'. Esperado um arquivo .template.config/template.json no diretório ou em um de seus subdiretórios.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingConfiguredTemplates">
@@ -149,7 +149,7 @@
       </trans-unit>
       <trans-unit id="ResolvingTemplateRepository">
         <source>Resolving template repository ref...</source>
-        <target state="new">Resolving template repository ref...</target>
+        <target state="translated">Resolvendo a referência do repositório de modelos...</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
@@ -209,37 +209,37 @@
       </trans-unit>
       <trans-unit id="TemplateDirectoryNotFound">
         <source>The template directory '{0}' does not exist.</source>
-        <target state="new">The template directory '{0}' does not exist.</target>
+        <target state="translated">O diretório de modelo "{0}" não existe.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathConflictingOptions">
         <source>--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</source>
-        <target state="new">--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</target>
+        <target state="translated">--template-path e --template-repository exigem valores não vazios e não podem ser combinados com um subcomando de modelo, --source, --version, --channel ou --language.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePathOptionDescription">
         <source>Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</source>
-        <target state="new">Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</target>
+        <target state="translated">Caminho para um diretório de pacote de modelo .NET desempacotado (relativo ao repositório quando --template-repository é especificado)</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitExited">
         <source>Git failed with exit code {0}: {1}</source>
-        <target state="new">Git failed with exit code {0}: {1}</target>
+        <target state="translated">O Git falhou com o código de saída {0}: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitFailed">
         <source>Could not access the template repository: {0}</source>
-        <target state="new">Could not access the template repository: {0}</target>
+        <target state="translated">Não foi possível acessar o repositório de modelos: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
-        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <target state="translated">Não foi possível iniciar o Git. Instale o Git e verifique se ele está no PATH.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryOptionDescription">
         <source>Clone a Git repository containing templates; --template-path is relative to its root</source>
-        <target state="new">Clone a Git repository containing templates; --template-path is relative to its root</target>
+        <target state="translated">Clonar um repositório Git que contém modelos; --template-path é relativo à raiz</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryPathInvalid">
@@ -249,17 +249,17 @@
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefNotFound">
         <source>Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</source>
-        <target state="new">Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</target>
+        <target state="translated">Não foi possível resolver a referência do repositório de modelos "{0}" para um SHA de confirmação. Especifique uma branch, uma tag ou um SHA de commit completo.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefOptionDescription">
         <source>Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</source>
-        <target state="new">Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</target>
+        <target state="translated">Branch, tag ou SHA de commit completo do repositório de modelos (requer --template-repository; o padrão é o HEAD remoto)</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefRequiresRepository">
         <source>--template-repository-ref requires --template-repository and a non-empty ref value.</source>
-        <target state="new">--template-repository-ref requires --template-repository and a non-empty ref value.</target>
+        <target state="translated">--template-repository-ref requer --template-repository e um valor de referência não vazio.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSearchPrompt">
