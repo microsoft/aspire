@@ -419,11 +419,16 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         var windowEnd = new DateTime(((now.Ticks / s_activityBucketSize.Ticks) + 1) * s_activityBucketSize.Ticks, DateTimeKind.Utc);
         var windowStart = windowEnd - (s_activityBucketSize * ActivityBucketCount);
 
-        var spanTotal = (await repository.GetSpansAsync(CreateSpansRequest(0, 0), cancellationToken).ConfigureAwait(false)).PagedResult.TotalItemCount;
-        var spanCount = Math.Min(spanTotal, MaxActivitySpans);
-        var spans = spanCount > 0
-            ? (await repository.GetSpansAsync(CreateSpansRequest(spanTotal - spanCount, spanCount), cancellationToken).ConfigureAwait(false)).PagedResult.Items
-            : [];
+        // Only the window's request spans, with the few fields used here. This refreshes about once a second while
+        // telemetry arrives, so it must not materialize traces.
+        var requestSpans = await repository.GetRequestSpansAsync(new GetRequestSpansRequest
+        {
+            ResourceKeys = resourceKeys,
+            StartTime = windowStart,
+            EndTime = windowEnd,
+            MaxCount = MaxActivitySpans
+        }, cancellationToken).ConfigureAwait(false);
+        var spans = requestSpans.Items;
 
         var resourceNames = new Dictionary<ResourceKey, string>();
         string GetName(OtlpResource resource)
@@ -444,18 +449,13 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
         foreach (var span in spans)
         {
-            if (span.Kind is not (OtlpSpanKind.Server or OtlpSpanKind.Consumer) || span.StartTime < windowStart || span.StartTime >= windowEnd)
-            {
-                continue;
-            }
-
             var index = (int)((span.StartTime - windowStart).Ticks / s_activityBucketSize.Ticks);
             var isError = span.Status == OtlpSpanStatusCode.Error;
             var durationMs = span.Duration.TotalMilliseconds;
             (isError ? errorBuckets : okBuckets)[index]++;
             durations.Add(durationMs);
 
-            var resource = span.Source.Resource;
+            var resource = span.Resource;
             if (!byResource.TryGetValue(resource.ResourceKey, out var resourceActivity))
             {
                 resourceActivity = new ResourceActivity(GetName(resource));
@@ -500,7 +500,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         var totalRequests = okBuckets.Sum() + errorBuckets.Sum();
         var totalErrors = errorBuckets.Sum();
         var windowMinutes = s_activityBucketSize.TotalMinutes * ActivityBucketCount;
-        if (spanTotal > spanCount && spans.Count > 0)
+        if (requestSpans.TotalItemCount > spans.Count && spans.Count > 0)
         {
             // Only the newest MaxActivitySpans were sampled, so the rate must be computed over the
             // interval those spans actually cover rather than the full window.
@@ -537,27 +537,19 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 .Take(InsightItemCount)
                 .ToList()
         };
-
-        GetSpansRequest CreateSpansRequest(int startIndex, int count) => new()
-        {
-            ResourceKeys = resourceKeys,
-            StartIndex = startIndex,
-            Count = count,
-            Filters = []
-        };
     }
 
     // Prefer the low-cardinality route template ("GET /api/catalog/{id}") over the span name.
     // See https://opentelemetry.io/docs/specs/semconv/http/http-spans/
-    private static string GetEndpointLabel(OtlpSpan span)
+    private static string GetEndpointLabel(RequestSpanSummary span)
     {
-        var route = span.Attributes.GetValue("http.route");
+        var route = span.HttpRoute;
         if (string.IsNullOrEmpty(route))
         {
             return span.Name;
         }
 
-        var method = span.Attributes.GetValue("http.request.method") ?? span.Attributes.GetValue("http.method");
+        var method = span.HttpMethod;
         return string.IsNullOrEmpty(method) ? route : $"{method} {route}";
     }
 
