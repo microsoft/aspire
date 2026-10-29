@@ -7,6 +7,7 @@ using System.Globalization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -192,6 +193,11 @@ internal sealed class ConfigCommand : BaseCommand
                         value));
 
                 return CliExitCodes.Success;
+            }
+            catch (TemplateSourceConfigurationException ex)
+            {
+                InteractionService.DisplayError(ex.Message);
+                return CliExitCodes.InvalidCommand;
             }
             catch (Exception ex)
             {

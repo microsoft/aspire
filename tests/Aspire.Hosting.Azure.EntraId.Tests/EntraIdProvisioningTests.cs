@@ -1149,14 +1149,20 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task AddExistingEntraApplication_DeployDoesNotRequireAzure(bool useParameters)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task AddExistingEntraApplication_DeployDoesNotRequireAzure(bool useParameters, bool useExport)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish, outputHelper, workspace.Path, step: WellKnownPipelineSteps.Deploy);
-        var entra = useParameters
+        var entra = useExport
+            ? builder.AddExistingEntraApplicationForExport("entra-web",
+                useParameters ? builder.AddParameter("tenant-id", TenantId) : TenantId,
+                useParameters ? builder.AddParameter("client-id", ClientId) : ClientId)
+            : useParameters
             ? builder.AddExistingEntraApplication("entra-web",
                 builder.AddParameter("tenant-id", TenantId), builder.AddParameter("client-id", ClientId))
             : builder.AddExistingEntraApplication("entra-web", TenantId, ClientId);

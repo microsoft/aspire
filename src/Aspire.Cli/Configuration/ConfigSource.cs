@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Aspire.Cli.Git;
 using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Configuration;
@@ -50,12 +51,7 @@ internal sealed class ConfigSource
         // Require fully qualified local paths so a saved binding cannot change repositories
         // when a later command runs in a different working directory.
         var isLocal = System.IO.Path.IsPathFullyQualified(Repository);
-        var isUrl = Uri.TryCreate(Repository, UriKind.Absolute, out var uri)
-            && uri.Scheme is "https" or "ssh"
-            && !string.IsNullOrEmpty(uri.Host)
-            && string.IsNullOrEmpty(uri.Query)
-            && string.IsNullOrEmpty(uri.Fragment)
-            && (uri.Scheme == "ssh" ? !uri.UserInfo.Contains(':') : string.IsNullOrEmpty(uri.UserInfo));
+        var isUrl = GitHelpers.IsValidRepositoryUrl(Repository);
         var at = Repository.IndexOf('@');
         var colon = Repository.IndexOf(':');
         var isScp = at > 0 && colon > at + 1 && colon < Repository.Length - 1

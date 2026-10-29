@@ -39,7 +39,8 @@ namespace Aspire.Hosting.Azure;
 /// <c>Microsoft.Identity.Abstractions</c>.
 /// </para>
 /// </remarks>
-public class EntraIdApplicationResource : AzureProvisioningResource
+[AspireExport]
+public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWithCustomWithReference<EntraIdApplicationResource>
 {
     private const string DefaultInstance = "https://login.microsoftonline.com/";
     private readonly IResourceAnnotation[] _provisioningAnnotations;
@@ -106,6 +107,31 @@ public class EntraIdApplicationResource : AzureProvisioningResource
     }
 
     internal bool IsExistingApplication { get; private set; }
+
+    static IResourceBuilder<TDestination>? IResourceWithCustomWithReference<EntraIdApplicationResource>.TryWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName,
+        bool optional,
+        string? name)
+    {
+        if (source is not IResourceBuilder<EntraIdApplicationResource> application)
+        {
+            return null;
+        }
+
+        if (optional)
+        {
+            throw new InvalidOperationException("Optional references are not supported for Entra ID applications.");
+        }
+
+        if (name is not null)
+        {
+            throw new InvalidOperationException("Named service references are not supported for Entra ID applications. Use connectionName to customize the configuration prefix.");
+        }
+
+        return EntraIdResourceExtensions.WithReference(builder, application, connectionName);
+    }
 
     internal void SetExistingApplication()
     {
