@@ -1,0 +1,6 @@
+﻿[
+  provider-global/apps-acr/apps-acr.bicep,
+  provider-global/apps/apps.bicep,
+  provider-global/main.bicep,
+  provider-global/storage/storage.bicep
+]

@@ -1,0 +1,5 @@
+﻿[
+  provider-global/main.bicep,
+  provider-global/storage-roles/storage-roles.bicep,
+  provider-global/storage/storage.bicep
+]

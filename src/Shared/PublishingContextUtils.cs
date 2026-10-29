@@ -12,13 +12,14 @@ internal static class PublishingContextUtils
     public static string GetEnvironmentOutputPath(PipelineStepContext context, IComputeEnvironmentResource environment)
     {
         var outputService = context.Services.GetRequiredService<IPipelineOutputService>();
-        if (context.Model.Resources.OfType<IComputeEnvironmentResource>().Count() > 1)
+        if (environment.HasAnnotationOfType<PipelineOutputDirectoryAnnotation>() ||
+            context.Model.Resources.OfType<IComputeEnvironmentResource>().Count() > 1)
         {
-            // If there are multiple compute environments, use resource-specific output path
+            // Explicit overrides and multiple compute environments select resource resolution.
             return outputService.GetOutputDirectory(environment);
         }
 
-        // If there is only one compute environment, use the root output path
+        // Preserve the global layout for zero or one compute environment.
         return outputService.GetOutputDirectory();
     }
 }

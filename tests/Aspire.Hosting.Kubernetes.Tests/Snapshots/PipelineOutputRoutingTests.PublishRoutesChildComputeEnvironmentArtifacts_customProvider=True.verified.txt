@@ -1,0 +1,8 @@
+﻿[
+  provider-cluster/Chart.yaml,
+  provider-cluster/templates/cluster-dashboard/config.yaml,
+  provider-cluster/templates/cluster-dashboard/deployment.yaml,
+  provider-cluster/templates/cluster-dashboard/service.yaml,
+  provider-cluster/templates/kube-api/deployment.yaml,
+  provider-cluster/values.yaml
+]

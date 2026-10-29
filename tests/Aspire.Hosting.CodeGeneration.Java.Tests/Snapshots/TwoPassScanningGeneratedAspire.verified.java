@@ -2335,6 +2335,15 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures this resource's output directory when using the default pipeline output service. */
+    public CSharpAppResource withPipelineOutputDirectory(String path) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        getClient().invokeCapability("Aspire.Hosting/withPipelineOutputDirectory", reqArgs);
+        return this;
+    }
+
     /** Configures how many replicas of the project should be created for the project. */
     public CSharpAppResource withReplicas(double replicas) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -5509,6 +5518,15 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures this resource's output directory when using the default pipeline output service. */
+    public ContainerRegistryResource withPipelineOutputDirectory(String path) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        getClient().invokeCapability("Aspire.Hosting/withPipelineOutputDirectory", reqArgs);
+        return this;
+    }
+
     public ContainerRegistryResource withRequiredCommand(String command) {
         return withRequiredCommand(command, null);
     }
@@ -6768,6 +6786,15 @@ public class ContainerResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/publishAsConnectionString", reqArgs);
+        return this;
+    }
+
+    /** Configures this resource's output directory when using the default pipeline output service. */
+    public ContainerResource withPipelineOutputDirectory(String path) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        getClient().invokeCapability("Aspire.Hosting/withPipelineOutputDirectory", reqArgs);
         return this;
     }
 
@@ -9547,6 +9574,15 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures this resource's output directory when using the default pipeline output service. */
+    public DotnetToolResource withPipelineOutputDirectory(String path) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        getClient().invokeCapability("Aspire.Hosting/withPipelineOutputDirectory", reqArgs);
+        return this;
+    }
+
     public DotnetToolResource withRequiredCommand(String command) {
         return withRequiredCommand(command, null);
     }
@@ -12033,6 +12069,15 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures this resource's output directory when using the default pipeline output service. */
+    public ExecutableResource withPipelineOutputDirectory(String path) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        getClient().invokeCapability("Aspire.Hosting/withPipelineOutputDirectory", reqArgs);
+        return this;
+    }
+
     public ExecutableResource withRequiredCommand(String command) {
         return withRequiredCommand(command, null);
     }
@@ -13918,6 +13963,15 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
         }
         getClient().invokeCapability("Aspire.Hosting/withExternalServiceHttpHealthCheck", reqArgs);
+        return this;
+    }
+
+    /** Configures this resource's output directory when using the default pipeline output service. */
+    public ExternalServiceResource withPipelineOutputDirectory(String path) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        getClient().invokeCapability("Aspire.Hosting/withPipelineOutputDirectory", reqArgs);
         return this;
     }
 
@@ -18794,6 +18848,15 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures this resource's output directory when using the default pipeline output service. */
+    public ParameterResource withPipelineOutputDirectory(String path) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        getClient().invokeCapability("Aspire.Hosting/withPipelineOutputDirectory", reqArgs);
+        return this;
+    }
+
     public ParameterResource withRequiredCommand(String command) {
         return withRequiredCommand(command, null);
     }
@@ -20435,6 +20498,15 @@ public class ProjectResource extends ResourceBuilderBase {
             reqArgs.put("protocol", AspireClient.serializeValue(protocol));
         }
         getClient().invokeCapability("Aspire.Hosting/withOtlpExporter", reqArgs);
+        return this;
+    }
+
+    /** Configures this resource's output directory when using the default pipeline output service. */
+    public ProjectResource withPipelineOutputDirectory(String path) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        getClient().invokeCapability("Aspire.Hosting/withPipelineOutputDirectory", reqArgs);
         return this;
     }
 
@@ -24069,6 +24141,15 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures this resource's output directory when using the default pipeline output service. */
+    public TestDatabaseResource withPipelineOutputDirectory(String path) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        getClient().invokeCapability("Aspire.Hosting/withPipelineOutputDirectory", reqArgs);
+        return this;
+    }
+
     public TestDatabaseResource withRequiredCommand(String command) {
         return withRequiredCommand(command, null);
     }
@@ -26348,6 +26429,15 @@ public class TestRedisResource extends ContainerResource {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/publishAsConnectionString", reqArgs);
+        return this;
+    }
+
+    /** Configures this resource's output directory when using the default pipeline output service. */
+    public TestRedisResource withPipelineOutputDirectory(String path) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        getClient().invokeCapability("Aspire.Hosting/withPipelineOutputDirectory", reqArgs);
         return this;
     }
 
@@ -28868,6 +28958,15 @@ public class TestVaultResource extends ContainerResource {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/publishAsConnectionString", reqArgs);
+        return this;
+    }
+
+    /** Configures this resource's output directory when using the default pipeline output service. */
+    public TestVaultResource withPipelineOutputDirectory(String path) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        getClient().invokeCapability("Aspire.Hosting/withPipelineOutputDirectory", reqArgs);
         return this;
     }
 

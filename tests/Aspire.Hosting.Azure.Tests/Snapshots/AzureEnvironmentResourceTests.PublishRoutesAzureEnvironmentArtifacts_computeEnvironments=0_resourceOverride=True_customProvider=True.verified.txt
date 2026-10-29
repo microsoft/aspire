@@ -1,0 +1,5 @@
+﻿[
+  provider-azure-environment/main.bicep,
+  provider-azure-environment/storage-roles/storage-roles.bicep,
+  provider-azure-environment/storage/storage.bicep
+]

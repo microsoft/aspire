@@ -1,0 +1,5 @@
+﻿[
+  global/routed/azure/main.bicep,
+  global/routed/azure/storage-roles/storage-roles.bicep,
+  global/routed/azure/storage/storage.bicep
+]

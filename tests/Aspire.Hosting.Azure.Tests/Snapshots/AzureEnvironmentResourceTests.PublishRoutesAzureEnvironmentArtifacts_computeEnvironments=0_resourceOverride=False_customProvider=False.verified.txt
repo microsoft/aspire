@@ -1,0 +1,5 @@
+﻿[
+  global/main.bicep,
+  global/storage-roles/storage-roles.bicep,
+  global/storage/storage.bicep
+]

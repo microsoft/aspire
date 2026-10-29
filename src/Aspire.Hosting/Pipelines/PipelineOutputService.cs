@@ -73,7 +73,9 @@ internal sealed class PipelineOutputService : IPipelineOutputService
         ArgumentNullException.ThrowIfNull(resource);
 
         var baseOutputDir = GetOutputDirectory();
-        return Path.Combine(baseOutputDir, resource.Name);
+        return resource.TryGetLastAnnotation<PipelineOutputDirectoryAnnotation>(out var annotation)
+            ? Path.GetFullPath(annotation.Path, baseOutputDir)
+            : Path.Combine(baseOutputDir, resource.Name);
     }
 
     /// <inheritdoc/>

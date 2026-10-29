@@ -1,0 +1,8 @@
+﻿[
+  provider-azure-environment/apps-acr/apps-acr.bicep,
+  provider-azure-environment/apps/apps.bicep,
+  provider-azure-environment/main.bicep,
+  provider-azure-environment/storage/storage.bicep,
+  provider-azure-environment/web-acr/web-acr.bicep,
+  provider-azure-environment/web/web.bicep
+]

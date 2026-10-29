@@ -1,0 +1,6 @@
+﻿[
+  provider-dev/app.bicep,
+  provider-dev/bicepconfig.json,
+  provider-staging/app.bicep,
+  provider-staging/bicepconfig.json
+]

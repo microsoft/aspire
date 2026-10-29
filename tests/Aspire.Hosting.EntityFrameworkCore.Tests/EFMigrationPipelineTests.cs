@@ -3,11 +3,14 @@
 
 #pragma warning disable ASPIREDOTNETTOOL, ASPIREPROJECTS001
 
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore.Tests.TestServices;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Testing;
+using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
+using Aspire.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,8 +18,291 @@ using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.EntityFrameworkCore.Tests;
 
-public class EFMigrationPipelineTests
+public class EFMigrationPipelineTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData("linux-x64", "", false)]
+    [InlineData("win-x64", ".exe", false)]
+    [InlineData("linux-x64", "", true)]
+    [InlineData("win-x64", ".exe", true)]
+    public async Task BundleContainerBuildReadsGeneratedWorkspaceAndRetainsOutput(string runtime, string suffix, bool customOutputService)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var originalOutput = Path.Combine(workspace.Path, "original");
+        var finalOutput = Path.Combine(workspace.Path, "final");
+        string contextPath;
+        var fileName = "migrations" + suffix;
+        var retainedPath = Path.Combine(finalOutput, "efmigrations", fileName);
+        using (var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish, outputPath: originalOutput, step: "build-migrations"))
+        {
+            var containerRuntime = new FakeContainerRuntime();
+            builder.Services.AddFakeContainerRuntime(containerRuntime);
+            builder.Configuration["Parameters:build-secret"] = "secret-value";
+            var secret = builder.AddParameter("build-secret", secret: true);
+            var project = builder.AddProject<Projects.ServiceA>("api");
+            var db = builder.AddResource(new TestDatabaseResource("db"));
+            var migrations = project.AddEFMigrations("migrations")
+                .WaitFor(db)
+                .PublishAsMigrationBundle(targetRuntime: runtime, publishContainer: true, baseImage: "custom-runtime:latest")
+                .WithImage("custom-migrations", "test")
+                .WithBuildArg("BUNDLE_ARG", "arg-value")
+                .WithBuildSecret("BUNDLE_SECRET", secret);
+            var dockerfile = Assert.Single(migrations.Resource.Annotations.OfType<DockerfileBuildAnnotation>());
+            contextPath = dockerfile.ContextPath;
+            Assert.False(File.Exists(Path.Combine(contextPath, "migrations" + suffix)));
+
+            // Change the output after container configuration, when its build context is already fixed.
+            if (customOutputService)
+            {
+                builder.Services.AddSingleton<IPipelineOutputService>(new PackagingOutputService(finalOutput));
+            }
+            else
+            {
+                builder.Services.Configure<PipelineOptions>(options => options.OutputPath = finalOutput);
+            }
+            var tool = new TestEfTool
+            {
+                EmitArtifactAsync = arguments =>
+                {
+                    var outputPath = arguments[Array.IndexOf(arguments, "--output") + 1];
+                    Assert.Equal(Path.Combine(contextPath, fileName), outputPath);
+                    Assert.False(File.Exists(retainedPath));
+                    return File.WriteAllTextAsync(outputPath, "generated bundle", TestContext.Current.CancellationToken);
+                }
+            };
+            migrations.Resource.ToolResource = tool.Resource;
+            object? buildOutput = null;
+            containerRuntime.BuildImageAsyncCallback = async (context, dockerfilePath, options, arguments, secrets, _, ct) =>
+            {
+                Assert.Equal(contextPath, context);
+                Assert.Equal("generated bundle", await File.ReadAllTextAsync(Path.Combine(context, fileName), ct));
+                Assert.Equal("generated bundle", await File.ReadAllTextAsync(retainedPath, ct));
+                buildOutput = new
+                {
+                    Dockerfile = await File.ReadAllTextAsync(dockerfilePath, ct),
+                    options!.ImageName,
+                    options.Tag,
+                    Arguments = arguments,
+                    Secrets = secrets.ToDictionary(secret => secret.Key, secret => secret.Value.Value)
+                };
+            };
+            using var app = builder.Build();
+
+            await ExecutePackagingPipelineAsync(app);
+
+            Assert.Single(tool.Invocations);
+            Assert.Single(containerRuntime.BuildImageCalls);
+            Assert.False(Directory.Exists(originalOutput));
+            Assert.True(migrations.Resource.TryGetContainerImageName(out var imageName));
+            Assert.NotNull(buildOutput);
+            await Verify(new { Build = buildOutput, Image = imageName });
+        }
+
+        Assert.False(Directory.Exists(contextPath));
+        Assert.Equal("generated bundle", await File.ReadAllTextAsync(retainedPath, TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BundleContainerGenerationOrCopyFailurePreventsImageBuild(bool copyFailure)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        string contextPath;
+        using (var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "build-migrations"))
+        {
+            var containerRuntime = new FakeContainerRuntime();
+            builder.Services.AddFakeContainerRuntime(containerRuntime);
+            var project = builder.AddProject<Projects.ServiceA>("api");
+            var db = builder.AddResource(new TestDatabaseResource("db"));
+            var migrations = project.AddEFMigrations("migrations").WaitFor(db)
+                .PublishAsMigrationBundle(targetRuntime: "linux-x64", publishContainer: true);
+            contextPath = Assert.Single(migrations.Resource.Annotations.OfType<DockerfileBuildAnnotation>()).ContextPath;
+            var retainedPath = Path.Combine(workspace.Path, "efmigrations", "migrations");
+            Directory.CreateDirectory(Path.GetDirectoryName(retainedPath)!);
+            if (copyFailure)
+            {
+                // A directory occupying the destination filename fails copying on every platform.
+                Directory.CreateDirectory(retainedPath);
+            }
+            else
+            {
+                await File.WriteAllTextAsync(retainedPath, "last successful bundle", TestContext.Current.CancellationToken);
+            }
+            var tool = new TestEfTool
+            {
+                Result = copyFailure ? CommandResults.Success() : CommandResults.Failure("bundle generation failed"),
+                EmitArtifactAsync = arguments =>
+                {
+                    var outputPath = arguments[Array.IndexOf(arguments, "--output") + 1];
+                    Assert.Equal(Path.Combine(contextPath, "migrations"), outputPath);
+                    return File.WriteAllTextAsync(outputPath, "incomplete or uncopied bundle", TestContext.Current.CancellationToken);
+                }
+            };
+            migrations.Resource.ToolResource = tool.Resource;
+            using var app = builder.Build();
+            Assert.Empty(containerRuntime.BuildImageCalls);
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecutePackagingPipelineAsync(app));
+
+            Assert.Single(tool.Invocations);
+            Assert.Equal("incomplete or uncopied bundle", await File.ReadAllTextAsync(
+                Path.Combine(contextPath, "migrations"), TestContext.Current.CancellationToken));
+            Assert.Empty(containerRuntime.BuildImageCalls);
+            if (copyFailure)
+            {
+                Assert.True(Directory.Exists(retainedPath));
+            }
+            else
+            {
+                Assert.Contains("bundle generation failed", exception.ToString());
+                Assert.Equal("last successful bundle", await File.ReadAllTextAsync(retainedPath, TestContext.Current.CancellationToken));
+            }
+        }
+
+        Assert.False(Directory.Exists(contextPath));
+    }
+
+    [Theory]
+    [InlineData(false, "linux-x64", ".sql")]
+    [InlineData(true, "linux-x64", "")]
+    [InlineData(true, "win-x64", ".exe")]
+    public async Task NonContainerGenerationWritesDirectlyToOutput(bool bundle, string runtime, string suffix)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish, outputPath: workspace.Path,
+            step: bundle ? "migrations-generate-migration-bundle" : "migrations-generate-migration-script");
+        var project = builder.AddProject<Projects.ServiceA>("api");
+        var migrations = project.AddEFMigrations("migrations");
+        if (bundle)
+        {
+            migrations.PublishAsMigrationBundle(targetRuntime: runtime);
+        }
+        else
+        {
+            migrations.PublishAsMigrationScript();
+        }
+        Assert.Empty(migrations.Resource.Annotations.OfType<DockerfileBuildAnnotation>());
+        var expectedPath = Path.Combine(workspace.Path, "efmigrations", "migrations" + suffix);
+        var tool = new TestEfTool
+        {
+            EmitArtifactAsync = arguments =>
+            {
+                Assert.Equal(expectedPath, arguments[Array.IndexOf(arguments, "--output") + 1]);
+                return File.WriteAllTextAsync(expectedPath, "direct artifact", TestContext.Current.CancellationToken);
+            }
+        };
+        migrations.Resource.ToolResource = tool.Resource;
+        using var app = builder.Build();
+        Assert.False(File.Exists(expectedPath));
+
+        await ExecutePackagingPipelineAsync(app);
+
+        Assert.Single(tool.Invocations);
+        Assert.Equal("direct artifact", await File.ReadAllTextAsync(expectedPath, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task BundleContainersUseIsolatedWorkspaces()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "bundle-images");
+        var project = builder.AddProject<Projects.ServiceA>("api");
+        var db = builder.AddResource(new TestDatabaseResource("db"));
+        var first = project.AddEFMigrations("first", typeof(TestDbContext).FullName!).WaitFor(db)
+            .PublishAsMigrationBundle(targetRuntime: "linux-x64", publishContainer: true);
+        var second = project.AddEFMigrations("second", typeof(AnotherDbContext).FullName!).WaitFor(db)
+            .PublishAsMigrationBundle(targetRuntime: "linux-x64", publishContainer: true);
+        var firstContext = Assert.Single(first.Resource.Annotations.OfType<DockerfileBuildAnnotation>()).ContextPath;
+        var secondContext = Assert.Single(second.Resource.Annotations.OfType<DockerfileBuildAnnotation>()).ContextPath;
+        Assert.NotEqual(firstContext, secondContext);
+        Assert.True(Directory.Exists(firstContext));
+        Assert.True(Directory.Exists(secondContext));
+        var tool = new TestEfTool
+        {
+            EmitArtifactAsync = arguments =>
+            {
+                var outputPath = arguments[Array.IndexOf(arguments, "--output") + 1];
+                return File.WriteAllTextAsync(outputPath, Path.GetFileName(outputPath), TestContext.Current.CancellationToken);
+            }
+        };
+        first.Resource.ToolResource = tool.Resource;
+        second.Resource.ToolResource = tool.Resource;
+        var containerRuntime = new FakeContainerRuntime
+        {
+            BuildImageAsyncCallback = async (context, _, _, _, _, _, ct) =>
+            {
+                var name = context == firstContext ? "first" : "second";
+                Assert.Equal(name == "first" ? firstContext : secondContext, context);
+                Assert.Equal(name, await File.ReadAllTextAsync(Path.Combine(context, name), ct));
+                Assert.False(File.Exists(Path.Combine(context, name == "first" ? "second" : "first")));
+            }
+        };
+        builder.Services.AddFakeContainerRuntime(containerRuntime);
+        builder.Pipeline.AddStep("bundle-images", _ => Task.CompletedTask, dependsOn: new[] { "build-first", "build-second" });
+        using var app = builder.Build();
+
+        await ExecutePackagingPipelineAsync(app);
+
+        Assert.Equal(new[] { firstContext, secondContext }.Order(), containerRuntime.BuildImageCalls.Select(call => call.contextPath).Order());
+        Assert.Equal(2, tool.Invocations.Count);
+        await Verify(new
+        {
+            FirstBundle = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "efmigrations", "first"), TestContext.Current.CancellationToken),
+            SecondBundle = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "efmigrations", "second"), TestContext.Current.CancellationToken)
+        });
+    }
+
+    private static Task ExecutePackagingPipelineAsync(DistributedApplication app)
+    {
+        var context = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services, NullLogger.Instance, TestContext.Current.CancellationToken);
+        return app.Services.GetRequiredService<IDistributedApplicationPipeline>().ExecuteAsync(context);
+    }
+
+    [Fact]
+    public async Task BundleManifestBuildContextSurvivesAppHostDisposal()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using (var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-manifest"))
+        {
+            var project = builder.AddProject<Projects.ServiceA>("api");
+            var db = builder.AddResource(new TestDatabaseResource("db"));
+            var migrations = project.AddEFMigrations("migrations").WaitFor(db)
+                .PublishAsMigrationBundle(targetRuntime: "linux-x64", publishContainer: true);
+            var tool = new TestEfTool
+            {
+                EmitArtifactAsync = arguments => File.WriteAllTextAsync(
+                    arguments[Array.IndexOf(arguments, "--output") + 1], "manifest bundle", TestContext.Current.CancellationToken)
+            };
+            migrations.Resource.ToolResource = tool.Resource;
+            migrations.WithPipelineConfiguration(context => context.Steps.Single(s => s.Name == "publish-manifest")
+                .DependsOn("migrations-generate-migration-bundle"));
+            using var app = builder.Build();
+            Assert.False(File.Exists(Path.Combine(workspace.Path, "efmigrations", "migrations")));
+
+            await ExecutePackagingPipelineAsync(app);
+        }
+
+        var document = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aspire-manifest.json"), TestContext.Current.CancellationToken))!;
+        var manifest = document["resources"]!["migrations"]!;
+        var contextPath = Path.GetFullPath(manifest["build"]!["context"]!.GetValue<string>(), workspace.Path);
+        var bundlePath = Path.Combine(contextPath, "migrations");
+
+        Assert.Equal("manifest bundle", await File.ReadAllTextAsync(bundlePath, TestContext.Current.CancellationToken));
+        await Verify(new
+        {
+            Manifest = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aspire-manifest.json"), TestContext.Current.CancellationToken)
+        }).ScrubProjectPaths(Path.Combine(workspace.Path, "aspire-manifest.json"));
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
@@ -467,10 +753,7 @@ public class EFMigrationPipelineTests
 
         var dockerfileAnnotation = Assert.Single(migrations.Resource.Annotations.OfType<DockerfileBuildAnnotation>());
         Assert.NotNull(dockerfileAnnotation.DockerfileFactory);
-        // The Dockerfile build context points at the same 'efmigrations' subfolder of the pipeline
-        // output directory that the generate step writes the bundle to. TestDistributedApplicationBuilder
-        // configures Pipeline:OutputPath to './' so the context resolves under the current directory.
-        Assert.Equal(Path.Combine(Path.GetFullPath("./"), "efmigrations"), dockerfileAnnotation.ContextPath);
+        Assert.True(Directory.Exists(dockerfileAnnotation.ContextPath));
         Assert.True(migrations.Resource.IsContainer());
     }
 
@@ -778,7 +1061,7 @@ public class EFMigrationPipelineTests
         var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
             .PublishAsMigrationBundle(targetRuntime: "win-x64");
 
-        Assert.Equal("mymigrations.exe", EFResourceBuilderExtensions.GetBundleFileName(migrations.Resource));
+        Assert.Equal("mymigrations.exe", migrations.Resource.GetBundleFileName());
     }
 
     [Fact]
@@ -789,7 +1072,7 @@ public class EFMigrationPipelineTests
         var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
             .PublishAsMigrationBundle(targetRuntime: "linux-arm64");
 
-        Assert.Equal("mymigrations", EFResourceBuilderExtensions.GetBundleFileName(migrations.Resource));
+        Assert.Equal("mymigrations", migrations.Resource.GetBundleFileName());
     }
 
     [Fact]
@@ -875,6 +1158,14 @@ public class EFMigrationPipelineTests
         }
 
         return results;
+    }
+
+    private sealed class PackagingOutputService(string path) : IPipelineOutputService
+    {
+        public string GetOutputDirectory() => path;
+        public string GetOutputDirectory(IResource resource) => Path.Combine(path, resource.Name);
+        public string GetTempDirectory() => Path.Combine(path, "temp");
+        public string GetTempDirectory(IResource resource) => Path.Combine(GetTempDirectory(), resource.Name);
     }
 
     // Test classes for DbContext types

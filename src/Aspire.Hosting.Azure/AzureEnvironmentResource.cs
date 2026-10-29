@@ -184,7 +184,9 @@ public sealed class AzureEnvironmentResource : Resource
         var azureProvisioningOptions = context.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>();
         var outputService = context.Services.GetRequiredService<IPipelineOutputService>();
         var publishingContext = new AzurePublishingContext(
-            outputService.GetOutputDirectory(),
+            this.HasAnnotationOfType<PipelineOutputDirectoryAnnotation>()
+                ? outputService.GetOutputDirectory(this)
+                : outputService.GetOutputDirectory(),
             azureProvisioningOptions.Value,
             context.Services,
             context.Logger,

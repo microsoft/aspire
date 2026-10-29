@@ -1,0 +1,3 @@
+﻿[
+  provider-compose/docker-compose.yaml
+]

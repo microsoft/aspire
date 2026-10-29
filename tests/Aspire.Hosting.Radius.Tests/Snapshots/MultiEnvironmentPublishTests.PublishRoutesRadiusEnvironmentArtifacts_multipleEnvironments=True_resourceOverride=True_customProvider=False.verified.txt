@@ -1,0 +1,6 @@
+﻿[
+  global/routed/dev/app.bicep,
+  global/routed/dev/bicepconfig.json,
+  global/staging/app.bicep,
+  global/staging/bicepconfig.json
+]

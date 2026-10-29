@@ -1,0 +1,4 @@
+﻿[
+  global/routed/dev/app.bicep,
+  global/routed/dev/bicepconfig.json
+]

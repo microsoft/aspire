@@ -158,10 +158,13 @@ public class DockerfileBuildAnnotation(string contextPath, string dockerfilePath
             }
         }
 
-        await EmitBuildContextIgnoreAsync(dockerfilePath ?? DockerfilePath, cancellationToken).ConfigureAwait(false);
+        await EmitBuildContextIgnoreAsync(dockerfilePath ?? DockerfilePath, ContextPath, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task EmitBuildContextIgnoreAsync(string dockerfilePath, CancellationToken cancellationToken)
+    /// <summary>
+    /// Emits ignore artifacts for the build context consumed by a live build or retained manifest.
+    /// </summary>
+    internal async Task EmitBuildContextIgnoreAsync(string dockerfilePath, string buildContextPath, CancellationToken cancellationToken)
     {
         if (BuildContextIgnoreContent is not { } content)
         {
@@ -169,7 +172,7 @@ public class DockerfileBuildAnnotation(string contextPath, string dockerfilePath
         }
 
         var perDockerfileIgnore = $"{dockerfilePath}.dockerignore";
-        var contextRootIgnore = Path.Combine(ContextPath, ".dockerignore");
+        var contextRootIgnore = Path.Combine(buildContextPath, ".dockerignore");
         if (File.Exists(contextRootIgnore))
         {
             if (File.Exists(perDockerfileIgnore) &&

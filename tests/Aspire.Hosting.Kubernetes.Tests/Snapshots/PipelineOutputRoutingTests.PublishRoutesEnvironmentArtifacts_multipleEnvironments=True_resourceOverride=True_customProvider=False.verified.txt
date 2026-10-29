@@ -1,0 +1,9 @@
+﻿[
+  global/compose/docker-compose.yaml,
+  global/routed/cluster/Chart.yaml,
+  global/routed/cluster/templates/cluster-dashboard/config.yaml,
+  global/routed/cluster/templates/cluster-dashboard/deployment.yaml,
+  global/routed/cluster/templates/cluster-dashboard/service.yaml,
+  global/routed/cluster/templates/kube-api/deployment.yaml,
+  global/routed/cluster/values.yaml
+]

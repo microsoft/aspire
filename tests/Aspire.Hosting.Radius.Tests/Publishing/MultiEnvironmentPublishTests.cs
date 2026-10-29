@@ -2,15 +2,56 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Radius.Publishing;
 using Aspire.Hosting.Radius.Publishing.Constructs;
 using Aspire.Hosting.Utils;
+using Aspire.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Radius.Tests.Publishing;
 
-public class MultiEnvironmentPublishTests
+public class MultiEnvironmentPublishTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task PublishRoutesRadiusEnvironmentArtifacts(bool multipleEnvironments, bool resourceOverride, bool customProvider)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var global = Path.Combine(workspace.Path, "global");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, global);
+        if (customProvider)
+        {
+            builder.Services.AddSingleton<IPipelineOutputService>(new TestPipelineOutputService(workspace.Path));
+        }
+        var dev = builder.AddRadiusEnvironment("dev");
+        if (resourceOverride)
+        {
+            dev.WithPipelineOutputDirectory("routed/dev");
+        }
+        builder.AddContainer("api-dev", "myapp/api", "latest").WithComputeEnvironment(dev);
+        if (multipleEnvironments)
+        {
+            var staging = builder.AddRadiusEnvironment("staging");
+            builder.AddContainer("api-staging", "myapp/api", "latest").WithComputeEnvironment(staging);
+        }
+        Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.Path));
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        await Verify(Directory.GetFiles(workspace.Path, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(workspace.Path, path).Replace('\\', '/'))
+            .Order(StringComparer.Ordinal).ToArray());
+    }
+
     [Fact]
     public void SingleEnvironment_AllResourcesScoped()
     {
@@ -98,4 +139,5 @@ public class MultiEnvironmentPublishTests
             Assert.Contains("extension radius", bicep);
         }
     }
+
 }

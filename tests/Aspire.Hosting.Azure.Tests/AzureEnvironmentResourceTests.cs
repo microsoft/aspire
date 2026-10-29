@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 #pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning;
 using Azure.Provisioning.Storage;
@@ -15,6 +16,58 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureEnvironmentResourceTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(0, false, false)]
+    [InlineData(0, false, true)]
+    [InlineData(0, true, false)]
+    [InlineData(0, true, true)]
+    [InlineData(1, false, false)]
+    [InlineData(1, false, true)]
+    [InlineData(1, true, false)]
+    [InlineData(1, true, true)]
+    [InlineData(2, false, false)]
+    [InlineData(2, false, true)]
+    [InlineData(2, true, false)]
+    [InlineData(2, true, true)]
+    public async Task PublishRoutesAzureEnvironmentArtifacts(int computeEnvironments, bool resourceOverride, bool customProvider)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var global = Path.Combine(workspace.Path, "global");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, global);
+        if (customProvider)
+        {
+            builder.Services.AddSingleton<IPipelineOutputService>(new TestPipelineOutputService(workspace.Path));
+        }
+        var environment = builder.AddAzureEnvironment();
+        if (resourceOverride)
+        {
+            environment.WithPipelineOutputDirectory("routed/azure");
+        }
+        if (computeEnvironments > 0)
+        {
+            builder.AddAzureContainerAppEnvironment("apps");
+        }
+        if (computeEnvironments > 1)
+        {
+            builder.AddAzureAppServiceEnvironment("web");
+        }
+        builder.AddAzureStorage("storage");
+        Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.Path));
+        using var app = builder.Build();
+        Assert.Equal(computeEnvironments, app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<IComputeEnvironmentResource>().Count());
+
+        await app.RunAsync();
+
+        if (customProvider)
+        {
+            Assert.False(Directory.Exists(global));
+        }
+
+        await Verify(Directory.GetFiles(workspace.Path, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(workspace.Path, path).Replace('\\', '/'))
+            .Order(StringComparer.Ordinal).ToArray());
+    }
+
     [Fact]
     public async Task WhenUsedWithAzureContainerAppsEnvironment_GeneratesProperBicep()
     {

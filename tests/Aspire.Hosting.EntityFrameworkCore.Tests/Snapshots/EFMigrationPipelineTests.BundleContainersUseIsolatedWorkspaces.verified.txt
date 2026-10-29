@@ -1,0 +1,4 @@
+﻿{
+  FirstBundle: first,
+  SecondBundle: second
+}

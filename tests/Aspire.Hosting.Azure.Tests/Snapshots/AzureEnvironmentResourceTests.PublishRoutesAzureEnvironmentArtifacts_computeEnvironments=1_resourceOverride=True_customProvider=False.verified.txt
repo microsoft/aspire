@@ -1,0 +1,6 @@
+﻿[
+  global/routed/azure/apps-acr/apps-acr.bicep,
+  global/routed/azure/apps/apps.bicep,
+  global/routed/azure/main.bicep,
+  global/routed/azure/storage/storage.bicep
+]

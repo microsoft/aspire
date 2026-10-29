@@ -326,15 +326,28 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// </summary>
     /// <param name="container">The container resource to written to the manifest.</param>
     /// <exception cref="DistributedApplicationException">Thrown if the container resource does not contain a <see cref="ContainerImageAnnotation"/>.</exception>
-    public async Task WriteContainerAsync(ContainerResource container)
+    public Task WriteContainerAsync(ContainerResource container) => WriteContainerAsync(container, null);
+
+    /// <summary>
+    /// Writes a container resource to the manifest, optionally retaining its build context in published output.
+    /// </summary>
+    /// <remarks>
+    /// Manifest consumers can build containers after the AppHost exits and deletes its temporary
+    /// build contexts. Copy the build inputs into published output and write those paths into the
+    /// manifest so they remain available. Leave the resource's original annotation unchanged because
+    /// callbacks and concurrent image builds still use its temporary context.
+    /// </remarks>
+    internal async Task WriteContainerAsync(ContainerResource container, DirectoryInfo? retainedBuildContext)
     {
+        var buildAnnotation = retainedBuildContext is null ? null : container.Annotations.OfType<DockerfileBuildAnnotation>().Single();
+        string? dockerfilePath = null;
         var deploymentTarget = container.GetDeploymentTargetAnnotation();
 
         if (container.Annotations.OfType<DockerfileBuildAnnotation>().Any())
         {
             Writer.WriteString("type", "container.v1");
             WriteConnectionString(container);
-            await WriteBuildContextAsync(container).ConfigureAwait(false);
+            dockerfilePath = await WriteBuildContextAsync(container, retainedBuildContext).ConfigureAwait(false);
         }
         else
         {
@@ -377,9 +390,91 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
         await WriteEnvironmentVariablesAsync(container).ConfigureAwait(false);
         WriteBindings(container);
+
+        if (retainedBuildContext is not null)
+        {
+            // Copy after environment callbacks so their files are retained too.
+            // Merge into published output; other resources may already have written files there.
+            CopyBuildContext(new DirectoryInfo(buildAnnotation!.ContextPath), retainedBuildContext, buildAnnotation.ContextPath, retainedBuildContext.FullName);
+            if (buildAnnotation.DockerfileFactory is not null)
+            {
+                // If the retained directory contains a .dockerignore, remove the generated
+                // Dockerfile-specific ignore file so it cannot override that .dockerignore.
+                await buildAnnotation.EmitBuildContextIgnoreAsync(
+                    GetRetainedBuildPath(dockerfilePath!, buildAnnotation.ContextPath, retainedBuildContext.FullName),
+                    retainedBuildContext.FullName, CancellationToken).ConfigureAwait(false);
+            }
+        }
     }
 
-    private async Task WriteBuildContextAsync(ContainerResource container)
+    // Merge into shared output rather than replacing it. Unlike an ordinary recursive copy,
+    // preserve links without traversing cycles and relocate context-local absolute targets.
+    private void CopyBuildContext(DirectoryInfo source, DirectoryInfo destination, string sourceRoot, string destinationRoot)
+    {
+        CancellationToken.ThrowIfCancellationRequested();
+        destination.Create();
+
+        foreach (var entry in source.EnumerateFileSystemInfos())
+        {
+            CancellationToken.ThrowIfCancellationRequested();
+            var destinationPath = Path.Combine(destination.FullName, entry.Name);
+            var existing = new FileInfo(destinationPath);
+            if (existing.LinkTarget is not null)
+            {
+                // Do not follow an existing output link when overwriting a retained input.
+                if ((existing.Attributes & FileAttributes.Directory) != 0)
+                {
+                    Directory.Delete(destinationPath);
+                }
+                else
+                {
+                    File.Delete(destinationPath);
+                }
+            }
+
+            if (entry.LinkTarget is { } linkTarget)
+            {
+                // Preserve links without traversing directory cycles. Rebase context-local
+                // targets while retaining references to files outside the context.
+                var target = Path.GetFullPath(linkTarget, source.FullName);
+                var retainedTarget = GetRetainedBuildPath(target, sourceRoot, destinationRoot);
+                if (!Path.IsPathRooted(linkTarget) && retainedTarget != target)
+                {
+                    retainedTarget = Path.GetRelativePath(destination.FullName, retainedTarget);
+                }
+
+                if (entry is DirectoryInfo)
+                {
+                    Directory.CreateSymbolicLink(destinationPath, retainedTarget);
+                }
+                else
+                {
+                    File.Delete(destinationPath);
+                    File.CreateSymbolicLink(destinationPath, retainedTarget);
+                }
+            }
+            else if (entry is DirectoryInfo directory)
+            {
+                CopyBuildContext(directory, new DirectoryInfo(destinationPath), sourceRoot, destinationRoot);
+            }
+            else
+            {
+                File.Copy(entry.FullName, destinationPath, overwrite: true);
+            }
+        }
+    }
+
+    // Map paths inside the temporary context to the same location in the retained directory.
+    // Leave paths outside the context unchanged.
+    private static string GetRetainedBuildPath(string path, string sourceRoot, string destinationRoot)
+    {
+        var relative = Path.GetRelativePath(sourceRoot, path);
+        return Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            ? path
+            : Path.Combine(destinationRoot, relative);
+    }
+
+    private async Task<string?> WriteBuildContextAsync(ContainerResource container, DirectoryInfo? retainedBuildContext)
     {
         if (container.TryGetAnnotationsOfType<DockerfileBuildAnnotation>(out var annotations) && annotations.Single() is { } annotation)
         {
@@ -402,9 +497,13 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 dockerfilePath = resourceDockerfilePath;
             }
 
+            string ExportPath(string path) => retainedBuildContext is null
+                ? path
+                : GetRetainedBuildPath(path, annotation.ContextPath, retainedBuildContext.FullName);
+
             Writer.WriteStartObject("build");
-            Writer.WriteString("context", GetManifestRelativePath(annotation.ContextPath));
-            Writer.WriteString("dockerfile", GetManifestRelativePath(dockerfilePath));
+            Writer.WriteString("context", GetManifestRelativePath(retainedBuildContext?.FullName ?? annotation.ContextPath));
+            Writer.WriteString("dockerfile", GetManifestRelativePath(ExportPath(dockerfilePath)));
 
             if (annotation.Stage is { } stage)
             {
@@ -447,7 +546,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 {
                     var valueString = value switch
                     {
-                        FileInfo fileValue => GetManifestRelativePath(fileValue.FullName),
+                        FileInfo fileValue => GetManifestRelativePath(ExportPath(fileValue.FullName)),
                         string stringValue => stringValue,
                         IManifestExpressionProvider manifestExpression => GetManifestExpression(manifestExpression, manifestExpression.ValueExpression),
                         bool boolValue => boolValue ? "true" : "false",
@@ -477,7 +576,10 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
             }
 
             Writer.WriteEndObject();
+            return dockerfilePath;
         }
+
+        return null;
     }
 
     /// <summary>

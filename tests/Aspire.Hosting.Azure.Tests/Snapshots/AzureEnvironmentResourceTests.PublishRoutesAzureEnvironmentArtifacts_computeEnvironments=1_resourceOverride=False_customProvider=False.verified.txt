@@ -1,0 +1,6 @@
+﻿[
+  global/apps-acr/apps-acr.bicep,
+  global/apps/apps.bicep,
+  global/main.bicep,
+  global/storage/storage.bicep
+]

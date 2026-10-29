@@ -1,0 +1,4 @@
+﻿[
+  provider-dev/app.bicep,
+  provider-dev/bicepconfig.json
+]

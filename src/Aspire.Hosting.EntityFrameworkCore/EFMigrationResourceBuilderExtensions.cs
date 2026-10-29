@@ -327,21 +327,51 @@ public static class EFMigrationResourceBuilderExtensions
     {
         var migrationResource = builder.Resource;
 
-        // Use the pipeline output directory as the Docker build context. The generate step writes
-        // the bundle to '<outputDir>/efmigrations/<bundleFile>', and the generated Dockerfile COPYs
-        // that same file into the image.
-        var buildContext = Path.Combine(ResolvePipelineOutputDirectory(builder), "efmigrations");
+        // Keep image inputs independent of the final publish destination, which is resolved
+        // when generation runs. The filesystem service owns cleanup after the image build.
+        var buildContext = builder.ApplicationBuilder.FileSystemService.TempDirectory.CreateTempSubdirectory("aspire-ef-migrations-");
 
         // WithDockerfileFactory requires the resource to already have a container image annotation
         // (so the image name/tag can be established). The EF migration resource normally has none,
         // so seed one with the resource name as the image.
         builder.WithImage(migrationResource.Name);
-        builder.WithDockerfileFactory(buildContext, _ => Task.FromResult(GenerateDockerfile(migrationResource)));
+        builder.WithDockerfileFactory(buildContext.Path, _ => Task.FromResult(GenerateDockerfile(migrationResource)));
+        // When the resource still uses this workspace, retain its inputs in published output
+        // so manifest consumers can use them after the AppHost exits.
+        builder.WithManifestPublishingCallback(context =>
+        {
+            if (migrationResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var annotation) && annotation.ContextPath == buildContext.Path)
+            {
+                var outputService = context.ExecutionContext.Services.GetRequiredService<IPipelineOutputService>();
+                return context.WriteContainerAsync(migrationResource, new DirectoryInfo(Path.Combine(outputService.GetOutputDirectory(), "efmigrations")));
+            }
+
+            return context.WriteContainerAsync(migrationResource);
+        });
 
         // WithDockerfileFactory replaces any existing PipelineStepAnnotation on the resource with
         // its build/push annotation (via EnsureBuildAndPushPipelineAnnotations' Replace mode). That
         // wipes the migration step factory registered by AddEFMigrationsCore, so re-register it.
-        builder.WithPipelineStepFactory(EFResourceBuilderExtensions.CreateMigrationPipelineStep);
+        builder.WithPipelineStepFactory(context => EFResourceBuilderExtensions.CreateMigrationPipelineStep(context, GenerateBundleAsync));
+
+        async Task<EFOperationResult> GenerateBundleAsync(EFCoreOperationExecutor executor, string outputDirectory)
+        {
+            var fileName = migrationResource.GetBundleFileName();
+            var outputPath = Path.Combine(outputDirectory, fileName);
+            var bundlePath = Path.Combine(buildContext.Path, fileName);
+            var result = await executor.GenerateMigrationBundleAsync(
+                bundlePath,
+                migrationResource.BundleTargetRuntime,
+                migrationResource.BundleSelfContained).ConfigureAwait(false);
+
+            // Retain the published executable without making its destination a build input.
+            if (result.Success && bundlePath != outputPath)
+            {
+                File.Copy(bundlePath, outputPath, overwrite: true);
+            }
+
+            return result;
+        }
 
         // Once the application model is finalized we know which IResourceWithConnectionString
         // dependencies the user declared via WithReference or WaitFor.
@@ -362,20 +392,6 @@ public static class EFMigrationResourceBuilderExtensions
 
             return Task.CompletedTask;
         });
-    }
-
-    // Resolves the pipeline output directory the same way PipelineOutputService does, so the
-    // Docker build context captured at configuration time matches the path the generate step
-    // uses at execution time (via IPipelineOutputService.GetOutputDirectory()).
-    private static string ResolvePipelineOutputDirectory(IResourceBuilder<EFMigrationResource> builder)
-    {
-        var configured = builder.ApplicationBuilder.Configuration["Pipeline:OutputPath"];
-        if (!string.IsNullOrWhiteSpace(configured))
-        {
-            return Path.GetFullPath(configured);
-        }
-
-        return Path.Combine(builder.ApplicationBuilder.AppHostDirectory, "aspire-output");
     }
 
     private static IResourceWithConnectionString GetSingleConnectionStringResource(EFMigrationResource migrationResource)
@@ -543,7 +559,7 @@ public static class EFMigrationResourceBuilderExtensions
             .PortableName;
 
         var baseImage = ResolveBaseImage(migrationResource);
-        var bundleFileName = EFResourceBuilderExtensions.GetBundleFileName(migrationResource);
+        var bundleFileName = migrationResource.GetBundleFileName();
         var isWindows = IsWindowsRuntime(migrationResource.BundleTargetRuntime);
 
         // The bundle is invoked with `--connection <env-ref>` so the EF Core migration tooling

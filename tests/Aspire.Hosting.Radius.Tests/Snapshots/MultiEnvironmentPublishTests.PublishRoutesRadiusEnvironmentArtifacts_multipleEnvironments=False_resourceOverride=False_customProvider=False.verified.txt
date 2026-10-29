@@ -1,0 +1,4 @@
+﻿[
+  global/app.bicep,
+  global/bicepconfig.json
+]
