@@ -305,8 +305,14 @@ public class DistributedApplicationTests
         await app.StopAsync(token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
-    [Fact]
-    public async Task BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation()
+    // Diagnostic matrix: the cancelled shared-token row is deliberately red.
+    // Compare the actual host's shutdown with and without a completed startup's token.
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation(bool reuseStartupTokenForShutdown, bool cancelStartupAfterStart)
     {
         const string testName = "before-start-event-explicit-start";
         using var testProgram = CreateTestProgram(testName, randomizePorts: false);
@@ -342,15 +348,17 @@ public class DistributedApplicationTests
 
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestTimeout);
         var token = cts.Token;
+        var elapsed = Stopwatch.StartNew();
+        using var startupCancellation = token.Register(() =>
+            _testOutputHelper.WriteLine($"Lifecycle experiment: startup token cancelled at {elapsed.Elapsed}; reuse={reuseStartupTokenForShutdown}, cancelAfterStart={cancelStartupAfterStart}"));
 
-        // Start app in background - it won't complete because of explicit start resource
-        _ = app.StartAsync(token);
+        var startTask = app.StartAsync(token);
 
         var normalResourceName = $"{testName}-serviceb";
         var explicitStartResourceName = $"{testName}-servicea";
 
         // Wait for normal resource to be running
-        await rns.WaitForResourceAsync(normalResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        var normalResource = await rns.WaitForResourceAsync(normalResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
 
         // Wait for explicit start resource to be NotStarted
         await rns.WaitForResourceAsync(explicitStartResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
@@ -362,7 +370,40 @@ public class DistributedApplicationTests
         Assert.Equal(1, normalEventCount);
         Assert.Equal(0, explicitStartEventCount);
 
-        await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        _testOutputHelper.WriteLine($"Lifecycle experiment: assertions complete at {elapsed.Elapsed}; startup status={startTask.Status}");
+        await startTask.DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        Assert.True(startTask.IsCompletedSuccessfully);
+
+        var servicePid = Assert.IsType<int>(GetResourcePropertyValue(normalResource, KnownProperties.Executable.Pid));
+        using var serviceProcess = Process.GetProcessById(servicePid);
+        Assert.False(serviceProcess.HasExited);
+        var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+        Assert.False(lifetime.ApplicationStopped.IsCancellationRequested);
+
+        // Expire the completed startup's budget without introducing a delay. The shared-token
+        // control must surface its cancellation; the phase-owned case must really stop the host.
+        if (cancelStartupAfterStart)
+        {
+            cts.Cancel();
+        }
+
+        using var shutdownCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestTimeout);
+        var shutdownToken = reuseStartupTokenForShutdown ? token : shutdownCts.Token;
+        var shutdownStarted = elapsed.Elapsed;
+        _testOutputHelper.WriteLine($"Lifecycle experiment: shutdown starts at {shutdownStarted}; startup cancelled={token.IsCancellationRequested}; shutdown cancelled={shutdownToken.IsCancellationRequested}; reuse={reuseStartupTokenForShutdown}, cancelAfterStart={cancelStartupAfterStart}");
+        var shutdownTask = app.StopAsync(shutdownToken);
+        try
+        {
+            await shutdownTask.DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+            await serviceProcess.WaitForExitAsync(shutdownToken).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+            Assert.True(serviceProcess.HasExited);
+            Assert.True(lifetime.ApplicationStopped.IsCancellationRequested);
+            _testOutputHelper.WriteLine($"Lifecycle experiment: host stopped and ServiceB pid={servicePid} exited; shutdown elapsed={elapsed.Elapsed - shutdownStarted}");
+        }
+        finally
+        {
+            _testOutputHelper.WriteLine($"Lifecycle experiment: shutdown observation ends at {elapsed.Elapsed}; shutdown elapsed={elapsed.Elapsed - shutdownStarted}; startup cancelled={token.IsCancellationRequested}; shutdown cancelled={shutdownToken.IsCancellationRequested}; shutdown task={shutdownTask.Status}; host stopped={lifetime.ApplicationStopped.IsCancellationRequested}");
+        }
     }
 
     [Fact]

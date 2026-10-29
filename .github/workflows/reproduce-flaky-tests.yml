@@ -28,7 +28,7 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation" --report-trx'
+  TEST_FILTER: '--filter-method "*.BeforeResourceStartedEvent_*" --report-trx'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
