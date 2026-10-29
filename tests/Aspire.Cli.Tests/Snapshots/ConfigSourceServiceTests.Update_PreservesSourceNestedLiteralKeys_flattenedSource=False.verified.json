@@ -4,6 +4,14 @@
     "path": "teams/platform.json",
     "appliedVersion": "version-2"
   },
+  "skillSources": {
+    "team": {
+      "repository": "example/remote",
+      "custom": {
+        "setting": "remote"
+      }
+    }
+  },
   "profiles": {
     "dev:local": {
       "environmentVariables": {
@@ -13,13 +21,5 @@
   },
   "custom": {
     "setting": "root-flat"
-  },
-  "skillSources": {
-    "team": {
-      "repository": "example/remote",
-      "custom": {
-        "setting": "remote"
-      }
-    }
   }
 }
