@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
@@ -24,6 +25,56 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 [UseCulture("en-US")]
 public class ResourceDetailsTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(DashboardConnectionState.Connected, DashboardConnectionState.Disconnected)]
+    [InlineData(DashboardConnectionState.Disconnected, DashboardConnectionState.Connected)]
+    public async Task ActionsMenu_ConnectionChanges_RefreshesUnchangedResource(
+        DashboardConnectionState initialState, DashboardConnectionState nextState)
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        ResourceSetupHelpers.SetupResourceDetails(this);
+        JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true).SetVoidResult();
+        var command = new CommandViewModel("restart", CommandViewModelState.Enabled,
+            displayName: "Restart", displayDescription: "Restart the resource", confirmationMessage: string.Empty,
+            argumentInputs: [], isHighlighted: false, iconName: string.Empty, iconVariant: IconVariant.Regular);
+        var terminal = TerminalSetupHelpers.CreateTerminalResource("app1");
+        var resource = ModelTestHelpers.CreateResource("app1", properties: terminal.Properties.ToDictionary(), commands: [command]);
+        var client = new TestDashboardClient(isEnabled: true, initialResources: [resource],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        client.SetConnectionState(initialState);
+        Services.AddSingleton<IDashboardClient>(client);
+        var cut = Render<CascadingValue<DashboardConnectionState>>(parameters => parameters
+            .Add(p => p.Name, nameof(DashboardConnectionState))
+            .Add(p => p.Value, initialState)
+            .AddChildContent<ResourceDetails>(parameters => parameters
+                .Add(p => p.Resource, resource)
+                .Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new(resource.Name, resource)]))
+                .Add(p => p.IsCommandExecuting, (_, _) => false)));
+        await cut.Find(".resource-details-actions").ClickAsync(new MouseEventArgs());
+        VerifyMenu(initialState);
+
+        var details = cut.FindComponent<ResourceDetails>().Instance;
+        await cut.InvokeAsync(() => client.SetConnectionState(nextState));
+        cut.Render(parameters => parameters
+            .Add(p => p.Name, nameof(DashboardConnectionState))
+            .Add(p => p.Value, nextState)
+            .AddChildContent<ResourceDetails>(parameters => parameters
+                .Add(p => p.Resource, resource)
+                .Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new(resource.Name, resource)]))
+                .Add(p => p.IsCommandExecuting, (_, _) => false)));
+        cut.WaitForAssertion(() => VerifyMenu(nextState));
+        Assert.Same(details, cut.FindComponent<ResourceDetails>().Instance);
+        Assert.Same(resource, details.Resource);
+
+        void VerifyMenu(DashboardConnectionState state)
+        {
+            var items = cut.FindComponent<AspireMenu>().Instance.Items;
+            Assert.Equal(state != DashboardConnectionState.Connected, Assert.Single(items, item => item.Text == "Restart").IsDisabled);
+            Assert.Equal(state == DashboardConnectionState.Connected ? 1 : 0, items.Count(item => item.Text == TerminalStrings.TerminalTitle));
+            Assert.NotNull(Assert.Single(items, item => item.Text == Aspire.Dashboard.Resources.Resources.ResourceActionConsoleLogsText).OnClick);
+        }
+    }
+
     [Fact]
     public async Task ClickMaskAllSwitch_UpdatedResource_MaskChanged()
     {

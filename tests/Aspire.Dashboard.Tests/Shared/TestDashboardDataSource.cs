@@ -33,7 +33,7 @@ internal static class TestDashboardDataSource
         ITelemetryRepository telemetryRepository,
         IResourceRepository resourceRepository) : IRepositoryFactory
     {
-        public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database) => telemetryRepository;
+        public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database, bool enableLivePeerResolution) => telemetryRepository;
         public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) => resourceRepository;
     }
 }

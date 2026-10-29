@@ -516,7 +516,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                                                               KnownConfigNames.Legacy.DashboardFrontendBrowserToken, fallbackOnEmpty: true) is not { } browserToken)
                     {
                         // No browser token was specified in configuration, so generate one.
-                        browserToken = TokenGenerator.GenerateToken();
+                        // A persistent dashboard keeps its login session across AppHost executions.
+                        _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:BrowserToken", TokenGenerator.GenerateToken);
+                        browserToken = _innerBuilder.Configuration["AppHost:BrowserToken"]!;
                     }
 
                     _innerBuilder.Configuration.AddInMemoryCollection(
@@ -531,7 +533,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                                                                        KnownConfigNames.Legacy.DashboardResourceServiceClientApiKey, fallbackOnEmpty: true);
 
                     // If no API key was specified in configuration, generate one.
-                    apiKey ??= TokenGenerator.GenerateToken();
+                    if (apiKey is null)
+                    {
+                        _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:ResourceService:ApiKey", TokenGenerator.GenerateToken);
+                        apiKey = _innerBuilder.Configuration["AppHost:ResourceService:ApiKey"]!;
+                    }
 
                     _innerBuilder.Configuration.AddInMemoryCollection(
                         new Dictionary<string, string?>
@@ -554,6 +560,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
                 _innerBuilder.Services.AddOptions<TransportOptions>().ValidateOnStart().PostConfigure(MapTransportOptionsFromCustomKeys);
                 _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<TransportOptions>, TransportOptionsValidator>());
+                _innerBuilder.Services.AddSingleton<DashboardRunState>();
                 _innerBuilder.Services.AddSingleton<DashboardServiceHost>();
                 _innerBuilder.Services.AddHostedService(sp => sp.GetRequiredService<DashboardServiceHost>());
                 _innerBuilder.Services.AddSingleton<IDashboardEndpointProvider, HostDashboardEndpointProvider>();

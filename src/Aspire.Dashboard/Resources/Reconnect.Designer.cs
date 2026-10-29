@@ -122,5 +122,23 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceServiceReconnectUnsupportedText", resourceCulture);
             }
         }
+        /// <summary>
+        ///   Looks up a localized string similar to AppHost offline.
+        /// </summary>
+        public static string ResourceServiceOfflineTitle {
+            get {
+                return ResourceManager.GetString("ResourceServiceOfflineTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Reconnecting automatically. You can keep browsing captured resources, logs, traces, and metrics. Resource commands will be available when the AppHost reconnects..
+        /// </summary>
+        public static string ResourceServiceOfflineDescription {
+            get {
+                return ResourceManager.GetString("ResourceServiceOfflineDescription", resourceCulture);
+            }
+        }
+
     }
 }

@@ -5,6 +5,7 @@ namespace Aspire.Dashboard.ServiceClient;
 
 internal sealed class DashboardDataSourceInitializer(
     DashboardDataSourcePool dataSourcePool,
+    DashboardClient? dashboardClient,
     IHostApplicationLifetime applicationLifetime,
     ILogger<DashboardDataSourceInitializer> logger) : IHostedService, IDisposable
 {
@@ -13,6 +14,11 @@ internal sealed class DashboardDataSourceInitializer(
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await dataSourcePool.InitializeAsync(cancellationToken).ConfigureAwait(false);
+        // Connect without waiting for a browser. AppHost startup waits for the dashboard to acknowledge its run.
+        if (dashboardClient is { IsEnabled: true })
+        {
+            _ = dashboardClient.WhenConnected;
+        }
 
         // Publishing from ApplicationStarted ensures a failed Kestrel bind doesn't leave an empty attempted run
         // in history. It is safe to publish this late because the current run is created from in-memory metadata;

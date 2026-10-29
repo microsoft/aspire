@@ -201,7 +201,7 @@ public sealed class EndpointAnnotation : IResourceAnnotation
         // It also depends on what the EndpointAnnotation is applied to.
         // In the Container case the TargetPort is the port that the process listens on inside the container,
         //  and the Port is the host interface port, so it is fine for them to be different.
-        get => _port ?? (IsProxied || _portSetToNull ? null : _targetPort);
+        get => GetPort(IsProxied);
         set
         {
             _port = value;
@@ -210,6 +210,11 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     }
 
     internal int? SpecifiedPort => _port;
+
+    // Port planning must account for the effective proxy policy without mutating the model.
+    internal int? GetPort(bool isProxied) => _port ?? (isProxied || _portSetToNull ? null : _targetPort);
+
+    internal int? GetTargetPort(bool isProxied) => _targetPort ?? (isProxied || _targetPortSetToNull ? null : _port);
 
     // For most cases "port==0" is equivalent to "port is unspecified". Both should be treated as "port should be allocated dynamically".
     internal static int? NormalizePort(int? port) => port is 0 ? null : port;
@@ -223,7 +228,7 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     public int? TargetPort
     {
         // See comment on the Port setter, as this is the reciprocal logic
-        get => _targetPort ?? (IsProxied || _targetPortSetToNull ? null : _port);
+        get => GetTargetPort(IsProxied);
         set
         {
             _targetPort = value;

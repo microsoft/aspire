@@ -113,13 +113,13 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         var databasePool = app.Services.GetRequiredService<DashboardDataSourcePool>();
         await databasePool.InitializeAsync(CancellationToken.None);
         var currentRun = app.Services.GetRequiredService<IDashboardRunStore>().GetRuns().Single(run => run.IsCurrent);
-        var telemetryRepository = Assert.IsType<SqliteTelemetryRepository>(app.Services.GetRequiredService<ITelemetryRepository>());
+        var telemetryRepository = Assert.IsType<SqliteTelemetryRepository>(app.Services.GetRequiredService<DashboardDataSourcePool>().Current.TelemetryRepository);
 
         Assert.Equal(currentRun.DatabasePath, databasePool.Current.Database.DatabasePath);
         Assert.False(databasePool.Current.Database.IsReadOnly);
         Assert.Same(databasePool.Current.Database.ActivitySource, telemetryRepository.SqlActivitySource);
         Assert.Same(databasePool.Current.TelemetryRepository, telemetryRepository);
-        Assert.Same(databasePool.Current.ResourceRepository, app.Services.GetRequiredService<IResourceRepository>());
+        Assert.Same(app.Services.GetRequiredService<DashboardClient>(), app.Services.GetRequiredService<IResourceRepository>());
         Assert.Null(app.Services.GetService<DashboardSqliteDatabase>());
     }
 

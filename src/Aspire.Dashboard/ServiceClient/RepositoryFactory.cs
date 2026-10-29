@@ -15,14 +15,15 @@ namespace Aspire.Dashboard.ServiceClient;
 // Constructor injection would create a cycle through ResourceOutgoingPeerResolver and IResourceRepository.
 internal sealed class RepositoryFactory(IServiceProvider serviceProvider) : IRepositoryFactory
 {
-    public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database) =>
+    public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database, bool enableLivePeerResolution) =>
         new SqliteTelemetryRepository(
             database,
             serviceProvider.GetRequiredService<ILoggerFactory>(),
             serviceProvider.GetRequiredService<IOptions<DashboardOptions>>(),
             serviceProvider.GetRequiredService<PauseManager>(),
             serviceProvider.GetRequiredService<TimeProvider>(),
-            serviceProvider.GetServices<IOutgoingPeerResolver>());
+            serviceProvider.GetServices<IOutgoingPeerResolver>(),
+            enableLivePeerResolution);
 
     public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) =>
         new SqliteResourceRepository(

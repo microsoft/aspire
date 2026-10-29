@@ -84,7 +84,8 @@ suite('Aspire Node Functions debugger E2E', function () {
 
 builder.Build().Run();`);
         assert.notStrictEqual(appHostSource, withoutDirectives, 'Expected the generated AppHost run statement.');
-        writeFileWithRetry(appHostSourcePath, appHostSource);
+        // The converted project uses the base .NET SDK, so keep its Aspire namespace explicit.
+        writeFileWithRetry(appHostSourcePath, `using Aspire.Hosting;\n\n${appHostSource}`);
         fs.rmSync(generatedAppHostPath);
         // Restore before launch so the first build evaluation imports the package's
         // build assets, including the Aspire.Hosting global using, without relying on C# tooling.

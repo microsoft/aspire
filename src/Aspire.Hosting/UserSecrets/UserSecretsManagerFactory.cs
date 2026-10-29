@@ -140,8 +140,9 @@ internal sealed class UserSecretsManagerFactory
         public void GetOrSetSecret(IConfigurationManager configuration, string name, Func<string> valueGenerator)
         {
             var existingValue = configuration[name];
-            if (existingValue is null)
+            if (string.IsNullOrEmpty(existingValue))
             {
+                // An empty saved token must not turn an authenticated dashboard into an unsecured one.
                 var value = valueGenerator();
                 configuration.AddInMemoryCollection(
                     new Dictionary<string, string?>

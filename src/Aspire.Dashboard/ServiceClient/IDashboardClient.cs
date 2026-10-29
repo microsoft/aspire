@@ -62,6 +62,9 @@ public interface IDashboardClient : IResourceRepository, IAsyncDisposable
     /// </remarks>
     string ApplicationName { get; }
 
+    /// <summary>Gets the currently attached AppHost run identity.</summary>
+    string AppHostRunId { get; }
+
     /// <summary>
     /// Gets the minimum dashboard version required by the connected AppHost,
     /// or <see langword="null"/> if not yet known.
@@ -74,7 +77,7 @@ public interface IDashboardClient : IResourceRepository, IAsyncDisposable
 
     Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken);
 
-    Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken);
+    Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, string appHostRunId, CancellationToken cancellationToken);
 
     /// <summary>
     /// Opens a duplex byte stream to an AppHost-owned terminal.
@@ -106,6 +109,9 @@ public interface IDashboardClient : IResourceRepository, IAsyncDisposable
 /// </summary>
 public sealed class ExecuteResourceCommandOptions
 {
+    // UI commands capture this before confirmation. Immediate callers may target the current attachment.
+    public string? ExpectedAppHostRunId { get; init; }
+
     /// <summary>
     /// Gets the invocation arguments supplied to the command, keyed by argument name.
     /// </summary>

@@ -9,11 +9,13 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 using Aspire.Dashboard.Utils;
 using Aspire.Shared;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Data.Sqlite;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -21,6 +23,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Proto.Logs.V1;
+using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
@@ -28,6 +31,507 @@ namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task Rollover_PublicationFails_RetryPublishesSameRunAndNotifiesReaders()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        using var store = CreateRunStore(options, new FixedTimeProvider(DateTimeOffset.UnixEpoch));
+        using var pool = new DashboardDataSourcePool(store, CreateRepositoryFactory(options));
+        await pool.InitializeAsync(CancellationToken.None);
+        pool.PublishRun();
+        await pool.StartAppHostRunAsync("first", CancellationToken.None);
+        var expectedRunId = store.GetCurrentRun().StartedAtUtc.AddMilliseconds(1).ToString("yyyyMMddTHHmmssfffZ");
+        var directory = Path.Combine(workspace.Path, "runs", expectedRunId);
+        // Publication writes run.json.tmp before replacing run.json. A directory at that path
+        // deterministically fails the write after the replacement database has initialized.
+        var publicationBlocker = Directory.CreateDirectory(Path.Combine(directory, "run.json.tmp"));
+        var notifications = 0;
+        pool.CurrentRunChanged += () => notifications++;
+        var failure = await Record.ExceptionAsync(() => pool.StartAppHostRunAsync("second", CancellationToken.None));
+        Assert.True(failure is IOException or UnauthorizedAccessException);
+        Assert.Equal(expectedRunId, store.RunId);
+        Assert.Equal(0, notifications);
+        publicationBlocker.Delete();
+
+        await pool.StartAppHostRunAsync("second", CancellationToken.None);
+
+        Assert.Equal(expectedRunId, store.RunId);
+        Assert.Equal(1, notifications);
+        Assert.True(File.Exists(Path.Combine(directory, "run.json")));
+        using var source = CreateDataSource(store, pool);
+        Assert.Equal(expectedRunId, source.SelectedRun.RunId);
+        Assert.False(source.IsReadOnly);
+        await pool.PruningTask;
+    }
+
+    [Fact]
+    public async Task SelectExplicitRun_PausedAcrossRollover_PreservesRequestedHistory()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        using var store = CreateRunStore(options);
+        using var pool = new DashboardDataSourcePool(store, CreateRepositoryFactory(options));
+        await pool.InitializeAsync(CancellationToken.None);
+        pool.PublishRun();
+        await pool.StartAppHostRunAsync("first", CancellationToken.None);
+        var requestedRunId = store.RunId;
+        using var descriptorRead = new ManualResetEventSlim();
+        using var continueSelection = new ManualResetEventSlim();
+        var reads = 0;
+        var selectionStore = new DelegatingDashboardRunStore(store)
+        {
+            AfterGetRunById = () =>
+            {
+                if (Interlocked.Increment(ref reads) == 1)
+                {
+                    descriptorRead.Set();
+                    Assert.True(continueSelection.Wait(TimeSpan.FromSeconds(30)));
+                }
+            }
+        };
+        using var source = CreateDataSource(selectionStore, pool);
+        var selection = Task.Run(() => source.SelectRun(requestedRunId));
+        try
+        {
+            Assert.True(descriptorRead.Wait(TimeSpan.FromSeconds(30)));
+            await pool.StartAppHostRunAsync("second", CancellationToken.None);
+        }
+        finally
+        {
+            continueSelection.Set();
+        }
+        await selection;
+
+        Assert.Equal(requestedRunId, source.SelectedRun.RunId);
+        Assert.True(source.IsReadOnly);
+        Assert.True(source.TelemetryRepository.IsReadOnly);
+        await pool.PruningTask;
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Rollover_RetainedReader_FreezesPeerResolutionAcrossTopologyChanges(bool callbackQueued, bool readLate)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        using var store = CreateRunStore(options);
+        var peerName = "destination-a";
+        using var resolver = new TestOutgoingPeerResolver(_ =>
+            (peerName, Aspire.Tests.Shared.DashboardModel.ModelTestHelpers.CreateResource(resourceName: peerName)));
+        using var services = new ServiceCollection()
+            .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
+            .AddSingleton(options)
+            .AddSingleton<PauseManager>()
+            .AddSingleton(TimeProvider.System)
+            .AddSingleton<IKnownPropertyLookup, MockKnownPropertyLookup>()
+            .AddSingleton<IOutgoingPeerResolver>(resolver)
+            .BuildServiceProvider();
+        using var pool = new DashboardDataSourcePool(store, new RepositoryFactory(services));
+        await pool.InitializeAsync(CancellationToken.None);
+        pool.PublishRun();
+        await pool.StartAppHostRunAsync("first", CancellationToken.None);
+        using var reader = pool.RetainCurrent(out var original, out _);
+        if (readLate)
+        {
+            await pool.StartAppHostRunAsync("second", CancellationToken.None);
+            _ = pool.Current.TelemetryRepository;
+            Assert.Equal(1, resolver.SubscriptionCount);
+            Assert.Empty(original.TelemetryRepository.GetResources());
+            Assert.Equal(1, resolver.SubscriptionCount);
+            await pool.PruningTask;
+            return;
+        }
+        var oldRepository = original.TelemetryRepository;
+        var payload = new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: DateTime.UnixEpoch,
+                                endTime: DateTime.UnixEpoch.AddSeconds(1), kind: Span.Types.SpanKind.Client,
+                                attributes: [KeyValuePair.Create(OtlpSpan.PeerServiceAttributeKey, "destination")])
+                        }
+                    }
+                }
+            }
+        };
+        await ((ITelemetryRepositoryWriter)oldRepository).AddTracesAsync(new AddContext(), payload);
+        Assert.Equal("destination-a", Assert.Single(oldRepository.GetTrace(GetHexId("1"))!.Spans).UninstrumentedPeer!.ResourceName);
+
+        var heldWrite = callbackQueued ? await original.Database.WriteLock.LockAsync() : null;
+        var pendingCallback = callbackQueued ? resolver.InvokePeerChanges() : Task.CompletedTask;
+        Task rollover;
+        try
+        {
+            rollover = pool.StartAppHostRunAsync("second", CancellationToken.None);
+            Assert.Equal(0, resolver.SubscriptionCount);
+            if (callbackQueued)
+            {
+                Assert.False(rollover.IsCompleted);
+                peerName = "destination-b";
+            }
+        }
+        finally
+        {
+            heldWrite?.Dispose();
+        }
+        await pendingCallback;
+        await rollover;
+        peerName = "destination-b";
+        var newRepository = pool.Current.TelemetryRepository;
+        Assert.Equal(1, resolver.SubscriptionCount);
+        await ((ITelemetryRepositoryWriter)newRepository).AddTracesAsync(new AddContext(), payload);
+        await resolver.InvokePeerChanges();
+
+        Assert.Equal("destination-a", Assert.Single(oldRepository.GetTrace(GetHexId("1"))!.Spans).UninstrumentedPeer!.ResourceName);
+        Assert.Equal("destination-b", Assert.Single(newRepository.GetTrace(GetHexId("1"))!.Spans).UninstrumentedPeer!.ResourceName);
+        await pool.PruningTask;
+    }
+
+    [Fact]
+    public async Task SelectCurrentRun_PausedAcrossRollover_UsesMatchingDescriptorAndRepositories()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        using var store = CreateRunStore(options);
+        using var pool = new DashboardDataSourcePool(store, CreateRepositoryFactory(options));
+        await pool.InitializeAsync(CancellationToken.None);
+        pool.PublishRun();
+        await pool.StartAppHostRunAsync("first", CancellationToken.None);
+        using var descriptorRead = new ManualResetEventSlim();
+        using var continueSelection = new ManualResetEventSlim();
+        var callbackCount = 0;
+        var selectionStore = new DelegatingDashboardRunStore(store)
+        {
+            AfterGetCurrentRun = () =>
+            {
+                if (Interlocked.Increment(ref callbackCount) == 1)
+                {
+                    descriptorRead.Set();
+                    Assert.True(continueSelection.Wait(TimeSpan.FromSeconds(30)));
+                }
+            }
+        };
+        var selection = Task.Run(() => new DashboardDataSource(selectionStore, NullLogger<DashboardDataSource>.Instance, pool));
+        try
+        {
+            Assert.True(descriptorRead.Wait(TimeSpan.FromSeconds(30)));
+            await pool.StartAppHostRunAsync("second", CancellationToken.None);
+        }
+        finally
+        {
+            continueSelection.Set();
+        }
+        using var dataSource = await selection;
+        Assert.Equal(store.RunId, dataSource.SelectedRun.RunId);
+        Assert.Equal(pool.Current.Database.DatabasePath, dataSource.SelectedRun.DatabasePath);
+        Assert.Same(pool.Current.TelemetryRepository, dataSource.TelemetryRepository);
+        Assert.Same(pool.Current.ResourceRepository, dataSource.ResourceRepository);
+        await pool.PruningTask;
+    }
+
+    [Fact]
+    public async Task Rollover_RetiredDirectoryRemainsLockedBeforeOwnershipReachesPool()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        using var store = CreateRunStore(options);
+        using var pool = new DashboardDataSourcePool(store, CreateRepositoryFactory(options));
+        await pool.InitializeAsync(CancellationToken.None);
+        pool.PublishRun();
+        await pool.StartAppHostRunAsync("first", CancellationToken.None);
+        using var reader = pool.RetainCurrent(out var current, out var original);
+
+        Assert.True(store.StartAppHostRun("second", out var ownership));
+        Assert.NotNull(ownership);
+        try
+        {
+            // This is the handoff boundary: the store has switched, but the pool has not
+            // attached ownership to the retained database. A competing process must still lose.
+            Assert.Null(TryOpenTestRunLease(original));
+            current.RetainDirectory(ownership);
+            pool.Dispose();
+            Assert.Null(TryOpenTestRunLease(original));
+            reader.Dispose();
+            using var competing = TryOpenTestRunLease(original);
+            Assert.NotNull(competing);
+        }
+        finally
+        {
+            ownership.Dispose();
+        }
+    }
+
+    [Theory]
+    [InlineData("logs")]
+    [InlineData("traces")]
+    [InlineData("metrics")]
+    public async Task ClearQueuedAcrossRollover_DoesNotInvokeReplacementRunWriter(string signal)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        using var store = CreateRunStore(options);
+        using var pool = new DashboardDataSourcePool(store, CreateRepositoryFactory(options));
+        using var dataSource = CreateDataSource(store, pool);
+        pool.PublishRun();
+        await pool.StartAppHostRunAsync("first", CancellationToken.None);
+        var origin = dataSource.SelectedRun.RunId;
+        var invoked = false;
+        var gate = await pool.RunWriteLock.LockAsync();
+        Task rollover;
+        Task<bool> clear;
+        try
+        {
+            rollover = pool.StartAppHostRunAsync("second", CancellationToken.None);
+            clear = dataSource.TryMutateCurrentRunAsync(origin, (writer, _) =>
+            {
+                invoked = true;
+                return signal switch
+                {
+                    "logs" => writer.ClearStructuredLogsAsync(),
+                    "traces" => writer.ClearTracesAsync(),
+                    "metrics" => writer.ClearMetricsAsync(),
+                    _ => throw new InvalidOperationException()
+                };
+            });
+        }
+        finally
+        {
+            gate.Dispose();
+        }
+        await rollover;
+        Assert.False(await clear);
+        Assert.False(invoked);
+        Assert.NotEqual(origin, store.RunId);
+        Assert.NotSame(dataSource.TelemetryRepository, pool.Current.TelemetryRepository);
+        await pool.PruningTask;
+    }
+
+    [Fact]
+    public async Task TemporaryRun_ShutdownWaitsForLastRequestBeforeDeletingDatabase()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace, persistenceMode: DashboardPersistenceMode.None);
+        using var store = CreateRunStore(options);
+        using var pool = new DashboardDataSourcePool(store, CreateRepositoryFactory(options));
+        await pool.InitializeAsync(CancellationToken.None);
+        var retention = pool.RetainCurrent(out var current, out _);
+        var directory = store.CurrentWorkingDirectory;
+        _ = current.ResourceRepository;
+        try
+        {
+            pool.Dispose();
+            store.Dispose();
+
+            Assert.True(Directory.Exists(directory));
+            Assert.Empty(current.ResourceRepository.GetResources());
+        }
+        finally
+        {
+            retention.Dispose();
+        }
+
+        Assert.False(Directory.Exists(directory));
+    }
+
+    [Fact]
+    public async Task AppHostRunChange_RollsStorageAndPreservesHistory()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        using var store = CreateRunStore(options, new FixedTimeProvider(DateTimeOffset.Parse("2026-10-18T12:00:00Z")));
+        using var pool = new DashboardDataSourcePool(store, CreateRepositoryFactory(options));
+        await pool.InitializeAsync(CancellationToken.None);
+        pool.PublishRun();
+        var writer = new CurrentResourceWriter(pool);
+        await pool.StartAppHostRunAsync("apphost-a", CancellationToken.None);
+        var firstRun = store.GetCurrentRun();
+        await writer.ReplaceResourcesAsync([new Resource { Name = "first", DisplayName = "first", ResourceType = "Executable", CreatedAt = Timestamp.FromDateTime(DateTime.UtcNow) }]);
+
+        await pool.StartAppHostRunAsync("apphost-a", CancellationToken.None);
+        Assert.Equal(firstRun.RunId, store.RunId);
+        Assert.Equal("first", Assert.Single(pool.Current.ResourceRepository.GetResources()).Name);
+
+        await pool.StartAppHostRunAsync("apphost-b", CancellationToken.None);
+        Assert.NotEqual(firstRun.RunId, store.RunId);
+        Assert.Empty(pool.Current.ResourceRepository.GetResources());
+        var historicalRun = store.GetRunById(firstRun.RunId, onlyCompatible: true)!;
+        Assert.False(historicalRun.IsCurrent);
+        Assert.True(historicalRun.CleanShutdown);
+        using (var history = pool.TryAcquire(historicalRun))
+        {
+            Assert.NotNull(history);
+            Assert.Equal("first", Assert.Single(history.ResourceRepository.GetResources()).Name);
+        }
+
+        // Repeated rollovers at the same clock instant must still create distinct databases.
+        await pool.StartAppHostRunAsync("apphost-c", CancellationToken.None);
+        Assert.Equal(3, store.GetRuns().Count);
+        await pool.PruningTask;
+    }
+
+    [Fact]
+    public async Task AppHostRunChange_PrunesUnpinnedRunsAndPreservesPinnedHistory()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        using var store = CreateRunStore(options);
+        using var pool = new DashboardDataSourcePool(store, CreateRepositoryFactory(options));
+        await pool.InitializeAsync(CancellationToken.None);
+        pool.PublishRun();
+        await pool.StartAppHostRunAsync("first", CancellationToken.None);
+        var pinned = store.GetCurrentRun();
+        store.SetRunPinned(pinned, true);
+
+        for (var i = 0; i < DashboardRunStore.MaxRuns + 3; i++)
+        {
+            await pool.StartAppHostRunAsync($"next-{i}", CancellationToken.None);
+        }
+        await pool.PruningTask;
+
+        Assert.False(store.GetCurrentRun().IsPinned);
+        Assert.True(store.GetRunById(pinned.RunId, onlyCompatible: true)!.IsPinned);
+        Assert.Equal(DashboardRunStore.MaxRuns + 1, store.GetRuns().Count);
+        Assert.Equal(DashboardRunStore.MaxRuns + 1, Directory.GetDirectories(Path.Combine(workspace.Path, "runs")).Length);
+    }
+
+    [Fact]
+    public async Task AppHostRunChange_SelectedHistoryCanBePinnedAfterAnotherRollover()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        using var store = CreateRunStore(options);
+        using var pool = new DashboardDataSourcePool(store, CreateRepositoryFactory(options));
+        await pool.InitializeAsync(CancellationToken.None);
+        pool.PublishRun();
+        await pool.StartAppHostRunAsync("first", CancellationToken.None);
+        var firstRunId = store.RunId;
+        await pool.StartAppHostRunAsync("second", CancellationToken.None);
+        var history = store.GetRunById(firstRunId, onlyCompatible: true)!;
+        using (var lease = pool.TryAcquire(history))
+        {
+            Assert.NotNull(lease);
+            await pool.StartAppHostRunAsync("third", CancellationToken.None);
+            var refreshed = store.GetRunById(firstRunId, onlyCompatible: true)!;
+            Assert.True(refreshed.IsLeased);
+            Assert.True(refreshed.IsSelectable);
+            store.SetRunPinned(history, true);
+            Assert.True(store.GetRunById(firstRunId, onlyCompatible: true)!.IsPinned);
+        }
+        Assert.False(store.GetRunById(firstRunId, onlyCompatible: true)!.IsLeased);
+        await pool.PruningTask;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AppHostRunChange_HistorySharesDirectoryLockWithRetiredCurrentReader(bool closeHistoryFirst)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        using var store = CreateRunStore(options);
+        using var pool = new DashboardDataSourcePool(store, CreateRepositoryFactory(options));
+        await pool.InitializeAsync(CancellationToken.None);
+        pool.PublishRun();
+        await pool.StartAppHostRunAsync("first", CancellationToken.None);
+        using var retainedReader = pool.RetainCurrent(out var current, out _);
+        var runId = store.RunId;
+        await pool.StartAppHostRunAsync("second", CancellationToken.None);
+        var history = store.GetRunById(runId, onlyCompatible: true)!;
+
+        using var historicalReader = pool.TryAcquire(history);
+        Assert.NotNull(historicalReader);
+        Assert.True(historicalReader.Database.IsReadOnly);
+        Assert.NotSame(current.Database, historicalReader.Database);
+        Assert.Equal(current.Database.DatabasePath, historicalReader.Database.DatabasePath);
+        Assert.Empty(historicalReader.ResourceRepository.GetResources());
+        Assert.Null(TryOpenTestRunLease(history));
+
+        if (closeHistoryFirst)
+        {
+            historicalReader.Dispose();
+            Assert.Empty(current.ResourceRepository.GetResources());
+        }
+        else
+        {
+            retainedReader.Dispose();
+            Assert.Empty(historicalReader.ResourceRepository.GetResources());
+        }
+        Assert.True(history.IsLeased);
+        Assert.Null(TryOpenTestRunLease(history));
+
+        retainedReader.Dispose();
+        historicalReader.Dispose();
+        Assert.False(history.IsLeased);
+        using var releasedLock = TryOpenTestRunLease(history);
+        Assert.NotNull(releasedLock);
+        await pool.PruningTask;
+    }
+
+    [Fact]
+    public async Task AppHostRunChange_BackgroundPruningDoesNotBlockAttachmentAndContainsFailures()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        var sink = new TestSink();
+        var logger = new TestLogger<DashboardRunStore>(new TestLoggerFactory(sink, enabled: true));
+        var deleting = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim();
+        var deletionCount = 0;
+        using var store = new DashboardRunStore(options, logger, TimeProvider.System, directory =>
+        {
+            if (Interlocked.Increment(ref deletionCount) == 1)
+            {
+                deleting.TrySetResult(directory);
+                release.Wait();
+                throw new InvalidOperationException("Test deletion failure");
+            }
+            Directory.Delete(directory, recursive: true);
+        });
+        using var pool = new DashboardDataSourcePool(store, CreateRepositoryFactory(options));
+        await pool.InitializeAsync(CancellationToken.None);
+        pool.PublishRun();
+        await pool.StartAppHostRunAsync("first", CancellationToken.None);
+        for (var i = 0; i < DashboardRunStore.MaxRuns - 1; i++)
+        {
+            await pool.StartAppHostRunAsync($"next-{i}", CancellationToken.None);
+            await pool.PruningTask;
+        }
+        try
+        {
+            var attachment = pool.StartAppHostRunAsync("overflow", CancellationToken.None);
+            var deletingDirectory = await deleting.Task.DefaultTimeout();
+            await attachment.DefaultTimeout();
+            var currentPath = await Task.Run(() => pool.Current.Database.DatabasePath).DefaultTimeout();
+            Assert.Equal(store.DatabasePath, currentPath);
+            var deletingRun = store.GetRunById(Path.GetFileName(deletingDirectory), onlyCompatible: true)!;
+            Assert.Null(store.TryAcquireRunLease(deletingRun));
+            Assert.Throws<InvalidOperationException>(() => store.SetRunPinned(deletingRun, true));
+            await Task.Run(() => pool.StartAppHostRunAsync("another-attachment", CancellationToken.None)).DefaultTimeout();
+            await new CurrentResourceWriter(pool).ReplaceResourcesAsync([]).DefaultTimeout();
+            Assert.False(pool.PruningTask.IsCompleted);
+        }
+        finally
+        {
+            release.Set();
+            await pool.PruningTask;
+        }
+
+        Assert.True(store.GetCurrentRun().IsCurrent);
+        var warning = Assert.Single(sink.Writes, r => r.LogLevel == LogLevel.Warning);
+        Assert.IsType<InvalidOperationException>(warning.Exception);
+    }
+
     [Fact]
     public void RunDirectory_IsNestedUnderSharedRunsDirectoryAndHasApplicationMarker()
     {
@@ -147,6 +651,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using var dataSourcePool = new DashboardDataSourcePool(runStore, CreateRepositoryFactory(options));
         using var initializer = new DashboardDataSourceInitializer(
             dataSourcePool,
+            dashboardClient: null,
             lifetime,
             NullLogger<DashboardDataSourceInitializer>.Instance);
         await initializer.StartAsync(CancellationToken.None);
@@ -216,7 +721,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             Options.Create(new DashboardOptions { ApplicationName = "Live application" }),
             new MockKnownPropertyLookup(),
             new TestStringLocalizer<Resources.Resources>(),
-            (IResourceRepositoryWriter)dataSource.ResourceRepository);
+            (IResourceRepositoryWriter)dataSource.ResourceRepository, dataSourcePool: null);
         IDashboardClient selectedClient = new SelectedDashboardClient(currentClient, dataSource);
 
         Assert.Equal("Live application", selectedClient.ApplicationName);
@@ -1169,13 +1674,13 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(4, historicalDatabases.Count);
         Assert.All(historicalDatabases, database => Assert.Same(sharedDatabase, database));
         Assert.All(historicalDatabases, database => Assert.Same(sharedDatabase.WriteLock, database.WriteLock));
-        Assert.Null(currentRunStore.TryAcquireRunLease(historicalRun));
+        Assert.Null(TryOpenTestRunLease(historicalRun));
 
         firstDataSource.SelectRun(runId: null);
 
         Assert.True(historicalRun.IsLeased);
         Assert.Empty(secondDataSource.TelemetryRepository.GetResources());
-        Assert.Null(currentRunStore.TryAcquireRunLease(historicalRun));
+        Assert.Null(TryOpenTestRunLease(historicalRun));
 
         secondDataSource.SelectRun(runId: null);
 
@@ -1480,7 +1985,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             options,
             new MockKnownPropertyLookup(),
             new TestStringLocalizer<Resources.Resources>(),
-            (IResourceRepositoryWriter)currentResourceRepository);
+            (IResourceRepositoryWriter)currentResourceRepository, dataSourcePool: null);
         IDashboardClient selectedClient = new SelectedDashboardClient(currentClient, dataSource);
         var connectionStateChangedCount = 0;
         selectedClient.ConnectionStateChanged += _ => connectionStateChangedCount++;
@@ -1722,10 +2227,10 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     {
         public List<DashboardSqliteDatabase> Databases { get; } = [];
 
-        public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database)
+        public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database, bool enableLivePeerResolution)
         {
             Databases.Add(database);
-            return inner.CreateTelemetryRepository(database);
+            return inner.CreateTelemetryRepository(database, enableLivePeerResolution);
         }
 
         public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database)

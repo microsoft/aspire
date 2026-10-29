@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
@@ -11,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 using IConfiguration = Microsoft.Extensions.Configuration.IConfiguration;
 
@@ -71,7 +73,15 @@ public class ApplicationNameTests : DashboardTestContext
         Services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         Services.AddSingleton<DashboardActivitySource>();
         // Use the real client intentionally to verify ApplicationName and DashboardClient work together.
-        Services.AddSingleton<IDashboardClient, DashboardClient>();
+        Services.AddSingleton<IDashboardClient>(services => new DashboardClient(
+            services.GetRequiredService<DashboardActivitySource>(),
+            services.GetRequiredService<ILoggerFactory>(),
+            services.GetRequiredService<IConfiguration>(),
+            services.GetRequiredService<IOptions<DashboardOptions>>(),
+            services.GetRequiredService<IKnownPropertyLookup>(),
+            services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.Resources>>(),
+            services.GetRequiredService<IResourceRepositoryWriter>(),
+            dataSourcePool: null));
         Services.AddSingleton<BrowserTimeProvider>();
         Services.AddSingleton<IKnownPropertyLookup>(new MockKnownPropertyLookup());
         Services.AddSingleton<IResourceRepositoryWriter, NoopResourceRepositoryWriter>();

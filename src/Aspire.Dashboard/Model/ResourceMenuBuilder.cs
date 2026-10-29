@@ -155,7 +155,7 @@ public sealed class ResourceMenuBuilder
 
     private bool CanViewTerminal(ResourceViewModel resource)
     {
-        return _dashboardClient.IsEnabled && !_dashboardClient.IsReadOnly && resource.HasTerminal();
+        return _dashboardClient.IsEnabled && !_dashboardClient.IsReadOnly && _dashboardClient.ConnectionState == DashboardConnectionState.Connected && resource.HasTerminal();
     }
 
     private MenuButtonItem CreateTerminalMenuItem(ResourceViewModel resource, IDictionary<string, ResourceViewModel> resourceByName)
@@ -339,7 +339,7 @@ public sealed class ResourceMenuBuilder
                 Tooltip = command.GetDisplayDescription(),
                 Icon = _iconResolver.ResolveCommandIcon(command.IconName, command.IconVariant),
                 OnClick = () => commandSelected.InvokeAsync(command),
-                IsDisabled = _dashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || isCommandExecuting(resource, command)
+                IsDisabled = _dashboardClient.IsReadOnly || _dashboardClient.ConnectionState != DashboardConnectionState.Connected || command.State == CommandViewModelState.Disabled || isCommandExecuting(resource, command)
             };
         }
     }

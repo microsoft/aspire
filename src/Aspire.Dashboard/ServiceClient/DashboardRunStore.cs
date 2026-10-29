@@ -83,16 +83,22 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     private static readonly DashboardJsonSerializerContext s_jsonContext = new(new JsonSerializerOptions { WriteIndented = true });
 
     private readonly string? _runsDirectory;
-    private readonly string? _metadataPath;
+    private string? _metadataPath;
     private readonly string _applicationMarkerFileName;
     private readonly string? _temporaryDirectory;
-    private readonly FileLock? _runLock;
+    private FileLock? _runLock;
     private DashboardRunMetadata _metadata;
     private readonly ILogger<DashboardRunStore> _logger;
     private readonly TimeProvider _timeProvider;
     private readonly Action<string> _deleteRunDirectory;
-    private readonly Lazy<IReadOnlyList<DashboardRunDescriptor>> _runs;
+    private Lazy<IReadOnlyList<DashboardRunDescriptor>> _runs;
+    private string? _appHostRunId;
     private readonly object _runStateLock = new();
+    // Retired current readers and read-only history share directory ownership, even though
+    // their SQLite connections differ. Descriptor snapshots are rebuilt on every rollover.
+    private readonly Dictionary<string, OwnedRunLock> _leasedRuns = new(StringComparer.Ordinal);
+    private int _references = 1;
+    private bool _disposeRequested;
     private bool _metadataPublished;
 
     public DashboardRunStore(IOptions<DashboardOptions> options, ILogger<DashboardRunStore> logger, TimeProvider timeProvider)
@@ -284,14 +290,79 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         }
     }
 
-    public string CurrentWorkingDirectory { get; }
-    public string DatabasePath { get; }
+    internal bool StartAppHostRun(string appHostRunId, out IDisposable? retiredRunOwnership)
+    {
+        lock (_runStateLock)
+        {
+            retiredRunOwnership = null;
+            if (string.IsNullOrEmpty(appHostRunId) || _appHostRunId == appHostRunId)
+            {
+                return false;
+            }
+
+            if (_appHostRunId is null || !SupportsRunSelection)
+            {
+                _appHostRunId = appHostRunId;
+                return false;
+            }
+
+            // The AppHost ID is only an identity token. Never use a remote-supplied value as a path.
+            var now = _timeProvider.GetUtcNow();
+            // Keep directory IDs monotonic even when two restarts occur within one clock tick.
+            var startedAt = now > _metadata.StartedAtUtc ? now : _metadata.StartedAtUtc.AddMilliseconds(1);
+            var runId = startedAt.ToString("yyyyMMddTHHmmssfffZ", CultureInfo.InvariantCulture);
+            var directory = Path.Combine(_runsDirectory!, runId);
+            if (directory == CurrentWorkingDirectory)
+            {
+                runId = startedAt.AddMilliseconds(1).ToString("yyyyMMddTHHmmssfffZ", CultureInfo.InvariantCulture);
+                directory = Path.Combine(_runsDirectory!, runId);
+            }
+            Directory.CreateDirectory(directory);
+            var runLock = OpenRequiredRunLock(directory, $"Dashboard run '{runId}' is already in use.");
+            try
+            {
+                File.WriteAllText(Path.Combine(directory, _applicationMarkerFileName), string.Empty);
+                WriteMetadata(_metadata with { EndedAtUtc = startedAt, CleanShutdown = true });
+            }
+            catch
+            {
+                runLock.Dispose();
+                throw;
+            }
+
+            // Transfer the held OS lock without closing it. Reopening it after publishing the new
+            // run would leave a gap in which another dashboard could acquire and prune this database.
+            var retiredRunId = RunId;
+            var retiredLock = new OwnedRunLock(_runLock!) { ReferenceCount = 1 };
+            _leasedRuns.Add(retiredRunId, retiredLock);
+            retiredRunOwnership = new RunLease(this, retiredRunId, retiredLock);
+            _runLock = runLock;
+            CurrentWorkingDirectory = directory;
+            DatabasePath = Path.Combine(directory, DatabaseFileName);
+            _metadataPath = Path.Combine(directory, "run.json");
+            _metadata = _metadata with { RunId = runId, StartedAtUtc = startedAt, EndedAtUtc = null, CleanShutdown = false, IsPinned = false };
+            _metadataPublished = false;
+            _appHostRunId = appHostRunId;
+            _runs = new(LoadRuns);
+            return true;
+        }
+    }
+
+    public string CurrentWorkingDirectory { get; private set; }
+    public string DatabasePath { get; private set; }
     public string RunId => _metadata.RunId;
     public DashboardPersistenceMode PersistenceMode { get; }
     public bool SupportsRunSelection => PersistenceMode == DashboardPersistenceMode.Run;
 
-    public IReadOnlyList<DashboardRunDescriptor> GetRuns() =>
-        _runs.Value.Where(run => !run.IsPruned).ToArray();
+    public IReadOnlyList<DashboardRunDescriptor> GetRuns()
+    {
+        // Lazy discovery reads both metadata and paths. Keep that snapshot in one run generation
+        // when a browser opens the selector concurrently with an AppHost reconnect.
+        lock (_runStateLock)
+        {
+            return _runs.Value.Where(run => !run.IsPruned).ToArray();
+        }
+    }
 
     public DashboardRunDescriptor GetCurrentRun() => GetRuns().Single(run => run.IsCurrent);
 
@@ -302,17 +373,12 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     public void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
     {
-        var storedRun = GetRunById(run.RunId, onlyCompatible: false);
-        if (storedRun is null)
-        {
-            throw new InvalidOperationException($"Dashboard run '{run.RunId}' is no longer available.");
-        }
-
-        var runDirectory = Path.GetDirectoryName(storedRun.DatabasePath)!;
         lock (_runStateLock)
         {
-            // The current run has the store's lifetime lock, and a selected historical run has a lease.
-            // Only an unselected historical run needs a temporary lock while its metadata is updated.
+            // Resolve inside the transition lock: a previously current descriptor can become history.
+            var storedRun = GetRunById(run.RunId, onlyCompatible: false)
+                ?? throw new InvalidOperationException($"Dashboard run '{run.RunId}' is no longer available.");
+            var runDirectory = Path.GetDirectoryName(storedRun.DatabasePath)!;
             using var runLock = storedRun.IsCurrent || storedRun.IsLeased
                 ? null
                 : TryOpenRunLock(runDirectory)
@@ -343,13 +409,18 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     public void PublishRun()
     {
-        if (_metadataPath is null || _metadataPublished)
+        // Publication shares both the metadata snapshot and its temporary file with pinning
+        // and rollover. Keep the snapshot, destination, and published flag in one generation.
+        lock (_runStateLock)
         {
-            return;
-        }
+            if (_metadataPath is null || _metadataPublished)
+            {
+                return;
+            }
 
-        WriteMetadata(_metadata);
-        _metadataPublished = true;
+            WriteMetadata(_metadata);
+            _metadataPublished = true;
+        }
     }
 
     /// <summary>
@@ -362,34 +433,83 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     /// </remarks>
     public void PruneExpiredRuns()
     {
-        if (!_metadataPublished || _runsDirectory is null || !Directory.Exists(_runsDirectory))
+        DashboardRunDescriptor[] candidates;
+        string currentLockPath;
+        lock (_runStateLock)
         {
-            return;
+            if (!_metadataPublished || _runsDirectory is null || !Directory.Exists(_runsDirectory))
+            {
+                return;
+            }
+
+            candidates = _runs.Value.Where(run => !run.IsPinned && !run.IsPruned).Skip(MaxRuns).ToArray();
+            currentLockPath = GetRunLockPath(CurrentWorkingDirectory);
         }
 
-        PruneRuns(_deleteRunDirectory);
-        DeleteUnheldLocks(_runsDirectory, "*.lock", GetRunLockPath(CurrentWorkingDirectory));
+        PruneRuns(candidates, _deleteRunDirectory);
+        // A newer run may now be current, but its held file lock protects it from cleanup as well.
+        DeleteUnheldLocks(_runsDirectory, "*.lock", currentLockPath);
+    }
+
+    internal Task PruneExpiredRunsInBackground()
+    {
+        IDisposable retention;
+        try
+        {
+            retention = Retain();
+        }
+        catch (ObjectDisposedException)
+        {
+            return Task.CompletedTask;
+        }
+
+        // Retain the store until housekeeping ends, even if the host starts shutting down meanwhile.
+        // Only candidate selection shares the transition lock; deletion holds just the candidate's file lock.
+        return Task.Run(() =>
+        {
+            using (retention)
+            {
+                try
+                {
+                    PruneExpiredRuns();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to prune expired dashboard runs.");
+                }
+            }
+        });
     }
 
     public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run)
     {
-        var storedRun = GetRunById(run.RunId, onlyCompatible: true);
-        if (storedRun is null)
-        {
-            return null;
-        }
-
-        var runDirectory = Path.GetDirectoryName(storedRun.DatabasePath)!;
         lock (_runStateLock)
         {
-            var runLock = TryOpenRunLock(runDirectory);
-            if (runLock is null)
+            // Rollover replaces cached descriptors. Resolve and mark the lease in the same
+            // generation so a concurrent selector refresh observes this dashboard's ownership.
+            var storedRun = GetRunById(run.RunId, onlyCompatible: true);
+            if (storedRun is null)
             {
                 return null;
             }
 
+            if (!_leasedRuns.TryGetValue(storedRun.RunId, out var ownedLock))
+            {
+                var runDirectory = Path.GetDirectoryName(storedRun.DatabasePath)!;
+                var runLock = TryOpenRunLock(runDirectory);
+                if (runLock is null)
+                {
+                    return null;
+                }
+
+                ownedLock = new OwnedRunLock(runLock);
+                _leasedRuns.Add(storedRun.RunId, ownedLock);
+            }
+
+            ownedLock.ReferenceCount++;
+            ownedLock.Descriptors.Add(storedRun);
             storedRun.IsLeased = true;
-            return new RunLease(this, storedRun, runLock);
+            return new RunLease(this, storedRun.RunId, ownedLock);
         }
     }
 
@@ -427,7 +547,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                         {
                             // Filter out in-progress runs that are owned by other Dashboard instances.
                             using var runLock = TryOpenRunLock(directory);
-                            run.IsSelectable = runLock is not null;
+                            run.IsSelectable = run.IsLeased || runLock is not null;
                         }
                         else
                         {
@@ -458,7 +578,42 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         return orderedRuns;
     }
 
+    internal IDisposable Retain()
+    {
+        lock (_runStateLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposeRequested, this);
+            _references++;
+            return new Reference(this);
+        }
+    }
+
     public void Dispose()
+    {
+        lock (_runStateLock)
+        {
+            if (_disposeRequested)
+            {
+                return;
+            }
+            _disposeRequested = true;
+        }
+        Release();
+    }
+
+    private void Release()
+    {
+        lock (_runStateLock)
+        {
+            if (--_references != 0)
+            {
+                return;
+            }
+            DisposeCore();
+        }
+    }
+
+    private void DisposeCore()
     {
         try
         {
@@ -512,30 +667,58 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         }
     }
 
-    private void PruneRuns(Action<string> deleteRunDirectory)
+    private void PruneRuns(IReadOnlyList<DashboardRunDescriptor> candidates, Action<string> deleteRunDirectory)
     {
-        foreach (var run in _runs.Value.Where(run => !run.IsPinned).Skip(MaxRuns))
+        foreach (var candidate in candidates)
         {
-            var directory = Path.GetDirectoryName(run.DatabasePath)!;
-            using var runLock = TryOpenRunLock(directory);
-            // Pinning can happen after the candidate list is created. Recheck while holding the same lock used by
-            // SetRunPinned so a successful pin always completes before pruning decides whether to delete the run.
-            if (runLock is null || IsPinnedRunDirectory(directory))
+            var directory = Path.GetDirectoryName(candidate.DatabasePath)!;
+            FileLock? runLock;
+            lock (_runStateLock)
+            {
+                // A rollover may have replaced the cached descriptors since candidates were selected.
+                var run = GetRunById(candidate.RunId, onlyCompatible: false);
+                if (run is null || run.IsCurrent || run.IsPinned)
+                {
+                    continue;
+                }
+
+                runLock = TryOpenRunLock(directory);
+                // The per-run lock excludes leases and pins, including other dashboard processes.
+                // Recheck persisted pin state after taking it, so a pin that won the race is preserved.
+                if (runLock is not null && IsPinnedRunDirectory(directory))
+                {
+                    runLock.Dispose();
+                    runLock = null;
+                }
+            }
+            if (runLock is null)
             {
                 continue;
             }
 
-            try
+            using (runLock)
             {
-                deleteRunDirectory(directory);
-                run.IsPruned = true;
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                _logger.LogWarning(
-                    exception,
-                    "Failed to delete expired dashboard run directory '{RunDirectory}'. The directory may still be in use by another dashboard process.",
-                    directory);
+                try
+                {
+                    // Recursive deletion can be slow. Never hold the global run-state lock here:
+                    // ingestion, browser scopes, and another attachment all need that lock.
+                    deleteRunDirectory(directory);
+                    lock (_runStateLock)
+                    {
+                        candidate.IsPruned = true;
+                        if (GetRunById(candidate.RunId, onlyCompatible: false) is { } currentDescriptor)
+                        {
+                            currentDescriptor.IsPruned = true;
+                        }
+                    }
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    _logger.LogWarning(
+                        exception,
+                        "Failed to delete expired dashboard run directory '{RunDirectory}'. The directory may still be in use by another dashboard process.",
+                        directory);
+                }
             }
         }
     }
@@ -594,9 +777,9 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     internal static string GetRunLockPath(string runDirectory) => $"{runDirectory}.lock";
 
-    private static DashboardRunDescriptor CreateDescriptor(DashboardRunMetadata metadata, string runDirectory, bool isCurrent)
+    private DashboardRunDescriptor CreateDescriptor(DashboardRunMetadata metadata, string runDirectory, bool isCurrent)
     {
-        return new DashboardRunDescriptor(
+        var descriptor = new DashboardRunDescriptor(
             metadata.RunId,
             metadata.SchemaVersion,
             metadata.StartedAtUtc,
@@ -609,6 +792,13 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         {
             IsPinned = metadata.IsPinned
         };
+        if (_leasedRuns.TryGetValue(metadata.RunId, out var ownedLock))
+        {
+            descriptor.IsLeased = true;
+            ownedLock.Descriptors.Add(descriptor);
+        }
+
+        return descriptor;
     }
 
     internal static string GetApplicationDirectory(string? dataRoot, string applicationName)
@@ -664,24 +854,35 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         return $"{prefix}-{hash}";
     }
 
-    private sealed class RunLease(DashboardRunStore owner, DashboardRunDescriptor run, FileLock runLock) : IDisposable
+    private sealed class OwnedRunLock(FileLock runLock)
     {
-        private FileLock? _runLock = runLock;
+        public FileLock RunLock { get; } = runLock;
+        public int ReferenceCount { get; set; }
+        public HashSet<DashboardRunDescriptor> Descriptors { get; } = new(ReferenceEqualityComparer.Instance);
+    }
+
+    private sealed class RunLease(DashboardRunStore owner, string runId, OwnedRunLock ownedLock) : IDisposable
+    {
+        private OwnedRunLock? _ownedLock = ownedLock;
 
         public void Dispose()
         {
             lock (owner._runStateLock)
             {
-                var runLock = Interlocked.Exchange(ref _runLock, null);
-                if (runLock is not null)
+                var ownedLock = Interlocked.Exchange(ref _ownedLock, null);
+                if (ownedLock is not null && --ownedLock.ReferenceCount == 0)
                 {
                     try
                     {
-                        runLock.Dispose();
+                        ownedLock.RunLock.Dispose();
                     }
                     finally
                     {
-                        run.IsLeased = false;
+                        owner._leasedRuns.Remove(runId);
+                        foreach (var descriptor in ownedLock.Descriptors)
+                        {
+                            descriptor.IsLeased = false;
+                        }
                     }
                 }
             }
@@ -702,6 +903,12 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         public bool IsPinned { get; init; }
         [JsonExtensionData]
         public Dictionary<string, JsonElement>? ExtensionData { get; init; }
+    }
+
+    private sealed class Reference(DashboardRunStore owner) : IDisposable
+    {
+        private DashboardRunStore? _owner = owner;
+        public void Dispose() => Interlocked.Exchange(ref _owner, null)?.Release();
     }
 }
 

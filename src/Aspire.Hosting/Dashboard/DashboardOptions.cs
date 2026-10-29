@@ -9,6 +9,7 @@ namespace Aspire.Hosting.Dashboard;
 
 internal class DashboardOptions
 {
+    public bool Persistent { get; set; }
     public string? DashboardPath { get; set; }
     public string? DashboardUrl { get; set; }
     public string? DashboardToken { get; set; }
@@ -35,6 +36,7 @@ internal class ConfigureDefaultDashboardOptions(IConfiguration configuration, IO
 {
     public void Configure(DashboardOptions options)
     {
+        options.Persistent = configuration.GetValue<bool>("Aspire:Dashboard:Persistent") && !dcpOptions.Value.RandomizePorts;
         options.DashboardPath = dcpOptions.Value.DashboardPath;
         options.DashboardUrl = configuration[KnownAspNetCoreConfigNames.Urls];
         options.DashboardToken = configuration["AppHost:BrowserToken"];

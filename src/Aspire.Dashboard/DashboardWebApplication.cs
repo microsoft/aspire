@@ -313,30 +313,31 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             options.MimeTypes = ["text/javascript", "application/javascript", "text/css", "image/svg+xml"];
         });
         builder.Services.AddHealthChecks();
-        if (dashboardOptions.Otlp.Cors.IsCorsEnabled)
+        builder.Services.AddCors();
+        builder.Services.AddOptions<Microsoft.AspNetCore.Cors.Infrastructure.CorsOptions>().Configure<DashboardClient>((options, client) =>
         {
-            builder.Services.AddCors(options =>
+            options.AddPolicy(OtlpHttpEndpointsBuilder.CorsPolicyName, builder =>
             {
-                options.AddPolicy(OtlpHttpEndpointsBuilder.CorsPolicyName, builder =>
-                {
-                    var corsOptions = dashboardOptions.Otlp.Cors;
+                var corsOptions = dashboardOptions.Otlp.Cors;
 
-                    builder.WithOrigins(corsOptions.AllowedOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-                    builder.SetIsOriginAllowedToAllowWildcardSubdomains();
+                builder.WithOrigins((corsOptions.AllowedOrigins ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                builder.SetIsOriginAllowedToAllowWildcardSubdomains();
+                var configuredOriginAllowed = builder.Build().IsOriginAllowed;
+                // AppHost resource ports can change while the dashboard process stays alive.
+                builder.SetIsOriginAllowed(origin => configuredOriginAllowed(origin) || client.IsAppHostOriginAllowed(origin));
 
-                    // By default, allow headers in the implicit safelist and X-Requested-With. This matches OTLP collector CORS behavior.
-                    // Implicit safelist: https://developer.mozilla.org/en-US/docs/Glossary/CORS-safelisted_request_header
-                    // OTLP collector: https://github.com/open-telemetry/opentelemetry-collector/blob/685625abb4703cb2e45a397f008127bbe2ba4c0e/config/confighttp/README.md#server-configuration
-                    var allowedHeaders = !string.IsNullOrEmpty(corsOptions.AllowedHeaders)
-                        ? corsOptions.AllowedHeaders.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                        : ["X-Requested-With"];
-                    builder.WithHeaders(allowedHeaders);
+                // By default, allow headers in the implicit safelist and X-Requested-With. This matches OTLP collector CORS behavior.
+                // Implicit safelist: https://developer.mozilla.org/en-US/docs/Glossary/CORS-safelisted_request_header
+                // OTLP collector: https://github.com/open-telemetry/opentelemetry-collector/blob/685625abb4703cb2e45a397f008127bbe2ba4c0e/config/confighttp/README.md#server-configuration
+                var allowedHeaders = !string.IsNullOrEmpty(corsOptions.AllowedHeaders)
+                    ? corsOptions.AllowedHeaders.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    : dashboardOptions.ResourceServiceClient.GetUri() is not null ? ["*"] : ["X-Requested-With"];
+                builder.WithHeaders(allowedHeaders);
 
-                    // Hardcode to allow only POST methods. OTLP is always sent in POST request bodies.
-                    builder.WithMethods(HttpMethods.Post);
-                });
+                // Hardcode to allow only POST methods. OTLP is always sent in POST request bodies.
+                builder.WithMethods(HttpMethods.Post);
             });
-        }
+        });
 
         // Add Forwarded Headers support so that the dashboard can be run behind a reverse proxy.
         // Verify they are enabled by looking at the value of ASPIRE_DASHBOARD_FORWARDEDHEADERS_ENABLED
@@ -382,13 +383,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // TryAdd for the same reason as IDashboardClient above: the factory decides which resource repository the
         // dashboard reads from, so a substituted client is only actually reachable if its factory survives too.
         builder.Services.TryAddSingleton<IRepositoryFactory, RepositoryFactory>();
-        builder.Services.AddSingleton(services => services.GetRequiredService<DashboardDataSourcePool>().Current.TelemetryRepository);
-        // OTLP ingestion and telemetry mutations always target the current dashboard run, even when a browser circuit selects a historical run.
-        builder.Services.AddSingleton<ITelemetryRepositoryWriter>(services =>
-            (ITelemetryRepositoryWriter)services.GetRequiredService<ITelemetryRepository>());
-        builder.Services.AddSingleton(services => services.GetRequiredService<DashboardDataSourcePool>().Current.ResourceRepository);
-        builder.Services.AddSingleton<IResourceRepositoryWriter>(services =>
-            (IResourceRepositoryWriter)services.GetRequiredService<IResourceRepository>());
+        // Readers are owned by the selected-run scope. Only ingestion follows the writable run globally.
+        builder.Services.AddSingleton<ITelemetryRepositoryWriter, CurrentTelemetryWriter>();
+        builder.Services.AddSingleton<IResourceRepositoryWriter, CurrentResourceWriter>();
+        // The live client already owns the resource subscription across AppHost reconnects.
+        builder.Services.AddSingleton<IResourceRepository>(services => services.GetRequiredService<DashboardClient>());
         builder.Services.AddTransient<StructuredLogsViewModel>();
 
         builder.Services.AddTransient<OtlpLogsService>();
@@ -396,7 +395,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddTransient<OtlpMetricsService>();
 
         // Telemetry API.
-        builder.Services.AddSingleton<TelemetryApiService>();
+        builder.Services.AddScoped(services => new TelemetryApiService(
+            services.GetRequiredService<DashboardDataSource>().TelemetryRepository));
 
         builder.Services.AddTransient<TracesViewModel>();
         builder.Services.AddSingleton<IOutgoingPeerResolver, ResourceOutgoingPeerResolver>();
@@ -545,10 +545,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             await next(context).ConfigureAwait(false);
         });
 
-        if (!string.IsNullOrEmpty(dashboardOptions.Otlp.Cors.AllowedOrigins))
+        if (dashboardOptions.Otlp.Cors.IsCorsEnabled || dashboardOptions.ResourceServiceClient.GetUri() is not null)
         {
-            // Only add CORS middleware when there is CORS configuration.
-            // The default policy only allows the dashboard origin. Certain endpoints expose CORS for external origins, e.g. OTLP HTTP endpoints.
+            // The attached AppHost can update allowed OTLP origins after dashboard startup.
+            // Standalone dashboards without CORS configuration retain their existing preflight behavior.
             _app.UseCors();
         }
 
@@ -628,7 +628,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.MapTerminalWebSocket();
 
         // OTLP HTTP services.
-        _app.MapHttpOtlpApi(dashboardOptions.Otlp);
+        _app.MapHttpOtlpApi(dashboardOptions);
 
         // OTLP gRPC services.
         _app.MapGrpcService<OtlpGrpcMetricsService>();

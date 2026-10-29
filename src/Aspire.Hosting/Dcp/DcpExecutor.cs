@@ -639,32 +639,16 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
             .Where(sp => sp.Endpoints.Any())
             .ToArray();
 
-        // Resolve endpoint behavior and exclude known public ports before any dynamic allocation can claim them.
-        foreach (var sp in serviceProducers)
+        foreach (var producer in serviceProducers)
         {
-            foreach (var endpoint in sp.Endpoints)
+            foreach (var endpoint in producer.Endpoints)
             {
-                endpoint.SetResolvedIsProxied(GetEffectiveIsProxied(sp.ModelResource, endpoint, _options.Value.RandomizePorts));
-                DcpModelUtilities.ValidateEndpointPorts(sp.ModelResource, endpoint);
-
-                if (TryGetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
-                {
-                    _proxylessEndpointPortAllocator.ExcludePort(fixedPublicPort);
-                }
-
-                if (TryGetPersistedProxylessEndpointPort(sp.ModelResource, endpoint) is int persistedPort)
-                {
-                    _proxylessEndpointPortAllocator.ExcludePort(persistedPort);
-                }
-
-                if (sp.ModelResource is IComputeResource &&
-                    !sp.ModelResource.IsContainer() &&
-                    EndpointAnnotation.NormalizePort(endpoint.TargetPort) is int fixedTargetPort)
-                {
-                    _proxylessEndpointPortAllocator.ExcludePort(fixedTargetPort);
-                }
+                endpoint.SetResolvedIsProxied(EndpointPortPlanner.GetEffectiveIsProxied(producer.ModelResource, endpoint, _options.Value.RandomizePorts));
+                DcpModelUtilities.ValidateEndpointPorts(producer.ModelResource, endpoint);
             }
         }
+
+        EndpointPortPlanner.ReservePorts(_model, _options.Value, _configuration, _proxylessEndpointPortAllocator, _logger);
 
         // Create DCP services after known ports are excluded, allocating missing proxyless public ports as needed.
         foreach (var sp in serviceProducers)
@@ -684,7 +668,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
 
                 EnsureProxylessEndpointPort(sp.ModelResource, endpoint);
 
-                if (TryGetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
+                if (EndpointPortPlanner.TryGetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
                 {
                     svc.Spec.Port = fixedPublicPort;
                 }
@@ -735,26 +719,6 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         }
     }
 
-    private static bool GetEffectiveIsProxied(IResource resource, EndpointAnnotation endpoint, bool randomizePorts)
-    {
-        if (!resource.SupportsProxy())
-        {
-            return false;
-        }
-
-        if (endpoint.IsExplicitlyProxied is bool isProxied)
-        {
-            return isProxied;
-        }
-
-        if (randomizePorts)
-        {
-            return true;
-        }
-
-        return !resource.HasPersistentLifetime();
-    }
-
     private void AllocateExecutableTargetPorts(IEnumerable<RenderedModelResource<Executable>> executables)
     {
         // Allocate per rendered executable so replicas receive distinct target ports.
@@ -798,50 +762,15 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         }
     }
 
-    /// <summary>
-    /// Determines whether an endpoint definition has a fixed public port DCP should reserve or pre-exclude.
-    /// </summary>
-    /// <remarks>
-    /// Use this when deciding whether DCP should bind a service to a known public port. Proxied endpoints
-    /// with randomized ports deliberately do not report a fixed port so DCP can allocate the public port
-    /// instead of reserving the configured value.
-    /// Port 0 requests dynamic allocation and therefore does not count as a fixed public port.
-    /// Container endpoint definitions keep the public host port separate from the target container port, so
-    /// only an explicitly specified public port counts as fixed. Executable endpoint definitions use the same
-    /// port value for the process and the public endpoint, so the effective public port can come from either
-    /// the endpoint port or target port.
-    /// </remarks>
-    private static bool TryGetEffectiveFixedPublicPort(IResource resource, EndpointAnnotation endpoint, bool randomizePorts, out int publicPort)
-    {
-        var effectivePublicPort = EndpointAnnotation.NormalizePort(resource.IsContainer() ? endpoint.SpecifiedPort : endpoint.Port);
-
-        // When port randomization is enabled, proxied endpoints intentionally ignore the defined public
-        // port so DCP can allocate one dynamically instead.
-        if (randomizePorts && endpoint.IsProxied && effectivePublicPort is not null)
-        {
-            publicPort = default;
-            return false;
-        }
-
-        if (effectivePublicPort is int fixedPublicPort)
-        {
-            publicPort = fixedPublicPort;
-            return true;
-        }
-
-        publicPort = default;
-        return false;
-    }
-
     private void EnsureProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
     {
-        if (!NeedsPublicPort(resource, endpoint))
+        if (!EndpointPortPlanner.NeedsPublicPort(resource, endpoint, _options.Value.RandomizePorts))
         {
             return;
         }
 
         int publicPort;
-        if (TryGetPersistedProxylessEndpointPort(resource, endpoint) is int persistedPort)
+        if (EndpointPortPlanner.TryGetPersistedProxylessEndpointPort(resource, endpoint, _options.Value.RandomizePorts, _configuration, _logger) is int persistedPort)
         {
             publicPort = persistedPort;
             _logger.LogDebug("Using persisted public port {Port} for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'.", persistedPort, endpoint.Name, resource.Name);
@@ -853,7 +782,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
 
             if (resource.HasPersistentLifetime() && !_options.Value.RandomizePorts)
             {
-                var secretKey = GetPersistedProxylessEndpointPortKey(resource, endpoint);
+                var secretKey = EndpointPortPlanner.GetPersistedProxylessEndpointPortKey(resource, endpoint);
                 if (!_userSecretsManager.TrySetSecret(secretKey, publicPort.ToString(CultureInfo.InvariantCulture)))
                 {
                     _logger.LogWarning("Failed to persist public port {Port} for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'. Enable user secrets, set a fixed public port, or configure the endpoint to use a proxy to avoid recreating the persistent resource each run.", publicPort, endpoint.Name, resource.Name);
@@ -866,47 +795,6 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         {
             endpoint.TargetPort = publicPort;
         }
-    }
-
-    private static bool NeedsPublicPort(IResource resource, EndpointAnnotation endpoint)
-    {
-        // DCP can allocate a port only for resources it launches as workloads. This includes compute
-        // resources and annotation-backed containers; integration-owned endpoints publish their own addresses.
-        return (resource is IComputeResource || resource.IsContainer()) &&
-            !endpoint.IsProxied &&
-            !TryGetEffectiveFixedPublicPort(resource, endpoint, randomizePorts: false, out _);
-    }
-
-    private int? TryGetPersistedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
-    {
-        if (_options.Value.RandomizePorts ||
-            !resource.HasPersistentLifetime() ||
-            !NeedsPublicPort(resource, endpoint))
-        {
-            return null;
-        }
-
-        var configuredPort = _configuration[GetPersistedProxylessEndpointPortKey(resource, endpoint)];
-        if (configuredPort is null)
-        {
-            return null;
-        }
-
-        if (int.TryParse(configuredPort, NumberStyles.None, CultureInfo.InvariantCulture, out var port) &&
-            PortRange.IsValidPort(port))
-        {
-            return port;
-        }
-
-        _logger.LogDebug("Ignoring invalid persisted public port value '{Port}' for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'.", configuredPort, endpoint.Name, resource.Name);
-        return null;
-    }
-
-    private static string GetPersistedProxylessEndpointPortKey(IResource resource, EndpointAnnotation endpoint)
-    {
-        // Schema suggested by https://github.com/microsoft/aspire/issues/13597:
-        // Resources:<resource-name>:<endpoint-name>:port
-        return $"Resources:{resource.Name}:{endpoint.Name}:port";
     }
 
     internal static void SetInitialResourceState(IResource resource, IAnnotationHolder annotationHolder)

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.CompilerServices;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
@@ -11,6 +12,7 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
 {
     public Task WhenConnected => IsReadOnly ? Task.CompletedTask : currentClient.WhenConnected;
     public Task WhenResourcesReady => IsReadOnly ? Task.CompletedTask : currentClient.WhenResourcesReady;
+    public string AppHostRunId => currentClient.AppHostRunId;
     public bool IsEnabled => IsReadOnly || currentClient.IsEnabled;
     public bool IsReadOnly => dataSource.IsReadOnly;
     public DashboardConnectionState ConnectionState => IsReadOnly ? DashboardConnectionState.Connected : currentClient.ConnectionState;
@@ -39,12 +41,48 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
     public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken) => dataSource.ResourceRepository.SubscribeResourcesAsync(cancellationToken);
     public ResourceViewModel? GetResource(string resourceName) => dataSource.ResourceRepository.GetResource(resourceName);
     public IReadOnlyList<ResourceViewModel> GetResources() => dataSource.ResourceRepository.GetResources();
-    public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) =>
-        IsReadOnly
-            ? dataSource.ResourceRepository.SubscribeConsoleLogs(resourceName, cancellationToken)
-            : currentClient.SubscribeConsoleLogs(resourceName, cancellationToken);
+    public async IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var capture = IsReadOnly ? Task.CompletedTask : CaptureAsync();
+        try
+        {
+            // Read cached and live data through one subscription. This keeps an offline page usable and
+            // lets capture resume after reconnect without replaying duplicate RPC batches into the viewer.
+            await foreach (var batch in dataSource.ResourceRepository.SubscribeConsoleLogs(resourceName, cts.Token).ConfigureAwait(false))
+            {
+                yield return batch;
+            }
+        }
+        finally
+        {
+            cts.Cancel();
+            try
+            {
+                await capture.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cts.IsCancellationRequested)
+            {
+            }
+        }
+
+        async Task CaptureAsync()
+        {
+            try
+            {
+                await currentClient.CaptureConsoleLogsAsync(resourceName, cts.Token).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Wake a waiting SQLite reader so an unexpected capture failure is observed by the caller.
+                cts.Cancel();
+                throw;
+            }
+        }
+    }
+
     public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken) =>
-        IsReadOnly
+        IsReadOnly || ConnectionState != DashboardConnectionState.Connected
             ? dataSource.ResourceRepository.GetConsoleLogs(resourceName, cancellationToken)
             : currentClient.GetConsoleLogs(resourceName, cancellationToken);
 
@@ -59,25 +97,29 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
 
     public Task SendInteractionRequestAsync(WatchInteractionsRequestUpdate request, CancellationToken cancellationToken)
     {
-        EnsureWritable();
+        EnsureLiveConnection();
         return currentClient.SendInteractionRequestAsync(request, cancellationToken);
     }
 
     public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken)
     {
         EnsureWritable();
+        if (currentClient.ConnectionState != DashboardConnectionState.Connected)
+        {
+            return Task.FromResult(new ResourceCommandResponseViewModel { Kind = Aspire.Dashboard.Model.ResourceCommandResponseKind.Cancelled });
+        }
         return currentClient.ExecuteResourceCommandAsync(resourceName, resourceType, command, options, cancellationToken);
     }
 
-    public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken)
+    public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, string appHostRunId, CancellationToken cancellationToken)
     {
-        EnsureWritable();
-        return currentClient.UploadFileAsync(fileStream, fileName, expectedSize, interactionId, inputName, cancellationToken);
+        EnsureLiveConnection();
+        return currentClient.UploadFileAsync(fileStream, fileName, expectedSize, interactionId, inputName, appHostRunId, cancellationToken);
     }
 
     public Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken)
     {
-        EnsureWritable();
+        EnsureLiveConnection();
         return currentClient.AttachTerminalAsync(terminalId, cancellationToken);
     }
 
@@ -86,7 +128,7 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
 
     public Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken)
     {
-        EnsureWritable();
+        EnsureLiveConnection();
         return currentClient.CloseTerminalAsync(terminalId, cancellationToken);
     }
 
@@ -94,6 +136,15 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
     {
         await Task.CompletedTask.ConfigureAwait(false);
         yield break;
+    }
+
+    private void EnsureLiveConnection()
+    {
+        EnsureWritable();
+        if (currentClient.ConnectionState != DashboardConnectionState.Connected)
+        {
+            throw new InvalidOperationException("The AppHost is disconnected.");
+        }
     }
 
     private void EnsureWritable()

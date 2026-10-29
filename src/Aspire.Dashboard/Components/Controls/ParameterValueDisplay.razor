@@ -30,7 +30,7 @@ else
     public required Func<ResourceViewModel, CommandViewModel, bool> IsCommandExecuting { get; set; }
 
     private CommandViewModel? SetCommand { get; set; }
-    private bool IsSetCommandDisabled => DashboardClient.IsReadOnly || SetCommand is null || SetCommand.State == CommandViewModelState.Disabled || IsSetCommandExecuting;
+    private bool IsSetCommandDisabled => DashboardClient.IsReadOnly || DashboardClient.ConnectionState != DashboardConnectionState.Connected || SetCommand is null || SetCommand.State == CommandViewModelState.Disabled || IsSetCommandExecuting;
     private bool IsSetCommandExecuting => SetCommand is not null && IsCommandExecuting(Resource, SetCommand);
 
     protected override void OnParametersSet()
@@ -49,7 +49,7 @@ else
 
     private Task OnClickAsync()
     {
-        if (DashboardClient.IsReadOnly ||
+        if (DashboardClient.IsReadOnly || DashboardClient.ConnectionState != DashboardConnectionState.Connected ||
             SetCommand is not { } setCommand ||
             setCommand.State == CommandViewModelState.Disabled ||
             IsCommandExecuting(Resource, setCommand))

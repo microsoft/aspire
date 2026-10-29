@@ -132,6 +132,10 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     [Inject]
     public required IToastService ToastService { get; init; }
 
+    // Invalidate command controls and cached menus when only the AppHost connection changes.
+    [CascadingParameter(Name = nameof(DashboardConnectionState))]
+    public DashboardConnectionState AppHostConnectionState { get; set; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; init; }
 
@@ -180,8 +184,11 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public string BasePath => DashboardUrls.ConsoleLogBasePath;
     public string SessionStorageKey => BrowserStorageKeys.ConsoleLogsPageState;
 
+    private string _originatingRunId = null!;
+
     protected override async Task OnInitializedAsync()
     {
+        _originatingRunId = DataSource.SelectedRun.RunId;
         TelemetryContextProvider.Initialize(TelemetryContext);
         _resourceSubscriptionToken = _resourceSubscriptionCts.Token;
         _logEntries = new(DashboardUIHelpers.GetVirtualizedItemCount(Options.Value.Frontend.MaxConsoleLogCount));
@@ -975,7 +982,10 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             ? DataSource.ResourceRepository.GetResources().Select(resource => resource.Name).ToList()
             : [key.Value.ToString()];
 
-        await DataSource.ResourceRepository.ClearConsoleLogsAsync(resourceNames, now);
+        if (!await DataSource.TryMutateCurrentRunAsync(_originatingRunId, (_, resources) => resources.ClearConsoleLogsAsync(resourceNames, now)))
+        {
+            return;
+        }
 
         var newFilters = key is null
             ? ConsoleLogsFilters.CreateClearAll(now)

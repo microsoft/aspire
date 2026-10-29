@@ -27,6 +27,8 @@ namespace Aspire.Hosting.Dashboard;
 /// </summary>
 internal sealed class DashboardServiceHost : IHostedService
 {
+    private const string ResourceServicePortKey = "AppHost:ResourceService:Port";
+
     /// <summary>
     /// Provides access to the URI at which the resource service endpoint is hosted.
     /// </summary>
@@ -51,7 +53,11 @@ internal sealed class DashboardServiceHost : IHostedService
         ResourceCommandService resourceCommandService,
         InteractionService interactionService,
         IInteractionFileUploadStore fileUploadStore,
-        TerminalService terminalService)
+        TerminalService terminalService,
+        IUserSecretsManager userSecretsManager,
+        ProxylessEndpointPortAllocator portAllocator,
+        IOptions<DashboardOptions> dashboardOptions,
+        DashboardRunState runState)
     {
         _logger = loggerFactory.CreateLogger<DashboardServiceHost>();
 
@@ -103,10 +109,11 @@ internal sealed class DashboardServiceHost : IHostedService
             builder.Services.AddSingleton(loggerOptions);
             builder.Services.Add(ServiceDescriptor.Singleton(typeof(ILogger<>), typeof(Logger<>)));
 
-            builder.Services.AddGrpc();
+            builder.Services.AddGrpc(options => options.Interceptors.Add<AppHostRunInterceptor>());
             builder.Services.AddSingleton(applicationModel);
             builder.Services.AddSingleton(resourceCommandService);
             builder.Services.AddSingleton<DashboardServiceData>();
+            builder.Services.AddSingleton(runState);
             builder.Services.AddSingleton(resourceNotificationService);
             builder.Services.AddSingleton(resourceLoggerService);
             builder.Services.AddSingleton(interactionService);
@@ -140,6 +147,16 @@ internal sealed class DashboardServiceHost : IHostedService
             var randomizePorts = dcpOptions.Value.RandomizePorts;
 
             var endpoint = ResolveEndpoint(uri, randomizePorts, allowUnsecuredTransport);
+            if (dashboardOptions.Value.Persistent && endpoint.Port == 0)
+            {
+                // Keep the address captured by the dashboard's gRPC channel valid across AppHost runs.
+                var port = configuration.GetValue<int?>(ResourceServicePortKey);
+                if (port is null)
+                {
+                    port = AllocatePersistentResourceServicePort(applicationModel, dcpOptions.Value, configuration, portAllocator, _logger, userSecretsManager);
+                }
+                endpoint = endpoint with { Port = port.Value };
+            }
 
             if (endpoint.UseListenLocalhost)
             {
@@ -209,6 +226,28 @@ internal sealed class DashboardServiceHost : IHostedService
         {
             throw new ArgumentException($"{KnownConfigNames.ResourceServiceEndpointUrl} must contain a local loopback address.");
         }
+    }
+
+    internal static int AllocatePersistentResourceServicePort(
+        DistributedApplicationModel model,
+        DcpOptions options,
+        IConfiguration configuration,
+        ProxylessEndpointPortAllocator allocator,
+        ILogger logger,
+        IUserSecretsManager userSecretsManager)
+    {
+        // The resource service starts before DCP prepares workloads. Reserve the model's
+        // known ports now so an unused fixed endpoint is not claimed and saved for this listener.
+        EndpointPortPlanner.ReservePorts(model, options, configuration, allocator, logger);
+        var port = allocator.AllocatePort(System.Net.Sockets.ProtocolType.Tcp);
+        if (!userSecretsManager.TrySetSecret(ResourceServicePortKey, port.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+        {
+            // Continuing would give a surviving dashboard a different resource-service address
+            // on the next run. Require durable state or an explicitly configured listener instead.
+            throw new DistributedApplicationException($"The persistent dashboard resource service port could not be saved. Enable writable user secrets or configure {KnownConfigNames.ResourceServiceEndpointUrl} with a fixed port.");
+        }
+
+        return port;
     }
 
     /// <summary>

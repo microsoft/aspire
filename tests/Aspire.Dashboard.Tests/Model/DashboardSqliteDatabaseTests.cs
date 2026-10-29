@@ -82,7 +82,8 @@ public sealed class DashboardSqliteDatabaseTests(ITestOutputHelper testOutputHel
             Options.Create(new DashboardOptions()),
             new PauseManager(),
             TimeProvider.System,
-            []);
+            [],
+            enableLivePeerResolution: true);
         using var resourceRepository = new SqliteResourceRepository(
             database,
             new MockKnownPropertyLookup(),

@@ -119,6 +119,13 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
             if (TryGetPortIndex(port, out var index))
             {
                 MarkVisited(index);
+
+                // A successful allocation caches the next incremental candidate. A saved or fixed
+                // port can be excluded before the next allocation, so invalidate that cached choice.
+                if (_nextCandidate == index)
+                {
+                    _nextCandidate = null;
+                }
             }
         }
     }

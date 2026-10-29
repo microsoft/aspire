@@ -22,6 +22,16 @@
         <target state="translated">다시 시도</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceServiceOfflineDescription">
+        <source>Reconnecting automatically. You can keep browsing captured resources, logs, traces, and metrics. Resource commands will be available when the AppHost reconnects.</source>
+        <target state="new">Reconnecting automatically. You can keep browsing captured resources, logs, traces, and metrics. Resource commands will be available when the AppHost reconnects.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceServiceOfflineTitle">
+        <source>AppHost offline</source>
+        <target state="new">AppHost offline</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceServiceReconnectDisconnectedText">
         <source>Lost connection to the AppHost. Attempting to reconnect...</source>
         <target state="translated">AppHost에 대한 연결이 끊어졌습니다. 다시 연결을 시도하는 중...</target>

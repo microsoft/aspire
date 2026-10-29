@@ -55,7 +55,10 @@ public sealed class TelemetryImportService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task representing the async operation.</returns>
     /// <exception cref="InvalidOperationException">Thrown when import is disabled.</exception>
-    public async Task ImportAsync(string fileName, Stream stream, CancellationToken cancellationToken)
+    public Task ImportAsync(string fileName, Stream stream, CancellationToken cancellationToken) =>
+        ImportAsync(fileName, stream, _telemetryRepositoryWriter, cancellationToken);
+
+    internal async Task ImportAsync(string fileName, Stream stream, ITelemetryRepositoryWriter writer, CancellationToken cancellationToken)
     {
         using var activity = _activitySource.StartActivity("Import telemetry data", ActivityKind.Internal);
 
@@ -64,10 +67,10 @@ public sealed class TelemetryImportService
             throw new InvalidOperationException("Import is disabled.");
         }
 
-        await ImportCoreAsync(fileName, stream, allowZipFile: true, cancellationToken).ConfigureAwait(false);
+        await ImportCoreAsync(fileName, stream, writer, allowZipFile: true, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task ImportCoreAsync(string fileName, Stream stream, bool allowZipFile, CancellationToken cancellationToken)
+    private async Task ImportCoreAsync(string fileName, Stream stream, ITelemetryRepositoryWriter writer, bool allowZipFile, CancellationToken cancellationToken)
     {
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
 
@@ -85,10 +88,10 @@ public sealed class TelemetryImportService
                 await stream.CopyToAsync(memoryStream, cancellationToken).ConfigureAwait(false);
                 memoryStream.Position = 0;
 
-                await ImportZipAsync(memoryStream, cancellationToken).ConfigureAwait(false);
+                await ImportZipAsync(memoryStream, writer, cancellationToken).ConfigureAwait(false);
                 break;
             case ".json":
-                await ImportJsonAsync(fileName, stream, cancellationToken).ConfigureAwait(false);
+                await ImportJsonAsync(fileName, stream, writer, cancellationToken).ConfigureAwait(false);
                 break;
             case ".txt":
                 // Text files are console logs - currently ignored as per requirements
@@ -100,18 +103,18 @@ public sealed class TelemetryImportService
         }
     }
 
-    private async Task ImportZipAsync(Stream stream, CancellationToken cancellationToken)
+    private async Task ImportZipAsync(Stream stream, ITelemetryRepositoryWriter writer, CancellationToken cancellationToken)
     {
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
 
         foreach (var entry in archive.Entries)
         {
             using var entryStream = entry.Open();
-            await ImportCoreAsync(entry.Name, entryStream, allowZipFile: false, cancellationToken).ConfigureAwait(false);
+            await ImportCoreAsync(entry.Name, entryStream, writer, allowZipFile: false, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private async Task ImportJsonAsync(string fileName, Stream stream, CancellationToken cancellationToken)
+    private async Task ImportJsonAsync(string fileName, Stream stream, ITelemetryRepositoryWriter writer, CancellationToken cancellationToken)
     {
         // Read the JSON content
         using var reader = new StreamReader(stream);
@@ -144,21 +147,21 @@ public sealed class TelemetryImportService
 
         if (telemetryData.ResourceLogs is { Length: > 0 })
         {
-            await ImportLogsAsync(telemetryData.ResourceLogs).ConfigureAwait(false);
+            await ImportLogsAsync(telemetryData.ResourceLogs, writer).ConfigureAwait(false);
             _logger.LogDebug("Imported logs from {FileName}", fileName);
             imported = true;
         }
 
         if (telemetryData.ResourceSpans is { Length: > 0 })
         {
-            await ImportTracesAsync(telemetryData.ResourceSpans).ConfigureAwait(false);
+            await ImportTracesAsync(telemetryData.ResourceSpans, writer).ConfigureAwait(false);
             _logger.LogDebug("Imported traces from {FileName}", fileName);
             imported = true;
         }
 
         if (telemetryData.ResourceMetrics is { Length: > 0 })
         {
-            await ImportMetricsAsync(telemetryData.ResourceMetrics).ConfigureAwait(false);
+            await ImportMetricsAsync(telemetryData.ResourceMetrics, writer).ConfigureAwait(false);
             _logger.LogDebug("Imported metrics from {FileName}", fileName);
             imported = true;
         }
@@ -169,35 +172,35 @@ public sealed class TelemetryImportService
         }
     }
 
-    private async Task ImportLogsAsync(OtlpResourceLogsJson[] resourceLogs)
+    private async Task ImportLogsAsync(OtlpResourceLogsJson[] resourceLogs, ITelemetryRepositoryWriter writer)
     {
         var exportRequest = new OtlpExportLogsServiceRequestJson { ResourceLogs = resourceLogs };
         var protobufRequest = OtlpJsonToProtobufConverter.ToProtobuf(exportRequest);
 
         var addContext = new AddContext();
-        await _telemetryRepositoryWriter.AddLogsAsync(addContext, protobufRequest.ResourceLogs).ConfigureAwait(false);
+        await writer.AddLogsAsync(addContext, protobufRequest.ResourceLogs).ConfigureAwait(false);
 
         _logger.LogDebug("Imported logs: {SuccessCount} succeeded, {FailureCount} failed", addContext.SuccessCount, addContext.FailureCount);
     }
 
-    private async Task ImportTracesAsync(OtlpResourceSpansJson[] resourceSpans)
+    private async Task ImportTracesAsync(OtlpResourceSpansJson[] resourceSpans, ITelemetryRepositoryWriter writer)
     {
         var exportRequest = new OtlpExportTraceServiceRequestJson { ResourceSpans = resourceSpans };
         var protobufRequest = OtlpJsonToProtobufConverter.ToProtobuf(exportRequest);
 
         var addContext = new AddContext();
-        await _telemetryRepositoryWriter.AddTracesAsync(addContext, protobufRequest.ResourceSpans).ConfigureAwait(false);
+        await writer.AddTracesAsync(addContext, protobufRequest.ResourceSpans).ConfigureAwait(false);
 
         _logger.LogDebug("Imported traces: {SuccessCount} succeeded, {FailureCount} failed", addContext.SuccessCount, addContext.FailureCount);
     }
 
-    private async Task ImportMetricsAsync(OtlpResourceMetricsJson[] resourceMetrics)
+    private async Task ImportMetricsAsync(OtlpResourceMetricsJson[] resourceMetrics, ITelemetryRepositoryWriter writer)
     {
         var exportRequest = new OtlpExportMetricsServiceRequestJson { ResourceMetrics = resourceMetrics };
         var protobufRequest = OtlpJsonToProtobufConverter.ToProtobuf(exportRequest);
 
         var addContext = new AddContext();
-        await _telemetryRepositoryWriter.AddMetricsAsync(addContext, protobufRequest.ResourceMetrics).ConfigureAwait(false);
+        await writer.AddMetricsAsync(addContext, protobufRequest.ResourceMetrics).ConfigureAwait(false);
 
         _logger.LogDebug("Imported metrics: {SuccessCount} succeeded, {FailureCount} failed", addContext.SuccessCount, addContext.FailureCount);
     }

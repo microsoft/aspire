@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // The built-in dashboard supports persistent executable lifetime.
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
 
@@ -39,7 +40,8 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                                              DcpNameGenerator nameGenerator,
                                              IHostApplicationLifetime hostApplicationLifetime,
                                              IDistributedApplicationEventing eventing,
-                                             CodespacesUrlRewriter codespaceUrlRewriter
+                                             CodespacesUrlRewriter codespaceUrlRewriter,
+                                             DashboardRunState runState
                                              ) : IDistributedApplicationEventingSubscriber, IAsyncDisposable
 {
     private static readonly HashSet<string> s_suppressAutomaticConfigurationCopy = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -65,6 +67,16 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         else
         {
             AddDashboardResource(@event.Model);
+        }
+
+        if (dashboardOptions.Value.Persistent)
+        {
+            // Later lifecycle hooks can add or replace resources. Gate the event rather
+            // than the current resource list so no exporter can start in the old run.
+            eventing.Subscribe<BeforeResourceStartedEvent>((evt, ct) =>
+                string.Equals(evt.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)
+                    ? Task.CompletedTask
+                    : runState.WaitForAttachmentAsync(ct));
         }
 
         // Stop watching logs from the dashboard when the app host is stopping. Part of the app host shutdown is tearing down the dashboard service.
@@ -161,6 +173,12 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             }));
         }
 
+        if (dashboardOptions.Value.Persistent)
+        {
+            // Naming must see the lifetime so DCP can adopt the same process on the next run.
+            dashboardResource.Annotations.Add(new PersistenceAnnotation { Mode = PersistenceMode.Persistent });
+        }
+
         nameGenerator.EnsureDcpInstancesPopulated(dashboardResource);
 
         ConfigureAspireDashboardResource(dashboardResource);
@@ -220,7 +238,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         if (string.IsNullOrWhiteSpace(dashboardUrls))
         {
             var endpointName = allowUnsecureTransport ? "http" : "https";
-            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: endpointContext.Scheme, isProxied: true));
+            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: endpointContext.Scheme, isProxied: !dashboardResource.HasPersistentLifetime()));
             LogEndpointAdded(endpointName, scheme: endpointContext.Scheme, host: "localhost", port: null);
 
             eventing.Subscribe<BeforeResourceStartedEvent>(dashboardResource, (@event, _) =>
@@ -239,7 +257,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             {
                 var address = BindingAddress.Parse(d.Trim());
 
-                dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: address.Scheme, port: address.Port, isProxied: true)
+                dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: address.Scheme, port: address.Port, isProxied: !dashboardResource.HasPersistentLifetime())
                 {
                     TargetHost = address.Host
                 });
@@ -477,7 +495,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             var allowedOrigins = configuration.GetString(KnownConfigNames.DashboardCorsAllowedOrigins, KnownConfigNames.Legacy.DashboardCorsAllowedOrigins);
 
             // If allowed origins are not configured then calculate allowed origins from endpoints.
-            if (string.IsNullOrEmpty(allowedOrigins))
+            if (string.IsNullOrEmpty(allowedOrigins) && !context.Resource.HasPersistentLifetime())
             {
                 var model = context.ExecutionContext.Services.GetRequiredService<DistributedApplicationModel>();
                 allowedOrigins = GetAllowedOriginsFromResourceEndpoints(model);
@@ -542,36 +560,48 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         // via the ILogger.
         context.EnvironmentVariables["LOGGING__CONSOLE__FORMATTERNAME"] = "json";
 
-        // Details for contacting AspireServer in an IDE debug session.
-        if (configuration["DEBUG_SESSION_PORT"] is { Length: > 0 } sessionPort)
+        if (context.Resource.HasPersistentLifetime())
         {
-            // DEBUG_SESSION_PORT env var is in the format localhost:port.
-            // We assume the address is localhost and only want the port value.
-            if (sessionPort.Split(':') is { Length: 2 } parts &&
-                int.TryParse(parts[1], CultureInfo.InvariantCulture, out var port))
+            // DCP preserves the process, so it must not inherit the launching CLI's orphan watchdog.
+            // Empty values override inherited process identity and keep the launch spec stable across runs.
+            context.EnvironmentVariables[KnownConfigNames.CliProcessId] = string.Empty;
+            context.EnvironmentVariables[KnownConfigNames.CliProcessStarted] = string.Empty;
+            context.EnvironmentVariables[KnownConfigNames.CliProcessStartedStable] = string.Empty;
+        }
+
+        if (!context.Resource.HasPersistentLifetime())
+        {
+            // Details for contacting AspireServer in an IDE debug session.
+            if (configuration["DEBUG_SESSION_PORT"] is { Length: > 0 } sessionPort)
             {
-                context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionPortName.EnvVarName] = port;
+                // DEBUG_SESSION_PORT env var is in the format localhost:port.
+                // We assume the address is localhost and only want the port value.
+                if (sessionPort.Split(':') is { Length: 2 } parts &&
+                    int.TryParse(parts[1], CultureInfo.InvariantCulture, out var port))
+                {
+                    context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionPortName.EnvVarName] = port;
+                }
+                else
+                {
+                    throw new InvalidOperationException($"Unexpected DEBUG_SESSION_PORT value. Expected localhost:port, got '{sessionPort}'.");
+                }
             }
-            else
+            if (configuration["DEBUG_SESSION_TOKEN"] is { Length: > 0 } sessionToken)
             {
-                throw new InvalidOperationException($"Unexpected DEBUG_SESSION_PORT value. Expected localhost:port, got '{sessionPort}'.");
+                context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionTokenName.EnvVarName] = sessionToken;
             }
-        }
-        if (configuration["DEBUG_SESSION_TOKEN"] is { Length: > 0 } sessionToken)
-        {
-            context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionTokenName.EnvVarName] = sessionToken;
-        }
-        if (configuration[KnownConfigNames.DcpInstanceIdPrefix] is { Length: > 0 } sessionDcpInstanceIdPrefix)
-        {
-            // DCP_INSTANCE_ID_PREFIX is a prefix, not a complete instance id. Use a
-            // stable dashboard-specific suffix so dashboard telemetry can use the
-            // same scoped DCP authorization path as other IDE endpoint requests.
-            var separator = sessionDcpInstanceIdPrefix.EndsWith('-') ? string.Empty : "-";
-            context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionDcpInstanceIdName.EnvVarName] = sessionDcpInstanceIdPrefix + separator + "dashboard";
-        }
-        if (configuration["DEBUG_SESSION_SERVER_CERTIFICATE"] is { Length: > 0 } sessionCertificate)
-        {
-            context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionServerCertificateName.EnvVarName] = sessionCertificate;
+            if (configuration[KnownConfigNames.DcpInstanceIdPrefix] is { Length: > 0 } sessionDcpInstanceIdPrefix)
+            {
+                // DCP_INSTANCE_ID_PREFIX is a prefix, not a complete instance id. Use a
+                // stable dashboard-specific suffix so dashboard telemetry can use the
+                // same scoped DCP authorization path as other IDE endpoint requests.
+                var separator = sessionDcpInstanceIdPrefix.EndsWith('-') ? string.Empty : "-";
+                context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionDcpInstanceIdName.EnvVarName] = sessionDcpInstanceIdPrefix + separator + "dashboard";
+            }
+            if (configuration["DEBUG_SESSION_SERVER_CERTIFICATE"] is { Length: > 0 } sessionCertificate)
+            {
+                context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionServerCertificateName.EnvVarName] = sessionCertificate;
+            }
         }
         if (options.TelemetryOptOut is { } optOutValue)
         {
@@ -619,7 +649,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         if (string.IsNullOrWhiteSpace(endpointUrl))
         {
-            annotation = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: context.Scheme, isProxied: true, transport: transport)
+            annotation = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: context.Scheme, isProxied: !dashboardResource.HasPersistentLifetime(), transport: transport)
             {
                 TargetHost = context.TargetHost
             };
@@ -628,7 +658,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         else
         {
             var address = BindingAddress.Parse(endpointUrl);
-            annotation = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true, transport: transport)
+            annotation = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: address.Scheme, port: address.Port, isProxied: !dashboardResource.HasPersistentLifetime(), transport: transport)
             {
                 TargetHost = address.Host
             };
@@ -706,7 +736,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         }
     }
 
-    private static string? GetAllowedOriginsFromResourceEndpoints(DistributedApplicationModel model)
+    internal static string? GetAllowedOriginsFromResourceEndpoints(DistributedApplicationModel model)
     {
         var allResourceEndpoints = model.Resources
             .Where(r => !string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))

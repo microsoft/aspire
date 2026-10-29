@@ -1,0 +1,38 @@
+.apphost-connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 4px 12px;
+    background: var(--messagebar-error-background-color);
+    border-block-end: 1px solid var(--messagebar-error-border-color);
+}
+
+.apphost-connection-message {
+    display: flex;
+    align-items: baseline;
+    flex: 1;
+    gap: 8px;
+    min-width: 0;
+    font-size: var(--fontSizeBase200);
+    line-height: 20px;
+}
+
+.apphost-connection-message strong {
+    flex-shrink: 0;
+    font-weight: var(--fontWeightSemibold);
+    white-space: nowrap;
+}
+
+.apphost-connection-message span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+::deep .apphost-reconnect-action {
+    flex-shrink: 0;
+    height: 24px;
+    font-size: var(--fontSizeBase200);
+    white-space: nowrap;
+}

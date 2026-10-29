@@ -521,7 +521,7 @@ public class OtlpHttpJsonTests
         Assert.NotNull(response);
 
         // Verify data was stored in the repository
-        var telemetryRepository = app.Services.GetRequiredService<ITelemetryRepository>();
+        var telemetryRepository = app.Services.GetRequiredService<DashboardDataSourcePool>().Current.TelemetryRepository;
         var resource = AssertMyServiceResource(telemetryRepository);
 
         var traces = await telemetryRepository.GetTracesAsync(new GetTracesRequest
@@ -581,7 +581,7 @@ public class OtlpHttpJsonTests
         Assert.NotNull(response);
 
         // Verify data was stored in the repository
-        var telemetryRepository = app.Services.GetRequiredService<ITelemetryRepository>();
+        var telemetryRepository = app.Services.GetRequiredService<DashboardDataSourcePool>().Current.TelemetryRepository;
         var resource = AssertMyServiceResource(telemetryRepository);
 
         var logs = await telemetryRepository.GetLogsAsync(new GetLogsContext
@@ -658,7 +658,7 @@ public class OtlpHttpJsonTests
         Assert.NotNull(response);
 
         // Verify data was stored in the repository (events are stored as logs)
-        var telemetryRepository = app.Services.GetRequiredService<ITelemetryRepository>();
+        var telemetryRepository = app.Services.GetRequiredService<DashboardDataSourcePool>().Current.TelemetryRepository;
         var resource = AssertMyServiceResource(telemetryRepository);
 
         var logs = await telemetryRepository.GetLogsAsync(new GetLogsContext
@@ -708,7 +708,7 @@ public class OtlpHttpJsonTests
         Assert.NotNull(response);
 
         // Verify data was stored in the repository
-        var telemetryRepository = app.Services.GetRequiredService<ITelemetryRepository>();
+        var telemetryRepository = app.Services.GetRequiredService<DashboardDataSourcePool>().Current.TelemetryRepository;
         var resource = AssertMyServiceResource(telemetryRepository);
 
         var instruments = telemetryRepository.GetInstrumentSummaries(resource.ResourceKey);
@@ -758,7 +758,7 @@ public class OtlpHttpJsonTests
         var response = System.Text.Json.JsonSerializer.Deserialize(responseBody, OtlpJsonSerializerContext.Default.OtlpExportMetricsServiceResponseJson);
         Assert.NotNull(response);
 
-        var telemetryRepository = app.Services.GetRequiredService<ITelemetryRepository>();
+        var telemetryRepository = app.Services.GetRequiredService<DashboardDataSourcePool>().Current.TelemetryRepository;
         var resources = telemetryRepository.GetResourcesByName("copilot-chat");
         var resource = Assert.Single(resources);
 

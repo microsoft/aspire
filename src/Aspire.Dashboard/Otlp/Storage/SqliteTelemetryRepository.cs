@@ -28,6 +28,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     private readonly IReadOnlyList<IOutgoingPeerResolver> _outgoingPeerResolvers;
     private readonly List<IDisposable> _outgoingPeerSubscriptions = [];
     private int _disposed;
+    private int _peerResolutionStopped;
     private int _hasReceivedTelemetry = -1;
 
     private static string CreateContainsLikePattern(string value) => $"%{EscapeLikePattern(value)}%";
@@ -79,13 +80,15 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     /// <param name="pauseManager">The telemetry pause manager.</param>
     /// <param name="timeProvider">The time provider.</param>
     /// <param name="outgoingPeerResolvers">The resolvers used to identify outgoing peer resources.</param>
+    /// <param name="enableLivePeerResolution">Whether live resource changes may update stored trace peers.</param>
     public SqliteTelemetryRepository(
         DashboardSqliteDatabase database,
         ILoggerFactory loggerFactory,
         IOptions<DashboardOptions> dashboardOptions,
         PauseManager pauseManager,
         TimeProvider timeProvider,
-        IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+        IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers,
+        bool enableLivePeerResolution)
     {
         _database = database;
         _pauseManager = pauseManager;
@@ -97,14 +100,17 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
             Options = dashboardOptions.Value.TelemetryLimits
         };
 
-        if (!database.IsReadOnly)
+        if (enableLivePeerResolution && !database.IsReadOnly)
         {
             foreach (var resolver in _outgoingPeerResolvers)
             {
                 _outgoingPeerSubscriptions.Add(resolver.OnPeerChanges(async () =>
                 {
                     await RecalculateUninstrumentedPeersAsync().ConfigureAwait(false);
-                    NotifyPeersChanged();
+                    if (Volatile.Read(ref _peerResolutionStopped) == 0)
+                    {
+                        NotifyPeersChanged();
+                    }
                 }));
             }
         }
@@ -311,9 +317,17 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         _database.EnsureWritable("Historical dashboard telemetry is read-only.");
     }
 
-    public void Dispose()
+    internal async Task FreezePeerResolutionAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        StopPeerResolution();
+        // A resolver can already have captured a callback or be recalculating peers. Fence queued
+        // callbacks under the same write lock and drain the active write before changing topology.
+        using var writeLock = await _database.WriteLock.LockAsync().ConfigureAwait(false);
+    }
+
+    private void StopPeerResolution()
+    {
+        if (Interlocked.Exchange(ref _peerResolutionStopped, 1) != 0)
         {
             return;
         }
@@ -322,6 +336,16 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         {
             subscription.Dispose();
         }
+    }
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        StopPeerResolution();
         DisposeWatchers();
     }
 

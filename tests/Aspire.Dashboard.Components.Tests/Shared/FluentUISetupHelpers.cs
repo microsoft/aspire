@@ -176,7 +176,8 @@ internal static class FluentUISetupHelpers
             options,
             new PauseManager(),
             context.Services.GetRequiredService<TimeProvider>(),
-            outgoingPeerResolvers);
+            outgoingPeerResolvers,
+            enableLivePeerResolution: true);
         await seed(writer);
     }
 
@@ -223,7 +224,8 @@ internal static class FluentUISetupHelpers
                 options,
                 pauseManager,
                 services.GetRequiredService<TimeProvider>(),
-                outgoingPeerResolvers);
+                outgoingPeerResolvers,
+                enableLivePeerResolution: true);
         });
         context.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<SqliteTelemetryRepository>());
         context.Services.AddSingleton<ITelemetryRepositoryWriter>(services => services.GetRequiredService<SqliteTelemetryRepository>());
@@ -266,7 +268,7 @@ internal static class FluentUISetupHelpers
         bool supportsRunSelection = true,
         string? databasePath = null) : IDashboardRunStore
     {
-        private readonly IReadOnlyList<DashboardRunDescriptor> _runs = (runs ??
+        private IReadOnlyList<DashboardRunDescriptor> _runs = (runs ??
             [
                 new(
                 RunId: "current",
@@ -278,6 +280,8 @@ internal static class FluentUISetupHelpers
                 DatabasePath: databasePath ?? string.Empty,
                 IsCurrent: true)
             ]).ToArray();
+
+        public void SetRuns(IReadOnlyList<DashboardRunDescriptor> runs) => _runs = runs;
 
         public int GetRunsCallCount { get; private set; }
 
@@ -336,7 +340,7 @@ internal static class FluentUISetupHelpers
         ITelemetryRepository telemetryRepository,
         IDashboardClient dashboardClient) : IRepositoryFactory
     {
-        public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database) => telemetryRepository;
+        public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database, bool enableLivePeerResolution) => telemetryRepository;
         public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) => dashboardClient;
     }
 

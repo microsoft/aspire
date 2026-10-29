@@ -687,6 +687,7 @@ public class ResourceOutgoingPeerResolverTests
         public Task WhenResourcesReady => Task.CompletedTask;
         public string ApplicationName => "ApplicationName";
         public string? MinRequiredVersion => null;
+        public string AppHostRunId => string.Empty;
         public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
 #pragma warning disable CS0067 // Event is never used - required by interface
         public event Action<DashboardConnectionState>? ConnectionStateChanged;
@@ -694,7 +695,7 @@ public class ResourceOutgoingPeerResolverTests
         public Task ReconnectAsync() => Task.CompletedTask;
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, string appHostRunId, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken) => throw new NotImplementedException();
         public IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync(CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken) => throw new NotImplementedException();

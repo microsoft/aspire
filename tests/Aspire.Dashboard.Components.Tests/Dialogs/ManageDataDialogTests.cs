@@ -275,6 +275,42 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RemoveSelected_RunChanges_RejectsStaleDialog(bool selectionFollowsCurrentRun)
+    {
+        var client = new TestDashboardClient(isEnabled: false, initialResources: []);
+        SetupManageDataDialogServices(client);
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "api", instanceId: "instance"),
+                ScopeLogs = { new ScopeLogs { Scope = CreateScope("test-scope"), LogRecords = { CreateLogRecord() } } }
+            }
+        });
+        var cut = Render<ManageDataDialog>(parameters => parameters.Add(dialog => dialog.Virtualize, false));
+        cut.WaitForAssertion(() => AssertButtonDisabled(cut, "Remove selected", expectedDisabled: false));
+        var store = Assert.IsType<FluentUISetupHelpers.TestDashboardRunStore>(Services.GetRequiredService<IDashboardRunStore>());
+        var original = store.GetCurrentRun();
+        store.SetRuns([original with { IsCurrent = false }, original with { RunId = "replacement", IsCurrent = true }]);
+        if (selectionFollowsCurrentRun)
+        {
+            Services.GetRequiredService<DashboardDataSource>().SelectRun(runId: null);
+        }
+
+        cut.Find("fluent-button[aria-label='Remove selected']").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("dashboard run changed", cut.Find(".error-message").TextContent);
+            Assert.Single(repository.GetResources());
+            Assert.Empty(client.ClearedConsoleLogs);
+        });
+    }
+
     private void SetupManageDataDialogServices(TestDashboardClient dashboardClient)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);

@@ -1,6 +1,7 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
@@ -11,6 +12,8 @@ using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
+using Aspire.Tests.Shared.DashboardModel;
+using Aspire.Tests.Utils;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
@@ -25,9 +28,114 @@ using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 namespace Aspire.Dashboard.Components.Tests.Layout;
 
 [UseCulture("en-US")]
-public partial class MainLayoutTests : DashboardTestContext
+public partial class MainLayoutTests(ITestOutputHelper testOutputHelper) : DashboardTestContext
 {
     private IRenderedComponent<FluentMessageBarProvider>? _messageBarProvider;
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void StandaloneRun_NoAppHostConfigured_ShowsLiveRun(bool isDesktop)
+    {
+        var client = new TestDashboardClient(isEnabled: false);
+        // A real disabled client never starts the AppHost connection and remains Connecting.
+        client.SetConnectionState(DashboardConnectionState.Connecting);
+        SetupMainLayoutServices(dashboardClient: client);
+        var cut = Render<MainLayout>(parameters => parameters.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        var picker = cut.FindComponent<DashboardRunSelect>().FindComponent<AspireMenuButton>();
+        Assert.Equal("Live run", picker.Instance.Text);
+        Assert.Equal(Color.Success, picker.Instance.IconStartColor);
+        Assert.Empty(cut.FindAll(".apphost-connection-status"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task LiveRunConnectionStatus_DisconnectedAndRetrying_StaysOfflineUntilConnected(bool isDesktop)
+    {
+        var client = new TestDashboardClient(isEnabled: true, initialResources: [],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        SetupMainLayoutServices(dashboardClient: client);
+        var cut = Render<MainLayout>(parameters => parameters.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        var picker = cut.FindComponent<DashboardRunSelect>();
+        Assert.Equal("Live run", picker.FindComponent<AspireMenuButton>().Instance.Text);
+
+        await cut.InvokeAsync(() => client.SetConnectionState(DashboardConnectionState.Disconnected));
+        cut.WaitForAssertion(() => Assert.Equal("AppHost offline", picker.FindComponent<AspireMenuButton>().Instance.Text));
+        Assert.Equal(Color.Error, picker.FindComponent<AspireMenuButton>().Instance.IconStartColor);
+        Assert.Equal("AppHost offline", cut.Find(".apphost-connection-message strong").TextContent);
+
+        await cut.InvokeAsync(() => client.SetConnectionState(DashboardConnectionState.Connecting));
+        cut.WaitForAssertion(() => Assert.Equal("AppHost offline", picker.FindComponent<AspireMenuButton>().Instance.Text));
+        Assert.Equal(Color.Error, picker.FindComponent<AspireMenuButton>().Instance.IconStartColor);
+        Assert.Single(cut.FindAll(".apphost-connection-status"));
+
+        await cut.InvokeAsync(() => client.SetConnectionState(DashboardConnectionState.Connected));
+        cut.WaitForAssertion(() => Assert.Equal("Live run", picker.FindComponent<AspireMenuButton>().Instance.Text));
+        Assert.Equal(Color.Success, picker.FindComponent<AspireMenuButton>().Instance.IconStartColor);
+        Assert.Empty(cut.FindAll(".apphost-connection-status"));
+        Assert.Empty(cut.FindAll(".new-live-run-notice"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NewLiveRun_WaitsForConnection_PreservesHistoryAndCanOpenLive(bool viewingHistory)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var store = new DashboardRunStore(Microsoft.Extensions.Options.Options.Create(new DashboardOptions
+        {
+            Data = new DashboardDataOptions { Directory = workspace.Path, PersistenceMode = DashboardPersistenceMode.Run }
+        }), Microsoft.Extensions.Logging.Abstractions.NullLogger<DashboardRunStore>.Instance, TimeProvider.System);
+        var client = new TestDashboardClient(isEnabled: true, initialResources: [],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        string? historicalRunId = null;
+        SetupMainLayoutServices(dashboardRunStore: store, dashboardClient: client,
+            sessionStorage: new TestSessionStorage { OnGetAsync = _ => (true, historicalRunId) });
+        // Dispose the component service provider before deleting its run directory: the pool
+        // retains the store until all circuit leases have been released.
+        try
+        {
+            var pool = Services.GetRequiredService<DashboardDataSourcePool>();
+            await pool.InitializeAsync(CancellationToken.None);
+            pool.PublishRun();
+            await pool.StartAppHostRunAsync("first", CancellationToken.None);
+            var previous = store.GetCurrentRun();
+            await pool.StartAppHostRunAsync("before-view", CancellationToken.None);
+            historicalRunId = viewingHistory ? previous.RunId : null;
+            var cut = Render<MainLayout>(parameters => parameters.Add(p => p.ViewportInformation,
+                new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+            var selection = Services.GetRequiredService<IDashboardRunSelection>();
+            await cut.InvokeAsync(() => client.SetConnectionState(DashboardConnectionState.Disconnected));
+            await pool.StartAppHostRunAsync("second", CancellationToken.None);
+            cut.WaitForAssertion(() => Assert.Equal(viewingHistory ? previous.RunId : store.RunId, selection.SelectedRun.RunId));
+            Assert.Empty(cut.FindAll(".new-live-run-notice"));
+            await cut.InvokeAsync(() => client.SetConnectionState(DashboardConnectionState.Connecting));
+            Assert.Empty(cut.FindAll(".new-live-run-notice"));
+            await cut.InvokeAsync(() => client.SetConnectionState(DashboardConnectionState.Connected));
+            cut.WaitForAssertion(() => Assert.Equal("New live run connected", cut.Find(".new-live-run-notice strong").TextContent));
+            Assert.Equal(viewingHistory ? previous.RunId : store.RunId, selection.SelectedRun.RunId);
+            var notice = cut.Find(".new-live-run-notice");
+            if (viewingHistory)
+            {
+                notice.QuerySelector("fluent-button")!.Click();
+                cut.WaitForAssertion(() => Assert.Equal(store.RunId, selection.SelectedRun.RunId));
+            }
+            else
+            {
+                notice.QuerySelector("fluent-button[aria-label='Dismiss new live run notice']")!.Click();
+            }
+            cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".new-live-run-notice")));
+            await pool.PruningTask;
+        }
+        finally
+        {
+            await DisposeAsync();
+        }
+    }
 
     [Fact]
     public void OnInitialize_BrowserInfoCircuitDisconnected_DoesNotThrow()
@@ -1067,6 +1175,102 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Same(exception, errorLog.Exception);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunSelectionPending_RolloverReconcilesLiveSelectionAndPreservesStoredHistory(bool restoreHistory)
+    {
+        var store = new FluentUISetupHelpers.TestDashboardRunStore();
+        var first = store.GetCurrentRun();
+        var restored = new TaskCompletionSource<(bool Success, object? Value)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        SetupMainLayoutServices(dashboardRunStore: store, sessionStorage: new TestSessionStorage
+        {
+            OnGetTaskAsync = _ => restored.Task
+        });
+        var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        var selection = Services.GetRequiredService<IDashboardRunSelection>();
+        Assert.Equal(first.RunId, selection.SelectedRun.RunId);
+        store.SetRuns([first with { IsCurrent = false }, first with { RunId = "second", IsCurrent = true }]);
+
+        await cut.InvokeAsync(() => restored.SetResult((true, restoreHistory ? first.RunId : null)));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(restoreHistory ? first.RunId : "second", selection.SelectedRun.RunId);
+            Assert.Equal(!restoreHistory, selection.SelectedRun.IsCurrent);
+        });
+    }
+
+    [Fact]
+    public async Task RestoredHistory_ReturnToLive_ContinuesReceivingLiveConnectionChanges()
+    {
+        var store = new FluentUISetupHelpers.TestDashboardRunStore();
+        var current = store.GetCurrentRun();
+        store.SetRuns([current, current with { RunId = "history", IsCurrent = false }]);
+        var liveClient = new TestDashboardClient();
+        SetupMainLayoutServices(dashboardRunStore: store,
+            sessionStorage: new TestSessionStorage { OnGetTaskAsync = _ => Task.FromResult<(bool Success, object? Value)>((true, "history")) },
+            dashboardClient: new TestDashboardClient(isReadOnly: true), liveAppHostClient: liveClient);
+        var cut = Render<MainLayout>(parameters => parameters.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        var selection = Services.GetRequiredService<IDashboardRunSelection>();
+        cut.WaitForAssertion(() => Assert.Equal("history", selection.SelectedRun.RunId));
+        var picker = cut.FindComponent<DashboardRunSelect>();
+        picker.Find("fluent-button").Click();
+        var live = cut.WaitForElements("fluent-menu-item")[0];
+        live.TriggerEvent("onmenuitemchange", new MenuItemEventArgs { Id = live.Id, Text = live.TextContent, Checked = true });
+        cut.WaitForAssertion(() => Assert.True(selection.SelectedRun.IsCurrent));
+
+        var renders = cut.RenderCount;
+        await cut.InvokeAsync(() => liveClient.SetConnectionState(DashboardConnectionState.Disconnected));
+        cut.WaitForAssertion(() => Assert.True(cut.RenderCount > renders));
+        renders = cut.RenderCount;
+        await cut.InvokeAsync(() => liveClient.SetConnectionState(DashboardConnectionState.Connected));
+        cut.WaitForAssertion(() => Assert.True(cut.RenderCount > renders));
+    }
+
+    [Fact]
+    public async Task ConnectionOnlyTransition_RefreshesResourceCommandControls()
+    {
+        var command = new CommandViewModel("restart", CommandViewModelState.Enabled, "Restart", "", "", [], true, "", IconVariant.Regular);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [command]);
+        var client = new TestDashboardClient(isEnabled: true, initialResources: [resource],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        Services.AddSingleton<IconResolver>();
+        SetupMainLayoutServices(dashboardClient: client);
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resources = new System.Collections.Concurrent.ConcurrentDictionary<string, ResourceViewModel>(StringComparers.ResourceName)
+        {
+            [resource.Name] = resource
+        };
+        var cut = Render<MainLayout>(parameters => parameters
+            .Add(p => p.ViewportInformation, viewport)
+            .Add(p => p.Body, body =>
+            {
+                // Routed pages can skip a parent render when their route parameters have not changed.
+                // The connection cascade must still invalidate command controls underneath that boundary.
+                body.OpenComponent<RenderOnceComponent>(0);
+                body.AddAttribute(1, nameof(RenderOnceComponent.ChildContent), (RenderFragment)(controls =>
+                {
+                    controls.OpenComponent<ResourceActions>(0);
+                    controls.AddAttribute(1, nameof(ResourceActions.Resource), resource);
+                    controls.AddAttribute(2, nameof(ResourceActions.ResourceByName), resources);
+                    controls.AddAttribute(3, nameof(ResourceActions.MaxHighlightedCount), 1);
+                    controls.AddAttribute(4, nameof(ResourceActions.IsCommandExecuting), (Func<ResourceViewModel, CommandViewModel, bool>)((_, _) => false));
+                    controls.CloseComponent();
+                }));
+                body.CloseComponent();
+            }));
+        bool IsDisabled() => cut.FindComponents<FluentButton>().Single(button => button.Instance.Title == "Restart").Instance.Disabled;
+        Assert.False(IsDisabled());
+
+        await cut.InvokeAsync(() => client.SetConnectionState(DashboardConnectionState.Disconnected));
+        cut.WaitForAssertion(() => Assert.True(IsDisabled()));
+        await cut.InvokeAsync(() => client.SetConnectionState(DashboardConnectionState.Connected));
+        cut.WaitForAssertion(() => Assert.False(IsDisabled()));
+    }
+
     [Fact]
     public async Task RunSelectionPending_UserSelectionWinsOverStoredSelection()
     {
@@ -1247,7 +1451,8 @@ public partial class MainLayoutTests : DashboardTestContext
         BrowserTimeProvider? browserTimeProvider = null,
         IDashboardRunStore? dashboardRunStore = null,
         ISessionStorage? sessionStorage = null,
-        TestDashboardClient? dashboardClient = null)
+        TestDashboardClient? dashboardClient = null,
+        TestDashboardClient? liveAppHostClient = null)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(
             this,
@@ -1265,7 +1470,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Services.AddSingleton<IThemeResolver, TestThemeResolver>();
         dashboardClient ??= new TestDashboardClient();
         Services.AddSingleton<IDashboardClient>(dashboardClient);
-        Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, dashboardClient);
+        Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, liveAppHostClient ?? dashboardClient);
         Services.AddSingleton<ITooltipService, TooltipService>();
         Services.Configure<DashboardOptions>(o =>
         {

@@ -848,6 +848,87 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.True(true);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("https://configured.example")]
+    public async Task WatchResources_AllocatedEndpointsRefreshCorsWithoutBlockingAttachment(string? configuredOrigins)
+    {
+        var notifications = CreateResourceNotificationService(new ResourceLoggerService());
+        using var data = CreateDashboardServiceData(resourceNotificationService: notifications);
+        var resource = new TestResource("web");
+        var endpoint = new EndpointAnnotation(System.Net.Sockets.ProtocolType.Tcp, name: "http", uriScheme: "http");
+        resource.Annotations.Add(endpoint);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["AppHost:DashboardApplicationName"] = "TestAppHost",
+            [KnownConfigNames.DashboardCorsAllowedOrigins] = configuredOrigins
+        }).Build();
+        var runState = new DashboardRunState();
+        var service = CreateDashboardService(data, configuration: configuration, model: new DistributedApplicationModel([resource]), runState: runState);
+        var info = await service.GetApplicationInformation(new ApplicationInformationRequest(), TestServerCallContext.Create());
+        Assert.Equal(configuredOrigins ?? "", info.CorsAllowedOrigins);
+        using var cts = new CancellationTokenSource();
+        var context = TestServerCallContext.Create(cancellationToken: cts.Token);
+        var writer = new TestServerStreamWriter<WatchResourcesUpdate>(context);
+        var watch = service.WatchResources(new WatchResourcesRequest { RunId = runState.RunId }, writer, context);
+        try
+        {
+            var initial = await writer.ReadNextAsync().DefaultTimeout();
+            Assert.Equal(configuredOrigins ?? "", initial.CorsAllowedOrigins);
+            await runState.WhenAttached.DefaultTimeout();
+
+            endpoint.AllocatedEndpoint = new(endpoint, "localhost", 45123);
+            // ApplicationOrchestrator publishes resource URL changes on ResourceEndpointsAllocatedEvent.
+            await notifications.PublishUpdateAsync(resource, snapshot => snapshot with
+            {
+                State = new ResourceStateSnapshot("Starting", null),
+                Urls = [new UrlSnapshot("http", "http://localhost:45123", false)]
+            });
+            var allocated = await writer.ReadNextAsync().DefaultTimeout();
+            Assert.True(allocated.HasCorsAllowedOrigins);
+            Assert.Equal(!string.IsNullOrEmpty(configuredOrigins) ? configuredOrigins : "http://localhost:45123", allocated.CorsAllowedOrigins);
+        }
+        finally
+        {
+            await CancelTokenAndAwaitTask(cts, watch).DefaultTimeout();
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("current")]
+    [InlineData("previous")]
+    public async Task AppHostRunInterceptor_OnlyCurrentAttachmentCanExecuteCommands(string? attachment)
+    {
+        var runState = new DashboardRunState();
+        var interceptor = new AppHostRunInterceptor(runState);
+        var headers = new Metadata();
+        if (attachment is not null)
+        {
+            headers.Add("x-aspire-apphost-run-id", attachment == "current" ? runState.RunId : "old-run");
+        }
+        var context = TestServerCallContext.Create(requestHeaders: headers);
+        var invoked = false;
+        Task<ResourceCommandResponse> Execute(ResourceCommandRequest request, ServerCallContext context)
+        {
+            invoked = true;
+            return Task.FromResult(new ResourceCommandResponse());
+        }
+
+        if (attachment == "previous")
+        {
+            var error = await Assert.ThrowsAsync<RpcException>(() => interceptor.UnaryServerHandler(new ResourceCommandRequest(), context, Execute));
+            Assert.Equal(StatusCode.FailedPrecondition, error.StatusCode);
+            Assert.False(invoked);
+        }
+        else
+        {
+            await interceptor.UnaryServerHandler(new ResourceCommandRequest(), context, Execute);
+            Assert.True(invoked);
+        }
+    }
+
     [Fact]
     public async Task GetApplicationInformation_ReadsFromConfiguration()
     {
@@ -864,7 +945,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         {
             ApplicationName = "DefaultAppName"
         };
-        var dashboardService = CreateDashboardService(dashboardServiceData, hostEnvironment: hostEnvironment, configuration: configuration);
+        var runState = new DashboardRunState();
+        var dashboardService = CreateDashboardService(dashboardServiceData, hostEnvironment: hostEnvironment, configuration: configuration, runState: runState);
 
         var context = TestServerCallContext.Create();
 
@@ -875,6 +957,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         // Assert
         Assert.Equal("MyCustomAppName", response.ApplicationName);
+        Assert.Equal(runState.RunId, response.RunId);
     }
 
     [Fact]
@@ -888,7 +971,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         {
             ApplicationName = "FallbackAppName"
         };
-        var dashboardService = CreateDashboardService(dashboardServiceData, hostEnvironment: hostEnvironment, configuration: configuration);
+        var runState = new DashboardRunState();
+        var dashboardService = CreateDashboardService(dashboardServiceData, hostEnvironment: hostEnvironment, configuration: configuration, runState: runState);
 
         var context = TestServerCallContext.Create();
 
@@ -1837,16 +1921,20 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         IConfiguration? configuration = null,
         ILogger<DashboardServiceImpl>? logger = null,
         IInteractionFileUploadStore? fileUploadStore = null,
-                        TerminalService? terminalService = null)
+        TerminalService? terminalService = null,
+        DistributedApplicationModel? model = null,
+        DashboardRunState? runState = null)
     {
         return new DashboardServiceImpl(
             dashboardServiceData,
+            runState ?? new DashboardRunState(),
             hostEnvironment ?? new TestHostEnvironment(),
             new TestHostApplicationLifetime(),
             configuration ?? new ConfigurationBuilder().Build(),
             logger ?? NullLogger<DashboardServiceImpl>.Instance,
             fileUploadStore ?? new TestInteractionFileUploadStore(),
-            terminalService ?? TestTerminalService.Create());
+            terminalService ?? TestTerminalService.Create(),
+            model ?? new DistributedApplicationModel(new ResourceCollection()));
     }
 
     private static DashboardServiceData CreateDashboardServiceData(

@@ -300,3 +300,15 @@ partial class ResourceCommandResponse
         };
     }
 }
+
+// Local attachment identity is deliberately not serialized. Interaction IDs can be reused by
+// another AppHost process, so delayed UI callbacks must retain the run that created them.
+partial class WatchInteractionsResponseUpdate
+{
+    internal string AppHostRunId { get; set; } = string.Empty;
+}
+
+partial class WatchInteractionsRequestUpdate
+{
+    internal string AppHostRunId { get; set; } = string.Empty;
+}

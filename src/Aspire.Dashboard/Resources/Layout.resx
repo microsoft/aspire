@@ -213,4 +213,25 @@
   <data name="DashboardRunSelectHelpTooltip" xml:space="preserve">
     <value>Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</value>
   </data>
+  <data name="DashboardRunSelectOffline" xml:space="preserve">
+    <value>AppHost offline</value>
+  </data>
+  <data name="DashboardRunSelectConnecting" xml:space="preserve">
+    <value>Connecting to AppHost</value>
+  </data>
+  <data name="DashboardNewLiveRunTitle" xml:space="preserve">
+    <value>New live run connected</value>
+  </data>
+  <data name="DashboardNewLiveRunFollowed" xml:space="preserve">
+    <value>Previous run saved in history.</value>
+  </data>
+  <data name="DashboardNewLiveRunHistory" xml:space="preserve">
+    <value>You’re viewing a previous run.</value>
+  </data>
+  <data name="DashboardNewLiveRunOpen" xml:space="preserve">
+    <value>Open live run</value>
+  </data>
+  <data name="DashboardNewLiveRunDismiss" xml:space="preserve">
+    <value>Dismiss new live run notice</value>
+  </data>
 </root>

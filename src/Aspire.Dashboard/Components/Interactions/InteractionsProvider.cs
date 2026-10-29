@@ -157,6 +157,8 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                 var item = ((IList<WatchInteractionsResponseUpdate>)_pendingInteractions)[0];
                 _pendingInteractions.RemoveAt(0);
 
+                InteractionDialogReference? dialogReference = null;
+                bool IgnoreResult() => _cts.IsCancellationRequested || dialogReference?.CompletedByServer == true;
                 Func<DashboardDialogService, Task<DashboardDialogReference>> openDialog;
                 string dialogComponentId;
 
@@ -166,9 +168,14 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     dialogParameters.Title = WebUtility.HtmlEncode(item.Title);
                     dialogParameters.OnDialogResult = EventCallback.Factory.Create<DialogResult>(this, async dialogResult =>
                     {
+                        if (IgnoreResult())
+                        {
+                            return;
+                        }
                         var request = new WatchInteractionsRequestUpdate
                         {
-                            InteractionId = item.InteractionId
+                            InteractionId = item.InteractionId,
+                            AppHostRunId = item.AppHostRunId
                         };
 
                         if (dialogResult.Cancelled)
@@ -211,8 +218,13 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                         DashboardClient = DashboardClient,
                         OnSubmitCallback = async (savedInteraction, update) =>
                         {
+                            if (IgnoreResult())
+                            {
+                                return;
+                            }
                             var request = new WatchInteractionsRequestUpdate
                             {
+                                AppHostRunId = item.AppHostRunId,
                                 InteractionId = savedInteraction.InteractionId,
                                 InputsDialog = savedInteraction.InputsDialog,
                                 ResponseUpdate = update
@@ -227,14 +239,14 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     dialogParameters.Width = "min(650px, 75vw)";
                     // A non-cancelled result means the form submission already sent its request.
                     dialogParameters.OnDialogResult = CreateDialogResultCallback(dialogResult =>
-                        dialogResult.Cancelled ? CreateCompletionRequest(item.InteractionId) : null);
+                        dialogResult.Cancelled ? CreateCompletionRequest(item) : null, IgnoreResult);
 
                     dialogComponentId = TelemetryComponentIds.InteractionInputsDialog;
                     openDialog = dialogService => dialogService.ShowDialogAsync<InteractionsInputDialog>(vm, dialogParameters);
                 }
                 else if (item.PromptProgress is not null)
                 {
-                    var dialogParameters = CreateProgressDialogParameters(item);
+                    var dialogParameters = CreateProgressDialogParameters(item, IgnoreResult);
                     var vm = new InteractionsProgressDialogViewModel
                     {
                         Message = GetMessageHtml(item)
@@ -245,7 +257,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                 }
                 else if (item.PromptTerminal is { } promptTerminal)
                 {
-                    var dialogParameters = CreateTerminalDialogParameters(item, promptTerminal);
+                    var dialogParameters = CreateTerminalDialogParameters(item, promptTerminal, IgnoreResult);
                     var vm = new InteractionsTerminalDialogViewModel
                     {
                         TerminalId = promptTerminal.TerminalId,
@@ -267,7 +279,8 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                 });
 
                 Debug.Assert(currentDialogReference != null, "Dialog should have been created in UI thread.");
-                _interactionDialogReference = new InteractionDialogReference(item.InteractionId, currentDialogReference, CreateTelemetryContext(dialogComponentId));
+                dialogReference = new InteractionDialogReference(item.InteractionId, currentDialogReference, CreateTelemetryContext(dialogComponentId));
+                _interactionDialogReference = dialogReference;
             }
             finally
             {
@@ -482,7 +495,8 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                 {
                     request = new WatchInteractionsRequestUpdate
                     {
-                        InteractionId = interaction.InteractionId
+                        InteractionId = interaction.InteractionId,
+                        AppHostRunId = interaction.AppHostRunId
                     };
 
                     if (result.Data is not bool actionResult)
@@ -546,26 +560,30 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
         return dialogParameters;
     }
 
-    private DialogParameters CreateProgressDialogParameters(WatchInteractionsResponseUpdate interaction)
+    private DialogParameters CreateProgressDialogParameters(WatchInteractionsResponseUpdate interaction, Func<bool> ignoreResult)
     {
         return CreatePromptDialogParameters(
             interaction,
+            ignoreResult,
             width: "500px",
             createResult: () => new WatchInteractionsRequestUpdate
             {
                 InteractionId = interaction.InteractionId,
+                AppHostRunId = interaction.AppHostRunId,
                 PromptProgress = new InteractionPromptProgress { Result = false }
             });
     }
 
-    private DialogParameters CreateTerminalDialogParameters(WatchInteractionsResponseUpdate interaction, InteractionPromptTerminal terminal)
+    private DialogParameters CreateTerminalDialogParameters(WatchInteractionsResponseUpdate interaction, InteractionPromptTerminal terminal, Func<bool> ignoreResult)
     {
         var dialogParameters = CreatePromptDialogParameters(
             interaction,
+            ignoreResult,
             width: "75vw",
             createResult: () => new WatchInteractionsRequestUpdate
             {
                 InteractionId = interaction.InteractionId,
+                AppHostRunId = interaction.AppHostRunId,
                 PromptTerminal = new InteractionPromptTerminal
                 {
                     TerminalId = terminal.TerminalId,
@@ -579,6 +597,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
     private DialogParameters CreatePromptDialogParameters(
         WatchInteractionsResponseUpdate interaction,
+        Func<bool> ignoreResult,
         string width,
         Func<WatchInteractionsRequestUpdate> createResult)
     {
@@ -595,10 +614,8 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
         }
 
         dialogParameters.OnDialogResult = CreateDialogResultCallback(
-            dialogResult => dialogResult.Cancelled ? CreateCompletionRequest(interaction.InteractionId) : createResult(),
-            ignoreResult: () => _cts.IsCancellationRequested ||
-                (_interactionDialogReference is { CompletedByServer: true } reference &&
-                 reference.InteractionId == interaction.InteractionId));
+            dialogResult => dialogResult.Cancelled ? CreateCompletionRequest(interaction) : createResult(),
+            ignoreResult);
 
         return dialogParameters;
     }
@@ -621,11 +638,12 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
         });
     }
 
-    private static WatchInteractionsRequestUpdate CreateCompletionRequest(int interactionId)
+    private static WatchInteractionsRequestUpdate CreateCompletionRequest(WatchInteractionsResponseUpdate interaction)
     {
         return new WatchInteractionsRequestUpdate
         {
-            InteractionId = interactionId,
+            InteractionId = interaction.InteractionId,
+            AppHostRunId = interaction.AppHostRunId,
             Complete = new InteractionComplete()
         };
     }

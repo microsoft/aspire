@@ -16,7 +16,7 @@ namespace Aspire.Dashboard.ServiceClient;
 /// <summary>
 /// Stores dashboard resources and console logs in SQLite.
 /// </summary>
-public sealed partial class SqliteResourceRepository : IResourceRepository, IResourceRepositoryWriter, IDisposable
+public sealed partial class SqliteResourceRepository : IResourceRepository, IResourceRepositoryWriter, IAppHostConsoleLogWriter, IDisposable
 {
     private readonly DashboardSqliteDatabase _database;
     private readonly IKnownPropertyLookup _knownPropertyLookup;
@@ -27,6 +27,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _resourceChannels = [];
     private readonly Dictionary<string, ImmutableHashSet<Channel<IReadOnlyList<ResourceLogLine>>>> _consoleChannels = new(StringComparers.ResourceName);
     private int _disposed;
+    private string? _appHostRunId;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SqliteResourceRepository"/> class.
@@ -286,12 +287,49 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         PublishResourceChanges(viewModelChanges);
     }
 
-    async Task IResourceRepositoryWriter.MarkConsoleLogsLoadedAsync(string resourceName)
+    async Task IAppHostConsoleLogWriter.BeginAppHostRunAsync(string runId)
     {
         EnsureWritable();
         ThrowIfDisposed();
         using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
+            if (_appHostRunId == runId)
+            {
+                return;
+            }
+
+            using var connection = _database.OpenConnection();
+            // Keep captured rows, but the next AppHost starts its own line-number sequence at 1.
+            connection.Execute("UPDATE dashboard_resources SET console_logs_loaded = 0;");
+            lock (_stateLock)
+            {
+                foreach (var state in _resourceStates.Values)
+                {
+                    state.LastConsoleLogLineNumber = int.MinValue;
+                    state.Resource.ConsoleLogsLoaded = false;
+                }
+            }
+            _appHostRunId = runId;
+        }
+    }
+
+    Task IResourceRepositoryWriter.MarkConsoleLogsLoadedAsync(string resourceName) =>
+        MarkConsoleLogsLoadedAsync(resourceName, expectedRunId: null);
+
+    Task IAppHostConsoleLogWriter.MarkConsoleLogsLoadedAsync(string resourceName, string runId) =>
+        MarkConsoleLogsLoadedAsync(resourceName, runId);
+
+    private async Task MarkConsoleLogsLoadedAsync(string resourceName, string? expectedRunId)
+    {
+        EnsureWritable();
+        ThrowIfDisposed();
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
+        {
+            if (expectedRunId is not null && expectedRunId != _appHostRunId)
+            {
+                return;
+            }
+
             using var connection = _database.OpenConnection();
             connection.Execute("""
                 UPDATE dashboard_resources
@@ -308,19 +346,31 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         }
     }
 
-    async Task IResourceRepositoryWriter.AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines)
+    Task IResourceRepositoryWriter.AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines) =>
+        AddConsoleLogsAsync(resourceName, logLines, expectedRunId: null);
+
+    Task<bool> IAppHostConsoleLogWriter.AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines, string runId) =>
+        AddConsoleLogsAsync(resourceName, logLines, runId);
+
+    private async Task<bool> AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines, string? expectedRunId)
     {
         EnsureWritable();
         ThrowIfDisposed();
         if (logLines.Count == 0)
         {
-            return;
+            return true;
         }
 
-        var viewModelLines = logLines.Select(line => new ResourceLogLine(line.LineNumber, line.Text, line.IsStdErr)).ToArray();
+        ResourceLogLine[] viewModelLines;
         Channel<IReadOnlyList<ResourceLogLine>>[] channels;
         using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
+            // Check inside the write lock so a late batch cannot race the generation reset.
+            if (expectedRunId is not null && expectedRunId != _appHostRunId)
+            {
+                return false;
+            }
+
             int lastLineNumber;
             DateTime? clearDate;
             lock (_stateLock)
@@ -371,6 +421,8 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 WHERE resource_name = @ResourceName;
                 """, new { ResourceName = resourceName }, transaction);
             InsertConsoleLogs(connection, transaction, resourceName, consoleLogsToInsert);
+            // Subscribers read the persisted view, so replayed or cleared lines must not be republished.
+            viewModelLines = consoleLogsToInsert.Select(line => new ResourceLogLine(line.LineNumber, line.Content, line.IsStdErr)).ToArray();
             TrimConsoleLogs(connection, transaction, _maxConsoleLogCount);
             transaction.Commit();
 
@@ -385,10 +437,17 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
             }
         }
 
+        if (viewModelLines.Length == 0)
+        {
+            return true;
+        }
+
         foreach (var channel in channels)
         {
             channel.Writer.TryWrite(viewModelLines);
         }
+
+        return true;
     }
 
     /// <inheritdoc/>

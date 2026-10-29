@@ -43,6 +43,10 @@ public partial class ResourceActions : ComponentBase
     [Parameter]
     public required ConcurrentDictionary<string, ResourceViewModel> ResourceByName { get; set; }
 
+    // Invalidate command controls and cached menus when only the AppHost connection changes.
+    [CascadingParameter(Name = nameof(DashboardConnectionState))]
+    public DashboardConnectionState AppHostConnectionState { get; set; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
