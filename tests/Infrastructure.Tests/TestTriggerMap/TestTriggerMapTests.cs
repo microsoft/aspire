@@ -98,6 +98,22 @@ public sealed class TestTriggerMapTests
         Assert.Equal(["Aspire.Templates.Tests"], result.TestProjects);
     }
 
+    [Theory]
+    [InlineData(".github/workflows/auto-rerun-transient-ci-failures.js")]
+    [InlineData(".github/workflows/auto-rerun-transient-ci-failures.yml")]
+    [InlineData(".github/workflows/auto-rerun/common.js")]
+    [InlineData(".github/workflows/auto-rerun/github.js")]
+    [InlineData(".github/workflows/auto-rerun/rerun-main.js")]
+    [InlineData(".github/workflows/auto-rerun/rerun-pull-request.js")]
+    public void AutoRerunWorkflowInputsReachInfrastructureTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+    }
+
     // Repo-relative '/'-separated project paths listed in Aspire.slnx (the Layer 1 graph root).
     private static IReadOnlySet<string> LoadSolutionProjectPaths()
     {
