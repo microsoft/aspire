@@ -872,7 +872,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal("example/remote", Assert.Single(config.SkillSources!).Value.Repository);
         Assert.Equal("version-2", config.ConfigSource!.AppliedVersion);
         var settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
-        Assert.Equal(["configSource", "docs", "skillSources"], settings.Select(p => p.Key));
+        Assert.Equal(["configSource", "skillSources", "docs"], settings.Select(p => p.Key));
         Assert.Equal(["team"], settings["skillSources"]!.AsObject().Select(p => p.Key));
         Assert.Equal(["repository", "arbitrary"], settings["skillSources"]!["team"]!.AsObject().Select(p => p.Key));
     }
@@ -1506,9 +1506,16 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var context = workspace.CreateExecutionContext();
         var clock = new AdjustableTimeProvider();
-        var git = new TestConfigSourceRepository();
+        var git = new TestConfigSourceRepository
+        {
+            ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
+                {"skillSources":{"team":{"repository":"example/team"}}}
+                """)!.AsObject()))
+        };
         using var first = TestConfigSourceServices.Create(context, git: git, clock: clock);
         await first.MaterializeAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var original = await File.ReadAllTextAsync(path);
         var retained = await first.AcquireAsync(s_source, force: false, CancellationToken.None);
         var cache = first.GetCacheDirectory(s_source);
         var stale = Directory.CreateDirectory(Path.Combine(cache, Guid.NewGuid().ToString("N")));
@@ -1526,6 +1533,10 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 
         Assert.Contains(changed ? ConfigSourceStrings.Refreshed : ConfigSourceStrings.RefreshedUnchanged,
             Assert.Single(interaction.DisplayedMessages).Message);
+        if (!changed)
+        {
+            Assert.Equal(original, await File.ReadAllTextAsync(path));
+        }
         Assert.Equal(2, git.Calls);
         Assert.Equal(0, git.CheckCalls);
         var pointer = await File.ReadAllTextAsync(Path.Combine(next.GetCacheDirectory(s_source), "current"));

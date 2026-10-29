@@ -248,14 +248,18 @@ internal sealed class ConfigSourceService(
 
             // Replace all case-equivalent local sections, preserving every source section
             // that IConfiguration combines (for example {"SKILLSOURCES":{...},"skillSources":{...}}).
+            // Keep the original position so an unchanged section does not reorder the file
+            // and make an otherwise identical refresh report changes.
+            var insertionIndex = configuration.Count;
             foreach (var key in configuration.Select(property => property.Key)
                 .Where(key => key.Equals(setting, StringComparison.OrdinalIgnoreCase)).ToArray())
             {
+                insertionIndex = Math.Min(insertionIndex, configuration.IndexOf(key));
                 configuration.Remove(key);
             }
             foreach (var (key, value) in supplied)
             {
-                configuration[key] = value?.DeepClone();
+                configuration.Insert(insertionIndex++, key, value?.DeepClone());
             }
         }
         var binding = new ConfigSource
