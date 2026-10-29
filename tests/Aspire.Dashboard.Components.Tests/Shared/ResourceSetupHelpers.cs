@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
@@ -23,6 +24,15 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class ResourceSetupHelpers
 {
+    public static void SetupResourceOverview(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient)
+    {
+        context.Services.AddSingleton<IVolumePathLauncher, VolumePathLauncher>();
+        context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
+        context.Services.AddSingleton<ConsoleLogsManager>();
+        SetupResourcesLayout(context, viewport, dashboardClient);
+        context.JSInterop.Setup<string>("Blazor._internal.PageTitle.getAndRemoveExistingTitle", _ => true).SetResult(string.Empty);
+    }
+
     public static void SetupResourcesLayout(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient)
     {
         SetupResourcesPage(context, viewport, dashboardClient);

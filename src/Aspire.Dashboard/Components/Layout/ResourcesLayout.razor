@@ -448,6 +448,21 @@
                     <FluentIcon Value="@(new Icons.Regular.Size16.Open())" Color="Color.Primary" />
                 </a>
             }
+            @if (!showLabels && CanViewResourceTerminal(resource))
+            {
+                var terminalLabel = string.Format(CultureInfo.CurrentCulture, TerminalLoc[nameof(TerminalStrings.TerminalOpenForResource)], resourceName);
+                <a class="@($"{GetResourceRowActionClass(actionIndex++)} resource-row-terminal")"
+                   href="@GetResourceTerminalUrl(resource)"
+                   data-tooltip="@terminalLabel"
+                   data-tooltip-positioning="above"
+                   aria-label="@terminalLabel"
+                   @onclick="@(() => NavigateToResourceTerminal(resource))"
+                   @onclick:preventDefault="true"
+                   @onclick:stopPropagation="true"
+                   @onkeydown:stopPropagation="true">
+                    <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="16px" Color="Color.Primary" />
+                </a>
+            }
             @foreach (var command in GetHighlightedCommands(resource))
             {
                 var commandTitle = !string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName();
@@ -609,6 +624,7 @@
                             Color="Color.Custom"
                             CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(selectedName)"
                             Value="@ResourceIconHelpers.GetIconForResource(IconResolver, selected, IconSize.Size20)" />
+                <PersistentContainerBadge Resource="@selected" />
             </span>
             <div class="resource-header-text">
                 <div class="resource-header-title">
@@ -709,7 +725,7 @@
             <FluentIcon Value="@selectedState.Icon" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
             @selectedState.Text
         </span>
-        <span class="resource-status-type">@resource.ResourceType</span>
+        <span class="resource-status-type">@GetResourceTypeLabel(resource)</span>
         @if (resource.StartTimeStamp is not null)
         {
             <span class="resource-header-sep" aria-hidden="true">·</span>
@@ -730,11 +746,15 @@
         // instead of letting the top navigation grow its own scrollbar.
         // While a tab click navigates, the strip keeps showing the clicked tab (see OnTabChanged).
         var activeTab = _navigatingToTab ?? CurrentTab;
+        var renderedLocation = _lastLocation;
         var currentTabItem = GetTabs().FirstOrDefault(t => t.Tab == activeTab);
     <div class="resource-tabs-nav">
-        <FluentTabs Class="resources-tab-header"
+        @* Keep queued native change events bound to their original location. Reusing the component would
+           rebind its callback before those events arrive, making an old change look like a new user navigation. *@
+        <FluentTabs @key="renderedLocation"
+                    Class="resources-tab-header"
                     ActiveTabId="@GetTabId(activeTab)"
-                    ActiveTabChanged="@(tab => OnTabChanged(tab, isDesktop))"
+                    ActiveTabChanged="@(tab => OnTabChanged(tab, isDesktop, renderedLocation))"
                     Size="null">
             @foreach (var tab in GetTabs())
             {
@@ -808,6 +828,7 @@
                                 Color="Color.Custom"
                                 CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(resourceName)"
                                 Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IsSpacious ? IconSize.Size20 : IconSize.Size16)" />
+                    <PersistentContainerBadge Resource="@resource" />
                 </span>
                 @if (IsCompact)
                 {
@@ -815,15 +836,6 @@
                        row to row. The state is a dot here; its name is in the tooltip and the label. *@
                     <span class="resource-row-text">
                         <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@resourceName" /></span>
-                        @if (resource.IsPersistentContainer)
-                        {
-                            @* Right after the name, as part of what the resource is rather than of its state. *@
-                            <FluentIcon Icon="Icons.Regular.Size16.Pin"
-                                        Class="persistent-container-icon"
-                                        data-tooltip="@ColumnsLoc[nameof(Columns.PersistentContainerIconTooltip)]"
-                                        aria-label="@ColumnsLoc[nameof(Columns.PersistentContainerIconTooltip)]"
-                                        Color="Color.Default" />
-                        }
                         @if (resource.IsResourceHidden(showHiddenResources: false))
                         {
                             <FluentIcon Value="@(new Icons.Regular.Size16.EyeOff())"
@@ -838,7 +850,7 @@
                         <span class="error-badge" data-tooltip="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneUnviewedErrors)], errorCount)">@errorCount</span>
                     }
                     <span class="resource-row-meta">
-                        <span class="resource-row-type" data-tooltip="@resource.ResourceType">@resource.ResourceType</span>
+                        <span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
                         <span class="resource-row-meta-state" data-tooltip="@stateViewModel.Text">
                             <span class="state-dot @GetStateClass(resource)"></span>
                         </span>
@@ -849,15 +861,6 @@
                     <span class="resource-row-text">
                         <span class="resource-row-title">
                             <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@resourceName" /></span>
-                            @if (resource.IsPersistentContainer)
-                            {
-                                @* Right after the name, as part of what the resource is rather than of its state. *@
-                                <FluentIcon Icon="Icons.Regular.Size16.Pin"
-                                            Class="persistent-container-icon"
-                                            data-tooltip="@ColumnsLoc[nameof(Columns.PersistentContainerIconTooltip)]"
-                                            aria-label="@ColumnsLoc[nameof(Columns.PersistentContainerIconTooltip)]"
-                                            Color="Color.Default" />
-                            }
                         </span>
                         <span class="resource-row-sub">
                             @if (resource.IsResourceHidden(showHiddenResources: false))
@@ -870,7 +873,7 @@
                             <span class="state-dot @GetStateClass(resource)"></span>
                             <span>@stateViewModel.Text</span>
                             <span class="resource-row-sep" aria-hidden="true">·</span>
-                            <span class="resource-row-type">@resource.ResourceType</span>
+                            <span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
                         </span>
                         @if (IsSpacious && !resource.IsParameter)
                         {

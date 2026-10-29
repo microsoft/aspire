@@ -3,10 +3,12 @@
 
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
@@ -23,6 +25,95 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public class TerminalsTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ModernLayout_UsesRouteSelectionAndReconnectsWithoutClosingProducer(bool isDesktop)
+    {
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var client = CreateClient(
+            TerminalSetupHelpers.CreateTerminalResource("first-instance", displayName: "first", autoFit: true),
+            TerminalSetupHelpers.CreateTerminalResource("second", autoFit: false));
+        TerminalsSetupHelpers.SetupResourcesPage(this, viewport, client);
+        var storage = Assert.IsType<TestSessionStorage>(Services.GetRequiredService<ISessionStorage>());
+        storage.OnGetAsync = key => key == BrowserStorageKeys.TerminalsPageState
+            ? (true, new Terminals.TerminalsPageState("second")) : (false, null);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        string? resourceName = "first";
+        navigation.NavigateTo(DashboardUrls.TerminalsUrl(resourceName) + "?pane=tags#output");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<Terminals>(0);
+            builder.AddAttribute(1, nameof(Terminals.ResourceName), resourceName);
+            builder.CloseComponent();
+        }));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("first-instance", cut.FindComponent<TerminalView>().Instance.ResourceName);
+            Assert.Equal(ResourceTab.Terminal, cut.Instance.CurrentTab);
+        });
+        var viewer = cut.FindComponent<TerminalView>().Instance;
+        Assert.True(viewer.AutoFit);
+        Assert.True(viewer.ShowOpenInWindow);
+        Assert.Equal("first", viewer.WindowResourceName);
+        Assert.Empty(cut.FindComponents<ResourceSelect>());
+        Assert.Single(cut.FindAll(".resource-tab-body .resource-terminal-page .terminal-view"));
+        Assert.Equal("http://localhost/resources/first?pane=tags&terminal=true#output", navigation.Uri);
+
+        resourceName = "second";
+        navigation.NavigateTo(DashboardUrls.TerminalsUrl(resourceName));
+        cut.Render();
+        cut.WaitForAssertion(() => Assert.Equal("second", viewer.ResourceName));
+        Assert.Same(viewer, cut.FindComponent<TerminalView>().Instance);
+        Assert.False(viewer.AutoFit);
+        Assert.Equal(["second"], cut.Instance.SelectedResourceNames);
+        Assert.Single(JSInterop.Invocations, i => i.Identifier == "reconnectTerminal");
+
+        storage.OnSetAsync = (key, _) =>
+        {
+            if (key == BrowserStorageKeys.TerminalsPageState)
+            {
+                navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("second"));
+            }
+        };
+        var page = cut.FindComponent<Terminals>().Instance;
+        await cut.InvokeAsync(() => page.UpdateViewModelFromQueryAsync(page.PageViewModel));
+        Assert.Equal("http://localhost/resources/second", navigation.Uri);
+        storage.OnSetAsync = null;
+
+        // The layout can update the outgoing page's cascading parameters before the router replaces its body.
+        cut.Render();
+        Assert.Equal("http://localhost/resources/second", navigation.Uri);
+
+        await cut.InvokeAsync(() => cut.FindComponent<Terminals>().Instance.DisposeAsync().AsTask());
+        Assert.Empty(client.ClosedTerminals);
+    }
+
+    [Fact]
+    public void ModernLayout_DoesNotRestoreSavedTerminalWhenNoResourceIsSelected()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        TerminalsSetupHelpers.SetupResourcesPage(this, viewport, CreateClient(TerminalSetupHelpers.CreateTerminalResource("shell")));
+        var storage = Assert.IsType<TestSessionStorage>(Services.GetRequiredService<ISessionStorage>());
+        storage.OnGetAsync = key => key == BrowserStorageKeys.TerminalsPageState
+            ? (true, new Terminals.TerminalsPageState("shell")) : (false, null);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.TerminalsUrl());
+
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<Terminals>(0);
+            builder.CloseComponent();
+        }));
+
+        cut.WaitForAssertion(() => Assert.Equal(Resources.TerminalStrings.TerminalsSelectAResource,
+            cut.Find(".resource-terminal-page [role='status']").TextContent.Trim()));
+        Assert.Empty(cut.FindComponents<TerminalView>());
+        Assert.Empty(cut.Instance.SelectedResourceNames);
+        Assert.Equal("http://localhost/terminals", navigation.Uri);
+    }
+
     [Theory]
     [InlineData(null, false)]
     [InlineData(false, false)]

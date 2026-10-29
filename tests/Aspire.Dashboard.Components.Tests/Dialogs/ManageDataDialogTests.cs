@@ -14,6 +14,8 @@ using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.Collections;
+using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -28,6 +30,36 @@ namespace Aspire.Dashboard.Components.Tests.Dialogs;
 [UseCulture("en-US")]
 public sealed class ManageDataDialogTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData("/resources", true)]
+    [InlineData("/legacy/resources", false)]
+    public void Render_PersistentContainerIndicatorMatchesExperience(string location, bool modern)
+    {
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        SetupManageDataDialogServices(new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("persistent", properties: new()
+                {
+                    [KnownProperties.Container.Lifetime] = new(KnownProperties.Container.Lifetime, Value.ForString("Persistent"), false, null, 0, null, false)
+                }),
+                ModelTestHelpers.CreateResource("ordinary")
+            ], resourceChannelProvider: () => channel));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(location);
+        var cut = Render<ManageDataDialog>(p => p.Add(p => p.Virtualize, false));
+
+        cut.WaitForAssertion(() =>
+        {
+            var names = cut.FindComponents<ResourceNameDisplay>();
+            Assert.Equal(2, names.Count);
+            var persistent = names.Single(name => name.Instance.Resource.Name == "persistent");
+            var ordinary = names.Single(name => name.Instance.Resource.Name == "ordinary");
+            Assert.Equal(modern ? 1 : 0, persistent.FindAll(".persistent-container-badge").Count);
+            Assert.Equal(modern ? 0 : 1, persistent.FindAll(".persistent-container-icon").Count);
+            Assert.Empty(ordinary.FindAll(".persistent-container-badge, .persistent-container-icon"));
+        });
+    }
+
     [Fact]
     public async Task Render_SelectionControlsExposeAccessibleNamesCheckboxRoleAndState()
     {

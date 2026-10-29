@@ -50,6 +50,8 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private OverviewTelemetry? _telemetry;
     private ResourcesLayout? _subscribedLayout;
     private IDisposable? _consoleLogsFiltersChangedSubscription;
+    private TerminalView? _terminalView;
+    private bool? _renderedTerminalFocus;
 
     [Parameter]
     public string? ResourceName { get; set; }
@@ -82,9 +84,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     public required IVolumePathLauncher VolumePathLauncher { get; init; }
 
     [Inject]
-    public required ShortcutManager ShortcutManager { get; init; }
-
-    [Inject]
     public required TerminalDockState TerminalDockState { get; init; }
 
     [Inject]
@@ -101,9 +100,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     [Inject]
     public required IStringLocalizer<Dashboard.Resources.Layout> LayoutLoc { get; init; }
-
-    private Task ToggleTerminalDockAsync()
-        => ShortcutManager.OnGlobalKeyDown(AspireKeyboardShortcut.ToggleTerminalDock);
 
     [Inject]
     public required IStringLocalizer<Dashboard.Resources.ConsoleLogs> ConsoleLogsLoc { get; init; }
@@ -123,6 +119,27 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     private ResourceViewModel? Resource => ResourcesLayout?.SelectedResource;
+
+    private bool IsTerminalFocused => ResourcesLayout?.CurrentTab == ResourceTab.Terminal &&
+        Resource is { } resource && ResourceSelectHelpers.HasUsableTerminal(resource);
+
+    private void ToggleTerminalFocus() =>
+        NavigationManager.NavigateTo(DashboardUrls.SetResourceTerminalFocus(NavigationManager.Uri, !IsTerminalFocused));
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_renderedTerminalFocus != IsTerminalFocused)
+        {
+            var wasRendered = _renderedTerminalFocus is not null;
+            _renderedTerminalFocus = IsTerminalFocused;
+            if (wasRendered && _terminalView is not null)
+            {
+                // Focus changes the existing card's size, not its connection. Explicit activation
+                // reapplies its sizing policy once; ordinary resizes must not fight other viewers.
+                await _terminalView.RefreshLayoutAsync();
+            }
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {

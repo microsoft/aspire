@@ -487,6 +487,21 @@
         <target state="new">Warnings</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcePersistentLifetime">
+        <source>Persistent</source>
+        <target state="new">Persistent</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePersistentLifetimeDescription">
+        <source>Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data.</source>
+        <target state="new">Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePersistentType">
+        <source>{0} (persistent)</source>
+        <target state="new">{0} (persistent)</target>
+        <note>{0} is the resource type, for example Container. Persistence describes the container lifetime, not durable data.</note>
+      </trans-unit>
       <trans-unit id="ResourceTagsAdd">
         <source>Add tag</source>
         <target state="new">Add tag</target>

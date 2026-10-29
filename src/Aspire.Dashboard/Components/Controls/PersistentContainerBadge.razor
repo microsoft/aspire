@@ -1,0 +1,12 @@
+@using Aspire.Dashboard.Components.CustomIcons
+@using Aspire.Dashboard.Resources
+
+@if (Resource.IsPersistentContainer)
+{
+    <span class="persistent-container-badge"
+          role="img"
+          aria-label="@Loc[nameof(Columns.PersistentContainerIconTooltip)]"
+          data-tooltip="@Loc[nameof(Columns.PersistentContainerIconTooltip)]">
+        <FluentIcon Value="@(new AspireIcons.Size16.Infinity())" Width="12px" aria-hidden="true" />
+    </span>
+}

@@ -12,7 +12,7 @@ namespace Aspire.Dashboard.Components.Layout;
 
 /// <summary>
 /// The top-level navigation displayed across the top of the desktop layout. With a resource
-/// service the dashboard is organized around the app model (Resources, Parameters, Graph, Terminals) and
+/// service the dashboard is organized around the resource selection and
 /// telemetry is reached from the pages of a resource selection. Telemetry-only services have a separate section
 /// in both AppHost and standalone mode.
 /// </summary>
@@ -50,9 +50,6 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
     internal static Icon GraphIcon(bool active = false) =>
         active ? new Icons.Filled.Size24.ShareAndroid()
                   : new Icons.Regular.Size24.ShareAndroid();
-
-    [Parameter]
-    public bool HasResourceTerminals { get; set; }
 
     internal static Icon StructuredLogsIcon(bool active = false) =>
         active ? new Icons.Filled.Size24.SlideTextSparkle()
@@ -142,10 +139,6 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
             // The pages of a selection (overview, console logs, structured logs, traces and metrics) are icons at the
             // top of the resources view, so the app navigation has a single entry for them.
             yield return new NavItem(NavSection.Resources, GetSelectionPageUrl(NavigationManager, ResourceTab.Overview), Loc[nameof(Resources.Layout.NavMenuResourcesTab)], ResourcesIcon(), ResourcesIcon(active: true));
-            if (HasResourceTerminals)
-            {
-                yield return new NavItem(NavSection.Terminals, DashboardUrls.TerminalsUrl(), Loc[nameof(Resources.Layout.NavMenuTerminalsTab)], TerminalsIcon(), TerminalsIcon(active: true));
-            }
         }
         yield return new NavItem(NavSection.Telemetry, DashboardUrls.TelemetrySourcesUrl(), Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)], TelemetryIcon(), TelemetryIcon(active: true));
     }
@@ -191,7 +184,9 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
             DashboardUrls.MetricsBasePath => NavSection.Resources,
             DashboardUrls.ParametersBasePath => NavSection.Parameters,
             DashboardUrls.GraphBasePath => NavSection.Graph,
-            DashboardUrls.TerminalsBasePath => NavSection.Terminals,
+            DashboardUrls.TerminalsBasePath => path.StartsWith($"{DashboardUrls.TerminalsBasePath}/resource/", StringComparisons.UrlPath)
+                ? NavSection.Resources
+                : NavSection.Terminals,
             DashboardUrls.ExtensionsBasePath => NavSection.Extensions,
             DashboardUrls.ResourceOverviewBasePath => NavSection.Resources,
             _ => NavSection.None

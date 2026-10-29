@@ -240,7 +240,7 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         Assert.Equal(
             [
-                ("cache", $"Running; Container; {Resources.Columns.PersistentContainerIconTooltip}", (string?)null)
+                ("cache", "Running; Container (persistent)", (string?)null)
             ],
             cut.FindAll(".resource-row-link").Select(link => (
                 link.GetAttribute("aria-label"), link.GetAttribute("aria-description"), link.GetAttribute("data-tooltip"))));
@@ -400,11 +400,72 @@ public class ResourcesLayoutTests : DashboardTestContext
         var api = cut.Find("[data-resource-name='api'] .resource-row-meta");
         Assert.Equal("Project", api.QuerySelector(".resource-row-type")!.TextContent);
         Assert.Equal("Running", api.QuerySelector(".resource-row-meta-state")!.GetAttribute("data-tooltip"));
-        // A persistent container's pin follows its name, not the columns.
-        Assert.Single(cut.FindAll("[data-resource-name='cache'] .resource-row-name + .persistent-container-icon"));
+        Assert.Empty(cut.FindAll("[data-resource-name='cache'] .persistent-container-icon"));
         var cache = cut.Find("[data-resource-name='cache'] .resource-row-meta");
         Assert.Empty(cache.QuerySelectorAll(".persistent-container-icon"));
-        Assert.Equal("Container", cache.QuerySelector(".resource-row-type")!.TextContent);
+        Assert.Equal("Container (persistent)", cache.QuerySelector(".resource-row-type")!.TextContent);
+    }
+
+    [Fact]
+    public async Task TerminalTab_NavigatesWithinTheSelectionAndFallsBackForNonTerminalResources()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                TerminalSetupHelpers.CreateTerminalResource("shell"),
+                TerminalSetupHelpers.CreateTerminalResource("other-shell"),
+                ModelTestHelpers.CreateResource("api")
+            ], resourceChannelProvider: () => channel));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("shell"));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        Assert.True(cut.Instance.IsTabAvailable(ResourceTab.Terminal));
+        var terminalTab = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Terminal");
+        Assert.True(terminalTab.Instance.Visible);
+        await cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(terminalTab.Instance));
+        Assert.Equal("http://localhost/resources/shell?terminal=true", navigation.Uri);
+        cut.Render();
+        Assert.Equal("tab-Terminal", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        var previousTabs = cut.FindComponent<FluentTabs>().Instance;
+        var previousTabChanged = cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged;
+        var overviewTab = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance;
+
+        cut.Find(".resource-row-link[aria-label='other-shell']").Click();
+        Assert.Equal("http://localhost/resources/other-shell?terminal=true", navigation.Uri);
+        cut.Render();
+        Assert.NotSame(previousTabs, cut.FindComponent<FluentTabs>().Instance);
+        Assert.Equal(["other-shell"], cut.Instance.SelectedResourceNames);
+        await cut.InvokeAsync(() => previousTabChanged.InvokeAsync(overviewTab));
+        Assert.Equal("http://localhost/resources/other-shell?terminal=true", navigation.Uri);
+
+        cut.Find(".resource-row-link[aria-label='api']").Click();
+        Assert.Equal("http://localhost/resources/api", navigation.Uri);
+        cut.Render();
+        Assert.False(cut.Instance.IsTabAvailable(ResourceTab.Terminal));
+        Assert.False(cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Terminal").Instance.Visible);
+    }
+
+    [Fact]
+    public async Task TerminalTab_FocusAndOverviewPreservePaneQueryAndFragment()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [TerminalSetupHelpers.CreateTerminalResource("shell")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/resources/shell?pane=tags#output");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        var terminal = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Terminal").Instance;
+        await cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(terminal));
+        Assert.Equal("http://localhost/resources/shell?pane=tags&terminal=true#output", navigation.Uri);
+        cut.Render();
+        var overview = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance;
+        await cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(overview));
+        Assert.Equal("http://localhost/resources/shell?pane=tags#output", navigation.Uri);
     }
 
     [Fact]
@@ -502,6 +563,88 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         var menuButton = cut.FindComponents<AspireMenuButton>().Single(b => b.Instance.Title == "Actions for api");
         Assert.Contains(menuButton.Instance.ItemsProvider(), item => item.Text == "Custom command");
+    }
+
+    [Theory]
+    [InlineData(true, ResourceListDensity.Comfortable)]
+    [InlineData(true, ResourceListDensity.Compact)]
+    [InlineData(true, ResourceListDensity.Spacious)]
+    [InlineData(false, ResourceListDensity.Comfortable)]
+    public async Task RowTerminal_SelectsOnlyItsResourceAndPreservesViewState(bool desktop, ResourceListDensity density)
+    {
+        var viewport = new ViewportInformation(IsDesktop: desktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var stop = new CommandViewModel("resource-stop", CommandViewModelState.Enabled, "Stop", "Stop resource", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "Stop", iconVariant: IconVariant.Filled);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("shell-instance", displayName: "shell", state: KnownResourceState.Running,
+                    urls: [new UrlViewModel("https", new Uri("https://localhost:5001"), false, false, UrlDisplayPropertiesViewModel.Empty)],
+                    commands: [stop],
+                    properties: new()
+                    {
+                        [KnownProperties.Terminal.Enabled] = new(KnownProperties.Terminal.Enabled, Value.ForString("true"), false, null, 0, null, false)
+                    }),
+                ModelTestHelpers.CreateResource("api")
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        const string initialUrl = "/resources?resource=api&resource=shell&pane=tags&filter=one&filter=two#output";
+        const string terminalUrl = "/resources/shell?pane=tags&filter=one&filter=two&terminal=true#output";
+        navigation.NavigateTo(initialUrl);
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
+
+        var terminal = Assert.Single(cut.FindAll(".resource-row-terminal"));
+        Assert.Equal(terminalUrl, terminal.GetAttribute("href"));
+        Assert.Equal("Open terminal for shell", terminal.GetAttribute("aria-label"));
+        Assert.Equal("Open terminal for shell", terminal.GetAttribute("data-tooltip"));
+        Assert.Collection(terminal.ParentElement!.Children,
+            endpoint => Assert.True(endpoint.ClassList.Contains("resource-row-action-priority-0")),
+            shortcut => Assert.True(shortcut.ClassList.Contains("resource-row-action-priority-1")),
+            command => Assert.True(command.ClassList.Contains("resource-row-action-priority-2")),
+            menu => Assert.True(menu.ClassList.Contains("aspire-menu-button")));
+
+        if (!desktop)
+        {
+            cut.Find(".resource-pane-open-button").Click();
+            Assert.True(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
+        }
+
+        // Modifier clicks on the shortcut must not invoke the row's multi-selection behavior.
+        await cut.InvokeAsync(() => cut.Find(".resource-row-terminal").Click(new Microsoft.AspNetCore.Components.Web.MouseEventArgs { CtrlKey = true }));
+        Assert.Equal("http://localhost" + terminalUrl, navigation.Uri);
+        cut.Render();
+        Assert.Equal(["shell"], cut.Instance.SelectedResourceNames);
+        Assert.Equal(ResourceTab.Terminal, cut.Instance.CurrentTab);
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
+
+        // The narrow-pane overflow menu must have the same navigation semantics as the shortcut.
+        navigation.NavigateTo(initialUrl);
+        cut.Render();
+        var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.Title == "Actions for shell");
+        var terminalItem = Assert.Single(menu.Instance.ItemsProvider(), item => item.Text == "Terminal");
+        await cut.InvokeAsync(Assert.IsType<Func<Task>>(terminalItem.OnClick));
+        Assert.Equal("http://localhost" + terminalUrl, navigation.Uri);
+        cut.Render();
+        Assert.Equal(["shell"], cut.Instance.SelectedResourceNames);
+        Assert.Equal(ResourceTab.Terminal, cut.Instance.CurrentTab);
+    }
+
+    [Fact]
+    public void RowTerminal_IsUnavailableInReadOnlyDashboards()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true, isReadOnly: true,
+            initialResources: [TerminalSetupHelpers.CreateTerminalResource("shell")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        Assert.Empty(cut.FindAll(".resource-row-terminal"));
+        var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.Title == "Actions for shell");
+        Assert.All(menu.Instance.ItemsProvider(), item => Assert.NotEqual("Terminal", item.Text));
+        Assert.False(cut.Instance.IsTabAvailable(ResourceTab.Terminal));
     }
 
     // The filters are a popover that stays open while values change. Expands only the given group, so the checkboxes
@@ -723,16 +866,19 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim());
     }
 
-    [Fact]
-    public async Task SelectAll_IsPressedOnlyWhileEverythingIsSelectedAndSelectsEverything()
+    [Theory]
+    [InlineData("/resources/api")]
+    [InlineData("/resources/api?terminal=true")]
+    [InlineData("/terminals/resource/api")]
+    public async Task SelectAll_IsPressedOnlyWhileEverythingIsSelectedAndSelectsEverything(string initialUrl)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
-            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            initialResources: [TerminalSetupHelpers.CreateTerminalResource("api"), ModelTestHelpers.CreateResource("cache")],
             resourceChannelProvider: () => channel));
         var navigationManager = Services.GetRequiredService<NavigationManager>();
-        navigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
+        navigationManager.NavigateTo(initialUrl);
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
 
         cut.WaitForAssertion(() => Assert.Equal("api", cut.Find(".resource-header-title").TextContent.Trim()));
@@ -908,10 +1054,16 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData("Persistent", 1)]
-    [InlineData("Session", 0)]
-    [InlineData(null, 0)]
-    public void AppHost_PersistentContainerPinFollowsStateAndType(string? lifetime, int expectedPins)
+    [InlineData("Persistent", ResourceListDensity.Comfortable, "Container (persistent)")]
+    [InlineData("Persistent", ResourceListDensity.Compact, "Container (persistent)")]
+    [InlineData("Persistent", ResourceListDensity.Spacious, "Container (persistent)")]
+    [InlineData("Session", ResourceListDensity.Comfortable, "Container")]
+    [InlineData("Session", ResourceListDensity.Compact, "Container")]
+    [InlineData("Session", ResourceListDensity.Spacious, "Container")]
+    [InlineData(null, ResourceListDensity.Comfortable, "Container")]
+    [InlineData(null, ResourceListDensity.Compact, "Container")]
+    [InlineData(null, ResourceListDensity.Spacious, "Container")]
+    public async Task AppHost_ContainerLifetimeQualifiesTypeAndBadgesResourceGlyph(string? lifetime, ResourceListDensity density, string expectedType)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -923,11 +1075,23 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
-        Assert.Equal(expectedPins, cut.FindAll(".resource-row-name + .persistent-container-icon").Count);
-        if (expectedPins == 1)
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
+
+        var type = cut.Find("[data-resource-name='cache'] .resource-row-type");
+        Assert.Equal(expectedType, type.TextContent);
+        Assert.Equal(expectedType, type.GetAttribute("data-tooltip"));
+        Assert.Equal($"Running; {expectedType}", cut.Find("[data-resource-name='cache'] .resource-row-link").GetAttribute("aria-description"));
+        var badges = cut.FindAll("[data-resource-name='cache'] .resource-row-icon .persistent-container-badge");
+        Assert.Equal(lifetime == "Persistent" ? 1 : 0, badges.Count);
+        if (lifetime == "Persistent")
         {
-            Assert.Equal(Resources.Columns.PersistentContainerIconTooltip, cut.Find(".persistent-container-icon").GetAttribute("aria-label"));
+            var badge = Assert.Single(badges);
+            Assert.Equal("img", badge.GetAttribute("role"));
+            const string description = "This container is persistent and won't be stopped when the app host is shut down.";
+            Assert.Equal(description, badge.GetAttribute("aria-label"));
+            Assert.Equal(description, badge.GetAttribute("data-tooltip"));
         }
+        Assert.Empty(cut.FindAll(".persistent-container-icon"));
     }
 
     [Theory]

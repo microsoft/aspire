@@ -149,7 +149,7 @@ public class TerminalViewTests : DashboardTestContext
         Assert.False(select.Instance.Disabled);
         Assert.Equal(Resources.TerminalStrings.TerminalPalette, select.Instance.AriaLabel);
         Assert.Equal(["Light", "Dark"], select.Instance.Items!.Select(select.Instance.OptionText!));
-        Assert.Equal("terminal-palette-select aspire-input", cut.Find(".terminal-controls").LastElementChild!.ClassName);
+        Assert.Equal("terminal-palette-select aspire-input", cut.Find(".terminal-palette-controls").LastElementChild!.ClassName);
 
         await cut.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync("light"));
         Assert.Single(save.Invocations);
@@ -195,6 +195,11 @@ public class TerminalViewTests : DashboardTestContext
         var dimensionsSelect = cut.FindComponent<FluentSelect<TerminalSizePreset, string>>();
         Assert.Null(dimensionsSelect.Instance.Placeholder);
         Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)].Value, dimensionsSelect.Instance.AriaLabel);
+        Assert.Equal(dimensionsSelect.Instance.Id, cut.Find("label.terminal-select-label").GetAttribute("for"));
+        var paletteSelect = cut.FindComponent<FluentSelect<string, string>>();
+        Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalPalette)].Value, paletteSelect.Instance.AriaLabel);
+        Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalPalette)].Value, paletteSelect.Find("fluent-dropdown").GetAttribute("title"));
+        Assert.Equal(paletteSelect.Instance.Id, cut.FindAll("label.terminal-select-label")[1].GetAttribute("for"));
     }
 
     [Theory]

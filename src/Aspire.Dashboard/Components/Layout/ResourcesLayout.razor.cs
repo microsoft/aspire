@@ -10,6 +10,7 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Humanizer;
 using System.Globalization;
+using System.Web;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.WebUtilities;
@@ -135,6 +136,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     [Inject]
     public required IStringLocalizer<Resources.StructuredLogs> StructuredLogsLoc { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<TerminalStrings> TerminalLoc { get; init; }
 
     [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
@@ -551,6 +555,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     internal string GetTabUrl(ResourceTab tab)
     {
+        if (!IsMultiSelection && tab is ResourceTab.Overview or ResourceTab.Terminal &&
+            CurrentTab is ResourceTab.Overview or ResourceTab.Terminal &&
+            NavigationManager.ToBaseRelativePath(NavigationManager.Uri).StartsWith(
+                $"{DashboardUrls.ResourceOverviewBasePath}/", StringComparison.OrdinalIgnoreCase))
+        {
+            return DashboardUrls.SetResourceTerminalFocus(NavigationManager.Uri, focused: tab == ResourceTab.Terminal);
+        }
+
         if (tab == ResourceTab.Metrics && _selectedResourceNames.Count == 0 && !DashboardClient.IsEnabled &&
             _telemetryOnlyResources.FirstOrDefault(resource => resource.Resource.HasMetrics) is { } metricsResource)
         {
@@ -665,6 +677,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             DashboardUrls.ParametersBasePath => ResourceTab.Parameters,
             DashboardUrls.ConsoleLogBasePath => ResourceTab.Console,
+            DashboardUrls.TerminalsBasePath => ResourceTab.Terminal,
             DashboardUrls.StructuredLogsBasePath => ResourceTab.StructuredLogs,
             DashboardUrls.TracesBasePath => ResourceTab.Traces,
             DashboardUrls.MetricsBasePath => ResourceTab.Metrics,
@@ -688,7 +701,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         // Several selected resources are listed in the query string, for example ?resource=api&resource=worker.
         var selectedResourceNames = new List<string>();
-        if (QueryHelpers.ParseQuery(query).TryGetValue(DashboardUrls.ResourceSelectionQueryName, out var queryValues))
+        var queryParameters = QueryHelpers.ParseQuery(query);
+        if (queryParameters.TryGetValue(DashboardUrls.ResourceSelectionQueryName, out var queryValues))
         {
             foreach (var value in queryValues)
             {
@@ -702,6 +716,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (selectedResourceNames.Count == 0 && routeResourceName is not null)
         {
             selectedResourceNames.Add(routeResourceName);
+        }
+
+        if (tab == ResourceTab.Overview && routeResourceName is not null &&
+            selectedResourceNames.Count == 1 &&
+            queryParameters.TryGetValue(DashboardUrls.ResourceTerminalQueryName, out var terminalFocus) &&
+            string.Equals(terminalFocus, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            tab = ResourceTab.Terminal;
         }
 
         return new ResourceLocation(tab, routeResourceName, selectedResourceNames, KeepSelection: false);
@@ -1320,6 +1342,20 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private List<MenuButtonItem> GetResourceMenuItems(ResourceViewModel resource)
     {
         var items = new List<MenuButtonItem>();
+        if (CanViewResourceTerminal(resource))
+        {
+            items.Add(new MenuButtonItem
+            {
+                Text = TerminalLoc[nameof(TerminalStrings.TerminalTitle)],
+                Icon = new Icons.Regular.Size20.WindowConsole(),
+                OnClick = () =>
+                {
+                    NavigateToResourceTerminal(resource);
+                    return Task.CompletedTask;
+                }
+            });
+        }
+
         ResourceMenuBuilder.AddMenuItems(
             items,
             resource,
@@ -1328,10 +1364,31 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             EventCallback.Factory.Create<CommandViewModel>(this, command => ExecuteResourceCommandAsync(resource, command)),
             (r, command) => DashboardCommandExecutor.IsExecuting(r.Name, command.Name),
             showViewDetails: false,
-            showTerminalItem: true,
+            showTerminalItem: false,
             showConsoleLogsItem: false,
             showUrls: false);
         return items;
+    }
+
+    private bool CanViewResourceTerminal(ResourceViewModel resource) =>
+        DashboardClient.IsEnabled && !DashboardClient.IsReadOnly && ResourceSelectHelpers.HasUsableTerminal(resource);
+
+    private string GetResourceTerminalUrl(ResourceViewModel resource)
+    {
+        var location = new Uri(NavigationManager.Uri);
+        var query = HttpUtility.ParseQueryString(location.Query);
+        // A row shortcut selects this resource alone, even from an aggregate page such as
+        // /resources?resource=api&resource=worker&pane=tags#output. Keep the remaining view state.
+        query.Remove(DashboardUrls.ResourceSelectionQueryName);
+        var url = DashboardUrls.ResourceOverviewUrl(GetResourceName(resource)) +
+            (query.Count > 0 ? $"?{query}" : string.Empty) + location.Fragment;
+        return DashboardUrls.SetResourceTerminalFocus(url, focused: true);
+    }
+
+    private void NavigateToResourceTerminal(ResourceViewModel resource)
+    {
+        CloseDrawer();
+        NavigationManager.NavigateTo(GetResourceTerminalUrl(resource));
     }
 
     private Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
@@ -1348,16 +1405,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     internal string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
 
+    private string GetResourceTypeLabel(ResourceViewModel resource) => resource.GetResourceTypeDisplayName(ResourcesLoc);
+
     private string GetResourceAccessibilityDescription(ResourceViewModel resource, string stateText, int errorCount)
     {
-        List<string> descriptions = [stateText, resource.ResourceType];
+        List<string> descriptions = [stateText, GetResourceTypeLabel(resource)];
         if (resource.IsResourceHidden(showHiddenResources: false))
         {
             descriptions.Add(ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)]);
-        }
-        if (resource.IsPersistentContainer)
-        {
-            descriptions.Add(ColumnsLoc[nameof(Columns.PersistentContainerIconTooltip)]);
         }
         if (errorCount > 0)
         {
@@ -1611,6 +1666,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private bool IsTabAvailable(ResourceTab tab, IReadOnlyList<SelectedResourceItem> selection)
     {
+        if (tab == ResourceTab.Terminal)
+        {
+            return !IsTelemetryPane && selection is [{ Resource: { } resource }] && CanViewResourceTerminal(resource);
+        }
+
         if (tab == ResourceTab.Parameters)
         {
             return DashboardClient.IsEnabled &&
@@ -1671,6 +1731,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 ResourceTab.Overview => DashboardUrls.ResourceOverviewUrl(),
                 ResourceTab.Parameters => DashboardUrls.ParametersUrl(),
                 ResourceTab.Console => DashboardUrls.ConsoleLogsUrl(),
+                ResourceTab.Terminal => DashboardUrls.TerminalsUrl(),
                 ResourceTab.StructuredLogs => DashboardUrls.StructuredLogsUrl(),
                 ResourceTab.Traces => DashboardUrls.TracesUrl(),
                 ResourceTab.Metrics => DashboardUrls.MetricsUrl(activeResourceName is not null && resourceNames.Contains(activeResourceName, StringComparers.ResourceName) ? activeResourceName : null),
@@ -1688,6 +1749,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 ? DashboardUrls.ParametersUrl()
                 : DashboardUrls.AddResourceSelection(DashboardUrls.ParametersUrl(), [resourceName]),
             ResourceTab.Console => DashboardUrls.ConsoleLogsUrl(resourceName),
+            ResourceTab.Terminal => resourceName is null ? DashboardUrls.TerminalsUrl() :
+                DashboardUrls.SetResourceTerminalFocus(DashboardUrls.ResourceOverviewUrl(resourceName), focused: true),
             ResourceTab.StructuredLogs => DashboardUrls.StructuredLogsUrl(resourceName),
             ResourceTab.Traces => DashboardUrls.TracesUrl(resourceName),
             ResourceTab.Metrics => DashboardUrls.MetricsUrl(resourceName),
@@ -1947,7 +2010,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private static string GetTabId(ResourceTab tab) => $"tab-{tab}";
 
-    private void OnTabChanged(FluentTab? newTab, bool isDesktop)
+    private void OnTabChanged(FluentTab? newTab, bool isDesktop, string? renderedLocation)
     {
         // FluentTabs also raises this when a tab is disposed, for example when leaving the resources view, and
         // when it syncs with ActiveTabId after a navigation. Only a change made while this layout shows the current
@@ -1956,6 +2019,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // raise changes while they're torn down, which would otherwise navigate to another tab.
         if (_isDisposed
             || isDesktop != ViewportInformation.IsDesktop
+                // A delayed event from the previous header must not navigate the newly selected resource.
+            || !string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal)
             || !string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal)
             || newTab?.Id is not { } id
             || !id.StartsWith("tab-", StringComparison.Ordinal)
@@ -1996,6 +2061,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             isVisible: DashboardClient.IsEnabled && !isTelemetryOnly && (resource is not null || isMultiSelection || _selectedItems.Count == 0));
         yield return CreateTab(ResourceTab.Console, Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)], new Icons.Regular.Size24.SlideText(),
             isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
+        yield return CreateTab(ResourceTab.Terminal, TerminalLoc[nameof(TerminalStrings.TerminalTitle)], new Icons.Regular.Size20.WindowConsole(),
+            isVisible: IsTabAvailable(ResourceTab.Terminal) || CurrentTab == ResourceTab.Terminal);
         yield return CreateTab(ResourceTab.StructuredLogs, StructuredLogsLoc[nameof(Resources.StructuredLogs.StructuredLogsHeader)], new Icons.Regular.Size24.SlideTextSparkle(),
             isVisible: true, errorCount);
         yield return CreateTab(ResourceTab.Traces, Loc[nameof(Resources.Layout.NavMenuTracesTab)], new Icons.Regular.Size24.GanttChart(),
@@ -2104,6 +2171,7 @@ internal enum ResourceTab
     Overview,
     Parameters,
     Console,
+    Terminal,
     StructuredLogs,
     Traces,
     Metrics

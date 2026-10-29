@@ -5,19 +5,34 @@
 @inject IStringLocalizer<Columns> Loc
 @inject IconResolver IconResolver
 
-<span class="resource-name-container">
-    @* Do this to trim significant whitespace so there isn't a space added between icon and text *@
-    @{
-        <FluentIcon Width="16px"
+@{
+    var showBadge = Resource.IsPersistentContainer && !DashboardExperienceComponents.IsLegacyLocation(NavigationManager);
+    RenderFragment resourceIcon = @<FluentIcon Width="16px"
                     Class="resource-icon"
                     Color="Color.Custom"
                     CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(FormatName(Resource))"
-                    Value="@ResourceIconHelpers.GetIconForResource(IconResolver, Resource, IconSize.Size16)" />
+                    Value="@ResourceIconHelpers.GetIconForResource(IconResolver, Resource, IconSize.Size16)" />;
+}
+
+<span class="resource-name-container">
+    @* Do this to trim significant whitespace so there isn't a space added between icon and text *@
+    @{
+        @if (showBadge)
+        {
+            <span class="modern-resource-icon">
+                @resourceIcon
+                <PersistentContainerBadge Resource="@Resource" />
+            </span>
+        }
+        else
+        {
+            @resourceIcon
+        }
     }
     @{
         <span class="resource-name-text"><FluentHighlighter HighlightedText="@FilterText" Text="@FormatName(Resource)" /></span>
     }
-    @if (Resource.IsPersistentContainer)
+    @if (Resource.IsPersistentContainer && !showBadge)
     {
         <FluentIcon Icon="Icons.Regular.Size16.Pin" data-tooltip="@Loc[nameof(Columns.PersistentContainerIconTooltip)]" aria-label="@Loc[nameof(Columns.PersistentContainerIconTooltip)]"
             Color="Color.Default" Class="persistent-container-icon" />

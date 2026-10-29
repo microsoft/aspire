@@ -181,6 +181,16 @@
   <data name="ResourcesDetailsContainerLifetimeProperty" xml:space="preserve">
     <value>Container lifetime</value>
   </data>
+  <data name="ResourcePersistentLifetime" xml:space="preserve">
+    <value>Persistent</value>
+  </data>
+  <data name="ResourcePersistentLifetimeDescription" xml:space="preserve">
+    <value>Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data.</value>
+  </data>
+  <data name="ResourcePersistentType" xml:space="preserve">
+    <value>{0} (persistent)</value>
+    <comment>{0} is the resource type, for example Container. Persistence describes the container lifetime, not durable data.</comment>
+  </data>
   <data name="ResourcesDetailsDisplayNameProperty" xml:space="preserve">
     <value>Display name</value>
   </data>

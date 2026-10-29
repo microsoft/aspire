@@ -21,6 +21,40 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 [UseCulture("en-US")]
 public class ApplicationSummaryTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(GroupOverview.Cards)]
+    [InlineData(GroupOverview.Resources)]
+    public async Task Render_PersistentContainersHaveBadgedGlyphAndQualifiedType(GroupOverview overview)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("persistent", state: KnownResourceState.Running, properties: new()
+                {
+                    [KnownProperties.Container.Lifetime] = new(KnownProperties.Container.Lifetime, Value.ForString("Persistent"), false, null, 0, null, false)
+                }),
+                ModelTestHelpers.CreateResource("ordinary", state: KnownResourceState.Running)
+            ], resourceChannelProvider: () => channel));
+        var cut = Render<ApplicationSummary>(p => p.AddCascadingValue(viewport));
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(overview));
+
+        cut.WaitForAssertion(() =>
+        {
+            var items = cut.FindAll(overview == GroupOverview.Cards ? ".resource-card" : ".home-resource-table tbody tr");
+            Assert.Equal(2, items.Count);
+            var persistent = items.Single(item => item.QuerySelector(".resource-name-text")!.TextContent == "persistent");
+            var ordinary = items.Single(item => item.QuerySelector(".resource-name-text")!.TextContent == "ordinary");
+            Assert.Single(persistent.QuerySelectorAll(".persistent-container-badge"));
+            Assert.Empty(ordinary.QuerySelectorAll(".persistent-container-badge"));
+            var typeSelector = overview == GroupOverview.Cards ? ".resource-card-type" : ".home-table-type";
+            Assert.Equal("Container (persistent)", persistent.QuerySelector(typeSelector)!.TextContent);
+            Assert.Equal("Container", ordinary.QuerySelector(typeSelector)!.TextContent);
+            Assert.Empty(cut.FindAll(".persistent-container-icon"));
+        });
+    }
+
     [Fact]
     public void Render_DefaultSetting_ShowsResourceCards()
     {

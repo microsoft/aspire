@@ -9,6 +9,10 @@ internal static class AspireIcons
 {
     internal static class Size16
     {
+        internal sealed class Infinity : Icon { public Infinity() : base("Infinity", IconVariant.Regular, IconSize.Size16,
+            """
+            <path d="M8 8C6.5 6 5.5 5 4 5a3 3 0 1 0 0 6c1.5 0 2.5-1 4-3s2.5-3 4-3a3 3 0 1 1 0 6c-1.5 0-2.5-1-4-3Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            """) { } };
         internal sealed class VisualStudio : Icon { public VisualStudio() : base("VisualStudio", IconVariant.Regular, IconSize.Size16,
             """
             <g transform="scale(0.3)">

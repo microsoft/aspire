@@ -323,6 +323,12 @@ window.setDashboardExperience = function (experience, targetPath) {
 
 function isActiveElementInput() {
     let currentElement = document.activeElement;
+    // Hex1b can focus a non-editable <div class="hex1b-terminal" tabindex="-1">
+    // for canvas keyboard input. The whole viewport owns those keys, not only its textarea.
+    if (currentElement.closest(".terminal-container")) {
+        return true;
+    }
+
     // Document.activeElement is the shadow host when Hex1b's textarea has
     // focus. Follow focused shadow roots so printable keys remain terminal
     // input rather than triggering dashboard navigation shortcuts. Stop at

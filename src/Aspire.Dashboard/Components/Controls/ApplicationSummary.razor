@@ -151,7 +151,7 @@
                         <span class="resource-card-title" data-tooltip="@GetResourceName(resource)">
                             <ResourceNameDisplay Resource="resource" FilterText="" FormatName="GetResourceName" ShowHiddenIndicator="false" />
                         </span>
-                        <span class="resource-card-type">@resource.ResourceType</span>
+                        <span class="resource-card-type">@resource.GetResourceTypeDisplayName(Loc)</span>
                     </header>
                     <div class="resource-card-body">
                         <div class="resource-card-field">
@@ -330,7 +330,7 @@
                                 </td>
                                 <td><StateColumnDisplay Resource="@resource" UnviewedErrorCounts="@_unviewedErrorCounts" /></td>
                                 <td><StartTimeColumnDisplay Resource="@resource" /></td>
-                                <td class="home-table-type">@resource.ResourceType</td>
+                                <td class="home-table-type">@resource.GetResourceTypeDisplayName(Loc)</td>
                                 <td>
                                     @if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } source)
                                     {
