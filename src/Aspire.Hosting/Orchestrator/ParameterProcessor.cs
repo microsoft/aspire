@@ -731,12 +731,29 @@ public sealed class ParameterProcessor(
 
                 foreach (var (parameter, version) in unresolvedParametersSnapshot)
                 {
-                    // Create an input for each unresolved parameter. The input is named after the parameter, like the
-                    // set-parameter command names its input, rather than whatever name a WithCustomInput generator
-                    // chose: the dashboard matches the prompt's inputs to parameters by name to show them in the
-                    // parameter form, and two custom inputs could otherwise share a name in the same prompt.
-                    var input = parameter.CreateInput(name: parameter.Name);
+                    // Create an input for each unresolved parameter.
+                    var input = parameter.CreateInput();
                     resourceInputs.Add((parameter, input, version));
+                }
+
+                // Name the inputs after their parameters, like the set-parameter command names its input, rather than
+                // whatever names WithCustomInput generators chose: the dashboard matches the prompt's inputs to
+                // parameters by name to show them in its parameter form, and two custom inputs could otherwise share
+                // a name in the same prompt. A custom input can load its options from another input it names in
+                // DependsOnInputs, and read that input by name in its load callback. The callback can't be rewritten,
+                // so when an input depends on a name the renaming would change, the generators' names are kept. The
+                // dashboard then shows the prompt in a dialog, as it does for any input that isn't named after a parameter.
+                var renamedInputNames = resourceInputs
+                    .Where(i => !string.Equals(i.Input.Name, i.ParameterResource.Name, StringComparisons.InteractionInputName))
+                    .Select(i => i.Input.Name)
+                    .ToHashSet(StringComparers.InteractionInputName);
+                var dependsOnRenamedInput = resourceInputs.Any(i => i.Input.DynamicLoading?.DependsOnInputs?.Any(renamedInputNames.Contains) == true);
+                if (!dependsOnRenamedInput)
+                {
+                    foreach (var (parameter, input, _) in resourceInputs)
+                    {
+                        input.SetName(parameter.Name);
+                    }
                 }
 
                 var inputs = resourceInputs.Select(i => i.Input).ToList();

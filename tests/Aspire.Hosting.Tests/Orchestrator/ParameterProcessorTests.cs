@@ -1335,6 +1335,52 @@ public class ParameterProcessorTests
     }
 
     [Fact]
+    public async Task InitializeParametersAsync_WithCustomInputDependingOnAnotherCustomInput_KeepsGeneratedNames()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var regionParameter = CreateParameterWithMissingValue("regionParam");
+        var zoneParameter = CreateParameterWithMissingValue("zoneParam");
+        regionParameter.Annotations.Add(new InputGeneratorAnnotation(_ => new InteractionInput
+        {
+            Name = "Region",
+            InputType = InputType.Text,
+            Label = "Region"
+        }));
+        // The zone's options depend on the region input, which the load callback reads by the name it depends on.
+        zoneParameter.Annotations.Add(new InputGeneratorAnnotation(_ => new InteractionInput
+        {
+            Name = "Zone",
+            InputType = InputType.Choice,
+            Label = "Zone",
+            DynamicLoading = new InputLoadOptions
+            {
+                LoadCallback = context =>
+                {
+                    context.Input.Options = [KeyValuePair.Create($"{context.AllInputs["Region"].Value}-a", "a")];
+                    return Task.CompletedTask;
+                },
+                DependsOnInputs = ["Region"]
+            }
+        }));
+
+        await parameterProcessor.InitializeParametersAsync([regionParameter, zoneParameter]).DefaultTimeout();
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(["Region", "Zone", "SaveToUserSecrets"], inputsInteraction.Inputs.Select(input => input.Name));
+
+        inputsInteraction.Inputs["Region"].Value = "west";
+        inputsInteraction.Inputs["Zone"].Value = "west-a";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        Assert.Equal("west", await regionParameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.Equal("west-a", await zoneParameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+    }
+
+    [Fact]
     public async Task InitializeParametersAsync_WithMissingParameterValues_NotificationNamesUnresolvedParameters()
     {
         var testInteractionService = new TestInteractionService { IsAvailable = true };

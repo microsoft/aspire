@@ -241,6 +241,33 @@ public sealed class ParameterInteractionStateTests
         Assert.Equal(0, acceptCount);
     }
 
+    [Fact]
+    public async Task BeginInteractionAsync_NextNotificationAfterCompletion_AcceptsNextNotification()
+    {
+        var state = new ParameterInteractionState();
+        var acceptedNotifications = new List<int>();
+        using var panel = state.RegisterPanel();
+        panel.SetParameterNames(["first"]);
+
+        state.SetNotification(1, ["first"], () =>
+        {
+            acceptedNotifications.Add(1);
+            return Task.CompletedTask;
+        });
+        await state.BeginInteractionAsync(panel).DefaultTimeout();
+        state.Clear(1);
+
+        // The AppHost sends a new notification when a parameter is still missing after the previous prompt.
+        state.SetNotification(2, ["first"], () =>
+        {
+            acceptedNotifications.Add(2);
+            return Task.CompletedTask;
+        });
+        await state.BeginInteractionAsync(panel).DefaultTimeout();
+
+        Assert.Equal([1, 2], acceptedNotifications);
+    }
+
     private static InteractionsInputsDialogViewModel CreateInputsInteraction(int interactionId, params string[] inputNames)
     {
         var inputsDialog = new InteractionInputsDialog();

@@ -39,7 +39,7 @@
       </trans-unit>
       <trans-unit id="TracesFullName">
         <source>Name: {0}</source>
-        <target state="new">Name: {0}</target>
+        <target state="translated">名稱: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TracesHeader">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="TracesResourceSpans">
         <source>{0} spans</source>
-        <target state="new">{0} spans</target>
+        <target state="translated">{0} 範圍</target>
         <note>{0} is a resource name</note>
       </trans-unit>
       <trans-unit id="TracesSpansColumnHeader">
@@ -74,17 +74,17 @@
       </trans-unit>
       <trans-unit id="TracesTotalErroredTraces">
         <source>Errored: {0}</source>
-        <target state="new">Errored: {0}</target>
+        <target state="translated">Errored: {0}</target>
         <note>{0} is a number</note>
       </trans-unit>
       <trans-unit id="TracesTotalTraces">
         <source>Total: {0}</source>
-        <target state="new">Total: {0}</target>
+        <target state="translated">總計: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TracesTraceId">
         <source>Trace Id: {0}</source>
-        <target state="new">Trace Id: {0}</target>
+        <target state="translated">追蹤識別碼 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="VirtualizedLimitText">

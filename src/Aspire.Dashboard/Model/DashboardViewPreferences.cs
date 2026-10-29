@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Utils;
+using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Model;
@@ -73,9 +75,10 @@ public enum RecordingsStyle
 /// The view preferences chosen in the settings. They're kept in the browser's local storage, and shared by the
 /// settings panel and the views that apply them, which update as soon as a preference changes.
 /// </summary>
-public sealed class DashboardViewPreferences(ILocalStorage localStorage)
+public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOptionsMonitor<DashboardOptions> options)
 {
     private Task? _loadTask;
+    private GroupOverview _groupOverview;
 
     /// <summary>
     /// Gets the resource list's density.
@@ -85,7 +88,20 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage)
     /// <summary>
     /// Gets what the overview of several resources shows.
     /// </summary>
-    public GroupOverview GroupOverview { get; private set; }
+    /// <remarks>
+    /// A graph choice stored before Dashboard:UI:DisableResourceGraph was set shows the cards instead. The stored
+    /// choice is kept, so the graph comes back if the setting is removed.
+    /// </remarks>
+    public GroupOverview GroupOverview
+    {
+        get => _groupOverview == GroupOverview.Graph && !IsGraphEnabled ? GroupOverview.Cards : _groupOverview;
+        private set => _groupOverview = value;
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the overview can show the resource graph, which Dashboard:UI:DisableResourceGraph turns off.
+    /// </summary>
+    public bool IsGraphEnabled => options.CurrentValue.UI.DisableResourceGraph != true;
 
     /// <summary>
     /// Gets how the header switches between runs.
@@ -116,7 +132,8 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage)
 
     public async Task SetGroupOverviewAsync(GroupOverview groupOverview)
     {
-        if (GroupOverview == groupOverview)
+        // Graph deep links and shortcuts go through here, so this is where a disabled graph is enforced.
+        if (GroupOverview == groupOverview || (groupOverview == GroupOverview.Graph && !IsGraphEnabled))
         {
             return;
         }
