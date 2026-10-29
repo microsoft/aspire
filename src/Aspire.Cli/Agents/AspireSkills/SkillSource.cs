@@ -40,7 +40,7 @@ internal sealed class SkillSource
 
     [JsonPropertyName("plugins")]
     [Description("Plugin names within the marketplace. Defaults to [\"aspire\"].")]
-    public string[] Plugins { get; init; } = ["aspire"];
+    public string[]? Plugins { get; init; }
 
     [JsonPropertyName("ref")]
     [Description("Optional marketplace Git ref. Existing agent-side pins are preserved.")]
@@ -54,11 +54,9 @@ internal sealed class SkillSource
     [Description("HTTPS skills catalog URL for OpenCode V2. Omit for sources without an OpenCode catalog.")]
     public string? OpenCodeV2Catalog { get; init; }
 
-    [JsonIgnore]
-    internal IEnumerable<string> PluginNames => Plugins.Select(plugin => $"{plugin}@{Marketplace}");
+    internal IEnumerable<string> GetPluginNames() => (Plugins ?? ["aspire"]).Select(plugin => $"{plugin}@{Marketplace}");
 
-    [JsonIgnore]
-    internal string RepositoryUrl => IsGitHubRepository(Repository!)
+    internal string GetRepositoryUrl() => IsGitHubRepository(Repository!)
         ? $"https://github.com/{Repository}" : Repository!;
 
     internal static IReadOnlyList<SkillSource> Resolve(DirectoryInfo configurationDirectory, FileInfo globalSettingsFile)
@@ -126,7 +124,7 @@ internal sealed class SkillSource
             {
                 throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.repository");
             }
-            if (!GitHelpers.IsValidRepository(source.RepositoryUrl) || !GitHelpers.IsValidRef(source.Ref))
+            if (!GitHelpers.IsValidRepository(source.GetRepositoryUrl()) || !GitHelpers.IsValidRef(source.Ref))
             {
                 throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.repository/ref");
             }

@@ -86,6 +86,49 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         await Verify(await File.ReadAllTextAsync(path), "json");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LoadAndSave_PreservesSkillSourcePlugins(bool explicitPlugins)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var globalSettingsFile = new FileInfo(Path.Combine(workspace.Path, "globalsettings.json"));
+        await File.WriteAllTextAsync(globalSettingsFile.FullName, """
+            {
+              "skillSources": {
+                "team": {
+                  "repository": "example/global",
+                  "plugins": ["deployment", "operations"]
+                }
+              }
+            }
+            """);
+        var plugins = explicitPlugins ? """, "plugins": ["local", "release"]""" : string.Empty;
+        await File.WriteAllTextAsync(path, $$"""
+            {
+              "skillSources": {
+                "default": { "enabled": false },
+                "team": { "repository": "example/local"{{plugins}} }
+              }
+            }
+            """);
+        string[] expectedPlugins = explicitPlugins
+            ? ["local@team", "release@team"]
+            : ["deployment@team", "operations@team"];
+        Assert.Equal(expectedPlugins, Assert.Single(SkillSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile)).GetPluginNames());
+
+        var config = AspireConfigFile.Load(workspace.Path);
+        Assert.NotNull(config);
+        config.Channel = "daily";
+        config.Save(workspace.Path);
+
+        var source = Assert.Single(SkillSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile));
+        Assert.Equal("example/local", source.Repository);
+        Assert.Equal(expectedPlugins, source.GetPluginNames());
+        await Verify(await File.ReadAllTextAsync(path), "json").UseParameters(explicitPlugins);
+    }
+
     [Fact]
     public void Load_ReturnsConfig_WhenFileContainsDocsSourceConfiguration()
     {

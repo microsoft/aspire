@@ -13,6 +13,15 @@ namespace Aspire.Cli.Tests.Agents;
 public class SkillSourceTests(ITestOutputHelper output)
 {
     [Fact]
+    public void GetPluginNames_DefaultsToAspireWithoutSettingPlugins()
+    {
+        var source = new SkillSource { Marketplace = "team" };
+
+        Assert.Equal(["aspire@team"], source.GetPluginNames());
+        Assert.Null(source.Plugins);
+    }
+
+    [Fact]
     public void Resolve_MergesNamedSourcesAndFieldsAcrossConfigurationLayers()
     {
         using var configuration = new ConfigurationManager();
@@ -29,13 +38,13 @@ public class SkillSourceTests(ITestOutputHelper output)
             source =>
             {
                 Assert.Equal("microsoft/aspire-skills", source.Repository);
-                Assert.Equal(["aspire@aspire-skills"], source.PluginNames);
+                Assert.Equal(["aspire@aspire-skills"], source.GetPluginNames());
             },
             source => Assert.Equal("example/other", source.Repository),
             source =>
             {
                 Assert.Equal("example/team", source.Repository);
-                Assert.Equal(["team@custom-market", "deployment@custom-market"], source.PluginNames);
+                Assert.Equal(["team@custom-market", "deployment@custom-market"], source.GetPluginNames());
                 Assert.Equal("https://example.com/v1/", source.OpenCodeV1Catalog);
                 Assert.Equal("https://example.com/v2/", source.OpenCodeV2Catalog);
             });
@@ -51,7 +60,7 @@ public class SkillSourceTests(ITestOutputHelper output)
         var source = Assert.Single(SkillSource.Resolve(configuration));
 
         Assert.Equal("team", source.Marketplace);
-        Assert.Equal(["aspire@team"], source.PluginNames);
+        Assert.Equal(["aspire@team"], source.GetPluginNames());
     }
 
     [Theory]
@@ -89,7 +98,7 @@ public class SkillSourceTests(ITestOutputHelper output)
 
         var source = Assert.Single(SkillSource.Resolve(configuration));
 
-        Assert.Equal(["custom@aspire-skills", "deployment@aspire-skills"], source.PluginNames);
+        Assert.Equal(["custom@aspire-skills", "deployment@aspire-skills"], source.GetPluginNames());
     }
 
     [Theory]
