@@ -1585,13 +1585,22 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task AzureDevComputeClientKeepsCancellationAfterRejectedCreateDefinite()
     {
-        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden)));
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var sendCount = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            sendCount++;
+            // The client disposes the observed 403 before its retry delay. Starting the timer
+            // here prevents cancellation during SendAsync from making the create ambiguous.
+            return Task.FromResult<HttpResponseMessage>(new DisposeCallbackResponse(
+                HttpStatusCode.Forbidden,
+                () => cancellationTokenSource.CancelAfter(TimeSpan.FromMilliseconds(10))));
+        });
         var client = new AzureDevComputeClient(
             new HttpClient(handler),
             new RecordingTokenCredential(),
             NullLogger.Instance,
             TimeSpan.FromMinutes(1));
-        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(10));
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
@@ -1604,6 +1613,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
 
         Assert.False(exception.ResponseMayHaveBeenLost);
         Assert.IsType<TaskCanceledException>(exception.OriginalException);
+        Assert.Equal(1, sendCount);
     }
 
     [Fact]
@@ -3635,6 +3645,19 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             return handler(request);
+        }
+    }
+
+    private sealed class DisposeCallbackResponse(HttpStatusCode statusCode, Action onDispose) : HttpResponseMessage(statusCode)
+    {
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                onDispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 
