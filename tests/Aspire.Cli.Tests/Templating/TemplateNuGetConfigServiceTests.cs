@@ -40,6 +40,9 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                 <clear />
                 <add key="company" value="https://selected.example/v3/index.json" />
               </packageSources>
+              <packageSourceMapping>
+                <packageSource key="company"><package pattern="Private.*" /></packageSource>
+              </packageSourceMapping>
             </configuration>
             """;
         await File.WriteAllTextAsync(ambientPath, ambient);
@@ -105,7 +108,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ambient, await File.ReadAllTextAsync(ambientPath));
         Assert.Equal(
-            hasAmbientMappings ? ["https://private.example/v3/index.json"] : [selectedSource],
+            hasAmbientMappings ? ["https://private.example/v3/index.json"] : ["https://private.example/v3/index.json", selectedSource],
             NuGetTestHelper.GetEligiblePackageSources(output.FullName, "Aspire.Hosting.Redis"));
         await Verify(await File.ReadAllTextAsync(Path.Combine(output.FullName, "nuget.config")))
             .UseParameters(hasAmbientMappings, builtInScaffolding)
@@ -137,28 +140,20 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
         var service = CreateService(executionContext: workspace.CreateExecutionContext());
 
-        var refusesAmbientFeed = builtInCreatesConfig && source == PackageSources.NuGetOrg;
-        if (refusesAmbientFeed)
-        {
-            await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
-                service.PromptToCreateNuGetConfigAsync(channel, builtInOutput.FullName, TestContext.Current.CancellationToken));
-        }
-        else
-        {
-            await service.PromptToCreateNuGetConfigAsync(channel, builtInOutput.FullName, CancellationToken.None);
-        }
+        await service.PromptToCreateNuGetConfigAsync(channel, builtInOutput.FullName, CancellationToken.None);
         await service.CreateNuGetConfigIfMissingAsync(channel, templateEngineOutput.FullName, CancellationToken.None);
 
-        Assert.Equal(builtInCreatesConfig && !refusesAmbientFeed, File.Exists(Path.Combine(builtInOutput.FullName, "nuget.config")));
+        Assert.Equal(builtInCreatesConfig, File.Exists(Path.Combine(builtInOutput.FullName, "nuget.config")));
         Assert.Equal(templateEngineCreatesConfig, File.Exists(Path.Combine(templateEngineOutput.FullName, "nuget.config")));
-        if (builtInCreatesConfig && !refusesAmbientFeed)
+        var expectedSources = new[] { source, PackageSources.NuGetOrg }.Distinct(PackageSourceIdentity.Comparer).Order(StringComparer.Ordinal);
+        if (builtInCreatesConfig)
         {
-            Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(builtInOutput.FullName, "Aspire.Hosting"),
+            Assert.Equal(expectedSources, NuGetTestHelper.GetEligiblePackageSources(builtInOutput.FullName, "Aspire.Hosting"),
                 PackageSourceIdentity.Comparer);
         }
         if (templateEngineCreatesConfig)
         {
-            Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(templateEngineOutput.FullName, "Aspire.Hosting"),
+            Assert.Equal(expectedSources, NuGetTestHelper.GetEligiblePackageSources(templateEngineOutput.FullName, "Aspire.Hosting"),
                 PackageSourceIdentity.Comparer);
         }
     }
@@ -301,6 +296,12 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         const string channelAspireSource = "https://example.invalid/aspire";
         const string communitySource = "https://example.invalid/community";
         const string fallbackSource = "https://example.invalid/fallback";
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "nuget.config"), """
+            <configuration>
+              <packageSources><clear /><add key="ambient" value="https://ambient.example/v3/index.json" /></packageSources>
+              <packageSourceMapping><packageSource key="ambient"><package pattern="Private.*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """);
 
         var packagingService = new TestPackagingService
         {
@@ -1365,7 +1366,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             .ToArray();
         Assert.Equal(["https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"], sources);
         Assert.Equal(
-            ["https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"],
+            [PackageSources.NuGetOrg, "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"],
             NuGetTestHelper.GetEligiblePackageSources(outputDir.FullName, "Aspire.Hosting"));
     }
 
@@ -1451,7 +1452,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     public async Task ConfigureDotNetAppHostNuGetConfigAsync_StableChannel_RespectsExistingConfig(bool hasExistingConfig)
     {
         // The "without prompt" path is used by aspire init. When the channel does not
-        // require a project-level nuget.config (e.g. stable → nuget.org only):
+        // require a project-level nuget.config (stable uses ambient sources):
         //   - No existing config → skip creation entirely (return false)
         //   - Existing config → update it to clean up stale feeds (return true)
         // See: https://github.com/microsoft/aspire/issues/18124
@@ -1479,7 +1480,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                 var stableCh = PackageChannel.CreateExplicitChannel(
                     "stable",
                     PackageChannelQuality.Stable,
-                    [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
+                    mappings: null,
                     new FakeNuGetPackageCache(),
                     features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);

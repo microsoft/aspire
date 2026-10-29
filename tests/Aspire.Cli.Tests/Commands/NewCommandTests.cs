@@ -184,7 +184,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var nugetConfig = await File.ReadAllTextAsync(nugetConfigPath);
         Assert.Contains(stagingFeed, nugetConfig);
-        Assert.Contains("Aspire*", nugetConfig);
+        Assert.Null(XDocument.Load(nugetConfigPath).Root!.Element("packageSourceMapping"));
 
         var config = AspireConfigFile.Load(outputDirectory);
         Assert.NotNull(config);
@@ -771,10 +771,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var source = Assert.Single(packageSources.Elements("add"));
         Assert.Equal(sourceOverride, (string?)source.Attribute("value"));
-        var mapping = Assert.Single(doc.Root.Element("packageSourceMapping")!.Elements("packageSource"));
-        Assert.Equal((string?)source.Attribute("key"), (string?)mapping.Attribute("key"));
-        Assert.Equal("Aspire*", (string?)Assert.Single(mapping.Elements("package")).Attribute("pattern"));
-        Assert.Equal([sourceOverride], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting"));
+        Assert.Null(doc.Root.Element("packageSourceMapping"));
+        Assert.Equal(new[] { sourceOverride, PackageSources.NuGetOrg }.Order(StringComparer.Ordinal),
+            NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting"));
     }
 
     [Fact]

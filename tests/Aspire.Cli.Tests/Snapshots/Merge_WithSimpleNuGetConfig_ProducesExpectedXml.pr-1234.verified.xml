@@ -3,9 +3,4 @@
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
     <add key="aspire-test" value="{PR_HIVE}/packages" />
   </packageSources>
-  <packageSourceMapping>
-    <packageSource key="aspire-test">
-      <package pattern="Aspire*" />
-    </packageSource>
-  </packageSourceMapping>
 </configuration>

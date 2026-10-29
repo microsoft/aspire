@@ -178,12 +178,14 @@ public class NuGetConfigurationTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Build_PersistenceDoesNotWriteDefaultSourceBindings(bool hasAmbientDefaultSource)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Build_PersistenceDoesNotWriteDefaultSourceBindings(bool hasAmbientDefaultSource, bool hasAmbientMappings)
     {
         const string channelSource = "https://channel.example/v3/index.json";
-        var settings = CreateSettings([]);
+        var settings = CreateSettings(hasAmbientMappings ? [new("company-public", ["*"])] : []);
         if (hasAmbientDefaultSource)
         {
             settings = settings with
@@ -201,9 +203,16 @@ public class NuGetConfigurationTests
 
         var persistence = Assert.IsType<DotNetAppHostNuGetConfig>(configuration.AppHostConfig);
         Assert.Equal([("aspire-test", channelSource)], persistence.SourceChanges.Sources);
-        var mapping = Assert.Single(persistence.PackageSourceMappings);
-        Assert.Equal("aspire-test", mapping.SourceKey);
-        Assert.Equal(["Aspire*"], mapping.Patterns);
+        if (hasAmbientMappings)
+        {
+            var mapping = Assert.Single(persistence.PackageSourceMappings);
+            Assert.Equal("aspire-test", mapping.SourceKey);
+            Assert.Equal(["Aspire*"], mapping.Patterns);
+        }
+        else
+        {
+            Assert.Empty(persistence.PackageSourceMappings);
+        }
         Assert.Equal(2, configuration.ConfigSources.Count);
     }
 

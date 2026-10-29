@@ -45,14 +45,21 @@ internal static class DotNetAppHostNuGetConfigBuilder
         var integrationMappings = selectedMappings
             .Where(static mapping => mapping.PackageFilter != PackageMapping.AllPackages)
             .ToArray();
-        var mappings = selectedSources
-            .Select(source => new NuGetPackageSourceMapping(source.Key,
+        var integrationSources = selectedSources
+            .Where(source => integrationMappings.Any(mapping =>
+                PackageSourceIdentity.Comparer.Equals(mapping.Source, source.Source)))
+            .ToArray();
+        // Introducing the first mapping makes every unmapped dependency ineligible for
+        // restore. Keep mapping disabled rather than persisting ambient fallback policy.
+        // https://learn.microsoft.com/nuget/consume-packages/package-source-mapping#package-pattern-requirements
+        var mappings = settings.PackageSourceMappings.Count == 0
+            ? []
+            : integrationSources.Select(source => new NuGetPackageSourceMapping(source.Key,
                 [.. integrationMappings
                     .Where(mapping => PackageSourceIdentity.Comparer.Equals(mapping.Source, source.Source))
                     .Select(static mapping => mapping.PackageFilter)
                     .Distinct(StringComparer.OrdinalIgnoreCase)]))
-            .Where(static mapping => mapping.Patterns.Count > 0)
-            .ToArray();
+                .ToArray();
         var selectedPatterns = selectedMappings.Count == 0
             ? [PackageSourceOverrideMappings.DefaultPackagePattern]
             : integrationMappings.Select(static mapping => mapping.PackageFilter)
@@ -94,8 +101,7 @@ internal static class DotNetAppHostNuGetConfigBuilder
             }
         }
         var sourceChanges = new NuGetConfigOverlay(
-            Sources: [.. selectedSources.Where(source => !source.IsAmbient &&
-                    mappings.Any(mapping => string.Equals(mapping.SourceKey, source.Key, StringComparison.OrdinalIgnoreCase)))
+            Sources: [.. integrationSources.Where(static source => !source.IsAmbient)
                 .Select(static source => (source.Key, source.Source))],
             PackageSourceMappings: [],
             ClearDisabledPackageSources: false,
@@ -105,12 +111,14 @@ internal static class DotNetAppHostNuGetConfigBuilder
             RetiredSourceKeys = retiredKeys
         };
 
-        return new DotNetAppHostNuGetConfig(workloadId, sourceChanges, mappings, removedMappings);
+        return new DotNetAppHostNuGetConfig(
+            workloadId, sourceChanges, [.. integrationSources.Select(static source => source.Key)], mappings, removedMappings);
     }
 }
 
 internal sealed record DotNetAppHostNuGetConfig(
     string WorkloadId,
     NuGetConfigOverlay SourceChanges,
+    IReadOnlyList<string> SelectedSourceKeys,
     IReadOnlyList<NuGetPackageSourceMapping> PackageSourceMappings,
     IReadOnlyList<NuGetPackageSourceMapping> RemovedPackageSourceMappings);

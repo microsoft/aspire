@@ -371,8 +371,10 @@ public partial class NewCommandLocalTemplateTests
         var output = Path.Combine(workspace.Path, "out");
         Assert.Equal(expectedCreate, File.Exists(Path.Combine(output, "nuget.config")));
         Assert.Equal(
-            expectedCreate ? "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" : "https://api.nuget.org/v3/index.json",
-            Assert.Single(NuGetTestHelper.GetEligiblePackageSources(output, "Aspire.Hosting.Redis")));
+            expectedCreate
+                ? new[] { "https://api.nuget.org/v3/index.json", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" }
+                : ["https://api.nuget.org/v3/index.json"],
+            NuGetTestHelper.GetEligiblePackageSources(output, "Aspire.Hosting.Redis"));
     }
 
     public static TheoryData<string, string, string[], string[], string?, string> BuiltInTemplatePrompts => new()

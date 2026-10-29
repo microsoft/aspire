@@ -273,8 +273,7 @@ internal sealed class BundleNuGetService : INuGetService
         if (channel?.Name == PackageChannelNames.Stable &&
             string.IsNullOrWhiteSpace(packageSourceOverride) &&
             nugetServiceIndexOverride is null &&
-            channel.Mappings is { Length: > 0 } stableMappings &&
-            stableMappings.All(static mapping =>
+            (channel.Mappings ?? []).All(static mapping =>
                 PackageSourceIdentity.Comparer.Equals(mapping.Source, PackageSources.NuGetOrg)))
         {
             return DotNetAppHostNuGetConfigBuilder.BuildStable(
@@ -283,7 +282,7 @@ internal sealed class BundleNuGetService : INuGetService
 
         var mappings = string.IsNullOrWhiteSpace(packageSourceOverride)
             ? channel?.Mappings
-            : PackageSourceOverrideMappings.Create(packageSourceOverride, channel, nugetServiceIndexOverride);
+            : PackageSourceOverrideMappings.Create(packageSourceOverride, channel);
         if (mappings is { Length: > 0 } && mappings.All(static mapping => mapping.PackageFilter == PackageMapping.AllPackages))
         {
             mappings = [.. mappings.Select(static mapping => new PackageMapping(

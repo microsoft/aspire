@@ -3,9 +3,4 @@
   <packageSources>
     <add key="aspire-apphost-source" value="https://selected.example/v3/index.json" />
   </packageSources>
-  <packageSourceMapping>
-    <packageSource key="aspire-apphost-source">
-        <package pattern="Aspire*" />
-      </packageSource>
-  </packageSourceMapping>
 </configuration>

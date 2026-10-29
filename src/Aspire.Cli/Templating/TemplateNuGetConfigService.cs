@@ -139,7 +139,8 @@ internal sealed class TemplateNuGetConfigService(
             return false;
         }
 
-        if (matchingChannel.Mappings is not { Length: > 0 })
+        if (matchingChannel.Mappings is not { Length: > 0 } &&
+            !string.Equals(matchingChannel.Name, PackageChannelNames.Stable, StringComparisons.ChannelName))
         {
             return false;
         }

@@ -387,7 +387,9 @@ internal sealed partial class TemplateEngineFactory(
                         return new TemplateResult(CliExitCodes.InvalidCommand);
                     }
 
-                    value = identityChannel.SourceDetails;
+                    // Ambient channels do not identify one feed. Leave the template's own
+                    // default intact rather than injecting the channel's display label.
+                    value = identityChannel.Mappings is { Length: > 0 } ? identityChannel.SourceDetails : parameter.DefaultValue;
                 }
                 else if (!hostEnvironment.SupportsInteractiveInput || hostConfiguration.IsHidden(parameter.Name))
                 {
@@ -461,8 +463,7 @@ internal sealed partial class TemplateEngineFactory(
         // handles PR hives and explicit local/source overrides.
         var channels = (await packagingService.GetChannelsAsync(cancellationToken, executionContext.IdentityChannel)).ToArray();
         var channel = channels.FirstOrDefault(channel =>
-            string.Equals(channel.Name, executionContext.IdentityChannel, StringComparisons.ChannelName) &&
-            channel.Mappings is { Length: > 0 });
+            string.Equals(channel.Name, executionContext.IdentityChannel, StringComparisons.ChannelName));
         if (channel is null)
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,

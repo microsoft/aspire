@@ -171,6 +171,16 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
         string? conflictingSourceKey = null;
         foreach (var source in sourceConfiguration.ConfigSources.Where(static source => source.IsAmbient))
         {
+            if (!configuration.SelectedSourceKeys.Contains(source.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!source.IsEnabled)
+            {
+                conflictingSourceKey = source.Key;
+                break;
+            }
             if (!configuration.PackageSourceMappings.Any(mapping =>
                 string.Equals(mapping.SourceKey, source.Key, StringComparison.OrdinalIgnoreCase)))
             {
@@ -188,7 +198,7 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
                     string.Equals(mapping.Key, source.Key, StringComparison.OrdinalIgnoreCase)) &&
                 inheritedMappings.Any(mapping =>
                     string.Equals(mapping.Key, source.Key, StringComparison.OrdinalIgnoreCase));
-            if (!source.IsEnabled || inheritsMapping ||
+            if (inheritsMapping ||
                 !NuGetConfigurationBuilder.IsCliManagedSourceKey(source.Key, configuration.WorkloadId) ||
                 !localSources.Any(local =>
                     string.Equals(local.Key, source.Key, StringComparison.OrdinalIgnoreCase) &&
@@ -243,43 +253,8 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
             }
         }
 
-        // Check the post-edit hierarchy: removing a local channel entry can expose
-        // an inherited old reference that conflicts with the replacement configuration.
-        var inheritsSources = settings.GetSection(ConfigurationConstants.PackageSources)?.Items
-            .Any(static item => item is ClearItem) != true;
-        var inheritedSources = inheritedSettings.GetSection(ConfigurationConstants.PackageSources)?.Items
-            .OfType<SourceItem>().ToArray() ?? [];
-        // Ignore sources already disabled by the pre-edit hierarchy, not masks that
-        // the temporary writer would introduce to make inherited retirement effective.
-        ISettings existingSettings = originalContent is null
-            ? inheritedSettings
-            : Settings.LoadSettingsGivenConfigPaths([targetFile.FullName, .. inheritedConfigPaths]);
-        var existingDisabledSourceKeys = existingSettings.GetSection(ConfigurationConstants.DisabledPackageSources)?.Items
-            .OfType<AddItem>().Select(static item => item.Key).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
-        var proposedMappingItems = settings.GetSection(ConfigurationConstants.PackageSourceMapping)?.Items.ToArray() ?? [];
-        var inheritsMappings = !proposedMappingItems.Any(static item => item is ClearItem);
-        foreach (var key in configuration.SourceChanges.RetiredSourceKeys
-            .Concat(configuration.RemovedPackageSourceMappings.Select(static mapping => mapping.SourceKey))
-            .Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var retiresSource = configuration.SourceChanges.RetiredSourceKeys.Contains(key, StringComparer.OrdinalIgnoreCase);
-            var inheritedSourceSurvives = retiresSource && inheritsSources && !existingDisabledSourceKeys.Contains(key) &&
-                inheritedSources.Any(source => string.Equals(source.Key, key, StringComparison.OrdinalIgnoreCase));
-            var inheritedMappingSurvives = inheritsMappings &&
-                !proposedMappingItems.OfType<PackageSourceMappingSourceItem>().Any(mapping =>
-                    string.Equals(mapping.Key, key, StringComparison.OrdinalIgnoreCase)) &&
-                inheritedMappings.Any(mapping =>
-                    string.Equals(mapping.Key, key, StringComparison.OrdinalIgnoreCase) &&
-                    (retiresSource || mapping.Patterns.Any(pattern =>
-                        configuration.RemovedPackageSourceMappings.Any(removed =>
-                            string.Equals(removed.SourceKey, key, StringComparison.OrdinalIgnoreCase) &&
-                            removed.Patterns.Contains(pattern.Pattern, StringComparer.OrdinalIgnoreCase)))));
-            if (inheritedSourceSurvives || inheritedMappingSurvives)
-            {
-                conflictingSourceKey ??= key;
-                break;
-            }
-        }
+        // Removing local records may expose inherited policy. Retirement does not mask
+        // or modify that policy, and its presence does not prevent local removal.
         settings.SaveToDisk();
 
         return conflictingSourceKey;

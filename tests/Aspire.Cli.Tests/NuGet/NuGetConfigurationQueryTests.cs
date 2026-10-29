@@ -82,9 +82,7 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
         var ambientSources = new[] { customerSource, privateSource, sharedSource, PackageSources.NuGetOrg }
             .Order(StringComparer.Ordinal).ToArray();
         string[] aspireSources = channelName == PackageChannelNames.Stable ? ambientSources : [selectedSource];
-        string[] dependencySources = hasMappings || channelName == PackageChannelNames.Stable
-            ? ambientSources
-            : [];
+        var persistedSources = ambientSources.Append(selectedSource).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var previewDirectory = preview.EffectiveWorkingDirectory.FullName;
 
         Assert.Equal(ambientSources, NuGetTestHelper.GetEligiblePackageSources(previewDirectory, "Contoso.Package"));
@@ -92,7 +90,7 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
         Assert.Equal(original, await File.ReadAllTextAsync(configPath));
 
         var merger = new DotNetAppHostNuGetConfigMerger(service);
-        if (channelName == PackageChannelNames.Daily)
+        if (channelName == PackageChannelNames.Daily && hasMappings)
         {
             await Assert.ThrowsAsync<Aspire.Cli.Projects.ProjectUpdaterException>(() =>
                 merger.PrepareAsync(workspace.WorkspaceRoot, configuration, createIfMissing: false,
@@ -107,8 +105,10 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
         Assert.NotNull(candidate);
         await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
 
-        Assert.Equal(dependencySources, NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Contoso.Package"));
-        Assert.Equal(aspireSources, NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting"));
+        Assert.Equal(hasMappings ? ambientSources : persistedSources,
+            NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Contoso.Package"));
+        Assert.Equal(hasMappings ? aspireSources : persistedSources,
+            NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting"));
     }
 
     [Theory]
@@ -157,8 +157,11 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
             globalPackagesFolder: null, TestContext.Current.CancellationToken);
         Assert.NotNull(candidate);
         await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
-        Assert.Equal([newHive], NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting"));
-        Assert.Empty(NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Example.Dependency"));
+        var persistedLocations = new[] { newHive, "https://private.example/v3/index.json" }.Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(hasMappings ? [newHive] : persistedLocations,
+            NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting"));
+        Assert.Equal(hasMappings ? [] : persistedLocations,
+            NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Example.Dependency"));
         var persistedSources = new global::NuGet.Configuration.PackageSourceProvider(
             global::NuGet.Configuration.Settings.LoadDefaultSettings(appHostDirectory.FullName)).LoadPackageSources();
         Assert.Equal(

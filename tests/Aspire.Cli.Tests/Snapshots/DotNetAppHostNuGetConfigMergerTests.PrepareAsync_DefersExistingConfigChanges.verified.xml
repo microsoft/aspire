@@ -9,9 +9,4 @@
       <add key="ClearTextPassword" value="test-password" />
     </private>
   </packageSourceCredentials>
-  <packageSourceMapping>
-    <packageSource key="aspire-test">
-      <package pattern="Aspire*" />
-    </packageSource>
-  </packageSourceMapping>
 </configuration>
