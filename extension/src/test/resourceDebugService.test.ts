@@ -763,6 +763,234 @@ suite('Resource debug service', () => {
         duplicated.sessions.dispose();
     });
 
+    for (const resourceName of ['api', 'API', 'api-generated', 'API-GENERATED']) {
+        test(`resolves attach selector ${resourceName} to its runtime identity`, async () => {
+            const resource = createResource({ name: 'api-generated', displayName: 'api' });
+            const configure = sinon.stub().resolves({ type: 'coreclr', request: 'attach', name: 'API' });
+            const { service, sessions } = createService({
+                appHosts: [createAppHost({ resources: [resource] })],
+                provider: createProvider({ createDebugConfiguration: configure }),
+            });
+            try {
+                assert.deepStrictEqual(await service.debug(createRequest({ resourceName })), { outcome: 'started', providerId: 'dotnet' });
+                assert.strictEqual(configure.firstCall.args[0], resource);
+                assert.strictEqual(sessions.hasActiveSession(resolvedTarget, resource.name), true);
+            }
+            finally {
+                sessions.dispose();
+            }
+        });
+    }
+
+    test('prefers a runtime-name match over another resource display name', async () => {
+        const resource = createResource({ name: 'api', displayName: 'other' });
+        const configure = sinon.stub().resolves({ type: 'coreclr', request: 'attach', name: 'API' });
+        const { service, sessions } = createService({
+            appHosts: [createAppHost({ resources: [createResource({ name: 'api-generated', displayName: 'API' }), resource] })],
+            provider: createProvider({ createDebugConfiguration: configure }),
+        });
+        try {
+            assert.deepStrictEqual(await service.debug(createRequest({ resourceName: 'API' })), { outcome: 'started', providerId: 'dotnet' });
+            assert.strictEqual(configure.firstCall.args[0], resource);
+        }
+        finally {
+            sessions.dispose();
+        }
+    });
+
+    for (const resources of [
+        [createResource({ name: 'api-first' }), createResource({ name: 'api-second' })],
+        [createResource({ name: 'api' }), createResource({ name: 'API' })],
+    ]) {
+        test(`rejects ambiguous ${resources[0].name === 'api' ? 'runtime' : 'display'} names without starting a debugger`, async () => {
+            const startDebugging = sinon.stub().resolves(true);
+            const { service, sessions } = createService({ appHosts: [createAppHost({ resources })], startDebugging });
+            try {
+                assert.deepStrictEqual(await service.debug(createRequest()), { outcome: 'resourceNotFound' });
+                assert.strictEqual(startDebugging.callCount, 0);
+            }
+            finally {
+                sessions.dispose();
+            }
+        });
+    }
+
+    for (const selectors of [['api', 'API-GENERATED'], ['api-generated', 'API']]) {
+        test(`serializes aliases ${selectors.join(' then ')} using the canonical resource`, async () => {
+            let releaseStart!: (started: boolean) => void;
+            let signalStart!: () => void;
+            const gate = new Promise<boolean>(resolve => { releaseStart = resolve; });
+            const entered = new Promise<void>(resolve => { signalStart = resolve; });
+            const startDebugging = sinon.stub().callsFake(() => {
+                signalStart();
+                return gate;
+            });
+            const { service, sessions } = createService({
+                appHosts: [createAppHost({ resources: [createResource({ name: 'api-generated', displayName: 'api' })] })],
+                startDebugging,
+            });
+            try {
+                const first = service.debug(createRequest({ resourceName: selectors[0] }));
+                await entered;
+                const second = service.debug(createRequest({ resourceName: selectors[1] }));
+                await new Promise<void>(resolve => setImmediate(resolve));
+                assert.strictEqual(startDebugging.callCount, 1);
+                releaseStart(true);
+                assert.deepStrictEqual(await first, { outcome: 'started', providerId: 'dotnet' });
+                assert.deepStrictEqual(await second, { outcome: 'alreadyDebugging' });
+                assert.strictEqual(startDebugging.callCount, 1);
+            }
+            finally {
+                releaseStart(true);
+                sessions.dispose();
+            }
+        });
+    }
+
+    test('reacquires the selected resource lock when a queued display selector changes targets', async () => {
+        const original = createResource({ name: 'api-original', displayName: 'api' });
+        const replacement = createResource({ name: 'api-replacement', displayName: 'api' });
+        let resources = [original];
+        const configure = sinon.stub().resolves({ type: 'coreclr', request: 'attach', name: 'API' });
+        const { service, repository, sessions } = createService({
+            provider: createProvider({ createDebugConfiguration: configure }),
+        });
+        repository.fetchAppHostResourcesOnce = async () => resources;
+        let releaseOriginal!: () => void;
+        let releaseReplacement!: () => void;
+        const originalGate = new Promise<void>(resolve => { releaseOriginal = resolve; });
+        const replacementGate = new Promise<void>(resolve => { releaseReplacement = resolve; });
+        const originalLock = sessions.runSerialized(resolvedTarget, original.name, undefined, async () => await originalGate, () => undefined);
+        const replacementLock = sessions.runSerialized(resolvedTarget, replacement.name, undefined, async () => await replacementGate, () => undefined);
+        try {
+            const pending = service.debug(createRequest());
+            await new Promise<void>(resolve => setImmediate(resolve));
+            resources = [replacement];
+            releaseOriginal();
+            await originalLock;
+            await new Promise<void>(resolve => setImmediate(resolve));
+
+            assert.strictEqual(configure.callCount, 0);
+            releaseReplacement();
+            assert.deepStrictEqual(await pending, { outcome: 'started', providerId: 'dotnet' });
+            assert.strictEqual(configure.callCount, 1);
+            assert.strictEqual(configure.firstCall.args[0], replacement);
+            assert.strictEqual(sessions.hasActiveSession(resolvedTarget, replacement.name), true);
+        }
+        finally {
+            releaseOriginal();
+            releaseReplacement();
+            await Promise.all([originalLock, replacementLock]);
+            sessions.dispose();
+        }
+    });
+
+    test('shares the replacement resource lock with a competing runtime-name request', async () => {
+        const original = createResource({ name: 'api-original', displayName: 'api' });
+        const replacement = createResource({ name: 'api-replacement', displayName: 'api' });
+        let resources = [original];
+        let releaseOriginal!: () => void;
+        let completeStart!: (started: boolean) => void;
+        let signalStart!: () => void;
+        const originalGate = new Promise<void>(resolve => { releaseOriginal = resolve; });
+        const startRequest = new Promise<boolean>(resolve => { completeStart = resolve; });
+        const startCalled = new Promise<void>(resolve => { signalStart = resolve; });
+        const configure = sinon.stub().resolves({ type: 'coreclr', request: 'attach', name: 'API' });
+        const startDebugging = sinon.stub().callsFake(() => {
+            signalStart();
+            return startRequest;
+        });
+        const { service, repository, sessions } = createService({
+            provider: createProvider({ createDebugConfiguration: configure }),
+            startDebugging,
+        });
+        repository.fetchAppHostResourcesOnce = async () => resources;
+        const originalLock = sessions.runSerialized(resolvedTarget, original.name, undefined, async () => await originalGate, () => undefined);
+        try {
+            const pending = service.debug(createRequest());
+            await new Promise<void>(resolve => setImmediate(resolve));
+            resources = [replacement];
+            const direct = service.debug(createRequest({ resourceName: replacement.name }));
+            await startCalled;
+            releaseOriginal();
+            await originalLock;
+            await new Promise<void>(resolve => setImmediate(resolve));
+
+            assert.strictEqual(configure.callCount, 1);
+            assert.strictEqual(startDebugging.callCount, 1);
+            completeStart(true);
+            assert.deepStrictEqual(await direct, { outcome: 'started', providerId: 'dotnet' });
+            assert.deepStrictEqual(await pending, { outcome: 'alreadyDebugging' });
+            assert.strictEqual(configure.callCount, 1);
+            assert.strictEqual(configure.firstCall.args[0], replacement);
+            assert.strictEqual(sessions.hasActiveSession(resolvedTarget, replacement.name), true);
+        }
+        finally {
+            releaseOriginal();
+            completeStart(true);
+            await originalLock;
+            sessions.dispose();
+        }
+    });
+
+    for (const { change, resourcesAfterWait } of [
+        { change: 'missing', resourcesAfterWait: [] },
+        { change: 'ambiguous', resourcesAfterWait: [createResource({ name: 'api-first' }), createResource({ name: 'api-second' })] },
+    ]) {
+        test(`rejects a ${change} display selector after waiting for its lock`, async () => {
+            const original = createResource({ name: 'api-original', displayName: 'api' });
+            let resources = [original];
+            const startDebugging = sinon.stub().resolves(true);
+            const { service, repository, sessions } = createService({ startDebugging });
+            repository.fetchAppHostResourcesOnce = async () => resources;
+            let releaseOriginal!: () => void;
+            const originalGate = new Promise<void>(resolve => { releaseOriginal = resolve; });
+            const originalLock = sessions.runSerialized(resolvedTarget, original.name, undefined, async () => await originalGate, () => undefined);
+            try {
+                const pending = service.debug(createRequest());
+                await new Promise<void>(resolve => setImmediate(resolve));
+                resources = resourcesAfterWait;
+                releaseOriginal();
+                await originalLock;
+
+                assert.deepStrictEqual(await pending, { outcome: 'resourceNotFound' });
+                assert.strictEqual(startDebugging.callCount, 0);
+            }
+            finally {
+                releaseOriginal();
+                await originalLock;
+                sessions.dispose();
+            }
+        });
+    }
+
+    test('cancels a queued display-selector request without starting a debugger', async () => {
+        const resource = createResource({ name: 'api-generated', displayName: 'api' });
+        const startDebugging = sinon.stub().resolves(true);
+        const { service, sessions } = createService({
+            appHosts: [createAppHost({ resources: [resource] })],
+            startDebugging,
+        });
+        let releaseOriginal!: () => void;
+        const originalGate = new Promise<void>(resolve => { releaseOriginal = resolve; });
+        const originalLock = sessions.runSerialized(resolvedTarget, resource.name, undefined, async () => await originalGate, () => undefined);
+        const cancellation = new vscode.CancellationTokenSource();
+        try {
+            const pending = service.debug(createRequest({ cancellationToken: cancellation.token }));
+            await new Promise<void>(resolve => setImmediate(resolve));
+            cancellation.cancel();
+
+            assert.deepStrictEqual(await pending, { outcome: 'cancelled' });
+            assert.strictEqual(startDebugging.callCount, 0);
+        }
+        finally {
+            releaseOriginal();
+            await originalLock;
+            cancellation.dispose();
+            sessions.dispose();
+        }
+    });
+
     test('reports a missing debugger extension without exposing resource details', async () => {
         const { service, sessions } = createService({
             isExtensionInstalled: () => false,
