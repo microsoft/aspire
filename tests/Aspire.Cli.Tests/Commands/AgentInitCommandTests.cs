@@ -693,7 +693,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var context = new AgentConfigurationTestContext(outputHelper);
         var app = context.Project.CreateSubdirectory("app");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(app.FullName, "aspire.config.json"), """
-            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","plugin":"team"}}}
+            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","plugins":["team"]}}}
             """);
         var interaction = new TestInteractionService();
         var services = context.CreateServiceCollection(outputHelper, options =>
@@ -728,7 +728,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             {"skillSources":{"default":{"enabled":false},"old":{"repository":"example/old"}}}
             """);
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, ".aspire", "settings.global.json"), """
-            {"skillSources":{"shared":{"repository":"example/shared"},"team":{"repository":"example/global","plugin":"team","ref":"main"}}}
+            {"skillSources":{"shared":{"repository":"example/shared"},"team":{"repository":"example/global","plugins":["team"],"ref":"main"}}}
             """);
         var interaction = new TestInteractionService();
         using var provider = context.CreateServiceCollection(outputHelper, options =>

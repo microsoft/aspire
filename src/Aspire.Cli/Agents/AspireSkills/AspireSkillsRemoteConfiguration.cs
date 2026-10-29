@@ -20,7 +20,7 @@ internal static class AspireSkillsRemoteConfiguration
     public static bool HasPluginRegistration(IEnumerable<string> settings, IReadOnlyList<SkillSource> sources)
     {
         // Disabling new registrations does not disable a plugin already active in an agent.
-        var pluginNames = sources.Select(source => source.PluginName).Prepend(PluginName).Distinct(StringComparer.Ordinal).ToArray();
+        var pluginNames = sources.SelectMany(source => source.PluginNames).Prepend(PluginName).Distinct(StringComparer.Ordinal).ToArray();
         var enabled = new HashSet<string>(StringComparer.Ordinal);
         foreach (var path in settings)
         {
@@ -167,14 +167,17 @@ internal static class AspireSkillsRemoteConfiguration
     private static void ApplyPlugin(JsonObject root, IReadOnlyList<JsonObject> settings, SkillSource skillSource)
     {
         var marketplaceName = skillSource.Marketplace!;
-        var pluginName = skillSource.PluginName;
+        var pluginNames = skillSource.PluginNames.ToArray();
         JsonObject? selectedSource = null;
         foreach (var config in settings.Append(root))
         {
             var plugins = OptionalObject(config, "enabledPlugins");
-            if (plugins is not null && Boolean(plugins, pluginName) is false)
+            foreach (var pluginName in pluginNames)
             {
-                throw ExistingConfiguration($"enabledPlugins.{pluginName}");
+                if (plugins is not null && Boolean(plugins, pluginName) is false)
+                {
+                    throw ExistingConfiguration($"enabledPlugins.{pluginName}");
+                }
             }
 
             var marketplaces = OptionalObject(config, "extraKnownMarketplaces");
@@ -220,9 +223,12 @@ internal static class AspireSkillsRemoteConfiguration
         // No autoUpdate opt-in and no installedPlugins/cache metadata: registration is not
         // acquisition. Existing entries, including explicit false, were checked above.
         var targetPlugins = Object(root, "enabledPlugins");
-        if (!targetPlugins.ContainsKey(pluginName))
+        foreach (var pluginName in pluginNames)
         {
-            targetPlugins[pluginName] = true;
+            if (!targetPlugins.ContainsKey(pluginName))
+            {
+                targetPlugins[pluginName] = true;
+            }
         }
     }
 

@@ -23,8 +23,9 @@ public class SettingsSchemaBuilderTests
             var skillSources = Assert.Single(schema.Properties, property => property.Name == "skillSources");
             Assert.Equal("object", skillSources.AdditionalPropertiesType);
             Assert.Equal(
-                ["enabled", "repository", "marketplace", "plugin", "ref", "openCodeV1Catalog", "openCodeV2Catalog"],
+                ["enabled", "repository", "marketplace", "plugins", "ref", "openCodeV1Catalog", "openCodeV2Catalog"],
                 skillSources.SubProperties!.Select(property => property.Name));
+            Assert.Equal("array", Assert.Single(skillSources.SubProperties!, property => property.Name == "plugins").Type);
         }
     }
 

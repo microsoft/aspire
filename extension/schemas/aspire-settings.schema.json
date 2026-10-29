@@ -268,9 +268,10 @@
             "description": "Agent marketplace identifier. Defaults to the source name, or aspire-skills for the default source.",
             "type": "string"
           },
-          "plugin": {
-            "description": "Plugin name within the marketplace. Defaults to aspire.",
-            "type": "string"
+          "plugins": {
+            "description": "Plugin names within the marketplace. Defaults to [\"aspire\"].",
+            "type": "array",
+            "items": {}
           },
           "ref": {
             "description": "Optional marketplace Git ref. Existing agent-side pins are preserved.",
