@@ -23,6 +23,7 @@ public sealed class ParameterInteractionState
 
     private readonly List<PanelRegistration> _panels = [];
     private PendingNotification? _notification;
+    private DialogInteraction? _dialogInteraction;
 
     /// <summary>
     /// Gets the inputs interaction shown inline, if any.
@@ -104,10 +105,36 @@ public sealed class ParameterInteractionState
     }
 
     /// <summary>
+    /// Records an inputs interaction that's shown in a dialog because no mounted form could show it. A form that can
+    /// show it takes it from the dialog when it's mounted: after reloading the page on the form, the AppHost's prompt
+    /// is replayed before the form is rendered, and the form is where the user went to enter the values.
+    /// </summary>
+    /// <param name="interaction">The interaction shown in the dialog.</param>
+    /// <param name="closeDialog">Closes the dialog without answering the interaction.</param>
+    public void SetDialogInteraction(InteractionsInputsDialogViewModel interaction, Func<Task> closeDialog)
+    {
+        _dialogInteraction = new DialogInteraction(interaction, closeDialog);
+        TryTakeDialogInteraction();
+    }
+
+    /// <summary>
+    /// Forgets the interaction shown in a dialog after the dialog closed.
+    /// </summary>
+    public void ClearDialogInteraction(int interactionId)
+    {
+        if (_dialogInteraction?.Interaction.Interaction.InteractionId == interactionId)
+        {
+            _dialogInteraction = null;
+        }
+    }
+
+    /// <summary>
     /// Forgets the given interaction, which the AppHost completed.
     /// </summary>
     public void Clear(int interactionId)
     {
+        ClearDialogInteraction(interactionId);
+
         var changed = false;
         if (_notification?.InteractionId == interactionId)
         {
@@ -137,7 +164,13 @@ public sealed class ParameterInteractionState
 
     private void OnPanelsChanged()
     {
-        if (Current is not { } current || _panels.Any(panel => panel.Shows(GetParameterInputNames(current))))
+        if (Current is not { } current)
+        {
+            TryTakeDialogInteraction();
+            return;
+        }
+
+        if (_panels.Any(panel => panel.Shows(GetParameterInputNames(current))))
         {
             return;
         }
@@ -146,6 +179,17 @@ public sealed class ParameterInteractionState
         Current = null;
         Changed?.Invoke();
         Released?.Invoke(current);
+    }
+
+    private void TryTakeDialogInteraction()
+    {
+        if (Current is not null || _dialogInteraction is not { } dialogInteraction || !TrySetCurrent(dialogInteraction.Interaction))
+        {
+            return;
+        }
+
+        _dialogInteraction = null;
+        _ = dialogInteraction.CloseDialog();
     }
 
     /// <summary>
@@ -196,6 +240,8 @@ public sealed class ParameterInteractionState
             _owner.OnPanelsChanged();
         }
     }
+
+    private sealed record DialogInteraction(InteractionsInputsDialogViewModel Interaction, Func<Task> CloseDialog);
 
     private sealed class PendingNotification(int interactionId, IReadOnlyCollection<string> parameterNames, Func<Task> accept)
     {

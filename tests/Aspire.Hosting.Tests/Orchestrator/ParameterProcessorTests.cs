@@ -1300,6 +1300,41 @@ public class ParameterProcessorTests
     }
 
     [Fact]
+    public async Task InitializeParametersAsync_WithCustomInputs_PromptInputsAreNamedAfterParameters()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var firstParameter = CreateParameterWithMissingValue("firstParam");
+        var secondParameter = CreateParameterWithMissingValue("secondParam");
+        foreach (var parameter in new[] { firstParameter, secondParameter })
+        {
+            // Both generators use the same input name, which a prompt for both parameters can't contain twice.
+            parameter.Annotations.Add(new InputGeneratorAnnotation(_ => new InteractionInput
+            {
+                Name = "ParameterInput",
+                InputType = InputType.Number,
+                Label = "Custom Input"
+            }));
+        }
+
+        await parameterProcessor.InitializeParametersAsync([firstParameter, secondParameter]).DefaultTimeout();
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(["firstParam", "secondParam", "SaveToUserSecrets"], inputsInteraction.Inputs.Select(input => input.Name));
+        Assert.All(inputsInteraction.Inputs.Take(2), input => Assert.Equal("Custom Input", input.Label));
+
+        inputsInteraction.Inputs["firstParam"].Value = "1";
+        inputsInteraction.Inputs["secondParam"].Value = "2";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        Assert.Equal("1", await firstParameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.Equal("2", await secondParameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+    }
+
+    [Fact]
     public async Task InitializeParametersAsync_WithMissingParameterValues_NotificationNamesUnresolvedParameters()
     {
         var testInteractionService = new TestInteractionService { IsAvailable = true };
