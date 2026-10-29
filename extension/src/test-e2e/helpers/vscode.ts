@@ -97,6 +97,43 @@ export async function observeVisibleSideBarSectionTitles(durationMs = 2000): Pro
     return [...observedTitles];
 }
 
+export async function waitForExplorerSelection(expectedPath: readonly string[], timeoutMs = 30000): Promise<void> {
+    let lastSelection: { focused: boolean; path: string[] } = { focused: false, path: [] };
+
+    try {
+        await VSBrowser.instance.driver.wait(async () => {
+            lastSelection = await VSBrowser.instance.driver.executeScript<{ focused: boolean; path: string[] }>(`
+                const explorer = document.querySelector('.explorer-folders-view');
+                const rows = [...explorer?.querySelectorAll('.monaco-list-row') ?? []]
+                    .sort((a, b) => Number(a.getAttribute('data-index')) - Number(b.getAttribute('data-index')));
+                const selectedIndex = rows.findIndex(row => row.classList.contains('selected'));
+                const labels = [];
+                let level = Infinity;
+                // Monaco recycles DOM rows; data-index preserves tree order, while aria-level identifies parents.
+                for (let index = selectedIndex; index >= 0; index--) {
+                    const row = rows[index];
+                    const rowLevel = Number(row.getAttribute('aria-level'));
+                    if (rowLevel > 0 && rowLevel < level) {
+                        const label = row.querySelector('.label-name')?.textContent?.trim();
+                        if (label) {
+                            labels.unshift(label);
+                        }
+                        level = rowLevel;
+                    }
+                }
+                return { focused: Boolean(explorer?.contains(document.activeElement)), path: labels };
+            `);
+            const selectedPath = lastSelection.path.slice(-expectedPath.length);
+            return lastSelection.focused
+                && selectedPath.length === expectedPath.length
+                && selectedPath.every((label, index) => label === expectedPath[index]);
+        }, timeoutMs, `Timed out waiting for Explorer to focus and select '${expectedPath.join('/')}'.`);
+    }
+    catch (error) {
+        throw withWaitDiagnostics(error, [`Last Explorer selection: ${JSON.stringify(lastSelection)}`]);
+    }
+}
+
 export async function waitForTreeItem(section: TreeSection, label: string, timeoutMs = 30000): Promise<TreeItem> {
     let lastLabel: string | undefined;
     const findMatchingItem = async (candidateSection: TreeSection): Promise<TreeItem | false> => {

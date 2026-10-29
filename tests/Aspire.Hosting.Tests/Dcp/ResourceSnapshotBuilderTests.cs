@@ -87,7 +87,7 @@ public class ResourceSnapshotBuilderTests
     }
 
     [Fact]
-    public void ExecutableSnapshotPublishesLaunchConfigurationTypeOnlyWhenInstallingDebuggerCanEnableDebugging()
+    public void ExecutableSnapshotPublishesSourcePathIndependentlyOfDebuggerEligibility()
     {
         const string propertyName = "resource.launchConfigurationType";
         var resource = new TestDotnetProjectResource("python");
@@ -106,11 +106,13 @@ public class ResourceSnapshotBuilderTests
         var snapshot = snapshotBuilder.ToSnapshot(executable, CreatePreviousSnapshot());
 
         Assert.Equal("python", GetProperty(snapshot, propertyName).Value);
+        Assert.Equal(resource.WorkingDirectory, GetProperty(snapshot, KnownProperties.Resource.SourcePath).Value);
 
         resource.Annotations.Add(new ForceProcessExecutionAnnotation());
         snapshot = snapshotBuilder.ToSnapshot(executable, snapshot);
 
         Assert.Empty(snapshot.Properties.Where(property => property.Name == propertyName));
+        Assert.Equal(resource.WorkingDirectory, GetProperty(snapshot, KnownProperties.Resource.SourcePath).Value);
 
         resource.Annotations.Remove(resource.Annotations.OfType<ForceProcessExecutionAnnotation>().Single());
         resource.Annotations.Add(new ContainerLifetimeAnnotation
@@ -120,6 +122,7 @@ public class ResourceSnapshotBuilderTests
         snapshot = snapshotBuilder.ToSnapshot(executable, snapshot);
 
         Assert.Empty(snapshot.Properties.Where(property => property.Name == propertyName));
+        Assert.Equal(resource.WorkingDirectory, GetProperty(snapshot, KnownProperties.Resource.SourcePath).Value);
     }
 
     [Fact]

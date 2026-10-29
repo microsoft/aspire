@@ -1709,7 +1709,25 @@ builder.Build().Run();
 
 function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions, includeWinUi) {
   const projectDirectory = path.join(workspaceRoot, projectName);
+  const includeLanguageSources = matchedTestSpecs.some(specPath => path.basename(specPath) === 'treeActions.e2e.test.js');
   fs.mkdirSync(projectDirectory, { recursive: true });
+  fs.mkdirSync(path.join(projectDirectory, 'e2e-source-image'), { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, 'e2e-source-tool'), 'Non-filesystem source collision fixture.');
+  if (includeLanguageSources) {
+    const pythonDirectory = path.join(projectDirectory, 'e2e-python-source');
+    const pythonInterpreter = path.join(pythonDirectory, '.venv', isWindows ? 'Scripts' : 'bin', isWindows ? 'python.exe' : 'python');
+    fs.mkdirSync(path.dirname(pythonInterpreter), { recursive: true });
+    fs.writeFileSync(pythonInterpreter, Buffer.from([0x4d, 0x5a, 0, 0]));
+    fs.writeFileSync(path.join(pythonDirectory, 'main.py'), 'print("Python source navigation fixture")\n');
+    const javaDirectory = path.join(projectDirectory, 'e2e-java-source');
+    const javaLauncher = path.join(projectDirectory, 'e2e-java-launcher', 'cmd.exe');
+    fs.mkdirSync(javaDirectory, { recursive: true });
+    fs.mkdirSync(path.dirname(javaLauncher), { recursive: true });
+    fs.writeFileSync(javaLauncher, Buffer.from([0x4d, 0x5a, 0, 0]));
+    fs.writeFileSync(path.join(javaDirectory, 'App.java'), 'class App {}\n');
+  }
+  const outsideWorkspaceSourcePath = path.join(shortRunRoot, 'e2e-outside-workspace-source');
+  fs.mkdirSync(outsideWorkspaceSourcePath, { recursive: true });
   const azureFunctionsPackageReference = includeAzureFunctions
     ? `    <PackageReference Include="Aspire.Hosting.Azure.Functions" Version="${resolvedAppHostSdkVersion}" />\n`
     : '';
@@ -1738,16 +1756,40 @@ ${winUiProjectReference}${azureFunctionsPackageReference}  </ItemGroup>
   const winUiResource = includeWinUi
     ? 'builder.AddProject<Projects.AspireE2E_WinUI>("e2e-winui", launchProfileName: "E2E");\n\n'
     : '';
+  const languageSourceResources = includeLanguageSources
+    ? `// Match source metadata with existing binaries without installing or launching Python or Java.
+foreach (var (language, launcher) in new[]
+{
+    ("python", Path.Combine(builder.AppHostDirectory, "e2e-python-source", ".venv", ${isWindows ? '"Scripts", "python.exe"' : '"bin", "python"'})),
+    ("java", Path.Combine(builder.AppHostDirectory, "e2e-java-launcher", "cmd.exe"))
+})
+{
+    builder.AddResource(new NoCommandsResource($"e2e-{language}-source"))
+        .WithInitialState(new CustomResourceSnapshot
+        {
+            ResourceType = "Executable",
+            State = KnownResourceStates.Running,
+            Properties = [
+                new("resource.sourcePath", Path.Combine(builder.AppHostDirectory, $"e2e-{language}-source")),
+                new("executable.path", launcher),
+                new("executable.workDir", Path.Combine(builder.AppHostDirectory, $"e2e-{language}-source"))
+            ]
+        });
+}
+
+`
+    : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001 // Older published SDKs still mark pipeline APIs experimental.
 #pragma warning disable ASPIRETERMINAL001
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 
 // The E2E fixture intentionally covers interaction command arguments and terminal metadata while those APIs are still experimental.
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
+var worker = builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
     .WithHttpEndpoint(name: "http")
     .WithCommand(
         "echo-arguments",
@@ -1812,6 +1854,84 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
         });
 
 builder.AddResource(new NoCommandsResource("e2e-no-commands"));
+
+var workerProjectPath = worker.Resource.GetProjectMetadata().ProjectPath;
+
+// Metadata-only resources cover image/package source collisions without downloading containers or tools.
+builder.AddResource(new NoCommandsResource("e2e-image-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Container",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("container.image", "e2e-source-image"),
+            new(CustomResourceKnownProperties.Source, "e2e-source-image")
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-tool-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Tool",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("tool.package", "e2e-source-tool"),
+            new("executable.path", Path.Combine(builder.AppHostDirectory, "e2e-source-tool")),
+            new(CustomResourceKnownProperties.Source, "e2e-source-tool")
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-suppressed-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Project",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("project.path", workerProjectPath),
+            new(CustomResourceKnownProperties.Source, string.Empty)
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-directory-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Executable",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("executable.path", "dotnet"),
+            new("executable.workDir", Path.GetDirectoryName(workerProjectPath))
+        ]
+    });
+
+${languageSourceResources}builder.AddResource(new NoCommandsResource("e2e-display-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Custom",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new(CustomResourceKnownProperties.Source, workerProjectPath)
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-missing-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Project",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("project.path", Path.ChangeExtension(workerProjectPath, ".missing.csproj"))
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-outside-workspace-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Project",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("project.path", ${JSON.stringify(outsideWorkspaceSourcePath)})
+        ]
+    });
 
 // e2e-terminal opts into WithTerminal so the real CLI surfaces terminal.enabled and
 // terminal.replicaIndex over the backchannel. The extension's Open terminal action reads
