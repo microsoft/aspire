@@ -4,22 +4,22 @@
     <body>
       <trans-unit id="Accept">
         <source>Yes</source>
-        <target state="new">Yes</target>
+        <target state="translated">Oui</target>
         <note />
       </trans-unit>
       <trans-unit id="AppliedVersionMissing">
         <source>A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</source>
-        <target state="new">A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</target>
+        <target state="translated">Une source de configuration enregistrée ne comporte aucune version appliquée enregistrée. Exécutez « `aspire update --config-source` »pour enregistrer ses paramètres autorisés et définir la version appliquée.</target>
         <note>Do not translate "aspire update --config-source".</note>
       </trans-unit>
       <trans-unit id="AuthenticationFailed">
         <source>Git could not authenticate to the configuration source. Configure your Git credential helper or SSH authentication and retry.</source>
-        <target state="new">Git could not authenticate to the configuration source. Configure your Git credential helper or SSH authentication and retry.</target>
+        <target state="translated">Git n’a pas pu s’authentifier auprès de la source de configuration. Configurez votre assistance relative aux informations d’identification Git ou l’authentification SSH, puis réessayez.</target>
         <note />
       </trans-unit>
       <trans-unit id="BindingChanged">
         <source>The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</source>
-        <target state="new">The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</target>
+        <target state="translated">La source de configuration enregistrée a été modifiée lors de la récupération. Aucun paramètre source n’a été appliqué. Réessayez à l’aide de la liaison source enregistrée.</target>
         <note />
       </trans-unit>
       <trans-unit id="Candidate">
@@ -27,152 +27,152 @@
 Configuration file: {1}
 Configuration ref: {2}
 Source origin: {3}</source>
-        <target state="new">Configuration source: {0}
-Configuration file: {1}
-Configuration ref: {2}
-Source origin: {3}</target>
+        <target state="translated">Source de configuration : {0}
+Fichier de configuration : {1}
+Réf configuration : {2}
+Origine de la source : {3}</target>
         <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the branch name, commit SHA, or default-branch label, and {3} is the source origin (an environment variable name or Microsoft employee default).</note>
       </trans-unit>
       <trans-unit id="CheckFailed">
         <source>The configuration source update check failed: {0} Continuing with the saved configuration.</source>
-        <target state="new">The configuration source update check failed: {0} Continuing with the saved configuration.</target>
+        <target state="translated">La vérification de la mise à jour de la source de configuration a échoué : {0} La configuration enregistrée sera utilisée.</target>
         <note>{0} is the configuration source check failure message.</note>
       </trans-unit>
       <trans-unit id="CheckFailedWithoutDetails">
         <source>The configuration source update check failed. Continuing with the saved configuration.</source>
-        <target state="new">The configuration source update check failed. Continuing with the saved configuration.</target>
+        <target state="translated">La vérification de la mise à jour de la source de configuration a échoué. La configuration enregistrée sera utilisée.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigLockFailed">
         <source>The settings file could not be locked. No source settings were applied. Retry when other configuration writers have finished.</source>
-        <target state="new">The settings file could not be locked. No source settings were applied. Retry when other configuration writers have finished.</target>
+        <target state="translated">Impossible de verrouiller le fichier de paramètres. Aucun paramètre source n’a été appliqué. Réessayez lorsque les autres enregistreurs de configuration auront terminé.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsentRequired">
         <source>A configuration source is available. Specify --use-config-source true to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</source>
-        <target state="new">A configuration source is available. Specify --use-config-source true to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</target>
+        <target state="translated">Une source de configuration est disponible. Spécifiez --use-config-source true pour l’accepter ou --use-config-source false pour utiliser la configuration standard d’Aspire en mode non interactif.</target>
         <note>Do not translate "--use-config-source", "true", or "false".</note>
       </trans-unit>
       <trans-unit id="Decline">
         <source>No, use standard Aspire configuration</source>
-        <target state="new">No, use standard Aspire configuration</target>
+        <target state="translated">Non, utiliser la configuration standard Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="DefaultBranch">
         <source>default branch</source>
-        <target state="new">default branch</target>
+        <target state="translated">branche par défaut</target>
         <note />
       </trans-unit>
       <trans-unit id="EmployeeOrigin">
         <source>Microsoft employee default</source>
-        <target state="new">Microsoft employee default</target>
+        <target state="translated">Paramètre par défaut pour les employés Microsoft</target>
         <note />
       </trans-unit>
       <trans-unit id="GitNotFound">
         <source>Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</source>
-        <target state="new">Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</target>
+        <target state="translated">Impossible de démarrer Git. Vérifiez que Git est installé et disponible sur PATH pour utiliser cette source de configuration.</target>
         <note>Do not translate "PATH".</note>
       </trans-unit>
       <trans-unit id="GitTimeout">
         <source>The configuration source Git operation timed out. Check repository access and Git credentials, then retry.</source>
-        <target state="new">The configuration source Git operation timed out. Check repository access and Git credentials, then retry.</target>
+        <target state="translated">L’opération Git de la source de configuration a expiré. Vérifiez l’accès au référentiel et les informations d’identification Git, puis réessayez.</target>
         <note />
       </trans-unit>
       <trans-unit id="IncompatibleOptions">
         <source>--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</source>
-        <target state="new">--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</target>
+        <target state="translated">--config-source ne peut pas être combiné avec --self, --migrate, --channel, --quality ou --nuget-config-dir.</target>
         <note>Do not translate the command-line option names.</note>
       </trans-unit>
       <trans-unit id="InvalidBinding">
         <source>The configSource binding must contain a Git repository address and a repository-relative configuration file path.</source>
-        <target state="new">The configSource binding must contain a Git repository address and a repository-relative configuration file path.</target>
+        <target state="translated">La liaison configSource doit contenir une adresse de dépôt Git et un chemin de fichier de configuration relatif au dépôt.</target>
         <note>Do not translate "configSource".</note>
       </trans-unit>
       <trans-unit id="InvalidCache">
         <source>The configuration source cache is invalid. Restore or remove its cache entry and retry.</source>
-        <target state="new">The configuration source cache is invalid. Restore or remove its cache entry and retry.</target>
+        <target state="translated">Le cache de la source de configuration n’est pas valide. Restaurez ou supprimez son entrée de cache et réessayez.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidConfiguration">
         <source>The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</source>
-        <target state="new">The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</target>
+        <target state="translated">La configuration source doit être un objet JSON Aspire valide d’une taille maximale de 4 Mio.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidPath">
         <source>The configuration file must be a nonempty repository-relative path using '/' separators, without '.', '..', or empty path segments.</source>
-        <target state="new">The configuration file must be a nonempty repository-relative path using '/' separators, without '.', '..', or empty path segments.</target>
+        <target state="translated">Le fichier de configuration doit être un chemin d’accès relatif au dépôt non vide utilisant le séparateur « / », sans « . », « .. » ni segments de chemin vides.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidRef">
         <source>The configuration source ref must be a branch name or full commit SHA, not an empty value, tag, revision expression, or command option.</source>
-        <target state="new">The configuration source ref must be a branch name or full commit SHA, not an empty value, tag, revision expression, or command option.</target>
+        <target state="translated">La référence de la source de configuration doit être un nom de branche ou un SHA de commit complet, et non une valeur vide, une balise, une expression de révision ou une option de commande.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidRepository">
         <source>The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments.</source>
-        <target state="new">The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments.</target>
+        <target state="translated">La source de configuration doit être un chemin de dépôt local absolu ou une adresse de dépôt Git HTTPS ou SSH, sans mots de passe, jetons, requêtes ni fragments.</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingFile">
         <source>The configuration file is missing or is not a regular file at the selected Git branch or commit.</source>
-        <target state="new">The configuration file is missing or is not a regular file at the selected Git branch or commit.</target>
+        <target state="translated">Le fichier de configuration est manquant ou n’est pas un fichier standard dans le commit ou la branche GIT sélectionné.</target>
         <note />
       </trans-unit>
       <trans-unit id="NestedSource">
         <source>A source configuration file cannot declare another configSource.</source>
-        <target state="new">A source configuration file cannot declare another configSource.</target>
+        <target state="translated">Un fichier de configuration source ne peut pas déclarer un autre configSource.</target>
         <note>Do not translate "configSource".</note>
       </trans-unit>
       <trans-unit id="NoBinding">
         <source>No configuration source to update.</source>
-        <target state="new">No configuration source to update.</target>
+        <target state="translated">Aucune source de configuration à mettre à jour.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoCandidate">
         <source>No configuration source is available. Set {0} to a Git repository address.</source>
-        <target state="new">No configuration source is available. Set {0} to a Git repository address.</target>
+        <target state="translated">Aucune source de configuration n’est disponible. Définissez {0} sur une adresse de dépôt Git.</target>
         <note>{0} is the environment variable name.</note>
       </trans-unit>
       <trans-unit id="RefreshOptionDescription">
         <source>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</source>
-        <target state="new">Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</target>
+        <target state="translated">Appliquez les paramètres autorisés des sources de configuration Git locales et globales enregistrées les plus proches, en remplaçant les modifications locales apportées aux paramètres fournis, sans mettre à jour les packages ni l’interface de ligne de commande.</target>
         <note />
       </trans-unit>
       <trans-unit id="Refreshed">
         <source>configuration updated</source>
-        <target state="new">configuration updated</target>
+        <target state="translated">configuration mise à jour</target>
         <note />
       </trans-unit>
       <trans-unit id="RefreshedUnchanged">
         <source>configuration already up to date</source>
-        <target state="new">configuration already up to date</target>
+        <target state="translated">configuration déjà à jour</target>
         <note />
       </trans-unit>
       <trans-unit id="RepositoryUnavailable">
         <source>Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry.</source>
-        <target state="new">Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry.</target>
+        <target state="translated">Git n’a pas pu lire le référentiel source de configuration. Vérifiez l’accès au dépôt, la connectivité réseau et l’authentification Git, puis réessayez.</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateAvailable">
         <source>A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</source>
-        <target state="new">A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</target>
+        <target state="translated">Une nouvelle version de la source de configuration est disponible. Exécutez « `aspire update --config-source` » pour l’appliquer.</target>
         <note>Do not translate "aspire update --config-source".</note>
       </trans-unit>
       <trans-unit id="UseNotice">
         <source>Configuration source {0} ({1}) at commit {2}: {3}.
 Settings file: {4}</source>
-        <target state="new">Configuration source {0} ({1}) at commit {2}: {3}.
-Settings file: {4}</target>
+        <target state="translated">Source de configuration {0} ({1}) à la {2} de validation : {3}.
+Fichier de paramètres : {4}</target>
         <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the resolved Git commit SHA, {3} is the localized configuration update result, and {4} is the destination settings file path.</note>
       </trans-unit>
       <trans-unit id="UseSourceOptionDescription">
         <source>Accept or decline the proposed Git configuration source for this project.</source>
-        <target state="new">Accept or decline the proposed Git configuration source for this project.</target>
+        <target state="translated">Acceptez ou refusez la source de configuration Git proposée pour ce projet.</target>
         <note />
       </trans-unit>
       <trans-unit id="UseSourcePrompt">
         <source>Use configuration from this source?</source>
-        <target state="new">Use configuration from this source?</target>
+        <target state="translated">Utiliser la configuration de cette source ?</target>
         <note />
       </trans-unit>
     </body>

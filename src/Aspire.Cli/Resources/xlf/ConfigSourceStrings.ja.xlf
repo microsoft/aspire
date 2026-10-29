@@ -4,22 +4,22 @@
     <body>
       <trans-unit id="Accept">
         <source>Yes</source>
-        <target state="new">Yes</target>
+        <target state="translated">はい</target>
         <note />
       </trans-unit>
       <trans-unit id="AppliedVersionMissing">
         <source>A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</source>
-        <target state="new">A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</target>
+        <target state="translated">保存された構成ソースには、適用されたバージョンが記録されていません。`aspire update --config-source` を実行して、許可されている設定を保存し、適用されたバージョンを確定してください。</target>
         <note>Do not translate "aspire update --config-source".</note>
       </trans-unit>
       <trans-unit id="AuthenticationFailed">
         <source>Git could not authenticate to the configuration source. Configure your Git credential helper or SSH authentication and retry.</source>
-        <target state="new">Git could not authenticate to the configuration source. Configure your Git credential helper or SSH authentication and retry.</target>
+        <target state="translated">Git で構成ソースへの認証ができませんでした。Git 資格情報ヘルパーまたは SSH 認証を構成して、再試行してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="BindingChanged">
         <source>The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</source>
-        <target state="new">The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</target>
+        <target state="translated">保存された構成ソースが取得中に変更されました。ソース設定は適用されませんでした。保存されたソース バインドを使用して再試行してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="Candidate">
@@ -27,152 +27,152 @@
 Configuration file: {1}
 Configuration ref: {2}
 Source origin: {3}</source>
-        <target state="new">Configuration source: {0}
-Configuration file: {1}
-Configuration ref: {2}
-Source origin: {3}</target>
+        <target state="translated">構成ソース: {0}
+構成ファイル: {1}
+構成参照: {2}
+ソースの配信元: {3}</target>
         <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the branch name, commit SHA, or default-branch label, and {3} is the source origin (an environment variable name or Microsoft employee default).</note>
       </trans-unit>
       <trans-unit id="CheckFailed">
         <source>The configuration source update check failed: {0} Continuing with the saved configuration.</source>
-        <target state="new">The configuration source update check failed: {0} Continuing with the saved configuration.</target>
+        <target state="translated">構成ソースの更新チェックに失敗しました: {0} 保存した構成で続行します。</target>
         <note>{0} is the configuration source check failure message.</note>
       </trans-unit>
       <trans-unit id="CheckFailedWithoutDetails">
         <source>The configuration source update check failed. Continuing with the saved configuration.</source>
-        <target state="new">The configuration source update check failed. Continuing with the saved configuration.</target>
+        <target state="translated">構成ソースの更新チェックに失敗しました。保存された構成で続行します。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigLockFailed">
         <source>The settings file could not be locked. No source settings were applied. Retry when other configuration writers have finished.</source>
-        <target state="new">The settings file could not be locked. No source settings were applied. Retry when other configuration writers have finished.</target>
+        <target state="translated">設定ファイルを解析できませんでした。ソース設定は適用されませんでした。他の構成ライターが完了したら、もう一度お試しください。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsentRequired">
         <source>A configuration source is available. Specify --use-config-source true to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</source>
-        <target state="new">A configuration source is available. Specify --use-config-source true to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</target>
+        <target state="translated">構成ソースを使用できます。--use-config-source true を指定して承諾するか、--use-config-source false を指定して標準の Aspire 構成を非対話型モードで使用してください。</target>
         <note>Do not translate "--use-config-source", "true", or "false".</note>
       </trans-unit>
       <trans-unit id="Decline">
         <source>No, use standard Aspire configuration</source>
-        <target state="new">No, use standard Aspire configuration</target>
+        <target state="translated">いいえ、標準の Aspire 構成を使用します</target>
         <note />
       </trans-unit>
       <trans-unit id="DefaultBranch">
         <source>default branch</source>
-        <target state="new">default branch</target>
+        <target state="translated">既定のブランチ</target>
         <note />
       </trans-unit>
       <trans-unit id="EmployeeOrigin">
         <source>Microsoft employee default</source>
-        <target state="new">Microsoft employee default</target>
+        <target state="translated">Microsoft 従業員の既定値</target>
         <note />
       </trans-unit>
       <trans-unit id="GitNotFound">
         <source>Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</source>
-        <target state="new">Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</target>
+        <target state="translated">Git を開始できませんでした。この構成ソースを使用するには、Git がインストールされ、PATH で使用可能であることを確認してください。</target>
         <note>Do not translate "PATH".</note>
       </trans-unit>
       <trans-unit id="GitTimeout">
         <source>The configuration source Git operation timed out. Check repository access and Git credentials, then retry.</source>
-        <target state="new">The configuration source Git operation timed out. Check repository access and Git credentials, then retry.</target>
+        <target state="translated">構成ソースの Git 操作がタイムアウトしました。リポジトリへのアクセスと Git 資格情報を確認してから、再試行してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="IncompatibleOptions">
         <source>--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</source>
-        <target state="new">--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</target>
+        <target state="translated">--config-source を --self、--migrate、--channel、--quality、または --nuget-config-dir と組み合わせることはできません。</target>
         <note>Do not translate the command-line option names.</note>
       </trans-unit>
       <trans-unit id="InvalidBinding">
         <source>The configSource binding must contain a Git repository address and a repository-relative configuration file path.</source>
-        <target state="new">The configSource binding must contain a Git repository address and a repository-relative configuration file path.</target>
+        <target state="translated">configSource バインドには、Git リポジトリ アドレスとリポジトリ構成ファイルの相対パスが含まれている必要があります。</target>
         <note>Do not translate "configSource".</note>
       </trans-unit>
       <trans-unit id="InvalidCache">
         <source>The configuration source cache is invalid. Restore or remove its cache entry and retry.</source>
-        <target state="new">The configuration source cache is invalid. Restore or remove its cache entry and retry.</target>
+        <target state="translated">構成ソース キャッシュが無効です。キャッシュ エントリを復元または削除して、再試行してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidConfiguration">
         <source>The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</source>
-        <target state="new">The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</target>
+        <target state="translated">ソース構成は、4 MiB 以下の有効な Aspire JSON オブジェクトである必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidPath">
         <source>The configuration file must be a nonempty repository-relative path using '/' separators, without '.', '..', or empty path segments.</source>
-        <target state="new">The configuration file must be a nonempty repository-relative path using '/' separators, without '.', '..', or empty path segments.</target>
+        <target state="translated">構成ファイルは、'.'、'..'、または空のパス セグメントを含まない、'/' 区切り記号を使用した空でないリポジトリ相対パスである必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidRef">
         <source>The configuration source ref must be a branch name or full commit SHA, not an empty value, tag, revision expression, or command option.</source>
-        <target state="new">The configuration source ref must be a branch name or full commit SHA, not an empty value, tag, revision expression, or command option.</target>
+        <target state="translated">構成ソースの参照は、空の値、タグ、リビジョン式、またはコマンド オプションではなく、ブランチ名または完全なコミット SHA である必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidRepository">
         <source>The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments.</source>
-        <target state="new">The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments.</target>
+        <target state="translated">構成ソースは、絶対ローカル リポジトリ パス、またはパスワード、トークン、クエリ、フラグメントを含まない HTTPS または SSH Git リポジトリ アドレスである必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingFile">
         <source>The configuration file is missing or is not a regular file at the selected Git branch or commit.</source>
-        <target state="new">The configuration file is missing or is not a regular file at the selected Git branch or commit.</target>
+        <target state="translated">選択した Git ブランチまたはコミットで、構成ファイルがないか、通常のファイルではありません。</target>
         <note />
       </trans-unit>
       <trans-unit id="NestedSource">
         <source>A source configuration file cannot declare another configSource.</source>
-        <target state="new">A source configuration file cannot declare another configSource.</target>
+        <target state="translated">ソース構成ファイルで別の configSource を宣言することはできません。</target>
         <note>Do not translate "configSource".</note>
       </trans-unit>
       <trans-unit id="NoBinding">
         <source>No configuration source to update.</source>
-        <target state="new">No configuration source to update.</target>
+        <target state="translated">更新する構成ソースがありません。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoCandidate">
         <source>No configuration source is available. Set {0} to a Git repository address.</source>
-        <target state="new">No configuration source is available. Set {0} to a Git repository address.</target>
+        <target state="translated">使用できる構成ソースがありません。{0} を Git リポジトリ アドレスに設定してください。</target>
         <note>{0} is the environment variable name.</note>
       </trans-unit>
       <trans-unit id="RefreshOptionDescription">
         <source>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</source>
-        <target state="new">Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</target>
+        <target state="translated">保存された最も近いローカルおよびグローバル Git 構成ソースから許可された設定を適用し、パッケージや CLI を更新せずに、指定された設定に対するローカルの編集を置き換えます。</target>
         <note />
       </trans-unit>
       <trans-unit id="Refreshed">
         <source>configuration updated</source>
-        <target state="new">configuration updated</target>
+        <target state="translated">構成が更新されました</target>
         <note />
       </trans-unit>
       <trans-unit id="RefreshedUnchanged">
         <source>configuration already up to date</source>
-        <target state="new">configuration already up to date</target>
+        <target state="translated">構成は既に最新です</target>
         <note />
       </trans-unit>
       <trans-unit id="RepositoryUnavailable">
         <source>Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry.</source>
-        <target state="new">Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry.</target>
+        <target state="translated">Git で構成ソース リポジトリを読み取ることができませんでした。リポジトリへのアクセス、ネットワーク接続、Git 認証を確認してから、再試行してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateAvailable">
         <source>A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</source>
-        <target state="new">A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</target>
+        <target state="translated">構成ソースの新しいバージョンを使用できます。`aspire update --config-source` を実行して適用してください。</target>
         <note>Do not translate "aspire update --config-source".</note>
       </trans-unit>
       <trans-unit id="UseNotice">
         <source>Configuration source {0} ({1}) at commit {2}: {3}.
 Settings file: {4}</source>
-        <target state="new">Configuration source {0} ({1}) at commit {2}: {3}.
-Settings file: {4}</target>
+        <target state="translated">コミット {2} 時点の構成ソース {0} ({1}): {3}。
+設定ファイル: {4}</target>
         <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the resolved Git commit SHA, {3} is the localized configuration update result, and {4} is the destination settings file path.</note>
       </trans-unit>
       <trans-unit id="UseSourceOptionDescription">
         <source>Accept or decline the proposed Git configuration source for this project.</source>
-        <target state="new">Accept or decline the proposed Git configuration source for this project.</target>
+        <target state="translated">このプロジェクトに対して提案された Git 構成ソースを承諾または拒否します。</target>
         <note />
       </trans-unit>
       <trans-unit id="UseSourcePrompt">
         <source>Use configuration from this source?</source>
-        <target state="new">Use configuration from this source?</target>
+        <target state="translated">このソースの構成を使用しますか?</target>
         <note />
       </trans-unit>
     </body>
