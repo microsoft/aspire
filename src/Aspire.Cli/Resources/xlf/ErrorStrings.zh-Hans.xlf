@@ -169,27 +169,27 @@
       </trans-unit>
       <trans-unit id="GitAuthenticationFailed">
         <source>Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled.</source>
-        <target state="new">Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled.</target>
+        <target state="translated">Git 身份验证失败。请先配置 Git 凭据或 SSH 身份验证，然后再运行此命令；已禁用终端凭据提示。</target>
         <note />
       </trans-unit>
       <trans-unit id="GitCommandFailed">
         <source>The Git command failed. Check the repository and selected reference.</source>
-        <target state="new">The Git command failed. Check the repository and selected reference.</target>
+        <target state="translated">Git 命令失败。请检查存储库和所选引用。</target>
         <note />
       </trans-unit>
       <trans-unit id="GitRepositoryUnavailable">
         <source>The Git repository could not be accessed. Check its address, network connectivity, and your access permissions.</source>
-        <target state="new">The Git repository could not be accessed. Check its address, network connectivity, and your access permissions.</target>
+        <target state="translated">无法访问 Git 存储库。检查其地址、网络连接和访问权限。</target>
         <note />
       </trans-unit>
       <trans-unit id="GitTimedOut">
         <source>The Git operation timed out after two minutes.</source>
-        <target state="new">The Git operation timed out after two minutes.</target>
+        <target state="translated">Git 操作在两分钟后超时。</target>
         <note />
       </trans-unit>
       <trans-unit id="GitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
-        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <target state="translated">无法启动 Git。请安装 Git，并确保其位于 PATH 中。</target>
         <note />
       </trans-unit>
       <trans-unit id="GlobalAppHostPathCannotBeSetWithConfigCommand">

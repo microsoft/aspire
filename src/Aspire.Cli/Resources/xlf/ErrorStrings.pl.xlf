@@ -169,27 +169,27 @@
       </trans-unit>
       <trans-unit id="GitAuthenticationFailed">
         <source>Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled.</source>
-        <target state="new">Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled.</target>
+        <target state="translated">Uwierzytelnianie Git nie powiodło się. Przed uruchomieniem tego polecenia skonfiguruj poświadczenia Git lub uwierzytelnianie SSH; monity o poświadczenia terminalu są wyłączone.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitCommandFailed">
         <source>The Git command failed. Check the repository and selected reference.</source>
-        <target state="new">The Git command failed. Check the repository and selected reference.</target>
+        <target state="translated">Polecenie Git nie powiodło się. Sprawdź repozytorium i wybrane odwołanie.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitRepositoryUnavailable">
         <source>The Git repository could not be accessed. Check its address, network connectivity, and your access permissions.</source>
-        <target state="new">The Git repository could not be accessed. Check its address, network connectivity, and your access permissions.</target>
+        <target state="translated">Nie można uzyskać dostępu do repozytorium Git. Sprawdź jego adres, łączność sieciową i uprawnienia dostępu.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitTimedOut">
         <source>The Git operation timed out after two minutes.</source>
-        <target state="new">The Git operation timed out after two minutes.</target>
+        <target state="translated">Operacja Git przekroczyła limit czasu po dwóch minutach.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
-        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <target state="translated">Nie można uruchomić Git. Zainstaluj narzędzie Git i upewnij się, że znajduje się ono na ścieżce PATH.</target>
         <note />
       </trans-unit>
       <trans-unit id="GlobalAppHostPathCannotBeSetWithConfigCommand">
