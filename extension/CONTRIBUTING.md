@@ -150,6 +150,42 @@ ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true ASPIRE_EXTENSION_E2E_INSTALL_AZ
 ASPIRE_EXTENSION_E2E_ENABLE_WINUI=true ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=/path/to/vscode-dotnet-runtime.vsix ASPIRE_EXTENSION_E2E_CSHARP_VSIX=/path/to/vscode-csharp-win32-x64.vsix ASPIRE_EXTENSION_E2E_SHARD=winui-debug ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/winUiDebug.e2e.test.js ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 ```
 
+#### Diagnostic-branch notification experiment
+
+On `agent/diagnose-extension-log-visibility` only, `reproduce-flaky-tests.yml` is a
+single-dispatch wrapper around the existing package/native CLI producers and
+`extension-e2e-tests.yml` with `diagnosticLogsOnly: true`. It runs only Linux
+`diagnostic-logs` using `out/test-e2e/test-e2e/diagnosticLogs.e2e.test.js`. The
+normal reusable-workflow caller still defaults to the full matrix.
+
+Dispatch once at the verified branch head:
+
+```bash
+gh workflow run reproduce-flaky-tests.yml --repo microsoft/aspire --ref agent/diagnose-extension-log-visibility
+```
+
+All checkouts and same-run artifacts use the dispatched source. Native fixture
+builds, VSIX packaging/bridge verification, TypeScript compilation, and focused
+lint must succeed before the two original tests run. Setup/build failure means
+zero actual tests, not successful qualification. No local restore workaround is
+required.
+
+Only this diagnostic input enables `ASPIRE_EXTENSION_E2E_DIAGNOSTIC_STAGES`.
+Named observations bracket the first connected log editor assertion, editor
+closure, notification dismissal, and second connected command. They emit only
+editor counts and notification/dismiss-button visibility flags, never editor
+titles, notification text, logs, paths, URLs, or tokens. A stage marker preceding
+its metadata record can indicate an observer failure rather than a test-action
+failure. DOM snapshots are observations, not Selenium visibility assertions or
+proof that a button remained stable during dismissal.
+
+Read the exact run's job result and private diagnostics once when complete. A
+second-command entry rejects the earlier-cleanup hypothesis; a different failing
+stage rejects notification dismissal; a demonstrably stable and visible actual
+dismiss button rejects hidden/replaced-button explanations. One all-pass run is
+inconclusive: stop rather than repeat it. This diagnostic branch is not a product
+fix or a merge candidate.
+
 #### Blazor WebAssembly browser debugger E2E
 
 Run the managed browser debugger proof with platform-specific .NET Install Tool and C# VSIX files:

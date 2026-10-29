@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { getCommandInvocationCount, isSamePath, waitForCommandOutcome, waitForRepositoryIdle, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
+import { VSBrowser } from './helpers/extester';
 import { dismissAllNotifications, getNotificationMessages, openAspireView, takeNotificationAction, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
 
 interface CliResult {
@@ -73,12 +74,20 @@ suite('CLI diagnostic log actions E2E', function () {
 
         await assertSingleFailureNotification(failureText);
         await takeNotificationAction(failureText, 'Open CLI Log');
+        await observeDiagnosticStage('first-connected-editor:before');
         await assertPersistentLogEditor(firstCliLogPath);
+        await observeDiagnosticStage('first-connected-editor:after');
 
+        await observeDiagnosticStage('close-editors:before');
         await executeE2eControlCommand({ name: 'closeAllEditors' });
+        await observeDiagnosticStage('close-editors:after');
+        await observeDiagnosticStage('dismiss-notifications:before');
         await dismissAllNotifications();
+        await observeDiagnosticStage('dismiss-notifications:after');
 
+        await observeDiagnosticStage('second-connected-command:before');
         const secondFailure = await runConnectedFailure(appHostPath, failureText);
+        await observeDiagnosticStage('second-connected-command:after');
         const appHostLogPath = getDiagnosticLogPath(secondFailure.stderr, 'See AppHost logs at');
 
         await assertSingleFailureNotification(failureText);
@@ -86,6 +95,31 @@ suite('CLI diagnostic log actions E2E', function () {
         await assertPersistentLogEditor(appHostLogPath);
     });
 });
+
+async function observeDiagnosticStage(stage: string): Promise<void> {
+    if (process.env.ASPIRE_EXTENSION_E2E_DIAGNOSTIC_STAGES !== 'true') {
+        return;
+    }
+
+    console.info(`[diagnostic-stage] ${stage}`);
+    const metadata = await VSBrowser.instance.driver.executeScript(`
+        function visible(element) {
+            const rect = element.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            return rect.width > 0 && rect.height > 0
+                && style.display !== 'none' && style.visibility !== 'hidden';
+        }
+
+        return {
+            editors: document.querySelectorAll('.editor-group-container .tab').length,
+            notifications: Array.from(document.querySelectorAll('.notifications-toasts .monaco-list-row'), element => ({
+                visible: visible(element),
+                dismissButtons: Array.from(element.querySelectorAll('.codicon-notifications-clear'), visible),
+            })),
+        };
+    `);
+    console.info(`[diagnostic-metadata] ${stage} ${JSON.stringify(metadata)}`);
+}
 
 async function runConnectedFailure(appHostPath: string, failureText: string): Promise<CliResult> {
     return await runFailingCliWithNotification(

@@ -3,6 +3,11 @@ name: VS Code extension E2E tests
 on:
   workflow_call:
     inputs:
+      diagnosticLogsOnly:
+        description: Run only the existing Linux diagnostic-logs shard.
+        required: false
+        type: boolean
+        default: false
       extensionVersionOverride:
         required: false
         type: string
@@ -120,14 +125,14 @@ jobs:
           if-no-files-found: error
 
   extension_e2e:
-    if: ${{ github.repository == 'microsoft/aspire' }}
+    if: ${{ github.repository == 'microsoft/aspire' && !inputs.diagnosticLogsOnly }}
     name: VS Code extension E2E (${{ matrix.name }}, ${{ matrix.shardName }})
     needs: verify_prerequisites
     runs-on: ${{ matrix.runner }}
     # The Java AppHost shard imports a multi-project Gradle build and then runs the whole
     # application under a debugger, so it needs more than the shared budget.
     timeout-minutes: ${{ matrix.timeoutMinutes || 75 }}
-    env:
+    env: &extension_e2e_env
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
     strategy:
@@ -544,7 +549,7 @@ jobs:
       run:
         shell: pwsh
 
-    steps:
+    steps: &extension_e2e_steps
       - name: Configure NuGet package cache (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -1046,6 +1051,11 @@ jobs:
           # run-e2e.js validates compiled spec matches, including brace globs that
           # PowerShell Test-Path does not expand.
 
+      - name: Lint diagnostic observation source
+        if: inputs.diagnosticLogsOnly
+        working-directory: extension
+        run: corepack yarn eslint src/test-e2e/diagnosticLogs.e2e.test.ts
+
       - name: Install Deno
         if: ${{ matrix.installDeno }}
         shell: pwsh
@@ -1124,6 +1134,7 @@ jobs:
         env:
           ASPIRE_EXTENSION_E2E_VSIX: ${{ github.workspace }}/extension/out/aspire-extension.vsix
           ASPIRE_EXTENSION_E2E_SHARD: ${{ matrix.shardName }}
+          ASPIRE_EXTENSION_E2E_DIAGNOSTIC_STAGES: ${{ inputs.diagnosticLogsOnly }}
           ASPIRE_EXTENSION_E2E_SPEC: ${{ matrix.spec }}
           ASPIRE_EXTENSION_E2E_BROWSER: ${{ matrix.browser }}
           ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}
@@ -1198,3 +1209,37 @@ jobs:
             Write-Host "Recorder logs:"
             $recordingLogs | ForEach-Object { Write-Host "  $($_.FullName.Replace((Get-Location).Path + [IO.Path]::DirectorySeparatorChar, ''))" }
           }
+
+  diagnostic_logs:
+    if: ${{ github.repository == 'microsoft/aspire' && inputs.diagnosticLogsOnly }}
+    name: VS Code extension E2E (${{ matrix.name }}, ${{ matrix.shardName }})
+    needs: verify_prerequisites
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    env: *extension_e2e_env
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            shardName: diagnostic-logs
+            spec: out/test-e2e/test-e2e/diagnosticLogs.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installDeno: false
+            installDotnetDebugger: false
+            installAzureFunctions: false
+            installAzureFunctionsCoreTools: false
+            installResourceDebug: false
+            installWinUI: false
+            installJava: false
+            browser: ''
+            advisoryIssue: ''
+            unsetCliStartTimeout: ''
+    defaults:
+      run:
+        shell: pwsh
+    steps: *extension_e2e_steps
