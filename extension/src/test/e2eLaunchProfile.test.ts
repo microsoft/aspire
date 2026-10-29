@@ -1386,7 +1386,7 @@ builder.Build().Run();
         assert.ok(writeConfig.includes('fs.writeFileSync(workspaceNuGetConfigPath, nugetConfig);'));
     });
 
-    test('uses only local and approved package feeds in both fixture restore scopes', () => {
+    test('uses only local and approved package feeds without enabling source mapping in both fixture restore scopes', () => {
         const configurations = getFixtureNuGetConfigurations(['/packages/local', '/packages/<preview> & "daily"']);
         const expectedConfig = `<?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -1403,30 +1403,6 @@ builder.Build().Run();
   </packageSources>
   <packageSourceMapping>
     <clear />
-    <packageSource key="e2e-source-0">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="e2e-source-1">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet-public">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet-eng">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet9">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet10">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet11">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet-libraries">
-      <package pattern="*" />
-    </packageSource>
   </packageSourceMapping>
 </configuration>
 `;

@@ -2187,12 +2187,8 @@ function writeNuGetConfigIfLocalPackageSourcesExist() {
   const fallbackSourceEntries = fallbackSources
     .map(source => `    <add key="${escapeXml(source.key)}" value="${escapeXml(source.value)}" />`)
     .join('\n');
-  const sourceMappingEntries = [
-    ...packageSources.map((_, index) => `e2e-source-${index}`),
-    ...fallbackSources.map(source => source.key),
-  ].map(key => `    <packageSource key="${escapeXml(key)}">
-      <package pattern="*" />
-    </packageSource>`).join('\n');
+  // Clear inherited mappings without enabling mapping: generated AppHosts inherit these
+  // fixture-owned aliases, which the CLI must not modify to add integration mappings.
   const nugetConfig = `<?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <packageSources>
@@ -2202,7 +2198,6 @@ ${fallbackSourceEntries}
   </packageSources>
   <packageSourceMapping>
     <clear />
-${sourceMappingEntries}
   </packageSourceMapping>
 </configuration>
 `;
