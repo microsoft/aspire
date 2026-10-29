@@ -20,7 +20,7 @@ on:
 env:
   # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
   # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
-  TEST_PROJECT: "Hosting"
+  TEST_PROJECT: "Hosting.Azure"
 
   # Test filter arguments passed to dotnet test (after the -- separator).
   # Use quotes around wildcard patterns to prevent shell glob expansion.
@@ -28,11 +28,11 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+  TEST_FILTER: '--filter-method "*.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects" --filter-method "*.AzureFunctionsTests.AddAzureFunctionsProject_RemoveDefaultHostStorageWhenUseHostStorageIsUsed" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true" --report-trx'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
+  TARGET_OSES: "ubuntu-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
@@ -298,6 +298,15 @@ jobs:
                 RESULT=8
               fi
             fi
+            # Keep all native results and DCP phase evidence, including successful iterations.
+            mkdir -p "${{ github.workspace }}/all-results/iteration-$i"
+            cp "$ITER_OUTPUT" "${{ github.workspace }}/all-results/iteration-$i/"
+            if [ -d "${{ github.workspace }}/testresults" ]; then
+              cp -r "${{ github.workspace }}/testresults/." "${{ github.workspace }}/all-results/iteration-$i/"
+            else
+              echo "::error::Iteration $i produced no testresults directory; native case outcomes are unknown."
+              RESULT=8
+            fi
             rm -f "$ITER_OUTPUT"
 
             if [ "$RESULT" -eq 0 ]; then
@@ -390,10 +399,10 @@ jobs:
           if ($fail -gt 0) { exit 1 }
 
       - name: Upload failure logs
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: failures-${{ matrix.os }}-${{ matrix.index }}
+          name: diagnostic-${{ matrix.os }}-${{ matrix.index }}
           path: all-results/
           if-no-files-found: ignore
 

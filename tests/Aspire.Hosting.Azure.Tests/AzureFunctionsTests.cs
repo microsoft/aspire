@@ -4,6 +4,7 @@
 #pragma warning disable ASPIRECOMMAND001
 #pragma warning disable ASPIREAZUREFUNCTIONS001
 
+using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using Aspire.TestUtilities;
@@ -12,6 +13,8 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -191,14 +194,50 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
         builder.AddAzureFunctionsProject<TestProject>("funcapp2");
 
         using var host = builder.Build();
-        await host.StartAsync();
+        var elapsed = Stopwatch.StartNew();
+        var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
+        using var stopping = lifetime.ApplicationStopping.Register(() =>
+            outputHelper.WriteLine($"Functions shutdown diagnostic: ApplicationStopping at {elapsed.Elapsed}"));
+        using var stopped = lifetime.ApplicationStopped.Register(() =>
+            outputHelper.WriteLine($"Functions shutdown diagnostic: ApplicationStopped at {elapsed.Elapsed}"));
+        outputHelper.WriteLine($"Functions shutdown diagnostic: configured shutdown timeout={host.Services.GetRequiredService<IOptions<HostOptions>>().Value.ShutdownTimeout}");
+        var startTask = host.StartAsync();
+        await startTask;
+        outputHelper.WriteLine($"Functions shutdown diagnostic: startup settled at {elapsed.Elapsed}; task={startTask.Status}");
 
         // Assert that the default storage resource is not present
         var model = host.Services.GetRequiredService<DistributedApplicationModel>();
         Assert.Single(model.Resources.OfType<AzureStorageResource>(),
             r => r.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
 
-        await host.StopAsync();
+        var notifications = host.Services.GetRequiredService<ResourceNotificationService>();
+        WriteSnapshots("before shutdown");
+        var shutdownStarted = elapsed.Elapsed;
+        var shutdownTask = host.StopAsync();
+        try
+        {
+            await shutdownTask;
+        }
+        finally
+        {
+            outputHelper.WriteLine($"Functions shutdown diagnostic: shutdown observation at {elapsed.Elapsed}; phase elapsed={elapsed.Elapsed - shutdownStarted}; task={shutdownTask.Status}; ApplicationStopped={lifetime.ApplicationStopped.IsCancellationRequested}");
+            WriteSnapshots("after shutdown observation");
+        }
+
+        void WriteSnapshots(string phase)
+        {
+            foreach (var resource in model.Resources)
+            {
+                if (notifications.TryGetCurrentState(resource.Name, out var resourceEvent))
+                {
+                    outputHelper.WriteLine($"Functions shutdown diagnostic: {phase}; resource={resource.Name}; id={resourceEvent.ResourceId}; state={resourceEvent.Snapshot.State?.Text}; health={resourceEvent.Snapshot.HealthStatus}; exit={resourceEvent.Snapshot.ExitCode}");
+                }
+                else
+                {
+                    outputHelper.WriteLine($"Functions shutdown diagnostic: {phase}; resource={resource.Name}; no current snapshot");
+                }
+            }
+        }
     }
 
     [Fact]
