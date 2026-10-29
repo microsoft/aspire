@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -43,7 +44,9 @@ internal sealed class OrchestratorHostService : IHostedLifecycleService, IAsyncD
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
+        using var observation = ShutdownDiagnostics.Observe("OrchestratorHostService.StopAsync", cancellationToken);
         await _appOrchestrator.StopAsync(cancellationToken).ConfigureAwait(false);
+        ShutdownDiagnostics.Mark("OrchestratorHostService.StopAsync.completed", cancellationToken);
     }
 
     public async ValueTask DisposeAsync()

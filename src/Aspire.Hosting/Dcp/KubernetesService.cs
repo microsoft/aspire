@@ -436,6 +436,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
 
     public Task StopServerAsync(string resourceCleanup = ResourceCleanup.Full, CancellationToken cancellationToken = default)
     {
+        ShutdownDiagnostics.Mark("KubernetesService.StopServerAsync.request", cancellationToken);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         return ExecuteWithRetry(
@@ -460,6 +461,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
 
     public async Task CleanupResourcesAsync(CancellationToken cancellationToken = default)
     {
+        using var observation = ShutdownDiagnostics.Observe("KubernetesService.CleanupResourcesAsync", cancellationToken);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         var executionDoc = await ExecuteWithRetry(
@@ -480,6 +482,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             cancellationToken
         ).ConfigureAwait(false);
 
+        ShutdownDiagnostics.Mark($"KubernetesService.cleanup-request-acknowledged; ResourcesCleanedUp={executionDoc.ResourcesCleanedUp}", cancellationToken);
         if (executionDoc.ResourcesCleanedUp)
         {
             return;
@@ -507,6 +510,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                 RetryOnConnectivityErrors,
                 cancellationContext).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
+        ShutdownDiagnostics.Mark("KubernetesService.ResourcesCleanedUp=true", cancellationToken);
     }
 
     public void Dispose()

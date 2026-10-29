@@ -190,6 +190,7 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
     public async Task AddAzureFunctionsProject_WorksWithMultipleProjects()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        using var shutdownCapture = ShutdownDiagnosticCapture.Attach(builder.Services, message => outputHelper.WriteLine(message));
         builder.AddAzureFunctionsProject<TestProject>("funcapp");
         builder.AddAzureFunctionsProject<TestProject>("funcapp2");
 
@@ -204,6 +205,9 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
         var startTask = host.StartAsync();
         await startTask;
         outputHelper.WriteLine($"Functions shutdown diagnostic: startup settled at {elapsed.Elapsed}; task={startTask.Status}");
+        var hostOptions = host.Services.GetRequiredService<IOptions<HostOptions>>().Value;
+        outputHelper.WriteLine($"Functions shutdown diagnostic: runtime={Environment.Version}; hosting={typeof(IHost).Assembly.FullName}; stopConcurrently={hostOptions.ServicesStopConcurrently}; callerToken=CancellationToken.None");
+        outputHelper.WriteLine($"Functions shutdown diagnostic: services in registration order={string.Join(", ", host.Services.GetServices<IHostedService>().Select(service => service.GetType().FullName))}");
 
         // Assert that the default storage resource is not present
         var model = host.Services.GetRequiredService<DistributedApplicationModel>();

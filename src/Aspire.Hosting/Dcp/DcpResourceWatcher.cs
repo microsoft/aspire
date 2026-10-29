@@ -265,6 +265,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        using var observation = ShutdownDiagnostics.Observe("DcpResourceWatcher.StopAsync", cancellationToken);
         var tasks = new List<Task>();
         if (_resourceWatchTask is { } resourceTask)
         {
@@ -279,10 +280,19 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
         try
         {
-            await Task.WhenAll(tasks).WaitAsync(cancellationToken).ConfigureAwait(false);
+            var allTasks = Task.WhenAll(tasks);
+            try
+            {
+                await allTasks.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                ShutdownDiagnostics.Mark($"DcpResourceWatcher.all-task={allTasks.Status}; resource-task={_resourceWatchTask?.Status}; log-tasks={string.Join(",", tasks.Select(task => task.Status))}", cancellationToken);
+            }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
+            ShutdownDiagnostics.Mark("DcpResourceWatcher.cancellation.exception-token", ex.CancellationToken);
             // Ignore.
         }
         catch (Exception ex)

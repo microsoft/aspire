@@ -282,19 +282,32 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        using var observation = ShutdownDiagnostics.Observe("DcpExecutor.StopAsync", cancellationToken);
         if (Interlocked.CompareExchange(ref _stopped, 1, 0) != 0)
         {
+            ShutdownDiagnostics.Mark("DcpExecutor.already-stopped", cancellationToken);
             return; // Already stopped/stop in progress.
         }
 
+        ShutdownDiagnostics.Mark("DcpExecutor.own-shutdown.before-cancel", _shutdownCancellation.Token);
         _shutdownCancellation.Cancel();
+        ShutdownDiagnostics.Mark("DcpExecutor.own-shutdown.after-cancel", _shutdownCancellation.Token);
 
         try
         {
-            await _resourceWatcher.StopAsync(cancellationToken).ConfigureAwait(false);
+            var watcherTask = _resourceWatcher.StopAsync(cancellationToken);
+            try
+            {
+                await watcherTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                ShutdownDiagnostics.Mark($"DcpExecutor.watcher-task={watcherTask.Status}", cancellationToken);
+            }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
+            ShutdownDiagnostics.Mark("DcpExecutor.watcher-cancellation.exception-token", ex.CancellationToken);
             // Ignore.
         }
         catch (Exception ex)
@@ -306,7 +319,9 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         {
             if (_options.Value.WaitForResourceCleanup)
             {
+                using var cleanup = ShutdownDiagnostics.Observe("DcpExecutor.CleanupResourcesAsync", cancellationToken);
                 await _kubernetesService.CleanupResourcesAsync(cancellationToken).ConfigureAwait(false);
+                ShutdownDiagnostics.Mark("DcpExecutor.CleanupResourcesAsync.completed", cancellationToken);
             }
 
             // The app orchestrator (represented by kubernetesService here) will perform a resource cleanup
@@ -315,10 +330,13 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
             // There is not much difference for single app run, but for tests that tend to launch multiple instances
             // of app host from the same process, the gain from programmatic orchestrator shutdown is significant
             // See https://github.com/microsoft/aspire/issues/6561 for more info.
+            using var serverStop = ShutdownDiagnostics.Observe("DcpExecutor.StopServerAsync", cancellationToken);
             await _kubernetesService.StopServerAsync(Model.ResourceCleanup.Full, cancellationToken).ConfigureAwait(false);
+            ShutdownDiagnostics.Mark("DcpExecutor.StopServerAsync.completed", cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
+            ShutdownDiagnostics.Mark("DcpExecutor.cleanup-or-server-cancellation.exception-token", ex.CancellationToken);
             // Ignore.
         }
         catch (Exception ex)

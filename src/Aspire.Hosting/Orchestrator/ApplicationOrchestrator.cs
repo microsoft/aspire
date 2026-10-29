@@ -636,9 +636,13 @@ internal sealed class ApplicationOrchestrator
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        using var observation = ShutdownDiagnostics.Observe("ApplicationOrchestrator.StopAsync", cancellationToken);
+        ShutdownDiagnostics.Mark("ApplicationOrchestrator.own-shutdown.before-cancel", _shutdownCancellation.Token);
         _shutdownCancellation.Cancel();
+        ShutdownDiagnostics.Mark("ApplicationOrchestrator.own-shutdown.after-cancel", _shutdownCancellation.Token);
 
         await _dcpExecutor.StopAsync(cancellationToken).ConfigureAwait(false);
+        ShutdownDiagnostics.Mark("ApplicationOrchestrator.StopAsync.completed", cancellationToken);
     }
 
     public async Task StartResourceAsync(string resourceName, CancellationToken cancellationToken)

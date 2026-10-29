@@ -494,7 +494,21 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// <inheritdoc cref="IHost.StopAsync" />
     public virtual async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        await _host.StopAsync(cancellationToken).ConfigureAwait(false);
+        using var observation = ShutdownDiagnostics.Observe("generic-host.StopAsync.caller", cancellationToken);
+        var stopTask = _host.StopAsync(cancellationToken);
+        try
+        {
+            await stopTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex)
+        {
+            ShutdownDiagnostics.Mark("generic-host.StopAsync.exception-token", ex.CancellationToken);
+            throw;
+        }
+        finally
+        {
+            ShutdownDiagnostics.Mark($"generic-host.StopAsync.task={stopTask.Status}", cancellationToken);
+        }
 
         // Reset locale override after stopping the host.
         if (_localeOverrideContext is not null)

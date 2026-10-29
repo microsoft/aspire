@@ -28,18 +28,19 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects" --filter-method "*.AzureFunctionsTests.AddAzureFunctionsProject_RemoveDefaultHostStorageWhenUseHostStorageIsUsed" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true" --report-trx'
+  # Match the failing regular Hosting.Azure lane; the isolated matrix arm adds only the two method filters.
+  TEST_FILTER: '--filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true" --report-trx'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
   TARGET_OSES: "ubuntu-latest"
 
-  # Number of parallel runners per OS
-  # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "3"
+  # Number of parallel runners per OS per contrast arm
+  # Total jobs = RUNNERS_PER_OS × number of OSes × 2 arms (must be ≤ 256)
+  RUNNERS_PER_OS: "2"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "3"
+  ITERATIONS_PER_RUNNER: "1"
 
 jobs:
 
@@ -111,19 +112,23 @@ jobs:
           ENTRIES=""
           for os in "${OSES[@]}"; do
             os=$(echo "$os" | xargs)
-            for i in $(seq 1 "$RUNNERS"); do
-              if [ -n "$ENTRIES" ]; then ENTRIES="$ENTRIES,"; fi
-              ENTRIES="${ENTRIES}{\"os\":\"${os}\",\"index\":${i}}"
+            for context in isolated regular-project; do
+              for i in $(seq 1 "$RUNNERS"); do
+                if [ -n "$ENTRIES" ]; then ENTRIES="$ENTRIES,"; fi
+                ENTRIES="${ENTRIES}{\"os\":\"${os}\",\"index\":${i},\"context\":\"${context}\"}"
+              done
             done
           done
 
           MATRIX="{\"include\":[${ENTRIES}]}"
           echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
 
-          TOTAL=$(echo "$ENTRIES" | tr ',' '\n' | wc -l)
+          TOTAL=$(echo "$MATRIX" | jq '.include | length')
           echo "Generated matrix: $TOTAL runners across ${#OSES[@]} OS(es)"
           echo "Each runner will execute ${{ env.ITERATIONS_PER_RUNNER }} iterations"
-          echo "Total test executions: $(( TOTAL * ${{ env.ITERATIONS_PER_RUNNER }} ))"
+          echo "Total native invocations: $(( TOTAL * ${{ env.ITERATIONS_PER_RUNNER }} ))"
+          echo "Selected cases planned: 4; adjacent cases planned: 4."
+          echo "Regular-project total is measured from TRX (prior baseline: 2115 per invocation)."
 
   build_cli_e2e_image:
     name: Build CLI E2E Docker image
@@ -132,7 +137,7 @@ jobs:
     uses: ./.github/workflows/build-cli-e2e-image.yml
 
   reproduce:
-    name: "${{ matrix.os }} #${{ matrix.index }}"
+    name: "${{ matrix.context }} / ${{ matrix.os }} #${{ matrix.index }}"
     needs: [setup, build_cli_e2e_image]
     if: >-
       ${{
@@ -266,6 +271,11 @@ jobs:
           PASS=0
           FAIL=0
           ITERATIONS=${{ env.ITERATIONS_PER_RUNNER }}
+          METHOD_FILTER=()
+          if [ "${{ matrix.context }}" = "isolated" ]; then
+            METHOD_FILTER=(--filter-method "*.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects" --filter-method "*.AzureFunctionsTests.AddAzureFunctionsProject_RemoveDefaultHostStorageWhenUseHostStorageIsUsed")
+          fi
+          echo "Contrast arm: ${{ matrix.context }}; only method selection differs."
 
           for i in $(seq 1 "$ITERATIONS"); do
             echo "::group::Iteration $i/$ITERATIONS"
@@ -281,12 +291,15 @@ jobs:
             ITER_OUTPUT="${{ github.workspace }}/iter-output-$i.log"
             set +e  # Disable errexit so pipefail doesn't abort before PIPESTATUS capture
             ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" \
+              /p:ContinuousIntegrationBuild=true \
+              --no-launch-profile \
               --no-restore \
               --no-build \
               -- \
               --timeout 10m \
               --results-directory "${{ github.workspace }}/testresults" \
               ${{ env.TEST_FILTER }} \
+              "${METHOD_FILTER[@]}" \
               2>&1 | tee "$ITER_OUTPUT"
             RESULT=${PIPESTATUS[0]}
             set -e
@@ -402,7 +415,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: diagnostic-${{ matrix.os }}-${{ matrix.index }}
+          name: causal-${{ matrix.context }}-${{ matrix.os }}-${{ matrix.index }}
           path: all-results/
           if-no-files-found: ignore
 
@@ -423,8 +436,10 @@ jobs:
           echo "| Test Project | \`${{ env.TEST_PROJECT }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Filter | \`${{ env.TEST_FILTER }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| OSes | ${{ env.TARGET_OSES }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Runners per OS | ${{ env.RUNNERS_PER_OS }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Runners per OS per arm | ${{ env.RUNNERS_PER_OS }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Iterations per runner | ${{ env.ITERATIONS_PER_RUNNER }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Contrast | isolated pair vs normal regular-project load; same source/runtime/probes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Selected cases planned | 4 (2 per arm); outcomes require TRX |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ needs.reproduce.result }}" = "success" ]; then
