@@ -45,6 +45,7 @@ internal sealed class TestInteractionService : IInteractionService
 
     // Call tracking
     public List<StringPromptCall> StringPromptCalls { get; } = [];
+    public List<bool> StringPromptLogResponses { get; } = [];
     public List<FilePathPromptCall> FilePathPromptCalls { get; } = [];
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
     public List<(string PromptText, string? DefaultValue, IReadOnlyList<object> PreSelected, bool Optional)> MultiSelectionPromptCalls { get; } = [];
@@ -115,7 +116,7 @@ internal sealed class TestInteractionService : IInteractionService
         action();
     }
 
-    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, bool logResponse = true, CancellationToken cancellationToken = default)
     {
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
@@ -124,6 +125,7 @@ internal sealed class TestInteractionService : IInteractionService
         }
 
         StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret, required));
+        StringPromptLogResponses.Add(logResponse);
 
         return PromptForResponseAsync(validator, binding, cancellationToken);
     }

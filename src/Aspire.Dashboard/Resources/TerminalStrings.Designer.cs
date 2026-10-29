@@ -61,29 +61,11 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Terminal disconnected. The last output has been preserved.
+        ///   Looks up a localized string similar to Toggle terminal (`).
         /// </summary>
-        public static string TerminalDisconnectedMessage {
+        public static string MainLayoutToggleTerminalDock {
             get {
-                return ResourceManager.GetString("TerminalDisconnectedMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Terminal disconnected (exit code {0}). The last output has been preserved.
-        /// </summary>
-        public static string TerminalDisconnectedWithExitCode {
-            get {
-                return ResourceManager.GetString("TerminalDisconnectedWithExitCode", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Restart resource.
-        /// </summary>
-        public static string TerminalRestartResource {
-            get {
-                return ResourceManager.GetString("TerminalRestartResource", resourceCulture);
+                return ResourceManager.GetString("MainLayoutToggleTerminalDock", resourceCulture);
             }
         }
 
@@ -93,42 +75,6 @@ namespace Aspire.Dashboard.Resources {
         public static string TerminalCloseTab {
             get {
                 return ResourceManager.GetString("TerminalCloseTab", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Show terminal.
-        /// </summary>
-        public static string TerminalShowOutput {
-            get {
-                return ResourceManager.GetString("TerminalShowOutput", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Terminal disconnected. Show recovery actions.
-        /// </summary>
-        public static string TerminalShowDisconnectedBanner {
-            get {
-                return ResourceManager.GetString("TerminalShowDisconnectedBanner", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Terminal disconnected (exit code {0}). Show recovery actions.
-        /// </summary>
-        public static string TerminalShowDisconnectedBannerWithExitCode {
-            get {
-                return ResourceManager.GetString("TerminalShowDisconnectedBannerWithExitCode", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Toggle terminal (`).
-        /// </summary>
-        public static string MainLayoutToggleTerminalDock {
-            get {
-                return ResourceManager.GetString("MainLayoutToggleTerminalDock", resourceCulture);
             }
         }
 
@@ -165,6 +111,24 @@ namespace Aspire.Dashboard.Resources {
         public static string TerminalDisconnected {
             get {
                 return ResourceManager.GetString("TerminalDisconnected", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Terminal disconnected. The last output has been preserved..
+        /// </summary>
+        public static string TerminalDisconnectedMessage {
+            get {
+                return ResourceManager.GetString("TerminalDisconnectedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Terminal disconnected (exit code {0}). The last output has been preserved..
+        /// </summary>
+        public static string TerminalDisconnectedWithExitCode {
+            get {
+                return ResourceManager.GetString("TerminalDisconnectedWithExitCode", resourceCulture);
             }
         }
 
@@ -457,6 +421,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Restart resource.
+        /// </summary>
+        public static string TerminalRestartResource {
+            get {
+                return ResourceManager.GetString("TerminalRestartResource", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Reconnect terminal.
         /// </summary>
         public static string TerminalRetry {
@@ -471,6 +444,33 @@ namespace Aspire.Dashboard.Resources {
         public static string TerminalsHeader {
             get {
                 return ResourceManager.GetString("TerminalsHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Terminal disconnected. Show recovery actions.
+        /// </summary>
+        public static string TerminalShowDisconnectedBanner {
+            get {
+                return ResourceManager.GetString("TerminalShowDisconnectedBanner", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Terminal disconnected (exit code {0}). Show recovery actions.
+        /// </summary>
+        public static string TerminalShowDisconnectedBannerWithExitCode {
+            get {
+                return ResourceManager.GetString("TerminalShowDisconnectedBannerWithExitCode", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Show terminal.
+        /// </summary>
+        public static string TerminalShowOutput {
+            get {
+                return ResourceManager.GetString("TerminalShowOutput", resourceCulture);
             }
         }
 

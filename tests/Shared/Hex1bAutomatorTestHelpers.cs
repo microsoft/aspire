@@ -622,6 +622,31 @@ internal static class Hex1bAutomatorTestHelpers
                 await auto.EnterAsync();
                 break;
 
+            case AspireTemplate.GoStarter:
+                // The list omits the C# starters when the image has no .NET SDK, so search by text instead of counting Downs.
+                await auto.TypeAsync("Go API");
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("> Starter App (Go API + Redis, Go AppHost)").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(5),
+                    description: "Go starter template selected");
+                await auto.EnterAsync();
+                break;
+
+            case AspireTemplate.GoEmptyAppHost:
+                await auto.TypeAsync("Empty AppHost");
+                await auto.EnterAsync();
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("Which language would you like to use?").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(10),
+                    description: "AppHost language prompt");
+                await auto.TypeAsync("Go");
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("> Go").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(5),
+                    description: "Go AppHost language selected");
+                await auto.EnterAsync();
+                break;
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(template), template, $"Unsupported template: {template}");
         }

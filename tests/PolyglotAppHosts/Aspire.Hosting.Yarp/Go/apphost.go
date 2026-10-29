@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	buildVersion := builder.AddParameterFromConfiguration("buildVersion", "MyConfig:BuildVersion")
@@ -36,7 +36,7 @@ func main() {
 	proxy.WithBuildSecret("MY_SECRET", buildSecret)
 
 	if err = proxy.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	proxy.WithConfiguration(func(config aspire.YarpConfigurationBuilder) {
@@ -130,7 +130,7 @@ func main() {
 				"RequestHeadersCopy": "true",
 			})
 		if err = fromEndpointRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		fromResourceRoute := config.AddRoute("/from-resource/{**catchall}", backendService).
@@ -138,7 +138,7 @@ func main() {
 				"PathPrefix": "/resource",
 			})
 		if err = fromResourceRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		fromExternalRoute := config.AddRoute("/from-external/{**catchall}", externalBackend).
@@ -146,7 +146,7 @@ func main() {
 				"PathPrefix": "/external",
 			})
 		if err = fromExternalRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		stringCluster := config.AddClusterWithDestination("string-cluster", "https://example.route")
@@ -155,7 +155,7 @@ func main() {
 				"PathPrefix": "/string",
 			})
 		if err = fromStringRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		catchAllRoute := config.AddCatchAllRoute(endpointCluster).
@@ -163,7 +163,7 @@ func main() {
 				"PathPrefix": "/cluster",
 			})
 		if err = catchAllRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		catchAllEndpointRoute := config.AddCatchAllRoute(endpoint).
@@ -171,7 +171,7 @@ func main() {
 				"PathPrefix": "/catchall-endpoint",
 			})
 		if err = catchAllEndpointRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		catchAllResourceRoute := config.AddCatchAllRoute(backendService).
@@ -179,7 +179,7 @@ func main() {
 				"PathPrefix": "/catchall-resource",
 			})
 		if err = catchAllResourceRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		catchAllExternalRoute := config.AddCatchAllRoute(externalBackend).
@@ -187,7 +187,7 @@ func main() {
 				"PathPrefix": "/catchall-external",
 			})
 		if err = catchAllExternalRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		catchAllStringCluster := config.AddClusterWithDestination("catchall-string-cluster", "https://example.catchall")
@@ -196,7 +196,7 @@ func main() {
 				"PathPrefix": "/catchall-string",
 			})
 		if err = catchAllStringRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		_ = config.AddRoute("/resource/{**catchall}", resourceCluster)
@@ -207,14 +207,14 @@ func main() {
 
 	proxy.PublishAsConnectionString()
 	if err = proxy.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

@@ -163,6 +163,8 @@ internal static class CliTestHelper
         services.AddTransient(options.NuGetPackageCacheFactory);
         services.AddSingleton<TemplateNuGetConfigService>();
         services.AddSingleton(options.TemplateProviderFactory);
+        services.AddSingleton<TemplateSourceStore>();
+        services.AddSingleton<ConfiguredTemplateSourceService>();
         // Template registration checks the real PATH, independently of command-specific environment fakes.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, DotNetTemplateFactory>(sp =>
             ActivatorUtilities.CreateInstance<DotNetTemplateFactory>(sp, new HostEnvironment())));
@@ -261,6 +263,7 @@ internal static class CliTestHelper
         services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();
         services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostToolingCheck>();
+        services.AddSingleton<IEnvironmentCheck, GoAppHostToolingCheck>();
         services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();
@@ -315,6 +318,7 @@ internal static class CliTestHelper
         services.AddTransient<DoCommand>();
         services.AddTransient<PublishCommand>();
         services.AddTransient<ConfigCommand>();
+        services.AddTransient<TemplateManagementCommand>();
         services.AddTransient<CompletionsCommand>();
         services.AddTransient<CacheCommand>();
         services.AddTransient<CertificatesCommand>();

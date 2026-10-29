@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	registry := builder.AddAzureContainerRegistry("containerregistry").
@@ -24,7 +24,7 @@ func main() {
 		service.Tags().Set("provisioning-proxy", "go")
 	})
 	if err = registry.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	environment := builder.AddAzureContainerAppEnvironment("environment")
@@ -34,7 +34,7 @@ func main() {
 		aspire.AzureContainerRegistryRoleAcrPush,
 	})
 	if err = environment.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	registryFromEnvironment := environment.GetAzureContainerRegistry()
@@ -44,7 +44,7 @@ func main() {
 		Keep:   aspire.Float64Ptr(2),
 	})
 	if err = registryFromEnvironment.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()

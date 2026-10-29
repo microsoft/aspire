@@ -92,6 +92,135 @@ Automatic SDK rewrites are limited to unconditional declarations. Conditional
 SDK declarations that cannot be safely classified require an explicit version
 edit; source fallback does not guess whether their MSBuild conditions are active.
 
+## Configured template sources
+
+Register named local directories or Git repositories in the
+CLI's global configuration. Source management is always global; no `--global` flag is needed.
+
+Interactive `aspire new` offers **Search for more templates** only when at least
+one valid global template source is configured. Checking availability reads source
+definitions only; it does not discover templates or contact remote sources.
+
+```bash
+aspire template source add company --path /absolute/path/to/company-templates
+aspire template source add examples --repository https://github.com/microsoft/aspire-templates
+aspire template source add release --repository https://github.com/microsoft/aspire-templates --ref release/17.0 --path templates
+aspire template source remove examples
+aspire template source list
+aspire template source list --format json
+```
+
+This writes the following shape to the global `~/.aspire/aspire.config.json` file:
+
+```json
+{
+  "templateSources": {
+    "company": {
+      "path": "/absolute/path/to/company-templates"
+    },
+    "release": {
+      "repository": "https://github.com/microsoft/aspire-templates",
+      "ref": "release/17.0",
+      "path": "templates"
+    }
+  }
+}
+```
+
+Use an absolute path on your platform (for example, `C:\Templates` on Windows).
+Local directories and Git repositories can contain one or more .NET template-engine
+templates using `.template.config/template.json`, including templates in subdirectories.
+Project-level `templateSources` settings are not used.
+
+All sources must use objects; path and URL string shorthands are not accepted.
+Source names cannot contain dots, colons, or control characters. Adding a name
+that already exists (case-insensitively) fails without overwriting it.
+The `templateSources` section and source names are matched case-insensitively, preserving
+their existing spelling. Source add/remove fail rather than write without the
+global configuration lock.
+Source-management commands defer normalization until a validated update under the
+target file's lock. Rejected source-management operations leave configuration bytes
+unchanged and do not normalize project settings or migrate legacy files at startup.
+Existing `config` commands retain their normal startup migration and normalization.
+
+`source list` displays source names and their configured fields in a table.
+`--format json` writes only a JSON object keyed by source name to stdout, matching
+the global `templateSources` object (without the surrounding `templateSources` property):
+
+```json
+{
+  "company": {
+    "path": "/absolute/path/to/company-templates"
+  },
+  "release": {
+    "repository": "https://github.com/microsoft/aspire-templates",
+    "ref": "release/17.0",
+    "path": "templates"
+  }
+}
+```
+
+Source-management commands require the modern global `aspire.config.json`.
+If only legacy `globalsettings.json` exists, they fail without modifying it.
+Run `aspire config info` to perform the existing startup migration, then retry.
+
+Listing sorts sources by name, preserves configured fields without adding defaults,
+and includes incomplete source objects so they can be inspected while editing.
+No configured sources produces `{}` in JSON mode. Invalid/unreadable global
+configuration fails with a nonzero exit code and diagnostics on stderr, not an
+empty success result. Startup normalization and legacy-config migration also leave
+configuration files untouched when listing. Listing does not scan directories, resolve
+Git refs, or clone repositories.
+
+The `repository` value must be an HTTPS or SSH URL, for example
+`https://github.com/microsoft/aspire-templates` or
+`ssh://git@github.com/microsoft/aspire-templates.git`.
+SCP-style addresses such as `git@github.com:owner/repo.git`, other URL schemes,
+query strings, and fragments are not accepted. HTTPS URLs must not contain user
+information; SSH URLs may contain a username but no password.
+Use Git's existing credential helper or SSH authentication rather than storing credentials
+in a template source. The CLI must be able to access the repository without an
+interactive Git credential prompt.
+
+Use a repository object to select a branch, tag, or full commit SHA with `ref`, or
+limit discovery to a repository-relative `path`. Omit `ref` to use the default `HEAD`
+and omit `path` to search the repository root (`.`). Paths must stay inside the
+repository and must not traverse symbolic links. Git sources use
+`repository`, `ref`, and `path`; supplied values must
+be nonempty strings.
+Unknown source fields are ignored when reading configuration for compatibility
+with newer CLI versions. Invalid combinations and edits to unknown fields are
+rejected before saving. For stepwise
+editing with `aspire config set templateSources.<name>.<field> <value> --global`, incomplete
+Git objects are allowed until discovery, but supplied paths are still validated;
+`source add` always requires a complete source.
+
+Each search resolves the selected ref to a commit and reuses a cached checkout of
+that commit, cloning only when it is not already cached. Multiple paths and refs
+resolving to the same repository commit share its checkout. Generation uses the
+selected checkout even if the remote subsequently changes. The existing explicit `--template-repository`,
+`--template-repository-ref`, and `--template-path` options are unchanged.
+
+Run `aspire new` interactively and select **Search for more templates** beneath the
+default templates. Enter text to search template names and descriptions, or leave
+it empty to list everything. Matching is case-insensitive, and results show the
+source name to distinguish templates with identical names. Duplicate labels within
+one source receive numeric suffixes. Select a result to
+create a project with the normal local-template parameter prompts.
+Search input remains visible while typing but is excluded from prompt diagnostic logs.
+Configured templates cannot be combined with `--source`, `--version`, `--channel`,
+or `--language`; package/version choices are owned by the template. Supplying any
+of these options therefore keeps the picker restricted to built-in templates.
+
+Directories are scanned and repositories are acquired only when searching, not when
+displaying help or the default picker. Repository resolution and cloning show progress.
+Malformed source configuration fails the command rather than skipping entries.
+A source that cannot be read, resolved, authenticated, or cloned produces a warning
+without blocking other sources. Cancellation stops the search. You can search again
+or return to the default templates without creating project files.
+Repeated queries reuse template-engine sessions for local directories and unchanged
+Git checkouts, keeping selected template callbacks alive through generation.
+
 ## Examples
 
 To initialize an empty C# AppHost without discovering incidental `.sln` or `.slnx` files, run this from the repository root:

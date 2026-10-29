@@ -66,3 +66,7 @@ src/Components/**/ConfigurationSchema.json text eol=lf
 
 # Verify 32 rejects CRLF in text baselines, including on Windows.
 *.verified.* text=auto eol=lf
+
+# gofmt rewrites CRLF, and the go-starter files are scaffolded exactly as they are checked out.
+*.go text eol=lf
+src/Aspire.Cli/Templating/Templates/go-starter/** text eol=lf

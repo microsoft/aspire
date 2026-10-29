@@ -3,7 +3,6 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
     <PackageTags>aspire integration hosting azure entra identity authentication security</PackageTags>
     <Description>Microsoft Entra ID support for Aspire.</Description>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
