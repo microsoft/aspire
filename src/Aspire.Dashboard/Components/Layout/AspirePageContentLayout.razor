@@ -7,9 +7,20 @@
     <!-- Toolbar -->
     @if (ViewportInformation.IsDesktop)
     {
-        @* The header's top-level navigation and the resource header already show where the user is, so the
-           page title is kept for assistive technology only. *@
-        <div class="visually-hidden">@PageTitleSection</div>
+        @if (DashboardExperienceComponents.IsLegacyLocation(NavigationManager))
+        {
+            @* The previous experience keeps main's behavior: the page title is teleported into its top header, which
+               has no other indication of the page. *@
+            <SectionContent SectionName="@DashboardUIHelpers.PageTitleTopBarSection">
+                @PageTitleSection
+            </SectionContent>
+        }
+        else
+        {
+            @* The header's top-level navigation and the resource header already show where the user is, so the
+               page title is kept for assistive technology only. *@
+            <div class="visually-hidden">@PageTitleSection</div>
+        }
 
         @* A page can opt out of the desktop toolbar row (HideDesktopToolbar) when it renders its toolbar
            controls somewhere else. Skipping the <header>

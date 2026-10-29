@@ -30,6 +30,9 @@
 
 <body>
     <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
+    @* Shared controls show tooltips through data-tooltip, which this provider displays. It's here rather than in a
+       layout so the pages of both experiences, and every layout, get it. *@
+    <aspire-tooltip-provider></aspire-tooltip-provider>
     <ReconnectModal />
     <script src="@Assets["js/imask-7.6.1.min.js"]"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>

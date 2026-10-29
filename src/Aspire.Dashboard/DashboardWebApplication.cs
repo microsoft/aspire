@@ -550,12 +550,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // This is done to avoid immediately navigating in the Blazor app.
         _app.Use(async (context, next) =>
         {
-            if (context.Request.Path.Value is { } requestPath && TargetLocationInterceptor.IsResourceServicePath(requestPath))
+            if (context.Request.Path.Value is { } requestPath && TargetLocationInterceptor.GetStandaloneLocation(requestPath) is { } standaloneLocation)
             {
                 var client = context.RequestServices.GetRequiredService<IDashboardClient>();
                 if (!client.IsEnabled)
                 {
-                    context.Response.Redirect(TargetLocationInterceptor.StructuredLogsPath);
+                    context.Response.Redirect(standaloneLocation);
                     return;
                 }
             }
