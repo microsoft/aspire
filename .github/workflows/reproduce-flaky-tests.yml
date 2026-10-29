@@ -1,6 +1,9 @@
 # Diagnostic branch only: preserve the original timer-based case and assertions.
 # Two mocked-transport ordering controls exercise the real repository client.
 # A passing experiment establishes controlled branch behavior, not a flake fix.
+# The added response-buffering case intentionally retains the original definite
+# assertion: cancellation before the client observes the response should expose
+# that assertion's missing phase precondition. Do not ignore its failure.
 name: Diagnose sandbox create cancellation ordering
 run-name: Sandbox cancellation ordering at ${{ github.sha }}
 
@@ -21,5 +24,6 @@ jobs:
       extraTestArgs: >-
         --filter-method '*.AzureDevComputeClientKeepsCancellationAfterRejectedCreateDefinite'
         --filter-method '*.DiagnosticAzureDevComputeCreateCancellationOrdering'
+        --filter-method '*.DiagnosticAzureDevComputeRejectedCreateCancellationDuringResponseBuffering'
         --filter-method '*.AzureDevComputeClientMarksRejectedCreateResponsesAsDefinite'
         --filter-method '*.AzureDevComputeClientMarksCancellationBeforeCreateDispatchAsDefinite'

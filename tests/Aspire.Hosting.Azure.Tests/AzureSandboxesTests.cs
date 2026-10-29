@@ -1674,6 +1674,42 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task DiagnosticAzureDevComputeRejectedCreateCancellationDuringResponseBuffering()
+    {
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var sendCount = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            sendCount++;
+            output.WriteLine("[cancellation-buffering] forbidden-response-returned-by-handler");
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden)
+            {
+                Content = new CancelDuringBufferingContent(cancellationTokenSource, () =>
+                    output.WriteLine("[cancellation-buffering] cancel-before-client-observes-response")),
+            });
+        });
+        var client = new AzureDevComputeClient(
+            new HttpClient(handler),
+            new RecordingTokenCredential(),
+            NullLogger.Instance,
+            TimeSpan.FromMinutes(1));
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Name = "disk-image",
+                Source = CreateDiskImageSource()
+            },
+            cancellationTokenSource.Token));
+
+        output.WriteLine($"[cancellation-buffering] sends={sendCount} ambiguous={exception.ResponseMayHaveBeenLost} original={exception.OriginalException.GetType().Name}");
+        Assert.Equal(1, sendCount);
+        Assert.False(exception.ResponseMayHaveBeenLost);
+        Assert.IsType<TaskCanceledException>(exception.OriginalException);
+    }
+
+    [Fact]
     public async Task AzureDevComputeClientTreatsMissingDeletedResourcesAsSuccess()
     {
         var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)));
@@ -3692,6 +3728,22 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             }
 
             base.Dispose(disposing);
+        }
+    }
+
+    private sealed class CancelDuringBufferingContent(CancellationTokenSource cancellation, Action onBuffering) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            onBuffering();
+            cancellation.Cancel();
+            return Task.FromCanceled(cancellation.Token);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
         }
     }
 
