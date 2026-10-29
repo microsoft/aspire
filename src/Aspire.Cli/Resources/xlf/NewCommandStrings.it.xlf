@@ -99,7 +99,7 @@
       </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
         <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
-        <target state="translated">Non sono stati trovati modelli .NET in '{0}'. È previsto un file con estensione template.config/template.json nella directory o in una delle relative sottodirectory.</target>
+        <target state="translated">Non sono stati trovati modelli .NET in '{0}'. È previsto un file .template.config/template.json nella directory o in una delle relative sottodirectory.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingConfiguredTemplates">

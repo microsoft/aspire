@@ -219,7 +219,7 @@
       </trans-unit>
       <trans-unit id="TemplatePathOptionDescription">
         <source>Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</source>
-        <target state="translated">未解壓縮的 .NET 範本套件目錄路徑 (指定 --template-repository 時，此路徑必須相對於存放庫)</target>
+        <target state="translated">已解壓縮的 .NET 範本套件目錄路徑 (指定 --template-repository 時，此路徑必須相對於存放庫)</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryGitExited">
