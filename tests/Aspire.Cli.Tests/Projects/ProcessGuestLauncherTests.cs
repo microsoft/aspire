@@ -49,7 +49,6 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/21259", typeof(PlatformDetection), nameof(PlatformDetection.IsMacOS))]
     public async Task LaunchAsync_NoOptions_OnCancellation_ForceKillsProcessTreeAndReturns()
     {
         // Baseline: when no GuestLaunchOptions are passed (publish path, scaffolding, any caller
@@ -87,7 +86,6 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/21259", typeof(PlatformDetection), nameof(PlatformDetection.IsMacOS))]
     public async Task LaunchAsync_WithGracefulServices_GracefulSucceeds_NoTreeKillEscalation()
     {
         // Run-path happy case: graceful signaler is invoked, simulates a successful signal by
@@ -200,7 +198,6 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/21259", typeof(PlatformDetection), nameof(PlatformDetection.IsMacOS))]
     public async Task LaunchAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToTreeKill()
     {
         // Run-path bad-citizen case: graceful signaler accepts the request but the process ignores
@@ -276,7 +273,6 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/21259", typeof(PlatformDetection), nameof(PlatformDetection.IsMacOS))]
     public async Task LaunchAsync_WithGracefulServices_SignalerThrows_StillEscalatesToTreeKill()
     {
         // Best-effort contract for the graceful signal: any exception (DCP layout discovery failed,
