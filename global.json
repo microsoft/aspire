@@ -30,10 +30,10 @@
     "runner": "Microsoft.Testing.Platform"
   },
   "msbuild-sdks": {
-    "Microsoft.Build.NoTargets": "3.7.0",
-    "Microsoft.Build.Traversal": "3.2.0",
-    "Microsoft.DotNet.Arcade.Sdk": "10.0.0-beta.26472.2",
-    "Microsoft.DotNet.Helix.Sdk": "10.0.0-beta.26472.2",
-    "Microsoft.DotNet.SharedFramework.Sdk": "10.0.0-beta.26472.2"
+    "Microsoft.Build.NoTargets": "3.7.134",
+    "Microsoft.Build.Traversal": "4.1.82",
+    "Microsoft.DotNet.Arcade.Sdk": "10.0.0-beta.26515.1",
+    "Microsoft.DotNet.Helix.Sdk": "10.0.0-beta.26515.1",
+    "Microsoft.DotNet.SharedFramework.Sdk": "10.0.0-beta.26515.1"
   }
 }
