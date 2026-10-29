@@ -49,6 +49,16 @@ Daha fazla bilgi için https://aka.ms/aspire/container-runtime-unhealthy sayfas�
         <target state="translated">Kaynak otomatik olarak başlatılacak şekilde yapılandırılmadı.</target>
         <note />
       </trans-unit>
+      <trans-unit id="StateColumnResourceUnresolvedParameters">
+        <source>Resource is waiting for parameter values.</source>
+        <target state="new">Resource is waiting for parameter values.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StateColumnResourceUnresolvedParametersList">
+        <source>Waiting for parameters: {0}</source>
+        <target state="new">Waiting for parameters: {0}</target>
+        <note>{0} is a comma-separated list of parameter resource names.</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceWaiting">
         <source>Resource is waiting for dependencies.</source>
         <target state="translated">Kaynak, bağımlılıkları bekliyor.</target>

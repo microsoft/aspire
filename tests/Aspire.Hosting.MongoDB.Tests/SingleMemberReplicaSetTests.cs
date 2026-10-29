@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,51 @@ namespace Aspire.Hosting.MongoDB.Tests;
 
 public class SingleMemberReplicaSetTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MissingKeyFileParameterBlocksOnlyTheServer(bool compositeValue)
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestDcpExecutor(options => options.DisableDashboard = false, testOutputHelper);
+        var key = builder.AddParameter("key", secret: true);
+        IExpressionValue value = compositeValue ? ReferenceExpression.Create($"prefix-{key}") : key.Resource;
+        var mongo = builder.AddMongoDB("mongo").WithKeyFile(value);
+        var consumer = builder.AddContainer("consumer", "test-image").WithReference(mongo);
+        using var app = builder.Build();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var orchestrator = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+
+        Assert.True(app.Services.GetRequiredService<IInteractionService>().IsAvailable);
+        await orchestrator.PublishResourcesPreparedAsync(cts.Token);
+        await orchestrator.PublishResourceStartingAsync(mongo.Resource, cts.Token);
+        await orchestrator.PublishResourceStartingAsync(consumer.Resource, cts.Token);
+
+        Assert.True(notifications.TryGetCurrentState(mongo.Resource.Name, out var unresolved));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, unresolved.Snapshot.State?.Text);
+        Assert.Equal(
+            ["key"],
+            Assert.IsType<string[]>(Assert.Single(unresolved.Snapshot.Properties, p => p.Name == "resource.unresolvedParameters").Value));
+        Assert.True(notifications.TryGetCurrentState(consumer.Resource.Name, out var consumerState));
+        Assert.Equal(KnownResourceStates.Starting, consumerState.Snapshot.State?.Text);
+        Assert.Empty(consumerState.Snapshot.Properties.Where(p => p.Name == "resource.unresolvedParameters"));
+
+        var files = Assert.Single(mongo.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>());
+        var filesTask = files.Callback(new ContainerFileSystemCallbackContext
+        {
+            Model = mongo.Resource,
+            Services = app.Services
+        }, cts.Token);
+        Assert.False(filesTask.IsCompleted);
+
+        await key.Resource.SetValueAsync("shared-key", cts.Token);
+        var file = Assert.IsType<ContainerFile>(Assert.Single(await filesTask));
+        Assert.Equal("rs.key", file.Name);
+        Assert.Equal(compositeValue ? "prefix-shared-key" : "shared-key", file.Contents);
+        var starting = await notifications.WaitForResourceAsync(mongo.Resource.Name, e => e.Snapshot.State?.Text == KnownResourceStates.Starting, cts.Token);
+        Assert.Empty(starting.Snapshot.Properties.Where(p => p.Name == "resource.unresolvedParameters"));
+    }
+
     [Fact]
     public async Task WithReplicaSetKeepsTheServerAndDatabaseModel()
     {

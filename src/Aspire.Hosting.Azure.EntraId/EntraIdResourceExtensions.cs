@@ -75,6 +75,21 @@ public static class EntraIdResourceExtensions
     private static IResourceBuilder<EntraIdApplicationResource> ConfigureEntraIdResource(
         IResourceBuilder<EntraIdApplicationResource> resourceBuilder)
     {
+        // IDs can be configured after consumers reference this resource. Link only the final values.
+        resourceBuilder.ApplicationBuilder.OnBeforeStart((_, _) =>
+        {
+            if (resourceBuilder.Resource.TenantIdParameter is { } tenantId)
+            {
+                resourceBuilder.WithReferenceRelationship(tenantId);
+            }
+            if (resourceBuilder.Resource.ClientIdParameter is { } clientId)
+            {
+                resourceBuilder.WithReferenceRelationship(clientId);
+            }
+
+            return Task.CompletedTask;
+        });
+
         return resourceBuilder
             .WithIconName("ShieldKeyhole")
             // The resource waits until its IDs are known, which takes a while when they come from parameters that the
@@ -349,8 +364,9 @@ public static class EntraIdResourceExtensions
     /// </para>
     /// <para>
     /// The parameter values are validated when the application starts. The tenant ID must be a GUID or a domain such as
-    /// <c>contoso.onmicrosoft.com</c>, and the client ID must be a GUID. When a value is missing or malformed, the resource
-    /// reports <c>FailedToStart</c> and logs the reason.
+    /// <c>contoso.onmicrosoft.com</c>, and the client ID must be a GUID. Missing values are reported as
+    /// <c>UnresolvedParameters</c> while waiting for user input. Invalid values cause the resource to report
+    /// <c>FailedToStart</c> and log the reason.
     /// </para>
     /// <para>
     /// The registration is used only for configuration. Aspire does not deploy Bicep or query Microsoft Graph
@@ -2715,6 +2731,33 @@ public static class EntraIdResourceExtensions
         {
             EnsureManagedIdentityRequired(builder.Resource);
         }
+
+        // Match the late-bound environment callback without evaluating it during parameter discovery.
+        builder.ApplicationBuilder.OnBeforeStart((_, _) =>
+        {
+            if (entra.TenantIdParameter is { } tenantId)
+            {
+                builder.WithReferenceRelationship(tenantId);
+            }
+            if (entra.ClientIdParameter is { } clientId)
+            {
+                builder.WithReferenceRelationship(clientId);
+            }
+            foreach (var credential in entra.ClientCredentials)
+            {
+                switch (credential)
+                {
+                    case EntraIdClientSecretCredential secret:
+                        builder.WithReferenceRelationship(secret.ClientSecret);
+                        break;
+                    case EntraIdFileCertificateCredential { Password: { } password }:
+                        builder.WithReferenceRelationship(password);
+                        break;
+                }
+            }
+
+            return Task.CompletedTask;
+        });
 
         builder.WithEnvironment(context =>
         {

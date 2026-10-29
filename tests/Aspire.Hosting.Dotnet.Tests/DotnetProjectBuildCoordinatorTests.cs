@@ -3362,8 +3362,14 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         await completion.Callback(app.Services, TestContext.Current.CancellationToken);
     }
 
-    [Fact]
-    public async Task BuildCompletionCapabilityObservesRebuildGenerations()
+    [Theory]
+    [InlineData(nameof(KnownResourceStates.Starting))]
+    [InlineData(nameof(KnownResourceStates.Running))]
+    [InlineData(nameof(KnownResourceStates.Waiting))]
+    [InlineData(nameof(KnownResourceStates.UnresolvedParameters))]
+    [InlineData(nameof(KnownResourceStates.Building))]
+    [InlineData(nameof(KnownResourceStates.Stopping))]
+    public async Task BuildCompletionCapabilityObservesRebuildGenerations(string rebuildState)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
@@ -3390,7 +3396,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         {
             await app.ResourceNotifications.PublishUpdateAsync(rebuilder, snapshot => snapshot with
             {
-                State = KnownResourceStates.Running,
+                State = rebuildState,
                 ExitCode = null
             });
             var wait = completion.Callback(app.Services, TestContext.Current.CancellationToken);

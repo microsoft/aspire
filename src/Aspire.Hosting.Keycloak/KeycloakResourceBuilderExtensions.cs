@@ -76,6 +76,8 @@ public static class KeycloakResourceBuilderExtensions
             .WithEndpoint(ManagementEndpointName, e => e.ExcludeReferenceEndpoint = true)
             .WithHttpHealthCheck(endpointName: ManagementEndpointName, path: "/health/ready")
             .WithOtlpExporter()
+            .WithReferenceRelationship(resource.AdminReference)
+            .WithReferenceRelationship(resource.AdminPasswordParameter)
             .WithEnvironment(context =>
             {
                 context.EnvironmentVariables[AdminEnvVarName] = resource.AdminReference;

@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Components.Common.TestUtilities;
+using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests.Dcp;
+using Aspire.Hosting.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Utils;
@@ -54,6 +56,14 @@ public static class TestDistributedApplicationBuilder
         return CreateCore([], configureOptions, testOutputHelper);
     }
 
+    public static IDistributedApplicationTestingBuilder CreateWithTestDcpExecutor(Action<DistributedApplicationOptions> configureOptions, ITestOutputHelper? testOutputHelper = null)
+    {
+        var builder = CreateCore([], configureOptions, testOutputHelper);
+        builder.Services.AddSingleton<IDcpExecutor, TestDcpExecutor>();
+
+        return builder;
+    }
+
     public static IDistributedApplicationTestingBuilder Create(Action<DistributedApplicationOptions>? configureOptions, ITestOutputHelper testOutputHelper, params string[] args)
     {
         return CreateCore(args, configureOptions, testOutputHelper);
@@ -74,7 +84,9 @@ public static class TestDistributedApplicationBuilder
         // Discussion: https://github.com/microsoft/aspire/pull/7335/files#r1936799460
         builder.Services.ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler());
 
-        builder.Services.AddSingleton<ApplicationOrchestratorProxy>(sp => new ApplicationOrchestratorProxy(sp.GetRequiredService<ApplicationOrchestrator>()));
+        builder.Services.AddSingleton<ApplicationOrchestratorProxy>(sp => new ApplicationOrchestratorProxy(
+            sp.GetRequiredService<ApplicationOrchestrator>(),
+            sp.GetRequiredService<DcpExecutorEvents>()));
 
         if (testOutputHelper is not null)
         {
