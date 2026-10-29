@@ -121,7 +121,11 @@ beforeEach(() => {
             append(style) { this.styles.push(style.textContent); },
         };
         const client = {
-            element: { parentElement: element, shadowRoot: shadow, dataset: {}, style: {}, contains: value => value === client.element },
+            element: {
+                parentElement: element, shadowRoot: shadow, dataset: {}, style: {}, attributes: new Set(),
+                contains: value => value === client.element,
+                toggleAttribute(name, force) { force ? this.attributes.add(name) : this.attributes.delete(name); return !!force; },
+            },
             connected: true,
             peer: { id: "browser-1", primaryId: "cli-1", isPrimary: false },
             geometry: { columns: 100, rows: 30 },

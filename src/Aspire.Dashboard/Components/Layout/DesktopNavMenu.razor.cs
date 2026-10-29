@@ -106,10 +106,10 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
     /// Gets the URL of a page of the current resource selection, such as its console logs. The selection is read from
     /// the current URL; pages that aren't about resources, like the parameters, select every resource.
     /// </summary>
-    internal static string GetSelectionPageUrl(NavigationManager navigationManager, ResourcesLayout.ResourceTab tab)
+    internal static string GetSelectionPageUrl(NavigationManager navigationManager, ResourceTab tab)
     {
         var path = navigationManager.ToBaseRelativePath(navigationManager.Uri);
-        if (tab == ResourcesLayout.ResourceTab.Overview && ResourcesLayout.ParsePaneMode(path) == ResourcePaneMode.Telemetry)
+        if (tab == ResourceTab.Overview && ResourcesLayout.ParsePaneMode(path) == ResourcePaneMode.Telemetry)
         {
             return DashboardUrls.ResourceListUrl();
         }
@@ -124,13 +124,13 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
         }
 
         // Without a selection, the overview restores the last selected resources, like the Resources entry always did.
-        if (tab == ResourcesLayout.ResourceTab.Overview && resourceNames.Count == 0)
+        if (tab == ResourceTab.Overview && resourceNames.Count == 0)
         {
             return DashboardUrls.ResourceListUrl();
         }
 
         var url = ResourcesLayout.GetTabUrl(tab, resourceNames, routeResourceName);
-        return ResourcesLayout.ParsePaneMode(path) == ResourcePaneMode.Telemetry && tab is not (ResourcesLayout.ResourceTab.Overview or ResourcesLayout.ResourceTab.Console)
+        return ResourcesLayout.ParsePaneMode(path) == ResourcePaneMode.Telemetry && tab is not (ResourceTab.Overview or ResourceTab.Console)
             ? DashboardUrls.AddTelemetryPane(url)
             : url;
     }
@@ -141,7 +141,7 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
         {
             // The pages of a selection (overview, console logs, structured logs, traces and metrics) are icons at the
             // top of the resources view, so the app navigation has a single entry for them.
-            yield return new NavItem(NavSection.Resources, GetSelectionPageUrl(NavigationManager, ResourcesLayout.ResourceTab.Overview), Loc[nameof(Resources.Layout.NavMenuResourcesTab)], ResourcesIcon(), ResourcesIcon(active: true));
+            yield return new NavItem(NavSection.Resources, GetSelectionPageUrl(NavigationManager, ResourceTab.Overview), Loc[nameof(Resources.Layout.NavMenuResourcesTab)], ResourcesIcon(), ResourcesIcon(active: true));
             if (HasResourceTerminals)
             {
                 yield return new NavItem(NavSection.Terminals, DashboardUrls.TerminalsUrl(), Loc[nameof(Resources.Layout.NavMenuTerminalsTab)], TerminalsIcon(), TerminalsIcon(active: true));

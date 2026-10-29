@@ -1539,6 +1539,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithContainerRuntimeArgs(args []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithCorrelationId(correlationId string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithCreatedAt(createdAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithDashboardPosition(position float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithDependency(dependency ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithDeveloperCertificateTrust(trust bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithDockerfile(contextPath string, options ...*WithDockerfileOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1607,7 +1608,9 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithSerializedAnnotation(annotationId string, json string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithTags(tags []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithTerminal(options ...*WithTerminalOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithTrait(name string, value string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUrl(url any, options ...*WithUrlOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -2346,6 +2349,18 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCreatedAt(
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithDashboardPosition sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDashboardPosition(position float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["position"] = serializeValue(position)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -3479,6 +3494,18 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithStatus(sta
 	return s
 }
 
+// WithTags adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTags(tags []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if tags != nil { reqArgs["tags"] = serializeValue(tags) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal(options ...*WithTerminalOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -3505,6 +3532,19 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal(o
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTrait(name string, value string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTrait", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -3861,6 +3901,7 @@ type CSharpAppResource interface {
 	WithContainerRegistry(registry Resource) CSharpAppResource
 	WithCorrelationId(correlationId string) CSharpAppResource
 	WithCreatedAt(createdAt string) CSharpAppResource
+	WithDashboardPosition(position float64) CSharpAppResource
 	WithDependency(dependency ResourceWithConnectionString) CSharpAppResource
 	WithDeveloperCertificateTrust(trust bool) CSharpAppResource
 	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) CSharpAppResource
@@ -3921,7 +3962,9 @@ type CSharpAppResource interface {
 	WithSerializedAnnotation(annotationId string, json string) CSharpAppResource
 	WithSessionLifetime() CSharpAppResource
 	WithStatus(status TestResourceStatus) CSharpAppResource
+	WithTags(tags []string) CSharpAppResource
 	WithTerminal(options ...*WithTerminalOptions) CSharpAppResource
+	WithTrait(name string, value string) CSharpAppResource
 	WithUnionDependency(dependency any) CSharpAppResource
 	WithUrl(url any, options ...*WithUrlOptions) CSharpAppResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) CSharpAppResource
@@ -4532,6 +4575,18 @@ func (s *cSharpAppResource) WithCreatedAt(createdAt string) CSharpAppResource {
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithDashboardPosition sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+func (s *cSharpAppResource) WithDashboardPosition(position float64) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["position"] = serializeValue(position)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -5526,6 +5581,18 @@ func (s *cSharpAppResource) WithStatus(status TestResourceStatus) CSharpAppResou
 	return s
 }
 
+// WithTags adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+func (s *cSharpAppResource) WithTags(tags []string) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if tags != nil { reqArgs["tags"] = serializeValue(tags) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
 func (s *cSharpAppResource) WithTerminal(options ...*WithTerminalOptions) CSharpAppResource {
 	if s.err != nil { return s }
@@ -5552,6 +5619,19 @@ func (s *cSharpAppResource) WithTerminal(options ...*WithTerminalOptions) CSharp
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+func (s *cSharpAppResource) WithTrait(name string, value string) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTrait", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6855,6 +6935,7 @@ type ContainerRegistryResource interface {
 	WithContainerRegistry(registry Resource) ContainerRegistryResource
 	WithCorrelationId(correlationId string) ContainerRegistryResource
 	WithCreatedAt(createdAt string) ContainerRegistryResource
+	WithDashboardPosition(position float64) ContainerRegistryResource
 	WithDependency(dependency ResourceWithConnectionString) ContainerRegistryResource
 	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ContainerRegistryResource
 	WithEndpoints(endpoints []string) ContainerRegistryResource
@@ -6889,7 +6970,9 @@ type ContainerRegistryResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ContainerRegistryResource
 	WithSessionLifetime() ContainerRegistryResource
 	WithStatus(status TestResourceStatus) ContainerRegistryResource
+	WithTags(tags []string) ContainerRegistryResource
 	WithTerminal(options ...*WithTerminalOptions) ContainerRegistryResource
+	WithTrait(name string, value string) ContainerRegistryResource
 	WithUnionDependency(dependency any) ContainerRegistryResource
 	WithUrl(url any, options ...*WithUrlOptions) ContainerRegistryResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerRegistryResource
@@ -7228,6 +7311,18 @@ func (s *containerRegistryResource) WithCreatedAt(createdAt string) ContainerReg
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithDashboardPosition sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+func (s *containerRegistryResource) WithDashboardPosition(position float64) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["position"] = serializeValue(position)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -7767,6 +7862,18 @@ func (s *containerRegistryResource) WithStatus(status TestResourceStatus) Contai
 	return s
 }
 
+// WithTags adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+func (s *containerRegistryResource) WithTags(tags []string) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if tags != nil { reqArgs["tags"] = serializeValue(tags) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
 func (s *containerRegistryResource) WithTerminal(options ...*WithTerminalOptions) ContainerRegistryResource {
 	if s.err != nil { return s }
@@ -7793,6 +7900,19 @@ func (s *containerRegistryResource) WithTerminal(options ...*WithTerminalOptions
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+func (s *containerRegistryResource) WithTrait(name string, value string) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTrait", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -7949,6 +8069,7 @@ type ContainerResource interface {
 	WithContainerRuntimeArgs(args []string) ContainerResource
 	WithCorrelationId(correlationId string) ContainerResource
 	WithCreatedAt(createdAt string) ContainerResource
+	WithDashboardPosition(position float64) ContainerResource
 	WithDependency(dependency ResourceWithConnectionString) ContainerResource
 	WithDeveloperCertificateTrust(trust bool) ContainerResource
 	WithDockerfile(contextPath string, options ...*WithDockerfileOptions) ContainerResource
@@ -8017,7 +8138,9 @@ type ContainerResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ContainerResource
 	WithSessionLifetime() ContainerResource
 	WithStatus(status TestResourceStatus) ContainerResource
+	WithTags(tags []string) ContainerResource
 	WithTerminal(options ...*WithTerminalOptions) ContainerResource
+	WithTrait(name string, value string) ContainerResource
 	WithUnionDependency(dependency any) ContainerResource
 	WithUrl(url any, options ...*WithUrlOptions) ContainerResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerResource
@@ -8755,6 +8878,18 @@ func (s *containerResource) WithCreatedAt(createdAt string) ContainerResource {
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithDashboardPosition sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+func (s *containerResource) WithDashboardPosition(position float64) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["position"] = serializeValue(position)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -9888,6 +10023,18 @@ func (s *containerResource) WithStatus(status TestResourceStatus) ContainerResou
 	return s
 }
 
+// WithTags adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+func (s *containerResource) WithTags(tags []string) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if tags != nil { reqArgs["tags"] = serializeValue(tags) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
 func (s *containerResource) WithTerminal(options ...*WithTerminalOptions) ContainerResource {
 	if s.err != nil { return s }
@@ -9914,6 +10061,19 @@ func (s *containerResource) WithTerminal(options ...*WithTerminalOptions) Contai
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+func (s *containerResource) WithTrait(name string, value string) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTrait", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11718,6 +11878,7 @@ type DotnetToolResource interface {
 	WithContainerRegistry(registry Resource) DotnetToolResource
 	WithCorrelationId(correlationId string) DotnetToolResource
 	WithCreatedAt(createdAt string) DotnetToolResource
+	WithDashboardPosition(position float64) DotnetToolResource
 	WithDependency(dependency ResourceWithConnectionString) DotnetToolResource
 	WithDeveloperCertificateTrust(trust bool) DotnetToolResource
 	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) DotnetToolResource
@@ -11778,6 +11939,7 @@ type DotnetToolResource interface {
 	WithSerializedAnnotation(annotationId string, json string) DotnetToolResource
 	WithSessionLifetime() DotnetToolResource
 	WithStatus(status TestResourceStatus) DotnetToolResource
+	WithTags(tags []string) DotnetToolResource
 	WithTerminal(options ...*WithTerminalOptions) DotnetToolResource
 	WithToolIgnoreExistingFeeds() DotnetToolResource
 	WithToolIgnoreFailedSources() DotnetToolResource
@@ -11785,6 +11947,7 @@ type DotnetToolResource interface {
 	WithToolPrerelease() DotnetToolResource
 	WithToolSource(source string) DotnetToolResource
 	WithToolVersion(version string) DotnetToolResource
+	WithTrait(name string, value string) DotnetToolResource
 	WithUnionDependency(dependency any) DotnetToolResource
 	WithUrl(url any, options ...*WithUrlOptions) DotnetToolResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) DotnetToolResource
@@ -12364,6 +12527,18 @@ func (s *dotnetToolResource) WithCreatedAt(createdAt string) DotnetToolResource 
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithDashboardPosition sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+func (s *dotnetToolResource) WithDashboardPosition(position float64) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["position"] = serializeValue(position)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -13366,6 +13541,18 @@ func (s *dotnetToolResource) WithStatus(status TestResourceStatus) DotnetToolRes
 	return s
 }
 
+// WithTags adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+func (s *dotnetToolResource) WithTags(tags []string) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if tags != nil { reqArgs["tags"] = serializeValue(tags) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
 func (s *dotnetToolResource) WithTerminal(options ...*WithTerminalOptions) DotnetToolResource {
 	if s.err != nil { return s }
@@ -13461,6 +13648,19 @@ func (s *dotnetToolResource) WithToolVersion(version string) DotnetToolResource 
 	}
 	reqArgs["version"] = serializeValue(version)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withToolVersion", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+func (s *dotnetToolResource) WithTrait(name string, value string) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTrait", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14666,6 +14866,7 @@ type ExecutableResource interface {
 	WithContainerRegistry(registry Resource) ExecutableResource
 	WithCorrelationId(correlationId string) ExecutableResource
 	WithCreatedAt(createdAt string) ExecutableResource
+	WithDashboardPosition(position float64) ExecutableResource
 	WithDependency(dependency ResourceWithConnectionString) ExecutableResource
 	WithDeveloperCertificateTrust(trust bool) ExecutableResource
 	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ExecutableResource
@@ -14726,7 +14927,9 @@ type ExecutableResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ExecutableResource
 	WithSessionLifetime() ExecutableResource
 	WithStatus(status TestResourceStatus) ExecutableResource
+	WithTags(tags []string) ExecutableResource
 	WithTerminal(options ...*WithTerminalOptions) ExecutableResource
+	WithTrait(name string, value string) ExecutableResource
 	WithUnionDependency(dependency any) ExecutableResource
 	WithUrl(url any, options ...*WithUrlOptions) ExecutableResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExecutableResource
@@ -15306,6 +15509,18 @@ func (s *executableResource) WithCreatedAt(createdAt string) ExecutableResource 
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithDashboardPosition sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+func (s *executableResource) WithDashboardPosition(position float64) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["position"] = serializeValue(position)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -16308,6 +16523,18 @@ func (s *executableResource) WithStatus(status TestResourceStatus) ExecutableRes
 	return s
 }
 
+// WithTags adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+func (s *executableResource) WithTags(tags []string) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if tags != nil { reqArgs["tags"] = serializeValue(tags) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
 func (s *executableResource) WithTerminal(options ...*WithTerminalOptions) ExecutableResource {
 	if s.err != nil { return s }
@@ -16334,6 +16561,19 @@ func (s *executableResource) WithTerminal(options ...*WithTerminalOptions) Execu
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+func (s *executableResource) WithTrait(name string, value string) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTrait", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -16778,6 +17018,7 @@ type ExternalServiceResource interface {
 	WithContainerRegistry(registry Resource) ExternalServiceResource
 	WithCorrelationId(correlationId string) ExternalServiceResource
 	WithCreatedAt(createdAt string) ExternalServiceResource
+	WithDashboardPosition(position float64) ExternalServiceResource
 	WithDependency(dependency ResourceWithConnectionString) ExternalServiceResource
 	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ExternalServiceResource
 	WithEndpoints(endpoints []string) ExternalServiceResource
@@ -16813,7 +17054,9 @@ type ExternalServiceResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ExternalServiceResource
 	WithSessionLifetime() ExternalServiceResource
 	WithStatus(status TestResourceStatus) ExternalServiceResource
+	WithTags(tags []string) ExternalServiceResource
 	WithTerminal(options ...*WithTerminalOptions) ExternalServiceResource
+	WithTrait(name string, value string) ExternalServiceResource
 	WithUnionDependency(dependency any) ExternalServiceResource
 	WithUrl(url any, options ...*WithUrlOptions) ExternalServiceResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExternalServiceResource
@@ -17152,6 +17395,18 @@ func (s *externalServiceResource) WithCreatedAt(createdAt string) ExternalServic
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithDashboardPosition sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+func (s *externalServiceResource) WithDashboardPosition(position float64) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["position"] = serializeValue(position)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -17709,6 +17964,18 @@ func (s *externalServiceResource) WithStatus(status TestResourceStatus) External
 	return s
 }
 
+// WithTags adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+func (s *externalServiceResource) WithTags(tags []string) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if tags != nil { reqArgs["tags"] = serializeValue(tags) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
 func (s *externalServiceResource) WithTerminal(options ...*WithTerminalOptions) ExternalServiceResource {
 	if s.err != nil { return s }
@@ -17735,6 +18002,19 @@ func (s *externalServiceResource) WithTerminal(options ...*WithTerminalOptions) 
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+func (s *externalServiceResource) WithTrait(name string, value string) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTrait", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -19532,6 +19812,7 @@ type ParameterResource interface {
 	WithCorrelationId(correlationId string) ParameterResource
 	WithCreatedAt(createdAt string) ParameterResource
 	WithCustomInput(options *ParameterCustomInputOptions) ParameterResource
+	WithDashboardPosition(position float64) ParameterResource
 	WithDependency(dependency ResourceWithConnectionString) ParameterResource
 	WithDescription(description string, options ...*WithDescriptionOptions) ParameterResource
 	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ParameterResource
@@ -19569,7 +19850,9 @@ type ParameterResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ParameterResource
 	WithSessionLifetime() ParameterResource
 	WithStatus(status TestResourceStatus) ParameterResource
+	WithTags(tags []string) ParameterResource
 	WithTerminal(options ...*WithTerminalOptions) ParameterResource
+	WithTrait(name string, value string) ParameterResource
 	WithUnionDependency(dependency any) ParameterResource
 	WithUrl(url any, options ...*WithUrlOptions) ParameterResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ParameterResource
@@ -19959,6 +20242,18 @@ func (s *parameterResource) WithCustomInput(options *ParameterCustomInputOptions
 	}
 	if options != nil { reqArgs["options"] = serializeValue(options) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCustomInput", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithDashboardPosition sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+func (s *parameterResource) WithDashboardPosition(position float64) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["position"] = serializeValue(position)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -20546,6 +20841,18 @@ func (s *parameterResource) WithStatus(status TestResourceStatus) ParameterResou
 	return s
 }
 
+// WithTags adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+func (s *parameterResource) WithTags(tags []string) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if tags != nil { reqArgs["tags"] = serializeValue(tags) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
 func (s *parameterResource) WithTerminal(options ...*WithTerminalOptions) ParameterResource {
 	if s.err != nil { return s }
@@ -20572,6 +20879,19 @@ func (s *parameterResource) WithTerminal(options ...*WithTerminalOptions) Parame
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+func (s *parameterResource) WithTrait(name string, value string) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTrait", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -21418,6 +21738,7 @@ type ProjectResource interface {
 	WithContainerRegistry(registry Resource) ProjectResource
 	WithCorrelationId(correlationId string) ProjectResource
 	WithCreatedAt(createdAt string) ProjectResource
+	WithDashboardPosition(position float64) ProjectResource
 	WithDependency(dependency ResourceWithConnectionString) ProjectResource
 	WithDeveloperCertificateTrust(trust bool) ProjectResource
 	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ProjectResource
@@ -21478,7 +21799,9 @@ type ProjectResource interface {
 	WithSerializedAnnotation(annotationId string, json string) ProjectResource
 	WithSessionLifetime() ProjectResource
 	WithStatus(status TestResourceStatus) ProjectResource
+	WithTags(tags []string) ProjectResource
 	WithTerminal(options ...*WithTerminalOptions) ProjectResource
+	WithTrait(name string, value string) ProjectResource
 	WithUnionDependency(dependency any) ProjectResource
 	WithUrl(url any, options ...*WithUrlOptions) ProjectResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ProjectResource
@@ -22089,6 +22412,18 @@ func (s *projectResource) WithCreatedAt(createdAt string) ProjectResource {
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithDashboardPosition sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+func (s *projectResource) WithDashboardPosition(position float64) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["position"] = serializeValue(position)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23083,6 +23418,18 @@ func (s *projectResource) WithStatus(status TestResourceStatus) ProjectResource 
 	return s
 }
 
+// WithTags adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+func (s *projectResource) WithTags(tags []string) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if tags != nil { reqArgs["tags"] = serializeValue(tags) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
 func (s *projectResource) WithTerminal(options ...*WithTerminalOptions) ProjectResource {
 	if s.err != nil { return s }
@@ -23109,6 +23456,19 @@ func (s *projectResource) WithTerminal(options ...*WithTerminalOptions) ProjectR
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+func (s *projectResource) WithTrait(name string, value string) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTrait", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -24921,6 +25281,7 @@ type TestDatabaseResource interface {
 	WithContainerRuntimeArgs(args []string) TestDatabaseResource
 	WithCorrelationId(correlationId string) TestDatabaseResource
 	WithCreatedAt(createdAt string) TestDatabaseResource
+	WithDashboardPosition(position float64) TestDatabaseResource
 	WithDependency(dependency ResourceWithConnectionString) TestDatabaseResource
 	WithDeveloperCertificateTrust(trust bool) TestDatabaseResource
 	WithDockerfile(contextPath string, options ...*WithDockerfileOptions) TestDatabaseResource
@@ -24989,7 +25350,9 @@ type TestDatabaseResource interface {
 	WithSerializedAnnotation(annotationId string, json string) TestDatabaseResource
 	WithSessionLifetime() TestDatabaseResource
 	WithStatus(status TestResourceStatus) TestDatabaseResource
+	WithTags(tags []string) TestDatabaseResource
 	WithTerminal(options ...*WithTerminalOptions) TestDatabaseResource
+	WithTrait(name string, value string) TestDatabaseResource
 	WithUnionDependency(dependency any) TestDatabaseResource
 	WithUrl(url any, options ...*WithUrlOptions) TestDatabaseResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestDatabaseResource
@@ -25727,6 +26090,18 @@ func (s *testDatabaseResource) WithCreatedAt(createdAt string) TestDatabaseResou
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithDashboardPosition sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+func (s *testDatabaseResource) WithDashboardPosition(position float64) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["position"] = serializeValue(position)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -26860,6 +27235,18 @@ func (s *testDatabaseResource) WithStatus(status TestResourceStatus) TestDatabas
 	return s
 }
 
+// WithTags adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+func (s *testDatabaseResource) WithTags(tags []string) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if tags != nil { reqArgs["tags"] = serializeValue(tags) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
 func (s *testDatabaseResource) WithTerminal(options ...*WithTerminalOptions) TestDatabaseResource {
 	if s.err != nil { return s }
@@ -26886,6 +27273,19 @@ func (s *testDatabaseResource) WithTerminal(options ...*WithTerminalOptions) Tes
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+func (s *testDatabaseResource) WithTrait(name string, value string) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTrait", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -27292,6 +27692,7 @@ type TestRedisResource interface {
 	WithContainerRuntimeArgs(args []string) TestRedisResource
 	WithCorrelationId(correlationId string) TestRedisResource
 	WithCreatedAt(createdAt string) TestRedisResource
+	WithDashboardPosition(position float64) TestRedisResource
 	WithDataVolume(options ...*WithDataVolumeOptions) TestRedisResource
 	WithDependency(dependency ResourceWithConnectionString) TestRedisResource
 	WithDeveloperCertificateTrust(trust bool) TestRedisResource
@@ -27367,7 +27768,9 @@ type TestRedisResource interface {
 	WithSerializedAnnotation(annotationId string, json string) TestRedisResource
 	WithSessionLifetime() TestRedisResource
 	WithStatus(status TestResourceStatus) TestRedisResource
+	WithTags(tags []string) TestRedisResource
 	WithTerminal(options ...*WithTerminalOptions) TestRedisResource
+	WithTrait(name string, value string) TestRedisResource
 	WithUnionDependency(dependency any) TestRedisResource
 	WithUrl(url any, options ...*WithUrlOptions) TestRedisResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestRedisResource
@@ -28319,6 +28722,18 @@ func (s *testRedisResource) WithCreatedAt(createdAt string) TestRedisResource {
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithDashboardPosition sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+func (s *testRedisResource) WithDashboardPosition(position float64) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["position"] = serializeValue(position)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -29569,6 +29984,18 @@ func (s *testRedisResource) WithStatus(status TestResourceStatus) TestRedisResou
 	return s
 }
 
+// WithTags adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+func (s *testRedisResource) WithTags(tags []string) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if tags != nil { reqArgs["tags"] = serializeValue(tags) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTerminal adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
 func (s *testRedisResource) WithTerminal(options ...*WithTerminalOptions) TestRedisResource {
 	if s.err != nil { return s }
@@ -29595,6 +30022,19 @@ func (s *testRedisResource) WithTerminal(options ...*WithTerminalOptions) TestRe
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+func (s *testRedisResource) WithTrait(name string, value string) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTrait", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

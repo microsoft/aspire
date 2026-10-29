@@ -7,7 +7,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Xunit;
 using NavSection = Aspire.Dashboard.Components.Layout.DesktopNavMenu.NavSection;
-using ResourceTab = Aspire.Dashboard.Components.Layout.ResourcesLayout.ResourceTab;
+using ResourceTab = Aspire.Dashboard.Components.Layout.ResourceTab;
 using ResourcesPage = Aspire.Dashboard.Components.Pages.Resources;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;

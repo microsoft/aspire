@@ -45,7 +45,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly HashSet<string> _collapsedResourceNames = new(StringComparers.ResourceName);
     private readonly HashSet<string> _collapsedGroups = new(StringComparer.OrdinalIgnoreCase);
-    private ResourceGrouping _grouping;
+    private ResourcePaneGrouping _grouping;
     private readonly CancellationTokenSource _cts = new();
     private readonly List<MenuButtonItem> _paneMenuItems = [];
     private readonly ResourcesPage.ResourcesViewModel _filter = new() { SelectedViewKind = ResourcesPage.ResourceViewKind.Table };
@@ -248,15 +248,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (DashboardClient.IsEnabled && paneModeResult.Success && Enum.TryParse<ResourcePaneMode>(paneModeResult.Value, ignoreCase: true, out var storedPaneMode) && storedPaneMode != ResourcePaneMode.Telemetry)
         {
             // Migrate the former Tags navigation view to the resource pane's grouping preference.
-            _grouping = storedPaneMode == ResourcePaneMode.Tags ? ResourceGrouping.Tags : ResourceGrouping.None;
+            _grouping = storedPaneMode == ResourcePaneMode.Tags ? ResourcePaneGrouping.Tags : ResourcePaneGrouping.None;
             PaneState.SetMode(ResourcePaneMode.Resources);
         }
         var groupingResult = await LocalStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneGrouping);
-        if (groupingResult.Success && Enum.TryParse<ResourceGrouping>(groupingResult.Value, out var grouping) && Enum.IsDefined(grouping))
+        if (groupingResult.Success && Enum.TryParse<ResourcePaneGrouping>(groupingResult.Value, out var grouping) && Enum.IsDefined(grouping))
         {
             _grouping = grouping;
         }
-        else if (_grouping == ResourceGrouping.Tags)
+        else if (_grouping == ResourcePaneGrouping.Tags)
         {
             await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneGrouping, _grouping.ToString());
         }
@@ -265,9 +265,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (kindsResult.Success && kindsResult.Value is { } storedKinds)
         {
             var kinds = storedKinds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            _showResources = kinds.Contains(nameof(PaneKind.Resources), StringComparer.Ordinal);
-            _showParameters = kinds.Contains(nameof(PaneKind.Parameters), StringComparer.Ordinal);
-            _showTelemetryOnlyResources = kinds.Contains(nameof(PaneKind.TelemetrySources), StringComparer.Ordinal);
+            _showResources = kinds.Contains(nameof(ResourcePaneKind.Resources), StringComparer.Ordinal);
+            _showParameters = kinds.Contains(nameof(ResourcePaneKind.Parameters), StringComparer.Ordinal);
+            _showTelemetryOnlyResources = kinds.Contains(nameof(ResourcePaneKind.TelemetrySources), StringComparer.Ordinal);
         }
         await ApplyPaneModeFromLocationAsync(_lastLocation);
         if (cancellationToken.IsCancellationRequested)
@@ -579,7 +579,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         if (mode == ResourcePaneMode.Tags)
         {
-            await SetGroupingAsync(ResourceGrouping.Tags);
+            await SetGroupingAsync(ResourcePaneGrouping.Tags);
             mode = ResourcePaneMode.Resources;
         }
         PaneState.SetMode(mode.Value);
@@ -900,14 +900,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private List<ResourceGroup> GetResourceGroups()
     {
         // Tag groups include parameters (see GetTagGroups), so they can have content when only parameters are shown.
-        if (_grouping == ResourceGrouping.Tags ? !_showResources && !_showParameters : !_showResources)
+        if (_grouping == ResourcePaneGrouping.Tags ? !_showResources && !_showParameters : !_showResources)
         {
             return [];
         }
 
-        var groups = _grouping == ResourceGrouping.Tags ? GetTagGroups() : _resourceByName.Values
+        var groups = _grouping == ResourcePaneGrouping.Tags ? GetTagGroups() : _resourceByName.Values
             .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
-            .GroupBy(r => _grouping == ResourceGrouping.ResourceType ? r.ResourceType
+            .GroupBy(r => _grouping == ResourcePaneGrouping.ResourceType ? r.ResourceType
                 : string.IsNullOrEmpty(r.State) ? nameof(KnownResourceState.Unknown) : r.State, StringComparer.OrdinalIgnoreCase)
             .Select(group => new ResourceGroup(group.Key,
                 group.Where(r => GetGroupName(group.Key).Contains(_filter.TextFilter, StringComparisons.UserTextSearch) || r.MatchesFilter(_filter.TextFilter))
@@ -922,10 +922,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private string GetGroupName(string? value) => GetGroupName(_grouping, value);
 
-    private string GetGroupName(ResourceGrouping grouping, string? value) => grouping switch
+    private string GetGroupName(ResourcePaneGrouping grouping, string? value) => grouping switch
     {
-        ResourceGrouping.Tags => value ?? Loc[nameof(Resources.Layout.ResourcePaneUntaggedGroup)],
-        ResourceGrouping.State => string.IsNullOrEmpty(value) ? ColumnsLoc[nameof(Columns.UnknownStateLabel)] : value.Humanize(),
+        ResourcePaneGrouping.Tags => value ?? Loc[nameof(Resources.Layout.ResourcePaneUntaggedGroup)],
+        ResourcePaneGrouping.State => string.IsNullOrEmpty(value) ? ColumnsLoc[nameof(Columns.UnknownStateLabel)] : value.Humanize(),
         _ => value ?? string.Empty
     };
 
@@ -942,13 +942,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             tags.Add(string.Empty);
         }
-        OrderStore.EnsureGroups(nameof(ResourceGrouping.Tags), tags);
-        OrderStore.EnsureGroups(nameof(ResourceGrouping.ResourceType), resources.Select(r => r.ResourceType)
+        OrderStore.EnsureGroups(nameof(ResourcePaneGrouping.Tags), tags);
+        OrderStore.EnsureGroups(nameof(ResourcePaneGrouping.ResourceType), resources.Select(r => r.ResourceType)
             .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase));
-        OrderStore.EnsureGroups(nameof(ResourceGrouping.State), resources
+        OrderStore.EnsureGroups(nameof(ResourcePaneGrouping.State), resources
             .Select(r => string.IsNullOrEmpty(r.State) ? nameof(KnownResourceState.Unknown) : r.State)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(value => GetGroupName(ResourceGrouping.State, value), StringComparer.CurrentCultureIgnoreCase));
+            .OrderBy(value => GetGroupName(ResourcePaneGrouping.State, value), StringComparer.CurrentCultureIgnoreCase));
     }
 
     // Tags are normalized to nonempty values, so the empty key uniquely identifies the synthetic untagged group.
@@ -965,15 +965,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 RenderKey = "resource-grouping-header"
             }
         }
-        .Concat(Enum.GetValues<ResourceGrouping>().Select(grouping => new MenuButtonItem
+        .Concat(Enum.GetValues<ResourcePaneGrouping>().Select(grouping => new MenuButtonItem
         {
             Id = $"resource-grouping-{grouping}",
             Class = "resource-grouping-menu-item",
             Text = Loc[grouping switch
             {
-                ResourceGrouping.None => nameof(Resources.Layout.ResourcePaneGroupingNone),
-                ResourceGrouping.Tags => nameof(Resources.Layout.NavMenuTagsTab),
-                ResourceGrouping.ResourceType => nameof(Resources.Layout.ResourcePaneGroupingResourceType),
+                ResourcePaneGrouping.None => nameof(Resources.Layout.ResourcePaneGroupingNone),
+                ResourcePaneGrouping.Tags => nameof(Resources.Layout.NavMenuTagsTab),
+                ResourcePaneGrouping.ResourceType => nameof(Resources.Layout.ResourcePaneGroupingResourceType),
                 _ => nameof(Resources.Layout.ResourcePaneGroupingState)
             }],
             Tooltip = string.Empty,
@@ -983,7 +983,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }))
         .ToList();
 
-    private async Task SetGroupingAsync(ResourceGrouping grouping)
+    private async Task SetGroupingAsync(ResourcePaneGrouping grouping)
     {
         _grouping = grouping;
         StateHasChanged();
@@ -1128,9 +1128,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _isLoaded && !IsTelemetryPane &&
         _filter.TextFilter.Length == 0 && NoFiltersSet;
 
-    private bool CanReorderResources => CanReorderPane && _grouping == ResourceGrouping.None;
+    private bool CanReorderResources => CanReorderPane && _grouping == ResourcePaneGrouping.None;
 
-    private bool CanReorderGroups => CanReorderPane && _grouping != ResourceGrouping.None;
+    private bool CanReorderGroups => CanReorderPane && _grouping != ResourcePaneGrouping.None;
 
     private string GetReorderParentName(ResourceViewModel resource)
     {
@@ -1450,17 +1450,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return keys.Distinct().ToList();
     }
 
-    internal enum PaneKind
+    internal bool IsKindShown(ResourcePaneKind kind) => kind switch
     {
-        Resources,
-        Parameters,
-        TelemetrySources
-    }
-
-    internal bool IsKindShown(PaneKind kind) => kind switch
-    {
-        PaneKind.Resources => _showResources,
-        PaneKind.Parameters => _showParameters,
+        ResourcePaneKind.Resources => _showResources,
+        ResourcePaneKind.Parameters => _showParameters,
         _ => _showTelemetryOnlyResources
     };
 
@@ -1513,19 +1506,19 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return kinds.Count > 0 ? string.Join(", ", kinds) : Loc[nameof(Resources.Layout.ResourcePaneNoKindsShown)];
     }
 
-    private PaneKind GetKind(string name) =>
+    private ResourcePaneKind GetKind(string name) =>
         ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource)
-            ? (resource.IsParameter ? PaneKind.Parameters : PaneKind.Resources)
-            : PaneKind.TelemetrySources;
+            ? (resource.IsParameter ? ResourcePaneKind.Parameters : ResourcePaneKind.Resources)
+            : ResourcePaneKind.TelemetrySources;
 
-    private async Task ToggleKindAsync(PaneKind kind)
+    private async Task ToggleKindAsync(ResourcePaneKind kind)
     {
         switch (kind)
         {
-            case PaneKind.Resources:
+            case ResourcePaneKind.Resources:
                 _showResources = !_showResources;
                 break;
-            case PaneKind.Parameters:
+            case ResourcePaneKind.Parameters:
                 _showParameters = !_showParameters;
                 break;
             default:
@@ -1539,15 +1532,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         var shown = new List<string>();
         if (_showResources)
         {
-            shown.Add(nameof(PaneKind.Resources));
+            shown.Add(nameof(ResourcePaneKind.Resources));
         }
         if (_showParameters)
         {
-            shown.Add(nameof(PaneKind.Parameters));
+            shown.Add(nameof(ResourcePaneKind.Parameters));
         }
         if (_showTelemetryOnlyResources)
         {
-            shown.Add(nameof(PaneKind.TelemetrySources));
+            shown.Add(nameof(ResourcePaneKind.TelemetrySources));
         }
         await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneKinds, string.Join(',', shown));
 
@@ -1893,7 +1886,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private List<string> GetVisibleRowNames()
     {
         List<string> names;
-        if (DashboardClient.IsEnabled && _grouping != ResourceGrouping.None)
+        if (DashboardClient.IsEnabled && _grouping != ResourcePaneGrouping.None)
         {
             // A resource with several tags is listed several times. Ranges use its first position.
             names = GetResourceGroups()
@@ -2069,31 +2062,42 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _selfRef?.Dispose();
     }
 
-    internal enum ResourceTab
-    {
-        Overview,
-        Parameters,
-        Console,
-        StructuredLogs,
-        Traces,
-        Metrics
-    }
-
     internal sealed record ResourceLocation(ResourceTab Tab, string? RouteResourceName, IReadOnlyList<string> SelectedResourceNames, bool KeepSelection);
 
     private sealed record TelemetryOnlyResource(string Name, OtlpResource Resource);
 
     private sealed record SelectedResourceItem(string Name, ResourceViewModel? Resource, TelemetryOnlyResource? TelemetryOnly);
 
-    private enum ResourceGrouping
-    {
-        None,
-        Tags,
-        ResourceType,
-        State
-    }
-
     private sealed record ResourceGroup(string? Value, List<ResourceViewModel> Resources);
 
     private sealed record TabItem(ResourceTab Tab, string Text, Icon Icon, bool IsVisible, string Href, int ErrorCount, bool IsAvailable);
+}
+
+// These enums are top-level rather than nested in ResourcesLayout because pages reference the layout through
+// [Layout(typeof(ResourcesLayout))], which preserves all of the layout's members for trimming. Native AOT reports
+// every preserved nested enum as a use of Enum.GetValues(Type) (IL3050) on each page that uses the layout.
+
+internal enum ResourceTab
+{
+    Overview,
+    Parameters,
+    Console,
+    StructuredLogs,
+    Traces,
+    Metrics
+}
+
+internal enum ResourcePaneKind
+{
+    Resources,
+    Parameters,
+    TelemetrySources
+}
+
+internal enum ResourcePaneGrouping
+{
+    None,
+    Tags,
+    ResourceType,
+    State
 }
