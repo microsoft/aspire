@@ -7,8 +7,5 @@
     <packageSource key="aspire-test">
       <package pattern="Aspire*" />
     </packageSource>
-    <packageSource key="nuget.org">
-      <package pattern="*" />
-    </packageSource>
   </packageSourceMapping>
 </configuration>

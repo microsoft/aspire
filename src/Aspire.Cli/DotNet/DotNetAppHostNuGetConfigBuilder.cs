@@ -42,25 +42,21 @@ internal static class DotNetAppHostNuGetConfigBuilder
         IReadOnlyList<NuGetConfigSource> selectedSources,
         IReadOnlyList<string> preservedSources)
     {
-        var specificSources = selectedMappings
+        var integrationMappings = selectedMappings
             .Where(static mapping => mapping.PackageFilter != PackageMapping.AllPackages)
-            .Select(static mapping => mapping.Source)
-            .ToHashSet(PackageSourceIdentity.Comparer);
+            .ToArray();
         var mappings = selectedSources
             .Select(source => new NuGetPackageSourceMapping(source.Key,
-                [.. selectedMappings
+                [.. integrationMappings
                     .Where(mapping => PackageSourceIdentity.Comparer.Equals(mapping.Source, source.Source))
-                    .Where(mapping => settings.PackageSourceMappings.Count == 0 ||
-                        mapping.PackageFilter != PackageMapping.AllPackages ||
-                        specificSources.Count == 0 || specificSources.Contains(mapping.Source))
                     .Select(static mapping => mapping.PackageFilter)
                     .Distinct(StringComparer.OrdinalIgnoreCase)]))
             .Where(static mapping => mapping.Patterns.Count > 0)
             .ToArray();
         var selectedPatterns = selectedMappings.Count == 0
             ? [PackageSourceOverrideMappings.DefaultPackagePattern]
-            : selectedMappings.Where(static mapping => mapping.PackageFilter != PackageMapping.AllPackages)
-                .Select(static mapping => mapping.PackageFilter).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            : integrationMappings.Select(static mapping => mapping.PackageFilter)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var selectedKeys = selectedSources.Select(static source => source.Key)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var preservedIdentities = preservedSources
@@ -97,21 +93,13 @@ internal static class DotNetAppHostNuGetConfigBuilder
                 removedMappings.Add(new NuGetPackageSourceMapping(source.Name, obsoletePatterns));
             }
         }
-        var enabledKeys = selectedSources
-            .Where(static source => source.IsAmbient && !source.IsEnabled)
-            .Select(static source => source.Key)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var clearDisabledSources = enabledKeys.Count > 0 || retiredKeys.Count > 0;
-
         var sourceChanges = new NuGetConfigOverlay(
-            Sources: [.. selectedSources.Where(static source => !source.IsAmbient)
+            Sources: [.. selectedSources.Where(source => !source.IsAmbient &&
+                    mappings.Any(mapping => string.Equals(mapping.SourceKey, source.Key, StringComparison.OrdinalIgnoreCase)))
                 .Select(static source => (source.Key, source.Source))],
             PackageSourceMappings: [],
-            ClearDisabledPackageSources: clearDisabledSources,
-            DisabledPackageSourceKeys: clearDisabledSources
-                ? [.. settings.DisabledPackageSourceKeys.Where(key => !enabledKeys.Contains(key))
-                    .Concat(retiredKeys).Distinct(StringComparer.OrdinalIgnoreCase)]
-                : [],
+            ClearDisabledPackageSources: false,
+            DisabledPackageSourceKeys: [],
             GlobalPackagesFolder: null)
         {
             RetiredSourceKeys = retiredKeys

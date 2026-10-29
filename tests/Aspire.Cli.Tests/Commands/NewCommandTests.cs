@@ -769,9 +769,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var doc = XDocument.Load(Path.Combine(outputPath, "nuget.config"));
         var packageSources = doc.Root!.Element("packageSources")!;
 
-        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == sourceOverride);
+        var source = Assert.Single(packageSources.Elements("add"));
+        Assert.Equal(sourceOverride, (string?)source.Attribute("value"));
+        var mapping = Assert.Single(doc.Root.Element("packageSourceMapping")!.Elements("packageSource"));
+        Assert.Equal((string?)source.Attribute("key"), (string?)mapping.Attribute("key"));
+        Assert.Equal("Aspire*", (string?)Assert.Single(mapping.Elements("package")).Attribute("pattern"));
         Assert.Equal([sourceOverride], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting"));
-        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Example.Dependency"));
     }
 
     [Fact]

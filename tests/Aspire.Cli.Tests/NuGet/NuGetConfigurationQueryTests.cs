@@ -84,7 +84,7 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
         string[] aspireSources = channelName == PackageChannelNames.Stable ? ambientSources : [selectedSource];
         string[] dependencySources = hasMappings || channelName == PackageChannelNames.Stable
             ? ambientSources
-            : [PackageSources.NuGetOrg];
+            : [];
         var previewDirectory = preview.EffectiveWorkingDirectory.FullName;
 
         Assert.Equal(ambientSources, NuGetTestHelper.GetEligiblePackageSources(previewDirectory, "Contoso.Package"));

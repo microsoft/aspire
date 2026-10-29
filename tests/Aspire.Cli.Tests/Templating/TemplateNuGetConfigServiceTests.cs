@@ -71,10 +71,10 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
               <packageSources>
                 <clear />
                 <add key="azure-default" value="https://private.example/v3/index.json" />
-                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+                <add key="company-public" value="https://api.nuget.org/v3/index.json" />
               </packageSources>
               <disabledPackageSources>
-                <add key="nuget.org" value="true" />
+                <add key="company-public" value="true" />
               </disabledPackageSources>
               {{(hasAmbientMappings ? """
               <packageSourceMapping>
@@ -90,7 +90,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         const string selectedSource = "https://selected.example/v3/index.json";
         var channel = PackageChannel.CreateExplicitChannel(
             "daily", PackageChannelQuality.Both,
-            [new PackageMapping("Aspire*", selectedSource)],
+            [new PackageMapping("Aspire*", selectedSource), new PackageMapping("*", PackageSources.NuGetOrg)],
             new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
         var service = CreateService(executionContext: workspace.CreateExecutionContext());
 
@@ -325,7 +325,8 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         var doc = XDocument.Load(Path.Combine(outputDirectory.FullName, "nuget.config"));
         Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, sourceOverride));
         Assert.Equal(["CommunityToolkit*"], GetPackagePatternsForSource(doc, communitySource));
-        Assert.Equal([fallbackSource], NuGetTestHelper.GetEligiblePackageSources(outputDirectory.FullName, "Example.Dependency"));
+        Assert.Empty(NuGetTestHelper.GetEligiblePackageSources(outputDirectory.FullName, "Example.Dependency"));
+        Assert.Equal(2, doc.Root!.Element("packageSources")!.Elements("add").Count());
         Assert.Empty(GetPackagePatternsForSource(doc, channelAspireSource));
         Assert.Empty(GetPackagePatternsForSource(doc, PackageSources.NuGetOrg));
     }

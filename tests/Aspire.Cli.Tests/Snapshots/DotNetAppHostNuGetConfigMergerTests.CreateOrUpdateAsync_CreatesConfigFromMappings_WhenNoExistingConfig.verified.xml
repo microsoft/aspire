@@ -8,7 +8,7 @@
       <package pattern="Aspire.*" />
     </packageSource>
     <packageSource key="aspire-test-0">
-      <package pattern="*" />
+      <package pattern="CommunityToolkit*" />
     </packageSource>
   </packageSourceMapping>
 </configuration>

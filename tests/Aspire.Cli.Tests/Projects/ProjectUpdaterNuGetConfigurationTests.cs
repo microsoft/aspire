@@ -1510,19 +1510,23 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData("AppHost.csproj")]
-    [InlineData("apphost.cs")]
-    public async Task UpdateAsync_RefusesBorrowingAmbientChannelFeedBeforeEdits(string fileName)
+    [InlineData("AppHost.csproj", false)]
+    [InlineData("apphost.cs", false)]
+    [InlineData("AppHost.csproj", true)]
+    [InlineData("apphost.cs", true)]
+    public async Task UpdateAsync_RefusesUnsafeChannelFeedBeforeEdits(string fileName, bool disabledSource)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = await CreateAppHostAsync(workspace, fileName);
         var originalProject = await File.ReadAllBytesAsync(projectFile.FullName);
         var configPath = Path.Combine(workspace.Path, "NuGet.Config");
         const string source = "https://selected.example/v3/index.json";
-        const string originalConfig = """
+        var sourceKey = disabledSource ? "aspire-staging" : "company";
+        var originalConfig = $$"""
             <configuration>
-              <packageSources><clear /><add key="company" value="https://selected.example/v3/index.json" /></packageSources>
-              <packageSourceMapping><packageSource key="company"><package pattern="Private.*" /></packageSource></packageSourceMapping>
+              <packageSources><clear /><add key="{{sourceKey}}" value="https://selected.example/v3/index.json" /></packageSources>
+              {{(disabledSource ? """<disabledPackageSources><add key="aspire-staging" value="true" /></disabledPackageSources>""" : "")}}
+              <packageSourceMapping><packageSource key="{{sourceKey}}"><package pattern="Private.*" /></packageSource></packageSourceMapping>
             </configuration>
             """;
         await File.WriteAllTextAsync(configPath, originalConfig);
@@ -1549,7 +1553,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
                 TestContext.Current.CancellationToken));
 
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
-            UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat, configPath, "company"), error.Message);
+            UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat, configPath, sourceKey), error.Message);
         Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
         Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
         var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
@@ -1619,6 +1623,70 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         Assert.Equal(1, restoreCount);
         AssertUpdatedSdk(provider, projectFile);
         Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
+        var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
+        Assert.Equal([UpdateCommandStrings.PerformUpdatesPrompt],
+            interaction.BooleanPromptCalls.Select(static call => call.PromptText));
+    }
+
+    [Theory]
+    [InlineData("AppHost.csproj")]
+    [InlineData("apphost.cs")]
+    public async Task UpdateAsync_RefusesConflictingInheritedOldChannelBeforeEdits(string fileName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = await CreateAppHostAsync(workspace, fileName);
+        var directory = workspace.CreateDirectory("AppHost");
+        projectFile.MoveTo(Path.Combine(directory.FullName, projectFile.Name));
+        var originalProject = await File.ReadAllBytesAsync(projectFile.FullName);
+        var parentPath = Path.Combine(workspace.Path, "NuGet.Config");
+        const string parent = """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="aspire-staging" value="https://old.example/v3/index.json" />
+                <add key="company" value="https://company.example/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key="aspire-staging"><package pattern="Aspire.Hosting.Redis" /><package pattern="Private.*" /></packageSource>
+                <packageSource key="company"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(parentPath, parent);
+        var configPath = Path.Combine(directory.FullName, "NuGet.Config");
+        const string originalConfig = "<configuration />";
+        await File.WriteAllTextAsync(configPath, originalConfig);
+        const string source = "https://new.example/v3/index.json";
+        var runner = CreateRunner(projectFile, hasExplicitChannel: false);
+        runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => CreatePackageEvaluation();
+        runner.GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0, [configPath, parentPath]);
+        runner.SearchPackagesAsyncCallback = (workingDirectory, query, _, _, _, _, _, _, _, _) =>
+        {
+            Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(workingDirectory.FullName, query));
+            return (0, [new NuGetPackageCli { Id = query, Version = "9.4.2", Source = source }]);
+        };
+        runner.AddPackageAsyncCallback = (_, _, _, _, _, _, _) =>
+            throw new InvalidOperationException("An inherited channel conflict must be refused before package edits.");
+        runner.RestoreAsyncCallback = (_, _, _) =>
+            throw new InvalidOperationException("An inherited channel conflict must be refused before restore.");
+        using var provider = CreateServices(workspace, runner, new FakeNuGetClient
+        {
+            GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings
+        }).BuildServiceProvider();
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily", PackageChannelQuality.Both, [new("Aspire*", source)],
+            provider.GetRequiredService<INuGetPackageCache>(), new TestFeatures(), NullLogger.Instance);
+        var updater = provider.GetRequiredService<IProjectUpdater>();
+
+        var error = await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+            updater.UpdateProjectAsync(CreateContext(projectFile, channel, hasExplicitChannel: true),
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture,
+            UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat, configPath, "aspire-staging"), error.Message);
+        Assert.Equal(parent, await File.ReadAllTextAsync(parentPath));
+        Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
+        Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
         var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
         Assert.Equal([UpdateCommandStrings.PerformUpdatesPrompt],
             interaction.BooleanPromptCalls.Select(static call => call.PromptText));
