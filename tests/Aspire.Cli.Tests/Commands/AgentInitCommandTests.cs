@@ -12,6 +12,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.TestServices;
@@ -65,6 +66,77 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             root.Parse($"{command} --skills ").GetCompletions().Select(item => item.Label).Order(StringComparer.Ordinal));
         Assert.Equal(["embedded", "remote"],
             root.Parse($"{command} --aspire-source ").GetCompletions().Select(item => item.Label).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AgentInit_UsesConfiguredOrSelectedAppHostSettings(bool configured)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var first = context.Project.CreateSubdirectory("first");
+        var selected = context.Project.CreateSubdirectory("selected");
+        var firstProject = new FileInfo(Path.Combine(first.FullName, "First.csproj"));
+        var selectedProject = new FileInfo(Path.Combine(selected.FullName, "Selected.csproj"));
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(selected.FullName, AspireConfigFile.FileName), """
+            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/selected","plugins":["deployment"]}}}
+            """);
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (prompt, choices, _, _) =>
+            {
+                if (prompt == AgentCommandStrings.InitCommand_ConfigureAspireSourcePrompt)
+                {
+                    return "remote";
+                }
+
+                Assert.False(configured);
+                Assert.Equal(InteractionServiceStrings.SelectAppHostToUse, prompt);
+                Assert.Equal([firstProject, selectedProject], choices.Cast<FileInfo>());
+                return selectedProject;
+            }
+        };
+        var locator = new TestProjectLocator
+        {
+            GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(configured ? selectedProject : null),
+            FindAppHostProjectFilesAsyncCallback = (directory, scope, _) =>
+            {
+                Assert.False(configured);
+                Assert.Equal(context.Project.FullName, directory.FullName);
+                Assert.Equal(AppHostDiscoveryScope.DefaultFiltered, scope);
+                return Task.FromResult<List<FileInfo>>([firstProject, selectedProject]);
+            }
+        };
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+            options.ProjectLocatorFactory = _ => locator;
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --skills aspire --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        await Verify(await File.ReadAllTextAsync(
+            context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)), "json")
+            .UseParameters(configured);
+    }
+
+    [Fact]
+    public async Task AgentInit_WithoutAspireSkills_DoesNotDiscoverAppHost()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                GetAppHostFromSettingsAsyncCallback = _ => throw new InvalidOperationException("AppHost lookup is unnecessary without Aspire skills."),
+                FindAppHostProjectFilesAsyncCallback = (_, _, _) => throw new InvalidOperationException("AppHost discovery is unnecessary without Aspire skills.")
+            };
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --skills none --mcp=false --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
     }
 
     [Theory]

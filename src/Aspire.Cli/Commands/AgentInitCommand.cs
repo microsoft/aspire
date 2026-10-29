@@ -38,6 +38,7 @@ internal sealed class AgentInitCommand : BaseCommand
     private readonly ITelemetryHookConfigurator _telemetryHookConfigurator;
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly IConfigurationService _configurationService;
+    private readonly IProjectLocator _projectLocator;
     private static readonly string[] s_skillChoices =
         [CommonAgentApplicators.AspireSkillName, SkillDefinition.PlaywrightCli.Name, SkillDefinition.DotnetInspect.Name];
 
@@ -50,6 +51,7 @@ internal sealed class AgentInitCommand : BaseCommand
         ILanguageDiscovery languageDiscovery,
         ITelemetryHookConfigurator telemetryHookConfigurator,
         IConfigurationService configurationService,
+        IProjectLocator projectLocator,
         CommonCommandServices services)
         : base("init", AgentCommandStrings.InitCommand_Description, services)
     {
@@ -63,6 +65,7 @@ internal sealed class AgentInitCommand : BaseCommand
         _telemetryHookConfigurator = telemetryHookConfigurator;
         _hostEnvironment = services.HostEnvironment;
         _configurationService = configurationService;
+        _projectLocator = projectLocator;
         Options.Add(s_workspaceRootOption);
         Options.Add(s_mcpOption);
         Options.Add(AgentsOption);
@@ -276,7 +279,7 @@ internal sealed class AgentInitCommand : BaseCommand
         var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
         var result = await ExecuteAgentInitAsync(
             workspaceRoot,
-            ExecutionContext.WorkingDirectory,
+            configurationDirectory: null,
             PromptBinding.Create(parseResult, AgentsOption),
             PromptBinding.Create(parseResult, s_skillsOption, CommonAgentApplicators.AspireSkillName),
             PromptBinding.Create(parseResult, s_aspireSourceOption, DefaultAspireSource),
@@ -284,6 +287,30 @@ internal sealed class AgentInitCommand : BaseCommand
             PromptBinding.CreateBoolConfirm(parseResult, s_mcpOption, defaultValue: false),
             cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
+    }
+
+    private async Task<DirectoryInfo> GetConfigurationDirectoryAsync(CancellationToken cancellationToken)
+    {
+        // Discover the AppHost without the advisory configuration-source checks performed
+        // by UseOrFindAppHostProjectFileAsync. Agent setup only consumes saved settings.
+        var appHost = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken);
+        if (appHost is null)
+        {
+            var candidates = await _projectLocator.FindAppHostProjectFilesAsync(
+                ExecutionContext.WorkingDirectory, AppHostDiscoveryScope.DefaultFiltered, cancellationToken);
+            appHost = candidates.Count switch
+            {
+                0 => null,
+                1 => candidates[0],
+                _ => await InteractionService.PromptForSelectionAsync(
+                    InteractionServiceStrings.SelectAppHostToUse,
+                    candidates,
+                    file => $"{file.Name.EscapeMarkup()} ({Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, file.FullName).EscapeMarkup()})",
+                    cancellationToken: cancellationToken)
+            };
+        }
+
+        return appHost?.Directory ?? ExecutionContext.WorkingDirectory;
     }
 
     private async Task<DirectoryInfo> PromptForWorkspaceRootAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -318,7 +345,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
     private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(
         DirectoryInfo workspaceRoot,
-        DirectoryInfo configurationDirectory,
+        DirectoryInfo? configurationDirectory,
         PromptBinding<string?> agentsBinding,
         PromptBinding<string?> skillsBinding,
         PromptBinding<string?> aspireSourceBinding,
@@ -408,6 +435,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (selectedSkillNames.Contains(CommonAgentApplicators.AspireSkillName))
         {
+            configurationDirectory ??= await GetConfigurationDirectoryAsync(cancellationToken);
             skillSources = SkillSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
             var (sourceProvided, requestedSource, defaultSource) = PromptBinding.Resolve(aspireSourceBinding);
             if ((!sourceProvided && _hostEnvironment.SupportsInteractiveInput) ||
