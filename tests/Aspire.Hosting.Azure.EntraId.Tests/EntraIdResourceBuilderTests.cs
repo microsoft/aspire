@@ -695,6 +695,39 @@ public class EntraIdResourceBuilderTests
     }
 
     [Theory]
+    [InlineData(DistributedApplicationOperation.Run, false)]
+    [InlineData(DistributedApplicationOperation.Run, true)]
+    [InlineData(DistributedApplicationOperation.Publish, false)]
+    [InlineData(DistributedApplicationOperation.Publish, true)]
+    public async Task WithReference_ProjectFactoriesPreserveMicrosoftIdentityWebDefaults(DistributedApplicationOperation operation, bool useDotnetProject)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create(operation);
+        var entra = appBuilder.AddExistingEntraApplication("entra-api", tenantId: TenantId, clientId: ClientId);
+
+#pragma warning disable CS0618 // Both factories must retain Entra defaults even through a widened builder view.
+        IResourceBuilder<IResourceWithEnvironment> project = useDotnetProject
+            ? appBuilder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            : appBuilder.AddProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+
+        project.WithEnvironment("EXISTING_SETTING", "unchanged");
+        Assert.Same(project, project.WithReference(entra));
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            project.Resource, operation, TestServiceProvider.Instance);
+
+        Assert.Equal("unchanged", env["EXISTING_SETTING"]);
+        // Factory-specific telemetry settings are independent of the authentication configuration.
+        Assert.Equal(new Dictionary<string, string>
+        {
+            ["AzureAd__Instance"] = "https://login.microsoftonline.com/",
+            ["AzureAd__TenantId"] = TenantId,
+            ["AzureAd__ClientId"] = ClientId
+        }, env.Where(pair => pair.Key.StartsWith("AzureAd__", StringComparison.Ordinal))
+            .ToDictionary(pair => pair.Key, pair => pair.Value));
+    }
+
+    [Theory]
     [InlineData(DistributedApplicationOperation.Run, "AzureAdApi", "AzureAdApi")]
     [InlineData(DistributedApplicationOperation.Publish, "AzureAdApi", "AzureAdApi")]
     [InlineData(DistributedApplicationOperation.Run, "Authentication:AzureAd", "Authentication__AzureAd")]

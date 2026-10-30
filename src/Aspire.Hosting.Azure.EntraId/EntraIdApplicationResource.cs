@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001 // Existing registrations remove the framework's provisioning annotations.
 #pragma warning disable ASPIREAZURE003 // Tenant-scoped resource annotations are experimental.
 
+using System.Globalization;
 using System.IO.Hashing;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
@@ -133,8 +134,18 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
         return EntraIdResourceExtensions.WithReference(builder, application, connectionName);
     }
 
+    internal void EnsureCanBeExistingApplication()
+    {
+        if (ClientCredentials.OfType<EntraIdLocalDeveloperCertificateCredential>().Any())
+        {
+            throw new InvalidOperationException("A registration using RunWithLocalDeveloperCertificateCredential cannot be converted to an existing application. Existing registrations remain caller-managed.");
+        }
+    }
+
     internal void SetExistingApplication()
     {
+        EnsureCanBeExistingApplication();
+
         IsExistingApplication = true;
         ProvisioningTaskCompletionSource = null;
 
@@ -513,6 +524,25 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
         if (resource.AppRoles.Count > 0)
         {
             application.AppRoles = [.. resource.AppRoles.Select(role => CreateAppRole(resource, role))];
+        }
+
+        if (resource.ClientCredentials.OfType<EntraIdLocalDeveloperCertificateCredential>().SingleOrDefault() is { } localCredential)
+        {
+            // This developer registration owns the full key collection. Embed only the selected public
+            // certificate so renewal changes the template checksum without a separate Graph read.
+            // Let Graph assign keyId: resubmitting an explicit existing ID can fail with KeyNotUpdatable.
+            // See https://learn.microsoft.com/graph/applications-how-to-add-certificate#step-2-add-the-certificate-details-using-microsoft-graph.
+            var certificate = localCredential.GetCertificate(resource);
+            application.KeyCredentials = [new MicrosoftGraphKeyCredential
+            {
+                CustomKeyIdentifier = certificate.Thumbprint,
+                DisplayName = "Aspire local developer certificate",
+                EndDateTime = certificate.NotAfter.ToString("O", CultureInfo.InvariantCulture),
+                Key = certificate.PublicCertificate,
+                StartDateTime = certificate.NotBefore.ToString("O", CultureInfo.InvariantCulture),
+                Type = "AsymmetricX509Cert",
+                Usage = "Verify"
+            }];
         }
 
         resource.ValidateScopeReferences();

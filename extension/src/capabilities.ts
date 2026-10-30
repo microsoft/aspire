@@ -9,13 +9,14 @@ export type Capability =
     | 'build-dotnet-using-cli' // Support building .NET projects using the CLI
     | 'devkit' // Support for .NET DevKit extension (old, used for determining whether to build .NET projects in extension)
     | 'ms-dotnettools.csdevkit' // Older AppHost versions used this extension identifier instead of devkit
-    | 'project' // Support for running C# projects
-    | 'project-with-external-build.v1' // Support for externally built C# projects
+    | 'project' // Support for running SDK-style .NET projects and file-based C# apps
+    | 'project-with-external-build.v1' // Support for externally built SDK-style .NET projects
     | 'ms-dotnettools.csharp' // Older AppHost versions used this extension identifier instead of project
     | 'python' // Support for running Python projects
     | 'ms-python.python' // Older AppHost versions used this extension identifier instead of python
     | 'go' // Support for running Go projects
     | 'golang.go' // Older AppHost versions used this extension identifier instead of go
+    | 'go-apphost.v1' // Support for debugging Go AppHosts through the Go extension's Delve adapter
     | 'rust' // Support for running Rust projects
     | 'ms-vscode.cpptools' // Rust debug adapter extension identifier on Windows (cppvsdbg)
     | 'vadimcn.vscode-lldb' // Rust debug adapter extension identifier on macOS/Linux (CodeLLDB)
@@ -225,6 +226,8 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
         capabilities.push("ms-dotnettools.csdevkit");
     }
 
+    // coreclr in the C# extension also debugs SDK-style F# and VB projects.
+    // A language extension alone does not supply this adapter.
     if (isCsharpInstalled()) {
         capabilities.push("project");
         capabilities.push("project-with-external-build.v1");
@@ -245,6 +248,10 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
     if (isGoInstalled()) {
         capabilities.push("go");
         capabilities.push("golang.go");
+        // `go` only means "can debug Go resources", and extension builds that cannot launch a Go AppHost
+        // advertise it too. The CLI gates AppHost launching on this separate versioned name so those
+        // builds are never asked to start apphost.go (they would hand it to the .NET debugger).
+        capabilities.push("go-apphost.v1");
     }
 
     if (isRustInstalled(platform)) {

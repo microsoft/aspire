@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy .NET ProjectResource hosted-agent interop; Foundry.AddProject is unrelated.
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPROJECTS001
 
@@ -1049,3 +1050,4 @@ public class HostedAgentExtensionTests
         public string ProjectPath => "project";
     }
 }
+#pragma warning restore CS0618

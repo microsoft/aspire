@@ -4,6 +4,7 @@
 using System.Net;
 using System.Security.Claims;
 using System.Text;
+using EntraId.Web;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -11,13 +12,26 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Identity.Web;
 
 var builder = WebApplication.CreateBuilder(args);
+var localCertificateDemo = builder.Configuration.GetValue<bool>("LocalCertificateDemo");
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
 
 // The AppHost's WithReference(entraWeb) fills in the AzureAd section with the tenant and client IDs.
-builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+var authentication = builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApp(builder.Configuration);
+
+if (localCertificateDemo)
+{
+    authentication.EnableTokenAcquisitionToCallDownstreamApi([GraphController.GraphScope]).AddInMemoryTokenCaches();
+    builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
+    {
+        options.ResponseType = "code";
+        options.UsePkce = true;
+    });
+    builder.Services.AddHttpClient(GraphController.HttpClientName, client => client.BaseAddress = new Uri("https://graph.microsoft.com/v1.0/"));
+    builder.Services.AddControllers();
+}
 
 builder.Services.AddAuthorization();
 builder.Services.AddAntiforgery();
@@ -49,9 +63,11 @@ app.MapGet("/", (HttpContext context, IAntiforgery antiforgery) =>
     var rolesText = roles.Length > 0
         ? string.Join(", ", roles.Select(WebUtility.HtmlEncode))
         : "none. Assign a role to this user in the Entra admin center, then sign in again.";
+    var downstreamLink = localCertificateDemo ? """<p><a href="/me">Call Microsoft Graph /me</a></p>""" : string.Empty;
     return Page("Entra ID playground", $"""
         <p>Signed in as <strong>{WebUtility.HtmlEncode(identity.Name)}</strong>.</p>
         <p>Roles: {rolesText}</p>
+        {downstreamLink}
         <form method="post" action="/signout">
             <input type="hidden" name="{antiforgeryTokens.FormFieldName}" value="{antiforgeryTokens.RequestToken}">
             <button type="submit">Sign out</button>
@@ -60,6 +76,11 @@ app.MapGet("/", (HttpContext context, IAntiforgery antiforgery) =>
 });
 
 app.MapGet("/signin", () => Results.Challenge(new AuthenticationProperties { RedirectUri = "/" }));
+
+if (localCertificateDemo)
+{
+    app.MapControllers();
+}
 
 app.MapPost("/signout", async (HttpContext context, IAntiforgery antiforgery) =>
 {

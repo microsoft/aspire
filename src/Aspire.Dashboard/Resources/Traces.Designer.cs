@@ -124,15 +124,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Name: {0}.
-        /// </summary>
-        public static string TracesFullName {
-            get {
-                return ResourceManager.GetString("TracesFullName", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Traces.
         /// </summary>
         public static string TracesHeader {
@@ -169,15 +160,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to {0} spans.
-        /// </summary>
-        public static string TracesResourceSpans {
-            get {
-                return ResourceManager.GetString("TracesResourceSpans", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Spans.
         /// </summary>
         public static string TracesSpansColumnHeader {
@@ -187,11 +169,19 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Errored: {0}.
+        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} of {1} traces&lt;/strong&gt;. Use filters to narrow the results.
         /// </summary>
-        public static string TracesTotalErroredTraces {
+        public static string VirtualizedLimitText {
             get {
-                return ResourceManager.GetString("TracesTotalErroredTraces", resourceCulture);
+                return ResourceManager.GetString("VirtualizedLimitText", resourceCulture);
+            }
+        }
+        /// <summary>
+        ///   Looks up a localized string similar to {0} spans.
+        /// </summary>
+        public static string TracesResourceSpans {
+            get {
+                return ResourceManager.GetString("TracesResourceSpans", resourceCulture);
             }
         }
 
@@ -205,6 +195,24 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Errored: {0}.
+        /// </summary>
+        public static string TracesTotalErroredTraces {
+            get {
+                return ResourceManager.GetString("TracesTotalErroredTraces", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Name: {0}.
+        /// </summary>
+        public static string TracesFullName {
+            get {
+                return ResourceManager.GetString("TracesFullName", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Trace Id: {0}.
         /// </summary>
         public static string TracesTraceId {
@@ -213,13 +221,5 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} of {1} traces&lt;/strong&gt;. Use filters to narrow the results.
-        /// </summary>
-        public static string VirtualizedLimitText {
-            get {
-                return ResourceManager.GetString("VirtualizedLimitText", resourceCulture);
-            }
-        }
     }
 }

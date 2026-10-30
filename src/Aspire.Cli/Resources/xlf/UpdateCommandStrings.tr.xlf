@@ -42,6 +42,11 @@
         <target state="translated">Merkezi paket yönetimi şu anda 'aspire update' tarafından desteklenmiyor.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChannelFeedAlreadyConfiguredFormat">
+        <source>Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</source>
+        <target state="new">Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChannelNonePlaceholder">
         <source>(none)</source>
         <target state="translated">(yok)</target>

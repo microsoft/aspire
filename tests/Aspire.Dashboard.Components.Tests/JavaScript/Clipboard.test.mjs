@@ -8,7 +8,7 @@ import { runInNewContext } from "node:vm";
 
 const source = await readFile(new URL("../../../src/Aspire.Dashboard/wwwroot/js/app.js", import.meta.url), "utf8");
 
-function createClipboard() {
+function createClipboard(duration = 1500) {
     const requests = [];
     const timers = new Map();
     let nextTimer = 1;
@@ -26,6 +26,7 @@ function createClipboard() {
         getElementById: () => button,
         querySelector: () => ({ children: [tooltip] }),
         addEventListener() {},
+        body: {},
     };
     const window = { document };
     runInNewContext(source, {
@@ -39,8 +40,10 @@ function createClipboard() {
         },
         customElements: { define() {} },
         CSSStyleSheet: class { replaceSync() {} },
+        // app.js keeps Fluent control roles current as the page changes.
+        MutationObserver: class { observe() {} },
         setTimeout(callback, delay) {
-            assert.equal(delay, 1500);
+            assert.equal(delay, duration);
             const id = nextTimer++;
             timers.set(id, callback);
             return id;
@@ -80,6 +83,21 @@ test("clipboard success receives a full feedback interval after the write finish
     assert.equal(clipboard.copyIcon.style.display, "");
     assert.equal(clipboard.checkmarkIcon.style.display, "none");
     assert.equal(clipboard.button.dataset.copyTimeout, undefined);
+});
+
+test("clipboard button can request two seconds of successful copy feedback", async () => {
+    const clipboard = createClipboard(2000);
+    clipboard.button.dataset.copyDuration = "2000";
+    clipboard.copy("text");
+    assert.equal(clipboard.timers.size, 0);
+    clipboard.requests[0].resolve();
+    await flush();
+    assert.equal(clipboard.copyIcon.style.display, "none");
+    assert.equal(clipboard.checkmarkIcon.style.display, "");
+
+    clipboard.reset();
+    assert.equal(clipboard.copyIcon.style.display, "");
+    assert.equal(clipboard.checkmarkIcon.style.display, "none");
 });
 
 test("clipboard failure also resets after the write finishes", async () => {

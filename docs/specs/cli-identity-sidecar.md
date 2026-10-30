@@ -72,7 +72,7 @@ All five new fields are **optional**. When absent, the resolver falls back to th
 
 #### `nugetServiceIndexOverride`
 
-The `nugetServiceIndexOverride` field replaces the `https://api.nuget.org/v3/index.json` URL that the CLI writes into newly-generated `NuGet.config` files (via `aspire init`, `aspire new`, and any other config-emitting path). When set, every emission point that would otherwise hard-code `api.nuget.org` instead writes the override URL. **The override only affects URLs the CLI *writes*; it never rewrites URLs the CLI *reads* from existing user configs.** That asymmetry is intentional — the override exists to let a Test Bench session (see #17824) point the CLI at a local NuGet proxy (see #17823) without touching the customer's `NuGet.config` that's actually under test.
+The `nugetServiceIndexOverride` field supplies an explicit `Aspire*` integration source for the stable channel. Without it, stable resolves integrations through ambient NuGet configuration and declares no source mappings. The override does not become an all-packages default or replace the integration feeds of daily, staging, or local/PR channels. **It never rewrites URLs read from existing user configs.** This lets a Test Bench session (see #17824) select a local NuGet proxy (see #17823) for stable integrations without taking ownership of the customer's default package routing.
 
 The CLI exposes the override on demand via a small API on `CliExecutionContext`:
 
@@ -85,7 +85,7 @@ The CLI exposes the override on demand via a small API on `CliExecutionContext`:
 public string? NuGetServiceIndexOverride { get; }
 ```
 
-Source-override policy composition consults this property when it needs a fallback source: a non-null value selects the override URL, while null selects the canonical URL. Shared configuration writing materializes the composed policy for temporary overlays and persisted template configuration. Existing ambient source definitions are not rewritten.
+Explicit source-override policy composition does not append NuGet.org or this property as a default source. Shared configuration writing materializes the selected integration policy for temporary overlays and persisted template configuration. Existing ambient source definitions are not rewritten.
 
 #### `packages`
 
@@ -106,7 +106,7 @@ Each identity field is resolved **independently** so you can override one and in
 3. **Terminal fallback**:
    - `channel` → `local`.
    - `version` and `commit` → the value read from `AssemblyInformationalVersion` (still stamped by Arcade for every assembly; this is not stamping we control or intend to remove).
-   - `nugetServiceIndexOverride` → `null` (no override; callers use the canonical `https://api.nuget.org/v3/index.json`).
+   - `nugetServiceIndexOverride` → `null` (no override; stable uses ambient integration sources).
    - `packages` → `null` (no override; the CLI uses its normal channel/hive package sources).
 
 The resolver distinguishes four outcomes per field, each surfaced in `aspire doctor --self`: `from-env`, `from-sidecar`, `from-assembly-fallback`, `defaulted-to-local`. This makes "is my override actually taking effect?" trivially debuggable and prevents the soft-fallback class of bug the critique flagged (a missing installer write silently looking healthy because the resolver fell back to a baked value).

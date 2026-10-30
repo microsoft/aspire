@@ -15,8 +15,10 @@ internal sealed class TemplateHostConfiguration
 {
     private readonly Dictionary<string, SymbolInfo> _symbols = new(StringComparer.Ordinal);
     private readonly Dictionary<string, NuGetPackageVersionValueSource> _valueSources = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _defaultValueSources = new(StringComparer.Ordinal);
 
     public IReadOnlyDictionary<string, NuGetPackageVersionValueSource> ValueSources => _valueSources;
+    public IReadOnlyDictionary<string, string> DefaultValueSources => _defaultValueSources;
 
     /// <summary>
     /// Gets whether this template opts into creating a missing output-root NuGet configuration
@@ -124,6 +126,18 @@ internal sealed class TemplateHostConfiguration
                     if (symbol.Value.TryGetProperty("valueSource", out var valueSource))
                     {
                         configuration._valueSources.Add(symbol.Name, ReadValueSource(valueSource, template, symbol.Name));
+                    }
+                    if (symbol.Value.TryGetProperty("defaultValueSource", out var defaultValueSource))
+                    {
+                        if (defaultValueSource.ValueKind != JsonValueKind.String ||
+                            string.IsNullOrWhiteSpace(defaultValueSource.GetString()) ||
+                            symbol.Value.TryGetProperty("valueSource", out _))
+                        {
+                            throw new JsonException(string.Format(CultureInfo.CurrentCulture,
+                                TemplatingStrings.InvalidTemplatePromptDefault, symbol.Name));
+                        }
+
+                        configuration._defaultValueSources.Add(symbol.Name, defaultValueSource.GetString()!);
                     }
                 }
             }

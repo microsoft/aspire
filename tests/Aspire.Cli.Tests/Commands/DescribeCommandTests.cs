@@ -49,6 +49,24 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("describe --apphost-pid 42")]
+    [InlineData("describe --apphost missing.csproj --apphost-pid 0")]
+    [InlineData("describe --apphost missing.csproj --apphost-pid -1")]
+    public async Task DescribeCommand_AppHostPid_RejectsUnboundOrInvalidValues(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
+    }
+
+    [Theory]
     [InlineData("json")]
     [InlineData("Json")]
     [InlineData("JSON")]
@@ -255,6 +273,98 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(deserialized);
         Assert.Equal(2, deserialized.Resources.Length);
         Assert.Equal("frontend", deserialized.Resources[0].Name);
+    }
+
+    [Fact]
+    public void DescribeCommand_SnapshotFormat_IncludesDebugPropertiesForParentedProjectAndMauiResources()
+    {
+        var resourcesOutput = new ResourcesOutput
+        {
+            Resources =
+            [
+                new ResourceJson
+                {
+                    Name = "api-grouped",
+                    DisplayName = "API",
+                    ResourceType = "Project",
+                    State = "Running",
+                    Source = "Api.csproj",
+                    Properties = new Dictionary<string, JsonNode?>
+                    {
+                        [KnownProperties.Executable.Args] = null,
+                        [KnownProperties.Executable.Path] = JsonValue.Create("dotnet"),
+                        [KnownProperties.Project.Configuration] = JsonValue.Create("Release"),
+                        [KnownProperties.Project.LaunchCommand] = JsonValue.Create("watch"),
+                        [KnownProperties.Project.LaunchProfile] = JsonValue.Create("https"),
+                        [KnownProperties.Project.Path] = JsonValue.Create("/repo/api/Api.csproj"),
+                        [KnownProperties.Project.TargetFramework] = JsonValue.Create("net10.0"),
+                        [KnownProperties.Resource.LaunchConfigurationType] = JsonValue.Create("project"),
+                        [KnownProperties.Resource.ParentName] = JsonValue.Create("group"),
+                    }
+                },
+                new ResourceJson
+                {
+                    Name = "mauiapp-android-emulator",
+                    DisplayName = "MAUI",
+                    ResourceType = "Project",
+                    State = "Running",
+                    Source = "MauiApp.csproj",
+                    Properties = new Dictionary<string, JsonNode?>
+                    {
+                        [KnownProperties.Executable.Args] = null,
+                        [KnownProperties.Executable.Path] = JsonValue.Create("dotnet"),
+                        [KnownProperties.Executable.Pid] = JsonValue.Create(1234),
+                        [KnownProperties.Project.LaunchProfile] = JsonValue.Create("AndroidEmulator"),
+                        [KnownProperties.Project.Path] = JsonValue.Create("/repo/maui/MauiApp.csproj"),
+                        [KnownProperties.Resource.LaunchConfigurationType] = JsonValue.Create("maui"),
+                        [KnownProperties.Resource.ParentName] = JsonValue.Create("mauiapp"),
+                    }
+                }
+            ]
+        };
+
+        var json = JsonSerializer.Serialize(resourcesOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+
+        Assert.Equal("""
+            {
+              "resources": [
+                {
+                  "name": "api-grouped",
+                  "displayName": "API",
+                  "resourceType": "Project",
+                  "state": "Running",
+                  "source": "Api.csproj",
+                  "properties": {
+                    "executable.args": null,
+                    "executable.path": "dotnet",
+                    "project.configuration": "Release",
+                    "project.launchCommand": "watch",
+                    "project.launchProfile": "https",
+                    "project.path": "/repo/api/Api.csproj",
+                    "project.targetFramework": "net10.0",
+                    "resource.launchConfigurationType": "project",
+                    "resource.parentName": "group"
+                  }
+                },
+                {
+                  "name": "mauiapp-android-emulator",
+                  "displayName": "MAUI",
+                  "resourceType": "Project",
+                  "state": "Running",
+                  "source": "MauiApp.csproj",
+                  "properties": {
+                    "executable.args": null,
+                    "executable.path": "dotnet",
+                    "executable.pid": 1234,
+                    "project.launchProfile": "AndroidEmulator",
+                    "project.path": "/repo/maui/MauiApp.csproj",
+                    "resource.launchConfigurationType": "maui",
+                    "resource.parentName": "mauiapp"
+                  }
+                }
+              ]
+            }
+            """, json);
     }
 
     [Fact]

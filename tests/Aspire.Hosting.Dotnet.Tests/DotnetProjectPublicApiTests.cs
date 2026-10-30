@@ -113,7 +113,7 @@ public class DotnetProjectPublicApiTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddResource(new DotnetProjectResource("app", builder.AppHostDirectory));
-        project.Resource.Annotations.Add(new DotnetProjectMetadata("app.cs", buildConfiguration: null));
+        project.Resource.Annotations.Add(new DotnetProjectMetadata("app.cs", buildConfiguration: null, "app"));
         const string expectedMessage =
             "The .NET resource 'app' uses WithBuildEnvironment, which is supported only for project files.";
 

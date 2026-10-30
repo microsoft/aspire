@@ -132,16 +132,19 @@ In your AppHost project, install the Aspire Azure AI Search Hosting library with
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.Search
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, add an Azure AI Search service and consume the connection using the following methods:
 
 ```csharp
-var search = builder.ExecutionContext.IsPublishMode
+using Aspire.Hosting.ApplicationModel;
+
+IResourceBuilder<IResourceWithConnectionString> search = builder.ExecutionContext.IsPublishMode
     ? builder.AddAzureSearch("search")
     : builder.AddConnectionString("search");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(search);
 ```
 

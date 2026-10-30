@@ -17,12 +17,14 @@ namespace Aspire.Hosting.DevTunnels.Tests;
 
 public class DevTunnelResourceBuilderExtensionsTests
 {
-    [Fact]
-    public async Task WithReference_InjectsServiceDiscoveryEnvironmentVariablesWhenReferencingOtherResourcesViaTheTunnel()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WithReference_InjectsServiceDiscoveryEnvironmentVariablesWhenReferencingOtherResourcesViaTheTunnel(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var target = builder.AddProject<ProjectA>("target")
+        var target = AddTargetProject(builder, useDotnetProject)
             .WithHttpsEndpoint();
         var tunnel = builder.AddDevTunnel("tunnel")
             .WithReference(target);
@@ -34,7 +36,8 @@ public class DevTunnelResourceBuilderExtensionsTests
 
         tunnelPort.TunnelEndpointAnnotation.AllocatedEndpoint = new(tunnelPort.TunnelEndpointAnnotation, "test123.devtunnels.ms", 443);
 
-        var values = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(consumer.Resource, serviceProvider: builder.Services.BuildServiceProvider()).DefaultTimeout();
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var values = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(consumer.Resource, serviceProvider: serviceProvider).DefaultTimeout();
 
         Assert.Equal("https://test123.devtunnels.ms:443", values["services__target__https__0"]);
         Assert.Equal("https://test123.devtunnels.ms:443", values["TARGET_HTTPS"]);
@@ -83,12 +86,14 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.Empty(tunnel.Resource.Annotations.OfType<PersistenceAnnotation>());
     }
 
-    [Fact]
-    public void WithReference_WithAnonymousAccess_SetsPortAllowAnonymousOption()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WithReference_WithAnonymousAccess_SetsPortAllowAnonymousOption(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var target = builder.AddProject<ProjectA>("target")
+        var target = AddTargetProject(builder, useDotnetProject)
             .WithHttpsEndpoint();
         var tunnel = builder.AddDevTunnel("tunnel")
             .WithReference(target, allowAnonymous: true);
@@ -98,12 +103,14 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.True(port.Options.AllowAnonymous);
     }
 
-    [Fact]
-    public async Task WithReference_UsesTargetPortForDevTunnelPortWhenAvailable()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WithReference_UsesTargetPortForDevTunnelPortWhenAvailable(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var target = builder.AddProject<ProjectA>("target")
+        var target = AddTargetProject(builder, useDotnetProject)
             .WithHttpEndpoint(port: 5000, targetPort: 5001, name: "http");
         var tunnel = builder.AddDevTunnel("tunnel")
             .WithReference(target);
@@ -132,12 +139,14 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.Equal(5000, await tunnelPort.GetTunnelPortAsync());
     }
 
-    [Fact]
-    public async Task WithReference_ResolvesDynamicTargetPortForDevTunnelPortWhenAvailable()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WithReference_ResolvesDynamicTargetPortForDevTunnelPortWhenAvailable(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var target = builder.AddProject<ProjectA>("target")
+        var target = AddTargetProject(builder, useDotnetProject)
             .WithHttpEndpoint(port: 5000, name: "http");
         var tunnel = builder.AddDevTunnel("tunnel")
             .WithReference(target);
@@ -152,12 +161,14 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.Equal(5001, await tunnelPort.GetTunnelPortAsync());
     }
 
-    [Fact]
-    public async Task WithReference_UsesAllocatedPortForDevTunnelPortWhenTargetPortIsUnavailable()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WithReference_UsesAllocatedPortForDevTunnelPortWhenTargetPortIsUnavailable(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var target = builder.AddProject<ProjectA>("target")
+        var target = AddTargetProject(builder, useDotnetProject)
             .WithHttpEndpoint(port: 5000, name: "http");
         var tunnel = builder.AddDevTunnel("tunnel")
             .WithReference(target);
@@ -207,7 +218,9 @@ public class DevTunnelResourceBuilderExtensionsTests
         builder.Services.AddSingleton<IDevTunnelClient>(client);
         builder.Services.AddSingleton<IRequiredCommandValidator, TestRequiredCommandValidator>();
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpEndpoint(port: 5000, targetPort: 5001, name: "http");
         var tunnel = builder.AddDevTunnel("tunnel", "mytunnel", new DevTunnelOptions
         {
@@ -249,7 +262,9 @@ public class DevTunnelResourceBuilderExtensionsTests
         builder.Services.AddSingleton<IDevTunnelClient>(client);
         builder.Services.AddSingleton<IRequiredCommandValidator, TestRequiredCommandValidator>();
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpEndpoint(port: 5000, targetPort: 5001, name: "http");
         var tunnel = builder.AddDevTunnel("tunnel", "mytunnel")
             .WithReference(target);
@@ -289,7 +304,9 @@ public class DevTunnelResourceBuilderExtensionsTests
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddSingleton<IDevTunnelClient>(client);
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpEndpoint(port: 5000, targetPort: 5001, name: "http");
         var tunnel = builder.AddDevTunnel("tunnel", "mytunnel")
             .WithReference(target);
@@ -349,7 +366,9 @@ public class DevTunnelResourceBuilderExtensionsTests
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddSingleton<IDevTunnelClient>(client);
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpEndpoint(port: 5000, targetPort: 5001, name: "http");
         var tunnel = builder.AddDevTunnel("tunnel", "mytunnel", new DevTunnelOptions
         {
@@ -381,7 +400,9 @@ public class DevTunnelResourceBuilderExtensionsTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpsEndpoint(name: "https");
         var tunnel = builder.AddDevTunnel("tunnel")
             .WithReference(target);
@@ -398,7 +419,9 @@ public class DevTunnelResourceBuilderExtensionsTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpsEndpoint(name: "https");
         var tunnel = builder.AddDevTunnel("tunnel")
             .WithReference(target);
@@ -415,7 +438,9 @@ public class DevTunnelResourceBuilderExtensionsTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpsEndpoint(name: "https");
         var tunnel = builder.AddDevTunnel("tunnel")
             .WithReference(target);
@@ -433,7 +458,9 @@ public class DevTunnelResourceBuilderExtensionsTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpsEndpoint(name: "https");
         var tunnel = builder.AddDevTunnel("tunnel")
             .WithReference(target);
@@ -452,9 +479,13 @@ public class DevTunnelResourceBuilderExtensionsTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpsEndpoint(name: "https");
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target2 = builder.AddProject<ProjectA>("target2")
+#pragma warning restore CS0618
             .WithHttpsEndpoint(name: "https");
         var tunnel = builder.AddDevTunnel("tunnel")
             .WithReference(target);
@@ -474,7 +505,9 @@ public class DevTunnelResourceBuilderExtensionsTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpsEndpoint(name: "https");
         var tunnel = builder.AddDevTunnel("tunnel");
 
@@ -492,7 +525,9 @@ public class DevTunnelResourceBuilderExtensionsTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpEndpoint(name: "http")
             .WithHttpsEndpoint(name: "https");
         var tunnel = builder.AddDevTunnel("tunnel")
@@ -517,7 +552,9 @@ public class DevTunnelResourceBuilderExtensionsTests
         var interactionService = new TestInteractionService();
         builder.Services.AddSingleton<IInteractionService>(interactionService);
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpEndpoint(name: "http");
         var tunnel = builder.AddDevTunnel("tunnel")
             .WithReference(target);
@@ -607,7 +644,9 @@ public class DevTunnelResourceBuilderExtensionsTests
         var interactionService = new TestInteractionService();
         builder.Services.AddSingleton<IInteractionService>(interactionService);
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpEndpoint(name: "http");
         var tunnel = builder.AddDevTunnel("tunnel")
             .WithReference(target);
@@ -648,7 +687,9 @@ public class DevTunnelResourceBuilderExtensionsTests
         var interactionService = new TestInteractionService();
         builder.Services.AddSingleton<IInteractionService>(interactionService);
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpEndpoint(name: "http");
         var targetEndpoint = target.GetEndpoint("http");
         targetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(targetEndpoint.EndpointAnnotation, "localhost", 3000);
@@ -829,7 +870,9 @@ public class DevTunnelResourceBuilderExtensionsTests
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddSingleton<IDevTunnelClient>(new TestDevTunnelClient());
 
+#pragma warning disable CS0618 // Retain synthetic legacy project metadata and Dev Tunnel endpoint contracts.
         var target = builder.AddProject<ProjectA>("target")
+#pragma warning restore CS0618
             .WithHttpEndpoint(name: "http");
         var tunnel = builder.AddDevTunnel("tunnel")
             .WithReference(target);
@@ -871,6 +914,15 @@ public class DevTunnelResourceBuilderExtensionsTests
                 Assert.Equal("http://localhost:3000", property.Value);
                 Assert.True(property.IsHighlighted);
             });
+    }
+
+    private static IResourceBuilder<IResourceWithEndpoints> AddTargetProject(IDistributedApplicationBuilder builder, bool useDotnetProject)
+    {
+#pragma warning disable CS0618 // Exercise the same tunnel contracts through both project factories.
+        return useDotnetProject
+            ? builder.AddDotnetProject("target", "target.csproj", options => options.ExcludeLaunchProfile = true)
+            : builder.AddProject<ProjectA>("target", options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
     }
 
     private static (string Command, string[] Arguments) GetLongRunningCommand()

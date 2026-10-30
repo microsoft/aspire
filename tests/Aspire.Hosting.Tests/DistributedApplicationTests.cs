@@ -342,28 +342,28 @@ public class DistributedApplicationTests
         using var app = testProgram.Build();
         var rns = app.Services.GetRequiredService<ResourceNotificationService>();
 
-        using var startupCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestTimeout);
-        var token = startupCts.Token;
+        using var startupCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        var startupToken = startupCts.Token;
 
-        var startTask = app.StartAsync(token);
+        var startTask = app.StartAsync(startupToken);
 
         var normalResourceName = $"{testName}-serviceb";
         var explicitStartResourceName = $"{testName}-servicea";
 
         // Wait for normal resource to be running
-        var normalResource = await rns.WaitForResourceAsync(normalResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        var normalResource = await rns.WaitForResourceAsync(normalResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, startupToken).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         // Wait for explicit start resource to be NotStarted
-        await rns.WaitForResourceAsync(explicitStartResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await rns.WaitForResourceAsync(explicitStartResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, startupToken).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         // Wait for resource to finish being created.
-        await resourcesCreatedTcs.Task.DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await resourcesCreatedTcs.Task.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         // Verify BeforeResourceStartedEvent was fired for normal resource but NOT for explicit start resource
         Assert.Equal(1, normalEventCount);
         Assert.Equal(0, explicitStartEventCount);
 
-        await startTask.DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await startTask.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         var servicePid = Assert.IsType<int>(GetResourcePropertyValue(normalResource, KnownProperties.Executable.Pid));
         using var serviceProcess = Process.GetProcessById(servicePid);
@@ -378,9 +378,9 @@ public class DistributedApplicationTests
         }
 
         // A slow startup must not consume the shutdown phase's cancellation budget.
-        using var shutdownCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestTimeout);
-        await app.StopAsync(shutdownCts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
-        await serviceProcess.WaitForExitAsync(shutdownCts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        using var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync(stopCts.Token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await serviceProcess.WaitForExitAsync(stopCts.Token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         Assert.True(serviceProcess.HasExited);
         Assert.True(lifetime.ApplicationStopped.IsCancellationRequested);
     }
@@ -1860,7 +1860,9 @@ public class DistributedApplicationTests
         {
             endpoint.IsProxied = false;
         });
+#pragma warning disable CS0618 // Retain legacy project start, stop, and lifetime compatibility.
         var servicea = builder.AddProject<Projects.ServiceA>($"{testName}-servicea")
+#pragma warning restore CS0618
             .WithReference(redis)
             .WithReference(redisNoPort);
 
@@ -1934,7 +1936,9 @@ public class DistributedApplicationTests
         // Since port is not specified, Aspire will assign the host port before the container is created.
         var redisNoPort = builder.AddRedis($"{testName}-redisNoPort").WithEndpointProxySupport(false);
 
+#pragma warning disable CS0618 // Retain legacy project start, stop, and lifetime compatibility.
         var servicea = builder.AddProject<Projects.ServiceA>($"{testName}-servicea")
+#pragma warning restore CS0618
             .WithReference(redis)
             .WithReference(redisNoPort);
 

@@ -16,6 +16,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.EntraId` integration 
 
 ```bash
 aspire add Aspire.Hosting.Azure.EntraId
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -39,10 +40,10 @@ var entraWeb = builder.AddEntraIdApplication("entra-web")
                           "https://localhost:7123/signin-oidc",
                           "https://localhost:7123/signout-callback-oidc");
 
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
        .WithReference(entraApi);
 
-builder.AddProject<Projects.Web>("web")
+builder.AddDotnetProject("web", "../Web/Web.csproj")
        .WithReference(entraWeb);
 ```
 
@@ -159,10 +160,10 @@ var entraWeb = builder.AddEntraIdApplication("entra-web")
                       // Optional: consent for all users, so that nobody is prompted.
                       .WithAdminConsent(entraApi, "Weather.Read");
 
-var apiService = builder.AddProject<Projects.Api>("apiservice")
+var apiService = builder.AddDotnetProject("apiservice", "../Api/Api.csproj")
        .WithReference(entraApi);
 
-builder.AddProject<Projects.Web>("webfrontend")
+builder.AddDotnetProject("webfrontend", "../Web/Web.csproj")
        .WithReference(entraWeb)
        .WithReference(apiService);
 ```
@@ -337,7 +338,7 @@ var apiClientId = builder.AddParameter("EntraApiClientId");
 var entraApi = builder.AddEntraIdApplication("entra-api")
                       .AsExistingApplication(tenantId: tenantId, clientId: apiClientId);
 
-var api = builder.AddProject<Projects.Api>("api")
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
                  .WithReference(entraApi);
 ```
 
@@ -426,7 +427,7 @@ For a different .NET configuration section, set `connectionName`. Colons in nest
 to double underscores; for example, `"Authentication:AzureAd"` produces `Authentication__AzureAd__ClientId`:
 
 ```csharp
-var customApi = builder.AddProject<Projects.Api>("custom-api")
+var customApi = builder.AddDotnetProject("custom-api", "../Api/Api.csproj")
                        .WithReference(entraApi, connectionName: "Authentication:AzureAd");
 ```
 
@@ -472,6 +473,37 @@ For the audiences other than `AzureADMyOrg`, the home tenant ID is injected as `
 
 An application that acquires tokens for itself needs a client credential. Each `With*` call appends an entry to the injected `AzureAd__ClientCredentials__{index}__*` variables, and multiple credentials can be configured as a fallback chain.
 
+### Local developer certificate
+
+For registrations created by Aspire, opt in to a local certificate instead of copying a client secret:
+
+```csharp
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .RunWithLocalDeveloperCertificateCredential()
+                      .PublishWithFederatedManagedIdentityCredential();
+
+builder.AddDotnetProject("web", "../Web/Web.csproj")
+       .WithReference(entraWeb);
+```
+
+In a TypeScript AppHost, call `runWithLocalDeveloperCertificateCredential()` on the registration (`await entraWeb.runWithLocalDeveloperCertificateCredential();`); other languages use their usual naming (for example, Python's `run_with_local_developer_certificate_credential()`). The behavior is the same as in C#.
+
+**Use separate Entra registrations for development and production.** Give each developer a distinct `Azure:TenantResourceSuffix`, and use a different suffix or registration name for production. Registrations are tenant-scoped: different resource groups do not isolate them. The local method does nothing when publishing, but that does **not** revoke a public key previously trusted by the registration. Never use a production registration for this feature.
+
+Aspire creates a dedicated, self-signed RSA certificate valid for **48 hours**. On a subsequent AppHost run, it reuses the certificate when more than **24 hours** remain, otherwise it generates a replacement and updates the registration's public key credentials. Renewal invalidates the Azure provisioning cache. There is no background renewal or running-workload credential reload: restart development sessions before their certificate expires.
+
+The passwordless PFX, including its private key, is stored under the **AppHost-specific Aspire store** at `dev-certs/Entra/<resource-name>.pfx`, not in the user's global HTTPS certificate directory. The store honors `Aspire:Store:Path` / `ASPIRE__STORE__PATH`. The directory and PFX are restricted to the current user. Renewal atomically **overwrites the same PFX file**; it does not retain private-key generations. It neither installs a certificate in an OS store nor trusts it as an HTTPS certificate. Missing or incompatible local material is regenerated; filesystem and Graph failures surface as errors. A failed Graph update leaves the new PFX available for retry.
+
+Only the **public DER certificate** is embedded in the run-mode Bicep template and sent to Entra through the Microsoft Graph Bicep extension. Aspire owns the registration's entire `keyCredentials` collection: deployment replaces it with the selected certificate, without reading or preserving existing keys. Renewal removes the previous public key, so older sessions using that certificate must restart. Do not add independently managed certificate credentials to this development registration; use developer-specific registration suffixes.
+
+Graph assigns the registration's certificate credential ID; Aspire does not set `keyId` when submitting the public certificate. This avoids targeting an immutable existing credential during redeployment. The local certificate remains reusable independently of that Graph-assigned ID.
+
+`WithReference` supplies `SourceType = Base64Encoded` and `Base64EncodedValue` containing the private PFX through a **secret parameter**, using the normal configuration naming conventions for .NET and other resources. Projects using Microsoft.Identity.Web receive `AzureAd__ClientCredentials__{index}__SourceType` and `AzureAd__ClientCredentials__{index}__Base64EncodedValue`. Container and other non-.NET resources retain their existing upper-snake-case naming convention. No certificate path, store access, bind mount, or image-build secret is needed. **Base64 is not encryption**: these are sensitive runtime environment values, accessible to the workload and to sufficiently privileged local/container tooling. Do not log them. Local credentials and paths are excluded from published manifests and deployment artifacts.
+
+The provisioning identity needs the existing registration-creation/update permissions. For delegated Graph access, `Application.ReadWrite.All` permits this; an application identity can use `Application.ReadWrite.OwnedBy` for registrations it owns, subject to tenant policy and consent. Aspire does not make a separate Graph request to read certificate credentials. The workloads do not need these Graph management permissions. See [Update application](https://learn.microsoft.com/graph/api/application-update) and [Certificate credentials](https://learn.microsoft.com/entra/identity-platform/certificate-credentials).
+
+AppHost shutdown and Azure resource-group deletion do not delete the local PFX or the tenant-scoped registration. Delete the registration/service principal separately when finished; remove the resource's PFX from the AppHost store if you also want to discard its local credential. A public key may remain until a subsequent deployment replaces it. Existing registrations remain caller-managed: this API rejects `AddExistingEntraApplication` and conversion with `AsExistingApplication`.
+
 ### Client secret
 
 ```csharp
@@ -491,7 +523,7 @@ For deployed applications, use a federated managed identity credential so that n
 var entraWeb = builder.AddEntraIdApplication("entra-web")
                       .PublishWithFederatedManagedIdentityCredential();
 
-builder.AddProject<Projects.Web>("web")
+builder.AddDotnetProject("web", "../Web/Web.csproj")
        .WithReference(entraWeb);
 ```
 
@@ -501,7 +533,7 @@ To trust only specific workloads, or a specific identity, pass them. A workload 
 
 ```csharp
 var entraWeb = builder.AddEntraIdApplication("entra-web");
-var web = builder.AddProject<Projects.Web>("web").WithReference(entraWeb);
+var web = builder.AddDotnetProject("web", "../Web/Web.csproj").WithReference(entraWeb);
 
 entraWeb.PublishWithFederatedManagedIdentityCredential(web);
 ```
@@ -511,13 +543,13 @@ var identity = builder.AddAzureUserAssignedIdentity("web-identity");
 var entraWeb = builder.AddEntraIdApplication("entra-web")
                       .PublishWithFederatedManagedIdentityCredential(identity);
 
-builder.AddProject<Projects.Web>("web")
+builder.AddDotnetProject("web", "../Web/Web.csproj")
        .WithAzureUserAssignedIdentity(identity)
        .WithReference(entraWeb);
 ```
 The federated credential only changes how the app authenticates as itself. Interactive user sign-in still needs a redirect URI registered on the app registration. Derive it from the web app's endpoint with `WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc")`, which uses the compute environment's host when deployed, so it does not make the registration depend on the web app.
 
-Managed identities exist only in Azure, so `PublishWithFederatedManagedIdentityCredential` is not used when running locally; add another credential, such as a client secret, for local development.
+Managed identities exist only in Azure, so `PublishWithFederatedManagedIdentityCredential` is not used when running locally. For Aspire-created registrations, combine it with `RunWithLocalDeveloperCertificateCredential` as shown above; the local workload does not probe an unavailable managed identity.
 
 #### Existing registrations
 

@@ -44,6 +44,38 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommand_ReportsAmbientFeedRefusalAsProjectCreationFailure()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string source = "https://selected.example/v3/index.json";
+        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        const string original = """
+            <configuration>
+              <packageSources><clear /><add key="company" value="https://selected.example/v3/index.json" /></packageSources>
+              <packageSourceMapping><packageSource key="company"><package pattern="Private.*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(configPath, original);
+        using var provider = CreateServiceCollection(workspace, options =>
+        {
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+        }).BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+            $"new {KnownTemplateId.CSharpEmptyAppHost} --language csharp --name TemplateOut --output ./TemplateOut --source {source} --version 13.4.0 --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToCreateNewProject, exitCode);
+        var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
+        Assert.Equal([string.Format(CultureInfo.CurrentCulture,
+            UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat,
+            Path.Combine(workspace.Path, "TemplateOut", "nuget.config"), "company")], interaction.DisplayedErrors);
+        Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+        Assert.Empty(Directory.EnumerateFiles(Path.Combine(workspace.Path, "TemplateOut")));
+    }
+
+    [Fact]
     public void NewCommandWithPolyglotEnabled_ExposesTemplateSubcommands()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -152,7 +184,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var nugetConfig = await File.ReadAllTextAsync(nugetConfigPath);
         Assert.Contains(stagingFeed, nugetConfig);
-        Assert.Contains("Aspire*", nugetConfig);
+        Assert.Null(XDocument.Load(nugetConfigPath).Root!.Element("packageSourceMapping"));
 
         var config = AspireConfigFile.Load(outputDirectory);
         Assert.NotNull(config);
@@ -737,9 +769,11 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var doc = XDocument.Load(Path.Combine(outputPath, "nuget.config"));
         var packageSources = doc.Root!.Element("packageSources")!;
 
-        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == sourceOverride);
-        Assert.Equal([sourceOverride], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting"));
-        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Example.Dependency"));
+        var source = Assert.Single(packageSources.Elements("add"));
+        Assert.Equal(sourceOverride, (string?)source.Attribute("value"));
+        Assert.Null(doc.Root.Element("packageSourceMapping"));
+        Assert.Equal(new[] { sourceOverride, PackageSources.NuGetOrg }.Order(StringComparer.Ordinal),
+            NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting"));
     }
 
     [Fact]

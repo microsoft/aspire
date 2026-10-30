@@ -120,6 +120,7 @@ In your AppHost project, install the `Aspire.Hosting.Redis` library with [NuGet]
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Redis
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, register a Redis server and consume the connection using the following methods:
@@ -127,7 +128,7 @@ Then, in the _AppHost.cs_ file of `AppHost`, register a Redis server and consume
 ```csharp
 var redis = builder.AddRedis("cache");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(redis);
 ```
 
