@@ -15,6 +15,7 @@ From your AppHost directory, add the `Aspire.Hosting.OpenAI` integration with th
 
 ```bash
 aspire add Aspire.Hosting.OpenAI
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -29,7 +30,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 var openai = builder.AddOpenAI("openai");
 var chat = openai.AddModel("chat", "gpt-4o-mini");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(chat);
 ```
 

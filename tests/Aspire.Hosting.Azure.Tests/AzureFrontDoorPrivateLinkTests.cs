@@ -23,10 +23,10 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
         environment.WithAzureFrontDoorPrivateLink(frontDoor);
 
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
-        var web = builder.AddProject<Project>("web", launchProfileName: null)
+        var web = builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         frontDoor.WithOrigin(api).WithOrigin(web);
@@ -49,7 +49,7 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
         environment.WithAzureFrontDoorPrivateLink(frontDoor);
 
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         frontDoor.WithOrigin(api);
@@ -68,7 +68,7 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         var frontDoor = builder.AddAzureFrontDoor("frontdoor")
@@ -109,11 +109,11 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
             });
         environment.WithAzureFrontDoorPrivateLink(frontDoor);
 
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(environment);
-        var publicApi = builder.AddProject<Project>("public-api", launchProfileName: null)
+        var publicApi = builder.AddDotnetProject("public-api", "public-api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(publicEnvironment);
@@ -139,10 +139,10 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
         environment.WithAzureFrontDoorPrivateLink(frontDoor);
 
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
-        var web = builder.AddProject<Project>("web", launchProfileName: null)
+        var web = builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithReference(api)
@@ -168,11 +168,11 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
         privateEnvironment.WithAzureFrontDoorPrivateLink(frontDoor);
 
-        var privateApi = builder.AddProject<Project>("private-api", launchProfileName: null)
+        var privateApi = builder.AddDotnetProject("private-api", "private-api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(privateEnvironment);
-        var publicApi = builder.AddProject<Project>("public-api", launchProfileName: null)
+        var publicApi = builder.AddDotnetProject("public-api", "public-api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(publicEnvironment);
@@ -199,10 +199,10 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
         var second = builder.AddAzureFrontDoor("second");
         environment.WithAzureFrontDoorPrivateLink(first).WithAzureFrontDoorPrivateLink(second);
 
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
-        var web = builder.AddProject<Project>("web", launchProfileName: null)
+        var web = builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         first.WithOrigin(api);
@@ -230,15 +230,15 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
         west.WithAzureFrontDoorPrivateLink(frontDoor);
         east.WithAzureFrontDoorPrivateLink(frontDoor);
 
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(west);
-        var admin = builder.AddProject<Project>("admin", launchProfileName: null)
+        var admin = builder.AddDotnetProject("admin", "admin.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(west);
-        var web = builder.AddProject<Project>("web", launchProfileName: null)
+        var web = builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(east);
@@ -265,10 +265,10 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
         var unconnected = builder.AddAzureFrontDoor("unconnected");
         environment.WithAzureFrontDoorPrivateLink(connected);
 
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
-        var web = builder.AddProject<Project>("web", launchProfileName: null)
+        var web = builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         connected.WithOrigin(api);
@@ -292,7 +292,7 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
         privateEnvironment.WithAzureFrontDoorPrivateLink(frontDoor);
 
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(publicEnvironment);
@@ -314,7 +314,7 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
         environment.WithAzureFrontDoorPrivateLink(frontDoor);
 
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         frontDoor.WithOrigin(api);
@@ -336,7 +336,7 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
         environment.WithAzureFrontDoorPrivateLink(frontDoor);
 
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         frontDoor.WithOrigin(api);
@@ -436,11 +436,11 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
         west.WithAzureFrontDoorPrivateLink(frontDoor);
         east.WithAzureFrontDoorPrivateLink(frontDoor);
 
-        var westApi = builder.AddProject<Project>("west-api", launchProfileName: null)
+        var westApi = builder.AddDotnetProject("west-api", "west-api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(west);
-        var eastApi = builder.AddProject<Project>("east-api", launchProfileName: null)
+        var eastApi = builder.AddDotnetProject("east-api", "east-api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(east);
@@ -466,7 +466,7 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
         target.WithAzureFrontDoorPrivateLink(frontDoor);
 
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(target);
@@ -515,11 +515,6 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
         }
 
         return count;
-    }
-
-    private sealed class Project : IProjectMetadata
-    {
-        public string ProjectPath => "project";
     }
 
     // A compute environment other than Azure Container Apps that Front Door can reach over Private Link.

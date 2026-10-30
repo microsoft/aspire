@@ -130,6 +130,9 @@ must use `DotnetProjectDeploymentHelpers.ReplaceExactlyOnce` (or an equivalent r
 replacement) so template drift fails during setup instead of silently dropping references,
 node-pool constraints, or image annotations. The ACA starter scenario explicitly converts
 the declarations to path-based `AddProject` to retain separate `ProjectResource` coverage.
+That is intentional legacy compatibility coverage, not guidance for new AppHosts; ordinary
+services use `AddDotnetProject` from `Aspire.Hosting.Dotnet`. See the
+[migration guide](../../docs/migrate-from-addproject.md) for retained-call warning handling.
 
 The multiple-node-pool scenario pins the API to a non-default user pool and checks both
 the live workload selectors and actual node placement. The shared-storage scenario checks

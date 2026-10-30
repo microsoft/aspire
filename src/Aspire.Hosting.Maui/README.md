@@ -2,6 +2,10 @@
 
 This library provides support for running .NET MAUI applications within an Aspire application model. It enables local development and debugging of MAUI apps alongside other services in your distributed application.
 
+MAUI migration to the new .NET resource model is separate. Keep `AddMauiProject` and its six
+platform resource shapes; ordinary `AddDotnetProject` does not replace their build, launch,
+debug, or OTLP behavior. See the [project migration guide](../../docs/migrate-from-addproject.md#retained-legacy-scenarios).
+
 ## Getting Started
 
 ### Adding a MAUI Application
@@ -114,11 +118,18 @@ When both dashboard OTLP endpoints are available, MAUI dev tunnels prefer OTLP/H
 
 ## Example: Complete Aspire App with MAUI
 
+This staged mobile scenario deliberately retains its legacy backend declaration and generated
+metadata/build references. Its local obsolete-warning suppression is not a recommendation for
+new ordinary services. Migrate a companion backend independently only after validating the
+complete platform/tunnel scenario.
+
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Add backend services
+#pragma warning disable CS0618 // Retain the staged legacy MAUI scenario until its backend is validated independently.
 var apiService = builder.AddProject<Projects.ApiService>("apiservice");
+#pragma warning restore CS0618
 
 // Create a dev tunnel for the API service
 var apiTunnel = builder.AddDevTunnel("api-tunnel")

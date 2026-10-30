@@ -10,6 +10,8 @@ using Aspire.Cli.Git;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -23,6 +25,53 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class InitCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InitCommand_ReportsAmbientFeedRefusalAsProjectCreationFailure(bool hasSolution)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        if (hasSolution)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Test.sln"), "Fake solution file");
+        }
+        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        var original = $$"""
+            <configuration>
+              <packageSources><clear /><add key="company" value="{{SourceForChannel("daily")}}" /></packageSources>
+              <packageSourceMapping><packageSource key="company"><package pattern="Private.*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(configPath, original);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "daily");
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("daily");
+            options.NuGetClientFactory = _ => new FakeNuGetClient
+            {
+                GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings
+            };
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                NewProjectAsyncCallback = (_, _, _, _, _) =>
+                    throw new InvalidOperationException("Refusal must occur before creating an AppHost project.")
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<InitCommand>();
+
+        var exitCode = await command.Parse("init").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToCreateNewProject, exitCode);
+        var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
+        Assert.Equal([string.Format(System.Globalization.CultureInfo.CurrentCulture,
+            UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat, configPath, "company")], interaction.DisplayedErrors);
+        Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+        Assert.False(File.Exists(Path.Combine(workspace.Path, "apphost.cs")));
+        Assert.False(Directory.Exists(Path.Combine(workspace.Path, "Test.AppHost")));
+    }
+
     /// <summary>
     /// Configures the test packaging service factory to return a single implicit channel
     /// whose template package cache yields one Aspire.ProjectTemplates entry, and pins the
@@ -2365,14 +2414,15 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         => $"https://feeds.test.invalid/{channelName}-fallback/v3/index.json";
 
     /// <summary>
-    /// Asserts that native NuGet evaluation routes Aspire packages exclusively to the selected channel.
+    /// Asserts that unmapped native restore can use both the channel and ambient feed.
     /// </summary>
     private static void AssertNuGetConfigHasChannelShape(string nugetConfigPath, string channelName)
     {
         var channelSource = SourceForChannel(channelName);
         var workingDirectory = Path.GetDirectoryName(nugetConfigPath)!;
-        Assert.Equal([channelSource], NuGetTestHelper.GetEligiblePackageSources(workingDirectory, "Aspire.AppHost.Sdk"));
-        Assert.Equal([channelSource], NuGetTestHelper.GetEligiblePackageSources(workingDirectory, "Aspire.Hosting.Redis"));
+        string[] expectedSources = ["https://api.nuget.org/v3/index.json", channelSource];
+        Assert.Equal(expectedSources, NuGetTestHelper.GetEligiblePackageSources(workingDirectory, "Aspire.AppHost.Sdk"));
+        Assert.Equal(expectedSources, NuGetTestHelper.GetEligiblePackageSources(workingDirectory, "Aspire.Hosting.Redis"));
     }
 
     private sealed class TestScaffoldingService : IScaffoldingService

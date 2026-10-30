@@ -18,7 +18,9 @@ public class ProjectRebuilderResourceTests
     {
         using var builder = CreateBuilder();
         var versionProvider = UseDotnetSdkVersion(builder, "11.0.100-rc.1");
+#pragma warning disable CS0618 // Retain the legacy project rebuild and watch command contract.
         var project = builder.AddProject<Projects.ServiceA>("servicea", options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
         var launchDefaults = Assert.Single(project.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>());
         launchDefaults.BuildConfiguration = "Release";
 
@@ -54,7 +56,9 @@ public class ProjectRebuilderResourceTests
     {
         using var builder = CreateBuilder();
         UseDotnetSdkVersion(builder, "11.0.100-preview.7.25380.108");
+#pragma warning disable CS0618 // Retain the legacy project rebuild and watch command contract.
         var project = builder.AddProject<Projects.ServiceA>("servicea", options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
         var launchDefaults = Assert.Single(project.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>());
         launchDefaults.BuildConfiguration = null;
 

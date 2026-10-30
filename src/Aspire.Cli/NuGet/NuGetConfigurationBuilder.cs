@@ -19,18 +19,11 @@ internal static class NuGetConfigurationBuilder
             .Select(mapping => NuGetSourceIdentity.Compute(mapping.Source, settings.SourceIdentityKey))
             .Append(NuGetSourceIdentity.Compute(PackageSources.NuGetOrg, settings.SourceIdentityKey))
             .ToHashSet(StringComparer.Ordinal);
-        var sourceKeyPrefix = $"aspire-{workloadId}";
         // Shared .NET feeds are identified by their CLI aliases, including aliases left
         // behind when an AppHost moves and its path-derived workload identifier changes.
         var channelSourceKeys = settings.Sources
             .Where(source => !preservedSourceIdentities.Contains(source.Identity) &&
-                (source.IsCliManaged ||
-                 string.Equals(source.Name, $"aspire-{PackageChannelNames.Daily}", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(source.Name, $"aspire-{PackageChannelNames.Staging}", StringComparison.OrdinalIgnoreCase) ||
-                 source.Name.StartsWith("aspire-pr-", StringComparison.OrdinalIgnoreCase) ||
-                 source.Name.StartsWith("aspire-apphost-", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(source.Name, sourceKeyPrefix, StringComparison.OrdinalIgnoreCase) ||
-                 source.Name.StartsWith($"{sourceKeyPrefix}-", StringComparison.OrdinalIgnoreCase)))
+                IsCliManagedSource(source, workloadId))
             .Select(static source => source.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -65,39 +58,6 @@ internal static class NuGetConfigurationBuilder
         };
 
         return new NuGetConfiguration(settings, [], overlay);
-    }
-
-    public static NuGetConfiguration RepairAspireOnlyAppHostMappings(NuGetConfiguration configuration)
-    {
-        if (configuration.Overlay is not { PackageSourceMappings.Count: > 0 } overlay ||
-            configuration.Settings.PackageSourceMappings.Count == 0 ||
-            configuration.Settings.PackageSourceMappings.SelectMany(static mapping => mapping.Patterns)
-                .Any(static pattern => !pattern.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase)))
-        {
-            return configuration;
-        }
-
-        // Aspire-only mappings also exclude unrelated packages from inherited feeds.
-        // Repair only unmapped ambient sources for the existing AppHost write approval;
-        // dynamic restores and explicitly mapped user sources retain their restrictions.
-        // https://learn.microsoft.com/nuget/consume-packages/package-source-mapping
-        var excludedKeys = configuration.Settings.PackageSourceMappings.Select(static mapping => mapping.SourceKey)
-            .Concat(overlay.RetiredSourceKeys)
-            .Concat(overlay.DisabledPackageSourceKeys)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var fallbackMappings = configuration.Settings.Sources
-            .Where(source => source.IsEnabled && !source.IsCliManaged && !excludedKeys.Contains(source.Name))
-            .Select(static source => new NuGetPackageSourceMapping(source.Name, [PackageMapping.AllPackages]))
-            .ToArray();
-        if (fallbackMappings.Length == 0)
-        {
-            return configuration;
-        }
-
-        return new NuGetConfiguration(configuration.Settings, configuration.ConfigSources, overlay with
-        {
-            PackageSourceMappings = [.. overlay.PackageSourceMappings, .. fallbackMappings]
-        });
     }
 
     public static NuGetConfiguration Build(
@@ -138,6 +98,17 @@ internal static class NuGetConfigurationBuilder
             configSources,
             overlay);
     }
+
+    internal static bool IsCliManagedSource(NuGetSourceInfo source, string workloadId)
+        => source.IsCliManaged || IsCliManagedSourceKey(source.Name, workloadId);
+
+    internal static bool IsCliManagedSourceKey(string sourceKey, string workloadId)
+        => string.Equals(sourceKey, $"aspire-{PackageChannelNames.Daily}", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(sourceKey, $"aspire-{PackageChannelNames.Staging}", StringComparison.OrdinalIgnoreCase) ||
+            sourceKey.StartsWith("aspire-pr-", StringComparison.OrdinalIgnoreCase) ||
+            sourceKey.StartsWith("aspire-apphost-", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(sourceKey, $"aspire-{workloadId}", StringComparison.OrdinalIgnoreCase) ||
+            sourceKey.StartsWith($"aspire-{workloadId}-", StringComparison.OrdinalIgnoreCase);
 
     public static NuGetConfigSource[] ResolveSourceAliases(
         PackageMapping[]? mappings,

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain synthetic-metadata legacy ProjectResource proxy, gateway, and fluent contracts.
 #pragma warning disable ASPIREEXTENSION001
 
 using Aspire.Hosting.ApplicationModel;
@@ -508,3 +509,4 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         public LaunchSettings LaunchSettings { get; } = new();
     }
 }
+#pragma warning restore CS0618

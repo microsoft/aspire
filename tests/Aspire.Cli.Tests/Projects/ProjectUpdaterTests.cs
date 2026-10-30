@@ -4507,8 +4507,11 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             .ToList();
 
         var createdConfig = Assert.Single(nugetConfigs);
-        var content = await File.ReadAllTextAsync(createdConfig.FullName);
-        Assert.Contains("packageSourceMapping", content, StringComparison.Ordinal);
+        var document = System.Xml.Linq.XDocument.Load(createdConfig.FullName);
+        Assert.Null(document.Root!.Element("packageSourceMapping"));
+        Assert.Equal(
+            "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json",
+            (string?)Assert.Single(document.Root.Element("packageSources")!.Elements("add")).Attribute("value"));
     }
 }
 

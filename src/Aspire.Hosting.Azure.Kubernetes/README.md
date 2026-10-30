@@ -17,6 +17,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.Kubernetes` integrati
 
 ```bash
 aspire add Aspire.Hosting.Azure.Kubernetes
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -28,7 +29,7 @@ In the AppHost, add an AKS environment and deploy services to it:
 ```csharp
 var aks = builder.AddAzureKubernetesEnvironment("aks");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
     .WithComputeEnvironment(aks);
 ```
 

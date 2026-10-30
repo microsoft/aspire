@@ -9,6 +9,7 @@
 using Aspire.Hosting.ApplicationModel;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.Azure.EntraId.Provisioning;
+using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -201,14 +202,23 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
     }
 
-    [Fact]
-    public async Task WithFederatedManagedIdentityCredential_ConsumerIdentity_EmitsClientIdOutputInPublishMode()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WithFederatedManagedIdentityCredential_ConsumerIdentity_EmitsClientIdOutputInPublishMode(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var identity = builder.AddAzureUserAssignedIdentity("web-identity");
         var entra = builder.AddEntraIdApplication("entra-web")
             .PublishWithFederatedManagedIdentityCredential();
-        var web = builder.AddResource(new ProjectResource("web")).WithAzureUserAssignedIdentity(identity).WithReference(entra);
+#pragma warning disable CS0618 // Federated credentials must use the assigned consumer identity through either factory.
+        IResourceBuilder<IResourceWithEnvironment> web = useDotnetProject
+            ? builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+                .WithAzureUserAssignedIdentity(identity)
+            : builder.AddProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+                .WithAzureUserAssignedIdentity(identity);
+#pragma warning restore CS0618
+        web.WithReference(entra);
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             web.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
@@ -217,14 +227,21 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         Assert.Equal("SignedAssertionFromManagedIdentity", env["AzureAd__ClientCredentials__0__SourceType"]);
     }
 
-    [Fact]
-    public void ValidateManagedIdentities_RejectsResourceWithoutIdentity()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ValidateManagedIdentities_RejectsResourceWithoutIdentity(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var identity = builder.AddAzureUserAssignedIdentity("web-identity");
         var entra = builder.AddEntraIdApplication("entra-web")
             .PublishWithFederatedManagedIdentityCredential(identity);
-        builder.AddResource(new ProjectResource("web")).WithReference(entra);
+#pragma warning disable CS0618 // Identity validation must not silently skip either project resource type.
+        IResourceBuilder<IResourceWithEnvironment> web = useDotnetProject
+            ? builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+            : builder.AddProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+        web.WithReference(entra);
 
         var exception = Assert.Throws<InvalidOperationException>(entra.Resource.ValidateManagedIdentities);
         Assert.Contains("no user-assigned managed identity", exception.Message);
@@ -247,13 +264,20 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         Assert.Equal("{trusted-identity.outputs.clientId}", env["AzureAd__ClientCredentials__0__ManagedIdentityClientId"]);
     }
 
-    [Fact]
-    public async Task PublishWithFederatedManagedIdentityCredential_EnvironmentCallbackRunBeforeIdentityExists_StillResolvesIt()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishWithFederatedManagedIdentityCredential_EnvironmentCallbackRunBeforeIdentityExists_StillResolvesIt(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var entra = builder.AddEntraIdApplication("entra-web")
             .PublishWithFederatedManagedIdentityCredential();
-        var web = builder.AddResource(new ProjectResource("web")).WithReference(entra);
+#pragma warning disable CS0618 // Cached dependency discovery must preserve late identity resolution for both factories.
+        IResourceBuilder<IResourceWithEnvironment> web = useDotnetProject
+            ? builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+            : builder.AddProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+        web.WithReference(entra);
 
         // The Azure resource preparer runs the environment callbacks to discover dependencies before it attaches
         // identities, and a callback's result is cached, so the value must not need the identity at that point.
@@ -1384,9 +1408,11 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     [InlineData(nameof(ProjectResource), false)]
     [InlineData(nameof(ExecutableResource), false)]
     [InlineData(nameof(ContainerResource), false)]
+    [InlineData(nameof(DotnetProjectResource), false)]
     [InlineData(nameof(ProjectResource), true)]
     [InlineData(nameof(ExecutableResource), true)]
     [InlineData(nameof(ContainerResource), true)]
+    [InlineData(nameof(DotnetProjectResource), true)]
     public void WithReference_DoesNotAddImplicitWaits(string resourceType, bool existing)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -1399,13 +1425,16 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             nameof(ProjectResource) => builder.AddResource(new ProjectResource("consumer")),
             nameof(ExecutableResource) => builder.AddExecutable("consumer", "node", "."),
             nameof(ContainerResource) => builder.AddContainer("consumer", "test-image"),
+            nameof(DotnetProjectResource) => builder.AddDotnetProject("consumer", "consumer.csproj", options => options.ExcludeLaunchProfile = true),
             _ => throw new ArgumentOutOfRangeException(nameof(resourceType))
         };
 
+        // Modern projects already wait for their build resource; authentication references must preserve those waits.
+        var initialWaits = consumer.Resource.Annotations.OfType<WaitAnnotation>().ToArray();
         Assert.Same(consumer, consumer.WithReference(entra));
         consumer.WithReference(entra, connectionName: "OTHER");
 
-        Assert.Empty(consumer.Resource.Annotations.OfType<WaitAnnotation>());
+        Assert.Equal(initialWaits, consumer.Resource.Annotations.OfType<WaitAnnotation>());
     }
 
     [Fact]

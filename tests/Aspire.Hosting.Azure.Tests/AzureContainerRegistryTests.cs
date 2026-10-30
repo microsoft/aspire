@@ -76,7 +76,9 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
 
         // Create a container registry and assign roles to a project
         var acr = builder.AddAzureContainerRegistry("acr");
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithRoleAssignments(acr, ContainerRegistryBuiltInRole.AcrPull, ContainerRegistryBuiltInRole.AcrPush);
 
         using var app = builder.Build();
