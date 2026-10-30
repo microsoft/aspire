@@ -124,10 +124,11 @@ await builder.build().run();
             // Phase 5: Verify the deployment
             // =====================================================================
 
-            // Verify pods are running in the namespace
-            await auto.TypeAsync($"kubectl get pods -n {k8sNamespace} --no-headers");
+            // Wait for all deployed pods to become Ready.
+            await auto.TypeAsync(
+                 $"kubectl wait --for=condition=Ready pod --all -n {k8sNamespace} --timeout=240s");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromSeconds(30));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             // =====================================================================
             // Phase 6: Cleanup
