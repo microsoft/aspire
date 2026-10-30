@@ -1,0 +1,7 @@
+.resource-terminal-page {
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    padding-top: var(--layout-top-padding);
+    box-sizing: border-box;
+}

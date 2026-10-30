@@ -48,13 +48,16 @@
     gap: 8px;
     min-height: 34px;
     padding: 4px 8px;
+    border-top: 1px solid var(--colorNeutralStroke1);
     background: var(--colorNeutralBackground2);
-    color: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground1);
     font-size: var(--fontSizeBase200);
     line-height: var(--lineHeightBase200);
     /* Fluent controls consume these tokens inside their shadow roots. */
     --fontSizeBase300: var(--fontSizeBase200);
     --lineHeightBase300: var(--lineHeightBase200);
+    /* Controls belong to the dashboard theme, not the independently selected terminal palette. */
+    --colorNeutralForeground2: var(--colorNeutralForeground1);
 }
 
 .terminal-focus-hint kbd {
@@ -72,7 +75,7 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
-    gap: 6px;
+    gap: 12px;
     min-width: 0;
     margin-inline-start: auto;
 }
@@ -81,9 +84,35 @@
     white-space: nowrap;
 }
 
+.terminal-font-controls,
+.terminal-size-controls,
+.terminal-palette-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.terminal-font-controls {
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--aspire-control-radius);
+    background: var(--colorNeutralBackground1);
+}
+
 .terminal-controls ::deep .toolbar-button {
-    width: var(--aspire-control-height);
-    min-width: var(--aspire-control-height);
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+}
+
+.terminal-controls ::deep .toolbar-button::part(control) {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    min-height: 24px;
     padding: 0;
 }
 
@@ -92,7 +121,6 @@
 }
 
 /* The select's field wrapper has an empty grid row that otherwise offsets its visible border. */
-.terminal-controls ::deep .toolbar-button,
 .terminal-controls ::deep .terminal-size-select,
 .terminal-controls ::deep .terminal-palette-select {
     height: var(--aspire-control-height);
@@ -109,6 +137,7 @@
 .terminal-font-size {
     min-width: 32px;
     text-align: center;
+    font-weight: var(--fontWeightMedium);
     font-variant-numeric: tabular-nums;
 }
 
@@ -167,9 +196,9 @@
 }
 
 .terminal-container {
-    /* Tint a muted neutral base with brand purple without competing with terminal content. */
-    --terminal-focus-neutral-color: color-mix(in srgb, var(--colorNeutralForeground3) 60%, var(--colorNeutralStroke1));
-    --terminal-focus-color: color-mix(in srgb, #7455dd 25%, var(--terminal-focus-neutral-color));
+    /* Terminal palettes are independent of the dashboard theme. Keep contrast against the palette and tint focus with the dashboard brand. */
+    --terminal-border-color: color-mix(in srgb, var(--terminal-foreground, var(--colorNeutralForeground1)) 60%, var(--terminal-background, var(--colorNeutralBackground1)));
+    --terminal-focus-color: color-mix(in srgb, var(--colorBrandStroke1) 15%, color-mix(in srgb, var(--terminal-foreground, var(--colorNeutralForeground1)) 70%, var(--terminal-background, var(--colorNeutralBackground1))));
     position: relative;
     isolation: isolate;
     width: 100%;
@@ -180,12 +209,14 @@
 }
 
 .terminal-container::after {
-    /* Paint focus above the composited canvas without resizing the terminal or intercepting input. */
+    /* Paint the boundary above the composited canvas without resizing it or intercepting input. */
     content: "";
     position: absolute;
     inset: 0;
     z-index: 1;
     pointer-events: none;
+    outline: 1px solid var(--terminal-border-color);
+    outline-offset: -1px;
 }
 
 .terminal-disconnected .terminal-container {
@@ -219,6 +250,11 @@
 }
 
 .terminal-container:focus-within::after {
+    outline-color: var(--terminal-focus-color);
+}
+
+/* :focus-visible inside Hex1b's shadow root cannot be selected from this stylesheet. */
+.terminal-container:focus-within:not(:has([data-aspire-pointer-input="true"]))::after {
     outline: var(--strokeWidthThick) solid var(--terminal-focus-color);
     outline-offset: calc(-1 * var(--strokeWidthThick));
 }
@@ -258,13 +294,15 @@
 }
 
 @media (prefers-contrast: more) {
-    .terminal-container {
-        --terminal-focus-color: var(--colorStrokeFocus1);
+    .terminal-container:focus-within::after {
+        outline-width: var(--strokeWidthThick);
+        outline-offset: calc(-1 * var(--strokeWidthThick));
     }
 }
 
 @media (forced-colors: active) {
     .terminal-container {
+        --terminal-border-color: CanvasText;
         --terminal-focus-color: Highlight;
     }
 

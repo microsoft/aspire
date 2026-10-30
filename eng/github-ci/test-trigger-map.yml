@@ -569,6 +569,7 @@ path_rules:
       - src/Aspire.Dashboard/wwwroot/js/app.js
       - src/Aspire.Dashboard/wwwroot/js/app-terminalwindow.js
       - src/Aspire.Dashboard/wwwroot/js/app-resourcegraph.js
+      - src/Aspire.Dashboard/wwwroot/js/app-dashboard-experience.js
       - src/Aspire.Dashboard/package.json
       - src/Aspire.Dashboard/package-lock.json
       - src/Aspire.Dashboard/wwwroot/js/hex1b-web-terminal/**

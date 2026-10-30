@@ -416,7 +416,9 @@ internal sealed partial class AtsGoCodeGenerator
             }
 
             var owner = leaves[0].Value.OwningAssemblyName;
-            var typeText = RenderGoExportedValueType(node, indentLevel: 0);
+            // The API reference lists the declaration's shape only, so it leaves out the godoc comments that the
+            // generated SDK writes on each field.
+            var typeText = RenderGoExportedValueType(node, indentLevel: 0, includeDocs: false);
 
             scope.AddDeclaration(new GoApiDeclaration
             {

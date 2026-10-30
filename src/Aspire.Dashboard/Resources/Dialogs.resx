@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -175,17 +175,33 @@
   <data name="FilterDialogConditionInputLabel" xml:space="preserve">
     <value>Condition</value>
   </data>
-  <data name="HelpDialogGetHelpLinkText" xml:space="preserve">
-    <value>Go to aspire.dev documentation</value>
-  </data>
   <data name="HelpDialogCategoryPanels" xml:space="preserve">
     <value>Panels</value>
   </data>
   <data name="HelpDialogCategoryPageNavigation" xml:space="preserve">
-    <value>Page navigation</value>
+    <value>Dashboard navigation</value>
   </data>
   <data name="HelpDialogCategoryNavigation" xml:space="preserve">
-    <value>Site-wide navigation</value>
+    <value>General</value>
+  </data>
+  <data name="HelpDialogCategoryTelemetry" xml:space="preserve">
+    <value>Logs &amp; telemetry</value>
+  </data>
+  <data name="HelpDialogShortcutsHint" xml:space="preserve">
+    <value>Use shortcuts outside text fields and terminal input. Panel shortcuts apply to an open details panel. Press {0} in a terminal to focus its controls before using dashboard shortcuts.</value>
+    <comment>{0} is the F6 key, rendered as a keyboard key.</comment>
+  </data>
+  <data name="HelpDialogGoToParameters" xml:space="preserve">
+    <value>Parameters</value>
+  </data>
+  <data name="HelpDialogGoToGraph" xml:space="preserve">
+    <value>Resource graph</value>
+  </data>
+  <data name="HelpDialogGoToExtensions" xml:space="preserve">
+    <value>Extensions</value>
+  </data>
+  <data name="HelpDialogGoToTelemetrySources" xml:space="preserve">
+    <value>Telemetry sources</value>
   </data>
   <data name="HelpDialogIncreasePanelSize" xml:space="preserve">
     <value>Increase panel size</value>
@@ -203,34 +219,31 @@
     <value>Close panel</value>
   </data>
   <data name="HelpDialogGoToResources" xml:space="preserve">
-    <value>Go to Resources</value>
+    <value>Resources</value>
   </data>
   <data name="HelpDialogGoToConsoleLogs" xml:space="preserve">
-    <value>Go to Console Logs</value>
+    <value>Console logs (all resources)</value>
   </data>
   <data name="HelpDialogGoToStructuredLogs" xml:space="preserve">
-    <value>Go to Structured Logs</value>
+    <value>Structured logs</value>
   </data>
   <data name="HelpDialogGoToTraces" xml:space="preserve">
-    <value>Go to Traces</value>
+    <value>Traces</value>
   </data>
   <data name="HelpDialogGoToMetrics" xml:space="preserve">
-    <value>Go to Metrics</value>
+    <value>Metrics</value>
   </data>
   <data name="HelpDialogGoToTerminals" xml:space="preserve">
-    <value>Go to Terminals</value>
+    <value>Terminals</value>
   </data>
   <data name="HelpDialogGoToHelp" xml:space="preserve">
-    <value>Go to Help</value>
+    <value>Keyboard shortcuts</value>
   </data>
   <data name="HelpDialogGoToSettings" xml:space="preserve">
-    <value>Go to Settings</value>
+    <value>Settings</value>
   </data>
   <data name="HelpDialogToggleTerminalDock" xml:space="preserve">
-    <value>Toggle terminal</value>
-  </data>
-  <data name="HelpDialogKeyboardShortcutsTitle" xml:space="preserve">
-    <value>Keyboard Shortcuts</value>
+    <value>Toggle terminal dock</value>
   </data>
   <data name="DialogCloseButtonText" xml:space="preserve">
     <value>Close</value>
@@ -263,6 +276,9 @@
   <data name="TextVisualizerDialogPlaintextFormat" xml:space="preserve">
     <value>Unformatted</value>
   </data>
+  <data name="TextVisualizerWordWrap" xml:space="preserve">
+    <value>Word wrap</value>
+  </data>
   <data name="TextVisualizerDialogJsonFormat" xml:space="preserve">
     <value>JSON</value>
   </data>
@@ -291,6 +307,162 @@
   </data>
   <data name="SettingsDialogDashboardLogsAndTelemetry" xml:space="preserve">
     <value>Resource logs and telemetry</value>
+  </data>
+  <data name="SettingsDialogDashboardExperience" xml:space="preserve">
+    <value>Dashboard experience</value>
+  </data>
+  <data name="SettingsDialogDashboardExperienceDescription" xml:space="preserve">
+    <value>Choose which dashboard experience to use.</value>
+  </data>
+  <data name="SettingsDialogDashboardExperienceNew" xml:space="preserve">
+    <value>New dashboard</value>
+  </data>
+  <data name="SettingsDialogDashboardExperiencePrevious" xml:space="preserve">
+    <value>Previous dashboard</value>
+  </data>
+  <data name="SettingsDialogDashboardExperienceSelectorLabel" xml:space="preserve">
+    <value>Experience</value>
+  </data>
+  <data name="SettingsDialogAppearanceGroup" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="SettingsDialogLanguageAndTimeGroup" xml:space="preserve">
+    <value>Language and time</value>
+  </data>
+  <data name="SettingsDialogExperienceGroup" xml:space="preserve">
+    <value>Dashboard experience</value>
+  </data>
+  <data name="SettingsDialogDataAndTelemetryGroup" xml:space="preserve">
+    <value>Data and telemetry</value>
+  </data>
+  <data name="DashboardFeedbackDialogTitle" xml:space="preserve">
+    <value>Share dashboard feedback</value>
+  </data>
+  <data name="DashboardFeedbackDescription" xml:space="preserve">
+    <value>Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself.</value>
+  </data>
+  <data name="DashboardFeedbackStepProgress" xml:space="preserve">
+    <value>Step {0} of 2</value>
+  </data>
+  <data name="DashboardFeedbackStepOneTitle" xml:space="preserve">
+    <value>Why are you going back to the previous dashboard?</value>
+  </data>
+  <data name="DashboardFeedbackStepTwoTitle" xml:space="preserve">
+    <value>Is there anything else you want to tell us?</value>
+  </data>
+  <data name="DashboardFeedbackStepTwoDescription" xml:space="preserve">
+    <value>Both questions are optional, but your answers help us decide what to improve.</value>
+  </data>
+  <data name="DashboardFeedbackContinue" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="DashboardFeedbackBack" xml:space="preserve">
+    <value>Back</value>
+  </data>
+  <data name="DashboardFeedbackPreviewDisclosure" xml:space="preserve">
+    <value>Preview copied feedback</value>
+  </data>
+  <data name="DashboardFeedbackCopyOpenAndSwitch" xml:space="preserve">
+    <value>Open new discussion and switch</value>
+  </data>
+  <data name="DashboardFeedbackSkipAndSwitch" xml:space="preserve">
+    <value>Skip and switch</value>
+  </data>
+  <data name="DashboardFeedbackDurationLabel" xml:space="preserve">
+    <value>How long have you used the new dashboard?</value>
+  </data>
+  <data name="DashboardFeedbackDurationNotSpecified" xml:space="preserve">
+    <value>I&apos;d rather not say</value>
+  </data>
+  <data name="DashboardFeedbackDurationLessThanOneHour" xml:space="preserve">
+    <value>Less than an hour</value>
+  </data>
+  <data name="DashboardFeedbackDurationOneDay" xml:space="preserve">
+    <value>About a day</value>
+  </data>
+  <data name="DashboardFeedbackDurationTwoToSevenDays" xml:space="preserve">
+    <value>2 to 7 days</value>
+  </data>
+  <data name="DashboardFeedbackDurationMoreThanOneWeek" xml:space="preserve">
+    <value>More than a week</value>
+  </data>
+  <data name="DashboardFeedbackReasonsLabel" xml:space="preserve">
+    <value>What made you go back? Select all that apply.</value>
+  </data>
+  <data name="DashboardFeedbackReasonNavigation" xml:space="preserve">
+    <value>It was hard to find my way around</value>
+  </data>
+  <data name="DashboardFeedbackReasonFindingApplicationUrls" xml:space="preserve">
+    <value>I couldn&apos;t find my application URLs</value>
+  </data>
+  <data name="DashboardFeedbackReasonTelemetryWorkflow" xml:space="preserve">
+    <value>The telemetry workflow didn&apos;t work for me</value>
+  </data>
+  <data name="DashboardFeedbackReasonTerminals" xml:space="preserve">
+    <value>The terminals didn&apos;t work for me</value>
+  </data>
+  <data name="DashboardFeedbackReasonPerformanceOrAccessibility" xml:space="preserve">
+    <value>It was slow or hard to use with assistive technology</value>
+  </data>
+  <data name="DashboardFeedbackReasonMissingFeature" xml:space="preserve">
+    <value>A feature I need is missing</value>
+  </data>
+  <data name="DashboardFeedbackReasonOther" xml:space="preserve">
+    <value>Another reason</value>
+  </data>
+  <data name="DashboardFeedbackOtherPlaceholder" xml:space="preserve">
+    <value>Tell us what happened</value>
+  </data>
+  <data name="DashboardFeedbackMissingLabel" xml:space="preserve">
+    <value>What is missing from the new dashboard?</value>
+  </data>
+  <data name="DashboardFeedbackDifficultiesLabel" xml:space="preserve">
+    <value>What was harder or less clear than in the previous dashboard?</value>
+  </data>
+  <data name="DashboardFeedbackPreviewLabel" xml:space="preserve">
+    <value>Your feedback</value>
+  </data>
+  <data name="DashboardFeedbackModeLabel" xml:space="preserve">
+    <value>How do you run the dashboard?</value>
+  </data>
+  <data name="DashboardFeedbackModeAppHost" xml:space="preserve">
+    <value>With an AppHost</value>
+  </data>
+  <data name="DashboardFeedbackModeStandalone" xml:space="preserve">
+    <value>Standalone, for telemetry only</value>
+  </data>
+  <data name="DashboardFeedbackMarkdownTitle" xml:space="preserve">
+    <value>Dashboard experience feedback</value>
+  </data>
+  <data name="DashboardFeedbackCopy" xml:space="preserve">
+    <value>Copy feedback</value>
+  </data>
+  <data name="DashboardFeedbackCopyAndOpen" xml:space="preserve">
+    <value>Copy and open discussion</value>
+  </data>
+  <data name="DashboardFeedbackCopied" xml:space="preserve">
+    <value>Feedback copied to the clipboard.</value>
+  </data>
+  <data name="DashboardFeedbackCopiedAndOpened" xml:space="preserve">
+    <value>Feedback copied. Paste it into the GitHub discussion to share it.</value>
+  </data>
+  <data name="DashboardFeedbackCopyFailed" xml:space="preserve">
+    <value>The clipboard could not be accessed. Copy the preview manually.</value>
+  </data>
+  <data name="DashboardFeedbackSwitchToLegacy" xml:space="preserve">
+    <value>Switch to previous dashboard</value>
+  </data>
+  <data name="DashboardFeedbackPromptTitle" xml:space="preserve">
+    <value>Help shape the new dashboard</value>
+  </data>
+  <data name="DashboardFeedbackPromptMessage" xml:space="preserve">
+    <value>Share what works, what is missing, or what feels harder. Your feedback helps improve the dashboard while both experiences are available.</value>
+  </data>
+  <data name="DashboardFeedbackPromptShare" xml:space="preserve">
+    <value>Share feedback</value>
+  </data>
+  <data name="DashboardFeedbackPromptIgnore" xml:space="preserve">
+    <value>Don't ask again</value>
   </data>
   <data name="SettingsRemoveAllButtonText" xml:space="preserve">
     <value>Remove all</value>
@@ -526,6 +698,27 @@
   <data name="ManageDataResource" xml:space="preserve">
     <value>Resource</value>
   </data>
+  <data name="SettingsDialogGroupOverview" xml:space="preserve">
+    <value>Overview layout</value>
+  </data>
+  <data name="SettingsDialogGroupOverviewSummary" xml:space="preserve">
+    <value>Home</value>
+  </data>
+  <data name="SettingsDialogGroupOverviewCards" xml:space="preserve">
+    <value>Cards</value>
+  </data>
+  <data name="SettingsDialogResourceListDensity" xml:space="preserve">
+    <value>Resource list density</value>
+  </data>
+  <data name="SettingsDialogResourceListDensityComfortable" xml:space="preserve">
+    <value>Comfortable</value>
+  </data>
+  <data name="SettingsDialogResourceListDensityCompact" xml:space="preserve">
+    <value>Compact</value>
+  </data>
+  <data name="SettingsDialogResourceListDensitySpacious" xml:space="preserve">
+    <value>Spacious</value>
+  </data>
   <data name="SettingsDialogTimeFormat" xml:space="preserve">
     <value>Time format</value>
   </data>
@@ -549,6 +742,51 @@
   </data>
   <data name="AIAgentsDialogTitle" xml:space="preserve">
     <value>AI agents</value>
+  </data>
+  <data name="HelpDialogDocumentationTab" xml:space="preserve">
+    <value>Documentation</value>
+  </data>
+  <data name="HelpDialogDashboardDocumentationDescription" xml:space="preserve">
+    <value>Guides and reference for using the Aspire dashboard.</value>
+  </data>
+  <data name="HelpDialogRepoDescription" xml:space="preserve">
+    <value>Source code, releases and issues on GitHub.</value>
+  </data>
+  <data name="HelpDialogOpensInNewTab" xml:space="preserve">
+    <value>Opens in a new tab</value>
+  </data>
+  <data name="HelpDialogLearnHeading" xml:space="preserve">
+    <value>Learn</value>
+  </data>
+  <data name="HelpDialogCommunityHeading" xml:space="preserve">
+    <value>Community and support</value>
+  </data>
+  <data name="HelpDialogAspireDocumentationTitle" xml:space="preserve">
+    <value>Aspire documentation</value>
+  </data>
+  <data name="HelpDialogAspireDocumentationDescription" xml:space="preserve">
+    <value>Get started with Aspire, its integrations and deployment.</value>
+  </data>
+  <data name="HelpDialogReportIssueTitle" xml:space="preserve">
+    <value>Report an issue</value>
+  </data>
+  <data name="HelpDialogReportIssueDescription" xml:space="preserve">
+    <value>Found a bug or have an idea? Open an issue on GitHub.</value>
+  </data>
+  <data name="HelpDialogDashboardFeedbackTitle" xml:space="preserve">
+    <value>Dashboard feedback</value>
+  </data>
+  <data name="HelpDialogDashboardFeedbackDescription" xml:space="preserve">
+    <value>Share feedback about the evolving dashboard experience.</value>
+  </data>
+  <data name="HelpDialogDiscordTitle" xml:space="preserve">
+    <value>Discord</value>
+  </data>
+  <data name="HelpDialogDiscordDescription" xml:space="preserve">
+    <value>Chat with the Aspire team and community.</value>
+  </data>
+  <data name="HelpDialogDashboardVersion" xml:space="preserve">
+    <value>Aspire dashboard version {0}</value>
   </data>
   <data name="AIAgentsDialogStandaloneDescription" xml:space="preserve">
     <value>Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
@@ -647,5 +885,11 @@ Import previously exported telemetry or OTLP JSON files by selecting **{0}** in 
   </data>
   <data name="TelemetryHelpManageDataLink" xml:space="preserve">
     <value>Learn about managing dashboard data</value>
+  </data>
+  <data name="HelpDialogGetHelpLinkText" xml:space="preserve">
+    <value>Go to aspire.dev documentation</value>
+  </data>
+  <data name="HelpDialogKeyboardShortcutsTitle" xml:space="preserve">
+    <value>Keyboard Shortcuts</value>
   </data>
 </root>

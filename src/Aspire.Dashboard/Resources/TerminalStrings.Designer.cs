@@ -313,6 +313,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Expand terminal.
+        /// </summary>
+        public static string TerminalExpand {
+            get {
+                return ResourceManager.GetString("TerminalExpand", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Focus terminal controls.
         /// </summary>
         public static string TerminalFocusControlsDescription {
@@ -340,11 +349,29 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Minimize terminal.
+        /// </summary>
+        public static string TerminalMinimize {
+            get {
+                return ResourceManager.GetString("TerminalMinimize", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource&apos;s console logs..
         /// </summary>
         public static string TerminalMountFailed {
             get {
                 return ResourceManager.GetString("TerminalMountFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Open terminal for {0}.
+        /// </summary>
+        public static string TerminalOpenForResource {
+            get {
+                return ResourceManager.GetString("TerminalOpenForResource", resourceCulture);
             }
         }
 

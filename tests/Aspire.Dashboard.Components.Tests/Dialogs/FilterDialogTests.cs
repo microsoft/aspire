@@ -530,7 +530,7 @@ public class FilterDialogTests : DashboardTestContext
             }));
         });
 
-        var datePickerButton = Assert.Single(cut.FindComponents<FluentButton>(), button => button.Instance.Title == "Pick date and time");
+        var datePickerButton = Assert.Single(cut.FindComponents<FluentButton>(), button => button.Find("fluent-button").GetAttribute("data-tooltip") == "Pick date and time");
         Assert.True(datePickerButton.Instance.IconOnly);
         Assert.Equal(ButtonType.Button, datePickerButton.Instance.Type);
         Assert.Contains("aspire-icon-button", datePickerButton.Instance.Class);

@@ -33,6 +33,7 @@ internal static class KnownProperties
         public const string AppArgsSensitivity = "resource.appArgsSensitivity";
         public const string ExcludeFromMcp = "resource.excludeFromMcp";
         public const string WaitingFor = "resource.waitingFor";
+        public const string TraitPrefix = "resource.trait.";
     }
 
     public static class Container
@@ -101,4 +102,10 @@ internal static class KnownResourcePropertySortOrder
     // dashboard normalizes those values after the generic dashboard-owned properties.
     // This value should always be greater than the largest known resource property.
     public static int GetProducerDefinedStart() => ConnectionString + 1;
+}
+
+internal static class KnownResourceTraits
+{
+    public const string DashboardTag = "Aspire_Dashboard_Tag";
+    public const string DashboardPosition = "Aspire_Dashboard_Position";
 }
