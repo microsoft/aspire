@@ -2237,6 +2237,7 @@ builder.Build().Run();
         const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
         const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const coordinatedBuild = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'coordinatedBuild.e2e.test.ts'), 'utf8');
         const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
         const extensionRenameRetryStart = e2eStateFileBridge.indexOf('function isRetryableRenameError');
         const extensionRenameRetryEnd = e2eStateFileBridge.indexOf('function sleepSynchronously');
@@ -2267,6 +2268,9 @@ builder.Build().Run();
         assert.ok(fixtures.includes("code === 'EBUSY'"));
         assert.ok(fixtures.includes("code === 'EPERM'"));
         assert.ok(fixtures.includes("code === 'EACCES'"));
+        assert.ok(coordinatedBuild.includes("removePath(fixture.directory, { recursive: true, force: true });"));
+        assert.ok(coordinatedBuild.includes("writeFileWithRetry(path.join(fixture.directory, 'cleanup-probe.txt'), 'recreated');"));
+        assert.ok(!coordinatedBuild.includes('fs.rmSync(fixture.directory'));
     });
 
     test('uses lightweight secondary AppHost candidates for discovery-only E2E coverage', () => {

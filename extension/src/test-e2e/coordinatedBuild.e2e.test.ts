@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { AspireResourceExtendedDebugConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import { waitForRepositoryIdle } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceFoldersForE2E, writeFileWithRetry } from './helpers/fixtures';
+import { executeE2eControlCommand, removePath, restoreWorkspaceFoldersForE2E, writeFileWithRetry } from './helpers/fixtures';
 import { getWorkspaceRoot } from './helpers/paths';
 import { openAspireView } from './helpers/vscode';
 
@@ -91,7 +91,14 @@ suite('Aspire coordinated build E2E', function () {
                     await proveLaunch(false, {}, 'properties-primary', '--primary');
                 }
             } finally {
-                fs.rmSync(fixture.directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+                // The resource process and debug session are already terminated by the proof. Roslyn can
+                // still be finishing project discovery on Windows, so use the shared bounded retry helper
+                // for that transient project-system handle before proving the fixture path is reusable.
+                removePath(fixture.directory, { recursive: true, force: true });
+                assert.strictEqual(fs.existsSync(fixture.directory), false);
+                fs.mkdirSync(fixture.directory);
+                writeFileWithRetry(path.join(fixture.directory, 'cleanup-probe.txt'), 'recreated');
+                removePath(fixture.directory, { recursive: true, force: true });
             }
         });
     }
