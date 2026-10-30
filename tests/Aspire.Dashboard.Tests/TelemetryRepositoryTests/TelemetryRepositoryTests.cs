@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
@@ -384,7 +386,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var cts = CreateWatchCancellationTokenSource();
         var receivedSpans = new List<OtlpSpan>();
         var firstSpanReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -406,7 +408,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for initial span to be received
-        await firstSpanReceived.Task.DefaultTimeout();
+        await WaitForWatchSignalAsync(firstSpanReceived.Task, watchTask);
 
         // Add another span while watching
         await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
@@ -429,7 +431,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for task to complete
-        await watchTask;
+        await watchTask.DefaultTimeout();
 
         // Assert
         Assert.Equal(2, receivedSpans.Count);
@@ -502,7 +504,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var cts = CreateWatchCancellationTokenSource();
         var receivedLogs = new List<OtlpLogEntry>();
         var firstLogReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -524,7 +526,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for initial log to be received
-        await firstLogReceived.Task.DefaultTimeout();
+        await WaitForWatchSignalAsync(firstLogReceived.Task, watchTask);
 
         // Add another log while watching
         await repositoryContext.Repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -547,7 +549,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for task to complete
-        await watchTask;
+        await watchTask.DefaultTimeout();
 
         // Assert
         Assert.Equal(2, receivedLogs.Count);
@@ -968,7 +970,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var cts = CreateWatchCancellationTokenSource();
         var receivedLogs = new List<OtlpLogEntry>();
         var firstLogReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -991,7 +993,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for initial log to be received (proves watcher is registered)
-        await firstLogReceived.Task.DefaultTimeout();
+        await WaitForWatchSignalAsync(firstLogReceived.Task, watchTask);
 
         // Add more logs - one matches filter, one doesn't
         await repositoryContext.Repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -1015,7 +1017,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for task to complete
-        await watchTask;
+        await watchTask.DefaultTimeout();
 
         // Assert - only the matching logs should be received (initial + pushed match)
         Assert.Equal(2, receivedLogs.Count);
@@ -1059,7 +1061,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var cts = CreateWatchCancellationTokenSource();
         var receivedLogs = new List<OtlpLogEntry>();
         var firstLogReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1082,7 +1084,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for initial log to be received (proves watcher is registered)
-        await firstLogReceived.Task.DefaultTimeout();
+        await WaitForWatchSignalAsync(firstLogReceived.Task, watchTask);
 
         // Add logs with different severity levels
         await repositoryContext.Repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -1107,7 +1109,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for task to complete
-        await watchTask;
+        await watchTask.DefaultTimeout();
 
         // Assert - only Error and Critical logs should be received (initial + 2 pushed)
         Assert.Equal(3, receivedLogs.Count);
@@ -1142,7 +1144,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var cts = CreateWatchCancellationTokenSource();
         var receivedLogs = new List<OtlpLogEntry>();
         var firstLogReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1169,7 +1171,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for initial matching log to be received
-        await firstLogReceived.Task.DefaultTimeout();
+        await WaitForWatchSignalAsync(firstLogReceived.Task, watchTask);
 
         // Add more logs — one matches both fragments, one matches only one
         await repositoryContext.Repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -1192,7 +1194,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        await watchTask;
+        await watchTask.DefaultTimeout();
 
         // Assert — only logs containing BOTH "timeout" AND "error" should be received
         Assert.Equal(2, receivedLogs.Count);
@@ -1245,7 +1247,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var cts = CreateWatchCancellationTokenSource();
         var receivedLogs = new List<OtlpLogEntry>();
         var firstLogReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1265,7 +1267,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        await firstLogReceived.Task.DefaultTimeout();
+        await WaitForWatchSignalAsync(firstLogReceived.Task, watchTask);
 
         // Push a new matching log
         await repositoryContext.Repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -1288,7 +1290,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        await watchTask;
+        await watchTask.DefaultTimeout();
 
         // The disabled filter ("ZZZZZ_IMPOSSIBLE") should be ignored.
         // Only the enabled "match" filter applies.
@@ -1342,7 +1344,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var cts = CreateWatchCancellationTokenSource();
         var receivedSpans = new List<OtlpSpan>();
         var firstSpanReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1362,7 +1364,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        await firstSpanReceived.Task.DefaultTimeout();
+        await WaitForWatchSignalAsync(firstSpanReceived.Task, watchTask);
 
         // Push a new span that matches the enabled filter
         await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
@@ -1385,7 +1387,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        await watchTask;
+        await watchTask.DefaultTimeout();
 
         // The disabled filter should be ignored — only the enabled "span1" name filter applies
         Assert.Equal(2, receivedSpans.Count);
@@ -1452,6 +1454,65 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
                 }
             }
         });
+    }
+
+    [Fact]
+    public async Task WatchSpansAsync_SnapshotFailure_SurfacesWatchError()
+    {
+        // Arrange
+        using var repositoryContext = await CreateRepositoryAsync();
+        using var cts = CreateWatchCancellationTokenSource();
+        var failSnapshotRead = new AsyncLocal<bool>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == TracingSqliteConnection.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ActivityStarted = _ =>
+            {
+                if (failSnapshotRead.Value)
+                {
+                    throw new InvalidOperationException("Injected snapshot failure.");
+                }
+            }
+        };
+        ActivitySource.AddActivityListener(listener);
+        var firstSpanReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Act
+        // The flag flows into the watch's snapshot read only, so other tests' database commands are unaffected.
+        failSnapshotRead.Value = true;
+        var watchTask = Task.Run(async () =>
+        {
+            await foreach (var span in repositoryContext.Repository.WatchSpansAsync(new WatchSpansRequest { ResourceKeys = [], Filters = [] }, cts.Token))
+            {
+                firstSpanReceived.TrySetResult();
+            }
+        });
+        failSnapshotRead.Value = false;
+
+        // Assert
+        // A watch that fails before signaling must report its own error rather than an unrelated wait timeout.
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => WaitForWatchSignalAsync(firstSpanReceived.Task, watchTask));
+        Assert.Equal("Injected snapshot failure.", exception.Message);
+    }
+
+    // Watches outlive each bounded wait, so a slow initial snapshot on a loaded CI runner can't cancel the watch
+    // before the test observes it. Disposing the source stops the watch when a test fails early.
+    private static CancellationTokenSource CreateWatchCancellationTokenSource() => new(TestConstants.LongTimeoutTimeSpan);
+
+    private static async Task WaitForWatchSignalAsync(
+        Task signal,
+        Task watchTask,
+        [CallerFilePath] string? filePath = null,
+        [CallerLineNumber] int lineNumber = default)
+    {
+        var completedTask = await Task.WhenAny(signal, watchTask).DefaultTimeout(filePath: filePath, lineNumber: lineNumber);
+        if (completedTask != signal)
+        {
+            // Observe the watch so its fault or cancellation is reported instead of a wait timeout.
+            await watchTask;
+            Assert.Fail("The watch completed before it signaled.");
+        }
     }
 }
 
