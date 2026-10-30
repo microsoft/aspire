@@ -658,6 +658,43 @@ public class PackageInstallationTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StartingParentBeforeInstallerStateIsPublishedStillStartsInstaller()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var nodeApp = builder.AddJavaScriptApp("test-app", "./test-app")
+            .WithNpm(install: true)
+            .WithExplicitStart();
+
+        var installerResource = Assert.Single(builder.Resources.OfType<JavaScriptInstallerResource>());
+        var installerStarts = 0;
+        builder.CreateResourceBuilder(installerResource).WithCommand(
+            KnownResourceCommands.StartCommand,
+            "Start",
+            _ =>
+            {
+                Interlocked.Increment(ref installerStarts);
+                return Task.FromResult(CommandResults.Success());
+            });
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+
+        // Resources are initialized concurrently, so the parent's start can be handled before the
+        // installer has published any state.
+        var startParentTask = eventing.PublishAsync(new BeforeResourceStartedEvent(nodeApp.Resource, app.Services));
+        Assert.False(startParentTask.IsCompleted);
+
+        await notificationService.PublishUpdateAsync(installerResource, s => s with { State = KnownResourceStates.NotStarted });
+        await startParentTask.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(1, installerStarts);
+    }
+
+    [Fact]
     public async Task StartingParentDoesNotStartInstallerDisabledWithInstallFalse()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);

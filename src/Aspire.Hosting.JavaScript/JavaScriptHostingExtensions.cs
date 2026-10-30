@@ -3078,9 +3078,14 @@ public static partial class JavaScriptHostingExtensions
                 await installerStartLock.WaitAsync(cancellationToken).ConfigureAwait(false);
                 try
                 {
+                    // Resources are initialized concurrently, so the parent can be started before the installer
+                    // publishes its initial state. Wait for that state rather than treating it as already started.
                     var notificationService = e.Services.GetRequiredService<ResourceNotificationService>();
-                    if (!notificationService.TryGetCurrentState(installer.Name, out var installerEvent) ||
-                        installerEvent.Snapshot.State?.Text != KnownResourceStates.NotStarted)
+                    var installerEvent = await notificationService.WaitForResourceAsync(
+                        installer.Name,
+                        re => !string.IsNullOrEmpty(re.Snapshot.State?.Text),
+                        cancellationToken).ConfigureAwait(false);
+                    if (installerEvent.Snapshot.State?.Text != KnownResourceStates.NotStarted)
                     {
                         return;
                     }
