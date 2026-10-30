@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
@@ -20,21 +21,15 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// They are marked as outerloop tests to avoid slowing down regular CI.
 /// </remarks>
 [OuterloopTest("Requires network access to fetch aspire.dev documentation")]
-public partial class McpDocsE2ETests : IAsyncLifetime
+public partial class McpDocsE2ETests(McpDocsE2ETests.CliBuildFixture cliBuild) : IAsyncLifetime, IClassFixture<McpDocsE2ETests.CliBuildFixture>
 {
     private McpClient? _mcpClient;
 
     public async ValueTask InitializeAsync()
     {
-        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var cliProjectPath = Path.Combine(repoRoot, "src", "Aspire.Cli", "Aspire.Cli.csproj");
-
-        if (!File.Exists(cliProjectPath))
-        {
-            throw new InvalidOperationException($"Could not find CLI project at: {cliProjectPath}");
-        }
-
-        string[] arguments = ["run", "--project", cliProjectPath, "--", "agent", "mcp"];
+        // The CLI is built once by the class fixture. Launching it with --no-build keeps compilation out of
+        // McpClient.CreateAsync, whose initialization timeout should only cover the server's MCP handshake.
+        string[] arguments = ["run", "--no-build", "--project", cliBuild.CliProjectPath, "--", "agent", "mcp"];
 
         var options = new StdioClientTransportOptions
         {
@@ -312,4 +307,57 @@ public partial class McpDocsE2ETests : IAsyncLifetime
 
     [GeneratedRegex(@"\*\*Slug:\*\* `([^`]+)`")]
     private static partial Regex SlugRegex();
+
+    /// <summary>
+    /// Builds the Aspire CLI from source once for all tests in the class.
+    /// </summary>
+    /// <remarks>
+    /// CI installs the CLI from an archive and does not build src/Aspire.Cli, so the first <c>dotnet run</c>
+    /// would otherwise compile the CLI while the MCP client is waiting for the server to initialize.
+    /// </remarks>
+    public sealed class CliBuildFixture : IAsyncLifetime
+    {
+        public string CliProjectPath { get; } = Path.Combine(CliE2ETestHelpers.GetRepoRoot(), "src", "Aspire.Cli", "Aspire.Cli.csproj");
+
+        public async ValueTask InitializeAsync()
+        {
+            if (!File.Exists(CliProjectPath))
+            {
+                throw new InvalidOperationException($"Could not find CLI project at: {CliProjectPath}");
+            }
+
+            var startInfo = new ProcessStartInfo("dotnet")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add("build");
+            startInfo.ArgumentList.Add(CliProjectPath);
+            startInfo.ArgumentList.Add("-nologo");
+
+            using var process = Process.Start(startInfo)
+                ?? throw new InvalidOperationException("Failed to start 'dotnet build' for the Aspire CLI.");
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+
+            try
+            {
+                await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(entireProcessTree: true);
+                throw;
+            }
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    $"'dotnet build {CliProjectPath}' failed with exit code {process.ExitCode}.{Environment.NewLine}{await stdout}{Environment.NewLine}{await stderr}");
+            }
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
 }
