@@ -16,6 +16,100 @@ namespace Aspire.Hosting.Tests;
 public class ResourceCommandAnnotationTests
 {
     [Theory]
+    [InlineData("Pending", "start", ResourceCommandState.Disabled)]
+    [InlineData("Pending", "stop", ResourceCommandState.Disabled)]
+    [InlineData("Pending", "restart", ResourceCommandState.Disabled)]
+    [InlineData("Pending", "reset-volumes", ResourceCommandState.Disabled)]
+    [InlineData("Running", "start", ResourceCommandState.Disabled)]
+    [InlineData("Running", "stop", ResourceCommandState.Disabled)]
+    [InlineData("Running", "restart", ResourceCommandState.Disabled)]
+    [InlineData("Running", "reset-volumes", ResourceCommandState.Disabled)]
+    [InlineData("Failed", "start", ResourceCommandState.Hidden)]
+    [InlineData("Failed", "stop", ResourceCommandState.Enabled)]
+    [InlineData("Failed", "restart", ResourceCommandState.Enabled)]
+    [InlineData("Failed", "reset-volumes", ResourceCommandState.Enabled)]
+    [InlineData("Succeeded", "start", ResourceCommandState.Hidden)]
+    [InlineData("Succeeded", "stop", ResourceCommandState.Enabled)]
+    [InlineData("Succeeded", "restart", ResourceCommandState.Enabled)]
+    [InlineData("Succeeded", "reset-volumes", ResourceCommandState.Enabled)]
+    public void ResetVolumesCommand_DisablesLifecycleOnlyDuringActiveOperation(string resetState, string commandName, ResourceCommandState expected)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddContainer("database", "image").WithVolume("data", "/data").Resource;
+        resource.AddLifeCycleCommands();
+        var command = resource.Annotations.OfType<ResourceCommandAnnotation>().Single(c => c.Name == commandName);
+        using var services = new ServiceCollection().BuildServiceProvider();
+
+        Assert.Equal(expected, command.UpdateState(new UpdateCommandStateContext
+        {
+            ResourceSnapshot = new CustomResourceSnapshot
+            {
+                ResourceType = "container",
+                State = KnownResourceStates.Running,
+                Properties = [new(KnownProperties.Container.VolumeResetState, resetState)]
+            },
+            Services = services
+        }));
+    }
+
+    [Theory]
+    [InlineData("container", true)]
+    [InlineData("container", false)]
+    [InlineData("executable", true)]
+    [InlineData("executable", false)]
+    [InlineData("project", true)]
+    [InlineData("project", false)]
+    public void ResetVolumesCommand_RegisteredOnlyForVolumesAcrossComputeTypes(string resourceType, bool hasVolume)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        IResource resource = resourceType switch
+        {
+            "container" => builder.AddContainer("service", "image").Resource,
+            "executable" => builder.AddExecutable("service", "command", ".").Resource,
+            _ => builder.AddProject<Projects.ServiceA>("service", launchProfileName: null).Resource
+        };
+        resource.Annotations.Add(new ContainerMountAnnotation(hasVolume ? "data" : Path.GetFullPath("data"), "/data", hasVolume ? ContainerMountType.Volume : ContainerMountType.BindMount, isReadOnly: false));
+        resource.AddLifeCycleCommands();
+
+        Assert.Equal(hasVolume, resource.Annotations.OfType<ResourceCommandAnnotation>().Any(c => c.Name == KnownResourceCommands.ResetVolumesCommand));
+    }
+
+    [Theory]
+    [InlineData("Running", ResourceCommandState.Enabled)]
+    [InlineData("Exited", ResourceCommandState.Enabled)]
+    [InlineData("Starting", ResourceCommandState.Disabled)]
+    [InlineData("Stopping", ResourceCommandState.Disabled)]
+    [InlineData("Waiting", ResourceCommandState.Disabled)]
+    [InlineData("Building", ResourceCommandState.Disabled)]
+    [InlineData("RuntimeUnhealthy", ResourceCommandState.Disabled)]
+    [InlineData(null, ResourceCommandState.Disabled)]
+    public void ResetVolumesCommand_StateAndConfirmation(string? state, ResourceCommandState expected)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddContainer("database", "image").WithVolume("data", "/data").Resource;
+        resource.AddLifeCycleCommands();
+        var command = resource.Annotations.OfType<ResourceCommandAnnotation>().Single(c => c.Name == KnownResourceCommands.ResetVolumesCommand);
+        using var services = new ServiceCollection().BuildServiceProvider();
+
+        Assert.Equal(CommandStrings.ResetVolumesConfirmation, command.ConfirmationMessage);
+        Assert.Equal(expected, command.UpdateState(new UpdateCommandStateContext
+        {
+            ResourceSnapshot = new CustomResourceSnapshot { ResourceType = "container", Properties = [], State = state },
+            Services = services
+        }));
+    }
+
+    [Fact]
+    public void ResetVolumesCommand_NotAddedForBindMounts()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddContainer("database", "image").WithBindMount(Path.GetFullPath("data"), "/data").Resource;
+        resource.AddLifeCycleCommands();
+
+        Assert.Equal(["start", "stop", "restart"], resource.Annotations.OfType<ResourceCommandAnnotation>().Select(c => c.Name));
+    }
+
+    [Theory]
     [InlineData("start", "Starting", ResourceCommandState.Disabled)]
     [InlineData("start", "Stopping", ResourceCommandState.Hidden)]
     [InlineData("start", "Running", ResourceCommandState.Hidden)]

@@ -586,6 +586,9 @@ internal static class ContainerState
     // Container finished execution
     public const string Exited = "Exited";
 
+    // The Container API object exists, but its physical container has been removed.
+    public const string NotFound = "NotFound";
+
     // Container is in the process of stopping (waiting for container processes to exit, etc.).
     public const string Stopping = "Stopping";
 

@@ -84,6 +84,7 @@ public class ResourceSnapshotMapperTests
                     Name = "stop",
                     State = "Enabled",
                     Description = "Stop",
+                    ConfirmationMessage = "Stop this resource?",
                     Visibility = KnownCommandVisibility.Api,
                     ArgumentInputs =
                     [
@@ -134,6 +135,7 @@ public class ResourceSnapshotMapperTests
 
         var stopCommand = command.Value;
         Assert.Equal("Enabled", stopCommand.State);
+        Assert.Equal("Stop this resource?", stopCommand.ConfirmationMessage);
         Assert.Equal(KnownCommandVisibility.Api, stopCommand.Visibility);
         var argumentInput = Assert.Single(stopCommand.ArgumentInputs!);
         Assert.Equal("selector", argumentInput.Name);

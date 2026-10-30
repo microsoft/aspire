@@ -122,6 +122,7 @@ internal static class ResourceSnapshotMapper
                 {
                     DisplayName = string.IsNullOrWhiteSpace(c.command.DisplayName) ? null : c.command.DisplayName.Trim(),
                     Description = c.command.Description,
+                    ConfirmationMessage = c.command.ConfirmationMessage,
                     Visibility = IsDefaultCommandVisibility(c.command.Visibility) ? null : c.command.Visibility,
                     State = c.command.State,
                     SortOrder = c.index,

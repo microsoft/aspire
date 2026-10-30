@@ -9,6 +9,7 @@ export interface ResourceUrlJson {
 }
 
 export interface ResourceCommandJson {
+    confirmationMessage?: string | null;
     displayName?: string | null;
     description: string | null;
     visibility?: string | null;

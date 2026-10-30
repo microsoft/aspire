@@ -17,6 +17,7 @@ import {
     resourceCommandOutputOpenFailed,
     resourceCommandRunning,
     resourceCommandSucceeded,
+    yesLabel,
 } from '../loc/strings';
 
 // Narrow slice of AppHostDataRepository used to execute resource commands. Depending on the
@@ -37,6 +38,7 @@ export interface ResourceCommandExecutionRequest {
     appHostPath?: string;
     // Extra CLI tokens collected from argument prompts (already include the `--` delimiter).
     additionalArgs?: readonly string[];
+    confirmationMessage?: string | null;
 }
 
 export interface ResourceCommandExecutionOutcome {
@@ -59,6 +61,17 @@ export async function executeResourceCommand(
     request: ResourceCommandExecutionRequest): Promise<ResourceCommandExecutionOutcome> {
 
     const displayName = request.displayName ?? request.resourceName;
+    let additionalArgs = request.additionalArgs ?? [];
+    if (request.confirmationMessage?.trim()) {
+        const confirmation = await vscode.window.showWarningMessage(request.confirmationMessage, { modal: true }, { title: yesLabel });
+        if (confirmation?.title !== yesLabel) {
+            throw new vscode.CancellationError();
+        }
+
+        // Only newer CLIs emit confirmationMessage, so older CLI versions never receive
+        // the new --yes option. Place it before the resource-argument delimiter.
+        additionalArgs = ['--yes', ...additionalArgs];
+    }
 
     return await vscode.window.withProgress(
         {
@@ -73,7 +86,7 @@ export async function executeResourceCommand(
                     request.resourceName,
                     request.appHostPath,
                     request.commandName,
-                    request.additionalArgs ?? [],
+                    additionalArgs,
                     token);
             } catch (error) {
                 if (isCancellationError(error)) {

@@ -221,6 +221,12 @@ internal sealed class ResourceRelationshipJson
 internal sealed class ResourceCommandJson
 {
     /// <summary>
+    /// The warning to confirm before executing the command.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ConfirmationMessage { get; set; }
+
+    /// <summary>
     /// The display name of the command.
     /// </summary>
     public string? DisplayName { get; set; }

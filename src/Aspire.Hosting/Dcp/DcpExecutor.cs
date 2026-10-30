@@ -47,6 +47,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
     private readonly DistributedApplicationExecutionContext _executionContext;
     private readonly DcpAppResourceStore _appResources;
     private readonly IUserSecretsManager _userSecretsManager;
+    private readonly IAspireStore _aspireStore;
 
     // Has an entry if we raised ResourceEndpointsAllocatedEvent for a resource with a given name.
     // We want to ensure we raise the event only once for each app model resource.
@@ -92,7 +93,8 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                         ContainerNetworkEndpointProvisioner containerNetworkEndpointProvisioner,
                         ProfilingTelemetry profilingTelemetry,
                         ProxylessEndpointPortAllocator proxylessEndpointPortAllocator,
-                        IUserSecretsManager userSecretsManager)
+                        IUserSecretsManager userSecretsManager,
+                        IAspireStore aspireStore)
     {
         _distributedApplicationLogger = distributedApplicationLogger;
         _kubernetesService = kubernetesService;
@@ -108,6 +110,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         _executionContext = executionContext;
         _appResources = appResources;
         _userSecretsManager = userSecretsManager;
+        _aspireStore = aspireStore;
 
         _resourceWatcher = new DcpResourceWatcher(logger, kubernetesService, loggerService, executorEvents, model, _appResources, profilingTelemetry, _shutdownCancellation.Token);
 
@@ -1233,12 +1236,19 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         }
     }
 
-    public async Task StartResourceAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
+    public Task StartResourceAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
+        => StartResourceAsync(resourceReference, resetVolumes: false, cancellationToken);
+
+    public Task ResetResourceVolumesAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
+        => StartResourceAsync(resourceReference, resetVolumes: true, cancellationToken);
+
+    private async Task StartResourceAsync(IResourceReference resourceReference, bool resetVolumes, CancellationToken cancellationToken)
     {
         var appResource = (IAppResource)resourceReference;
         var resourceType = GetResourceType(appResource.DcpResource, resourceReference.ModelResource);
         var resourceLogger = _loggerService.GetLogger(resourceReference.DcpResourceName);
         using var activity = ProfilingTelemetry.StartResourceStart(_configuration, resourceReference.ModelResource, appResource.DcpResourceKind, appResource.DcpResourceName, resourceType);
+        var startAttempted = false;
 
         try
         {
@@ -1248,18 +1258,53 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
             await appResource.Initialized.WaitAsync(cancellationToken).ConfigureAwait(false);
             using var _ = await ConcurrencyUtils.AcquireAllAsync([appResource.SerializedOpSemaphore], cancellationToken).ConfigureAwait(false);
 
+            if (resetVolumes)
+            {
+                ValidateVolumeReset(resourceReference);
+                if (appResource.DcpResource is Container container)
+                {
+                    await ResetContainerVolumesAsync(container, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+                else if (appResource.DcpResource is Executable executable)
+                {
+                    var stopped = await DeleteResourceRetryPipeline.ExecuteAsync(async attemptCancellationToken =>
+                    {
+                        var patch = CreatePatch(executable, obj => obj.Spec.Stop = true);
+                        await _kubernetesService.PatchAsync(executable, patch, attemptCancellationToken).ConfigureAwait(false);
+                        var observed = await _kubernetesService.GetAsync<Executable>(executable.Metadata.Name, cancellationToken: attemptCancellationToken).ConfigureAwait(false);
+                        return observed.Status?.State is ExecutableState.Finished or ExecutableState.Terminated;
+                    }, cancellationToken).ConfigureAwait(false);
+                    if (!stopped)
+                    {
+                        throw new DistributedApplicationException($"Failed to stop '{resourceReference.DcpResourceName}' before resetting its volumes.");
+                    }
+
+                    foreach (var mount in resourceReference.ModelResource.Annotations.OfType<ContainerMountAnnotation>()
+                        .Where(m => m.Type == ContainerMountType.Volume && !string.IsNullOrEmpty(m.Source))
+                        .DistinctBy(m => m.Source, StringComparer.Ordinal))
+                    {
+                        VolumeMountPathResolver.ResetLocalPath(_aspireStore, resourceReference.ModelResource, mount.Source!);
+                    }
+                }
+                else
+                {
+                    throw new DistributedApplicationException($"Resource '{resourceReference.DcpResourceName}' does not support volume reset.");
+                }
+            }
+            startAttempted = true;
             // For resources that need delete/recreate startup, raise the starting event after deletion. This is required because
             // deleting the existing DCP object temporarily overrides the status with a terminal state, such as "Exited".
             switch (resourceReference)
             {
                 // We need to handle explicit start persistent resources specially on first launch as they may already be running, so we need to register them with DCP to discover their status.
-                case RenderedModelResource<Container> { DcpResource.Spec.Start: false } cr when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(cr.ModelResource, cr.DcpResource.Spec.Start):
+                case RenderedModelResource<Container> { DcpResource.Spec.Start: false } cr when !resetVolumes && !DcpModelUtilities.ShouldDeferCreateForExplicitStart(cr.ModelResource, cr.DcpResource.Spec.Start):
                     await PublishConnectionStringAvailableEventAsync(cr.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, cr.ModelResource, cr.DcpResourceName)).ConfigureAwait(false);
                     await PatchDcpObjectAsync(cr.DcpResource, static c => c.Spec.Start = true, cancellationToken).ConfigureAwait(false);
                     break;
 
-                case RenderedModelResource<Executable> { DcpResource.Spec.Start: false } er when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(er.ModelResource, er.DcpResource.Spec.Start):
+                case RenderedModelResource<Executable> { DcpResource.Spec.Start: false } er when !resetVolumes && !DcpModelUtilities.ShouldDeferCreateForExplicitStart(er.ModelResource, er.DcpResource.Spec.Start):
                     await PublishConnectionStringAvailableEventAsync(er.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, er.ModelResource, er.DcpResourceName)).ConfigureAwait(false);
                     await PatchDcpObjectAsync(er.DcpResource, static e => e.Spec.Start = true, cancellationToken).ConfigureAwait(false);
@@ -1301,11 +1346,167 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
             {
                 // FailedToApplyEnvironmentException is logged with actionable details where it is detected,
                 // so avoid duplicating that entry with a generic stack trace.
-                _logger.LogError(ex, "Failed to start resource {ResourceName}", resourceReference.ModelResource.Name);
+                if (resetVolumes)
+                {
+                    _logger.LogError(ex, "Failed to reset volumes for resource {ResourceName}", resourceReference.ModelResource.Name);
+                }
+                else
+                {
+                    _logger.LogError(ex, "Failed to start resource {ResourceName}", resourceReference.ModelResource.Name);
+                }
             }
 
-            await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName, ex.Message)).ConfigureAwait(false);
+            // A refused lifecycle operation must not turn an unchanged resource into FailedToStart.
+            if (startAttempted)
+            {
+                await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName, ex.Message)).ConfigureAwait(false);
+            }
             throw;
+        }
+    }
+
+    private void ValidateVolumeReset(IResourceReference resourceReference)
+    {
+        var resource = resourceReference.ModelResource;
+        var mounts = resource.Annotations.OfType<ContainerMountAnnotation>().Where(m => m.Type == ContainerMountType.Volume).ToArray();
+        if (mounts.Length == 0)
+        {
+            throw new DistributedApplicationException($"Resource '{resource.Name}' has no volumes to reset.");
+        }
+
+        var replicas = _appResources.Get().OfType<IResourceReference>()
+            .Where(r => ReferenceEquals(r.ModelResource, resource) && r.DcpResourceName != resourceReference.DcpResourceName)
+            .Where(r => r is RenderedModelResource<Container> or RenderedModelResource<Executable>)
+            .Select(r => r.DcpResourceName).ToArray();
+        if (replicas.Length > 0)
+        {
+            throw new DistributedApplicationException($"Volumes for '{resource.Name}' are shared with replicas: {string.Join(", ", replicas)}. Shared volumes cannot be reset.");
+        }
+
+        if (resourceReference is RenderedModelResource<Container>)
+        {
+            var names = mounts.Where(m => !string.IsNullOrEmpty(m.Source)).Select(m => m.Source).ToHashSet(StringComparer.Ordinal);
+            var consumers = _model.GetContainerResources()
+                .Where(r => !ReferenceEquals(r, resource))
+                .Where(r => r.Annotations.OfType<ContainerMountAnnotation>().Any(m => m.Type == ContainerMountType.Volume && names.Contains(m.Source)))
+                .Select(r => r.Name).ToArray();
+            if (consumers.Length > 0)
+            {
+                throw new DistributedApplicationException($"Volumes for '{resource.Name}' are shared with resources: {string.Join(", ", consumers)}. Shared volumes cannot be reset.");
+            }
+        }
+    }
+
+    private async Task ResetContainerVolumesAsync(Container container, CancellationToken cancellationToken)
+    {
+        var current = await _kubernetesService.GetAsync<Container>(container.Metadata.Name, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(current.Metadata.Uid))
+        {
+            throw new DistributedApplicationException($"The DCP runtime did not provide the identity of container '{container.Metadata.Name}'. Its volumes cannot be reset safely.");
+        }
+
+        var previousContainerId = current.Status?.ContainerId;
+        var operation = ContainerVolumeReset.Create($"volume-reset-{Guid.NewGuid():N}", current.Metadata.Name, current.Metadata.Uid);
+        ContainerVolumeReset accepted;
+        try
+        {
+            accepted = await _kubernetesService.CreateAsync(operation, cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpOperationException ex) when (ex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            throw new DistributedApplicationException("The DCP runtime does not support targeted volume reset. Use a DCP build with ContainerVolumeReset support.", ex);
+        }
+        catch (HttpOperationException ex) when (ex.Response.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            // The API client retries connectivity failures with the same operation name.
+            // A lost create response can therefore become AlreadyExists; observe that
+            // attempt instead of submitting another destructive operation.
+            try
+            {
+                accepted = await _kubernetesService.GetAsync<ContainerVolumeReset>(operation.Metadata.Name, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            catch (HttpOperationException lookupException) when (lookupException.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                throw new DistributedApplicationException($"Volume reset operation '{operation.Metadata.Name}' was accepted but is no longer available. Its outcome is unknown; inspect the container and storage before submitting another reset.", lookupException);
+            }
+            if (accepted.Spec.ContainerName != operation.Spec.ContainerName || accepted.Spec.ContainerUid != operation.Spec.ContainerUid)
+            {
+                throw new DistributedApplicationException($"Volume reset operation '{operation.Metadata.Name}' targets a different container. Its outcome cannot be used for this reset.", ex);
+            }
+        }
+
+        _resourceWatcher.WatchContainerVolumeResets();
+        if (string.IsNullOrEmpty(accepted.Metadata.Uid))
+        {
+            throw new DistributedApplicationException($"The DCP runtime did not provide the identity of volume reset operation '{operation.Metadata.Name}'. The accepted operation may still be running; inspect its outcome before retrying.");
+        }
+        // An accepted operation outlives its caller. Never delete an active operation on
+        // cancellation or timeout: DELETE would cancel destructive work rather than just its watch.
+        // DCP retains terminal results and garbage-collects abandoned operations.
+        var observed = await WaitForStateAsync(
+            [accepted],
+            reset => reset.Metadata.Uid == accepted.Metadata.Uid ? reset.Status?.State : null,
+            [ContainerVolumeResetState.Succeeded, ContainerVolumeResetState.Failed],
+            TimeSpan.FromMinutes(2),
+            cancellationToken).ConfigureAwait(false);
+        var completed = observed.Single();
+        if (completed.Metadata.Uid != accepted.Metadata.Uid || completed.IsActive)
+        {
+            throw new DistributedApplicationException($"Volume reset operation '{accepted.Metadata.Name}' for '{container.Metadata.Name}' did not finish. The accepted operation may still be running; wait for it to finish before retrying.");
+        }
+
+        // Terminal cleanup is independent of caller cancellation and never deletes the
+        // Container or ContainerVolume objects. DCP resumes the existing lifecycle itself.
+        using var cleanupCancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdownCancellation.Token);
+        cleanupCancellation.CancelAfter(TimeSpan.FromSeconds(10));
+        await DeleteCompletedVolumeResetAsync(completed, cleanupCancellation.Token).ConfigureAwait(false);
+
+        var result = completed.Status!;
+        if (result.State == ContainerVolumeResetState.Failed)
+        {
+            var message = result.Message ?? $"Volume reset for '{container.Metadata.Name}' failed.";
+            if (result.Consumers is { Count: > 0 })
+            {
+                message += $" Consumers: {string.Join(", ", result.Consumers.Select(consumer => $"'{consumer.ContainerName ?? consumer.ContainerId ?? "(unknown)"}' (volume '{consumer.VolumeName ?? "(unknown)"}')"))}.";
+            }
+            if (result.ContainerRemoved)
+            {
+                message += " The container was removed; some volume data may already have been deleted. DCP repairs owned storage before allowing startup.";
+            }
+            throw new DistributedApplicationException($"{message} Resolve the cause before retrying.");
+        }
+
+        var resumed = await _kubernetesService.GetAsync<Container>(current.Metadata.Name, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (resumed.Spec.Start is not false && resumed.Spec.Stop is not true)
+        {
+            var running = await WaitForStateAsync(
+                [resumed],
+                c => c.Metadata.Uid == current.Metadata.Uid &&
+                    c.Status?.ContainerId is { Length: > 0 } containerId &&
+                    containerId != previousContainerId ? c.Status.State : null,
+                [ContainerState.Running],
+                TimeSpan.FromMinutes(2),
+                cancellationToken).ConfigureAwait(false);
+            var restarted = running.Single();
+            if (restarted.Metadata.Uid != current.Metadata.Uid ||
+                restarted.Status?.State != ContainerState.Running ||
+                string.IsNullOrEmpty(restarted.Status.ContainerId) ||
+                restarted.Status.ContainerId == previousContainerId)
+            {
+                throw new DistributedApplicationException($"Volumes for '{container.Metadata.Name}' were reset, but the container did not resume running. Inspect the resource's startup diagnostics.");
+            }
+        }
+    }
+
+    private async Task DeleteCompletedVolumeResetAsync(ContainerVolumeReset operation, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _kubernetesService.DeleteAsync<ContainerVolumeReset>(operation.Metadata.Name, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpOperationException ex) when (ex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _logger.LogDebug("Completed volume reset operation '{OperationName}' was already deleted.", operation.Metadata.Name);
         }
     }
 
