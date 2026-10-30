@@ -23,6 +23,10 @@ internal static class TerminalWebSocketProxy
     private static readonly TimeSpan s_handshakeTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan s_sendTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan s_closeTimeout = TimeSpan.FromSeconds(2);
+    // Waiting for the browser's Close reply delays only resource cleanup, not the
+    // status the browser already received. Aborting too early resets the TCP
+    // connection under the browser's in-flight reply, so allow a generous grace.
+    private static readonly TimeSpan s_closeHandshakeTimeout = TimeSpan.FromSeconds(10);
 
     public static void MapTerminalWebSocket(this WebApplication app)
     {
@@ -495,7 +499,7 @@ internal static class TerminalWebSocketProxy
             return;
         }
 
-        using var timeout = new CancellationTokenSource(s_closeTimeout);
+        using var timeout = new CancellationTokenSource(s_closeHandshakeTimeout);
         try
         {
             if (receive is null)

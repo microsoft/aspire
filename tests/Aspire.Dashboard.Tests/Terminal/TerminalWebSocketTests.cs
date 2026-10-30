@@ -778,6 +778,29 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
         Assert.Equal(useGrpc ? 1 : 0, host.DisposedAttachments);
     }
 
+    [Fact]
+    public async Task BrowserView_DelayedCloseReplyCompletesCloseHandshake()
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var session = host.CreateViewSession(readOnly: false);
+        using var browser = await host.ConnectBrowserAsync(session, timeout.Token);
+        await ReadUntilAsync(browser, _ => true, timeout.Token);
+
+        await host.Presentation.DisposeAsync();
+        var closed = await ReadCloseAsync(browser, timeout.Token);
+        Assert.Equal(WebSocketCloseStatus.EndpointUnavailable, closed.CloseStatus);
+
+        // Model a browser (or a loaded test machine) whose Close reply arrives after the
+        // 2 second drain/send grace but within the close handshake timeout. The dashboard
+        // must not reset the connection under the in-flight reply.
+        await Task.Delay(TimeSpan.FromSeconds(3), timeout.Token);
+        await browser.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", timeout.Token);
+        Assert.Equal(WebSocketState.Closed, browser.State);
+        await host.WaitForAttachmentsReleasedAsync(timeout.Token);
+    }
+
     private static async Task<string?> ReadFirstLogicalLineAsync(WebSocket socket, int requestId, CancellationToken cancellationToken)
     {
         // Scroll to retained history, rather than only testing the freshly replayed live screen.
