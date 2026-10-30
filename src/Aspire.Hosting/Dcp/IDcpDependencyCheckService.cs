@@ -40,8 +40,11 @@ internal sealed class DcpContainersInfo
     [JsonPropertyName("hostName")]
     public string? HostName { get; set; }
 
+    // DCP can report an empty "hostName" (not just omit it) when it cannot determine one, e.g. when no
+    // container runtime is available. An empty value must fall back to the runtime default, otherwise
+    // container-facing URLs are built with an empty host.
     internal string ContainerHostName =>
-        HostName ?? Runtime switch
+        !string.IsNullOrEmpty(HostName) ? HostName : Runtime switch
         {
             KnownContainerRuntimes.Podman => "host.containers.internal",
             _ => "host.docker.internal",

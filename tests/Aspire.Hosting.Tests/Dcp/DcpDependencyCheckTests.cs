@@ -97,4 +97,16 @@ public sealed class DcpDependencyCheckTests
         Assert.Equal(LogLevel.Warning, warning.Level);
         Assert.Equal($"{message} For more information, visit: {linkUrl}", warning.Message);
     }
+
+    [Theory]
+    [InlineData(null, "docker", "host.docker.internal")]
+    [InlineData("", "docker", "host.docker.internal")]
+    [InlineData("", "podman", "host.containers.internal")]
+    [InlineData("custom.host", "docker", "custom.host")]
+    public void ContainerHostName_FallsBackToRuntimeDefaultWhenHostNameIsNullOrEmpty(string? hostName, string runtime, string expected)
+    {
+        var info = new DcpContainersInfo { Runtime = runtime, HostName = hostName };
+
+        Assert.Equal(expected, info.ContainerHostName);
+    }
 }
