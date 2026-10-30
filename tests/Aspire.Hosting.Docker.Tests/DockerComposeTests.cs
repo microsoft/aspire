@@ -12,6 +12,7 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests;
+using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
@@ -410,9 +411,10 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
         // Use a unique project name to avoid conflicts with other tests
         var projectId = Guid.NewGuid().ToString("N")[..8];
 
-        // Use a random port in the dynamic/private port range (49152-65535) to avoid conflicts
-        var hostPort = Random.Shared.Next(49152, 65535);
-        outputHelper.WriteLine($"Using random host port: {hostPort}");
+        // Docker publishes the port on all interfaces, so probe 0.0.0.0. The helper's default range
+        // stays outside the OS ephemeral range, where other tests' sockets can already hold the port.
+        var hostPort = await Network.GetAvailablePortAsync(address: "0.0.0.0");
+        outputHelper.WriteLine($"Using available host port: {hostPort}");
 
         // Helper to create a builder with the same configuration
         IDistributedApplicationTestingBuilder CreateBuilder(string step)
