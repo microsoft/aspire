@@ -171,6 +171,10 @@
   <data name="InitCommand_TelemetryHookSkippedUnexpectedShape" xml:space="preserve">
     <value>Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</value>
   </data>
+  <data name="TelemetryHookScriptUpdateFailed" xml:space="preserve">
+    <value>Could not update the telemetry hook script '{0}': {1}</value>
+    <comment>{0} is the hook script path. {1} is the underlying error message.</comment>
+  </data>
   <data name="InitCommand_TelemetryHookWriteFailed" xml:space="preserve">
     <value>Skipped the telemetry hook for {0} because its configuration could not be written.</value>
   </data>
