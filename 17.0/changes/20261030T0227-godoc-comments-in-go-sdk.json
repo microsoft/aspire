@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Go SDK generator now emits godoc comments from ATS documentation metadata, so IDE hover and `go doc` show API documentation for generated Aspire types and members.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📚",
+  "firstMergedAt": "2026-10-30T02:27:04Z",
+  "lastMergedAt": "2026-10-30T02:27:04Z",
+  "name": "Godoc comments in the generated Go SDK",
+  "owner": "IEvangelist",
+  "prs": [
+    21197
+  ]
+}

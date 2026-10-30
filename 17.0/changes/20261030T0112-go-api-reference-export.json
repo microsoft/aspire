@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "`aspire sdk export --language go` now exports a Go API reference for the Aspire SDK, alongside the existing language exporters.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🐹",
+  "firstMergedAt": "2026-10-30T01:12:10Z",
+  "lastMergedAt": "2026-10-30T01:12:10Z",
+  "name": "Go API reference export",
+  "owner": "IEvangelist",
+  "prs": [
+    21195
+  ]
+}

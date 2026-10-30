@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Godoc comments in the generated Go SDK",
+  "mergedAt": "2026-10-30T02:27:04Z",
+  "number": 21197,
+  "runDate": "2026-10-30T06:05:00Z",
+  "status": "included",
+  "title": "Emit godoc from ATS documentation metadata in the Go SDK generator"
+}

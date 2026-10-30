@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The VS Code extension can now launch and debug Go AppHosts.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🐞",
+  "firstMergedAt": "2026-10-30T02:26:31Z",
+  "lastMergedAt": "2026-10-30T02:26:31Z",
+  "name": "Launch and debug Go AppHosts from VS Code",
+  "owner": "IEvangelist",
+  "prs": [
+    21187
+  ]
+}

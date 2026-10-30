@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "An experimental redesigned dashboard adds a home view, a resource pane with search, filters and tag grouping, multiple resource overview layouts, parameter editing, metric cards with sparklines, and recorded runs. You can switch back to the previous dashboard from Settings.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "✨",
+  "firstMergedAt": "2026-10-30T04:47:48Z",
+  "lastMergedAt": "2026-10-30T04:47:48Z",
+  "name": "Modernized dashboard experience",
+  "owner": "sebastienros",
+  "prs": [
+    21412
+  ]
+}

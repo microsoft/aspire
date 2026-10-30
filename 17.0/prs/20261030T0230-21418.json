@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Trust confirmation when adding template sources",
+  "mergedAt": "2026-10-30T02:30:19Z",
+  "number": 21418,
+  "runDate": "2026-10-30T06:05:00Z",
+  "status": "included",
+  "title": "Require trust confirmation when adding template sources"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Go API reference export",
+  "mergedAt": "2026-10-30T01:12:10Z",
+  "number": 21195,
+  "runDate": "2026-10-30T06:05:00Z",
+  "status": "included",
+  "title": "Add `aspire sdk export -l go` (Go API reference exporter)"
+}

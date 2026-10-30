@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire template source add` now asks you to confirm that you trust the source (showing its repository URL or local path, defaulting to No) before saving it, since templates can run code.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-10-30T02:30:19Z",
+  "lastMergedAt": "2026-10-30T02:30:19Z",
+  "name": "Trust confirmation when adding template sources",
+  "owner": "mitchdenny",
+  "prs": [
+    21418
+  ]
+}
