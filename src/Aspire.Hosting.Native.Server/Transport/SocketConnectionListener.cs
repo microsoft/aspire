@@ -16,6 +16,7 @@ internal static class SocketConnectionListener
         ArgumentOutOfRangeException.ThrowIfLessThan(maximumConnections, 1);
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var clients = new List<Task>();
+        var activeConnections = 0;
         try
         {
             while (!lifetime.IsCancellationRequested)
@@ -26,11 +27,12 @@ internal static class SocketConnectionListener
                     // Reap after accept: a client may have ended while accept was pending.
                     await Task.WhenAll(clients.Where(client => client.IsCompleted)).ConfigureAwait(false);
                     clients.RemoveAll(client => client.IsCompletedSuccessfully);
-                    if (clients.Count >= maximumConnections)
+                    if (Volatile.Read(ref activeConnections) >= maximumConnections)
                     {
                         socket.Dispose();
                         continue;
                     }
+                    Interlocked.Increment(ref activeConnections);
                     clients.Add(ServeAsync(socket));
                 }
                 catch
@@ -51,10 +53,9 @@ internal static class SocketConnectionListener
 
         async Task ServeAsync(Socket socket)
         {
-            using var owned = socket;
-            using var stream = new NetworkStream(socket, ownsSocket: false);
             try
             {
+                using var stream = new NetworkStream(socket, ownsSocket: false);
                 await serve(stream, lifetime.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
@@ -65,6 +66,13 @@ internal static class SocketConnectionListener
                 // Surface handler failures even when no further client connects.
                 await lifetime.CancelAsync().ConfigureAwait(false);
                 throw;
+            }
+            finally
+            {
+                // Release capacity before closing: a client that observes the close may reconnect at once,
+                // and this task does not complete until after the socket is closed.
+                Interlocked.Decrement(ref activeConnections);
+                socket.Dispose();
             }
         }
     }
