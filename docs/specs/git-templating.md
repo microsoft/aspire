@@ -327,7 +327,8 @@ generation retains native fallback behavior.
 This is a display-only host opt-in, not a new template expression language.
 Targets must be optional string parameters with an empty default, without a
 NuGet `valueSource` or reserved CLI projection. Source graphs may depend only on
-`name`, the omitted override parameter, and native `regex`/`coalesce` symbols.
+the engine's project-name parameter `name`, the omitted override parameter, and
+native `regex`/`coalesce` symbols. Templates must not redefine the `name` leaf.
 The omitted override may appear only as a coalesce source; `name` may appear as
 a regex source or coalesce fallback, but not as a coalesce source. These
 restrictions avoid previews that disagree with the engine's parameter-default

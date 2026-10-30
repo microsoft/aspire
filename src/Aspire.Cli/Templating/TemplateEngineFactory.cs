@@ -340,7 +340,7 @@ internal sealed partial class TemplateEngineFactory(
         TemplatePromptDefaults promptDefaults;
         try
         {
-            promptDefaults = TemplatePromptDefaults.Load(settings, template, hostConfiguration, cancellationToken);
+            promptDefaults = await TemplatePromptDefaults.LoadAsync(settings, template, hostConfiguration, cancellationToken);
         }
         catch (TemplateAuthoringException ex)
         {

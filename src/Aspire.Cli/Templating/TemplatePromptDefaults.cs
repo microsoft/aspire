@@ -16,7 +16,7 @@ internal sealed class TemplatePromptDefaults
 {
     private readonly Dictionary<string, List<(IGeneratedSymbolMacro Macro, IMacroConfig Config)>> _projections = new(StringComparer.Ordinal);
 
-    public static TemplatePromptDefaults Load(
+    public static async Task<TemplatePromptDefaults> LoadAsync(
         IEngineEnvironmentSettings settings, ITemplateInfo template, TemplateHostConfiguration hostConfiguration,
         CancellationToken cancellationToken)
     {
@@ -25,6 +25,14 @@ internal sealed class TemplatePromptDefaults
         {
             return defaults;
         }
+
+        if (!settings.Components.TryGetComponent(template.GeneratorId, out IGenerator? generator) || generator is null)
+        {
+            throw new InvalidOperationException($"Template generator '{template.GeneratorId}' is not registered.");
+        }
+
+        using var loadedTemplate = await generator.LoadTemplateAsync(settings, template, cancellationToken: cancellationToken)
+            ?? throw new FileNotFoundException(null, template.ConfigPlace);
 
         if (!settings.TryGetMountPoint(template.MountPointUri, out var mount) || mount is null)
         {
@@ -70,7 +78,18 @@ internal sealed class TemplatePromptDefaults
             void Validate(string symbolName)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (symbolName == "name" || validated.Contains(symbolName))
+                if (symbolName == "name")
+                {
+                    // Cached discovery metadata does not preserve IsName; use runtime definitions.
+                    if (!loadedTemplate.ParameterDefinitions.Any(parameter => parameter.Name == symbolName && parameter.IsName))
+                    {
+                        throw InvalidDefault(parameterName);
+                    }
+
+                    return;
+                }
+
+                if (validated.Contains(symbolName))
                 {
                     return;
                 }

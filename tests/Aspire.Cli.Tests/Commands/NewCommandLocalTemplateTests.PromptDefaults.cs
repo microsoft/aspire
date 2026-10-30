@@ -116,6 +116,9 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("nested-name-source")]
     [InlineData("regex-omitted-override")]
     [InlineData("coalesce-omitted-fallback")]
+    [InlineData("redefined-name-constant")]
+    [InlineData("redefined-name-random")]
+    [InlineData("redefined-name-parameter")]
     public async Task LocalTemplate_InvalidProjectDerivedDefaultsFailBeforePromptingOrWriting(string scenario)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -192,6 +195,18 @@ public partial class NewCommandLocalTemplateTests
                 symbols["nestedName"] = JsonNode.Parse(
                     """{"type":"generated","generator":"coalesce","parameters":{"sourceVariableName":"normalizedName","fallbackVariableName":"ShortName"}}""");
                 symbols["shortNameValue"]!["parameters"]!["fallbackVariableName"] = "nestedName";
+                break;
+            case "redefined-name-constant":
+                symbols["name"] = JsonNode.Parse(
+                    """{"type":"generated","generator":"constant","parameters":{"value":"DifferentName"}}""");
+                break;
+            case "redefined-name-random":
+                symbols["name"] = JsonNode.Parse(
+                    """{"type":"generated","generator":"random","parameters":{"low":1,"high":10}}""");
+                break;
+            case "redefined-name-parameter":
+                symbols["name"] = JsonNode.Parse(
+                    """{"type":"parameter","datatype":"string","defaultValue":"DifferentName"}""");
                 break;
         }
         await File.WriteAllTextAsync(templatePath, template.ToJsonString());
