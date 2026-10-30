@@ -1855,6 +1855,12 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                     exit 0
                 fi
                 if [ "$1" = "--yes" ] && { [ "$2" = "aspire.cli@13.5.0" ] || [ "$2" = "aspire.cli" ]; } && [ "$3" = "--" ] && [ "$4" = "setup" ] && [ "$5" = "--install-path" ]; then
+                    # Like the real CLI, setup validates the extracted layout through layout discovery,
+                    # which only probes ASPIRE_LAYOUT_PATH and the Aspire home for a DNX-hosted CLI.
+                    if [ "$6" != "${ASPIRE_LAYOUT_PATH:-}" ] && [ "$6" != "${ASPIRE_HOME:-$HOME/.aspire}" ]; then
+                        echo "Bundle was extracted to $6 but layout validation failed." >&2
+                        exit 1
+                    fi
                     mkdir -p "$6/bundle/dcp" "$6/bundle/managed" "$6/bundle/dashboard"
                     : > "$6/bundle/dcp/dcp"
                     : > "$6/bundle/managed/aspire-managed"

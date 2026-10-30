@@ -315,6 +315,12 @@ namespace Projects%3B
       <_AspireCliSetupArgument Include="DnxInstallPath" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == ''">
         <Value>$(_AspireCliSetupHome)</Value>
       </_AspireCliSetupArgument>
+      <!-- The CLI validates an extracted bundle through layout discovery, which does not probe custom
+           install paths. Point discovery at the version-specific pinned layout so setup can validate it. -->
+      <_AspireCliSetupEnvironmentVariable Remove="@(_AspireCliSetupEnvironmentVariable)" />
+      <_AspireCliSetupEnvironmentVariable Include="ASPIRE_LAYOUT_PATH" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == '' and '$(_AspireCliBundlePinnedVersion)' != ''">
+        <Value>$(_AspireCliSetupHome)</Value>
+      </_AspireCliSetupEnvironmentVariable>
     </ItemGroup>
 
     <!-- Script installs normally extract during installation. This fallback also covers older
@@ -324,6 +330,7 @@ namespace Projects%3B
             Condition="'$(_AspireCliSetupExecutable)' != '' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))" />
     <RunAspireCliCommand FileName="$(_AspireCliSetupExecutable)"
                          Arguments="@(_AspireCliSetupArgument)"
+                         EnvironmentVariables="@(_AspireCliSetupEnvironmentVariable)"
                          TimeoutMilliseconds="$(_AspireCliBundleSetupTimeout)"
                          Condition="'$(_AspireCliSetupExecutable)' != '' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
       <Output TaskParameter="ExitCode" PropertyName="_AspireCliSetupExitCode" />
