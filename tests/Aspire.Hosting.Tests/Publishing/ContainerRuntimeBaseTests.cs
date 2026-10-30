@@ -345,6 +345,57 @@ public class ContainerRuntimeBaseTests
         Assert.False(result.TryGetManifest("linux", "amd64", out _));
     }
 
+    [Fact]
+    public async Task LoginToRegistryAsync_SerializesOverlappingLoginsToDifferentRegistries()
+    {
+        var processRunner = new GatedProcessRunner();
+        var runtime = new TestContainerRuntime(processRunner);
+
+        var firstLogin = runtime.LoginToRegistryAsync("first.azurecr.io", "user", "first-password", CancellationToken.None);
+        var secondLogin = runtime.LoginToRegistryAsync("second.azurecr.io", "user", "second-password", CancellationToken.None);
+
+        // Both pipeline login steps have been invoked, but only the first login command may be updating credentials.
+        var first = Assert.Single(processRunner.Started);
+        Assert.Equal("first-password", first.Spec.StandardInputContent);
+        Assert.False(secondLogin.IsCompleted);
+
+        first.Complete();
+        await firstLogin.WaitAsync(TimeSpan.FromSeconds(30));
+
+        var second = await processRunner.WaitForStartedAsync(2).WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(2, processRunner.Started.Count);
+        Assert.Equal("second-password", second.Spec.StandardInputContent);
+        Assert.True(first.Disposed);
+
+        second.Complete();
+        await secondLogin.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(1, processRunner.MaxConcurrentProcesses);
+    }
+
+    [Fact]
+    public async Task LoginToRegistryAsync_CanceledWhileWaitingDoesNotStartLogin()
+    {
+        var processRunner = new GatedProcessRunner();
+        var runtime = new TestContainerRuntime(processRunner);
+        using var cts = new CancellationTokenSource();
+
+        var firstLogin = runtime.LoginToRegistryAsync("first.azurecr.io", "user", "first-password", CancellationToken.None);
+        var secondLogin = runtime.LoginToRegistryAsync("second.azurecr.io", "user", "second-password", cts.Token);
+
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => secondLogin).WaitAsync(TimeSpan.FromSeconds(30));
+
+        var first = Assert.Single(processRunner.Started);
+        first.Complete();
+        await firstLogin.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // A canceled waiter must not leave the login lock held.
+        var thirdLogin = runtime.LoginToRegistryAsync("third.azurecr.io", "user", "third-password", CancellationToken.None);
+        Assert.Equal(2, processRunner.Started.Count);
+        processRunner.Started[1].Complete();
+        await thirdLogin.WaitAsync(TimeSpan.FromSeconds(30));
+    }
+
     private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
     {
         protected override string RuntimeExecutable => runtimeExecutable ?? (OperatingSystem.IsWindows() ? "cmd" : "sh");
@@ -407,6 +458,89 @@ public class ContainerRuntimeBaseTests
 
         public Task<IReadOnlyList<ComposeServiceInfo>?> ComposeListServicesAsync(ComposeOperationContext context, CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<ComposeServiceInfo>?>(null);
+    }
+
+    private sealed class GatedProcessRunner : IProcessRunner
+    {
+        private readonly Lock _lock = new();
+        private int _activeProcesses;
+
+        public List<GatedProcess> Started { get; } = [];
+
+        private readonly List<(int Count, TaskCompletionSource<GatedProcess> Waiter)> _startWaiters = [];
+
+        public int MaxConcurrentProcesses { get; private set; }
+
+        public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
+        {
+            var process = new GatedProcess(processSpec, this);
+            List<TaskCompletionSource<GatedProcess>> satisfied = [];
+            lock (_lock)
+            {
+                Started.Add(process);
+                _activeProcesses++;
+                MaxConcurrentProcesses = Math.Max(MaxConcurrentProcesses, _activeProcesses);
+                foreach (var waiter in _startWaiters.Where(w => w.Count == Started.Count).ToList())
+                {
+                    _startWaiters.Remove(waiter);
+                    satisfied.Add(waiter.Waiter);
+                }
+            }
+
+            foreach (var waiter in satisfied)
+            {
+                waiter.TrySetResult(process);
+            }
+
+            return (process.Result, process);
+        }
+
+        public Task<GatedProcess> WaitForStartedAsync(int count)
+        {
+            lock (_lock)
+            {
+                if (Started.Count >= count)
+                {
+                    return Task.FromResult(Started[count - 1]);
+                }
+
+                var waiter = new TaskCompletionSource<GatedProcess>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _startWaiters.Add((count, waiter));
+                return waiter.Task;
+            }
+        }
+
+        private void OnDisposed()
+        {
+            lock (_lock)
+            {
+                _activeProcesses--;
+            }
+        }
+
+        public sealed class GatedProcess(ProcessSpec spec, GatedProcessRunner owner) : IAsyncDisposable
+        {
+            private readonly TaskCompletionSource<ProcessResult> _result = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public ProcessSpec Spec { get; } = spec;
+
+            public Task<ProcessResult> Result => _result.Task;
+
+            public bool Disposed { get; private set; }
+
+            public void Complete() => _result.TrySetResult(new ProcessResult(0));
+
+            public ValueTask DisposeAsync()
+            {
+                if (!Disposed)
+                {
+                    Disposed = true;
+                    owner.OnDisposed();
+                }
+
+                return ValueTask.CompletedTask;
+            }
+        }
     }
 
     private sealed class CapturingProcessRunner(IEnumerable<ProcessResult>? results = null) : IProcessRunner

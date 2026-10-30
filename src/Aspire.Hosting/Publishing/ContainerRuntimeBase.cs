@@ -22,6 +22,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
 {
     private readonly ILogger<TLogger> _logger;
     private readonly IProcessRunner _processRunner;
+    private readonly SemaphoreSlim _registryLoginLock = new(1, 1);
 
     protected ContainerRuntimeBase(ILogger<TLogger> logger, IProcessRunner processRunner)
     {
@@ -323,6 +324,22 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     }
 
     public virtual async Task LoginToRegistryAsync(string registryServer, string username, string password, CancellationToken cancellationToken)
+    {
+        // Each login rewrites the runtime's shared credential configuration file. Overlapping logins
+        // to different registries can lose each other's updates, so pipeline steps that log in to
+        // independent registries concurrently must not run the login command at the same time.
+        await _registryLoginLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await LoginToRegistryCoreAsync(registryServer, username, password, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _registryLoginLock.Release();
+        }
+    }
+
+    private async Task LoginToRegistryCoreAsync(string registryServer, string username, string password, CancellationToken cancellationToken)
     {
         // Escape quotes in arguments to prevent command injection
         var escapedRegistryServer = EscapeArgument(registryServer);
