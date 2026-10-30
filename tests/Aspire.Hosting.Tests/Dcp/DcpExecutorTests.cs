@@ -1733,6 +1733,30 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopResourceAsync_ExecutableThatFailedToStart_IsTreatedAsStopped()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("CoolProgram", "cool", Environment.CurrentDirectory);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync();
+
+        // DCP reports FailedToStart when, for example, a stop request reaches an Executable before its
+        // process was started. Stopping it again must succeed instead of waiting for Finished/Terminated.
+        var executable = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "CoolProgram"));
+        executable.Status = new ExecutableStatus { State = ExecutableState.FailedToStart };
+
+        var reference = appExecutor.GetResource(executable.Metadata.Name);
+        await appExecutor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(executable.Spec.Stop);
+        Assert.Equal(ExecutableState.FailedToStart, executable.Status?.State);
+    }
+
+    [Fact]
     public async Task ProxylessContainerAllocatedHostPortIsStableOnResourceRestart()
     {
         var (allocatedPort, _) = GetAvailableConsecutivePortPair();
