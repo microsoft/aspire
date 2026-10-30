@@ -18,6 +18,11 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.Functions` integratio
 aspire add Aspire.Hosting.Azure.Functions
 ```
 
+The .NET Functions resource deliberately retains `AddAzureFunctionsProject` and its specialized
+Functions host/debug behavior. Do not replace it with ordinary `AddDotnetProject`; that migration
+is tracked separately in [#21345](https://github.com/microsoft/aspire/issues/21345). Keep its required
+generated project metadata and build references. See the [project migration guide](../../docs/migrate-from-addproject.md#retained-legacy-scenarios).
+
 ## Usage example
 
 In the AppHost, add an Azure Functions app resource and reference Azure resources with either C# or TypeScript.

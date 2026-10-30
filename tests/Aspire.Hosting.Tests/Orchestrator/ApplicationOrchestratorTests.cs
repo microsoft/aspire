@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy project orchestration with synthetic metadata.
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
@@ -1595,3 +1596,4 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         }
     }
 }
+#pragma warning restore CS0618

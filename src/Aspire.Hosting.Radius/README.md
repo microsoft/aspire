@@ -6,7 +6,7 @@ Use this integration to publish and deploy an Aspire AppHost's applications to a
 `AddKubernetesEnvironment`, `AddDockerComposeEnvironment`, and `AddAzureContainerAppEnvironment`.
 Add it to your AppHost, keep your existing resource graph unchanged, and target it with the standard
 `aspire publish` / `aspire deploy` lifecycle — Radius becomes just another target you
-deploy to, with no changes to how you declare `AddContainer`, `AddProject`, `AddRedis`, and friends.
+deploy to, with no changes to how you declare `AddContainer`, `AddDotnetProject`, `AddRedis`, and friends.
 Radius participates only at publish/deploy time; `aspire run` continues to run your app locally as usual.
 
 > **Preview / prototype.** This integration is an early prototype. The public API surface and the generated Bicep contract may change in future versions. Pin the integration version in `AppHost.csproj` and avoid taking dependencies on any internal types.
@@ -225,7 +225,7 @@ radius.WithSecretStore("db-creds", RadiusSecretStoreType.BasicAuthentication, s 
 ### Supported resources
 
 * `AddContainer(...)` — published as a Radius container workload (`Radius.Compute/containers`).
-* `AddProject<T>(...)` — published as a Radius container workload only when the project has a pre-built image attached with `WithContainerImage("<registry>/<image>:<tag>")`. Without one, `aspire publish` fails with a remediation message to build and push an image the cluster can pull. The attached image is treated as final, so files requested through `PublishWithContainerFiles` must be included when the image is built externally.
+* `AddDotnetProject("api", "../Api/Api.csproj")` from `Aspire.Hosting.Dotnet` (and retained legacy project resources) — published as a Radius container workload only when the project has a pre-built image attached with `WithContainerImage("<registry>/<image>:<tag>")`. Without one, `aspire publish` fails with a remediation message to build and push an image the cluster can pull. The attached image is treated as final, so files requested through `PublishWithContainerFiles` must be included when the image is built externally. Add the .NET integration with `aspire add Aspire.Hosting.Dotnet`. Radius's own experimental APIs remain experimental.
 * Selected resources with a Radius mapping emit a Radius resource type via the resource type mapper. Redis, PostgreSQL, and RabbitMQ emit the current `Radius.*` user-defined types; MongoDB, SQL Server, and the Dapr building blocks still emit the older `Applications.*` portable types, because their UDT equivalents have no published Kubernetes recipe. Child database resources (for example `AddSqlServer("sql").AddDatabase("appdb")`) are collapsed onto the parent today.
 
 Other Aspire resource types are not emitted; only the resources listed above appear in the generated Bicep.

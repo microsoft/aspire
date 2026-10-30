@@ -115,7 +115,9 @@ public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
         var appBuilder = CreateBuilder(new DistributedApplicationOptions
         { Args = GetJsonManifestArgs(), DisableDashboard = true, AssemblyName = typeof(ManifestGenerationTests).Assembly.FullName });
         var manifestStore = new JsonDocumentManifestStore();
+#pragma warning disable CS0618 // Retain legacy ProjectResource manifest serialization compatibility.
         appBuilder.AddProject<Projects.ServiceA>("servicea", launchProfileName: null);
+#pragma warning restore CS0618
 
         appBuilder.Services.AddSingleton(manifestStore);
         appBuilder.Pipeline.AddJsonDocumentManifestPublishing();

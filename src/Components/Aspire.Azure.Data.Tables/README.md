@@ -120,16 +120,19 @@ In your AppHost project, install the Aspire Azure Storage Hosting library with [
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.Storage
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, add a Table Storage connection and consume the connection using the following methods:
 
 ```csharp
-var tables = builder.ExecutionContext.IsPublishMode
+using Aspire.Hosting.ApplicationModel;
+
+IResourceBuilder<IResourceWithConnectionString> tables = builder.ExecutionContext.IsPublishMode
     ? builder.AddAzureStorage("storage").AddTables("tables")
     : builder.AddConnectionString("tables");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(tables);
 ```
 

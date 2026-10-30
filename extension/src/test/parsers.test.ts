@@ -243,6 +243,24 @@ suite('CSharpAppHostParser', () => {
         assert.strictEqual(resources[0].methodName, 'AddProject');
     });
 
+    test('parses path-based AddDotnetProject resources alongside legacy project calls', async () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument([
+            'var builder = DistributedApplication.CreateBuilder(args);',
+            'builder.AddDotnetProject("fsharp", "../Worker/Worker.fsproj");',
+            'builder.AddDotnetProject("vb", "../Service/Service.vbproj", options => options.LaunchProfileName = "http");',
+            'builder.AddProject<Projects.Legacy>("legacy");'
+        ].join('\n'), '/test/AppHost.cs');
+
+        const resources = await parser.parseResources(doc);
+
+        assert.deepStrictEqual(resources.map(resource => [resource.name, resource.methodName]), [
+            ['fsharp', 'AddDotnetProject'],
+            ['vb', 'AddDotnetProject'],
+            ['legacy', 'AddProject']
+        ]);
+    });
+
     test('parses AddContainer call', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
@@ -1134,6 +1152,25 @@ suite('JsTsAppHostParser', () => {
         const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].name, 'cache');
+    });
+
+    test('parses addDotnetProject plain-data options and preserves the legacy export', async () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument([
+            'import { createBuilder } from "@aspire/sdk";',
+            'const builder = await createBuilder();',
+            'await builder.addDotnetProject("fsharp", "../Worker/Worker.fsproj");',
+            'await builder.addDotnetProject("vb", "../Service/Service.vbproj", { launchProfileName: "http" });',
+            'await builder.addProject("legacy", "../Legacy/Legacy.csproj");'
+        ].join('\n'), '/test/apphost.ts');
+
+        const resources = await parser.parseResources(doc);
+
+        assert.deepStrictEqual(resources.map(resource => [resource.name, resource.methodName]), [
+            ['fsharp', 'addDotnetProject'],
+            ['vb', 'addDotnetProject'],
+            ['legacy', 'addProject']
+        ]);
     });
 
     test('parses multiple resource calls', async () => {

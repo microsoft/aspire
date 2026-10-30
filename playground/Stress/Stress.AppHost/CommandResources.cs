@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Aspire.Hosting.Dotnet;
 using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
@@ -25,14 +26,14 @@ internal static class CommandResources
 
     public static void AddCommandResources(
         this IDistributedApplicationBuilder builder,
-        IResourceBuilder<ProjectResource> serviceBuilder,
-        IResourceBuilder<ProjectResource> telemetryBuilder)
+        IResourceBuilder<DotnetProjectResource> serviceBuilder,
+        IResourceBuilder<DotnetProjectResource> telemetryBuilder)
     {
         AddServiceCommands(builder, serviceBuilder);
         AddTelemetryCommands(builder, telemetryBuilder);
     }
 
-    private static void AddServiceCommands(IDistributedApplicationBuilder builder, IResourceBuilder<ProjectResource> serviceBuilder)
+    private static void AddServiceCommands(IDistributedApplicationBuilder builder, IResourceBuilder<DotnetProjectResource> serviceBuilder)
     {
         var iconCommands = builder.AddCommandGroup("icon-commands", serviceBuilder.Resource);
         iconCommands.WithCommand(
@@ -1164,7 +1165,7 @@ internal static class CommandResources
         });
     }
 
-    private static void AddTelemetryCommands(IDistributedApplicationBuilder builder, IResourceBuilder<ProjectResource> telemetryBuilder)
+    private static void AddTelemetryCommands(IDistributedApplicationBuilder builder, IResourceBuilder<DotnetProjectResource> telemetryBuilder)
     {
         var interactionCommands = builder.AddCommandGroup("interaction-commands", telemetryBuilder.Resource);
         interactionCommands.AddInteractionCommands();
@@ -1482,7 +1483,7 @@ internal static class CommandResources
         var model = serviceProvider.GetRequiredService<DistributedApplicationModel>();
 
         var resources = model.Resources
-            .Where(r => r.IsContainer() || r is ProjectResource || r is ExecutableResource)
+            .Where(r => r.IsContainer() || r is IDotnetProgramResource or ExecutableResource)
             .Where(r => r.Name != KnownResourceNames.AspireDashboard)
             .ToList();
 

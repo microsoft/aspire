@@ -6,7 +6,12 @@ The format of the manifest file itself does not pre-suppose a particular target 
 
 ## Basic model
 
-The Aspire distributed application model is comprised components which are typically deployed together as a unit. For example there may be a front-end ASP.NET Core application which calls into one or more backend services which in turn may depend on relational databases or caches. Consider the following sample (taken from the eShop light example):
+The Aspire distributed application model is comprised components which are typically deployed together as a unit. For example there may be a front-end ASP.NET Core application which calls into one or more backend services which in turn may depend on relational databases or caches. Consider the following sample (adapted from the eShop light example):
+
+The .NET declarations require `Aspire.Hosting.Dotnet` in the AppHost
+(`aspire add Aspire.Hosting.Dotnet`), alongside the PostgreSQL and Redis integrations.
+Replace the illustrative project paths with actual paths relative to the AppHost directory.
+See the [project migration guide](../migrate-from-addproject.md).
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -14,13 +19,13 @@ var builder = DistributedApplication.CreateBuilder(args);
 var catalogDb = builder.AddPostgres("postgres").AddDatabase("catalogdb");
 var redis = builder.AddRedis("redis");
 
-var catalog = builder.AddProject<Projects.eShopLite_CatalogService>("catalogservice")
+var catalog = builder.AddDotnetProject("catalogservice", "../eShopLite.CatalogService/eShopLite.CatalogService.csproj")
     .WithReference(catalogDb);
 
-var basket = builder.AddProject<Projects.eShopLite_BasketService>("basketservice")
+var basket = builder.AddDotnetProject("basketservice", "../eShopLite.BasketService/eShopLite.BasketService.csproj")
     .WithReference(redis);
 
-builder.AddProject<Projects.eShopLite_Frontend>("frontend")
+builder.AddDotnetProject("frontend", "../eShopLite.Frontend/eShopLite.Frontend.csproj")
     .WithReference(basket)
     .WithReference(catalog)
     .WithExternalHttpEndpoints();
@@ -31,7 +36,11 @@ builder.AddContainer("prometheus", "prom/prometheus")
 builder.Build().Run();
 ```
 
-When ```dotnet run --publisher manifest``` is called on the AppHost project containing the code above the application model and dependency projects will be built and the AppHost will be executed in a model which emits an ```aspire-manifest.json``` file in the build artifacts for the AppHost project. The manifest file for the above project would look like the following:
+When the AppHost runs with the manifest publisher, it emits an `aspire-manifest.json` describing
+the application model. An AppHost-only build no longer builds services whose project references
+were removed; keep service builds in the solution/CI inputs. Project V2 declarations still
+publish as project resources, not arbitrary executable resources. The following JSON illustrates
+the manifest relationships:
 
 ```jsonc
 {

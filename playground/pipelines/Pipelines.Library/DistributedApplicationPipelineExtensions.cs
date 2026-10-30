@@ -1,8 +1,10 @@
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http.Headers;
+using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
+using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Pipelines;
 using Azure.Core;
 using Azure.Identity;
@@ -31,14 +33,23 @@ public static class DistributedApplicationPipelineExtensions
                         annotation.ComputeEnvironment == appServiceEnvironment &&
                         annotation.DeploymentTarget is AzureAppServiceWebSiteResource websiteResource)
                     {
-                        if (resource is not ProjectResource projectResource)
+                        // The deployment target supplies App Service support. Only the known project
+                        // factories also provide the metadata required by this SDK publishing step.
+                        var projectPath = resource switch
+                        {
+                            ProjectResource project => project.GetProjectMetadata().ProjectPath,
+                            DotnetProjectResource project => project.GetProjectMetadata().ProjectPath,
+                            _ => null
+                        };
+                        if (projectPath is null)
                         {
                             continue;
                         }
 
                         await DeployProjectToAppServiceAsync(
                             context,
-                            projectResource,
+                            resource,
+                            projectPath,
                             websiteResource,
                             appServiceEnvironment,
                             context.CancellationToken).ConfigureAwait(false);
@@ -52,14 +63,12 @@ public static class DistributedApplicationPipelineExtensions
 
     private static async Task DeployProjectToAppServiceAsync(
         PipelineStepContext context,
-        ProjectResource projectResource,
+        IResource projectResource,
+        string projectPath,
         AzureAppServiceWebSiteResource websiteResource,
         AzureAppServiceEnvironmentResource appServiceEnvironment,
         CancellationToken cancellationToken)
     {
-        var projectMetadata = projectResource.GetProjectMetadata();
-        var projectPath = projectMetadata.ProjectPath;
-
         var publishTask = await context.ReportingStep.CreateTaskAsync($"Publishing {projectResource.Name}", cancellationToken).ConfigureAwait(false);
         await using (publishTask.ConfigureAwait(false))
         {
