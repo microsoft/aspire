@@ -145,7 +145,7 @@ internal static class FluentUISetupHelpers
     public static void SetupFluentInputFile(BunitContext context)
     {
         var inputFileModule = context.JSInterop.SetupModule("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/InputFile/FluentInputFile.razor.js");
-        inputFileModule.SetupVoid("Microsoft.FluentUI.Blazor.InputFile.AttachClickHandler", _ => true);
+        inputFileModule.SetupVoid("Microsoft.FluentUI.Blazor.InputFile.AttachClickHandler", _ => true).SetVoidResult();
         var dropZoneReference = inputFileModule.SetupModule("Microsoft.FluentUI.Blazor.InputFile.InitializeFileDropZone", _ => true);
         dropZoneReference.SetupVoid("dispose", _ => true);
     }
