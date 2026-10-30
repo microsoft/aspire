@@ -441,7 +441,9 @@ internal static class KubernetesDeployTestHelpers
         string? expectedResponse = null)
     {
         // Wait for all pods to be ready in the namespace
-        await auto.TypeAsync($"kubectl wait --for=condition=Ready pod --all -n {@namespace} --timeout=180s");
+        await auto.TypeAsync(
+            $"kubectl wait --for=condition=Ready pod --all -n {@namespace} --timeout=180s || " +
+            $"{{ {GetDeploymentDiagnosticsCommand(@namespace)}; false; }}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
 
@@ -451,7 +453,7 @@ internal static class KubernetesDeployTestHelpers
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Show server pod logs for debugging connectivity issues
-        await auto.TypeAsync($"kubectl logs -n {@namespace} -l app={serviceName} --tail=50 2>&1 || true");
+        await auto.TypeAsync($"kubectl logs -n {@namespace} -l app.kubernetes.io/component={serviceName} --tail=50 2>&1 || true");
         await auto.EnterAsync();
         await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
 
@@ -514,6 +516,7 @@ internal static class KubernetesDeployTestHelpers
             $"if result=$(curl --connect-timeout 2 --max-time 5 -fsS http://localhost:{localPort}{testPath}) && " +
             $"{responseCheck}; then found=1; printf '%s\\n' \"$result\"; break; fi; " +
             "echo \"Attempt $i: got [$result], retrying...\"; sleep 5; done; " +
+            $"if [ \"$found\" != 1 ]; then cat port-forward.log; {GetDeploymentDiagnosticsCommand(@namespace)}; fi; " +
             "test \"$found\" = 1)",
             counter, TimeSpan.FromMinutes(6));
     }
@@ -552,5 +555,15 @@ internal static class KubernetesDeployTestHelpers
             $"io.x-k8s.kind.cluster={clusterName}", output);
         await LocalDeploymentTestHelpers.CleanupLabeledDockerResourcesAsync(
             $"{KindRegistryOwnerLabel}={clusterName}", output);
+    }
+
+    private static string GetDeploymentDiagnosticsCommand(string @namespace)
+    {
+        // Dashboard logs can contain login tokens. Collect application and backend logs instead,
+        // with bounded requests so diagnostics do not consume the terminal automation timeout.
+        return $"kubectl --request-timeout=10s get pods -n {@namespace} -o wide; " +
+            $"kubectl --request-timeout=10s get events -n {@namespace} --sort-by=.lastTimestamp; " +
+            $"kubectl --request-timeout=10s logs -n {@namespace} -l 'app.kubernetes.io/component!=env-dashboard' " +
+            "--all-containers=true --prefix=true --tail=100 --max-log-requests=10";
     }
 }
