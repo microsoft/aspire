@@ -21,13 +21,13 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     private readonly long _started = Stopwatch.GetTimestamp();
     private TrayViewState? _displayed;
     private nint _indicator;
+    private nint _watcher;
     private nint _menu;
     private uint _timer;
     private nint _dialog;
     private int _quitRequested;
     private bool _quitting;
     private bool _connected;
-    private bool _reportedConnected;
     private Exception? _failure;
     private long? _lastPinPrune;
 
@@ -38,6 +38,8 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
 
     private bool IsQuitting => _quitting || Volatile.Read(ref _quitRequested) != 0;
 
+    internal bool IsAvailable { get; private set; }
+
     internal unsafe void Run()
     {
         Gtk.Load();
@@ -46,6 +48,19 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             throw new InvalidOperationException("GTK could not connect to a graphical desktop. Run Aspire Tray inside your Wayland or X11 session.");
         }
         s_current = this;
+        // The proxy follows PropertiesChanged and watcher owner changes on GTK's
+        // main context. Do not start a watcher; reload invalidated properties.
+        // https://docs.gtk.org/gio/class.DBusProxy.html
+        _watcher = Gtk.g_dbus_proxy_new_for_bus_sync(2, 4 | 8, 0,
+            "org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher", "org.kde.StatusNotifierWatcher", 0, out var error);
+        if (_watcher == 0)
+        {
+            if (error != 0)
+            {
+                LinuxDesktop.g_error_free(error);
+            }
+            throw new InvalidOperationException("Could not observe the desktop's StatusNotifierWatcher on the session bus.");
+        }
         var icon = Path.Combine(AppContext.BaseDirectory, "Aspire.png");
         if (!File.Exists(icon))
         {
@@ -81,9 +96,9 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             {
                 restored.TrySetCanceled(token);
             }
-            else if (!_connected)
+            else if (!IsAvailable)
             {
-                restored.TrySetException(new InvalidOperationException("No StatusNotifierWatcher is available. Enable the desktop's tray support."));
+                restored.TrySetException(new InvalidOperationException("No registered StatusNotifierHost is available for the tray. Enable the desktop's tray support."));
             }
             else
             {
@@ -97,11 +112,56 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
 
     internal void RequestQuit() => Volatile.Write(ref _quitRequested, 1);
 
+    internal void ProcessPending()
+    {
+        while (_pending.TryDequeue(out var action))
+        {
+            action();
+        }
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void ConnectionChanged(nint indicator, int connected, nint data)
     {
-        // Successful watcher registration is reported by this signal, not a getter.
+        // This confirms item registration, not that a panel host is available.
         s_current!._connected = connected != 0;
+    }
+
+    private bool HasRegisteredHost()
+    {
+        var value = Gtk.g_dbus_proxy_get_cached_property(_watcher, "IsStatusNotifierHostRegistered");
+        if (value == 0)
+        {
+            return false;
+        }
+        try
+        {
+            if (Gtk.g_variant_is_of_type(value, "b") == 0)
+            {
+                throw new InvalidOperationException("The StatusNotifierWatcher's host registration property is not a boolean.");
+            }
+            return Gtk.g_variant_get_boolean(value) != 0;
+        }
+        finally
+        {
+            Gtk.g_variant_unref(value);
+        }
+    }
+
+    internal void UpdateAvailability(bool watcherConnected, bool hostRegistered)
+    {
+        // Watcher registration alone can succeed without any panel displaying items.
+        // https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/StatusNotifierWatcher/
+        var available = watcherConnected && hostRegistered;
+        if (IsAvailable && !available)
+        {
+            Console.Error.WriteLine("The desktop tray watcher or panel host disconnected. Waiting for it to return.");
+        }
+        IsAvailable = available;
+        if (available)
+        {
+            _ready.TrySetResult();
+        }
     }
 
     private void Quit()
@@ -136,24 +196,13 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             {
                 return 1;
             }
-            while (app._pending.TryDequeue(out var action))
-            {
-                action();
-            }
+            app.UpdateAvailability(app._connected, app.HasRegisteredHost());
+            app.ProcessPending();
             if (!app.IsQuitting)
             {
-                if (app._reportedConnected && !app._connected)
-                {
-                    Console.Error.WriteLine("The desktop tray watcher disconnected. Waiting for it to return.");
-                }
-                app._reportedConnected = app._connected;
-                if (app._connected)
-                {
-                    app._ready.TrySetResult();
-                }
                 if (!app._ready.Task.IsCompleted && Stopwatch.GetElapsedTime(app._started) > TimeSpan.FromSeconds(8))
                 {
-                    throw new InvalidOperationException("No StatusNotifierWatcher registered the tray. Enable an AppIndicator extension on GNOME or the tray module on Waybar.");
+                    throw new InvalidOperationException("The tray requires StatusNotifierWatcher registration and a registered panel host. Enable an AppIndicator extension on GNOME or the tray module on Waybar.");
                 }
                 app.Refresh();
             }
@@ -534,6 +583,10 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         {
             Gtk.gtk_widget_destroy(_menu);
             Gtk.g_object_unref(_menu);
+        }
+        if (_watcher != 0)
+        {
+            Gtk.g_object_unref(_watcher);
         }
         s_current = null;
     }

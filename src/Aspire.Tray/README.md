@@ -130,7 +130,8 @@ Quit does not disable login startup, and startup never starts an AppHost.
 The per-user control socket, persistent singleton lock, and private diagnostic
 log are under `~/.aspire/tray/runtime/`, independent of the invoking installation.
 Startup is acknowledged only after the GTK loop processes successful
-StatusNotifierWatcher registration and the GUI holds its bundle lease. Missing
+StatusNotifierWatcher registration, a registered StatusNotifierHost, and the GUI's
+bundle lease. Host registration changes also gate repeated start requests. Missing
 tray hosts fail with setup guidance rather than reporting an invisible tray as
 ready. The AppIndicator library re-registers after a watcher restart. Repeated
 start restores the existing item; stop shuts down only the tray and its discovery
@@ -341,7 +342,7 @@ converted at startup to a one-color AppKit template image, as Apple recommends f
 menu bar extras. Darker parts of the logo (its outline) become opaque and lighter facets
 partly transparent, so the logo keeps its inner structure in the menu bar's own color.
 See [Tray icon status](#tray-icon-status) for the status dot. Any click on it opens the
-[flyout panel](#flyout-panel), which hangs below the item, or from the top-right corner of
+[flyout panel](#macos-and-windows-flyout-panel), which hangs below the item, or from the top-right corner of
 the screen when the item is hidden behind the camera housing or off a crowded menu bar.
 
 **Stop** stops an AppHost without a confirmation, as in the dashboard; the exact process
@@ -500,7 +501,7 @@ Windows uses the original colored `src/Shared/Aspire.ico` (the same logo as macO
 artwork, with the status dot described in [Tray icon status](#tray-icon-status).
 The dot's green and amber are picked for the taskbar's light or dark theme. A left or right
 click, the context menu key, or Enter or Space on the focused icon opens the
-[flyout panel](#flyout-panel); keyboard selection also shows the panel's keyboard focus.
+[flyout panel](#macos-and-windows-flyout-panel); keyboard selection also shows the panel's keyboard focus.
 Ctrl+comma opens Settings while the panel has focus. The panel uses the same shared
 health, history, pinning, explicit Start, and exact-instance Stop behavior described above.
 Displayed and copied paths retain their original casing; Windows identity matching remains

@@ -88,6 +88,14 @@ internal static partial class Gtk
     [LibraryImport("libgobject-2.0.so.0", StringMarshalling = StringMarshalling.Utf8)] internal static partial ulong g_signal_connect_data(nint instance, string signal, nint callback, nint data, nint destroy, int flags);
     [LibraryImport("libgobject-2.0.so.0")] internal static partial void g_object_unref(nint instance);
     [LibraryImport("libgobject-2.0.so.0")] internal static partial nint g_object_ref_sink(nint instance);
+    [LibraryImport("libgio-2.0.so.0", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial nint g_dbus_proxy_new_for_bus_sync(int busType, int flags, nint info, string name, string path, string interfaceName, nint cancellable, out nint error);
+    [LibraryImport("libgio-2.0.so.0", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial nint g_dbus_proxy_get_cached_property(nint proxy, string propertyName);
+    [LibraryImport("libglib-2.0.so.0", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int g_variant_is_of_type(nint value, string type);
+    [LibraryImport("libglib-2.0.so.0")] internal static partial int g_variant_get_boolean(nint value);
+    [LibraryImport("libglib-2.0.so.0")] internal static partial void g_variant_unref(nint value);
     [LibraryImport(IndicatorLibrary, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint app_indicator_new(string id, string icon, int category);
     [LibraryImport(IndicatorLibrary)] internal static partial void app_indicator_set_status(nint indicator, int status);
     [LibraryImport(IndicatorLibrary)] internal static partial void app_indicator_set_menu(nint indicator, nint menu);

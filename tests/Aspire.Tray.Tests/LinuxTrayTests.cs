@@ -14,6 +14,44 @@ public class LinuxTrayTests
 {
     public static bool SupportsLinux => OperatingSystem.IsLinux();
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task ReadinessRequiresWatcherRegistrationAndPanelHost(bool watcherConnected, bool hostRegistered)
+    {
+        await using var controller = new TrayController(new TestAppHostClient());
+        using var application = new LinuxTrayApplication(controller, new MemoryTrayStartupSettings());
+
+        application.UpdateAvailability(watcherConnected, hostRegistered);
+
+        Assert.Equal(watcherConnected && hostRegistered, application.IsAvailable);
+        Assert.Equal(application.IsAvailable, application.ReadyAsync(CancellationToken.None).IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public async Task HostLossRevokesAvailabilityWithoutDisconnectingTheWatcher()
+    {
+        await using var controller = new TrayController(new TestAppHostClient());
+        using var application = new LinuxTrayApplication(controller, new MemoryTrayStartupSettings());
+        application.UpdateAvailability(watcherConnected: true, hostRegistered: true);
+        await application.ReadyAsync(CancellationToken.None);
+
+        application.UpdateAvailability(watcherConnected: true, hostRegistered: false);
+        Assert.False(application.IsAvailable);
+        var restore = application.RestoreAsync(CancellationToken.None);
+        application.ProcessPending();
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => restore);
+        Assert.Equal("No registered StatusNotifierHost is available for the tray. Enable the desktop's tray support.", error.Message);
+
+        application.UpdateAvailability(watcherConnected: true, hostRegistered: true);
+        Assert.True(application.IsAvailable);
+
+        application.UpdateAvailability(watcherConnected: false, hostRegistered: true);
+        Assert.False(application.IsAvailable);
+    }
+
     [Fact]
     public async Task PeriodicRefreshPrunesDeletedPinsWithoutDiscoveryUpdates()
     {
