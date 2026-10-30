@@ -141,6 +141,8 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
             var isCI = scenario is "CI" or "RetryableCI" or "TimedOutCI";
             var persistsBeforeDelivery = scenario is "Local" or "Agent" or "Dashboard";
             var mode = TelemetryManager.ConfigureExporterForProcess(scenario == "Agent", isCI);
+            // The drain started by shutdown below must be the only drain that can upload.
+            AzureMonitorExporterTestHooks.DisableEagerStorageDrain();
             if (dashboard)
             {
                 // The dashboard deliberately retains the service defaults, not the CLI's zero drain.
