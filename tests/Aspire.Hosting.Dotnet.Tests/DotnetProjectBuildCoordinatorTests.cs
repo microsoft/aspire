@@ -700,9 +700,22 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Null(ReadSentinelWrittenByRunningProcess(Path.Combine(workspace.Path, "missing.txt")));
     }
 
+    // The app may be writing the sentinel while the test polls it. File.ReadAllText opens with
+    // FileShare.Read, which on Windows conflicts with the app's open write handle (and blocks the app
+    // from opening it for write). Share read/write/delete so neither side gets a sharing violation;
+    // callers poll until the expected content is observed.
     private static string? ReadSentinelWrittenByRunningProcess(string path)
     {
-        return File.Exists(path) ? File.ReadAllText(path) : null;
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
     }
 
     [Fact]
