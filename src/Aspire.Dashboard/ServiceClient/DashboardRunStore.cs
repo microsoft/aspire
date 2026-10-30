@@ -620,6 +620,13 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     internal static string GetResumesDirectory(string? dataRoot) => Path.Combine(GetDataRoot(dataRoot), "resumes");
 
+    /// <summary>
+    /// Gets the directory for application settings that are shared by every run of the application, unlike run
+    /// databases which are created per run and pruned.
+    /// </summary>
+    internal static string GetApplicationSettingsDirectory(string? dataRoot, string applicationName) =>
+        Path.Combine(GetDataRoot(dataRoot), "apps", GetApplicationDirectoryName(applicationName));
+
     private static string GetDataRoot(string? dataRoot) => Path.GetFullPath(
         string.IsNullOrWhiteSpace(dataRoot)
             ? Path.Combine(AspireHomeDirectory.GetDefault(), "dashboard")

@@ -12,18 +12,13 @@ namespace Aspire.Dashboard.Utils;
 
 internal static class DashboardUIHelpers
 {
+    public const string PageTitleTopBarSection = "PageTitleTopBar";
     // Virtualize represents unloaded rows with CSS spacers. Browser engines clamp very tall
     // elements, causing the spacer observer to report inconsistent measurements and render forever.
     // At the dashboard's 46px grid row height, 200,000 items use a 9.2 million pixel spacer.
     public const int MaxVirtualizedItemCount = 200_000;
 
     public const string MessageBarSection = "MessagesTop";
-
-    // Blazor SectionOutlet/SectionContent name used to teleport the current page's title
-    // (the page's <h1 class="page-header">) up into the top header, where it renders as a
-    // suffix after the app/brand name (e.g. "Stress / Resources"). See MainLayout.razor
-    // (outlet) and AspirePageContentLayout.razor (content).
-    public const string PageTitleTopBarSection = "PageTitleTopBar";
 
     // these are language names supported by highlight.js
     public const string XmlFormat = "xml";

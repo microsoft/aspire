@@ -1,0 +1,45 @@
+.coming-soon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex: 1 1 auto;
+    padding: 48px 24px;
+    text-align: center;
+}
+
+.coming-soon-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    margin-bottom: 8px;
+    border-radius: 16px;
+    background: var(--colorBrandBackground2);
+}
+
+.coming-soon-title {
+    margin: 0;
+    font-size: var(--fontSizeBase500);
+    font-weight: var(--fontWeightSemibold);
+    /* Headings inherit a tall line height from the global styles. */
+    line-height: var(--lineHeightBase500);
+}
+
+.coming-soon-description {
+    max-width: 420px;
+    margin: 0;
+    color: var(--colorNeutralForeground2);
+}
+
+.coming-soon-badge {
+    margin-top: 8px;
+    padding: 2px 10px;
+    border-radius: 10px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+    font-weight: var(--fontWeightSemibold);
+}

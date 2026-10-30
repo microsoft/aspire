@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Layout;
@@ -8,6 +8,7 @@ using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Xunit;
 
@@ -16,26 +17,55 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public class MobileNavMenuTests : DashboardTestContext
 {
+    [Fact]
+    public void Standalone_ShowsUtilityEntries()
+    {
+        var cut = RenderMobileNavMenu("/structuredlogs?logLevel=error", hasResourceService: false);
+
+        Assert.Equal(
+            [Resources.Layout.MainLayoutAspireRepoLink, Resources.Layout.MainLayoutKeyboardShortcuts,
+                Resources.Layout.MainLayoutAspireDashboardHelpLink, Resources.Layout.MainLayoutLaunchNotifications,
+                Resources.Layout.MainLayoutLaunchSettings],
+            cut.FindAll("fluent-menu-item").Select(item => item.GetAttribute("data-tooltip")));
+        Assert.Empty(cut.FindAll("""fluent-menu-item[aria-current="page"]"""));
+    }
+
+    [Fact]
+    public async Task Documentation_OpensDashboardDocsInNewTabAndClosesMenu()
+    {
+        JSInterop.SetupVoid("open", _ => true).SetVoidResult();
+        var menuClosed = false;
+        var cut = RenderMobileNavMenu(DashboardUrls.HomeUrl(), () => menuClosed = true);
+        var documentationItem = cut.FindAll("fluent-menu-item")
+            .Single(item => item.GetAttribute("data-tooltip") == Resources.Layout.MainLayoutAspireDashboardHelpLink);
+
+        await cut.InvokeAsync(() => documentationItem.TriggerEvent("onmenuitemchange",
+            new MenuItemEventArgs { Id = documentationItem.Id, Text = documentationItem.TextContent }));
+
+        Assert.True(menuClosed);
+        var invocation = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "open");
+        Assert.Equal(["https://aspire.dev/dashboard/overview/", "_blank", "noopener,noreferrer"], invocation.Arguments);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void TerminalsNavigation_IsConditionalAndLastPageLink(bool hasTerminals)
+    public void TerminalsNavigation_IsConditional(bool hasTerminals)
     {
         var cut = RenderMobileNavMenu("/terminals/resource/shell", hasResourceTerminals: hasTerminals);
-        var titles = cut.FindAll("fluent-menu-item").Select(i => i.GetAttribute("title")).Take(hasTerminals ? 6 : 5);
+        var titles = cut.FindAll("fluent-menu-item").Select(i => i.GetAttribute("data-tooltip")).Take(hasTerminals ? 5 : 4);
         var expected = new List<string>
         {
-            Resources.Layout.NavMenuResourcesTab,
-            Resources.Layout.NavMenuConsoleLogsTab
+            Resources.Layout.MainLayoutAspireRepoLink,
+            Resources.Layout.MainLayoutKeyboardShortcuts,
+            Resources.Layout.MainLayoutAspireDashboardHelpLink
         };
-        expected.AddRange([Resources.Layout.NavMenuStructuredLogsTab, Resources.Layout.NavMenuTracesTab, Resources.Layout.NavMenuMetricsTab]);
         if (hasTerminals)
         {
-            expected.Add(Resources.Layout.NavMenuTerminalsTab);
+            expected.Insert(0, Resources.Layout.NavMenuTerminalsTab);
         }
+        expected.Add(Resources.Layout.MainLayoutLaunchNotifications);
         Assert.Equal(expected, titles);
-        Assert.Equal(Resources.Layout.MainLayoutAspireRepoLink,
-            cut.FindAll("fluent-menu-item").Skip(hasTerminals ? 6 : 5).First().GetAttribute("title"));
         if (hasTerminals)
         {
             AssertMenuItemIsActive(cut, Resources.Layout.NavMenuTerminalsTab);
@@ -43,33 +73,9 @@ public class MobileNavMenuTests : DashboardTestContext
     }
 
     [Fact]
-    public void Render_OpenMenu_CurrentPageHasSemanticAndVisualSelectedState()
-    {
-        var cut = RenderMobileNavMenu(DashboardUrls.StructuredLogsUrl());
-
-        AssertMenuItemIsActive(cut, Resources.Layout.NavMenuStructuredLogsTab);
-    }
-
-    [Fact]
-    public void Render_OpenMenu_CurrentPageWithQueryStringHasSemanticAndVisualSelectedState()
-    {
-        var cut = RenderMobileNavMenu(DashboardUrls.StructuredLogsUrl(logLevel: "warning"));
-
-        AssertMenuItemIsActive(cut, Resources.Layout.NavMenuStructuredLogsTab);
-    }
-
-    [Fact]
-    public void Render_OpenMenu_ResourcesPageWithQueryStringHasSemanticAndVisualSelectedState()
-    {
-        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(resource: "foo"));
-
-        AssertMenuItemIsActive(cut, Resources.Layout.NavMenuResourcesTab);
-    }
-
-    [Fact]
     public void MobileNavMenu_ConstrainedToRemainingViewport()
     {
-        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl());
+        var cut = RenderMobileNavMenu(DashboardUrls.HomeUrl());
 
         var menu = cut.Find("fluent-menu-list");
         var style = menu.GetAttribute("style");
@@ -81,19 +87,20 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.Equal("fluent-menu-item", menu.Children[0].LocalName);
         Assert.Equal("fluent-menu-item", menu.Children[menu.Children.Length - 1].LocalName);
 
-        Assert.Contains("max-height: calc(100dvh - var(--mobile-header-height) - var(--mobile-nav-menu-offset))", style);
+        Assert.Contains("max-height: calc(100dvh - var(--mobile-header-height))", style);
         Assert.DoesNotContain("height: 100vh", style);
-        Assert.Contains("margin-top: var(--mobile-nav-menu-offset)", style);
+        Assert.DoesNotContain("margin-top", style);
         Assert.Contains("overflow-y: auto", style);
         Assert.Contains("padding-block: var(--mobile-nav-menu-focus-padding)", style);
         Assert.Contains("scroll-padding-block: var(--mobile-nav-menu-focus-padding)", style);
         Assert.Contains("mobile-nav-menu", menu.ClassList);
+        Assert.Single(cut.FindAll(".mobile-nav-scrim"));
     }
 
     [Fact]
     public void Render_OpenMenu_InitializesKeyboardNavigationWithComponentReferenceAndMenuId()
     {
-        _ = RenderMobileNavMenu(DashboardUrls.ResourcesUrl());
+        _ = RenderMobileNavMenu(DashboardUrls.HomeUrl());
 
         var invocation = Assert.Single(JSInterop.Invocations, i => i.Identifier == "initializeMobileNavMenuKeyboardNavigation");
         Assert.Collection(
@@ -106,7 +113,7 @@ public class MobileNavMenuTests : DashboardTestContext
     public async Task CloseMobileNavMenuFromFocusLossAsync_ClosesMenuWithoutRestoringFocus()
     {
         var closeNavMenuCalled = false;
-        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), () => closeNavMenuCalled = true, isNavMenuOpen: false);
+        var cut = RenderMobileNavMenu(DashboardUrls.HomeUrl(), () => closeNavMenuCalled = true, isNavMenuOpen: false);
 
         await cut.InvokeAsync(cut.Instance.CloseMobileNavMenuFromFocusLossAsync);
 
@@ -119,7 +126,7 @@ public class MobileNavMenuTests : DashboardTestContext
     {
         JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
         var closeNavMenuCalled = false;
-        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), () => closeNavMenuCalled = true, isNavMenuOpen: false);
+        var cut = RenderMobileNavMenu(DashboardUrls.HomeUrl(), () => closeNavMenuCalled = true, isNavMenuOpen: false);
 
         await cut.InvokeAsync(cut.Instance.CloseMobileNavMenuFromKeyboardAsync);
 
@@ -129,10 +136,10 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.Equal(MainLayout.NavigationButtonId, argument);
     }
 
-    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, Action? closeNavMenu = null, bool isNavMenuOpen = true, bool hasResourceTerminals = false)
+    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, Action? closeNavMenu = null, bool isNavMenuOpen = true, bool hasResourceTerminals = false, bool hasResourceService = true)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
-        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: hasResourceService));
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentDivider(this);

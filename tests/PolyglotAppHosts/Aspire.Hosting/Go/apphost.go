@@ -33,6 +33,9 @@ func main() {
 
 	// AddContainer (pre-existing)
 	container := builder.AddContainer("mycontainer", "nginx")
+	container.WithTags([]string{"Backend", "API"}).WithTags([]string{"Service"}).
+		WithTrait("Owner", "Finance").WithTrait("Owner", "Platform").
+		WithDashboardPosition(-10)
 	if err = container.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}

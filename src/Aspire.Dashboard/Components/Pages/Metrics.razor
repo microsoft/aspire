@@ -2,9 +2,13 @@
 @page "/metrics/resource/{resourceName}"
 @page "/metrics/resource/{resourceName}/meter/{meterName}"
 @page "/metrics/resource/{resourceName}/meter/{meterName}/instrument/{instrumentName}"
+@layout ResourcesLayout
 
+@using System.Globalization
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Aspire.Dashboard.Resources
+@using Microsoft.AspNetCore.Components.Rendering
+@using Microsoft.AspNetCore.Components.Sections
 @inject IStringLocalizer<Dashboard.Resources.Metrics> Loc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
 
@@ -29,53 +33,33 @@
         Loc="@Loc"/>
 </PageTitle>
 
+@{
+    // Inside the resources layout on desktop, the filter toolbar shares the tabs row instead of taking its own row.
+    var toolbarInTabsRow = ViewportInformation.IsDesktop && ResourcesLayout is not null;
+}
+
+@if (toolbarInTabsRow)
+{
+    <StableSectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.TabToolbarSectionName">
+        <div class="main-toolbar filter-toolbar" role="toolbar" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
+            @((RenderFragment)RenderToolbar)
+        </div>
+    </StableSectionContent>
+}
+
 <div class="page-content-container">
     <AspirePageContentLayout
         AddNewlineOnToolbar="true"
         @ref="_contentLayout"
+        HideDesktopToolbar="@toolbarInTabsRow"
         HeaderStyle="margin-bottom: var(--spacingVerticalS);"
+        MainContentStyle="margin-top: var(--layout-top-padding);"
         MobileToolbarButtonText="@Loc[nameof(Dashboard.Resources.Metrics.MetricsViewAttributesToolbar)]">
         <PageTitleSection>
             <h1 class="page-header">@Loc[nameof(Dashboard.Resources.Metrics.MetricsHeader)]</h1>
         </PageTitleSection>
         <ToolbarSection>
-            <ResourceSelect Resources="_resourceViewModels"
-                            AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.SelectAResource)]"
-                            @bind-SelectedResource="PageViewModel.SelectedResource"
-                            @bind-SelectedResource:after="HandleSelectedResourceChangedAsync"
-                            CanSelectGrouping="true"
-                            LabelClass="toolbar-left" />
-
-            <SignalsActionsDisplay IsPaused="@PauseManager.AreMetricsPaused(out _)"
-                                  OnPausedChanged="@PauseManager.SetMetricsPaused"
-                                  HandleClearSignal="ClearMetrics"
-                                  SelectedResource="@PageViewModel.SelectedResource"/>
-
-            <div class="toolbar-end">
-                <label for="@_selectDurationId">@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]</label>
-
-                <DesktopToolbarDivider />
-
-                <FluentSelect TOption="SelectViewModel<TimeSpan>" TValue="SelectViewModel<TimeSpan>"
-                              Class="toolbar-select"
-                              Id="@_selectDurationId"
-                              Items="@_durations"
-                              OptionText="@(c => c?.Name)"
-                              @bind-Value="PageViewModel.SelectedDuration"
-                              @bind-Value:after="HandleSelectedDurationChangedAsync"
-                              AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]"/>
-            </div>
-
-            @if (!ViewportInformation.IsDesktop)
-            {
-                // Show metric selector in the toolbar for mobile, since we don't have enough room to show both
-                // panels on a mobile viewport.
-                <TreeMetricSelector
-                    @ref="_treeMetricSelector"
-                    PageViewModel="@PageViewModel"
-                    IncludeLabel="true"
-                    HandleSelectedTreeItemChangedAsync="@HandleSelectedTreeItemChangedAsync"/>
-            }
+            @((RenderFragment)RenderToolbar)
         </ToolbarSection>
         <MainSection>
             <div style="width: 100%; height: 100%; overflow: auto;">
@@ -84,21 +68,40 @@
                     // Collapsed property only allows us to show Panel1 (which is the metric selector)
                     // but we want to only show Panel2 on mobile. So, hide the bar handle and reduce width to 0
                     // on mobile.
+                    <div class="metrics-splitter" @ref="_metricsSplitterElement">
                     <FluentMultiSplitter Style="height:100%"
-                                         BarSize="@(ViewportInformation.IsDesktop ? "5px" : "0")">
-                        <FluentMultiSplitterPane Size="@(ViewportInformation.IsDesktop ? "20%" : "0")"
+                                         BarSize="@(ViewportInformation.IsDesktop ? "calc(var(--spacingHorizontalS) + var(--strokeWidthThin))" : "0")"
+                                         OnResize="HandleMetricsSplitterResize">
+                        <FluentMultiSplitterPane Size="@(ViewportInformation.IsDesktop ? _metricGroupsPaneSize : "0")"
                                                  Collapsed="@(!ViewportInformation.IsDesktop)">
                             @if (ViewportInformation.IsDesktop)
                             {
-                                <TreeMetricSelector
-                                    @ref="_treeMetricSelector"
+                                <MetricGroupList
+                                    @ref="_metricGroupList"
                                     PageViewModel="@PageViewModel"
-                                    HandleSelectedTreeItemChangedAsync="@HandleSelectedTreeItemChangedAsync"/>
+                                    SelectGroupAsync="@SelectGroupAsync"
+                                    GetGroupUrl="@GetGroupUrl"
+                                    TextFilterChanged="@OnTextFilterChanged"/>
                             }
                         </FluentMultiSplitterPane>
-                        <FluentMultiSplitterPane Size="80%">
+                        <FluentMultiSplitterPane Size="@_metricsContentPaneSize">
                             <div class="metrics-content">
-                                    @if (PageViewModel.SelectedResource.Id?.ReplicaSetName != null && PageViewModel is { SelectedMeter: not null, SelectedInstrument: not null })
+                                    @if ((PageViewModel.SelectedResource.Id is not null || IsAggregate) && (PageViewModel.ShowFilterResults || (PageViewModel.ShowAll && PageViewModel.SelectedInstrument is null)))
+                                    {
+                                        @* Filter results and the all-instruments view both list instruments from every meter. Cards show their
+                                           meter unless the section titles already do. *@
+                                        var resultGroups = GetFilterResultGroups();
+                                        var resultsTitle = PageViewModel.TextFilter.Trim().Length > 0
+                                            ? string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Metrics.MetricsFilterResultsTitle)], PageViewModel.TextFilter.Trim())
+                                            : Loc[nameof(Dashboard.Resources.Metrics.MetricsAllInstrumentsTitle)].Value;
+                                        <h3 class="meter-name-title">@resultsTitle</h3>
+                                        @if (resultGroups.Count == 0)
+                                        {
+                                            <p class="metrics-pinned-empty">@Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMatchingInstruments)]</p>
+                                        }
+                                        @RenderSections(resultGroups, EffectiveGroupBy != MetricGroupBy.Meter)
+                                    }
+                                    else if (PageViewModel.SelectedResource.Id?.ReplicaSetName != null && PageViewModel is { SelectedMeter: not null, SelectedInstrument: not null })
                                     {
                                         <ChartContainer
                                             ResourceKey="@(PageViewModel.SelectedResource.Id.GetResourceKey())"
@@ -107,26 +110,30 @@
                                             Duration="PageViewModel.SelectedDuration.Id"
                                             ActiveView="@(PageViewModel.SelectedViewKind ?? Metrics.MetricViewKind.Graph)"
                                             OnViewChangedAsync="@OnViewChangedAsync"
+                                            ShowRunningTotal="@PageViewModel.ShowRunningTotal"
+                                            OnShowRunningTotalChangedAsync="@OnShowRunningTotalChangedAsync"
+                                            ShowChangePerIntervalOption="true"
+                                            BackLabel="@GetBackLabel()"
+                                            OnBackAsync="@NavigateBackAsync"
                                             Resources="@_resources" />
                                     }
-                                    else if (PageViewModel.SelectedMeter != null)
+                                    else if (PageViewModel.ShowPinned && (PageViewModel.SelectedResource.Id is not null || IsAggregate))
+                                    {
+                                        var pinnedInstruments = GetOverviewInstruments();
+                                        <h3 class="meter-name-title">@Loc[nameof(Dashboard.Resources.Metrics.MetricsPinnedHeader)]</h3>
+                                        @if (pinnedInstruments.Count > 0)
+                                        {
+                                            @RenderSections(GetSections(pinnedInstruments, isSingleMeter: false), EffectiveGroupBy != MetricGroupBy.Meter)
+                                        }
+                                        else
+                                        {
+                                            <p class="metrics-pinned-empty">@Loc[nameof(Dashboard.Resources.Metrics.MetricsPinnedEmpty)]</p>
+                                        }
+                                    }
+                                    else if (PageViewModel.SelectedMeter is not null && (PageViewModel.SelectedResource.Id is not null || IsAggregate))
                                     {
                                         <h3 class="meter-name-title">@PageViewModel.SelectedMeter</h3>
-                                        <FluentDataGrid Class="aspire-spaced-grid"
-                                            Style="max-width:1100px;"
-                                            ItemsProvider="@EnumerableGridItemsProvider.Create(() => PageViewModel.Instruments.Where(item => item.Parent.Name == PageViewModel.SelectedMeter).OrderBy(item => item.Name))"
-                                            GridTemplateColumns="3fr 5fr"
-                                            RowSize="DataGridRowSize.Medium"
-                                            TGridItem="OtlpInstrumentSummary">
-                                            <ChildContent>
-                                                <TemplateColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementNameGridNameColumnHeader)]">
-                                                    <a class="aspire-link-button metrics-instrument-link" href="@DashboardUrls.MetricsUrl(resource: PageViewModel.SelectedResource.Name, meter: context.Parent.Name, instrument: context.Name, duration: DurationMinutes, view: ViewKindName)">
-                                                        @context.Name
-                                                    </a>
-                                                </TemplateColumn>
-                                                <PropertyColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementDescriptionGridNameColumnHeader)]" Property="@(c => c.Description)" SortBy="@s_instrumentDescriptionSort" Tooltip="true" TooltipText="@(c => c.Description)" />
-                                            </ChildContent>
-                                        </FluentDataGrid>
+                                        @RenderSections(GetSections(GetOverviewInstruments(), isSingleMeter: true), false)
                                     }
                                     else
                                     {
@@ -146,6 +153,7 @@
                                 </div>
                         </FluentMultiSplitterPane>
                     </FluentMultiSplitter>
+                    </div>
                 }
                 else if (PageViewModel.Instruments == null)
                 {
@@ -184,3 +192,135 @@
         </FooterSection>
     </AspirePageContentLayout>
 </div>
+
+@code {
+    private RenderFragment RenderSections(List<IGrouping<string, OtlpInstrumentSummary>> sections, bool showMeterName) => __builder =>
+    {
+        // Rendering thousands of cards, each with a live sparkline, makes the page unresponsive. Sections share one
+        // budget in their display order, and a notice asks to filter for the rest.
+        var total = sections.Sum(s => s.Count());
+        var remaining = MaxRenderedInstruments;
+        foreach (var section in sections)
+        {
+            if (remaining <= 0)
+            {
+                break;
+            }
+
+            var count = section.Count();
+            @RenderSection(section, showMeterName, count > remaining ? (int?)remaining : null)
+            remaining -= count;
+        }
+
+        if (total > MaxRenderedInstruments)
+        {
+            <p class="metrics-limit-notice" role="status">
+                @string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Metrics.MetricsInstrumentLimitReached)], MaxRenderedInstruments, total)
+            </p>
+        }
+    };
+
+    private RenderFragment RenderSection(IGrouping<string, OtlpInstrumentSummary> section, bool showMeterName, int? maxCount) => __builder =>
+    {
+        var hasTitle = section.Key.Length > 0;
+        var isCollapsed = hasTitle && _collapsedSections.Contains(section.Key);
+        var instruments = section.ToList();
+        var sectionKey = section.Key;
+
+        <section @key="sectionKey" class="metrics-filter-results-group" aria-label="@(hasTitle ? sectionKey : null)">
+            @if (hasTitle)
+            {
+                @* The dotted rule fills the header so the whole row reads as a target for collapsing the group. *@
+                <h4 class="metrics-filter-results-meter">
+                    <button type="button"
+                            class="metrics-section-toggle"
+                            aria-expanded="@(isCollapsed ? "false" : "true")"
+                            @onclick="@(() => ToggleSection(sectionKey))">
+                        <span class="metrics-section-title">@sectionKey</span>
+                        <span class="metrics-section-count">@instruments.Count</span>
+                        <span class="metrics-section-rule" aria-hidden="true"></span>
+                        <FluentIcon Class="metrics-section-chevron" Value="@(isCollapsed ? (Icon)new Icons.Regular.Size16.ChevronDown() : new Icons.Regular.Size16.ChevronUp())" Color="Color.Custom" CustomColor="currentColor" />
+                    </button>
+                </h4>
+            }
+            @if (!isCollapsed)
+            {
+                <MeterOverview ResourceKey="@OverviewResourceKey"
+                               GetResourceLabel="@ResourceLabelProvider"
+                               SortBy="@OverviewSortBy"
+                               Instruments="@instruments"
+                               Duration="@PageViewModel.SelectedDuration.Id"
+                               ShowMeterName="@showMeterName"
+                               MaxCount="@maxCount"
+                               GetInstrumentUrl="@GetInstrumentUrl" />
+            }
+        </section>
+    };
+
+    private void RenderToolbar(RenderTreeBuilder __builder)
+    {
+        @if (ResourcesLayout is null)
+        {
+            <ResourceSelect Resources="@(_selectionResourceViewModels ?? _resourceViewModels)"
+                            AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.SelectAResource)]"
+                            @bind-SelectedResource="PageViewModel.SelectedResource"
+                            @bind-SelectedResource:after="HandleSelectedResourceChangedAsync"
+                            CanSelectGrouping="true"
+                            LabelClass="toolbar-left" />
+        }
+
+        @if (CanOrganize)
+        {
+            @* Shown whenever instruments are listed. Lists of several resources also offer the resource options. *@
+            <div class="toolbar-organize" role="group" aria-label="@Loc[nameof(Dashboard.Resources.Metrics.MetricsOrganizeLandmark)]">
+                <AspireMenuButton ButtonClass="toolbar-button metrics-organize-button"
+                                  ButtonAppearance="ButtonAppearance.Default"
+                                  Icon="@(new Icons.Regular.Size20.GroupList())"
+                                  IconColor="Color.Custom"
+                                  IconCustomColor="currentColor"
+                                  ItemsProvider="GetGroupByMenuItems"
+                                  Title="@GetGroupByTooltip()" />
+                <AspireMenuButton ButtonClass="toolbar-button metrics-organize-button"
+                                  ButtonAppearance="ButtonAppearance.Default"
+                                  Icon="@(new Icons.Regular.Size20.ArrowSort())"
+                                  IconColor="Color.Custom"
+                                  IconCustomColor="currentColor"
+                                  ItemsProvider="GetSortByMenuItems"
+                                  Title="@GetSortByTooltip()" />
+            </div>
+        }
+
+        <SignalsActionsDisplay IsPaused="@PauseManager.AreMetricsPaused(out _)"
+                              OnPausedChanged="@PauseManager.SetMetricsPaused"
+                              HandleClearSignal="ClearMetrics"
+                              SelectedResource="@PageViewModel.SelectedResource"/>
+
+        <div class="toolbar-end">
+            <label for="@_selectDurationId">@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]</label>
+
+            <DesktopToolbarDivider />
+
+            <FluentSelect TOption="SelectViewModel<TimeSpan>" TValue="SelectViewModel<TimeSpan>"
+                          Class="toolbar-select"
+                          Id="@_selectDurationId"
+                          Items="@_durations"
+                          OptionText="@(c => c?.Name)"
+                          @bind-Value="PageViewModel.SelectedDuration"
+                          @bind-Value:after="HandleSelectedDurationChangedAsync"
+                          AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]"/>
+        </div>
+
+        @if (!ViewportInformation.IsDesktop)
+        {
+            // Show metric selector in the toolbar for mobile, since we don't have enough room to show both
+            // panels on a mobile viewport.
+            <MetricGroupList
+                @ref="_metricGroupList"
+                PageViewModel="@PageViewModel"
+                IncludeLabel="true"
+                SelectGroupAsync="@SelectGroupAsync"
+                GetGroupUrl="@GetGroupUrl"
+                TextFilterChanged="@OnTextFilterChanged"/>
+        }
+    }
+}

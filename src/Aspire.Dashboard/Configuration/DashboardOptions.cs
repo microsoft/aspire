@@ -340,6 +340,7 @@ public sealed class TelemetryLimitOptions
 
 public sealed class UIOptions
 {
+    public bool? DisableModernDashboard { get; set; }
     public bool? DisableResourceGraph { get; set; }
     public bool? DisableImport { get; set; }
     public bool? DisableAgentHelp { get; set; }

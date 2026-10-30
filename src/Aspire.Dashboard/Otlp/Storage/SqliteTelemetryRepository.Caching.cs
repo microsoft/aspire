@@ -323,7 +323,8 @@ public sealed partial class SqliteTelemetryRepository
                 Description = metric.Description,
                 Unit = metric.Unit,
                 InstrumentType = (int)MapMetricType(metric.DataCase),
-                AggregationTemporality = (int)MapAggregationTemporality(metric)
+                AggregationTemporality = (int)MapAggregationTemporality(metric),
+                IsMonotonic = metric.DataCase == Metric.DataOneofCase.Sum && metric.Sum.IsMonotonic
             };
             resource.InstrumentCount++;
             _metricIngestionState.LoadedDimensionInstruments.Add(instrumentId);
@@ -408,7 +409,8 @@ public sealed partial class SqliteTelemetryRepository
                         Description = metric.Description,
                         Unit = metric.Unit,
                         InstrumentType = (int)MapMetricType(metric.DataCase),
-                        AggregationTemporality = (int)MapAggregationTemporality(metric)
+                        AggregationTemporality = (int)MapAggregationTemporality(metric),
+                        IsMonotonic = metric.DataCase == Metric.DataOneofCase.Sum && metric.Sum.IsMonotonic
                     });
                     _metricIngestionState.LoadedDimensionInstruments.Add(insertedRecord.InstrumentId);
                     _metricIngestionState.DimensionCounts[insertedRecord.InstrumentId] = 0;
@@ -439,7 +441,8 @@ public sealed partial class SqliteTelemetryRepository
                 description AS Description,
                 unit AS Unit,
                 instrument_type AS InstrumentType,
-                aggregation_temporality AS AggregationTemporality
+                aggregation_temporality AS AggregationTemporality,
+                is_monotonic AS IsMonotonic
             FROM telemetry_metric_instruments
             WHERE resource_id = @ResourceId AND scope_id = @ScopeId;
             """, new
@@ -537,7 +540,8 @@ public sealed partial class SqliteTelemetryRepository
                         description AS Description,
                         unit AS Unit,
                         instrument_type AS InstrumentType,
-                        aggregation_temporality AS AggregationTemporality
+                        aggregation_temporality AS AggregationTemporality,
+                        is_monotonic AS IsMonotonic
                     FROM telemetry_metric_instruments
                     ORDER BY instrument_id;
                     """).AsList();
@@ -674,6 +678,7 @@ public sealed partial class SqliteTelemetryRepository
                     Unit = record.Unit,
                     Type = (OtlpInstrumentType)record.InstrumentType,
                     AggregationTemporality = (OtlpAggregationTemporality)record.AggregationTemporality,
+                    IsMonotonic = record.IsMonotonic,
                     Parent = resourceScope.Scope.Scope,
                     ResourceView = resource.ViewsById[record.ResourceViewId].View
                 });
@@ -845,6 +850,7 @@ public sealed partial class SqliteTelemetryRepository
         public required string Unit { get; init; }
         public required int InstrumentType { get; init; }
         public required int AggregationTemporality { get; init; }
+        public required bool IsMonotonic { get; init; }
     }
 
     internal sealed class InsertedInstrumentRecord

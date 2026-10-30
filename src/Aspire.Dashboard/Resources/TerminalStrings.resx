@@ -120,6 +120,10 @@
   <data name="TerminalProgress" xml:space="preserve">
     <value>Terminal progress</value>
   </data>
+  <data name="TerminalOpenForResource" xml:space="preserve">
+    <value>Open terminal for {0}</value>
+    <comment>{0} is the resource name.</comment>
+  </data>
   <data name="TerminalPalette" xml:space="preserve">
     <value>Terminal palette</value>
   </data>
@@ -185,6 +189,12 @@
   </data>
   <data name="TerminalDisconnected" xml:space="preserve">
     <value>The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</value>
+  </data>
+  <data name="TerminalExpand" xml:space="preserve">
+    <value>Expand terminal</value>
+  </data>
+  <data name="TerminalMinimize" xml:space="preserve">
+    <value>Minimize terminal</value>
   </data>
   <data name="TerminalDisconnectedMessage" xml:space="preserve">
     <value>Terminal disconnected. The last output has been preserved.</value>

@@ -18,6 +18,7 @@ public partial class TextVisualizerDialog : ComponentBase
     private List<SelectViewModel<string>> _options = null!;
     private SelectViewModel<string> _selectedFormat = null!;
     private bool _isLoading = true;
+    private bool _noWrap;
     private MarkdownProcessor? _markdownProcessor;
     private TextVisualizerDialogViewModel? _previousContent;
     internal TextVisualizerViewModel TextVisualizerViewModel { get; set; } = default!;
@@ -118,6 +119,8 @@ public partial class TextVisualizerDialog : ComponentBase
     }
 
     private void OnSelectedFormatChanged() => ChangeFormat(_selectedFormat.Id);
+
+    private void ToggleWordWrap() => _noWrap = !_noWrap;
 
     internal void ChangeFormat(string? newFormat)
     {

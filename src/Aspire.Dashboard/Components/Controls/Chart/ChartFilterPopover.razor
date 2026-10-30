@@ -27,7 +27,7 @@
                     var isChecked = Filter.SelectedValues.Contains(tag);
                     <FluentCheckbox Label="@tag.Text"
                                     Class="aspire-checkbox"
-                                    title="@tag.Text"
+                                    data-tooltip="@tag.Text"
                                     @key=tag
                                     @bind-Value:get="isChecked"
                                     @bind-Value:set="c => OnTagSelectionChangedAsync(tag, c)"/>
