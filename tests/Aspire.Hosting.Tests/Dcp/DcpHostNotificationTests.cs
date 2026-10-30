@@ -714,15 +714,19 @@ public sealed class DcpHostNotificationTests
         Assert.Equal("vendor=value", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupTraceState]);
     }
 
-    [Fact]
-    public async Task EnsureDcpHostRunning_TransfersSessionFolderOwnershipToDcp()
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(1, false)]
+    public async Task EnsureDcpHostRunning_TransfersSessionFolderOwnershipToDcpOnlyWhenDcpStarts(int launcherExitCode, bool sessionFolderOwnedByDcp)
     {
         // DCP is started with --detach and DCP_SESSION_FOLDER, so it outlives the AppHost and still reads
         // the kubeconfig in the session folder during its own cleanup before deleting the folder itself.
-        // Disposing the managed file system service must therefore not delete the folder once DCP has started.
+        // Disposing the managed file system service must therefore not delete the folder once DCP has started,
+        // but must still delete it when the DCP launcher fails.
+        var launcherDir = Directory.CreateTempSubdirectory("aspire-dcp-launcher");
         var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var locations = new Locations(fileSystemService);
-        var dcpOptions = new DcpOptions { CliPath = DotnetFileAppProcess.ResolvedExecutablePath };
+        var dcpOptions = new DcpOptions { CliPath = CreateFakeDcpLauncher(launcherDir.FullName, launcherExitCode) };
         var dcpHost = new DcpHost(
             new NullLoggerFactory(),
             Options.Create(dcpOptions),
@@ -737,12 +741,14 @@ public sealed class DcpHostNotificationTests
         var sessionDir = locations.DcpSessionDir;
         try
         {
-            dcpHost.EnsureDcpHostRunning();
             await File.WriteAllTextAsync(locations.DcpKubeconfigPath, "kubeconfig written by DCP");
+
+            dcpHost.EnsureDcpHostRunning();
+            await dcpHost.DcpSessionDirOwnershipTransfer.WaitAsync(TimeSpan.FromSeconds(60));
 
             fileSystemService.Dispose();
 
-            Assert.True(File.Exists(locations.DcpKubeconfigPath), "The DCP session folder must be left for DCP to clean up once DCP has started.");
+            Assert.Equal(sessionFolderOwnedByDcp, File.Exists(locations.DcpKubeconfigPath));
         }
         finally
         {
@@ -751,7 +757,23 @@ public sealed class DcpHostNotificationTests
             {
                 Directory.Delete(sessionDir, recursive: true);
             }
+            launcherDir.Delete(recursive: true);
         }
+    }
+
+    private static string CreateFakeDcpLauncher(string directory, int exitCode)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var scriptPath = Path.Combine(directory, "dcp.cmd");
+            File.WriteAllText(scriptPath, $"@exit /b {exitCode}{Environment.NewLine}");
+            return scriptPath;
+        }
+
+        var shellScriptPath = Path.Combine(directory, "dcp");
+        File.WriteAllText(shellScriptPath, $"#!/bin/sh{Environment.NewLine}exit {exitCode}{Environment.NewLine}");
+        File.SetUnixFileMode(shellScriptPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return shellScriptPath;
     }
 
     [Fact]

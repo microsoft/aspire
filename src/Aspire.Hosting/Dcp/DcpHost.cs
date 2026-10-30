@@ -281,10 +281,33 @@ internal sealed class DcpHost
             _logger.LogError(ex, "Failed to enable orchestration logging.");
         }
 
-        _ = ProcessUtil.Run(dcpProcessSpec);
+        var (dcpLauncherResult, _) = ProcessUtil.Run(dcpProcessSpec);
+        DcpSessionDirOwnershipTransfer = TransferDcpSessionDirOwnershipWhenDcpStartsAsync(dcpLauncherResult);
+    }
 
-        // DCP started successfully and now owns DCP_SESSION_FOLDER, deleting it after its own cleanup.
-        _locations.TransferDcpSessionDirOwnershipToDcp();
+    // Exposed for testing.
+    internal Task DcpSessionDirOwnershipTransfer { get; private set; } = Task.CompletedTask;
+
+    private async Task TransferDcpSessionDirOwnershipWhenDcpStartsAsync(Task<ProcessResult> dcpLauncherResult)
+    {
+        // With --detach, the launcher exits as soon as the detached apiserver has started. Once that succeeds, DCP owns
+        // DCP_SESSION_FOLDER and deletes it after its own cleanup. If the launch fails, the AppHost keeps cleaning it up.
+        try
+        {
+            var result = await dcpLauncherResult.ConfigureAwait(false);
+            if (result.ExitCode == 0)
+            {
+                _locations.TransferDcpSessionDirOwnershipToDcp();
+            }
+            else
+            {
+                _logger.LogDebug("DCP launcher exited with code {ExitCode}. The DCP session folder will be deleted by the AppHost.", result.ExitCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to observe the DCP launcher result. The DCP session folder will be deleted by the AppHost.");
+        }
     }
 
     public ProcessSpec CreateDcpProcessSpec(Locations locations)
