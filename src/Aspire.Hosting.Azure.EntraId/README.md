@@ -482,7 +482,7 @@ var entraWeb = builder.AddEntraIdApplication("entra-web")
                       .RunWithLocalDeveloperCertificateCredential()
                       .PublishWithFederatedManagedIdentityCredential();
 
-builder.AddProject<Projects.Web>("web")
+builder.AddDotnetProject("web", "../Web/Web.csproj")
        .WithReference(entraWeb);
 ```
 

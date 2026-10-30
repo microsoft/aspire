@@ -96,6 +96,7 @@ interface DotNetAttachTargetInfo {
 
 interface DotNetAttachDebuggerResourceInfo {
     configuration?: string;
+    directTargetInfo?: DotNetAttachTargetInfo;
     framework?: string;
     launchCommand?: DotNetLaunchCommand;
     launcherPid: number;
@@ -122,7 +123,9 @@ const executablePathPropertyName = 'executable.path';
 const projectPathPropertyName = 'project.path';
 const projectConfigurationPropertyName = 'project.configuration';
 const projectLaunchCommandPropertyName = 'project.launchCommand';
+const projectTargetPathPropertyName = 'project.targetPath';
 const projectTargetFrameworkPropertyName = 'project.targetFramework';
+const projectUseAppHostPropertyName = 'project.useAppHost';
 const resourceParentNamePropertyName = 'resource.parentName';
 const resourceLaunchConfigurationTypePropertyName = 'resource.launchConfigurationType';
 const dotNetProjectFileExtensions = new Set(['.csproj', '.fsproj', '.vbproj']);
@@ -1349,9 +1352,17 @@ function getDotNetAttachDebuggerResourceInfo(resource: ResourceDebugResourceSnap
         return undefined;
     }
 
+    const directTargetInfo = launchMetadata.launchCommand === 'direct'
+        ? getDirectDotNetAttachTargetInfo(resource)
+        : undefined;
+    if (launchMetadata.launchCommand === 'direct' && directTargetInfo === undefined) {
+        return undefined;
+    }
+
     const projectPath = resource.properties?.[projectPathPropertyName] as string;
     return {
         ...launchMetadata,
+        directTargetInfo,
         launcherPid,
         projectPath,
         resourceLabel: resource.displayName ?? resource.name,
@@ -1375,9 +1386,10 @@ function canRecognizeDotNetAttachDebuggerResource(resource: ResourceDebugResourc
     if (resource.properties?.[projectLaunchCommandPropertyName] === 'direct') {
         // Coordinated builds can launch the SDK's native apphost rather than a dotnet run/watch
         // parent. Require the producer's explicit PID semantics; process discovery still verifies
-        // that this PID is the evaluated project output, never just a matching executable name.
+        // that this PID is the coordinated build output, never just a matching executable name.
         if (launchConfigurationType !== 'project-with-external-build.v1' ||
-            getNonEmptyStringProperty(resource, executablePathPropertyName) === undefined) {
+            getNonEmptyStringProperty(resource, executablePathPropertyName) === undefined ||
+            getDirectDotNetAttachTargetInfo(resource) === undefined) {
             return false;
         }
     } else if (!isDotNetExecutable(resource)) {
@@ -1432,6 +1444,26 @@ function getDotNetLaunchMetadata(
 function getNonEmptyStringProperty(resource: ResourceDebugResourceSnapshot, propertyName: string): string | undefined {
     const value: unknown = resource.properties?.[propertyName];
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function getDirectDotNetAttachTargetInfo(resource: ResourceDebugResourceSnapshot): DotNetAttachTargetInfo | undefined {
+    const targetPath = getNonEmptyStringProperty(resource, projectTargetPathPropertyName);
+    const useAppHostValue: unknown = resource.properties?.[projectUseAppHostPropertyName];
+    let useAppHost: boolean | undefined;
+    if (typeof useAppHostValue === 'boolean') {
+        useAppHost = useAppHostValue;
+    } else if (typeof useAppHostValue === 'string') {
+        const normalizedUseAppHost = useAppHostValue.trim().toLowerCase();
+        if (normalizedUseAppHost === 'true') {
+            useAppHost = true;
+        } else if (normalizedUseAppHost === 'false') {
+            useAppHost = false;
+        }
+    }
+
+    return targetPath === undefined || useAppHost === undefined
+        ? undefined
+        : { targetPath, useAppHost };
 }
 
 function getResourceParentName(resource: ResourceDebugResourceSnapshot): string | null {
@@ -1709,14 +1741,16 @@ export async function createDotNetAttachDebugSessionConfiguration(
         throw new ResourceAttachConfigurationError('resourceNotAttachable', invalidLaunchConfiguration(resource.name));
     }
 
-    let targetInfo: DotNetAttachTargetInfo;
-    try {
-        targetInfo = await dotNetService.getDotNetAttachTargetInfo(attachInfo.projectPath, attachInfo.configuration, cancellationToken, attachInfo.framework);
-    }
-    catch (error) {
-        throw new ResourceAttachConfigurationError(
-            'resourceNotAttachable',
-            error instanceof Error ? error.message : String(error));
+    let targetInfo = attachInfo.directTargetInfo;
+    if (targetInfo === undefined) {
+        try {
+            targetInfo = await dotNetService.getDotNetAttachTargetInfo(attachInfo.projectPath, attachInfo.configuration, cancellationToken, attachInfo.framework);
+        }
+        catch (error) {
+            throw new ResourceAttachConfigurationError(
+                'resourceNotAttachable',
+                error instanceof Error ? error.message : String(error));
+        }
     }
 
     let applicationPid: number;

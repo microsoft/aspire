@@ -160,18 +160,68 @@ public class ResourceSnapshotBuilderTests
         Assert.True(GetProperty(snapshot, KnownProperties.Executable.Args).IsSensitive);
     }
 
-    [Theory]
-    [InlineData("/app/bin/Release/net10.0/project", "Release")]
-    [InlineData("C:\\app\\bin\\Debug\\net10.0\\project.exe", "Debug")]
-    [InlineData("dotnet", "Release")]
-    [InlineData("dotnet", null)]
-    public void CoordinatedProjectSnapshotIncludesDirectLaunchMetadata(string executablePath, string? configuration)
+    [Fact]
+    public void CoordinatedProjectIdeSnapshotDoesNotReportDirectLaunchMetadata()
     {
         var resource = new TestDotnetProjectResource("project");
         resource.Annotations.Add(new TestProjectMetadata
         {
             SuppressBuild = true,
-            BuildWorkingDirectory = "/app"
+            BuildWorkingDirectory = "/app",
+            BuildTarget = new("/app/bin/Release/net10.0/project.dll", useAppHost: false)
+        });
+        resource.Annotations.Add(SupportsDebuggingAnnotation.Create<object>(
+            resource.Name,
+            KnownLaunchConfigurationTypes.ProjectWithExternalBuild,
+            _ => Task.FromResult(new object())));
+
+        var executable = Executable.Create(resource.Name, "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, resource.Name);
+        executable.Spec.ExecutionType = ExecutionType.IDE;
+        executable.SetAnnotationAsObjectList(Executable.LaunchConfigurationsAnnotation, new[]
+        {
+            new ProjectLaunchConfiguration
+            {
+                Type = KnownLaunchConfigurationTypes.ProjectWithExternalBuild,
+                ProjectPath = "/app/project.csproj",
+                Mode = ExecutableLaunchMode.NoDebug,
+                BuildConfiguration = "Release"
+            }
+        });
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["private-application-argument"],
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [resource.Name] = resource
+        }).ToSnapshot(executable, CreatePreviousSnapshot(KnownResourceTypes.Project));
+
+        Assert.Equal("ide", GetProperty(snapshot, KnownProperties.Project.LaunchCommand).Value);
+        Assert.Equal("Release", GetProperty(snapshot, KnownProperties.Project.Configuration).Value);
+        Assert.Empty(snapshot.Properties.Where(property => property.Name is KnownProperties.Project.TargetPath
+            or KnownProperties.Project.UseAppHost));
+    }
+
+    [Theory]
+    [InlineData("/app/bin/Release/net10.0/project", "Release", "/app/bin/Release/net10.0/project.dll", true)]
+    [InlineData("C:\\app\\bin\\Debug\\net10.0\\project.exe", "Debug", "C:\\app\\bin\\Debug\\net10.0\\project.dll", true)]
+    [InlineData("dotnet", "Release", "/app/bin/Release/net10.0/project.dll", false)]
+    [InlineData("dotnet", null, "/app/bin/Debug/net10.0/project.dll", false)]
+    public void CoordinatedProjectSnapshotIncludesDirectLaunchMetadata(
+        string executablePath,
+        string? configuration,
+        string targetPath,
+        bool useAppHost)
+    {
+        var resource = new TestDotnetProjectResource("project");
+        resource.Annotations.Add(new TestProjectMetadata
+        {
+            SuppressBuild = true,
+            BuildWorkingDirectory = "/app",
+            BuildTarget = new(targetPath, useAppHost)
         });
         resource.Annotations.Add(new ProjectLaunchDefaultsAnnotation { BuildConfiguration = configuration });
         resource.Annotations.Add(SupportsDebuggingAnnotation.Create<object>(
@@ -202,6 +252,8 @@ public class ResourceSnapshotBuilderTests
         Assert.Equal(
             configuration is null ? [] : [configuration],
             snapshot.Properties.Where(property => property.Name == KnownProperties.Project.Configuration).Select(property => property.Value));
+        Assert.Equal(targetPath, GetProperty(snapshot, KnownProperties.Project.TargetPath).Value);
+        Assert.Equal(useAppHost, GetProperty(snapshot, KnownProperties.Project.UseAppHost).Value);
         Assert.False(GetProperty(snapshot, KnownProperties.Project.LaunchCommand).IsSensitive);
         Assert.True(GetProperty(snapshot, KnownProperties.Executable.Args).IsSensitive);
     }
@@ -239,7 +291,8 @@ public class ResourceSnapshotBuilderTests
         }).ToSnapshot(executable, CreatePreviousSnapshot(KnownResourceTypes.Project));
 
         Assert.Empty(snapshot.Properties.Where(property => property.Name is KnownProperties.Project.LaunchCommand
-            or KnownProperties.Project.Configuration or KnownProperties.Project.TargetFramework));
+            or KnownProperties.Project.Configuration or KnownProperties.Project.TargetFramework
+            or KnownProperties.Project.TargetPath or KnownProperties.Project.UseAppHost));
     }
 
     [Theory]
@@ -784,6 +837,8 @@ public class ResourceSnapshotBuilderTests
         public bool SuppressBuild { get; init; }
 
         public string? BuildWorkingDirectory { get; init; }
+
+        public ProjectBuildTarget? BuildTarget { get; init; }
 
         public LaunchSettings LaunchSettings { get; } = new()
         {

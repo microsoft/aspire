@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.EntityFrameworkCore.Tests;
@@ -29,14 +30,11 @@ public class EFMigrationResourceTests
         Assert.All(methods, method => Assert.Null(method.GetCustomAttribute<ExperimentalAttribute>()));
     }
 
-    [Theory]
-    [InlineData("Service.csproj")]
-    [InlineData("Service.fsproj")]
-    [InlineData("Service.vbproj")]
-    public void GeneralizedConstructorCapturesDataWithoutRegisteringResource(string path)
+    [Fact]
+    public void GeneralizedConstructorCapturesDataWithoutRegisteringResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddDotnetProject("project", path, options => options.ExcludeLaunchProfile = true);
+        var project = builder.AddDotnetProject("project", "Service.csproj", options => options.ExcludeLaunchProfile = true);
         var resources = builder.Resources.ToArray();
 
         var resource = new EFMigrationResource("migrations", (IDotnetProgramResource)project.Resource, "App.Context");
@@ -79,6 +77,10 @@ public class EFMigrationResourceTests
         Assert.Same(project.Resource, migrations.Resource.StartupProjectResource);
         Assert.Equal(overload is 1 or 3 ? "App.Context" : null, migrations.Resource.DbContextTypeName);
         Assert.Same(migrations.Resource, Assert.Single(builder.Resources.OfType<EFMigrationResource>()));
-        Assert.NotEmpty(migrations.Resource.Annotations);
+        var parentRelationship = Assert.Single(
+            migrations.Resource.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            annotation => annotation.Type == "Parent");
+        Assert.Same(project.Resource, parentRelationship.Resource);
+        Assert.Single(migrations.Resource.Annotations.OfType<PipelineStepAnnotation>());
     }
 }

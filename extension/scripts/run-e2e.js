@@ -1537,6 +1537,7 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
   else {
     writeWorkerProject('AspireE2E.Worker');
     if (enableResourceDebugE2E) {
+      writeCustomOutputWorkerProject('AspireE2E.CustomOutputWorker');
       writeGoWorker('AspireE2E.Go');
     }
     if (enableAzureFunctionsE2E) {
@@ -1818,6 +1819,13 @@ ${goPackageReference}  </ItemGroup>
 
 `
     : '';
+  const customOutputWorkerResource = includeResourceDebug
+    ? `builder.AddDotnetProject("e2e-custom-output-worker", "../AspireE2E.CustomOutputWorker/AspireE2E.CustomOutputWorker.csproj")
+    .WithBuildEnvironment("BUILD_FLAVOR", "custom")
+    .WithHttpEndpoint(name: "http");
+
+`
+    : '';
   const winUiResource = includeWinUi
     ? 'builder.AddDotnetProject("e2e-winui", "../AspireE2E.WinUI/AspireE2E.WinUI.csproj", options => options.LaunchProfileName = "E2E");\n\n'
     : '';
@@ -1903,7 +1911,7 @@ builder.AddDotnetProject("e2e-terminal", "../AspireE2E.Worker/AspireE2E.Worker.c
     .WithHttpEndpoint(name: "http")
     .WithTerminal();
 
-${winUiResource}${azureFunctionsResource}${goResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
+${winUiResource}${azureFunctionsResource}${customOutputWorkerResource}${goResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
 {
     var task = await context.ReportingStep
         .CreateTaskAsync("Running E2E run action pipeline step", context.CancellationToken)
@@ -2142,6 +2150,32 @@ function writeWorkerProject(projectName) {
 var app = builder.Build();
 
 app.MapGet("/", () => "ok");
+
+app.Run();
+`);
+}
+
+function writeCustomOutputWorkerProject(projectName) {
+  const projectDirectory = path.join(workspaceRoot, projectName);
+  fs.mkdirSync(projectDirectory, { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseAppHost>false</UseAppHost>
+    <BUILD_FLAVOR>default</BUILD_FLAVOR>
+    <OutputPath Condition="'$(BUILD_FLAVOR)' == 'custom'">bin/custom/</OutputPath>
+  </PropertyGroup>
+
+</Project>
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'Program.cs'), `${csharpFileHeader}var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+app.MapGet("/", () => "custom-ok");
 
 app.Run();
 `);

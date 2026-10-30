@@ -418,6 +418,7 @@ public static class DotnetProjectHostingExtensions
                             ctx.Logger,
                             cancellationToken),
                         ctx.CancellationToken).ConfigureAwait(false);
+                    projectMetadata.SetBuildTarget(runProperties.TargetPath, runProperties.UseAppHost);
                     var executableAnnotation = ctx.Resource.Annotations.OfType<ExecutableAnnotation>().Last();
                     executableAnnotation.Command = runProperties.Command;
                     if (!executableAnnotation.WorkingDirectoryExplicitlySet)

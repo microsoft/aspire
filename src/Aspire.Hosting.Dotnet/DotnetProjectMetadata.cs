@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREEXTENSION001
+
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Aspire.Hosting.Utils;
@@ -14,6 +16,7 @@ namespace Aspire.Hosting.Dotnet;
 internal sealed class DotnetProjectMetadata(string projectPath, string? buildConfiguration, string resourceName) : IProjectMetadata
 {
     private IReadOnlyDictionary<string, string> _buildEnvironment = ReadOnlyDictionary<string, string>.Empty;
+    private ProjectBuildTarget? _buildTarget;
     private string? _buildWorkingDirectory;
     private string? _resolvedProjectPath;
 
@@ -62,6 +65,9 @@ internal sealed class DotnetProjectMetadata(string projectPath, string? buildCon
     public string? BuildWorkingDirectory =>
         Volatile.Read(ref _buildWorkingDirectory);
 
+    public ProjectBuildTarget? BuildTarget =>
+        Volatile.Read(ref _buildTarget);
+
     internal DotnetProjectRunPropertiesResolverCallback RunPropertiesResolver { get; set; } =
         DotnetProjectRunPropertiesResolver.ResolveAsync;
 
@@ -105,5 +111,10 @@ internal sealed class DotnetProjectMetadata(string projectPath, string? buildCon
     internal void SetBuildWorkingDirectory(string? workingDirectory)
     {
         Volatile.Write(ref _buildWorkingDirectory, workingDirectory);
+    }
+
+    internal void SetBuildTarget(string targetPath, bool useAppHost)
+    {
+        Volatile.Write(ref _buildTarget, new ProjectBuildTarget(targetPath, useAppHost));
     }
 }

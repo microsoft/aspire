@@ -367,6 +367,8 @@ suite('Dotnet Debugger Extension Tests', () => {
                 'project.path': '/repo/Api.csproj',
                 'project.launchCommand': 'direct',
                 'project.configuration': 'Release',
+                'project.targetPath': candidate.targetPath,
+                'project.useAppHost': candidate.useAppHost,
                 'resource.launchConfigurationType': 'project-with-external-build.v1',
             });
 
@@ -376,7 +378,7 @@ suite('Dotnet Debugger Extension Tests', () => {
 
             assert.strictEqual(configuration.processId, 1234, candidate.executable);
             assert.strictEqual(configuration.request, 'attach');
-            assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.calledOnceWithExactly('/repo/Api.csproj', 'Release'), true);
+            assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.called, false);
         }
     });
 
@@ -400,8 +402,11 @@ suite('Dotnet Debugger Extension Tests', () => {
                 'executable.path': candidate.executable,
                 'project.path': '/repo/Api.csproj',
                 'project.launchCommand': 'direct',
+                'project.targetPath': targetPath,
+                'project.useAppHost': candidate.useAppHost,
                 'resource.launchConfigurationType': 'project-with-external-build.v1',
             })), { errorKind: 'resourceNotAttachable' });
+            assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.called, false);
         }
     });
 
@@ -424,12 +429,20 @@ suite('Dotnet Debugger Extension Tests', () => {
             });
             assert.strictEqual(provider.canRecognizeResource(resource), false);
             assert.strictEqual(provider.canAttachToResource(resource), false);
-            if (metadata['project.launchCommand'] === 'direct') {
-                assert.strictEqual(provider.canAttachToResource({
-                    ...resource,
-                    properties: { ...resource.properties, 'executable.path': 'dotnet' },
-                }), false);
-            }
+        }
+
+        for (const executablePath of [undefined, '', '   ']) {
+            const resource = createProjectResource({
+                'executable.pid': 1234,
+                'executable.path': executablePath,
+                'project.path': '/repo/Api.csproj',
+                'project.launchCommand': 'direct',
+                'project.targetPath': '/repo/bin/Release/net10.0/Api.dll',
+                'project.useAppHost': 'true',
+                'resource.launchConfigurationType': 'project-with-external-build.v1',
+            });
+            assert.strictEqual(provider.canRecognizeResource(resource), false);
+            assert.strictEqual(provider.canAttachToResource(resource), false);
         }
         assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.called, false);
     });

@@ -178,7 +178,9 @@ internal class ResourceSnapshotBuilder
         properties = properties
             .RemoveResourceProperty(KnownProperties.Project.LaunchCommand)
             .RemoveResourceProperty(KnownProperties.Project.Configuration)
-            .RemoveResourceProperty(KnownProperties.Project.TargetFramework);
+            .RemoveResourceProperty(KnownProperties.Project.TargetFramework)
+            .RemoveResourceProperty(KnownProperties.Project.TargetPath)
+            .RemoveResourceProperty(KnownProperties.Project.UseAppHost);
         var dotNetLaunchProperties = GetDotNetLaunchProperties(executable, appModelResource, launchConfigurationType, effectiveArgs);
 
         if (projectPath is not null)
@@ -268,9 +270,19 @@ internal class ResourceSnapshotBuilder
             // executable or "dotnet exec app.dll". The reported PID is the application, not a
             // run/watch launcher, and its arguments must not be parsed as SDK build options.
             appModelResource.TryGetLastAnnotation<ProjectLaunchDefaultsAnnotation>(out var launchDefaults);
-            return launchDefaults?.BuildConfiguration is { } directBuildConfiguration
-                ? [new(KnownProperties.Project.LaunchCommand, "direct"), new(KnownProperties.Project.Configuration, directBuildConfiguration)]
-                : [new(KnownProperties.Project.LaunchCommand, "direct")];
+            var directProperties = ImmutableArray.CreateBuilder<ResourcePropertySnapshot>();
+            directProperties.Add(new(KnownProperties.Project.LaunchCommand, "direct"));
+            if (launchDefaults?.BuildConfiguration is { } directBuildConfiguration)
+            {
+                directProperties.Add(new(KnownProperties.Project.Configuration, directBuildConfiguration));
+            }
+            if (projectMetadata.BuildTarget is { } buildTarget)
+            {
+                directProperties.Add(new(KnownProperties.Project.TargetPath, buildTarget.TargetPath));
+                directProperties.Add(new(KnownProperties.Project.UseAppHost, buildTarget.UseAppHost));
+            }
+
+            return directProperties.ToImmutable();
         }
 
         var executableName = Path.GetFileName(resource.Spec.ExecutablePath);

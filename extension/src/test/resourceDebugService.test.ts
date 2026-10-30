@@ -264,7 +264,7 @@ suite('Resource debug service', () => {
     for (const state of ['Running', 'Exited']) {
         test(`recognizes a ${state} coordinated project from a CLI-started resource snapshot`, async () => {
             const dotNetService = new DotNetService(undefined);
-            sinon.stub(dotNetService, 'getDotNetAttachTargetInfo').resolves({
+            const getDotNetAttachTargetInfo = sinon.stub(dotNetService, 'getDotNetAttachTargetInfo').resolves({
                 targetPath: '/repo/api/bin/Release/net10.0/Api.dll',
                 useAppHost: true,
             });
@@ -276,6 +276,8 @@ suite('Resource debug service', () => {
                     'project.path': '/repo/api/Api.csproj',
                     'project.configuration': 'Release',
                     'project.launchCommand': 'direct',
+                    'project.targetPath': '/repo/api/bin/Release/net10.0/Api.dll',
+                    'project.useAppHost': 'true',
                     'resource.launchConfigurationType': 'project-with-external-build.v1',
                     'executable.path': '/repo/api/bin/Release/net10.0/Api',
                     'executable.pid': '1234',
@@ -305,6 +307,7 @@ suite('Resource debug service', () => {
                     assert.strictEqual(startDebugging.firstCall.args[1].type, 'coreclr');
                     assert.strictEqual(startDebugging.firstCall.args[1].request, 'attach');
                     assert.strictEqual(startDebugging.firstCall.args[1].processId, 1234);
+                    assert.strictEqual(getDotNetAttachTargetInfo.called, false);
                 }
             }
             finally {

@@ -674,7 +674,7 @@ public static class EntraIdResourceExtensions
     ///     .RunWithLocalDeveloperCertificateCredential()
     ///     .PublishWithFederatedManagedIdentityCredential();
     ///
-    /// builder.AddProject&lt;Projects.Web&gt;("web").WithReference(entra);
+    /// builder.AddDotnetProject("web", @"..\Web\Web.csproj").WithReference(entra);
     /// </code>
     /// </example>
     [AspireExport]

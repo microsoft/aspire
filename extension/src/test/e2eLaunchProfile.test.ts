@@ -722,7 +722,7 @@ suite('E2E launch profile', () => {
         assert.ok(debuggerPrerequisitesIndex < azureFunctionsPrerequisitesIndex);
         assert.ok(azureFunctionsPrerequisitesIndex < runStepIndex);
         assert.ok(workflow.includes('global-json-file: global.json'));
-        assert.deepStrictEqual(runnerTargetFrameworks, ['net11.0', 'net10.0', 'net10.0-windows10.0.19041.0', 'net10.0', 'net10.0']);
+        assert.deepStrictEqual(runnerTargetFrameworks, ['net11.0', 'net10.0', 'net10.0-windows10.0.19041.0', 'net10.0', 'net10.0', 'net10.0']);
         assert.deepStrictEqual(fixtureTargetFrameworks, ['net10.0', 'net10.0']);
         assert.ok(debuggerPrerequisiteStep.includes('if: ${{ matrix.installDotnetDebugger || matrix.installAzureFunctions || matrix.installResourceDebug }}'));
         assert.ok(debuggerPrerequisiteStep.includes('vscode-dotnet-runtime/3.1.0/vspackage'));
@@ -899,6 +899,7 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
                 ['e2e-worker', '../AspireE2E.Worker/AspireE2E.Worker.csproj'],
                 ['e2e-terminal', '../AspireE2E.Worker/AspireE2E.Worker.csproj'],
                 ...(includeWinUi ? [['e2e-winui', '../AspireE2E.WinUI/AspireE2E.WinUI.csproj']] : []),
+                ...(includeResourceDebug ? [['e2e-custom-output-worker', '../AspireE2E.CustomOutputWorker/AspireE2E.CustomOutputWorker.csproj']] : []),
             ]);
             assert.strictEqual(appHost.includes('options => options.LaunchProfileName = "E2E"'), includeWinUi);
             assert.strictEqual(appHost.includes('builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj")'), includeAzureFunctions);
@@ -1255,6 +1256,7 @@ builder.Build().Run();
         assert.ok(runner.includes('if (enableBrowserDebuggerE2E) {'));
         assert.ok(runner.includes("writeBrowserDebuggerAppHostProject('AspireE2E.Blazor.AppHost', resolvedAppHostSdkVersion);"));
         assert.ok(runner.includes("writeWorkerProject('AspireE2E.Worker');"));
+        assert.ok(runner.includes("writeCustomOutputWorkerProject('AspireE2E.CustomOutputWorker');"));
         assert.ok(runner.includes("writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E, enableWinUiE2E, enableResourceDebugE2E);"));
         assert.ok(nodeFunctionsSpec.includes('const appHostVersion = process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION;'));
         assert.ok(nodeFunctionsSpec.includes('<Project Sdk="Microsoft.NET.Sdk">'));

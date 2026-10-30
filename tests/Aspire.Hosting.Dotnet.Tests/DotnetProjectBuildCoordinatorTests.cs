@@ -653,7 +653,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         }
 
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
-            () => File.Exists(sentinelPath) && File.ReadAllText(sentinelPath) == "initial",
+            () => MarkerHasValue(sentinelPath, "initial"),
             "The initial file app should write its source-version marker.",
             retries: 20);
 
@@ -665,7 +665,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         Assert.True(rebuildResult.Success);
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
-            () => File.Exists(sentinelPath) && File.ReadAllText(sentinelPath) == "updated",
+            () => MarkerHasValue(sentinelPath, "updated"),
             "The rebuilt file app should restart from the edited source.",
             retries: 20);
 
@@ -1641,7 +1641,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         metadata.RunPropertiesResolver = (_, _, buildEnvironment, _, _, _) =>
         {
             resolverBuildEnvironment = buildEnvironment["BUILD_FLAVOR"];
-            return Task.FromResult(new DotnetProjectRunProperties("resolved-command", "--from-resolver", null));
+            return Task.FromResult(new DotnetProjectRunProperties(
+                "resolved-command",
+                "--from-resolver",
+                WorkingDirectory: null,
+                Path.Combine(Path.GetDirectoryName(projectPath)!, "bin", "Worker.dll"),
+                UseAppHost: false));
         };
         await using var app = builder.Build();
 
@@ -2021,7 +2026,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             .WithWorkingDirectory(runtimeWorkingDirectory);
         var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
         metadata.RunPropertiesResolver = (_, _, _, _, _, _) =>
-            Task.FromResult(new DotnetProjectRunProperties("resolved-command", "--from-resolver", sdkWorkingDirectory));
+            Task.FromResult(new DotnetProjectRunProperties(
+                "resolved-command",
+                "--from-resolver",
+                sdkWorkingDirectory,
+                Path.Combine(projectDirectory, "bin", "Worker.dll"),
+                UseAppHost: false));
         if (requiresContextSpecificBuild)
         {
             project.WithBuildEnvironment("BUILD_FLAVOR", "custom");
@@ -2070,7 +2080,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
         var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
         metadata.RunPropertiesResolver = (_, _, _, _, _, _) =>
-            Task.FromResult(new DotnetProjectRunProperties("resolved-command", "--from-resolver", sdkWorkingDirectory));
+            Task.FromResult(new DotnetProjectRunProperties(
+                "resolved-command",
+                "--from-resolver",
+                sdkWorkingDirectory,
+                Path.Combine(projectDirectory, "bin", "Worker.dll"),
+                UseAppHost: false));
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
@@ -3125,7 +3140,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         }
 
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
-            () => File.Exists(sentinelPath) && File.ReadAllText(sentinelPath) == "started",
+            () => MarkerHasValue(sentinelPath, "started"),
             "The SDK project should start from the configured build output.",
             retries: 20);
         var expectedTargetPath = Path.Combine(Path.GetDirectoryName(projectPath)!, "bin", "custom", "net10.0", "EnvironmentBuild.dll");
@@ -3136,6 +3151,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.True(metadata.SuppressBuild);
         Assert.Equal("Release", metadata.BuildEnvironment["Configuration"]);
         Assert.Equal(Path.GetDirectoryName(projectPath), metadata.BuildWorkingDirectory);
+        var buildTarget = metadata.BuildTarget;
+        Assert.NotNull(buildTarget);
+        Assert.Equal(expectedTargetPath, buildTarget.TargetPath);
+        Assert.False(buildTarget.UseAppHost);
         Assert.Single(File.ReadAllLines(GetBuildCountPath(projectPath)));
 
         WriteProgram("rebuilt");
@@ -3145,7 +3164,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             TestContext.Current.CancellationToken);
         Assert.True(rebuildResult.Success);
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
-            () => File.Exists(sentinelPath) && File.ReadAllText(sentinelPath) == "rebuilt",
+            () => MarkerHasValue(sentinelPath, "rebuilt"),
             "The rebuilt SDK project should restart from the edited source.",
             retries: 20);
         Assert.Equal(["build", "build"], File.ReadAllLines(GetBuildCountPath(projectPath)));
@@ -3213,7 +3232,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         {
             Interlocked.Increment(ref resolverCallCount);
             Assert.True(File.Exists(sentinelPath));
-            return Task.FromResult(new DotnetProjectRunProperties("dotnet", "exec PersistentProject.dll", null));
+            return Task.FromResult(new DotnetProjectRunProperties(
+                "dotnet",
+                "exec PersistentProject.dll",
+                WorkingDirectory: null,
+                Path.Combine(Path.GetDirectoryName(projectPath)!, "PersistentProject.dll"),
+                UseAppHost: false));
         };
         await using var app = builder.Build();
         await PublishBeforeStartAsync(builder, app);
@@ -3550,7 +3574,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             });
 
         var resolverCalled = false;
-        var expected = new DotnetProjectRunProperties("dotnet", "exec Api.dll", null);
+        var expected = new DotnetProjectRunProperties(
+            "dotnet",
+            "exec Api.dll",
+            WorkingDirectory: null,
+            Path.Combine(Path.GetDirectoryName(projectPath)!, "Api.dll"),
+            UseAppHost: false);
         var resolutionTask = DotnetProjectHostingExtensions.ResolveRunPropertiesAfterBuildAsync(
             coordinator,
             project.Resource,
@@ -4041,6 +4070,22 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
     private static string GetBuildCountPath(string projectPath) =>
         Path.Combine(Path.GetDirectoryName(projectPath)!, "build-count.txt");
+
+    private static bool MarkerHasValue(string path, string expected)
+    {
+        try
+        {
+            // The child can still be writing the marker when the poll runs. Allow its write handle on
+            // Windows and treat a transient open/read failure as "not ready" so the caller retries.
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd() == expected;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
 
     private static string NormalizeBuildProjectPath(string path) =>
         path.Replace(Path.DirectorySeparatorChar, '/');

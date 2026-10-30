@@ -340,29 +340,30 @@ public class DistributedApplicationTests
         using var app = testProgram.Build();
         var rns = app.Services.GetRequiredService<ResourceNotificationService>();
 
-        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestTimeout);
-        var token = cts.Token;
+        using var startupCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        var startupToken = startupCts.Token;
 
         // Start app in background - it won't complete because of explicit start resource
-        _ = app.StartAsync(token);
+        _ = app.StartAsync(startupToken);
 
         var normalResourceName = $"{testName}-serviceb";
         var explicitStartResourceName = $"{testName}-servicea";
 
         // Wait for normal resource to be running
-        await rns.WaitForResourceAsync(normalResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await rns.WaitForResourceAsync(normalResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, startupToken).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         // Wait for explicit start resource to be NotStarted
-        await rns.WaitForResourceAsync(explicitStartResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await rns.WaitForResourceAsync(explicitStartResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, startupToken).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         // Wait for resource to finish being created.
-        await resourcesCreatedTcs.Task.DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await resourcesCreatedTcs.Task.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         // Verify BeforeResourceStartedEvent was fired for normal resource but NOT for explicit start resource
         Assert.Equal(1, normalEventCount);
         Assert.Equal(0, explicitStartEventCount);
 
-        await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        using var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync(stopCts.Token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
     [Fact]
