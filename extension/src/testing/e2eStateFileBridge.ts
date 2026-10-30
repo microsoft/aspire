@@ -1509,22 +1509,12 @@ async function proveAttachedResourceDebugging(
           return undefined;
         }));
 
-    // Remove the breakpoint before continuing so requests queued by the traffic driver cannot
-    // immediately stop the process again and race debugger detach.
-    vscode.debug.removeBreakpoints([breakpoint]);
-    await attachedSession.customRequest('continue', { threadId: breakpointHit.stoppedEvent.threadId });
-    await vscode.debug.stopDebugging(attachedSession);
-    await waitForE2eValue(
-      `${expectedDebugType} attach session termination`,
-      timeoutMs,
-      () => terminatedSessionIds.has(attachedSession!.id) ? true : undefined);
-
-    const responseBody = await waitForE2eValue(
-      `resource '${resourceName}' response after debugger detach`,
+    const waitForResourceResponse = (phase: 'continue' | 'detach') => waitForE2eValue(
+      `resource '${resourceName}' response after debugger ${phase}`,
       timeoutMs,
       async () => {
-        const resourceAfterDetach = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
-        if (!(resourceAfterDetach instanceof ResourceItem) || resourceAfterDetach.resource.state !== 'Running') {
+        const resource = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
+        if (!(resource instanceof ResourceItem) || resource.resource.state !== 'Running') {
           return undefined;
         }
 
@@ -1543,6 +1533,20 @@ async function proveAttachedResourceDebugging(
           return undefined;
         }
       });
+
+    // A successful continue acknowledges the debugger request, not application progress. Immediate
+    // disconnect can leave Windows CoreCLR unresponsive, so observe a completed request first.
+    // Clearing the breakpoint also keeps queued traffic from stopping the target again.
+    vscode.debug.removeBreakpoints([breakpoint]);
+    await attachedSession.customRequest('continue', { threadId: breakpointHit.stoppedEvent.threadId });
+    await waitForResourceResponse('continue');
+    await vscode.debug.stopDebugging(attachedSession);
+    await waitForE2eValue(
+      `${expectedDebugType} attach session termination`,
+      timeoutMs,
+      () => terminatedSessionIds.has(attachedSession!.id) ? true : undefined);
+
+    const responseBody = await waitForResourceResponse('detach');
 
     if (attachRequests.length === 0 || breakpointResponses.every(response => response.success !== true)) {
       throw new Error(`The ${expectedDebugType} adapter did not report both attach and bound-breakpoint protocol traffic.`);

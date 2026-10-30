@@ -26,7 +26,7 @@ import * as configInfoProvider from '../utils/configInfoProvider';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import * as workspaceModule from '../utils/workspace';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { EndpointUrlItem } from '../views/treeItems/resourceItems';
+import { EndpointUrlItem, ResourceItem } from '../views/treeItems/resourceItems';
 
 import { createMockExtension, createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 
@@ -57,6 +57,119 @@ suite('E2E state file bridge', () => {
         sandbox.restore();
         removeDirectorySafely(runRoot);
     });
+
+    for (const debugType of ['coreclr', 'go'] as const) {
+        test(`waits for the ${debugType} target to respond after continuing before detaching`, async () => {
+            const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+            const sourcePath = path.join(runRoot, 'source.txt');
+            const appHostPath = path.join(runRoot, 'AppHost.csproj');
+            fs.writeFileSync(sourcePath, 'breakpoint source');
+            process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT = runRoot;
+            sandbox.stub(vscode.workspace, 'workspaceFolders').value([createWorkspaceFolder('probe', runRoot)]);
+            let startListener: ((session: vscode.DebugSession) => unknown) | undefined;
+            let terminateListener: ((session: vscode.DebugSession) => unknown) | undefined;
+            let trackerFactory: vscode.DebugAdapterTrackerFactory | undefined;
+            sandbox.stub(vscode.debug, 'onDidStartDebugSession').callsFake(listener => {
+                startListener = listener;
+                return { dispose() { } };
+            });
+            sandbox.stub(vscode.debug, 'onDidTerminateDebugSession').callsFake(listener => {
+                terminateListener = listener;
+                return { dispose() { } };
+            });
+            sandbox.stub(vscode.debug, 'registerDebugAdapterTrackerFactory').callsFake((_type, factory) => {
+                trackerFactory = factory;
+                return { dispose() { } };
+            });
+            const removeBreakpoints = sandbox.stub(vscode.debug, 'removeBreakpoints');
+            sandbox.stub(vscode.debug, 'addBreakpoints');
+            const session = createDebugSession('attach-proof', debugType, 'Attached worker', { request: 'attach' });
+            let continueAccepted = false;
+            let targetResponded = false;
+            let detached = false;
+            const customRequest = sandbox.stub().callsFake(async (request: string) => {
+                if (request === 'continue') {
+                    continueAccepted = true;
+                    return { allThreadsContinued: true };
+                }
+                assert.strictEqual(request, 'stackTrace');
+                return { stackFrames: [{ source: { path: sourcePath }, line: 1 }] };
+            });
+            session.customRequest = customRequest;
+            const stopDebugging = sandbox.stub(vscode.debug, 'stopDebugging').callsFake(async stopped => {
+                assert.strictEqual(stopped, session);
+                assert.strictEqual(removeBreakpoints.called, true);
+                assert.strictEqual(targetResponded, true, 'An accepted continue request is not proof of target progress.');
+                detached = true;
+                terminateListener?.(session);
+            });
+            sandbox.stub(Response.prototype, 'text').resolves('ok');
+            sandbox.stub(globalThis, 'fetch').callsFake(async () => {
+                if (continueAccepted && !detached) {
+                    targetResponded = true;
+                }
+                return new Response('ok');
+            });
+            const resource = new ResourceItem({
+                name: 'worker',
+                displayName: 'worker',
+                resourceType: debugType === 'coreclr' ? 'Project' : 'Executable',
+                state: 'Running',
+                stateStyle: null,
+                healthStatus: null,
+                healthReports: null,
+                exitCode: null,
+                dashboardUrl: null,
+                urls: null,
+                commands: null,
+                properties: null,
+            }, 42, false);
+            const provider = {
+                findEndpointElement: () => new EndpointUrlItem('http://localhost:12345', 'HTTP'),
+                findResourceElement: () => resource,
+            } as unknown as AspireAppHostTreeProvider;
+            const tools = new Map([['aspire_resource_debug', {
+                registered: true,
+                tool: {
+                    invoke: async () => {
+                        const tracker = trackerFactory?.createDebugAdapterTracker(session);
+                        assert.ok(tracker && !('then' in tracker));
+                        startListener?.(session);
+                        tracker.onWillReceiveMessage?.({ type: 'request', command: 'attach', arguments: {} });
+                        tracker.onDidSendMessage?.({ type: 'response', command: 'setBreakpoints', success: true, body: { breakpoints: [{ verified: true }] } });
+                        tracker.onDidSendMessage?.({ type: 'event', event: 'stopped', body: { reason: 'breakpoint', threadId: 7 } });
+                        return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(JSON.stringify({
+                            outcome: 'started', provider: debugType === 'coreclr' ? 'dotnet' : 'go',
+                        }))]);
+                    },
+                },
+            }]]);
+            const result = executeE2eControlCommand(
+                {} as vscode.ExtensionContext, {} as AspireExtensionContext,
+                {} as AppHostDataRepository, createLaunchService(), provider, {} as AspireTerminalProvider,
+                { hasSnapshot: false }, {}, tools, {
+                    name: 'proveAttachedResourceDebugging',
+                    appHostPath,
+                    sourcePath,
+                    resourceName: 'worker',
+                    breakpointLine: 0,
+                    expectedDebugType: debugType,
+                    expectedResponse: 'ok',
+                    timeoutMs: 2000,
+                }, () => { });
+            const completion = result.then(value => ({ value }), error => ({ error }));
+            await clock.tickAsync(1000);
+            const settled = await completion;
+            if ('error' in settled) {
+                throw settled.error;
+            }
+            const proof = settled.value as { resourceResponseAfterDetach: string; sessionTerminated: boolean };
+            assert.strictEqual(proof.resourceResponseAfterDetach, 'ok');
+            assert.strictEqual(proof.sessionTerminated, true);
+            assert.strictEqual(stopDebugging.callCount, 1);
+            assert.strictEqual(customRequest.withArgs('continue').callCount, 1);
+        });
+    }
 
     for (const route of [
         { invocation: 'vscode.lm.invokeTool', direct: false, canceled: false },
