@@ -524,6 +524,75 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedCliPrefetch, cliStarted);
     }
 
+    // Qualification only (not part of the fix PR): forces the adverse ordering deterministically.
+    // A registration on stoppingCts.Token made inside each callback runs before BackgroundService's
+    // linked-token registration and holds stoppingCts.Cancel() (bounded at 5s) until that branch's
+    // catch has logged. The callbacks wait on cancellationToken.
+    [Fact]
+    public async Task QualifyPrefetchCancellationWithLinkedTokenCancellationDelayed()
+    {
+        var sink = new TestSink();
+        using var stoppingCts = new CancellationTokenSource();
+        var executionContext = CreateExecutionContext();
+        executionContext.CommandSelected.TrySetResult(new TestCommand(prefetchesTemplatePackages: true, prefetchesCliPackages: true));
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, true);
+
+        var templateArrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cliArrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var templateLogged = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cliLogged = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        sink.MessageLogged += context =>
+        {
+            var message = context.Message ?? string.Empty;
+            if (message.Contains("Template package prefetching was cancelled") || message.Contains("prefetching template packages"))
+            {
+                templateLogged.TrySetResult($"{context.LogLevel}: {message}");
+            }
+            if (message.Contains("CLI package prefetching was cancelled") || message.Contains("prefetching CLI packages"))
+            {
+                cliLogged.TrySetResult($"{context.LogLevel}: {message}");
+            }
+        };
+
+        _ = Task.Run(async () =>
+        {
+            await Task.WhenAll(templateArrived.Task, cliArrived.Task);
+            stoppingCts.Cancel();
+        });
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = async cancellationToken =>
+            {
+                stoppingCts.Token.Register(() => templateLogged.Task.Wait(TimeSpan.FromSeconds(5)));
+                templateArrived.SetResult();
+                await AsyncTestHelpers.WaitForCancellationAsync(cancellationToken);
+                throw new UnreachableException();
+            }
+        };
+        var updateNotifier = new TestCliUpdateNotifier
+        {
+            CheckForCliUpdatesAsyncCallback = async (_, cancellationToken) =>
+            {
+                stoppingCts.Token.Register(() => cliLogged.Task.Wait(TimeSpan.FromSeconds(5)));
+                cliArrived.SetResult();
+                await AsyncTestHelpers.WaitForCancellationAsync(cancellationToken);
+            }
+        };
+
+        var prefetcher = CreatePrefetcher(executionContext, features, packagingService, updateNotifier, sink);
+        await prefetcher.StartAsync(stoppingCts.Token).DefaultTimeout();
+
+        var templateMessage = await templateLogged.Task.DefaultTimeout();
+        var cliMessage = await cliLogged.Task.DefaultTimeout();
+        await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal("Trace: Template package prefetching was cancelled because the CLI is shutting down.", templateMessage);
+        Assert.Equal("Trace: CLI package prefetching was cancelled because the CLI is shutting down.", cliMessage);
+    }
+
     private static TestLogger<NuGetPackagePrefetcher> CreateLogger(TestSink sink)
         => new(new TestLoggerFactory(sink, enabled: true));
 
