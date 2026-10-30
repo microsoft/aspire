@@ -26,7 +26,7 @@ public partial class NewCommandLocalTemplateTests
         {
             ReadConfiguration = (_, _) => throw new InvalidOperationException("Help must not acquire init configuration.")
         };
-        using var provider = CreateInheritedTemplateServices(workspace, new TestInteractionService(), git).BuildServiceProvider();
+        using var provider = CreateInheritedTemplateServices(workspace, new TestInteractionService(), git, interactive: true).BuildServiceProvider();
 
         var result = await provider.GetRequiredService<RootCommand>().Parse(commandLine).InvokeAsync().DefaultTimeout();
 
@@ -43,13 +43,13 @@ public partial class NewCommandLocalTemplateTests
         {
             ReadConfiguration = (_, _) => throw new ConfigSourceException("Configuration source unavailable.")
         };
-        using var provider = CreateInheritedTemplateServices(workspace, interaction, git).BuildServiceProvider();
+        using var provider = CreateInheritedTemplateServices(workspace, interaction, git, interactive: true).BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new() { ["personal"] = workspace.Path });
         var path = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
         var original = await File.ReadAllTextAsync(path);
 
         var result = await provider.GetRequiredService<RootCommand>()
-            .Parse("template source list --format json").InvokeAsync().DefaultTimeout();
+            .Parse("template source list --format json --use-config-source true").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, result);
         Assert.Equal("Configuration source unavailable.", Assert.Single(interaction.DisplayedErrors));
@@ -73,7 +73,7 @@ public partial class NewCommandLocalTemplateTests
                 }
                 """)!.AsObject()))
         };
-        using var provider = CreateInheritedTemplateServices(workspace, interaction, git).BuildServiceProvider();
+        using var provider = CreateInheritedTemplateServices(workspace, interaction, git, interactive: true).BuildServiceProvider();
         var settings = provider.GetRequiredService<IConfigurationService>();
         var localPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await WriteConfiguredSourcesAsync(provider, new() { ["Enterprise"] = workspace.Path });
@@ -82,7 +82,12 @@ public partial class NewCommandLocalTemplateTests
         var store = provider.GetRequiredService<TemplateSourceStore>();
 
         var sources = await discovery.GetSourcesAsync(default);
-        var listed = await store.ListAsync(default);
+        var listed = await store.ListAsync(new ConfigSource
+        {
+            Repository = "https://git.example/configuration",
+            Path = AspireConfigFile.FileName,
+            Ref = "config-preview"
+        }, default);
 
         Assert.Equal(["Enterprise", "shared"], sources.Select(source => source.Key).Order(StringComparer.Ordinal));
         Assert.Equal(new TemplateSource(workspace.Path, null, null), sources.Single(source => source.Key == "Enterprise").Value.Template);
@@ -138,7 +143,7 @@ public partial class NewCommandLocalTemplateTests
                 }
                 """)!.AsObject()))
         };
-        using var provider = CreateInheritedTemplateServices(workspace, interaction, git).BuildServiceProvider();
+        using var provider = CreateInheritedTemplateServices(workspace, interaction, git, interactive: true).BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new() { ["personal"] = Path.Combine(workspace.Path, "personal") });
         var globalPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
         var originalGlobal = await File.ReadAllTextAsync(globalPath);
@@ -178,10 +183,10 @@ public partial class NewCommandLocalTemplateTests
                 {"templateSources":{"enterprise":{"repository":"https://git.example/templates","ref":"preview","future":true}}}
                 """)!.AsObject()))
         };
-        using var provider = CreateInheritedTemplateServices(workspace, interaction, git).BuildServiceProvider();
+        using var provider = CreateInheritedTemplateServices(workspace, interaction, git, interactive: true).BuildServiceProvider();
 
         var result = await provider.GetRequiredService<RootCommand>()
-            .Parse("template source list --format json").InvokeAsync().DefaultTimeout();
+            .Parse("template source list --format json --use-config-source true").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result);
         Assert.Empty(interaction.DisplayedErrors);
@@ -193,10 +198,11 @@ public partial class NewCommandLocalTemplateTests
     }
 
     private IServiceCollection CreateInheritedTemplateServices(
-        TemporaryWorkspace workspace, TestInteractionService interaction, TestConfigSourceRepository git)
+        TemporaryWorkspace workspace, TestInteractionService interaction, TestConfigSourceRepository git, bool interactive)
     {
-        var services = CreateServices(workspace, interaction, interactive: true);
+        var services = CreateServices(workspace, interaction, interactive);
         services.AddSingleton<IGitClient>(git);
+        git.ReadConfigurationWhenUnattended = true;
         services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
         {
             [CliConfigNames.InitSourceUrl] = "https://git.example/configuration",

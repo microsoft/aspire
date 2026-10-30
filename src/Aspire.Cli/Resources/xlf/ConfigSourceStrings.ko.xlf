@@ -166,8 +166,8 @@ Settings file: {4}</target>
         <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the resolved Git commit SHA, {3} is the localized configuration update result, and {4} is the destination settings file path.</note>
       </trans-unit>
       <trans-unit id="UseSourceOptionDescription">
-        <source>Accept or decline the proposed Git configuration source for this project.</source>
-        <target state="new">Accept or decline the proposed Git configuration source for this project.</target>
+        <source>Accept or decline the proposed Git configuration source using an explicit true or false value.</source>
+        <target state="new">Accept or decline the proposed Git configuration source using an explicit true or false value.</target>
         <note />
       </trans-unit>
       <trans-unit id="UseSourcePrompt">

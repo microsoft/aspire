@@ -335,7 +335,7 @@
     <value>Could not update global template sources. Check the configuration file's JSON format and file permissions.</value>
   </data>
   <data name="TemplateSourceListDescription" xml:space="preserve">
-    <value>List named template sources from global configuration without discovering templates.</value>
+    <value>List named template sources without discovering templates.</value>
   </data>
   <data name="TemplateSourceListEmpty" xml:space="preserve">
     <value>No template sources are configured. Use 'aspire template source add' to add one.</value>

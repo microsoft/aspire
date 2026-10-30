@@ -16,12 +16,13 @@ internal sealed class TemplateSourceStore(
     ILogger<TemplateSourceStore> logger,
     ConfigSourceService configSources)
 {
-    public async Task<JsonObject> ListAsync(CancellationToken cancellationToken)
+    public async Task<JsonObject> ListAsync(ConfigSource? configSource, CancellationToken cancellationToken)
     {
         var settings = await ReadAsync(GetSettingsFilePath(), cancellationToken);
         // Listing is configuration management, not discovery. Keep incomplete sources visible
         // so users can inspect and finish objects created through stepwise config edits.
-        var inherited = await configSources.GetTemplateSourcesAsync(cancellationToken);
+        var inherited = configSource is null ? new JsonObject()
+            : await configSources.GetTemplateSourcesAsync(configSource, cancellationToken);
         return new JsonObject(TemplateSourceConfiguration.MergeSources(inherited, GetSources(settings))
             .Select(source => new KeyValuePair<string, JsonNode?>(source.Key, source.Value?.DeepClone())));
     }

@@ -143,7 +143,11 @@ internal sealed class ConfigSourceService(
     /// Resolves a candidate configuration source from the environment or employee detection,
     /// obtains consent, and acquires the accepted source.
     /// </summary>
-    public async Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    public Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(ParseResult parseResult, CancellationToken cancellationToken) =>
+        ResolveAndAcquireConfigSourceAsync(parseResult, allowInteractiveInput: true, cancellationToken);
+
+    internal async Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(
+        ParseResult parseResult, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
         var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
         var explicitSource = repository is not null;
@@ -178,7 +182,7 @@ internal sealed class ConfigSourceService(
         var accepted = parseResult.GetValue(s_useSourceOption);
         if (accepted is null)
         {
-            if (!hostEnvironment.SupportsInteractiveInput)
+            if (!allowInteractiveInput || !hostEnvironment.SupportsInteractiveInput)
             {
                 throw new ConfigSourceException(ConfigSourceStrings.ConsentRequired);
             }
@@ -194,7 +198,7 @@ internal sealed class ConfigSourceService(
             return null;
         }
 
-        await AcquireAsync(source, force: false, cancellationToken);
+        await AcquireAsync(source, force: false, allowInteractiveInput, cancellationToken);
         return source;
     }
 
@@ -236,6 +240,11 @@ internal sealed class ConfigSourceService(
             Path = environment.GetEnvironmentVariable(CliConfigNames.InitSourcePath) ?? AspireConfigFile.FileName,
             Ref = environment.GetEnvironmentVariable(CliConfigNames.InitSourceRef)
         };
+        return await GetTemplateSourcesAsync(source, cancellationToken);
+    }
+
+    internal async Task<JsonObject> GetTemplateSourcesAsync(ConfigSource source, CancellationToken cancellationToken)
+    {
         var snapshot = await AcquireAsync(source, force: false, cancellationToken);
         var sources = new JsonObject();
         foreach (var (key, value) in snapshot.Configuration)
@@ -460,7 +469,11 @@ internal sealed class ConfigSourceService(
         return Path.Combine(executionContext.AspireHomeDirectory.FullName, "configsources", key);
     }
 
-    internal async Task<ConfigSourceSnapshot> AcquireAsync(ConfigSource source, bool force, CancellationToken cancellationToken)
+    internal Task<ConfigSourceSnapshot> AcquireAsync(ConfigSource source, bool force, CancellationToken cancellationToken) =>
+        AcquireAsync(source, force, allowInteractiveInput: true, cancellationToken);
+
+    private async Task<ConfigSourceSnapshot> AcquireAsync(
+        ConfigSource source, bool force, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
         source.Validate();
         var key = new ConfigSourceIdentity(source.Repository, source.Path, source.Ref);
@@ -490,7 +503,7 @@ internal sealed class ConfigSourceService(
                 Path = source.Path,
                 Ref = source.Ref
             };
-            var (commit, version, configuration) = await AcquireRepositoryAsync(identity, snapshotDirectory, cancellationToken);
+            var (commit, version, configuration) = await AcquireRepositoryAsync(identity, snapshotDirectory, allowInteractiveInput, cancellationToken);
             ConfigurationHelper.NormalizeSettings(configuration);
             var now = timeProvider.GetUtcNow();
             var snapshot = new ConfigSourceSnapshot(new(identity, commit, version, now), configuration);
@@ -594,13 +607,14 @@ internal sealed class ConfigSourceService(
         }
     }
 
-    private async Task<(string Commit, string Version, JsonObject Configuration)> AcquireRepositoryAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
+    private async Task<(string Commit, string Version, JsonObject Configuration)> AcquireRepositoryAsync(
+        ConfigSource source, string directory, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
         using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
-            var (repositoryDirectory, commit, version) = await FetchVersionAsync(source, directory, allowInteractive: true, timeout.Token);
+            var (repositoryDirectory, commit, version) = await FetchVersionAsync(source, directory, allowInteractiveInput, timeout.Token);
             var size = await git.GetObjectSizeAsync(repositoryDirectory, version, GitCommandMode.Interactive, timeout.Token);
             if (size is null or > 4 * 1024 * 1024)
             {

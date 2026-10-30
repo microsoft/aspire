@@ -210,7 +210,7 @@ public partial class NewCommandLocalTemplateTests
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
         Assert.Equal("Company", source.Key);
         Assert.Equal(new TemplateSource("templates/api", "https://example.test/repo", null), source.Value.Template);
-        Assert.Equal("Company", Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(default)).Key);
+        Assert.Equal("Company", Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(null, default)).Key);
 
         Assert.Equal(CliExitCodes.Success, await root.Parse("template source add other --repository https://example.test/other").InvokeAsync().DefaultTimeout());
         Assert.Equal(CliExitCodes.Success, await root.Parse("template source remove company").InvokeAsync().DefaultTimeout());

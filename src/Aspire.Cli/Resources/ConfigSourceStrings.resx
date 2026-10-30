@@ -61,7 +61,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="UseSourceOptionDescription" xml:space="preserve">
-    <value>Accept or decline the proposed Git configuration source for this project.</value>
+    <value>Accept or decline the proposed Git configuration source using an explicit true or false value.</value>
   </data>
   <data name="RefreshOptionDescription" xml:space="preserve">
     <value>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</value>
