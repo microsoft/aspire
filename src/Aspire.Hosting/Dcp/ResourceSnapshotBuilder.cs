@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREEXTENSION001 // Launch configuration metadata is experimental but needed for snapshot serialization.
+#pragma warning disable ASPIREPROJECTS001 // Project launch defaults supply the configuration of coordinated process launches.
 
 using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
@@ -178,7 +179,7 @@ internal class ResourceSnapshotBuilder
             .RemoveResourceProperty(KnownProperties.Project.LaunchCommand)
             .RemoveResourceProperty(KnownProperties.Project.Configuration)
             .RemoveResourceProperty(KnownProperties.Project.TargetFramework);
-        var dotNetLaunchProperties = GetDotNetLaunchProperties(executable, launchConfigurationType, effectiveArgs);
+        var dotNetLaunchProperties = GetDotNetLaunchProperties(executable, appModelResource, launchConfigurationType, effectiveArgs);
 
         if (projectPath is not null)
         {
@@ -251,9 +252,27 @@ internal class ResourceSnapshotBuilder
 
     private static ImmutableArray<ResourcePropertySnapshot> GetDotNetLaunchProperties(
         Executable resource,
+        IResource? appModelResource,
         string? launchConfigurationType,
         IReadOnlyList<string>? effectiveArgs)
     {
+        if (resource.Spec.ExecutionType == ExecutionType.Process &&
+            launchConfigurationType == KnownLaunchConfigurationTypes.ProjectWithExternalBuild &&
+            appModelResource is not null &&
+            appModelResource.TryGetProjectMetadata(out var projectMetadata) &&
+            projectMetadata.SuppressBuild &&
+            !projectMetadata.IsFileBasedApp &&
+            projectMetadata.BuildWorkingDirectory is not null)
+        {
+            // Coordinated projects execute the SDK's RunCommand directly, which may be an apphost
+            // executable or "dotnet exec app.dll". The reported PID is the application, not a
+            // run/watch launcher, and its arguments must not be parsed as SDK build options.
+            appModelResource.TryGetLastAnnotation<ProjectLaunchDefaultsAnnotation>(out var launchDefaults);
+            return launchDefaults?.BuildConfiguration is { } directBuildConfiguration
+                ? [new(KnownProperties.Project.LaunchCommand, "direct"), new(KnownProperties.Project.Configuration, directBuildConfiguration)]
+                : [new(KnownProperties.Project.LaunchCommand, "direct")];
+        }
+
         var executableName = Path.GetFileName(resource.Spec.ExecutablePath);
         if (!string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(executableName, "dotnet.exe", StringComparison.OrdinalIgnoreCase))

@@ -332,6 +332,108 @@ suite('Dotnet Debugger Extension Tests', () => {
         })), { errorKind: 'resourceNotAttachable' });
     });
 
+    test('direct coordinated attach verifies the reported application PID for apphost and DLL launches', async () => {
+        for (const candidate of [
+            {
+                targetPath: '/repo/bin/Release/net10.0/Api.dll',
+                useAppHost: true,
+                executable: '/repo/bin/Release/net10.0/Api',
+                command: '/repo/bin/Release/net10.0/Api',
+            },
+            {
+                targetPath: 'C:\\repo\\bin\\Release\\net10.0\\Api.dll',
+                useAppHost: true,
+                executable: 'C:\\repo\\bin\\Release\\net10.0\\Api.exe',
+                command: '"C:\\repo\\bin\\Release\\net10.0\\Api.exe"',
+            },
+            {
+                targetPath: '/repo/bin/Release/net10.0/Api.dll',
+                useAppHost: false,
+                executable: '/usr/share/dotnet/dotnet',
+                command: '"/usr/share/dotnet/dotnet" exec "/repo/bin/Release/net10.0/Api.dll"',
+            },
+        ]) {
+            const dotNetService = new TestDotNetService(candidate.targetPath, null, false);
+            dotNetService.getDotNetAttachTargetInfoStub.resolves(candidate);
+            const resolver = new LaunchedChildProcessResolver(new StaticLaunchedChildProcessQuery([
+                { pid: 1234, parentPid: 10, ...candidate },
+                createLaunchedProcess(4321, 1234, candidate.executable, candidate.command),
+            ]), immediateProcessClock, { timeoutMs: 10, retryDelayMs: 10 });
+            const provider = createAttachProvider(dotNetService, resolver, { realpath: async value => value });
+            const resource = createProjectResource({
+                'executable.pid': 1234,
+                'executable.path': candidate.executable,
+                'executable.args': null,
+                'project.path': '/repo/Api.csproj',
+                'project.launchCommand': 'direct',
+                'project.configuration': 'Release',
+                'resource.launchConfigurationType': 'project-with-external-build.v1',
+            });
+
+            assert.strictEqual(provider.canRecognizeResource(resource), true, candidate.executable);
+            assert.strictEqual(provider.canAttachToResource(resource), true, candidate.executable);
+            const configuration = await provider.createDebugConfiguration(resource);
+
+            assert.strictEqual(configuration.processId, 1234, candidate.executable);
+            assert.strictEqual(configuration.request, 'attach');
+            assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.calledOnceWithExactly('/repo/Api.csproj', 'Release'), true);
+        }
+    });
+
+    test('direct coordinated attach rejects another program even when its child matches the project output', async () => {
+        const targetPath = '/repo/bin/Release/net10.0/Api.dll';
+        for (const candidate of [
+            { executable: '/other/Api', command: '/other/Api', useAppHost: true },
+            { executable: '/usr/share/dotnet/dotnet', command: 'dotnet exec /other/Api.dll', useAppHost: false },
+            { executable: '/usr/share/dotnet/dotnet', command: `dotnet run --project /repo/Api.csproj -- "${targetPath}"`, useAppHost: false },
+        ]) {
+            const dotNetService = new TestDotNetService(targetPath, null, false);
+            dotNetService.getDotNetAttachTargetInfoStub.resolves({ targetPath, useAppHost: candidate.useAppHost });
+            const resolver = new LaunchedChildProcessResolver(new StaticLaunchedChildProcessQuery([
+                { pid: 1234, parentPid: 10, ...candidate },
+                createLaunchedProcess(4321, 1234, '/usr/share/dotnet/dotnet', `dotnet exec "${targetPath}"`),
+            ]), immediateProcessClock, { timeoutMs: 10, retryDelayMs: 10 });
+            const provider = createAttachProvider(dotNetService, resolver, { realpath: async value => value });
+
+            await assert.rejects(provider.createDebugConfiguration(createProjectResource({
+                'executable.pid': 1234,
+                'executable.path': candidate.executable,
+                'project.path': '/repo/Api.csproj',
+                'project.launchCommand': 'direct',
+                'resource.launchConfigurationType': 'project-with-external-build.v1',
+            })), { errorKind: 'resourceNotAttachable' });
+        }
+    });
+
+    test('native executables require explicit coordinated direct-launch metadata', () => {
+        const dotNetService = new TestDotNetService('/repo/bin/Release/net10.0/Api.dll', null, false);
+        const provider = createAttachProvider(dotNetService, { resolveProcessId: sinon.stub().resolves(1234) });
+        for (const metadata of [
+            {},
+            { 'resource.launchConfigurationType': 'project-with-external-build.v1' },
+            { 'project.launchCommand': 'direct' },
+            { 'project.launchCommand': 'direct', 'resource.launchConfigurationType': 'project' },
+            { 'project.launchCommand': 'direct', 'resource.launchConfigurationType': 'unknown' },
+            { 'project.launchCommand': 'run', 'resource.launchConfigurationType': 'project-with-external-build.v1' },
+        ]) {
+            const resource = createProjectResource({
+                'executable.pid': 1234,
+                'executable.path': '/repo/bin/Release/net10.0/Api',
+                'project.path': '/repo/Api.csproj',
+                ...metadata,
+            });
+            assert.strictEqual(provider.canRecognizeResource(resource), false);
+            assert.strictEqual(provider.canAttachToResource(resource), false);
+            if (metadata['project.launchCommand'] === 'direct') {
+                assert.strictEqual(provider.canAttachToResource({
+                    ...resource,
+                    properties: { ...resource.properties, 'executable.path': 'dotnet' },
+                }), false);
+            }
+        }
+        assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.called, false);
+    });
+
     test('attach configuration resolves the evaluated framework-dependent TargetPath child PID', async () => {
         const { dotNetService } = createDebuggerExtension('/repo/bin/Debug/net10.0/EvaluatedAssemblyName.dll', null, true, true);
         dotNetService.getDotNetAttachTargetInfoStub.resolves({

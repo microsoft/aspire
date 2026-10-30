@@ -2803,11 +2803,21 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, instances.Length);
         using (var completionCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
         {
-            await Task.WhenAll(instances.Select(name =>
+            var completedResources = await Task.WhenAll(instances.Select(name =>
                 app.ResourceNotifications.WaitForResourceAsync(
                     resource.Resource.Name,
                     resourceEvent => resourceEvent.ResourceId == name && resourceEvent.Snapshot.State?.Text == KnownResourceStates.Finished,
                     completionCts.Token)));
+            foreach (var completedResource in completedResources)
+            {
+                var properties = completedResource.Snapshot.Properties;
+                Assert.Equal("direct", Assert.Single(properties, property => property.Name == "project.launchCommand").Value);
+                Assert.Equal(
+                    KnownLaunchConfigurationTypes.ProjectWithExternalBuild,
+                    Assert.Single(properties, property => property.Name == "resource.launchConfigurationType").Value);
+                var processId = Assert.IsType<int>(Assert.Single(properties, property => property.Name == "executable.pid").Value);
+                Assert.True(File.Exists(Path.Combine(sentinels, $"{processId}.txt")));
+            }
         }
 
         using (var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))

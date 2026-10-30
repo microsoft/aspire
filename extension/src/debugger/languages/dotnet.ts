@@ -86,7 +86,7 @@ function createDotNetProcessEnvironment(
     return createResolvedAspireCliPathProcessEnvironment(resolvedCliPath, processEnvironment);
 }
 
-type DotNetLaunchCommand = 'run' | 'watch' | 'ide';
+type DotNetLaunchCommand = 'run' | 'watch' | 'ide' | 'direct';
 
 interface DotNetAttachTargetInfo {
     targetPath: string;
@@ -1372,7 +1372,15 @@ function canRecognizeDotNetAttachDebuggerResource(resource: ResourceDebugResourc
         return false;
     }
 
-    if (!isDotNetExecutable(resource)) {
+    if (resource.properties?.[projectLaunchCommandPropertyName] === 'direct') {
+        // Coordinated builds can launch the SDK's native apphost rather than a dotnet run/watch
+        // parent. Require the producer's explicit PID semantics; process discovery still verifies
+        // that this PID is the evaluated project output, never just a matching executable name.
+        if (launchConfigurationType !== 'project-with-external-build.v1' ||
+            getNonEmptyStringProperty(resource, executablePathPropertyName) === undefined) {
+            return false;
+        }
+    } else if (!isDotNetExecutable(resource)) {
         return false;
     }
 
@@ -1406,7 +1414,7 @@ function getDotNetLaunchMetadata(
     const hasLaunchCommand = properties !== null && properties !== undefined &&
         Object.prototype.hasOwnProperty.call(properties, projectLaunchCommandPropertyName);
     const launchCommandValue = properties?.[projectLaunchCommandPropertyName];
-    if (hasLaunchCommand && launchCommandValue !== 'run' && launchCommandValue !== 'watch' && launchCommandValue !== 'ide') {
+    if (hasLaunchCommand && launchCommandValue !== 'run' && launchCommandValue !== 'watch' && launchCommandValue !== 'ide' && launchCommandValue !== 'direct') {
         return undefined;
     }
 
@@ -1469,7 +1477,7 @@ async function createDotNetProcessIdentity(
     attachInfo: DotNetAttachDebuggerResourceInfo,
     fileSystem: DotNetAttachFileSystem,
 ): Promise<LaunchedChildProcessIdentity> {
-    const targetsLauncher = attachInfo.launchCommand === 'ide';
+    const targetsLauncher = attachInfo.launchCommand === 'ide' || attachInfo.launchCommand === 'direct';
     const requiresDirectChild = !targetsLauncher && attachInfo.launchCommand !== 'watch';
     if (attachInfo.useTargetNameFallback) {
         const targetName = targetInfo.targetName;
