@@ -8,7 +8,7 @@ namespace Aspire.Hosting.Dcp;
 internal sealed class Locations
 {
     private readonly IFileSystemService _directoryService;
-    private string? _dcpSessionDir;
+    private TempDirectory? _dcpSessionDir;
 
     public Locations(IFileSystemService directoryService)
     {
@@ -33,8 +33,16 @@ internal sealed class Locations
     {
         if (_dcpSessionDir is not null && _directoryService is FileSystemService fileSystemService)
         {
-            fileSystemService.UntrackItem(_dcpSessionDir);
+            fileSystemService.UntrackItem(_dcpSessionDir.Path);
         }
+    }
+
+    /// <summary>
+    /// Deletes the session directory when DCP failed to start and therefore will not delete it.
+    /// </summary>
+    public void DeleteDcpSessionDir()
+    {
+        _dcpSessionDir?.Dispose();
     }
 
     private string GetOrCreateDcpSessionDir()
@@ -42,9 +50,9 @@ internal sealed class Locations
         if (_dcpSessionDir == null)
         {
             // Use the temp directory service to create a DCP-specific subdirectory
-            _dcpSessionDir = _directoryService.TempDirectory.CreateTempSubdirectory(SocketDirectoryNames.DcpPrefix).Path;
+            _dcpSessionDir = _directoryService.TempDirectory.CreateTempSubdirectory(SocketDirectoryNames.DcpPrefix);
         }
 
-        return _dcpSessionDir;
+        return _dcpSessionDir.Path;
     }
 }

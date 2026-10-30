@@ -721,8 +721,8 @@ public sealed class DcpHostNotificationTests
     {
         // DCP is started with --detach and DCP_SESSION_FOLDER, so it outlives the AppHost and still reads
         // the kubeconfig in the session folder during its own cleanup before deleting the folder itself.
-        // Disposing the managed file system service must therefore not delete the folder once DCP has started,
-        // but must still delete it when the DCP launcher fails.
+        // Disposing the managed file system service must therefore not delete the folder once DCP has been launched,
+        // but the folder must still be deleted when the DCP launcher reports that startup failed.
         var launcherDir = Directory.CreateTempSubdirectory("aspire-dcp-launcher");
         var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
         var locations = new Locations(fileSystemService);
@@ -744,9 +744,11 @@ public sealed class DcpHostNotificationTests
             await File.WriteAllTextAsync(locations.DcpKubeconfigPath, "kubeconfig written by DCP");
 
             dcpHost.EnsureDcpHostRunning();
-            await dcpHost.DcpSessionDirOwnershipTransfer.WaitAsync(TimeSpan.FromSeconds(60));
 
+            // Shut down without waiting for the launcher result, as an AppHost that stops right after starting DCP would.
             fileSystemService.Dispose();
+
+            await dcpHost.DcpLaunchResultObserved.WaitAsync(TimeSpan.FromSeconds(60));
 
             Assert.Equal(sessionFolderOwnedByDcp, File.Exists(locations.DcpKubeconfigPath));
         }

@@ -282,31 +282,33 @@ internal sealed class DcpHost
         }
 
         var (dcpLauncherResult, _) = ProcessUtil.Run(dcpProcessSpec);
-        DcpSessionDirOwnershipTransfer = TransferDcpSessionDirOwnershipWhenDcpStartsAsync(dcpLauncherResult);
+
+        // DCP now owns DCP_SESSION_FOLDER: the detached apiserver reads the kubeconfig there during its own cleanup,
+        // after the AppHost may have shut down, and then deletes the folder. Transfer ownership as soon as the launcher
+        // has started so that AppHost disposal never deletes the folder under DCP, even if the AppHost stops early.
+        _locations.TransferDcpSessionDirOwnershipToDcp();
+        DcpLaunchResultObserved = DeleteDcpSessionDirIfDcpFailedToStartAsync(dcpLauncherResult);
     }
 
     // Exposed for testing.
-    internal Task DcpSessionDirOwnershipTransfer { get; private set; } = Task.CompletedTask;
+    internal Task DcpLaunchResultObserved { get; private set; } = Task.CompletedTask;
 
-    private async Task TransferDcpSessionDirOwnershipWhenDcpStartsAsync(Task<ProcessResult> dcpLauncherResult)
+    private async Task DeleteDcpSessionDirIfDcpFailedToStartAsync(Task<ProcessResult> dcpLauncherResult)
     {
-        // With --detach, the launcher exits as soon as the detached apiserver has started. Once that succeeds, DCP owns
-        // DCP_SESSION_FOLDER and deletes it after its own cleanup. If the launch fails, the AppHost keeps cleaning it up.
+        // With --detach, the launcher exits with 0 as soon as the detached apiserver has started, and with a non-zero
+        // exit code when startup fails. In that case no DCP process will delete the session folder.
         try
         {
             var result = await dcpLauncherResult.ConfigureAwait(false);
-            if (result.ExitCode == 0)
+            if (result.ExitCode != 0)
             {
-                _locations.TransferDcpSessionDirOwnershipToDcp();
-            }
-            else
-            {
-                _logger.LogDebug("DCP launcher exited with code {ExitCode}. The DCP session folder will be deleted by the AppHost.", result.ExitCode);
+                _logger.LogDebug("DCP launcher exited with code {ExitCode}. Deleting the DCP session folder.", result.ExitCode);
+                _locations.DeleteDcpSessionDir();
             }
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Failed to observe the DCP launcher result. The DCP session folder will be deleted by the AppHost.");
+            _logger.LogDebug(ex, "Failed to observe the DCP launcher result.");
         }
     }
 
@@ -341,6 +343,8 @@ internal sealed class DcpHost
             OnOutputData = Console.Out.Write,
             OnErrorData = Console.Error.Write,
             InheritEnv = false,
+            // The launcher exit code is observed to decide who deletes DCP_SESSION_FOLDER.
+            ThrowOnNonZeroReturnCode = false,
         };
 
         _logger.LogInformation("Starting DCP with arguments: {Arguments}", dcpProcessSpec.Arguments);
