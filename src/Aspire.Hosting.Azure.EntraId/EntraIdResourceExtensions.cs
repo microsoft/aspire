@@ -1174,8 +1174,11 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(credential);
 
-        if (credential is EntraIdKeyVaultCertificateCredential { KeyVault: not null })
+        if (credential is EntraIdKeyVaultCertificateCredential)
         {
+            // SourceType validates that exactly one of KeyVault or KeyVaultUrl is set and throws otherwise.
+            // Reading it here reports a misconfigured credential when it is added, rather than when the
+            // consumer's environment variables are resolved later.
             _ = credential.SourceType;
         }
 
