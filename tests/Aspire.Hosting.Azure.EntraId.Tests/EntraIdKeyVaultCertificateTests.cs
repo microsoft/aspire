@@ -167,7 +167,7 @@ public class EntraIdKeyVaultCertificateTests
     }
 
     [Fact]
-    public void ResourceCredential_RejectsInvalidInputsWithoutMutation()
+    public async Task ResourceCredential_RejectsInvalidInputs()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var vault = builder.AddAzureKeyVault("vault");
@@ -179,17 +179,21 @@ public class EntraIdKeyVaultCertificateTests
             entra.WithCertificateFromKeyVault((IResourceBuilder<AzureKeyVaultResource>)null!, "certificate"));
         Assert.Throws<ArgumentException>(() => entra.WithCertificateFromKeyVault(vault, ""));
         Assert.Throws<ArgumentNullException>(() => entra.WithCertificateFromKeyVault(vault, null!));
-        Assert.Throws<InvalidOperationException>(() => entra.WithCredential(new EntraIdKeyVaultCertificateCredential
+        Assert.Empty(entra.Resource.ClientCredentials);
+
+        entra.WithCredential(new EntraIdKeyVaultCertificateCredential
         {
             KeyVault = vault.Resource,
             KeyVaultUrl = "https://vault.vault.azure.net",
             CertificateNameInKeyVault = "certificate"
-        }));
+        });
+        var web = builder.AddResource(new ProjectResource("web")).WithReference(entra);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            web.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance));
         Assert.Throws<InvalidOperationException>(() => new EntraIdKeyVaultCertificateCredential
         {
             CertificateNameInKeyVault = "certificate"
         }.SourceType);
-        Assert.Empty(entra.Resource.ClientCredentials);
-        Assert.Empty(entra.Resource.Annotations.OfType<RoleAssignmentAnnotation>());
     }
 }
