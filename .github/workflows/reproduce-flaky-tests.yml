@@ -11,7 +11,10 @@ jobs:
   diagnose:
     name: MongoDB Kubernetes deployment diagnostics
     if: ${{ github.repository == 'microsoft/aspire' }}
-    runs-on: ubuntu-latest
+    # MongoDB rejects the 7.0.0-* kernel currently used by the newer hosted images.
+    # Keep MongoDB 8.3 unchanged and isolate kernel compatibility on Linux 6.8.
+    # https://jira.mongodb.org/browse/SERVER-121912
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     env:
       MSBUILDTERMINALLOGGER: "false"
@@ -19,6 +22,9 @@ jobs:
       GITHUB_PR_NUMBER: "21222"
       GITHUB_PR_HEAD_SHA: "5460e184ecce3206b0c482a1c6718f0c849c07cc"
     steps:
+      - name: Record host kernel
+        run: uname -r
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
