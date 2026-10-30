@@ -1037,6 +1037,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [InlineData(nameof(AgentEnvironment.CopilotApp), "GitHub Copilot App")]
     public async Task AgentInitCommand_GlobalScope_InstallsTelemetryHook_ForSelectedDetectedEnvironment(string environmentName, string displayName)
     {
+        using var gitCapture = new DiagnosticGitBoundaryCapture(outputHelper);
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var interactionService = new TestInteractionService();
@@ -1046,13 +1047,17 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
             options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedEnvironments = environment };
             options.InteractionServiceFactory = _ => interactionService;
+            var originalGitFactory = options.GitRepositoryFactory;
+            options.GitRepositoryFactory = provider => new DiagnosticGitBoundaryRepository(originalGitFactory(provider), gitCapture);
         });
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents copilot --scope global --skills aspire");
 
+        gitCapture.Record("command-invoke-entered");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
+        gitCapture.Record("command-invoke-completed");
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var hookFile = Path.Combine(homeDirectory.FullName, ".copilot", "hooks", "aspire-telemetry.json");
@@ -1097,6 +1102,58 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         return TestExecutionContextHelper.CreateExecutionContext(
             workingDirectory,
             homeDirectory: homeDirectory);
+    }
+
+    private sealed class DiagnosticGitBoundaryCapture(ITestOutputHelper output) : IDisposable
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _stages = new();
+
+        public void Record(string stage)
+        {
+            _stages.Enqueue($"[agent-init-git] stage={stage} ticks={System.Diagnostics.Stopwatch.GetTimestamp()} frequency={System.Diagnostics.Stopwatch.Frequency}");
+        }
+
+        public void Dispose()
+        {
+            Record("test-scope-ended");
+            foreach (var stage in _stages)
+            {
+                output.WriteLine(stage);
+            }
+        }
+    }
+
+    private sealed class DiagnosticGitBoundaryRepository(IGitRepository inner, DiagnosticGitBoundaryCapture capture) : IGitRepository
+    {
+        public async Task<DirectoryInfo?> GetRootAsync(CancellationToken cancellationToken)
+        {
+            capture.Record("root-entered");
+            try
+            {
+                var result = await inner.GetRootAsync(cancellationToken);
+                capture.Record(result is null ? "root-returned-null" : "root-returned-directory");
+                return result;
+            }
+            finally
+            {
+                capture.Record("root-finally");
+            }
+        }
+
+        public async Task<IReadOnlySet<string>?> GetIncludedFilesAsync(DirectoryInfo searchRoot, CancellationToken cancellationToken)
+        {
+            capture.Record("files-entered");
+            try
+            {
+                var result = await inner.GetIncludedFilesAsync(searchRoot, cancellationToken);
+                capture.Record(result is null ? "files-returned-null" : "files-returned-set");
+                return result;
+            }
+            finally
+            {
+                capture.Record("files-finally");
+            }
+        }
     }
 
     [Theory]
