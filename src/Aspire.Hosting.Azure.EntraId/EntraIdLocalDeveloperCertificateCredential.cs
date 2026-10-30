@@ -13,6 +13,9 @@ namespace Aspire.Hosting.Azure;
 internal sealed class EntraIdLocalDeveloperCertificateCredential : EntraIdClientCredential
 {
     private readonly DistributedApplicationExecutionContext _executionContext;
+    // Bicep generation, provisioning, and each referencing resource's environment evaluation can request the
+    // certificate concurrently. This ensures they share one selection (and one store call) for the run. The
+    // store's file lock separately coordinates other AppHost processes.
     private readonly SemaphoreSlim _certificateLock = new(1, 1);
     private LocalDeveloperCertificate? _certificate;
 
