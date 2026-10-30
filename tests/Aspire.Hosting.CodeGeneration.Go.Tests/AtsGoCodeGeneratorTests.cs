@@ -449,13 +449,28 @@ public class AtsGoCodeGeneratorTests
                     }
                 }
 
+                // liveGoroutines counts goroutines from a stop-the-world dump. runtime.NumGoroutine
+                // reads scheduler counters without stopping the world, and during a GC cycle it
+                // briefly counts exited goroutines (for example the thousands left by a previous
+                // test) as running, so its delta can be far larger than any real growth.
+                func liveGoroutines() int {
+                    buf := make([]byte, 1<<20)
+                    for {
+                        n := runtime.Stack(buf, true)
+                        if n < len(buf) {
+                            return bytes.Count(buf[:n], []byte("\ngoroutine ")) + 1
+                        }
+                        buf = make([]byte, 2*len(buf))
+                    }
+                }
+
                 func TestRegisterCancellationDoesNotParkGoroutinePerToken(t *testing.T) {
                     c := newClient("")
-                    before := runtime.NumGoroutine()
+                    before := liveGoroutines()
                     for range 1000 {
                         c.registerCancellation(NewCancellationToken())
                     }
-                    if grown := runtime.NumGoroutine() - before; grown > 50 {
+                    if grown := liveGoroutines() - before; grown > 50 {
                         t.Fatalf("registering 1000 tokens left %d more goroutines running", grown)
                     }
                 }
