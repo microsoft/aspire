@@ -242,11 +242,37 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         };
 
         UpdateResources();
-        _resourcesSubscription = TelemetryRepository.OnNewResources(() => InvokeAsync(() =>
+        _resourcesSubscription = TelemetryRepository.OnNewResources(() => InvokeAsync(async () =>
         {
             UpdateResources();
+            await ResolveRouteResourceAsync();
             StateHasChanged();
         }));
+    }
+
+    /// <summary>
+    /// Resolves the route's resource once its telemetry is known.
+    /// </summary>
+    /// <remarks>
+    /// A resource's page can be opened before the resource sends telemetry. The route then resolves to "All", and,
+    /// without resolving it again, the page would keep listing every resource's logs under the selected resource
+    /// and its subscription would mark every resource's errors as viewed.
+    /// </remarks>
+    private async Task ResolveRouteResourceAsync()
+    {
+        if (ResourceName is null ||
+            PageViewModel.SelectedResource != _allResource ||
+            _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource) is not { } resource ||
+            resource == _allResource)
+        {
+            return;
+        }
+
+        PageViewModel.SelectedResource = resource;
+        ViewModel.ResourceKey = resource.Id?.GetResourceKey();
+        ViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
+        UpdateSubscription();
+        await _dataGrid.SafeRefreshDataAsync();
     }
 
     protected override async Task OnParametersSetAsync()

@@ -179,11 +179,36 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         PageViewModel = new TracesPageViewModel { SelectedResource = _allResource, SelectedSpanType = _spanTypes[0] };
 
         UpdateResources();
-        _resourcesSubscription = TelemetryRepository.OnNewResources(callback: () => InvokeAsync(workItem: () =>
+        _resourcesSubscription = TelemetryRepository.OnNewResources(callback: () => InvokeAsync(workItem: async () =>
         {
             UpdateResources();
+            await ResolveRouteResourceAsync();
             StateHasChanged();
         }));
+    }
+
+    /// <summary>
+    /// Resolves the route's resource once its telemetry is known.
+    /// </summary>
+    /// <remarks>
+    /// A resource's page can be opened before the resource sends telemetry. The route then resolves to "All", and,
+    /// without resolving it again, the page would keep listing every resource's traces under the selected resource.
+    /// </remarks>
+    private async Task ResolveRouteResourceAsync()
+    {
+        if (ResourceName is null ||
+            PageViewModel.SelectedResource != _allResource ||
+            _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource) is not { } resource ||
+            resource == _allResource)
+        {
+            return;
+        }
+
+        PageViewModel.SelectedResource = resource;
+        TracesViewModel.ResourceKey = resource.Id?.GetResourceKey();
+        TracesViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
+        UpdateSubscription();
+        await _dataGrid.SafeRefreshDataAsync();
     }
 
     protected override async Task OnParametersSetAsync()
