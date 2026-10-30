@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "New local developer certificate credential for Entra ID apps",
+  "mergedAt": "2026-10-30T10:05:49Z",
+  "number": 21382,
+  "runDate": "2026-10-30T12:05:00Z",
+  "status": "included",
+  "title": "Add local developer certificate credentials for Entra applications"
+}
