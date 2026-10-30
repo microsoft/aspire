@@ -33,6 +33,7 @@ import { blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs 
 import type { BlazorWasmDebuggerStatus } from './blazorWasmDebuggerSetup';
 import { getPsFollowProcessLogPath, type PsFollowProcessEvent } from './psFollowProcessLog';
 import { proveDotnetResourceLaunch } from './dotnetResourceLaunchProof';
+import { runAttachedResourceDetachSequence } from './attachedResourceDetachSequence';
 
 let atomicWriteSequence = 0;
 
@@ -1357,6 +1358,9 @@ async function proveAttachedResourceDebugging(
   const debugAdapterResponses: DebugAdapterMessageSummary[] = [];
   const breakpointResponses: DebugAdapterMessageSummary[] = [];
   const stoppedEvents: DebugAdapterStoppedEvent[] = [];
+  const pendingBreakpointRequests = new Map<string, { sourcePath?: string; lines: number[]; afterRemoval: boolean }>();
+  const breakpointRemovalAcknowledgedSessionIds = new Set<string>();
+  let breakpointRemovalRequested = false;
 
   const sessionSubscription = vscode.debug.onDidStartDebugSession(session => {
     sessionById.set(session.id, session);
@@ -1376,6 +1380,16 @@ async function proveAttachedResourceDebugging(
               sessionName: session.name,
               command: message.command,
               body: redactDebugAdapterArguments(message.arguments),
+            });
+          }
+          if (message?.type === 'request' && message.command === 'setBreakpoints' && typeof message.seq === 'number') {
+            const requestedBreakpoints: unknown[] = Array.isArray(message.arguments?.breakpoints) ? message.arguments.breakpoints : [];
+            pendingBreakpointRequests.set(`${session.id}:${message.seq}`, {
+              sourcePath: typeof message.arguments?.source?.path === 'string' ? message.arguments.source.path : undefined,
+              lines: requestedBreakpoints
+                .map(requested => (requested as { line?: unknown } | undefined)?.line)
+                .filter((line): line is number => typeof line === 'number'),
+              afterRemoval: breakpointRemovalRequested,
             });
           }
         },
@@ -1401,6 +1415,17 @@ async function proveAttachedResourceDebugging(
             };
             breakpointResponses.push(breakpointResponse);
             extensionLogOutputChannel.info(`Resource debug E2E ${session.type} setBreakpoints response: ${JSON.stringify(breakpointResponse)}`);
+
+            const requestKey = `${session.id}:${message.request_seq}`;
+            const request = pendingBreakpointRequests.get(requestKey);
+            pendingBreakpointRequests.delete(requestKey);
+            if (request?.afterRemoval &&
+              message.success === true &&
+              request.sourcePath !== undefined &&
+              isSamePath(request.sourcePath, sourcePath) &&
+              !request.lines.includes(breakpointLine + 1)) {
+              breakpointRemovalAcknowledgedSessionIds.add(session.id);
+            }
           }
           if (message?.type === 'event' && message.event === 'stopped') {
             const stoppedEvent = {
@@ -1509,44 +1534,61 @@ async function proveAttachedResourceDebugging(
           return undefined;
         }));
 
-    const waitForResourceResponse = (phase: 'continue' | 'detach') => waitForE2eValue(
-      `resource '${resourceName}' response after debugger ${phase}`,
-      timeoutMs,
-      async () => {
-        const resource = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
-        if (!(resource instanceof ResourceItem) || resource.resource.state !== 'Running') {
-          return undefined;
-        }
+    const attachedSessionForDetach = attachedSession;
+    const fetchResourceResponse = async (phase: 'attached' | 'detached'): Promise<string | undefined> => {
+      const resource = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
+      if (!(resource instanceof ResourceItem) || resource.resource.state !== 'Running') {
+        return undefined;
+      }
 
-        const requestUrl = await resolveResourceRequestUrl(
-          appHostTreeProvider,
-          appHostPath,
-          resourceName,
-          resourceRequestPath,
-          timeoutMs);
-        try {
-          const response = await fetch(requestUrl, { signal: AbortSignal.timeout(5000) });
-          const body = await response.text();
-          return response.ok && body === expectedResponse ? body : undefined;
-        }
-        catch {
-          return undefined;
-        }
-      });
-
-    // A successful continue acknowledges the debugger request, not application progress. Immediate
-    // disconnect can leave Windows CoreCLR unresponsive, so observe a completed request first.
-    // Clearing the breakpoint also keeps queued traffic from stopping the target again.
-    vscode.debug.removeBreakpoints([breakpoint]);
-    await attachedSession.customRequest('continue', { threadId: breakpointHit.stoppedEvent.threadId });
-    await waitForResourceResponse('continue');
-    await vscode.debug.stopDebugging(attachedSession);
-    await waitForE2eValue(
-      `${expectedDebugType} attach session termination`,
-      timeoutMs,
-      () => terminatedSessionIds.has(attachedSession!.id) ? true : undefined);
-
-    const responseBody = await waitForResourceResponse('detach');
+      const requestUrl = await resolveResourceRequestUrl(
+        appHostTreeProvider,
+        appHostPath,
+        resourceName,
+        resourceRequestPath,
+        timeoutMs);
+      try {
+        const response = await fetch(requestUrl, { signal: AbortSignal.timeout(5000) });
+        const body = await response.text();
+        return response.ok && body === expectedResponse ? body : undefined;
+      }
+      catch (error) {
+        throw new Error(`${phase} request to resource '${resourceName}' failed: ${error instanceof Error ? error.name : String(error)}`);
+      }
+    };
+    const responseBody = await runAttachedResourceDetachSequence({
+      removeBreakpoint: () => {
+        breakpointRemovalRequested = true;
+        vscode.debug.removeBreakpoints([breakpoint]);
+      },
+      waitForBreakpointRemoval: async () => {
+        await waitForE2eValue(
+          `${expectedDebugType} adapter to acknowledge breakpoint removal in ${sourcePath}:${breakpointLine + 1}`,
+          timeoutMs,
+          () => breakpointRemovalAcknowledgedSessionIds.has(attachedSessionForDetach.id) ? true : undefined);
+        extensionLogOutputChannel.info(`Resource debug E2E ${expectedDebugType} adapter acknowledged breakpoint removal.`);
+      },
+      continueExecution: async () => {
+        await attachedSessionForDetach.customRequest('continue', { threadId: breakpointHit.stoppedEvent.threadId });
+      },
+      waitForResourceResponse: async phase => {
+        const body = await waitForE2eValue(
+          phase === 'attached'
+            ? `resource '${resourceName}' response while the debugger is still attached`
+            : `resource '${resourceName}' response after debugger detach`,
+          timeoutMs,
+          () => fetchResourceResponse(phase));
+        extensionLogOutputChannel.info(`Resource debug E2E resource '${resourceName}' responded while ${phase}.`);
+        return body;
+      },
+      detach: async () => {
+        await vscode.debug.stopDebugging(attachedSessionForDetach);
+        await waitForE2eValue(
+          `${expectedDebugType} attach session termination`,
+          timeoutMs,
+          () => terminatedSessionIds.has(attachedSessionForDetach.id) ? true : undefined);
+      },
+    });
 
     if (attachRequests.length === 0 || breakpointResponses.every(response => response.success !== true)) {
       throw new Error(`The ${expectedDebugType} adapter did not report both attach and bound-breakpoint protocol traffic.`);

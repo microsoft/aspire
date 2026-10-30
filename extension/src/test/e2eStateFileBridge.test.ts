@@ -59,7 +59,7 @@ suite('E2E state file bridge', () => {
     });
 
     for (const debugType of ['coreclr', 'go'] as const) {
-        test(`waits for the ${debugType} target to respond after continuing before detaching`, async () => {
+        test(`waits for ${debugType} breakpoint removal and target progress before detaching`, async () => {
             const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
             const sourcePath = path.join(runRoot, 'source.txt');
             const appHostPath = path.join(runRoot, 'AppHost.csproj');
@@ -69,6 +69,8 @@ suite('E2E state file bridge', () => {
             let startListener: ((session: vscode.DebugSession) => unknown) | undefined;
             let terminateListener: ((session: vscode.DebugSession) => unknown) | undefined;
             let trackerFactory: vscode.DebugAdapterTrackerFactory | undefined;
+            let adapterTracker: vscode.DebugAdapterTracker | undefined;
+            let removalAcknowledged = false;
             sandbox.stub(vscode.debug, 'onDidStartDebugSession').callsFake(listener => {
                 startListener = listener;
                 return { dispose() { } };
@@ -81,7 +83,18 @@ suite('E2E state file bridge', () => {
                 trackerFactory = factory;
                 return { dispose() { } };
             });
-            const removeBreakpoints = sandbox.stub(vscode.debug, 'removeBreakpoints');
+            const removeBreakpoints = sandbox.stub(vscode.debug, 'removeBreakpoints').callsFake(() => {
+                adapterTracker?.onWillReceiveMessage?.({
+                    type: 'request', command: 'setBreakpoints', seq: 2,
+                    arguments: { source: { path: sourcePath }, breakpoints: [] },
+                });
+                setTimeout(() => {
+                    removalAcknowledged = true;
+                    adapterTracker?.onDidSendMessage?.({
+                        type: 'response', command: 'setBreakpoints', request_seq: 2, success: true, body: { breakpoints: [] },
+                    });
+                }, 10);
+            });
             sandbox.stub(vscode.debug, 'addBreakpoints');
             const session = createDebugSession('attach-proof', debugType, 'Attached worker', { request: 'attach' });
             let continueAccepted = false;
@@ -89,6 +102,7 @@ suite('E2E state file bridge', () => {
             let detached = false;
             const customRequest = sandbox.stub().callsFake(async (request: string) => {
                 if (request === 'continue') {
+                    assert.strictEqual(removalAcknowledged, true, 'Continue must wait for the matching adapter acknowledgement.');
                     continueAccepted = true;
                     return { allThreadsContinued: true };
                 }
@@ -134,6 +148,7 @@ suite('E2E state file bridge', () => {
                     invoke: async () => {
                         const tracker = trackerFactory?.createDebugAdapterTracker(session);
                         assert.ok(tracker && !('then' in tracker));
+                        adapterTracker = tracker;
                         startListener?.(session);
                         tracker.onWillReceiveMessage?.({ type: 'request', command: 'attach', arguments: {} });
                         tracker.onDidSendMessage?.({ type: 'response', command: 'setBreakpoints', success: true, body: { breakpoints: [{ verified: true }] } });
