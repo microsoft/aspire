@@ -433,6 +433,9 @@ public partial class StructuredLogsTests : DashboardTestContext
         var grid = page.FindComponent<AspireFluentDataGrid<LogSummary>>();
 
         var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+
+        // Another resource's error arrives before the selected resource's first telemetry.
+        await AddLogAsync(repository, "worker", SeverityNumber.Error);
         await AddLogAsync(repository, "api", SeverityNumber.Info);
 
         // Telemetry from the selected resource scopes the page to it.
@@ -446,9 +449,9 @@ public partial class StructuredLogsTests : DashboardTestContext
             Count = 100
         }).AsTask());
 
-        // Another resource's logs aren't shown, and its error isn't marked as read by viewing the selected resource.
+        // Another resource's logs aren't shown, and its errors aren't marked as read by viewing the selected resource.
         Assert.Equal(["api"], result.Items.Select(item => item.Resource.ResourceName));
-        Assert.Equal(1, repository.GetResourceUnviewedErrorLogsCount().Single(entry => entry.Key.Name == "worker").Value);
+        Assert.Equal(2, repository.GetResourceUnviewedErrorLogsCount().Single(entry => entry.Key.Name == "worker").Value);
 
         static Task AddLogAsync(SqliteTelemetryRepository repository, string name, SeverityNumber severity)
         {

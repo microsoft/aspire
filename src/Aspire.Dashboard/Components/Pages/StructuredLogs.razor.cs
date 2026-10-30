@@ -182,7 +182,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
                 TelemetryRepository.MarkViewedErrorLogs(resourceKey);
             }
         }
-        else
+        else if (!IsRouteResourceUnresolved)
         {
             TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
         }
@@ -260,8 +260,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     /// </remarks>
     private async Task ResolveRouteResourceAsync()
     {
-        if (ResourceName is null ||
-            PageViewModel.SelectedResource != _allResource ||
+        if (!IsRouteResourceUnresolved ||
             _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource) is not { } resource ||
             resource == _allResource)
         {
@@ -274,6 +273,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         UpdateSubscription();
         await _dataGrid.SafeRefreshDataAsync();
     }
+
+    /// <summary>
+    /// Gets whether the route names a resource that the page couldn't resolve yet, for example because it hasn't sent telemetry.
+    /// </summary>
+    private bool IsRouteResourceUnresolved => ResourceName is not null && PageViewModel.SelectedResource == _allResource;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -321,11 +325,18 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private void UpdateSubscription()
     {
+        var resourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
+
+        // A read subscription marks new errors as viewed, and one without a resource key covers every resource. While
+        // the route's resource is unresolved, the page isn't showing every resource, so it must not hide other
+        // resources' new errors. Telemetry from several resources can arrive in one batch, before the route resolves.
+        var subscriptionType = IsRouteResourceUnresolved ? SubscriptionType.Other : SubscriptionType.Read;
+
         // Subscribe to updates.
-        if (_logsSubscription is null || _logsSubscription.ResourceKey != PageViewModel.SelectedResource.Id?.GetResourceKey())
+        if (_logsSubscription is null || _logsSubscription.ResourceKey != resourceKey || _logsSubscription.SubscriptionType != subscriptionType)
         {
             _logsSubscription?.Dispose();
-            _logsSubscription = TelemetryRepository.OnNewLogs(PageViewModel.SelectedResource.Id?.GetResourceKey(), SubscriptionType.Read, async () =>
+            _logsSubscription = TelemetryRepository.OnNewLogs(resourceKey, subscriptionType, async () =>
             {
                 ViewModel.ClearData();
                 await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
