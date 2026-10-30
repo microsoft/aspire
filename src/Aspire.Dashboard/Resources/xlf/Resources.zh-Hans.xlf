@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../Resources.resx">
     <body>
+      <trans-unit id="GraphPageTitle">
+        <source>Graph</source>
+        <target state="new">Graph</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HealthCheckStatusJustNowFormat">
         <source>{0} (just now)</source>
         <target state="translated">{0} (刚才)</target>
@@ -16,6 +21,166 @@
         <source>{0} (last run at {1})</source>
         <target state="translated">{0} (上次运行时间: {1})</target>
         <note>{0} is the health status like "Unhealthy", {1} is the local time when the health check ran</note>
+      </trans-unit>
+      <trans-unit id="HomeHeadlineAllRunning">
+        <source>All {0} resources are running</source>
+        <target state="new">All {0} resources are running</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeHeadlineAttention">
+        <source>{0} of {1} resources need attention</source>
+        <target state="new">{0} of {1} resources need attention</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeHeadlineHealthy">
+        <source>No resources need attention</source>
+        <target state="new">No resources need attention</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeHeadlinePending">
+        <source>{0} of {1} resources are pending</source>
+        <target state="new">{0} of {1} resources are pending</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeInactiveLabel">
+        <source>Inactive</source>
+        <target state="new">Inactive</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeNeedsAttentionLabel">
+        <source>Need attention</source>
+        <target state="new">Need attention</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeNoFailedTraces">
+        <source>No failed traces</source>
+        <target state="new">No failed traces</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeNoRecentErrors">
+        <source>No errors logged</source>
+        <target state="new">No errors logged</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomePendingLabel">
+        <source>Pending</source>
+        <target state="new">Pending</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeRecentErrorsTitle">
+        <source>Recent errors</source>
+        <target state="new">Recent errors</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeRecentFailedTracesTitle">
+        <source>Recent failed traces</source>
+        <target state="new">Recent failed traces</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeResourceActions">
+        <source>Actions for {0}</source>
+        <target state="new">Actions for {0}</target>
+        <note>{0} is the resource name.</note>
+      </trans-unit>
+      <trans-unit id="HomeResourceColumn">
+        <source>Resource</source>
+        <target state="new">Resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeResourceStatesLabel">
+        <source>Resource states</source>
+        <target state="new">Resource states</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeResourcesLabel">
+        <source>Resources</source>
+        <target state="new">Resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeRunningLabel">
+        <source>Running</source>
+        <target state="new">Running</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeStartedAt">
+        <source>Started {0}</source>
+        <target state="new">Started {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeSummaryLandmark">
+        <source>Summary</source>
+        <target state="new">Summary</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeTelemetryLandmark">
+        <source>Telemetry</source>
+        <target state="new">Telemetry</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeUnviewedErrors">
+        <source>{0} unviewed error logs</source>
+        <target state="new">{0} unviewed error logs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LayoutLabel">
+        <source>Layout</source>
+        <target state="new">Layout</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingParameterCount">
+        <source>{0} parameter needs a value</source>
+        <target state="new">{0} parameter needs a value</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingParametersCardTitle">
+        <source>Missing parameter values</source>
+        <target state="new">Missing parameter values</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingParametersCount">
+        <source>{0} parameters need values</source>
+        <target state="new">{0} parameters need values</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingParametersPanelDescription">
+        <source>Enter the missing values together, then apply them without leaving the resource overview.</source>
+        <target state="new">Enter the missing values together, then apply them without leaving the resource overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingParametersReview">
+        <source>Review missing parameters</source>
+        <target state="new">Review missing parameters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingParametersSaveToUserSecrets">
+        <source>Save values to user secrets</source>
+        <target state="new">Save values to user secrets</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingParametersSetValues">
+        <source>Set parameter values</source>
+        <target state="new">Set parameter values</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterValueRequired">
+        <source>Value required</source>
+        <target state="new">Value required</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterValueSet">
+        <source>Value set</source>
+        <target state="new">Value set</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParametersAllValuesSet">
+        <source>All values are set</source>
+        <target state="new">All values are set</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParametersPageTitle">
+        <source>Parameters</source>
+        <target state="new">Parameters</target>
+        <note />
       </trans-unit>
       <trans-unit id="ResourceActionCommandsText">
         <source>Commands</source>
@@ -111,6 +276,281 @@
         <source>(Unset)</source>
         <target state="translated">(取消设置)</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewBrowseMeters">
+        <source>Browse meters</source>
+        <target state="new">Browse meters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewConsoleTitle">
+        <source>Console</source>
+        <target state="new">Console</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewCountOfTotal">
+        <source>{0} of {1}</source>
+        <target state="new">{0} of {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewEndpointsTitle">
+        <source>Endpoints</source>
+        <target state="new">Endpoints</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewErrors">
+        <source>Errors</source>
+        <target state="new">Errors</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewExitCode">
+        <source>Exit code</source>
+        <target state="new">Exit code</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewFailed">
+        <source>Failed</source>
+        <target state="new">Failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewFilterEnvironmentVariables">
+        <source>Filter environment variables</source>
+        <target state="new">Filter environment variables</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewInstruments">
+        <source>Instruments</source>
+        <target state="new">Instruments</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewInternalEndpoint">
+        <source>Internal</source>
+        <target state="new">Internal</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewLogsTitle">
+        <source>Structured logs</source>
+        <target state="new">Structured logs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewMeters">
+        <source>Meters</source>
+        <target state="new">Meters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewMetricsTitle">
+        <source>Metrics</source>
+        <target state="new">Metrics</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNoAttentionLogs">
+        <source>No warnings or errors</source>
+        <target state="new">No warnings or errors</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNoConsoleLogs">
+        <source>No console output</source>
+        <target state="new">No console output</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNoEndpoints">
+        <source>No endpoints</source>
+        <target state="new">No endpoints</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNoEnvironmentVariables">
+        <source>No environment variables</source>
+        <target state="new">No environment variables</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNoHealthChecks">
+        <source>No health checks</source>
+        <target state="new">No health checks</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNoMatchingEnvironmentVariables">
+        <source>No environment variables match the filter</source>
+        <target state="new">No environment variables match the filter</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNoMetrics">
+        <source>No metrics</source>
+        <target state="new">No metrics</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNoPinnedMetrics">
+        <source>Pin the metrics you want to keep an eye on and they'll show up here.</source>
+        <target state="new">Pin the metrics you want to keep an eye on and they'll show up here.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNoProperties">
+        <source>No properties</source>
+        <target state="new">No properties</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNoRelationships">
+        <source>No relationships</source>
+        <target state="new">No relationships</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNoTelemetry">
+        <source>This resource hasn't sent telemetry</source>
+        <target state="new">This resource hasn't sent telemetry</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNoTraces">
+        <source>No traces</source>
+        <target state="new">No traces</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNoVolumes">
+        <source>No volumes</source>
+        <target state="new">No volumes</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNotFound">
+        <source>Resource '{0}' was not found.</source>
+        <target state="new">Resource '{0}' was not found.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewOpenConsole">
+        <source>Open console</source>
+        <target state="new">Open console</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewPageTitle">
+        <source>Resource overview</source>
+        <target state="new">Resource overview</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewPropertiesTitle">
+        <source>Properties</source>
+        <target state="new">Properties</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewRelationshipGraph">
+        <source>Relationship graph</source>
+        <target state="new">Relationship graph</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewRelationshipsTitle">
+        <source>Relationships</source>
+        <target state="new">Relationships</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewShowAllEnvironmentVariables">
+        <source>Show all environment variables</source>
+        <target state="new">Show all environment variables</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewShowAppModelEnvironmentVariables">
+        <source>Show only environment variables from the app model</source>
+        <target state="new">Show only environment variables from the app model</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewShowLess">
+        <source>Show less</source>
+        <target state="new">Show less</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewShowMore">
+        <source>{0} more</source>
+        <target state="new">{0} more</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewStatusTitle">
+        <source>Status</source>
+        <target state="new">Status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewStopTime">
+        <source>Stop time</source>
+        <target state="new">Stop time</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewTotal">
+        <source>Total</source>
+        <target state="new">Total</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewTracesTitle">
+        <source>Traces</source>
+        <target state="new">Traces</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewViewAll">
+        <source>View all</source>
+        <target state="new">View all</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewWarnings">
+        <source>Warnings</source>
+        <target state="new">Warnings</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePersistentLifetime">
+        <source>Persistent</source>
+        <target state="new">Persistent</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePersistentLifetimeDescription">
+        <source>Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data.</source>
+        <target state="new">Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePersistentType">
+        <source>{0} (persistent)</source>
+        <target state="new">{0} (persistent)</target>
+        <note>{0} is the resource type, for example Container. Persistence describes the container lifetime, not durable data.</note>
+      </trans-unit>
+      <trans-unit id="ResourceTagsAdd">
+        <source>Add tag</source>
+        <target state="new">Add tag</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTagsAppHostDefined">
+        <source>Defined by the AppHost. This tag cannot be removed.</source>
+        <target state="new">Defined by the AppHost. This tag cannot be removed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTagsCreate">
+        <source>Create tag "{0}"</source>
+        <target state="new">Create tag "{0}"</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTagsInputLabel">
+        <source>Add a tag to {0}</source>
+        <target state="new">Add a tag to {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTagsInputPlaceholder">
+        <source>Tag name</source>
+        <target state="new">Tag name</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTagsLabel">
+        <source>Tags</source>
+        <target state="new">Tags</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTagsRemove">
+        <source>Remove tag {0}</source>
+        <target state="new">Remove tag {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTagsSuggestions">
+        <source>Tags</source>
+        <target state="new">Tags</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTraitDashboardPosition">
+        <source>Dashboard position</source>
+        <target state="new">Dashboard position</target>
+        <note>Name of the property holding the default position a resource declares in the AppHost.</note>
+      </trans-unit>
+      <trans-unit id="ResourceTraitDashboardTags">
+        <source>Dashboard tags</source>
+        <target state="new">Dashboard tags</target>
+        <note>Name of the property listing the tags a resource declares in the AppHost.</note>
       </trans-unit>
       <trans-unit id="ResourcesActionsColumnHeader">
         <source>Actions</source>

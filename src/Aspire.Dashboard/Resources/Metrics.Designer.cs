@@ -60,153 +60,282 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Metrics.
-        /// </summary>
         public static string MetricsHeader {
             get {
                 return ResourceManager.GetString("MetricsHeader", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Description.
-        /// </summary>
+        public static string MetricsInstrumentTypeCounter {
+            get {
+                return ResourceManager.GetString("MetricsInstrumentTypeCounter", resourceCulture);
+            }
+        }
+
+        public static string MetricsInstrumentTypeGauge {
+            get {
+                return ResourceManager.GetString("MetricsInstrumentTypeGauge", resourceCulture);
+            }
+        }
+
+        public static string MetricsInstrumentTypeHistogram {
+            get {
+                return ResourceManager.GetString("MetricsInstrumentTypeHistogram", resourceCulture);
+            }
+        }
+
+        public static string MetricsGroupByLabel {
+            get {
+                return ResourceManager.GetString("MetricsGroupByLabel", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortByLabel {
+            get {
+                return ResourceManager.GetString("MetricsSortByLabel", resourceCulture);
+            }
+        }
+
+        public static string MetricsGroupNone {
+            get {
+                return ResourceManager.GetString("MetricsGroupNone", resourceCulture);
+            }
+        }
+
+        public static string MetricsOrganizeResource {
+            get {
+                return ResourceManager.GetString("MetricsOrganizeResource", resourceCulture);
+            }
+        }
+
+        public static string MetricsOrganizeMeter {
+            get {
+                return ResourceManager.GetString("MetricsOrganizeMeter", resourceCulture);
+            }
+        }
+
+        public static string MetricsOrganizeInstrument {
+            get {
+                return ResourceManager.GetString("MetricsOrganizeInstrument", resourceCulture);
+            }
+        }
+
+        public static string MetricsOrganizeLandmark {
+            get {
+                return ResourceManager.GetString("MetricsOrganizeLandmark", resourceCulture);
+            }
+        }
+
+        public static string MetricsGroupByTooltip {
+            get {
+                return ResourceManager.GetString("MetricsGroupByTooltip", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortByTooltip {
+            get {
+                return ResourceManager.GetString("MetricsSortByTooltip", resourceCulture);
+            }
+        }
+
+        public static string MetricsGroupMenuTitle {
+            get {
+                return ResourceManager.GetString("MetricsGroupMenuTitle", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortMenuTitle {
+            get {
+                return ResourceManager.GetString("MetricsSortMenuTitle", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortValueDescending {
+            get {
+                return ResourceManager.GetString("MetricsSortValueDescending", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortValueAscending {
+            get {
+                return ResourceManager.GetString("MetricsSortValueAscending", resourceCulture);
+            }
+        }
+
+        public static string MetricsSortName {
+            get {
+                return ResourceManager.GetString("MetricsSortName", resourceCulture);
+            }
+        }
+
+        public static string MetricsNoMatchingInstruments {
+            get {
+                return ResourceManager.GetString("MetricsNoMatchingInstruments", resourceCulture);
+            }
+        }
+
+        public static string MetricsInstrumentLimitReached {
+            get {
+                return ResourceManager.GetString("MetricsInstrumentLimitReached", resourceCulture);
+            }
+        }
+
+        public static string MetricsOverviewNoData {
+            get {
+                return ResourceManager.GetString("MetricsOverviewNoData", resourceCulture);
+            }
+        }
+
+        public static string MetricsPinInstrument {
+            get {
+                return ResourceManager.GetString("MetricsPinInstrument", resourceCulture);
+            }
+        }
+
+        public static string MetricsUnpinInstrument {
+            get {
+                return ResourceManager.GetString("MetricsUnpinInstrument", resourceCulture);
+            }
+        }
+
+        public static string MetricsPinnedHeader {
+            get {
+                return ResourceManager.GetString("MetricsPinnedHeader", resourceCulture);
+            }
+        }
+
+        public static string MetricsGroupsLabel {
+            get {
+                return ResourceManager.GetString("MetricsGroupsLabel", resourceCulture);
+            }
+        }
+
+        public static string MetricsPinnedEmpty {
+            get {
+                return ResourceManager.GetString("MetricsPinnedEmpty", resourceCulture);
+            }
+        }
+
+        public static string MetricsFilterResultsTitle {
+            get {
+                return ResourceManager.GetString("MetricsFilterResultsTitle", resourceCulture);
+            }
+        }
+
+        public static string MetricsAllInstrumentsTitle {
+            get {
+                return ResourceManager.GetString("MetricsAllInstrumentsTitle", resourceCulture);
+            }
+        }
+
+        public static string MetricsShowAllInstruments {
+            get {
+                return ResourceManager.GetString("MetricsShowAllInstruments", resourceCulture);
+            }
+        }
+
+        public static string MetricsBackTo {
+            get {
+                return ResourceManager.GetString("MetricsBackTo", resourceCulture);
+            }
+        }
+
+        public static string MetricsInstrumentNoDataTooltip {
+            get {
+                return ResourceManager.GetString("MetricsInstrumentNoDataTooltip", resourceCulture);
+            }
+        }
+
         public static string MetricsInsturementDescriptionGridNameColumnHeader {
             get {
                 return ResourceManager.GetString("MetricsInsturementDescriptionGridNameColumnHeader", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Instrument.
-        /// </summary>
         public static string MetricsInsturementNameGridNameColumnHeader {
             get {
                 return ResourceManager.GetString("MetricsInsturementNameGridNameColumnHeader", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Last 15 minutes.
-        /// </summary>
         public static string MetricsLastFifteenMinutes {
             get {
                 return ResourceManager.GetString("MetricsLastFifteenMinutes", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Last 5 minutes.
-        /// </summary>
         public static string MetricsLastFiveMinutes {
             get {
                 return ResourceManager.GetString("MetricsLastFiveMinutes", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Last hour.
-        /// </summary>
         public static string MetricsLastHour {
             get {
                 return ResourceManager.GetString("MetricsLastHour", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Last 1 minute.
-        /// </summary>
         public static string MetricsLastOneMinute {
             get {
                 return ResourceManager.GetString("MetricsLastOneMinute", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Last 6 hours.
-        /// </summary>
         public static string MetricsLastSixHours {
             get {
                 return ResourceManager.GetString("MetricsLastSixHours", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Last 30 minutes.
-        /// </summary>
         public static string MetricsLastThirtyMinutes {
             get {
                 return ResourceManager.GetString("MetricsLastThirtyMinutes", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Last 3 hours.
-        /// </summary>
         public static string MetricsLastThreeHours {
             get {
                 return ResourceManager.GetString("MetricsLastThreeHours", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Last 12 hours.
-        /// </summary>
         public static string MetricsLastTwelveHours {
             get {
                 return ResourceManager.GetString("MetricsLastTwelveHours", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to No metrics for the selected resource.
-        /// </summary>
         public static string MetricsNoMetricsForResource {
             get {
                 return ResourceManager.GetString("MetricsNoMetricsForResource", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to {0} metrics.
-        /// </summary>
         public static string MetricsPageTitle {
             get {
                 return ResourceManager.GetString("MetricsPageTitle", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Select a resource to view metrics.
-        /// </summary>
         public static string MetricsSelectAResource {
             get {
                 return ResourceManager.GetString("MetricsSelectAResource", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Select instrument..
-        /// </summary>
         public static string MetricsSelectInstrument {
             get {
                 return ResourceManager.GetString("MetricsSelectInstrument", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to View attributes.
-        /// </summary>
         public static string MetricsViewAttributesToolbar {
             get {
                 return ResourceManager.GetString("MetricsViewAttributesToolbar", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Metrics capture paused at {0}.
-        /// </summary>
         public static string PauseInProgressText {
             get {
                 return ResourceManager.GetString("PauseInProgressText", resourceCulture);

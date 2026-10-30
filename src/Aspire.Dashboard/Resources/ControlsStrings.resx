@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -129,20 +129,8 @@
   <data name="ChartContainerTableTab" xml:space="preserve">
     <value>Table</value>
   </data>
-  <data name="ResourcesContainerTableTab" xml:space="preserve">
-    <value>Resources</value>
-  </data>
-  <data name="ResourcesContainerParametersTab" xml:space="preserve">
-    <value>Parameters</value>
-  </data>
-  <data name="ResourcesContainerGraphTab" xml:space="preserve">
-    <value>Graph</value>
-  </data>
   <data name="ChartContainerGraphAccessibleLabel" xml:space="preserve">
     <value>Graph. For an accessible view please navigate to the Table tab</value>
-  </data>
-  <data name="ResourcesContainerGraphAccessibleLabel" xml:space="preserve">
-    <value>Graph. For an accessible view please navigate to the Resources tab</value>
   </data>
   <data name="EnvironmentVariablesFilterToggleShowSpecOnly" xml:space="preserve">
     <value>Show core properties</value>
@@ -197,6 +185,18 @@
   </data>
   <data name="ParameterSetValueAction" xml:space="preserve">
     <value>Click to set parameter value</value>
+  </data>
+  <data name="ParameterEditShortAction" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="ParameterSetShortAction" xml:space="preserve">
+    <value>Set</value>
+  </data>
+  <data name="ParameterDeleteShortAction" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="ParameterDeleteValueAction" xml:space="preserve">
+    <value>Delete value</value>
   </data>
   <data name="StateColumnHeader" xml:space="preserve">
     <value>State</value>
@@ -448,6 +448,15 @@
   <data name="VolumeMountTypeColumnHeader" xml:space="preserve">
     <value>Mount type</value>
   </data>
+  <data name="VolumeMountTypeReadOnlyTitle" xml:space="preserve">
+    <value>Read-only</value>
+  </data>
+  <data name="VolumeRevealInFileExplorer" xml:space="preserve">
+    <value>Reveal in file explorer</value>
+  </data>
+  <data name="VolumeRevealFailed" xml:space="preserve">
+    <value>Couldn't open '{0}'. It may not exist on this machine.</value>
+  </data>
   <data name="ClearAllResources" xml:space="preserve">
     <value>Remove all telemetry</value>
   </data>
@@ -548,5 +557,24 @@
   </data>
   <data name="Download" xml:space="preserve">
     <value>Download</value>
+  </data>
+  <data name="ChartContainerShowChangePerIntervalLabel" xml:space="preserve">
+    <value>Show change per interval</value>
+  </data>
+  <data name="ChartContainerUnitPerInterval" xml:space="preserve">
+    <value>{0} per interval</value>
+    <comment>{0} is the instrument's unit, e.g. "Requests"</comment>
+  </data>
+  <data name="ResourcesContainerTableTab" xml:space="preserve">
+    <value>Resources</value>
+  </data>
+  <data name="ResourcesContainerParametersTab" xml:space="preserve">
+    <value>Parameters</value>
+  </data>
+  <data name="ResourcesContainerGraphTab" xml:space="preserve">
+    <value>Graph</value>
+  </data>
+  <data name="ResourcesContainerGraphAccessibleLabel" xml:space="preserve">
+    <value>Graph. For an accessible view please navigate to the Resources tab</value>
   </data>
 </root>

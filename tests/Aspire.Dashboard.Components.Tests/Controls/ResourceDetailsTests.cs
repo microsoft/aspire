@@ -378,6 +378,38 @@ public class ResourceDetailsTests : DashboardTestContext
             });
     }
 
+    [Theory]
+    [InlineData("/resources/app1", "/resources/api")]
+    [InlineData("/legacy", "/?resource=api")]
+    [InlineData("/legacy?view=Graph", "/?resource=api")]
+    public async Task OnViewRelationshipAsync_NavigatesToResourceUrlOfCurrentExperience(string currentUrl, string expectedUrl)
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var resource = ModelTestHelpers.CreateResource(resourceName: "app1");
+        var related = ModelTestHelpers.CreateResource(resourceName: "api");
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(currentUrl);
+
+        var cut = Render<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([
+                new KeyValuePair<string, ResourceViewModel>(resource.Name, resource),
+                new KeyValuePair<string, ResourceViewModel>(related.Name, related)]));
+        });
+
+        // The previous experience has no resource overview route, so its View action must keep the query-based URL.
+        await cut.InvokeAsync(() => cut.Instance.OnViewRelationshipAsync(new ResourceDetailRelationshipViewModel
+        {
+            Resource = related,
+            ResourceName = related.Name,
+            Types = ["Reference"]
+        }));
+
+        Assert.Equal(expectedUrl, "/" + navigation.ToBaseRelativePath(navigation.Uri));
+    }
+
     [Fact]
     public void Render_StateDescription_ShowsAsResourceDetailEntry()
     {
@@ -608,6 +640,42 @@ public class ResourceDetailsTests : DashboardTestContext
             name => Assert.Equal("Container ID", name),
             name => Assert.Equal("Container command", name),
             name => Assert.Equal("AAA provider diagnostic", name));
+    }
+
+    [Fact]
+    public void Render_AppHostTraits_ShowInDefaultResourceDetailsWithReadableNamesAndValues()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        static ResourcePropertyViewModel Trait(string name, params string[] values) => new(
+            KnownProperties.Resource.TraitPrefix + name,
+            Value.ForList(values.Select(Value.ForString).ToArray()),
+            isValueSensitive: false,
+            knownProperty: null,
+            sortOrder: int.MaxValue,
+            displayName: name,
+            isHighlighted: false);
+
+        var properties = new[]
+        {
+            Trait("Owner", "Finance", "Platform"),
+            Trait(KnownResourceTraits.DashboardTag, "Backend", "API"),
+            Trait(KnownResourceTraits.DashboardPosition, "10"),
+            new ResourcePropertyViewModel("provider.diagnostic", Value.ForString("hidden"), false, null, int.MaxValue, null, false)
+        }.ToDictionary(p => p.Name);
+
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", properties: properties);
+
+        var cut = Render<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        Assert.Collection(cut.Instance.FilteredResourceProperties.Select(p => (p.DisplayName, ((IPropertyGridItem)p).Value)),
+            p => Assert.Equal(("Dashboard position", "10"), p),
+            p => Assert.Equal(("Dashboard tags", "Backend, API"), p),
+            p => Assert.Equal(("Owner", "Finance, Platform"), p));
     }
 
     private static int ProducerDefinedDisplaySortOrder(int producerSortOrder)

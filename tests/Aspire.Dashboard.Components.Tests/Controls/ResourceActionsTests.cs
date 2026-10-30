@@ -38,7 +38,7 @@ public class ResourceActionsTests : DashboardTestContext
         var cut = RenderActions(resource, client, isDesktop: true);
         var outputButton = cut.FindComponent<FluentButton>();
         Assert.Equal(expectTerminal ? TerminalStrings.TerminalTitle : DashboardResources.ResourceActionConsoleLogsText,
-            outputButton.Instance.Title);
+            outputButton.Find("fluent-button").GetAttribute("data-tooltip"));
 
         await cut.InvokeAsync(outputButton.Instance.OnClick.InvokeAsync);
         var navigation = Services.GetRequiredService<NavigationManager>();
@@ -99,13 +99,13 @@ public class ResourceActionsTests : DashboardTestContext
         var client = new TestDashboardClient(isEnabled: true, initialResources: [resource],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         var cut = RenderActions(resource, client, isDesktop: true);
-        Assert.Equal(DashboardResources.ResourceActionConsoleLogsText, cut.FindComponent<FluentButton>().Instance.Title);
+        Assert.Equal(DashboardResources.ResourceActionConsoleLogsText, cut.FindComponent<FluentButton>().Find("fluent-button").GetAttribute("data-tooltip"));
 
         cut.Render(builder => builder.Add(component => component.Resource, TerminalSetupHelpers.CreateTerminalResource("shell")));
-        Assert.Equal(TerminalStrings.TerminalTitle, cut.FindComponent<FluentButton>().Instance.Title);
+        Assert.Equal(TerminalStrings.TerminalTitle, cut.FindComponent<FluentButton>().Find("fluent-button").GetAttribute("data-tooltip"));
 
         cut.Render(builder => builder.Add(component => component.Resource, resource));
-        Assert.Equal(DashboardResources.ResourceActionConsoleLogsText, cut.FindComponent<FluentButton>().Instance.Title);
+        Assert.Equal(DashboardResources.ResourceActionConsoleLogsText, cut.FindComponent<FluentButton>().Find("fluent-button").GetAttribute("data-tooltip"));
     }
 
     [Fact]

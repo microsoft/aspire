@@ -351,13 +351,14 @@
           "typeId": "Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestConfigDto",
           "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
           "declaration": "type TestConfigDto struct",
-          "summary": "TestConfigDto represents TestConfigDto.",
+          "summary": "TestConfigDto - Test DTO to verify [AspireDto] generates TypeScript interfaces.",
           "members": [
             {
               "id": "TestConfigDto.Name",
               "kind": "field",
               "name": "Name",
               "declaration": "Name string \u0060json:\u0022name,omitempty\u0022\u0060",
+              "summary": "Name is the name of the test config.",
               "jsonName": "name"
             },
             {
@@ -365,6 +366,7 @@
               "kind": "field",
               "name": "Port",
               "declaration": "Port float64 \u0060json:\u0022port,omitempty\u0022\u0060",
+              "summary": "Port is the port used by the test config.",
               "jsonName": "port"
             },
             {
@@ -372,6 +374,7 @@
               "kind": "field",
               "name": "Enabled",
               "declaration": "Enabled bool \u0060json:\u0022enabled,omitempty\u0022\u0060",
+              "summary": "Enabled is a value indicating whether the test config is enabled.",
               "jsonName": "enabled"
             },
             {
@@ -379,6 +382,7 @@
               "kind": "field",
               "name": "OptionalField",
               "declaration": "OptionalField *string \u0060json:\u0022optionalField,omitempty\u0022\u0060",
+              "summary": "OptionalField is an optional test config field.",
               "jsonName": "optionalField"
             },
             {
@@ -400,13 +404,14 @@
           "typeId": "enum:Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceStatus",
           "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
           "declaration": "type TestResourceStatus string",
-          "summary": "TestResourceStatus represents TestResourceStatus.",
+          "summary": "TestResourceStatus - Test enum for type generation verification.",
           "members": [
             {
               "id": "TestResourceStatus.TestResourceStatusPending",
               "kind": "constant",
               "name": "TestResourceStatusPending",
               "declaration": "TestResourceStatusPending TestResourceStatus = \u0022Pending\u0022",
+              "summary": "TestResourceStatusPending - The resource is pending.",
               "value": "Pending"
             },
             {
@@ -414,6 +419,7 @@
               "kind": "constant",
               "name": "TestResourceStatusRunning",
               "declaration": "TestResourceStatusRunning TestResourceStatus = \u0022Running\u0022",
+              "summary": "TestResourceStatusRunning - The resource is running.",
               "value": "Running"
             },
             {
@@ -421,6 +427,7 @@
               "kind": "constant",
               "name": "TestResourceStatusStopped",
               "declaration": "TestResourceStatusStopped TestResourceStatus = \u0022Stopped\u0022",
+              "summary": "TestResourceStatusStopped - The resource is stopped.",
               "value": "Stopped"
             },
             {
@@ -428,6 +435,7 @@
               "kind": "constant",
               "name": "TestResourceStatusFailed",
               "declaration": "TestResourceStatusFailed TestResourceStatus = \u0022Failed\u0022",
+              "summary": "TestResourceStatusFailed is the resource failed.",
               "value": "Failed"
             }
           ]
