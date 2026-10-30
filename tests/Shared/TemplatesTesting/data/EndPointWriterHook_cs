@@ -12,7 +12,8 @@ public sealed class EndPointWriterHook : IDistributedApplicationEventingSubscrib
     public async Task OnAfterResourcesCreated(AfterResourcesCreatedEvent @event, CancellationToken cancellationToken)
     {
         var root = new JsonObject();
-        foreach (var project in @event.Model.Resources.OfType<ProjectResource>())
+        foreach (var project in @event.Model.Resources.OfType<IResourceWithEndpoints>()
+            .Where(resource => resource.Annotations.OfType<IProjectMetadata>().Any()))
         {
             var projectJson = new JsonObject();
             root[project.Name] = projectJson;

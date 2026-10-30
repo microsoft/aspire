@@ -25,7 +25,15 @@ The individual tests need to create projects from templates just like a user wou
 - Then, with a custom `nuget.config` which points to the built NuGet packages in `artifacts`, the SDK is configured to use local packages
     - which installs the components using the NuGet packages from the `artifacts` into `artifacts/bin/dotnet-tests`
 - This simulates the SDK being installed on a user's machine, and being independent of the aspire repo.
-- The test command helper removes inherited `MSBuildSDKsPath` and `MSBuildExtensionsPath` before launching tools. Otherwise, tests started by the repository's MSBuild can load its SDK targets into an older test SDK; solution restore can then fail to load NuGet tasks or their runtime dependencies.
+- The test command helper and AppHost launcher remove inherited `MSBuildSDKsPath`
+  and `MSBuildExtensionsPath` before applying explicit test-environment overrides.
+  The AppHost builds its child projects (for example, the API and frontend) before
+  starting those services. Removing the inherited repository MSBuild paths keeps
+  those child-project builds on the isolated test SDK.
+
+  Otherwise, tests started by the repository's MSBuild can load its SDK targets
+  into an older test SDK; solution restore can then fail to load NuGet tasks or
+  their runtime dependencies.
 - At this point the SDK is usable from outside the repo by using `source /path-to-aspire-repo/dogfood.sh`
 - The nuget versions for the locally built packages are like `8.0.0-dev` or `8.0.0-ci`.
 
