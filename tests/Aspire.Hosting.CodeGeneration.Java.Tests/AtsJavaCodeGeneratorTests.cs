@@ -750,7 +750,10 @@ public class AtsJavaCodeGeneratorTests
             import java.io.PipedInputStream;
             import java.io.PipedOutputStream;
             import java.lang.reflect.Field;
+            import java.lang.reflect.Method;
+            import java.math.BigDecimal;
             import java.nio.charset.StandardCharsets;
+            import java.util.List;
             import java.util.Map;
             import java.util.concurrent.CompletableFuture;
             import java.util.concurrent.TimeUnit;
@@ -787,6 +790,20 @@ public class AtsJavaCodeGeneratorTests
                     serverOutput.write(body);
                     serverOutput.flush();
                     call.get(2, TimeUnit.SECONDS);
+
+                    // Values parsed from JSON responses are BigDecimal and must round-trip without precision loss.
+                    Method toJson = AspireClient.class.getDeclaredMethod("toJson", Object.class);
+                    toJson.setAccessible(true);
+                    var numbers = List.<Object>of(
+                        32.0,
+                        2.5f,
+                        1e20,
+                        new BigDecimal("32.0"),
+                        new BigDecimal("1.0000000000000001"),
+                        new BigDecimal("9007199254740993.0"),
+                        new BigDecimal("1E-400"),
+                        7L);
+                    System.out.println("NUMBERS:" + toJson.invoke(client, numbers));
 
                     System.out.println("OK");
                 }
@@ -855,6 +872,9 @@ public class AtsJavaCodeGeneratorTests
         Assert.True(defaults.Lower);
         Assert.Equal(0, defaults.MinLower);
         Assert.Equal(-3, defaults.MinUpper);
+
+        var numbersLine = run.StdOut.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries).Single(line => line.StartsWith("NUMBERS:", StringComparison.Ordinal));
+        Assert.Equal("NUMBERS:[32,2.5,1.0E20,32,1.0000000000000001,9007199254740993,1E-400,7]", numbersLine);
 
         static JsonNode? FindProperty(JsonNode? node, string name)
         {
