@@ -89,6 +89,10 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
                 // cancelled if the caller disposes the monitor while the callback is running.
                 try
                 {
+                    if (Environment.GetEnvironmentVariable("ASPIRE_TERMINAL_STAGE_CAPTURE") == "1")
+                    {
+                        Console.Error.WriteLine($"[terminal-stage] stage=parent-death-detected pid={Environment.ProcessId} ticks={System.Diagnostics.Stopwatch.GetTimestamp()} frequency={System.Diagnostics.Stopwatch.Frequency}");
+                    }
                     await onParentExited(stopToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)

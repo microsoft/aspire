@@ -1,6 +1,6 @@
-# Diagnostic branch only: one original and one adjacent fact, no repeat loop.
-name: Diagnose terminal control shutdown stages
-run-name: Terminal control stages at ${{ github.sha }}
+# Diagnostic branch only: one owner-exit fact with watchdog and child coverage.
+name: Diagnose terminal owner exit stages
+run-name: Terminal owner exit stages at ${{ github.sha }}
 
 on:
   workflow_dispatch: {}
@@ -10,7 +10,7 @@ permissions:
   actions: read
 
 jobs:
-  terminal_control_stages:
+  terminal_owner_exit_stages:
     uses: ./.github/workflows/run-tests.yml
     with:
       testShortName: Managed
@@ -19,5 +19,4 @@ jobs:
       ignoreTestFailures: false
       allowZeroTests: false
       extraTestArgs: >-
-        --filter-method '*.TerminalHostControlShutdownUnlinksSockets'
         --filter-method '*.TerminalHostSubcommandStopsWhenOwningAppHostIsGone'

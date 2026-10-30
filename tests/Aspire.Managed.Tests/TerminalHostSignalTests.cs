@@ -181,7 +181,7 @@ public partial class TerminalHostSignalTests(ITestOutputHelper outputHelper)
         => await AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(
             "Aspire.TerminalHost.dll");
 
-    private static async Task AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(string? hostAssemblyPath)
+    private async Task AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(string? hostAssemblyPath)
     {
         var root = Directory.CreateTempSubdirectory();
         try
@@ -225,6 +225,7 @@ public partial class TerminalHostSignalTests(ITestOutputHelper outputHelper)
                     parentProcess.Id.ToString(CultureInfo.InvariantCulture);
                 startInfo.Environment[KnownConfigNames.TerminalHostParentProcessStartedStable] =
                     parentIdentity.Value.ToString(CultureInfo.InvariantCulture);
+                startInfo.Environment["ASPIRE_TERMINAL_STAGE_CAPTURE"] = "1";
 
                 using var process = Process.Start(startInfo)
                     ?? throw new InvalidOperationException("Failed to start aspire-managed.");
@@ -244,9 +245,12 @@ public partial class TerminalHostSignalTests(ITestOutputHelper outputHelper)
 
                     await readyTask;
 
+                    outputHelper.WriteLine($"[terminal-stage] stage=test-owner-kill-requested pid={parentProcess.Id} ticks={Stopwatch.GetTimestamp()} frequency={Stopwatch.Frequency}");
                     parentProcess.Kill(entireProcessTree: true);
                     await parentProcess.WaitForExitAsync();
+                    outputHelper.WriteLine($"[terminal-stage] stage=test-owner-exit-observed pid={parentProcess.Id} ticks={Stopwatch.GetTimestamp()} frequency={Stopwatch.Frequency}");
                     await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                    outputHelper.WriteLine($"[terminal-stage] stage=test-owned-forwarder-exit-observed pid={process.Id} ticks={Stopwatch.GetTimestamp()} frequency={Stopwatch.Frequency}");
 
                     var standardOutput = await standardOutputTask;
                     var standardError = await standardErrorTask;
@@ -258,10 +262,18 @@ public partial class TerminalHostSignalTests(ITestOutputHelper outputHelper)
                 }
                 finally
                 {
+                    outputHelper.WriteLine($"[terminal-stage] stage=test-owned-forwarder-before-cleanup pid={process.Id} exited={process.HasExited} ticks={Stopwatch.GetTimestamp()} frequency={Stopwatch.Frequency}");
                     if (!process.HasExited)
                     {
                         process.Kill(entireProcessTree: true);
                         await process.WaitForExitAsync();
+                    }
+                    foreach (var line in (await standardErrorTask).Split('\n'))
+                    {
+                        if (line.StartsWith("[terminal-stage]", StringComparison.Ordinal))
+                        {
+                            outputHelper.WriteLine(line.TrimEnd('\r'));
+                        }
                     }
                 }
             }

@@ -98,7 +98,9 @@ internal static class ParentProcessWatchdog
     {
         // Cancellation callbacks run synchronously and can themselves stall. Arm the timer
         // first so the force-exit backstop remains independent of cooperative shutdown.
+        var armed = System.Diagnostics.Stopwatch.GetTimestamp();
         var forceExitTask = ForceExitAfterDelayAsync(stopToken, forceExitGracePeriod, exit);
+        TraceStage("watchdog-force-exit-armed", armed);
 
         try
         {
@@ -126,6 +128,15 @@ internal static class ParentProcessWatchdog
         Action<int> exit)
     {
         await Task.Delay(forceExitGracePeriod, stopToken).ConfigureAwait(false);
+        TraceStage("watchdog-before-exit124", System.Diagnostics.Stopwatch.GetTimestamp());
         exit(TerminatedExitCode);
+    }
+
+    private static void TraceStage(string stage, long timestamp)
+    {
+        if (Environment.GetEnvironmentVariable("ASPIRE_TERMINAL_STAGE_CAPTURE") == "1")
+        {
+            Console.Error.WriteLine($"[terminal-stage] stage={stage} pid={Environment.ProcessId} ticks={timestamp} frequency={System.Diagnostics.Stopwatch.Frequency}");
+        }
     }
 }

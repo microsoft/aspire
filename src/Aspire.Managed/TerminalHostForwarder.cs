@@ -66,6 +66,7 @@ internal static partial class TerminalHostForwarder
             }
             catch (OperationCanceledException) when (shutdownCts.IsCancellationRequested)
             {
+                TraceStage("forwarder-shutdown-cancellation-observed");
                 if (!process.HasExited)
                 {
                     if (OperatingSystem.IsWindows())
@@ -94,13 +95,17 @@ internal static partial class TerminalHostForwarder
 
                 try
                 {
+                    TraceStage("forwarder-shutdown-child-wait-entered");
                     await process.WaitForExitAsync().WaitAsync(ParentProcessWatchdog.ForceExitGracePeriod).ConfigureAwait(false);
+                    TraceStage("forwarder-shutdown-child-wait-completed");
                 }
                 catch (TimeoutException)
                 {
+                    TraceStage("forwarder-shutdown-child-wait-timeout");
                     Console.Error.WriteLine("Terminal host did not stop within the shutdown grace period.");
                     process.Kill(entireProcessTree: true);
                     await process.WaitForExitAsync().ConfigureAwait(false);
+                    TraceStage("forwarder-grace-return124");
                     return ShutdownTimeoutExitCode;
                 }
 
@@ -117,7 +122,9 @@ internal static partial class TerminalHostForwarder
         {
             if (watchdog is not null)
             {
+                TraceStage("forwarder-watchdog-dispose-entered");
                 await watchdog.DisposeAsync().ConfigureAwait(false);
+                TraceStage("forwarder-watchdog-dispose-completed");
             }
             TraceStage("forwarder-finally-complete");
         }
