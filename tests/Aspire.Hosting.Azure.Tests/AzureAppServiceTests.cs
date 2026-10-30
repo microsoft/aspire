@@ -1391,9 +1391,11 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task UserDefinedSlotConfigNames_AreMergedWithGeneratedStickySettings(bool withDeploymentSlot)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task UserDefinedSlotConfigNames_AreMergedWithGeneratedStickySettings(bool withDeploymentSlot, bool parameterBackedNames)
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
@@ -1408,11 +1410,23 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
             .WithExternalHttpEndpoints()
             .PublishAsAzureAppServiceWebsite((infra, site) =>
             {
-                infra.Add(new global::Azure.Provisioning.AppService.SlotConfigNames("slotConfigNames")
+                var slotConfigNames = new global::Azure.Provisioning.AppService.SlotConfigNames("slotConfigNames")
                 {
-                    Parent = site,
-                    AppSettingNames = ["MY__CUSTOM_SETTING"]
-                });
+                    Parent = site
+                };
+
+                if (parameterBackedNames)
+                {
+                    var stickyNames = new global::Azure.Provisioning.ProvisioningParameter("stickyNames", typeof(string[]));
+                    infra.Add(stickyNames);
+                    slotConfigNames.AppSettingNames = stickyNames;
+                }
+                else
+                {
+                    slotConfigNames.AppSettingNames = ["MY__CUSTOM_SETTING"];
+                }
+
+                infra.Add(slotConfigNames);
             });
 
         using var app = builder.Build();
@@ -1426,8 +1440,9 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
         var (_, bicep) = await GetManifestWithBicep(website);
 
         Assert.Single(Regex.Matches(bicep, @"^resource slotConfigNames ", RegexOptions.Multiline));
-        Assert.Contains("'MY__CUSTOM_SETTING'", bicep);
-        Assert.Contains("'OTEL_SERVICE_NAME'", bicep);
+
+        await Verify(bicep, "bicep")
+            .UseParameters(withDeploymentSlot, parameterBackedNames);
     }
 
     [Fact]

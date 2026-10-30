@@ -1069,6 +1069,22 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         if (existingSlotConfigNames is not null)
         {
+            var appSettingNames = (IBicepValue)existingSlotConfigNames.AppSettingNames;
+            if (appSettingNames.Kind == BicepValueKind.Expression)
+            {
+                // The list is backed by an expression (e.g. a parameter), so compose it with Bicep union().
+                var mergedNames = new ProvisioningVariable($"{existingSlotConfigNames.BicepIdentifier}_appSettingNames", typeof(string[]))
+                {
+                    Value = new FunctionCallExpression(
+                        new IdentifierExpression("union"),
+                        appSettingNames.Compile(),
+                        new ArrayExpression([.. stickyConfigNames.Select(n => new StringLiteralExpression(n))]))
+                };
+                Infra.Add(mergedNames);
+                existingSlotConfigNames.AppSettingNames = mergedNames;
+                return;
+            }
+
             var existingNames = existingSlotConfigNames.AppSettingNames
                 .Where(n => ((IBicepValue)n).Kind == BicepValueKind.Literal)
                 .Select(n => n.Value)
