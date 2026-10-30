@@ -20,7 +20,7 @@ on:
 env:
   # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
   # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
-  TEST_PROJECT: "Hosting"
+  TEST_PROJECT: "Hosting.RemoteHost"
 
   # Test filter arguments passed to dotnet test (after the -- separator).
   # Use quotes around wildcard patterns to prevent shell glob expansion.
@@ -28,18 +28,18 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+  TEST_FILTER: '--filter-not-class "*.IntegrationHostProcessTests" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true" --report-trx'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
+  TARGET_OSES: "windows-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "3"
+  RUNNERS_PER_OS: "5"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "3"
+  ITERATIONS_PER_RUNNER: "20"
 
 jobs:
 
@@ -356,6 +356,17 @@ jobs:
             $result = $LASTEXITCODE
             Get-Content $iterOutput
 
+            # Keep each iteration's reports before the next cleanup removes them.
+            $reports = @(Get-ChildItem -LiteralPath "${{ github.workspace }}/testresults" -Filter *.trx -Recurse -File)
+            if ($reports.Count -eq 0) {
+              throw "Iteration ${i}: no TRX report was produced; target execution cannot be verified."
+            }
+            $reportDirectory = "${{ github.workspace }}/iteration-results/iteration-$i"
+            New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
+            foreach ($report in $reports) {
+              Copy-Item -LiteralPath $report.FullName -Destination $reportDirectory
+            }
+
             # Detect zero-test runs (--ignore-exit-code 8 in Testing.targets masks exit code 8)
             if ($result -eq 0) {
               $content = Get-Content $iterOutput -Raw -ErrorAction SilentlyContinue
@@ -388,6 +399,14 @@ jobs:
           Write-Host "========================================"
 
           if ($fail -gt 0) { exit 1 }
+
+      - name: Upload iteration TRX
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: iteration-results-${{ matrix.os }}-${{ matrix.index }}
+          path: iteration-results/
+          if-no-files-found: error
 
       - name: Upload failure logs
         if: failure()
