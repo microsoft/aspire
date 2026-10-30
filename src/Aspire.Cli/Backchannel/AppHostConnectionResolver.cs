@@ -221,6 +221,26 @@ internal sealed class AppHostConnectionResolver(
         var inScopeConnections = connections.Where(c => c.IsInScope).ToList();
         var outOfScopeConnections = connections.Where(c => !c.IsInScope).ToList();
 
+        // `aspire start`/`run` from this directory resolves the AppHost configured in aspire.config.json
+        // even when it is not under the working directory (for example, when run from a sibling directory).
+        // Treat that AppHost as in scope so follow-up commands target the same AppHost.
+        if (outOfScopeConnections.Count > 0 &&
+            await projectLocator.GetAppHostFromSettingsAsync(cancellationToken).ConfigureAwait(false) is { } configuredAppHost)
+        {
+            var configuredConnections = outOfScopeConnections
+                .Where(c => c.AppHostInfo?.AppHostPath is { Length: > 0 } appHostPath &&
+                    AppHostPathComparer.PathsEqual(appHostPath, configuredAppHost.FullName) &&
+                    IsInWorktreeOfWorkingDirectory(c, workingDirectory))
+                .ToList();
+
+            if (configuredConnections.Count > 0)
+            {
+                logger.LogDebug("Treating running AppHost {AppHostPath} as in scope because it is configured in settings.", configuredAppHost.FullName);
+                inScopeConnections.AddRange(configuredConnections);
+                outOfScopeConnections.RemoveAll(configuredConnections.Contains);
+            }
+        }
+
         IAppHostAuxiliaryBackchannel? selectedConnection = null;
 
         if (inScopeConnections.Count == 1)
