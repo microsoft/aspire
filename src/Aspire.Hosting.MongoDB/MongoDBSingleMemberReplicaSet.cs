@@ -118,9 +118,9 @@ internal static class MongoDBSingleMemberReplicaSet
                 }
 
                 ValidateConfiguration(config, name, host);
-                var status = await database.RunCommandAsync<BsonDocument>(
-                    new BsonDocument("replSetGetStatus", 1), ReadPreference.Nearest, cancellationToken).ConfigureAwait(false);
-                if (IsPrimary(status, name))
+                var hello = await database.RunCommandAsync<BsonDocument>(
+                    new BsonDocument("hello", 1), ReadPreference.Nearest, cancellationToken).ConfigureAwait(false);
+                if (IsWritablePrimary(hello, name))
                 {
                     return;
                 }
@@ -150,6 +150,11 @@ internal static class MongoDBSingleMemberReplicaSet
         }
     }
 
-    internal static bool IsPrimary(BsonDocument status, string name) =>
-        status["set"].AsString == name && status["myState"].AsInt32 == 1 && status["members"].AsBsonArray.Count == 1;
+    // Use hello rather than replSetGetStatus: a newly elected primary reports PRIMARY (myState 1) while it is still
+    // draining and rejects writes with NotWritablePrimary until hello reports isWritablePrimary.
+    // https://www.mongodb.com/docs/manual/reference/command/hello/#mongodb-data-hello.isWritablePrimary
+    internal static bool IsWritablePrimary(BsonDocument hello, string name) =>
+        hello.GetValue("setName", BsonNull.Value) is BsonString setName && setName.Value == name &&
+        hello.GetValue("isWritablePrimary", false).ToBoolean() &&
+        hello.GetValue("hosts", BsonNull.Value) is BsonArray { Count: 1 };
 }

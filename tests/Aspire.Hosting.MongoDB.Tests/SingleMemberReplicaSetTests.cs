@@ -189,20 +189,30 @@ public class SingleMemberReplicaSetTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData("mongo", 1, 1, true)]
-    [InlineData("mongo", 2, 1, false)]
-    [InlineData("other", 1, 1, false)]
-    [InlineData("mongo", 1, 2, false)]
-    public void ReadinessRequiresTheSingleMemberPrimary(string name, int state, int memberCount, bool expected)
+    [InlineData("mongo", true, 1, true)]
+    // A newly elected primary is still draining: replSetGetStatus already reports PRIMARY, but writes are rejected.
+    [InlineData("mongo", false, 1, false)]
+    [InlineData("other", true, 1, false)]
+    [InlineData("mongo", true, 2, false)]
+    public void ReadinessRequiresTheSingleMemberWritablePrimary(string name, bool isWritablePrimary, int hostCount, bool expected)
     {
-        var status = new BsonDocument
+        var hello = new BsonDocument
         {
-            ["set"] = name,
-            ["myState"] = state,
-            ["members"] = new BsonArray(Enumerable.Range(0, memberCount).Select(id => new BsonDocument("_id", id))),
+            ["setName"] = name,
+            ["isWritablePrimary"] = isWritablePrimary,
+            ["hosts"] = new BsonArray(Enumerable.Range(0, hostCount).Select(id => $"localhost:{27017 + id}")),
         };
 
-        Assert.Equal(expected, MongoDBSingleMemberReplicaSet.IsPrimary(status, "mongo"));
+        Assert.Equal(expected, MongoDBSingleMemberReplicaSet.IsWritablePrimary(hello, "mongo"));
+    }
+
+    [Fact]
+    public void ReadinessRequiresAReplicaSetMember()
+    {
+        // A standalone mongod, or a member that has not been initiated yet, reports no setName or hosts.
+        var hello = new BsonDocument { ["isWritablePrimary"] = false };
+
+        Assert.False(MongoDBSingleMemberReplicaSet.IsWritablePrimary(hello, "mongo"));
     }
 
     [Fact]

@@ -935,11 +935,11 @@ internal class MyMongoDbHealthCheck : IHealthCheck
                     return HealthCheckResult.Unhealthy(error);
                 }
 
-                var status = await _client.GetDatabase(MongoDBServerResource.DefaultAuthenticationDatabase)
-                    .RunCommandAsync<BsonDocument>(new BsonDocument("replSetGetStatus", 1), ReadPreference.Nearest, cancellationToken)
+                var hello = await _client.GetDatabase(MongoDBServerResource.DefaultAuthenticationDatabase)
+                    .RunCommandAsync<BsonDocument>(new BsonDocument("hello", 1), ReadPreference.Nearest, cancellationToken)
                     .ConfigureAwait(false);
 
-                return MongoDBSingleMemberReplicaSet.IsPrimary(status, replicaSet.Name)
+                return MongoDBSingleMemberReplicaSet.IsWritablePrimary(hello, replicaSet.Name)
                     ? HealthCheckResult.Healthy()
                     : HealthCheckResult.Unhealthy($"MongoDB replica set '{replicaSet.Name}' is not a writable single-member primary.");
             }
