@@ -11,6 +11,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Dcp.Process;
@@ -602,6 +603,30 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CommandStrings.RestartProjectDescription, restartCommand.DisplayDescription);
         Assert.Contains(resource.Annotations.OfType<ResourceCommandAnnotation>(), a => a.Name == KnownResourceCommands.RebuildCommand);
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_GuestAppHostDoesNotApplyAppHostServerBuildConfiguration()
+    {
+        // In a guest (TypeScript, Python, ...) AppHost the entry assembly is the prebuilt AppHost server,
+        // so its build configuration must not be applied to the coordinated build or the launch.
+        Assert.False(string.IsNullOrEmpty(Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration));
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.WorkspaceRoot.FullName;
+        var builder = DistributedApplication.CreateBuilder(new CreateBuilderOptions
+        {
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = Path.Combine(projectDirectory, "apphost.mts")
+        });
+
+        var projectPath = Path.Combine(projectDirectory, "MyService", "MyService.csproj");
+        var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true);
+
+        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(
+            await app.Resource.CreateLaunchConfigurationAsync(
+                LaunchConfigurationTestHelpers.CreateCallbackContext(app.Resource, ExecutableLaunchMode.NoDebug)));
+        Assert.Null(launchConfig.BuildConfiguration);
     }
 
     [Theory]

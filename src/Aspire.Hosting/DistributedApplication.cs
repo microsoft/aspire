@@ -245,6 +245,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
             EnableResourceLogging = options.EnableResourceLogging,
             ContainerRegistryOverride = options.ContainerRegistryOverride,
             DashboardApplicationName = options.DashboardApplicationName,
+            IsGuestAppHost = true,
             // These values came from the managed server's appsettings.json before polyglot AppHosts
             // used their own content root. Keep them as fallbacks so every user configuration source
             // can override them while existing AppHosts retain the same logging behavior.
