@@ -6,6 +6,29 @@
     gap: 2px;
 }
 
+.resource-actions:has(.resource-action-card-menu) {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 2px;
+}
+
+.resource-actions:has(.resource-action-card-menu) ::deep fluent-button {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    padding-inline: 0;
+}
+
+.resource-actions:has(.resource-action-card-menu) ::deep .fluent-button-content {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-actions:has(.resource-action-card-menu) .resource-action-card-menu {
+    width: 28px;
+}
+
 /* Every action position (a command button, the console-logs button, an empty command spacer, or the
    overflow menu) occupies an identical-width, center-aligned slot. This guarantees the console-logs,
    divider, and overflow-menu controls land in the exact same column on every row regardless of how many

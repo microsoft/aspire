@@ -1,0 +1,419 @@
+﻿::deep .unread-logs-errors-link {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 6px;
+    text-decoration: none;
+    --unread-logs-badge-color: #ffffff;
+}
+
+::deep .unread-logs-errors-link:hover {
+    background-color: var(--colorNeutralBackground2);
+}
+
+::deep .value-not-set-link {
+    display: inline;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--colorBrandBackground);
+    text-decoration: underline;
+    cursor: pointer;
+    font: inherit;
+}
+
+::deep .value-not-set-link:hover {
+    color: var(--colorBrandBackgroundHover);
+}
+
+::deep .error-counter-badge {
+    padding: 1px;
+}
+
+/* Forces the grid to always take up the width of its rows,
+   and the rows to always take up the width of the cells.
+   This fixes a few odd rendering things, but also enables us
+   to set overflow-x: clip on the grid to prevent an odd visual
+   glitch with the menu when it is at the far right of the viewport
+*/
+::deep .fluent-data-grid,
+::deep .fluent-data-grid-row {
+    min-width: min-content;
+}
+
+/* Ensures that any popups (e.g. menus) don't overflow past
+   the right edge of the grid causing a visual flicker of
+   the horizontal scrollbar appearing and disappearing
+*/
+::deep .fluent-data-grid {
+    overflow-x: clip;
+}
+
+::deep .resources-name-container {
+    height: 24px;
+    display: inline-flex;
+    vertical-align: middle;
+    align-items: center;
+}
+
+::deep tr.resource-row > :first-child {
+    padding-inline-start: 0;
+}
+
+::deep tr.resource-row-hidden:not(.selected-row):not(:hover),
+::deep tr.resource-row-hidden:not(.selected-row):not(:hover) > td {
+    background-color: var(--resource-hidden-background);
+}
+
+::deep .resources-summary-layout {
+    --resource-hidden-background: color-mix(in srgb, var(--colorNeutralBackground3) 50%, var(--aspire-page-background));
+    display: grid;
+    grid-template-rows: 1fr auto;
+    height: 100%;
+    width: 100%;
+    grid-template-areas:
+        "main"
+        "foot";
+}
+
+::deep .resource-tabs {
+    grid-area: main;
+    display: grid;
+    grid-template-areas:
+        "resources-tab-header"
+        "resources-tab-content";
+    grid-template-rows: auto 1fr;
+    overflow: hidden;
+}
+
+::deep .resources-tab-header {
+    width: max-content;
+    max-width: 100%;
+    min-width: 0;
+}
+
+/* FluentTabs keeps its horizontal tab list at max-content width. Constrain the host so
+   focus can scroll the selected tab into view when space is limited above ultra-low width. */
+::deep .resources-tab-header[orientation="horizontal"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+/* On desktop the tabs row also hosts the filter controls on the right. The filter toolbar wraps
+    its controls when its share of the row becomes too narrow. */
+::deep .resource-tabs-header-row {
+    grid-area: resources-tab-header;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--spacingHorizontalSNudge);
+    min-width: 0;
+    padding-top: 0.5rem;
+    padding-left: var(--layout-left-padding);
+    padding-right: var(--layout-right-padding);
+    container-type: inline-size;
+}
+
+/* Let the tabs take their content width and shrink/scroll (see the overflow rule above) instead
+   of pushing the toolbar off the row. */
+::deep .resource-tabs-header-row .resources-tab-header {
+    flex: 0 1 auto;
+}
+
+::deep .resource-tabs-toolbar {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+}
+
+.resources-filter-popup-container {
+    display: contents;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup::part(dialog) {
+    position-anchor: --resource-filter-button;
+    /* Fluent sets the dialog insets inline; the anchor position must override them. */
+    top: anchor(bottom) !important;
+    right: anchor(right) !important;
+    bottom: auto !important;
+    left: auto !important;
+    position-try-fallbacks: flip-block;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: 400px;
+    max-height: 500px;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 0;
+    border-radius: 0;
+    background: var(--aspire-popup-background);
+    box-shadow: var(--aspire-popup-shadow);
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup > .fluent-stack-vertical {
+    box-sizing: border-box;
+    max-width: 100%;
+    padding: 14px;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group {
+    min-width: 0;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group > legend {
+    font-family: var(--aspire-font-display);
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 27px;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group > .fluent-stack-vertical {
+    min-width: 0;
+    row-gap: 4px;
+    width: 100%;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group fluent-field {
+    grid-template-columns: auto minmax(0, 1fr);
+    height: 20px;
+    margin: 0;
+    min-width: 0;
+    width: 100%;
+}
+
+.resources-filter-popup-container ::deep .resources-filter-popup .filter-group fluent-field > label[slot="label"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@container (max-width: 500px) {
+    ::deep .resource-tabs-toolbar {
+        min-width: 0;
+    }
+}
+
+::deep .resources-grid-container {
+    overflow: auto;
+    grid-area: resources-tab-content;
+}
+
+::deep .resource-tabs .resources-grid-container {
+    margin-top: 10px;
+}
+
+::deep .resource-graph-container {
+    grid-area: resources-tab-content;
+    position: relative; /* So graph buttons are position inside the container */
+}
+
+::deep .resource-graph-controls {
+    position: absolute;
+    right: 30px;
+    bottom: 30px;
+    display: flex;
+    column-gap: 10px;
+}
+
+::deep .resource-graph-controls fluent-button {
+    --aspire-button-background: var(--aspire-page-background);
+    --aspire-button-border-color: transparent;
+    border: var(--strokeWidthThin) solid var(--aspire-button-border-color);
+    background-color: var(--aspire-button-background);
+}
+
+::deep .resource-graph-controls fluent-button:hover {
+    background-color: var(--colorNeutralBackground3);
+}
+
+::deep .resource-graph-controls fluent-button:active,
+::deep .resource-graph-controls fluent-button:hover:active {
+    background-color: var(--resource-graph-secondary-hover-background);
+}
+
+::deep .resource-graph-controls fluent-button > svg {
+    width: 24px;
+    height: 24px;
+}
+
+::deep .resource-graph .texts {
+    cursor: pointer;
+}
+
+::deep .resource-graph .nodes {
+    cursor: pointer;
+}
+
+::deep .resource-name {
+    fill: var(--colorNeutralForeground1);
+    stroke: var(--aspire-page-background);
+    font-size: 15px;
+    text-anchor: middle;
+    stroke-width: 0.5em;
+    paint-order: stroke;
+    stroke-linejoin: round;
+}
+
+::deep .resource-group-hidden .resource-name {
+    fill: var(--colorNeutralForeground3);
+}
+
+::deep .resource-node {
+    stroke: var(--aspire-page-background);
+    fill: var(--aspire-page-background);
+}
+
+::deep .resource-group-hidden .resource-node {
+    fill: var(--resource-hidden-background);
+}
+
+::deep .resource-hidden-icon {
+    fill: var(--colorNeutralForeground3);
+}
+
+::deep .resource-name-hitbox,
+::deep .resource-hidden-icon-hitbox {
+    fill: transparent;
+    stroke: none;
+    pointer-events: all;
+}
+
+::deep .resource-hidden-icon > path {
+    pointer-events: none;
+}
+
+::deep .resource-group-hover .resource-node {
+    fill: var(--resource-graph-hover-background) !important;
+}
+
+::deep .resource-group-selected .resource-scale {
+    transform: scale(1.2);
+}
+
+::deep .resource-group-selected .resource-node {
+    fill: var(--colorNeutralBackground3) !important;
+}
+
+::deep .resource-group-selected .resource-node-border {
+    stroke: var(--aspire-button-hover-border);
+}
+
+::deep .resource-group-highlight .resource-node {
+    fill: url(#highlighted-pattern);
+}
+
+::deep .resource-group-highlight .resource-node-border {
+    stroke: var(--aspire-button-hover-border);
+}
+
+::deep .resource-group-hover .resource-node-border {
+    stroke: var(--aspire-button-hover-border);
+}
+
+::deep .resource-node-border {
+    stroke: var(--colorNeutralStroke1);
+    stroke-width: 1;
+    fill: transparent;
+}
+
+::deep .resource-endpoint {
+    fill: var(--foreground-subtext-rest);
+    font-size: 11px;
+    text-anchor: middle;
+}
+
+::deep .resource-status-circle {
+    fill: var(--aspire-page-background);
+}
+
+/* Context menu affordance (cog) shown on the lower-right of a node. Hidden until the node is
+   hovered so it doesn't clutter the graph, and non-interactive while hidden (pointer-events: none)
+   so the invisible element can't intercept clicks. */
+::deep .resource-menu-cog {
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+    transition: opacity 0.15s ease-in-out;
+}
+
+::deep .resource-group-hover .resource-menu-cog,
+::deep .resource-menu-cog:focus,
+::deep .resource-menu-cog[aria-expanded="true"] {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (hover: none) {
+    ::deep .resource-menu-cog {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+::deep .resource-menu-cog-background {
+    fill: var(--aspire-page-background);
+    stroke: var(--colorNeutralStroke1);
+    stroke-width: var(--strokeWidthThin);
+}
+
+::deep .resource-menu-cog:hover .resource-menu-cog-background {
+    fill: var(--resource-graph-secondary-hover-background);
+    stroke: var(--aspire-button-hover-border);
+}
+
+::deep .resource-menu-cog:focus-visible .resource-menu-cog-background {
+    stroke: var(--colorStrokeFocus1);
+    stroke-width: var(--strokeWidthThick);
+}
+
+::deep .resource-menu-cog[aria-expanded="true"] .resource-menu-cog-background {
+    stroke: transparent;
+}
+
+::deep .resource-menu-cog[aria-expanded="true"] {
+    outline: none;
+}
+
+::deep .resource-menu-cog:active {
+    outline: none;
+}
+
+::deep .resource-menu-cog-icon {
+    fill: var(--colorBrandForeground1);
+    pointer-events: none;
+}
+
+::deep .resource-link {
+    stroke: var(--colorNeutralStroke1);
+    stroke-width: 1;
+    marker-end: url(#arrow-normal);
+}
+
+::deep .arrow-normal {
+    fill: var(--colorNeutralStroke1);
+}
+
+::deep .arrow-highlight {
+    fill: var(--aspire-button-hover-border);
+}
+
+::deep .arrow-highlight-expand {
+    fill: var(--aspire-button-hover-border);
+}
+
+::deep .resource-link-highlight {
+    stroke: var(--aspire-button-hover-border);
+    stroke-dasharray: 5,5;
+    stroke-width: 2;
+    marker-end: url(#arrow-highlight);
+}
+
+::deep .resource-link-highlight-expand {
+    stroke: var(--aspire-button-hover-border);
+    stroke-dasharray: 5,5;
+    stroke-width: 2;
+    marker-end: url(#arrow-highlight-expand);
+}

@@ -163,10 +163,13 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
     {
         await RunTestAsync(async page =>
         {
-            await GoToResourcesAndWaitAsync(page);
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = "legacy", Url = baseUrl }]);
+            await page.GotoAsync("/legacy/resources");
+            await page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
 
             var grid = page.Locator(".main-grid").First;
-            await Assertions.Expect(grid).ToBeVisibleAsync();
+            await Assertions.Expect(grid.Locator(".resource-row").First).ToBeVisibleAsync();
 
             // Guard against a Fluent UI Blazor rename of the resize handle marker: the auto-fit
             // double-click handler keys off exactly these selectors, so if none is present the
@@ -614,7 +617,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
 
             var bottomButton = page.Locator(".scroll-to-bottom");
             await Assertions.Expect(bottomButton).ToHaveAttributeAsync("aria-label", "Jump to latest");
-            await Assertions.Expect(bottomButton).ToHaveAttributeAsync("title", "Jump to latest");
+            await Assertions.Expect(bottomButton).ToHaveAttributeAsync("data-tooltip", "Jump to latest");
         });
     }
 
@@ -661,6 +664,10 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
                 [
                     new UrlViewModel("http", new Uri("about:blank#parent-url"), isInternal: false, isInactive: false, UrlDisplayPropertiesViewModel.Empty)
                 ]),
+            ModelTestHelpers.CreateResource(
+                resourceName: "connection-string",
+                resourceType: KnownResourceTypes.Parameter,
+                state: KnownResourceState.Running),
         ];
     }
 }

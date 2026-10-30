@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
-using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -76,12 +75,12 @@ public partial class MainLayoutTests
             Assert.True(shortcuts.IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals));
         });
         Assert.Equal(1, client.ResourceSubscriptionCount);
-        await cut.InvokeAsync(() => cut.FindComponent<DashboardRunSelect>().Instance.SelectedRunIdChanged.InvokeAsync("historical"));
+        await cut.InvokeAsync(() => cut.Instance.SwitchDashboardRunAsync("historical"));
         await disposed.Task.WaitAsync(DefaultWaitTimeout);
         Assert.False(HasTerminals());
         Assert.False(shortcuts.IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals));
-        Assert.Empty(cut.FindComponents<ResourceTerminalsAvailabilityProvider>());
-        await cut.InvokeAsync(() => cut.FindComponent<DashboardRunSelect>().Instance.SelectedRunIdChanged.InvokeAsync(null));
+        Assert.Empty(cut.FindComponents<NavigationAvailabilityProvider>());
+        await cut.InvokeAsync(() => cut.Instance.SwitchDashboardRunAsync(null));
         cut.WaitForAssertion(() =>
         {
             Assert.True(HasTerminals());
@@ -90,7 +89,7 @@ public partial class MainLayoutTests
         Assert.Equal(2, client.ResourceSubscriptionCount);
 
         bool HasTerminals() => isDesktop
-            ? cut.FindComponent<DesktopNavMenu>().Instance.HasResourceTerminals
+            ? shortcuts.IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals)
             : cut.FindComponent<MobileNavMenu>().Instance.HasResourceTerminals;
     }
 
@@ -132,11 +131,7 @@ public partial class MainLayoutTests
         {
             Assert.Equal(expected, cut.Instance.SubscribedShortcuts.Contains(AspireKeyboardShortcut.GoToTerminals));
             Assert.Equal(expected, shortcuts.IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals));
-            if (isDesktop)
-            {
-                Assert.Equal(expected, cut.FindComponent<DesktopNavMenu>().Instance.HasResourceTerminals);
-            }
-            else
+            if (!isDesktop)
             {
                 Assert.Equal(expected, cut.FindComponent<MobileNavMenu>().Instance.HasResourceTerminals);
             }

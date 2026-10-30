@@ -46,6 +46,12 @@ public interface ITelemetryRepository : IDisposable
     Task<GetTracesResponse> GetTracesAsync(GetTracesRequest context, CancellationToken cancellationToken);
     Task<GetTraceSummariesResponse> GetTraceSummariesAsync(GetTracesRequest context, CancellationToken cancellationToken);
     Task<GetSpansResponse> GetSpansAsync(GetSpansRequest context, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets the incoming request spans of a time window with only the fields activity summaries use, without
+    /// materializing their traces.
+    /// </summary>
+    Task<GetRequestSpansResponse> GetRequestSpansAsync(GetRequestSpansRequest request, CancellationToken cancellationToken);
     Task<Dictionary<string, int>> GetTraceFieldValuesAsync(string attributeName, CancellationToken cancellationToken);
     Task<Dictionary<string, int>> GetLogsFieldValuesAsync(string attributeName, CancellationToken cancellationToken);
     bool HasUpdatedTrace(OtlpTrace trace);

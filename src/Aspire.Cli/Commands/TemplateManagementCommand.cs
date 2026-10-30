@@ -146,6 +146,10 @@ internal sealed class TemplateManagementCommand : ParentCommand
 
     private sealed class AddSourceCommand : BaseCommand
     {
+        private readonly Option<bool> _yesOption = new("--yes", "-y")
+        {
+            Description = NewCommandStrings.TemplateSourceYesOptionDescription
+        };
         private readonly TemplateSourceStore _store;
 
         public AddSourceCommand(TemplateSourceStore store, CommonCommandServices services)
@@ -156,6 +160,9 @@ internal sealed class TemplateManagementCommand : ParentCommand
             Options.Add(AddSourceOptions.PathOption);
             Options.Add(AddSourceOptions.RepositoryOption);
             Options.Add(AddSourceOptions.RefOption);
+            Options.Add(_yesOption);
+
+            AddNonInteractiveRequiresYesValidator(this, _yesOption);
         }
 
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -163,6 +170,16 @@ internal sealed class TemplateManagementCommand : ParentCommand
             try
             {
                 var options = AddSourceOptions.FromParseResult(parseResult);
+                var confirmed = await InteractionService.PromptConfirmAsync(
+                    string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceTrustPrompt,
+                        options.Name.EscapeMarkup(), (options.Repository ?? options.Path!).EscapeMarkup()),
+                    binding: PromptBinding.Create(parseResult, _yesOption),
+                    cancellationToken: cancellationToken);
+                if (!confirmed)
+                {
+                    return CommandResult.Cancelled();
+                }
+
                 await _store.AddAsync(options.Name, options.ToJsonObject(), cancellationToken);
                 InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceAdded, options.Name));
                 return CommandResult.Success();

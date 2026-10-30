@@ -12,7 +12,7 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import * as cliModule from '../utils/process/cliProcess';
 import * as configInfoProvider from '../utils/configInfoProvider';
-import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
+import { describeAppHostPidCapability, describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
 import { errorFetchingAppHosts, errorStoppingAppHostWatcher } from '../loc/strings';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { createAppHostOperationTarget } from '../utils/appHostOperationTarget';
@@ -98,7 +98,7 @@ suite('AppHostDataRepository', () => {
         // Default to a current CLI so common-path tests use streamed discovery and include disabled
         // commands in describe output. Compatibility tests override this response explicitly.
         getConfigInfoStub = sinon.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
-            capabilities: [describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
+            capabilities: [describeAppHostPidCapability, describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
         } as any);
         defaultWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
         findFilesStub = sinon.stub(vscode.workspace, 'findFiles').resolves([]);
@@ -1444,6 +1444,30 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('fetchAppHostResourcesOnce describes one AppHost process with the caller cancellation token', async () => {
+        const describeProcess = new TestChildProcess();
+        spawnStub.onFirstCall().returns(describeProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+        const cancellation = new vscode.CancellationTokenSource();
+
+        try {
+            const fetchPromise = repository.fetchAppHostResourcesOnce(
+                createAppHostOperationTarget('/workspace/AppHost.csproj', '/workspace/AppHost.csproj'),
+                cancellation.token,
+                1234);
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--format', 'json', '--nologo', '--apphost', '/workspace/AppHost.csproj', '--apphost-pid', '1234']);
+            cancellation.cancel();
+
+            await assert.rejects(fetchPromise, vscode.CancellationError);
+            assert.strictEqual(describeProcess.killed, true);
+        } finally {
+            cancellation.dispose();
+            repository.dispose();
+        }
+    });
+
     test('fetchAppHostResourcesOnce describes only the requested AppHost with cancellation support', async () => {
         const describeProcess = new TestChildProcess();
         spawnStub.returns(describeProcess);
@@ -1493,6 +1517,25 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('fetchAppHostResourcesOnce fails before describe when the CLI cannot bind an AppHost process', async () => {
+        getConfigInfoStub.resolves({
+            capabilities: [describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            await assert.rejects(
+                repository.fetchAppHostResourcesOnce(
+                    createAppHostOperationTarget('/workspace/AppHost.csproj', '/workspace/AppHost.csproj'),
+                    undefined,
+                    1234),
+                /cannot bind resource snapshots to an AppHost process/);
+            assert.strictEqual(spawnStub.called, false);
+        } finally {
+            repository.dispose();
+        }
+    });
+
     test('fetchAppHostResourcesOnce uses the canonical operation path and selector workspace scope', async () => {
         const describeProcess = new TestChildProcess();
         spawnStub.returns(describeProcess);
@@ -1509,7 +1552,9 @@ suite('AppHostDataRepository', () => {
 
         try {
             const fetchPromise = repository.fetchAppHostResourcesOnce(
-                createAppHostOperationTarget(operationPath, scopePath));
+                createAppHostOperationTarget(operationPath, scopePath),
+                undefined,
+                1234);
             await waitForMicrotasks();
 
             assert.deepStrictEqual(spawnStub.firstCall.args[2], [
@@ -1519,6 +1564,8 @@ suite('AppHostDataRepository', () => {
                 '--nologo',
                 '--apphost',
                 operationPath,
+                '--apphost-pid',
+                '1234',
             ]);
             assert.deepStrictEqual(getCliPathStub.firstCall.args, [workspaceFolderCliPathTarget(folder)]);
 

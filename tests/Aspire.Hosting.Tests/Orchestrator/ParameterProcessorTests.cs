@@ -1300,6 +1300,139 @@ public class ParameterProcessorTests
     }
 
     [Fact]
+    public async Task InitializeParametersAsync_WithCustomInputs_PromptInputsAreNamedAfterParameters()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var firstParameter = CreateParameterWithMissingValue("firstParam");
+        var secondParameter = CreateParameterWithMissingValue("secondParam");
+        foreach (var parameter in new[] { firstParameter, secondParameter })
+        {
+            // Both generators use the same input name, which a prompt for both parameters can't contain twice.
+            parameter.Annotations.Add(new InputGeneratorAnnotation(_ => new InteractionInput
+            {
+                Name = "ParameterInput",
+                InputType = InputType.Number,
+                Label = "Custom Input"
+            }));
+        }
+
+        await parameterProcessor.InitializeParametersAsync([firstParameter, secondParameter]).DefaultTimeout();
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(["firstParam", "secondParam", "SaveToUserSecrets"], inputsInteraction.Inputs.Select(input => input.Name));
+        Assert.All(inputsInteraction.Inputs.Take(2), input => Assert.Equal("Custom Input", input.Label));
+
+        inputsInteraction.Inputs["firstParam"].Value = "1";
+        inputsInteraction.Inputs["secondParam"].Value = "2";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        Assert.Equal("1", await firstParameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.Equal("2", await secondParameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task InitializeParametersAsync_WithCustomInputDependingOnAnotherCustomInput_KeepsGeneratedNames()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var regionParameter = CreateParameterWithMissingValue("regionParam");
+        var zoneParameter = CreateParameterWithMissingValue("zoneParam");
+        regionParameter.Annotations.Add(new InputGeneratorAnnotation(_ => new InteractionInput
+        {
+            Name = "Region",
+            InputType = InputType.Text,
+            Label = "Region"
+        }));
+        // The zone's options depend on the region input, which the load callback reads by the name it depends on.
+        zoneParameter.Annotations.Add(new InputGeneratorAnnotation(_ => new InteractionInput
+        {
+            Name = "Zone",
+            InputType = InputType.Choice,
+            Label = "Zone",
+            DynamicLoading = new InputLoadOptions
+            {
+                LoadCallback = context =>
+                {
+                    context.Input.Options = [KeyValuePair.Create($"{context.AllInputs["Region"].Value}-a", "a")];
+                    return Task.CompletedTask;
+                },
+                DependsOnInputs = ["Region"]
+            }
+        }));
+
+        await parameterProcessor.InitializeParametersAsync([regionParameter, zoneParameter]).DefaultTimeout();
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(["Region", "Zone", "SaveToUserSecrets"], inputsInteraction.Inputs.Select(input => input.Name));
+
+        inputsInteraction.Inputs["Region"].Value = "west";
+        inputsInteraction.Inputs["Zone"].Value = "west-a";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        Assert.Equal("west", await regionParameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.Equal("west-a", await zoneParameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task InitializeParametersAsync_WithCustomInputForParameterNamedLikeSaveCheckbox_KeepsGeneratedName()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var parameter = CreateParameterWithMissingValue(ParameterProcessor.SaveToUserSecretsName);
+        parameter.Annotations.Add(new InputGeneratorAnnotation(_ => new InteractionInput
+        {
+            Name = "Secret",
+            InputType = InputType.Text,
+            Label = "Secret"
+        }));
+        var otherParameter = CreateParameterWithMissingValue("otherParam");
+
+        await parameterProcessor.InitializeParametersAsync([parameter, otherParameter]).DefaultTimeout();
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        // The save-values checkbox owns its name in the prompt, so this input can't take its parameter's name.
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(["Secret", "otherParam", ParameterProcessor.SaveToUserSecretsName], inputsInteraction.Inputs.Select(input => input.Name));
+
+        inputsInteraction.Inputs["Secret"].Value = "secret-value";
+        inputsInteraction.Inputs["otherParam"].Value = "other-value";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        Assert.Equal("secret-value", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.Equal("other-value", await otherParameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task InitializeParametersAsync_WithMissingParameterValues_NotificationNamesUnresolvedParameters()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var resolvedParameter = CreateParameterResource("resolvedParam", "value");
+        var firstParameter = CreateParameterWithMissingValue("firstParam");
+        var secondParameter = CreateParameterWithMissingValue("secondParam");
+
+        await parameterProcessor.InitializeParametersAsync([resolvedParameter, firstParameter, secondParameter]).DefaultTimeout();
+
+        // The notification keeps its button for clients that don't know the parameter names, and names the
+        // parameters so the dashboard can offer its own form for them.
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(InteractionStrings.ParametersBarTitle, notificationInteraction.Title);
+        var options = Assert.IsType<NotificationInteractionOptions>(notificationInteraction.Options);
+        Assert.Equal(InteractionStrings.ParametersBarPrimaryButtonText, options.PrimaryButtonText);
+        Assert.Null(options.LinkUrl);
+        Assert.Equal(["firstParam", "secondParam"], options.UnresolvedParameterNames);
+    }
+
+    [Fact]
     public async Task SetParameterCoreAsync_CalledTwice_UpdatesPreviousValueAndSavedState()
     {
         var capturingStateManager = new CapturingMockDeploymentStateManager();

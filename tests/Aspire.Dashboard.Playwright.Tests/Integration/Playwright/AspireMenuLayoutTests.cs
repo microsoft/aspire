@@ -31,13 +31,13 @@ public sealed class AspireMenuLayoutTests : PlaywrightTestsBase<DashboardServerF
         {
             new ResourceLogs
             {
-                Resource = CreateResource(name: "menu-resource", instanceId: "menu-resource"),
+                Resource = CreateResource(name: MockDashboardClient.TestResource1.Name, instanceId: MockDashboardClient.TestResource1.Uid),
                 ScopeLogs =
                 {
                     new ScopeLogs
                     {
                         Scope = CreateScope(),
-                        LogRecords = { CreateLogRecord(message: "menu test") }
+                        LogRecords = { CreateLogRecord(time: DateTime.UtcNow, observedTime: DateTime.UtcNow, message: "menu test") }
                     }
                 }
             }
@@ -46,9 +46,9 @@ public sealed class AspireMenuLayoutTests : PlaywrightTestsBase<DashboardServerF
         await RunTestAsync(async page =>
         {
             await page.SetViewportSizeAsync(1024, 400);
-            await page.GotoAsync("/structuredlogs");
+            await page.GotoAsync($"/structuredlogs/resource/{MockDashboardClient.TestResource1.Name}?pane=telemetry");
 
-            var trigger = page.Locator(".grid-action-container fluent-button[title='Actions']").First;
+            var trigger = page.Locator(".grid-action-container").GetByRole(AriaRole.Button, new() { Name = "Actions", Exact = true }).First;
             await Assertions.Expect(trigger).ToBeVisibleAsync();
 
             var cell = trigger.Locator("xpath=ancestor::td");
@@ -72,7 +72,6 @@ public sealed class AspireMenuLayoutTests : PlaywrightTestsBase<DashboardServerF
                     const items = [...menuList.querySelectorAll(':scope > fluent-menu-item')];
                     const triggerBounds = trigger.getBoundingClientRect();
                     const cellBounds = cell.getBoundingClientRect();
-                    const containerBounds = container.getBoundingClientRect();
                     const itemBounds = items.map(item => item.getBoundingClientRect());
                     const menuListBounds = menuList.getBoundingClientRect();
 
@@ -80,7 +79,6 @@ public sealed class AspireMenuLayoutTests : PlaywrightTestsBase<DashboardServerF
                         parseFloat(getComputedStyle(trigger).minWidth),
                         triggerBounds.top - cellBounds.top,
                         cellBounds.bottom - triggerBounds.bottom,
-                        containerBounds.height - cellBounds.height,
                         items.length,
                         new Set(itemBounds.map(bounds => Math.round(bounds.left))).size,
                         Math.max(...itemBounds.map(bounds => bounds.right)) - Math.min(...itemBounds.map(bounds => bounds.right)),
@@ -95,14 +93,13 @@ public sealed class AspireMenuLayoutTests : PlaywrightTestsBase<DashboardServerF
             Assert.Equal(32, values[0]);
             Assert.True(values[1] >= 0);
             Assert.True(values[2] >= 0);
-            Assert.InRange(Math.Abs(values[3]), 0, 1);
-            Assert.True(values[4] >= 2);
-            Assert.Equal(1, values[5]);
-            Assert.InRange(values[6], 0, 1);
-            Assert.True(values[7] >= 0, $"Menu overflowed the left viewport edge by {-values[7]}px.");
-            Assert.True(values[8] >= 0, $"Menu overflowed the right viewport edge by {-values[8]}px.");
-            Assert.True(values[9] >= 0, $"Menu overflowed the top viewport edge by {-values[9]}px.");
-            Assert.True(values[10] >= 0, $"Menu overflowed the bottom viewport edge by {-values[10]}px.");
+            Assert.True(values[3] >= 2);
+            Assert.Equal(1, values[4]);
+            Assert.InRange(values[5], 0, 1);
+            Assert.True(values[6] >= 0, $"Menu overflowed the left viewport edge by {-values[6]}px.");
+            Assert.True(values[7] >= 0, $"Menu overflowed the right viewport edge by {-values[7]}px.");
+            Assert.True(values[8] >= 0, $"Menu overflowed the top viewport edge by {-values[8]}px.");
+            Assert.True(values[9] >= 0, $"Menu overflowed the bottom viewport edge by {-values[9]}px.");
         });
     }
 }

@@ -98,6 +98,21 @@ public sealed class TestTriggerMapTests
         Assert.Equal(["Aspire.Templates.Tests"], result.TestProjects);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void GoHostingChangesSelectExtensionE2e(bool hasAffectedProject)
+    {
+        const string path = "src/Aspire.Hosting.Go/GoHostingExtensions.cs";
+        var result = hasAffectedProject
+            ? SelectWithRealMap(path, "Aspire.Hosting.Go")
+            : SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("job:extension-e2e", result.Jobs);
+    }
+
     // Repo-relative '/'-separated project paths listed in Aspire.slnx (the Layer 1 graph root).
     private static IReadOnlySet<string> LoadSolutionProjectPaths()
     {
@@ -482,6 +497,8 @@ public sealed class TestTriggerMapTests
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalDock.test.mjs")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-resourcegraph.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraph.test.mjs")]
+    [InlineData("src/Aspire.Dashboard/wwwroot/js/app-dashboard-experience.js")]
+    [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/DashboardExperience.test.mjs")]
     public void DashboardScriptInputsSelectInfrastructureTests(string path)
     {
         var result = SelectWithRealMap(path);

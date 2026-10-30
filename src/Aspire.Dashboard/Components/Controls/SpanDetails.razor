@@ -107,14 +107,14 @@
                                 GridTemplateColumns="4fr 1fr"
                                 ShowHover="true"
                                 Multiline="true">
-                    <TemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsSpanColumnHeader)]">
+                    <AspireTemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsSpanColumnHeader)]">
                         @WriteSpanLink(context)
-                    </TemplateColumn>
-                    <TemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsDetailsColumnHeader)]">
+                    </AspireTemplateColumn>
+                    <AspireTemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsDetailsColumnHeader)]">
                         <FluentButton OnClick="@(() => OnViewDetailsAsync(context))" Appearance="ButtonAppearance.Transparent" Class="button-hyperlink" IconStart="new Icons.Regular.Size16.GanttChart()">
                             @OtlpHelpers.ToShortenedId(context.SpanId)
                         </FluentButton>
-                    </TemplateColumn>
+                    </AspireTemplateColumn>
                 </FluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
             <AspirePropertyDetailsAccordionItem Header="@Loc[nameof(ControlsStrings.SpanDetailsBacklinksHeader)]"
@@ -131,14 +131,14 @@
                                 GridTemplateColumns="4fr 1fr"
                                 ShowHover="true"
                                 Multiline="true">
-                    <TemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsSpanColumnHeader)]">
+                    <AspireTemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsSpanColumnHeader)]">
                         @WriteSpanLink(context)
-                    </TemplateColumn>
-                    <TemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsDetailsColumnHeader)]">
+                    </AspireTemplateColumn>
+                    <AspireTemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsDetailsColumnHeader)]">
                         <FluentButton OnClick="@(() => OnViewDetailsAsync(context))" Appearance="ButtonAppearance.Transparent" Class="button-hyperlink" IconStart="new Icons.Regular.Size16.GanttChart()">
                             @OtlpHelpers.ToShortenedId(context.SpanId)
                         </FluentButton>
-                    </TemplateColumn>
+                    </AspireTemplateColumn>
                 </FluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
         </FluentAccordion>
@@ -157,7 +157,7 @@
 
         return @<div>
         <div class="spanlink-container" style="height:32px;">
-            <span class="spanlink-text" title="@content" style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(color);">
+            <span class="spanlink-text" data-tooltip="@content" style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(color);">
                 @content
             </span>
         </div>

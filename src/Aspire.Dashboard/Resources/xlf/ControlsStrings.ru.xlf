@@ -77,6 +77,11 @@
         <target state="translated">Обнаружено ограничение кратности</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChartContainerShowChangePerIntervalLabel">
+        <source>Show change per interval</source>
+        <target state="new">Show change per interval</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
         <source>Show count</source>
         <target state="translated">Показать счетчик</target>
@@ -91,6 +96,11 @@
         <source>Unable to display chart</source>
         <target state="translated">Не удалось показать график</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ChartContainerUnitPerInterval">
+        <source>{0} per interval</source>
+        <target state="new">{0} per interval</target>
+        <note>{0} is the instrument's unit, e.g. "Requests"</note>
       </trans-unit>
       <trans-unit id="ClearAllResources">
         <source>Remove all telemetry</source>
@@ -155,6 +165,26 @@
       <trans-unit id="ExportEnv">
         <source>Export .env</source>
         <target state="translated">Экспорт .env</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterDeleteShortAction">
+        <source>Delete</source>
+        <target state="new">Delete</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterDeleteValueAction">
+        <source>Delete value</source>
+        <target state="new">Delete value</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterEditShortAction">
+        <source>Edit</source>
+        <target state="new">Edit</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterSetShortAction">
+        <source>Set</source>
+        <target state="new">Set</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
@@ -702,9 +732,24 @@
         <target state="translated">Тип подключения</target>
         <note />
       </trans-unit>
+      <trans-unit id="VolumeMountTypeReadOnlyTitle">
+        <source>Read-only</source>
+        <target state="new">Read-only</target>
+        <note />
+      </trans-unit>
       <trans-unit id="VolumePathColumnHeader">
         <source>Path</source>
         <target state="translated">Путь</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VolumeRevealFailed">
+        <source>Couldn't open '{0}'. It may not exist on this machine.</source>
+        <target state="new">Couldn't open '{0}'. It may not exist on this machine.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VolumeRevealInFileExplorer">
+        <source>Reveal in file explorer</source>
+        <target state="new">Reveal in file explorer</target>
         <note />
       </trans-unit>
     </body>

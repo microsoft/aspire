@@ -8,6 +8,7 @@ import {
     resetLaunchFailureStore,
     LaunchFailureStore,
     getLaunchFailureMode,
+    getLaunchFailureProviderKindForAppHostPath,
     launchFailureCategories,
     launchFailureControllers,
     launchFailureExitCodeBuckets,
@@ -307,6 +308,22 @@ suite('Editor assistance AppHost services', () => {
                 assert.strictEqual(getLaunchFailureMode('do', noDebug), 'other');
                 assert.strictEqual(getLaunchFailureMode('unknown', noDebug), 'other');
                 assert.strictEqual(getLaunchFailureMode(undefined, noDebug), 'other');
+            }
+        });
+
+        test('derives the provider kind from the AppHost file language', () => {
+            const appHostPaths = [
+                ['/workspace/AppHost/AppHost.csproj', 'dotnet'],
+                ['/workspace/AppHost/apphost.ts', 'node'],
+                ['/workspace/AppHost/AppHost.java', 'java'],
+                ['/workspace/AppHost/apphost.go', 'go'],
+                ['/workspace/AppHost/apphost.rs', 'rust'],
+                ['/workspace/AppHost/apphost.py', 'other'],
+                [undefined, 'other'],
+            ] as const;
+
+            for (const [appHostPath, expected] of appHostPaths) {
+                assert.strictEqual(getLaunchFailureProviderKindForAppHostPath(appHostPath), expected, String(appHostPath));
             }
         });
 

@@ -34,6 +34,7 @@ public sealed class DefaultInstrumentUnitResolverTests
             Type = OtlpInstrumentType.Gauge,
             Unit = unit,
             AggregationTemporality = OtlpAggregationTemporality.Cumulative,
+            IsMonotonic = false,
             ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
         };
 
