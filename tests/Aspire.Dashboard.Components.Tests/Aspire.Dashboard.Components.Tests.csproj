@@ -13,6 +13,7 @@
 
   <ItemGroup Condition="'$(IncludeLegacyDashboard)' == 'false'">
     <Compile Remove="Dialogs\LegacySettingsDialogTests.cs" />
+    <Compile Remove="Layout\LegacyNavMenuTests.cs" />
     <Compile Remove="Layout\MainLayoutTests.Legacy.cs" />
   </ItemGroup>
 
