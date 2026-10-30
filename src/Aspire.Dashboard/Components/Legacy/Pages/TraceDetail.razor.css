@@ -1,0 +1,354 @@
+﻿::deep .trace-details-mobile {
+    padding-left: var(--layout-left-padding);
+    padding-right: var(--layout-right-padding);
+    padding-bottom: 4px;
+}
+
+::deep .trace-id {
+    color: var(--colorNeutralForeground3);
+    padding-left: 0.5rem;
+    font-size: 12px;
+    font-weight: normal;
+    line-height: 1;
+}
+
+::deep .summary-container {
+    display: flex;
+    flex-direction: column;
+}
+
+::deep .trace-summary-layout {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+    container-type: inline-size;
+}
+
+::deep .tracedetails-grid-container {
+    margin-top: 4px;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+::deep .trace-view-grid {
+}
+
+::deep .trace-view-grid .fluent-data-grid-row:not([row-type='header']):hover .span-bar-label-detail {
+    display: inline !important;
+}
+
+::deep .trace-view-grid .fluent-data-grid-row:not([row-type='header']) {
+    background: var(--colorNeutralBackground1);
+}
+
+/*
+    FluentDataGrid applies default inline padding to header cells (measured 16px on
+    the Resource column, 8px on Ticks/Actions), but this component zeroes the body
+    cells' padding (see the `td` rule below). Without matching the two, every header
+    label sits inset from its column - most visibly the "Resource" label and the
+    time-tick labels, which then no longer line up with the waterfall gridlines in
+    the rows below. The v5 grid also omits the `column-header` class, so FluentUI's
+    40px minimum height and block padding otherwise leave a gap between the header
+    and body ticks. Reset the complete cell geometry to the 32px tick height.
+*/
+::deep .trace-view-grid .fluent-data-grid-row[row-type='sticky-header'] th {
+    padding: 0 !important;
+    min-height: 32px !important;
+    height: 32px !important;
+    border-bottom: 0;
+}
+
+::deep .trace-view-grid .fluent-data-grid-row {
+    padding: 0;
+    border: 0;
+    align-items: center;
+}
+
+::deep .trace-view-grid .fluent-data-grid-row td:not(.empty-content-cell) {
+     /* The waterfall relies on each row being exactly the tick height with no padding or border so
+         vertical time ticks stack edge-to-edge and horizontal separators do not appear. */
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0;
+    vertical-align: middle;
+}
+
+::deep .empty-content-cell {
+    margin-top: 8px;
+    border-top: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
+}
+
+::deep .trace-view-grid .column-header {
+    padding: 0 !important;
+    min-height: 32px !important;
+    height: 32px !important;
+    border-bottom: 0;
+}
+
+::deep .ticks {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    align-items: center;
+}
+
+::deep .ticks .tick {
+    width: 1px;
+    height: 32px;
+    background: var(--trace-tick-background-color);
+    grid-row: 1;
+}
+
+::deep .ticks .end-tick {
+    justify-self: end;
+    grid-row: 1;
+}
+
+::deep .tick-label {
+    margin-left: 0.25rem;
+    margin-right: 0.25rem;
+    white-space: nowrap;
+    grid-row: 1;
+    text-align: left;
+}
+
+::deep .span-name-container {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+::deep .span-container {
+    grid-column: 1 / span 4;
+    grid-row: 1;
+    height: 100%;
+    display: grid;
+    /* z-index is required so the span is displayed above ticks */
+    z-index: 1;
+    align-items: center;
+}
+
+::deep .span-container .span-bar {
+    height: 15px;
+    border-radius: 5px;
+    grid-row: 1;
+}
+
+::deep .span-container .span-bar-label {
+    font-size: 12px;
+    color: var(--colorNeutralForeground3);
+    padding: 0 0.5em;
+    height: min-content;
+}
+
+::deep .span-container .span-bar-label-detail {
+    display: none;
+}
+
+::deep .span-container .span-bar-label-right {
+    grid-row: 1;
+    grid-column: 3;
+}
+
+::deep .span-container .span-bar-label-left {
+    grid-row: 1;
+    grid-column: 1;
+    justify-self: end;
+}
+
+::deep .uninstrumented-peer {
+    padding-left: 0.25rem;
+    color: var(--colorNeutralForeground3);
+    font-size: 12px;
+}
+
+::deep .span-kind-icon {
+    margin-right: 3px;
+    vertical-align: text-bottom;
+}
+
+::deep .uninstrumented-peer-icon {
+    vertical-align: text-bottom;
+}
+
+::deep .selected-row .uninstrumented-peer,
+::deep .selected-row .fluent-data-grid-row:not([row-type='header']):hover .uninstrumented-peer,
+::deep .fluent-data-grid-row:not([row-type='header']):hover .uninstrumented-peer,
+::deep .selected-row .span-container .span-bar-label,
+::deep .selected-row .fluent-data-grid-row:not([row-type='header']):hover .span-container .span-bar-label,
+::deep .fluent-data-grid-row:not([row-type='header']):hover .span-container .span-bar-label {
+    color: var(--colorNeutralForeground1);
+}
+
+::deep .pane-details-title {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+::deep .span-overview-container {
+    display: grid;
+    align-items: center;
+    grid-template-columns: auto 1fr auto;
+    width: 100%;
+}
+
+::deep .resource-name {
+    margin-left: 16px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+::deep .trace-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "details filters";
+    align-items: center;
+    column-gap: 8px;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--layout-top-padding) var(--layout-right-padding) 4px var(--layout-left-padding);
+}
+
+::deep .trace-header-details {
+    grid-area: details;
+    align-items: center;
+    min-width: 0;
+    --fluent-overflow-gap: 8px;
+}
+
+::deep .trace-header-details .fluent-overflow-item {
+    align-content: center;
+    white-space: nowrap;
+}
+
+::deep .trace-header-details .fluent-overflow-item strong {
+    margin-left: 4px;
+}
+
+::deep .trace-header-details .fluent-overflow-more {
+    align-content: center;
+}
+
+::deep .trace-header-overflow-badge {
+    background-color: var(--colorNeutralBackground3);
+    border-radius: 6px;
+    color: var(--colorNeutralForeground1);
+}
+
+::deep .trace-header-tooltip {
+    min-width: 300px;
+}
+
+::deep .trace-header-filters {
+    grid-area: filters;
+    min-width: 0;
+}
+
+@container (max-width: 900px) {
+    ::deep .trace-header {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "details"
+            "filters";
+        row-gap: 8px;
+    }
+
+}
+
+::deep .span-button-container {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    display: flex;
+}
+
+::deep .span-log-entry-button {
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    overflow: hidden;
+    border-radius: 50%;
+    align-self: center;
+    opacity: 0.8;
+    transform: translateX(-50%);
+    background: color-mix(in srgb, var(--button-color), white 30%);
+    border: var(--strokeWidthThin) solid color-mix(in srgb, var(--button-color), black 50%);
+}
+
+::deep .span-log-entry-button:hover {
+    opacity: 1;
+    background: color-mix(in srgb, var(--button-color), white 50%);
+}
+
+::deep .span-log-entry-error {
+    opacity: 1;
+    /* Error log entries appear above non-error log entries */
+    z-index: 1;
+    background: color-mix(in srgb, var(--button-color), white 15%);
+    border-color: color-mix(in srgb, var(--button-color), black 50%);
+}
+
+::deep .span-log-entry-error:hover {
+    background: color-mix(in srgb, var(--button-color), white 30%);
+}
+
+::deep .span-log-entry-selected {
+    opacity: 1;
+    background: color-mix(in srgb, var(--button-color), white 50%);
+    width: 20px;
+    height: 20px;
+}
+
+::deep .span-log-entry-selected.span-log-entry-error {
+    background: color-mix(in srgb, var(--button-color), white 30%);
+}
+
+::deep .log-tooltip-title {
+    font-weight: bold;
+    font-size: 15px;
+}
+
+::deep .log-tooltip-subtitle {
+    color: var(--colorNeutralForeground3);
+    font-size: 12px;
+    padding-left: 0.5rem;
+}
+
+::deep.log-tooltip-title-container {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    margin-bottom: 4px;
+    margin-top: 4px;
+}
+
+::deep.log-tooltip-table {
+    margin-bottom: 0;
+    width: 100%;
+    font-size: 12px;
+}
+
+::deep.log-tooltip-table td.label-column {
+    white-space: nowrap;
+    padding-right: var(--spacingHorizontalL);
+    width: 20%;
+}
+
+::deep.log-tooltip-table td {
+    padding: 3.5px 0;
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
+    align-content: start;
+    word-break: break-word;
+}
+
+::deep.log-tooltip-table tr:last-child td {
+    border-bottom: none;
+    padding-bottom: var(--spacingVerticalXXS);
+}

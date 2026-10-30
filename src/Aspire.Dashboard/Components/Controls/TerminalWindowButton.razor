@@ -4,7 +4,7 @@
               Appearance="ButtonAppearance.Transparent"
               IconOnly="true"
               Class="@($"aspire-icon-button {Class}")"
-              Title="@Label"
+              data-tooltip="@Label"
               aria-label="@Label"
               Disabled="@(!_ready || Disabled || string.IsNullOrEmpty(TerminalKey) || LaunchUrl is null)"
               data-terminal-window-key="@TerminalKey"

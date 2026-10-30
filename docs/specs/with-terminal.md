@@ -494,7 +494,48 @@ See the
 
 ### Terminals page
 
-Resource terminals are displayed on the **Terminals** page at `/terminals`,
+In the modern experience, the resource overview's **Expand terminal** action
+opens `/resources/{resourceName}?terminal=true` inside the resources layout. The
+terminal fills the content area while keeping the resource list, header, and
+navigation tabs. **Minimize terminal** removes the query parameter and restores
+all overview cards, preserving the resource, pane state, and terminal connection.
+Direct links and browser Back/Forward restore the same focused state. Existing
+`/terminals/resource/{resourceName}` links redirect to the focused overview.
+Terminal-backed sidebar rows also offer a compact **Open terminal for {resourceName}**
+shortcut beside the primary endpoint action. It selects that resource alone,
+preserves the remaining query and fragment state, and closes the mobile drawer.
+Like other row actions, it moves behind the actions menu when the pane is narrow.
+There is no standalone terminal destination in the desktop app navigation;
+the independent dock toggle stays in the top-right toolbar.
+A **Terminal** tab is available for a single terminal-backed
+resource; selecting another terminal resource keeps this tab, while selecting
+a non-terminal resource returns to its overview. The URL and resource list own
+the selection, so a saved terminal selection never overrides them. Opening
+`/terminals` without a resource prompts for a resource from the list.
+Console logs remains a separate tab, and the global terminal toggle continues
+to open the dock without navigating away from the resource.
+Both normal and focused terminal headers include a compact **More information**
+link that opens `https://aka.ms/aspire/dashboard-terminal` in a new tab.
+
+The terminal footer uses dashboard theme colors independently of the terminal
+palette, with full-contrast active metadata and the same neutral borders,
+surfaces, radii, and focus styling as other compact dashboard controls in both
+light and dark themes. Disabled sizing controls remain distinct from the
+effective font-size value and palette selector.
+Terminal viewport focus suppresses global dashboard shortcuts, including when
+Hex1b focuses its canvas host instead of its textarea. F6 still moves between
+terminal input and footer controls. A neutral boundary remains visible when
+inactive, with a thin muted accent for pointer focus and a stronger keyboard
+focus indicator, without changing the terminal's layout.
+Late layout activation also preserves keyboard focus in footer controls and
+does not dismiss an open palette picker.
+
+Expanding and minimizing explicitly reapply automatic sizing to the existing
+terminal once, without reconnecting or competing for sizing ownership on every
+resize. The font-size control uses the renderer's displayed cell metrics, since
+a follower or fixed-grid view can scale independently of its requested font size.
+
+In the legacy experience, resource terminals are displayed on the **Terminals** page at `/terminals`,
 after Metrics as the final page link in desktop and mobile navigation. Its resource
 selector contains only terminal-enabled resources, with individual replicas
 selectable and no All option. Replica index and count metadata are not required
@@ -509,7 +550,7 @@ resource display name for a singleton and the instance name for replicas,
 matching Console logs. Existing singleton links and saved selections containing
 an instance name are still accepted and canonicalized to the display name.
 
-The selector follows Console logs for ordering, state labels and the shared
+The legacy selector follows Console logs for ordering, state labels and the shared
 Show hidden resources setting. Waiting and stopped terminal resources remain
 selectable. Hidden terminal resources count toward navigation availability;
 when all terminals are hidden, View options offers Show hidden resources.
