@@ -288,7 +288,9 @@ public partial class MetricsTests : DashboardTestContext
                 cell => Assert.Equal("empty-data", Assert.Single(cell.Children).ClassName));
         });
 
-        table.FindAll("fluent-button").Single(button => button.TextContent.Trim() == "2").Click();
+        // Click() only queues the event when background chart work holds the renderer dispatcher,
+        // so await the dispatch before checking that the handler opened the dialog.
+        await table.FindAll("fluent-button").Single(button => button.TextContent.Trim() == "2").ClickAsync(new()).DefaultTimeout();
         var dialog = Assert.Single(dialogs);
         Assert.Same(instrumentViewModel.Instrument, dialog.Instrument);
         Assert.Equal([2d, 22d], dialog.Exemplars.Select(exemplar => exemplar.Value).Order());
