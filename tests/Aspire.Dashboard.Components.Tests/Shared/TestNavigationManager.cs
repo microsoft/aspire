@@ -17,6 +17,7 @@ internal sealed class TestNavigationManager : NavigationManager
     protected override void NavigateToCore(string uri, NavigationOptions options)
     {
         LastNavigationOptions = options;
+        HistoryEntryState = options.HistoryEntryState;
         NavigateToCore(uri, options.ForceLoad);
     }
 

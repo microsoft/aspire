@@ -745,10 +745,10 @@
         // When the row no longer has room for every label, the container query swaps this for the compact dropdown
         // instead of letting the top navigation grow its own scrollbar.
         // While a tab click navigates, the strip keeps showing the clicked tab (see OnTabChanged).
-        var activeTab = _navigatingToTab ?? CurrentTab;
+        var activeTab = _navigatingToTab ?? CurrentNavigationTab;
         var renderedLocation = _lastLocation;
         var currentTabItem = GetTabs().FirstOrDefault(t => t.Tab == activeTab);
-    <div class="resource-tabs-nav">
+    <div class="resource-tabs-nav" data-overflow-location="@renderedLocation" data-overflow-desktop="@isDesktop.ToString().ToLowerInvariant()">
         @* Keep queued native change events bound to their original location. Reusing the component would
            rebind its callback before those events arrive, making an old change look like a new user navigation. *@
         <FluentTabs @key="renderedLocation"

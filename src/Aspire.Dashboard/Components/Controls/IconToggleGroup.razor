@@ -16,6 +16,7 @@
                     aria-pressed="@(isSelected.ToString().ToLowerInvariant())"
                     aria-label="@option.Text"
                     data-tooltip="@option.Text"
+                    data-tooltip-positioning="@(TooltipPositioning?.ToString().ToLowerInvariant())"
                     @onclick="@(() => SelectAsync(option.Value))">
                 <span class="icon-toggle-icon">
                     <FluentIcon Value="@option.Icon" Width="@(Prominent ? "22px" : "20px")" Color="Color.Custom" CustomColor="currentColor" />
@@ -64,6 +65,9 @@
 
     [Parameter]
     public bool ShowSelectedOptionText { get; set; }
+
+    [Parameter]
+    public Positioning? TooltipPositioning { get; set; }
 
     private async Task SelectAsync(TValue value)
     {

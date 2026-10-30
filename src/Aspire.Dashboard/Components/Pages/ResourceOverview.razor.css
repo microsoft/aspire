@@ -46,6 +46,10 @@
     gap: 14px;
 }
 
+.overview-card[hidden] {
+    display: none;
+}
+
 .overview-card {
     display: flex;
     flex-direction: column;
@@ -61,14 +65,16 @@
     grid-column: span var(--overview-span, 12);
 }
 
-/* Cards keep their height; what doesn't fit scrolls inside them, below the card's header. The tags card isn't
-   sized: it's one line, and its tag picker opens a popup that a clipped card would cut off. */
+/* Cards in a packed row share its tallest requested height. Overflow scrolls below the header.
+   The tags card isn't sized: its picker opens a popup that a clipped card would cut off. */
 .overview-grid > .overview-card:not(.overview-tags-card) {
-    height: var(--overview-card-height, auto);
+    height: var(--overview-row-height, var(--overview-card-height, auto));
     overflow: hidden;
 }
 
-.overview-grid > .overview-card:not(.overview-tags-card) > :not(.overview-card-header) {
+/* PropertyGrid owns its root's CSS scope; constrain that wrapper as well as native card bodies. */
+.overview-grid > .overview-card:not(.overview-tags-card) > :not(.overview-card-header):not(.overview-show-more):not(.overview-console-paused),
+.overview-grid > .overview-card ::deep > .property-grid {
     flex-shrink: 1;
     min-height: 0;
     overflow: auto;
@@ -82,11 +88,19 @@
     .overview-grid > .overview-card {
         grid-column: span var(--overview-span-md, 12);
     }
+
+    .overview-grid > .overview-card:not(.overview-tags-card) {
+        height: var(--overview-row-height-md, var(--overview-card-height, auto));
+    }
 }
 
 @container (max-width: 760px) {
     .overview-grid > .overview-card {
         grid-column: span 12;
+    }
+
+    .overview-grid > .overview-card:not(.overview-tags-card) {
+        height: var(--overview-card-height, auto);
     }
 }
 
@@ -109,6 +123,9 @@
 
 .overview-card-header {
     display: flex;
+    /* Keep filters and actions together on another line rather than clipping them in narrow cards. */
+    flex-wrap: wrap;
+    flex-shrink: 0;
     align-items: center;
     gap: 8px;
     margin-bottom: 10px;
@@ -187,6 +204,7 @@
 
 .overview-show-more {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     gap: 6px;
     width: 100%;
@@ -247,6 +265,7 @@
 
 .overview-console-paused {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     gap: 6px;
     margin-top: 8px;
@@ -716,7 +735,7 @@ a.overview-selection-card-title:hover {
     text-align: center;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 768px) {
     .resource-overview {
         padding: 12px;
     }

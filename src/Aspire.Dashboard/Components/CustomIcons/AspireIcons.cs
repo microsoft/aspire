@@ -27,6 +27,21 @@ internal static class AspireIcons
             """) { } };
     }
 
+    internal static class Size20
+    {
+        internal sealed class HideEmptyPanels : Icon
+        {
+            // Match Fluent's Grid icon exactly, omitting only the bottom-right tile.
+            public HideEmptyPanels() : base("HideEmptyPanels", IconVariant.Regular, IconSize.Size20,
+                """
+                <path d="M7.5 2C8.33 2 9 2.67 9 3.5v4C9 8.33 8.33 9 7.5 9h-4A1.5 1.5 0 0 1 2 7.5v-4C2 2.67 2.67 2 3.5 2zm9 0c.83 0 1.5.67 1.5 1.5v4c0 .83-.67 1.5-1.5 1.5h-4a1.5 1.5 0 0 1-1.5-1.5v-4c0-.83.67-1.5 1.5-1.5zm-9 1h-4a.5.5 0 0 0-.5.5v4c0 .28.22.5.5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5m9 0h-4a.5.5 0 0 0-.5.5v4c0 .28.22.5.5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5"/>
+                <path d="M7.5 11C8.33 11 9 11.67 9 12.5v4C9 17.33 8.33 18 7.5 18h-4A1.5 1.5 0 0 1 2 16.5v-4C2 11.67 2.67 11 3.5 11zm0 1h-4a.5.5 0 0 0-.5.5v4c0 .28.22.5.5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5"/>
+                """)
+            {
+            }
+        }
+    }
+
     internal static class Size24
     {
         // The official SVGs from GitHub have a viewbox of 96x96, so we need to scale them down to 20x20 and center them within the 24x24 box to make them match the

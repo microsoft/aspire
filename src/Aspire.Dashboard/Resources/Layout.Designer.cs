@@ -313,6 +313,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to More actions.
+        /// </summary>
+        public static string MainLayoutMoreActions {
+            get {
+                return ResourceManager.GetString("MainLayoutMoreActions", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Help.
         /// </summary>
         public static string MainLayoutHelp {

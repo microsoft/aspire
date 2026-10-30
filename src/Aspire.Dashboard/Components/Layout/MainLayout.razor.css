@@ -14,7 +14,7 @@
 ::deep.layout > header > a.application-name {
     display: block;
     flex: 0 1 auto;
-    min-width: 0;
+    min-width: min(80px, 20vw);
     /* Long application names truncate with an ellipsis; the full name is in the tooltip. */
     max-width: min(220px, 22vw);
     height: 28px;
@@ -30,9 +30,35 @@
     white-space: nowrap;
 }
 
-::deep.layout > header > .flex-filler {
+.header-action {
+    display: flex;
+    flex: 0 0 auto;
+}
+
+.header-action[data-header-overflow] {
+    display: none;
+}
+
+.header-overflow {
+    display: none;
+    flex: 0 0 auto;
+}
+
+header[data-has-header-overflow] .header-overflow,
+.header-overflow[data-has-secondary-actions="true"] {
+    display: flex;
+}
+
+::deep.layout > header > .brand-logo-container {
+    display: flex;
+    align-items: center;
+    flex: 0 0 24px;
+}
+
+::deep.layout > header > .header-context {
+    display: flex;
     flex: 1 1 auto;
-    min-width: 8px;
+    min-width: 0;
 }
 
 ::deep.layout a.logo {
@@ -79,12 +105,6 @@
 
 ::deep.layout > header .header-button:hover {
     background: var(--colorNeutralBackground3);
-}
-
-::deep.layout > header .navigation-button {
-    --aspire-button-foreground: var(--colorBrandForeground1);
-    flex-shrink: 0;
-    color: var(--aspire-button-foreground);
 }
 
 ::deep.layout > header .notification-counter-badge {
@@ -171,7 +191,7 @@
     margin-bottom: 0;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 769px) {
     ::deep.layout {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: auto auto minmax(0, 1fr);
@@ -279,16 +299,17 @@
 
 @media (max-width: 768px) {
     ::deep.layout {
-        /* MobileNavMenu uses this same value to place its sheet directly under the header and to keep its
-           scrollport within the visible viewport instead of extending underneath the header at high zoom. */
-        --mobile-header-height: 50px;
-        --mobile-nav-menu-focus-padding: 4px;
-        grid-template-columns: auto 1fr;
-        grid-template-rows: var(--mobile-header-height) auto minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: 50px auto minmax(0, 1fr);
         grid-template-areas:
-            "icon head"
-            "messagebar messagebar"
-            "main main";
+            "head"
+            "messagebar"
+            "main";
+    }
+
+    ::deep.layout > header {
+        gap: 4px;
+        padding-inline: 8px;
     }
 
     ::deep.layout > .aspire-icon {

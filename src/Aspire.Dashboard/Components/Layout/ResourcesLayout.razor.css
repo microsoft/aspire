@@ -328,6 +328,10 @@
     border-radius: 8px;
 }
 
+.resource-row + .resource-row {
+    margin-top: 1px;
+}
+
 .resource-row:hover {
     background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
 }
@@ -976,7 +980,7 @@
     align-items: center;
 }
 
-.resource-tabs-overflow.has-overflow {
+.resource-tabs-nav[data-has-tab-overflow] .resource-tabs-overflow {
     display: flex;
 }
 
@@ -1100,7 +1104,7 @@
         display: inline-flex;
     }
 
-    .resource-tabs-nav .resource-tabs-overflow.has-overflow {
+    .resource-tabs-nav[data-has-tab-overflow] .resource-tabs-overflow {
         display: none;
     }
 }
@@ -1157,6 +1161,19 @@
     .resource-header-controls {
         width: 100%;
         margin-left: 0;
+        justify-content: flex-end;
+    }
+
+    .resource-header-row:has(.overview-panel-selector) {
+        flex-wrap: nowrap;
+    }
+
+    .resource-header-row:has(.overview-panel-selector) .resource-header-controls {
+        flex: 0 0 auto;
+        align-self: flex-start;
+        width: auto;
+        margin-left: auto;
+        margin-top: 8px;
     }
 
     /* The title is the control that opens the resource list. It spans the content width, like the page content

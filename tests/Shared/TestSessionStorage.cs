@@ -10,6 +10,7 @@ public sealed class TestSessionStorage : ISessionStorage
     public Func<string, (bool Success, object? Value)>? OnGetAsync { get; set; }
     public Func<string, Task<(bool Success, object? Value)>>? OnGetTaskAsync { get; set; }
     public Action<string, object?>? OnSetAsync { get; set; }
+    public Func<string, object?, Task>? OnSetTaskAsync { get; set; }
 
     public async Task<StorageResult<T>> GetAsync<T>(string key)
     {
@@ -30,6 +31,11 @@ public sealed class TestSessionStorage : ISessionStorage
 
     public Task SetAsync<T>(string key, T value)
     {
+        if (OnSetTaskAsync is { } asyncCallback)
+        {
+            return asyncCallback(key, value);
+        }
+
         if (OnSetAsync is { } callback)
         {
             callback(key, value);

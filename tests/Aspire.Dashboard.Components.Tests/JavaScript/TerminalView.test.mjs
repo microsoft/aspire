@@ -638,9 +638,9 @@ test("palette, theme and contrast changes replace the complete overlay without r
         themeObservers[0].callback();
         assert.equal(attempt.client.colorMode, theme);
         assert.equal(view.style["--terminal-background"], palette.background);
-        // The upstream frame, not the snapshotted appearance, supplies the palette color.
+        // The shared CSS track tint is resolved before painting; the canvas uses a flat fallback.
         const trackColor = theme === "dark" ? "#837f82" : "#848189";
-        assert.deepEqual(paintedTrack(trackColor), [{ color: trackColor, opacity: 0.35 }]);
+        assert.deepEqual(paintedTrack(trackColor), [{ color: "rgb(100, 100, 100)", opacity: 1 }]);
     }
     for (const query of ["(forced-colors: active)", "(prefers-contrast: more)"]) {
         const previous = attempt.client.scrollbar;

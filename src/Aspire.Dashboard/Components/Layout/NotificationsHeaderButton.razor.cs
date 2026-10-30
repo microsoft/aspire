@@ -11,6 +11,9 @@ public partial class NotificationsHeaderButton : ComponentBase, IDisposable
 {
     private const int OverflowCount = 9;
 
+    [Parameter]
+    public string? Id { get; set; }
+
     [Parameter, EditorRequired]
     public required Func<Task> OnClick { get; set; }
 

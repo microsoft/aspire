@@ -45,6 +45,8 @@ public class TestDashboardClient : IDashboardClient
     public Func<WatchTerminalsUpdate, Task>? BeforeTerminalUpdateAsync { get; set; }
     public Func<CancellationToken, Task>? BeforeResourceSubscriptionAsync { get; set; }
     public Action<WatchTerminalsUpdate>? OnTerminalUpdateProcessed { get; set; }
+    public Func<IReadOnlyList<ResourceLogLine>, Task>? BeforeConsoleLogsBatchAsync { get; set; }
+    public Action<IReadOnlyList<ResourceLogLine>>? OnConsoleLogsBatchProcessed { get; set; }
     public int TerminalSubscriptionCount => Volatile.Read(ref _terminalSubscriptionCount);
     public int ActiveTerminalSubscriptionCount => Volatile.Read(ref _activeTerminalSubscriptionCount);
     public int ResourceSubscriptionCount => Volatile.Read(ref _resourceSubscriptionCount);
@@ -170,7 +172,12 @@ public class TestDashboardClient : IDashboardClient
 
         await foreach (var item in channel.Reader.ReadAllAsync(cancellationToken))
         {
+            if (BeforeConsoleLogsBatchAsync is { } beforeBatch)
+            {
+                await beforeBatch(item);
+            }
             yield return item;
+            OnConsoleLogsBatchProcessed?.Invoke(item);
         }
     }
 

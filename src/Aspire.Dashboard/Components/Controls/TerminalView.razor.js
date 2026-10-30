@@ -70,9 +70,10 @@ function scrollbarConfiguration(state) {
         };
         const renderScrollbar = createDefaultScrollbarRenderer({
             track: {
-                // Omitted colors follow the terminal palette in each upstream renderer frame.
-                color: forced ? color("Canvas") : undefined,
-                opacity: forced || state.moreContrast.matches ? 1 : 0.35,
+                // The built-in canvas painter accepts only a solid track color, not a CSS gradient.
+                // Keep its palette-based high-contrast track; otherwise share the native track's tint.
+                color: forced ? color("Canvas") : state.moreContrast.matches ? undefined : color("var(--scrollbar-track-color)"),
+                opacity: 1,
             },
             thumb: {
                 color: forced ? color("CanvasText") : undefined,

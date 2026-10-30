@@ -1,5 +1,4 @@
 ﻿@using Aspire.Dashboard.Components.CustomIcons
-@using Aspire.Dashboard.Components.Dialogs
 @using Aspire.Dashboard.Components.Interactions
 @using Aspire.Dashboard.Resources
 @using Microsoft.AspNetCore.Components.Sections
@@ -7,12 +6,10 @@
 @inject IStringLocalizer<TerminalStrings> TerminalLoc
 @inherits LayoutComponentBase
 
-<div class="layout @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
-    @if (ViewportInformation.IsDesktop)
-    {
+<div class="layout @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)">
         @* Full-width top header with the brand lockup (logo + app name) and app-wide actions. The dashboard's main
            views are switched from the icon rail below the logo. *@
-        <header>
+        <header @ref="_header">
             <div class="brand-logo-container">
                 <a href="/" class="logo" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true"
                               data-tooltip="@Loc[nameof(Layout.MainLayoutAspire)]"
@@ -24,7 +21,10 @@
                 <ApplicationName/>
             </a>
             <div class="header-context">
-                <SectionOutlet SectionName="@HeaderContextSectionName" />
+                @if (ViewportInformation.IsDesktop)
+                {
+                    <SectionOutlet SectionName="@HeaderContextSectionName" />
+                }
             </div>
             @if (RunStore.SupportsRunSelection && UseRunMenu)
             {
@@ -46,84 +46,37 @@
                                       OnClick="@LaunchRecordingsAsync" />
                 }
             }
-            @if (_navigationAvailability.HasResourceTerminals)
+            @foreach (var action in GetHeaderActions())
             {
-                <FluentButton Class="header-button"
-                              Appearance="ButtonAppearance.Default"
-                              OnClick="ToggleTerminalDockAsync"
-                              data-tooltip="@TerminalLoc[nameof(TerminalStrings.MainLayoutToggleTerminalDock)]"
-                              aria-label="@TerminalLoc[nameof(TerminalStrings.MainLayoutToggleTerminalDock)]"
-                              aria-keyshortcuts="`">
-                    <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="22px" Color="Color.Default" />
-                </FluentButton>
+                <div class="header-action" data-header-action="@action.Id" @key="action.Id">
+                    @if (action.Id == NotificationsButtonId)
+                    {
+                        <NotificationsHeaderButton Id="@action.Id" OnClick="@(action.OnClick!)" />
+                    }
+                    else
+                    {
+                        <FluentButton Class="header-button"
+                                      Id="@action.Id"
+                                      Appearance="ButtonAppearance.Default"
+                                      OnClick="@(action.OnClick!)"
+                                      data-tooltip="@action.Text"
+                                      aria-label="@action.Text"
+                                      @attributes="@action.AdditionalAttributes">
+                            <FluentIcon Value="@action.Icon" Color="Color.Default" />
+                        </FluentButton>
+                    }
+                </div>
             }
-            <FluentButton Class="header-button"
-                          Id="@HelpButtonId"
-                          Appearance="ButtonAppearance.Default" OnClick="@(() => LaunchHelpAsync(HelpButtonId, HelpDialogTab.Documentation))"
-                          data-tooltip="@Loc[nameof(Layout.MainLayoutHelp)]" aria-label="@Loc[nameof(Layout.MainLayoutHelp)]"
-                          aria-haspopup="dialog" aria-keyshortcuts="?">
-                <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Default"/>
-            </FluentButton>
-            <NotificationsHeaderButton OnClick="@LaunchNotificationsAsync" />
-            <FluentButton Class="header-button"
-                          Id="@SettingsButtonId"
-                          Appearance="ButtonAppearance.Default" OnClick="@(() => LaunchSettingsAsync(SettingsButtonId))"
-                          data-tooltip="@Loc[nameof(Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchSettings)]">
-                <FluentIcon Value="@(new Icons.Regular.Size24.Settings())" Color="Color.Default"/>
-            </FluentButton>
+            <div class="header-overflow" data-has-secondary-actions="@_navigationAvailability.HasResourceTerminals.ToString().ToLowerInvariant()">
+                <AspireMenuButton MenuButtonId="@NavigationButtonId"
+                                  ButtonClass="header-button"
+                                  Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
+                                  ButtonAppearance="ButtonAppearance.Transparent"
+                                  ItemsProvider="@GetHeaderOverflowItems"
+                                  Title="@Loc[nameof(Layout.MainLayoutMoreActions)]" />
+            </div>
             <UserProfile/>
         </header>
-    }
-    else
-    {
-        <div class="aspire-icon">
-            <a href="/" class="logo" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true"
-                          data-tooltip="@Loc[nameof(Layout.MainLayoutAspire)]"
-                          aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
-                <AspireLogo />
-            </a>
-        </div>
-        <header>
-            <a href="/" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="after" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
-                <ApplicationName/>
-            </a>
-            <div class="flex-filler"></div>
-            @if (RunStore.SupportsRunSelection && UseRunMenu)
-            {
-                <DashboardRunMenu SelectedRunId="@RunSelection.SelectedRun.RunId"
-                                  SelectedRunIsCurrent="@RunSelection.SelectedRun.IsCurrent"
-                                  SelectedRunStartedAtUtc="@RunSelection.SelectedRun.StartedAtUtc"
-                                  SelectedRunIdChanged="@SwitchDashboardRunAsync" />
-            }
-            else if (RunStore.SupportsRunSelection)
-            {
-                var selectedRun = RunSelection.SelectedRun;
-                <DashboardRunSelect ButtonId="@RunSelectButtonId"
-                                    SelectedRunIsCurrent="@selectedRun.IsCurrent"
-                                    SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
-                                    OnClick="@LaunchRecordingsAsync" />
-            }
-            <UserProfile/>
-            <FluentButton
-                IconEnd="@(_isNavMenuOpen ? new Icons.Regular.Size20.Dismiss() : new Icons.Regular.Size20.Navigation())"
-                Id="@NavigationButtonId"
-                data-tooltip="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
-                aria-label="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
-                Appearance="ButtonAppearance.Transparent"
-                OnClick="@(() => _isNavMenuOpen = !_isNavMenuOpen)"
-                Class="navigation-button aspire-icon-button"/>
-        </header>
-
-        <MobileNavMenu
-            HasResourceTerminals="@_navigationAvailability.HasResourceTerminals"
-            IsNavMenuOpen="_isNavMenuOpen"
-            CloseNavMenu="@CloseMobileNavMenu"
-            LaunchHelpAsync="@LaunchHelpAsync"
-            LaunchAIAgentsAsync="@LaunchAIAgentsAsync"
-            IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
-            LaunchNotificationsAsync="@LaunchNotificationsAsync"
-            LaunchSettingsAsync="@LaunchSettingsAsync" />
-    }
 
     <div class="messagebar-container">
         <FluentMessageBarProvider Section="@DashboardUIHelpers.MessageBarSection" Class="top-messagebar" MaxMessageCount="null" NewestOnTop="true" />

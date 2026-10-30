@@ -167,6 +167,11 @@
         <target state="translated">Параметры</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutMoreActions">
+        <source>More actions</source>
+        <target state="new">More actions</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutNotificationCenterTitle">
         <source>Notifications</source>
         <target state="translated">Уведомления</target>

@@ -9,7 +9,7 @@
                         Class="@(UnreadCount > OverflowCount ? "notification-counter-badge notification-counter-badge-overflow" : "notification-counter-badge")"
                         Style="border: 0;">
         <AnchorContent>
-            <FluentButton Class="header-button"
+            <FluentButton Id="@Id" Class="header-button"
                           Appearance="ButtonAppearance.Default" OnClick="@HandleClick"
                           data-tooltip="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
                 <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Default" Style="vertical-align: bottom;" />
@@ -19,7 +19,7 @@
 }
 else
 {
-    <FluentButton Class="header-button"
+    <FluentButton Id="@Id" Class="header-button"
                   Appearance="ButtonAppearance.Default" OnClick="@HandleClick"
                   data-tooltip="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
         <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Default" />

@@ -4,6 +4,12 @@
  cards would otherwise call the server for every card that crosses the margin.
  */
 export function observeCards(container, dotNetReference) {
+    // The router can remove this element while the server is awaiting the module import or this interop call.
+    // There is no observer to register for an outgoing page.
+    if (!container?.isConnected) {
+        return null;
+    }
+
     const visibleIds = new Set();
     let reportTimer = null;
     let disposed = false;

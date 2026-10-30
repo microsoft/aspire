@@ -39,6 +39,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     internal const int MinimumPaneWidthPx = 200;
     internal const int MaximumPaneWidthPx = 560;
     internal const int DefaultPaneWidthPx = 290;
+    internal const string AllResourcesHistoryEntryState = "aspire-all-resources";
     private const string ResourcesSectionKey = "section:resources";
     private const string ParametersSectionKey = "section:parameters";
     private const string TelemetrySectionKey = "section:telemetry";
@@ -69,12 +70,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _pendingLandingRedirect;
     private bool _hasLocation;
     private string? _lastLocation;
+    private string? _selectionLocation;
     // The tab a click on the tab strip is navigating to, until the new location arrives. See OnTabChanged.
     private ResourceTab? _navigatingToTab;
     private bool _isDisposed;
     private IReadOnlyList<string> _selectedResourceNames = [];
     private List<SelectedResourceItem> _selectedItems = [];
     private string? _selectionAnchor;
+    private long _selectionVersion;
     private int? _paneWidth;
     private ElementReference _layoutElement;
     private IJSObjectReference? _jsModule;
@@ -168,6 +171,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// Gets the tab of the current page.
     /// </summary>
     internal ResourceTab CurrentTab { get; private set; }
+
+    // A focused resource terminal is a view of its overview, not a separate navigation destination.
+    private ResourceTab CurrentNavigationTab => CurrentTab == ResourceTab.Terminal ? ResourceTab.Overview : CurrentTab;
 
     /// <summary>
     /// Gets the names of the resources selected in the resource list, in selection order. The list is empty when no
@@ -410,7 +416,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // The router sets a new body on every navigation. Selection is updated here, rather than in a
         // LocationChanged handler, so it's current before the page in the body renders.
         var location = NavigationManager.Uri;
-        if (string.Equals(location, _lastLocation, StringComparison.Ordinal))
+        if (string.Equals(location, _lastLocation, StringComparison.Ordinal) &&
+            string.Equals(location, _selectionLocation, StringComparison.Ordinal))
         {
             return;
         }
@@ -487,9 +494,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// Called by the tab strip when the tabs that no longer fit change. They move to the "..." menu.
     /// </summary>
     [JSInvokable]
-    public void SetOverflowTabs(string[] tabIds)
+    public void SetOverflowTabs(string[] tabIds, string renderedLocation, bool isDesktop)
     {
-        if (_isDisposed || _overflowTabIds.SequenceEqual(tabIds))
+        if (_isDisposed || isDesktop != ViewportInformation.IsDesktop
+            || !string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal)
+            || !string.Equals(renderedLocation, NavigationManager.Uri, StringComparison.Ordinal)
+            || _overflowTabIds.SequenceEqual(tabIds))
         {
             return;
         }
@@ -521,6 +531,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     private void UpdateFromLocation(string location)
     {
+        _selectionVersion++;
+        _selectionLocation = location;
+        _overflowTabIds = [];
         var baseRelativePath = NavigationManager.ToBaseRelativePath(location);
         var parsedLocation = ParseLocation(baseRelativePath);
         var wasAllResources = _hasLocation && _selectedResourceNames.Count == 0;
@@ -538,6 +551,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // resources are already shown keeps them. Telemetry sources has its own selection, so it must not restore
         // the last app-resource selection when its overview route has no selected source.
         _pendingLandingRedirect = DashboardClient.IsEnabled
+            // A history entry created by All is an explicit empty filter, not a request to restore a saved row.
+            && NavigationManager.HistoryEntryState != AllResourcesHistoryEntryState
             && ParsePaneMode(baseRelativePath) != ResourcePaneMode.Telemetry
             && parsedLocation.Tab == ResourceTab.Overview
             && parsedLocation.SelectedResourceNames.Count == 0
@@ -810,6 +825,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         _pendingLandingRedirect = false;
+        var selectionVersion = _selectionVersion;
+        var location = NavigationManager.Uri;
 
         List<string> resourceNames;
         try
@@ -826,7 +843,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
-        if (resourceNames.Count > 0)
+        if (resourceNames.Count > 0 && IsCurrentSelectionOperation(selectionVersion, location))
         {
             NavigationManager.NavigateTo(GetTabUrl(ResourceTab.Overview, resourceNames), new NavigationOptions { ReplaceHistoryEntry = true });
         }
@@ -1814,6 +1831,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     private async Task OnRowClickAsync(MouseEventArgs e, string resourceName)
     {
+        SynchronizeSelectionForClick();
+        var selectionVersion = ++_selectionVersion;
+        var location = NavigationManager.Uri;
         // The selection can also change by navigating, for example with a link to a resource. Ranges then start at
         // the last selected resource.
         var anchor = _selectionAnchor is not null && IsSelected(_selectionAnchor) ? _selectionAnchor : _selectedResourceNames is [.., var last] ? last : null;
@@ -1855,9 +1875,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             // Remember the cleared selection so the overview doesn't select a resource again.
             await SetStoredSelectionAsync(selection);
+            if (!IsCurrentSelectionOperation(selectionVersion, location))
+            {
+                return;
+            }
         }
 
-        NavigationManager.NavigateTo(GetSelectionUrl(selection));
+        NavigationManager.NavigateTo(GetSelectionUrl(selection), GetSelectionNavigationOptions(selection));
     }
 
     // A single selected resource is shown by its row alone, so a one-resource group doesn't duplicate the highlight.
@@ -1873,6 +1897,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
+        SynchronizeSelectionForClick();
+        var selectionVersion = ++_selectionVersion;
+        var location = NavigationManager.Uri;
         IReadOnlyList<string> selection;
         if (e.CtrlKey || e.MetaKey)
         {
@@ -1901,19 +1928,35 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         _selectionAnchor = selection is [.., var last] ? last : null;
-        NavigationManager.NavigateTo(GetSelectionUrl(selection));
+        if (selection.Count == 0)
+        {
+            await SetStoredSelectionAsync(selection);
+            if (!IsCurrentSelectionOperation(selectionVersion, location))
+            {
+                return;
+            }
+        }
+        NavigationManager.NavigateTo(GetSelectionUrl(selection), GetSelectionNavigationOptions(selection));
     }
 
     private async Task OnAllResourcesClickAsync()
     {
+        SynchronizeSelectionForClick();
+        var selectionVersion = ++_selectionVersion;
+        var location = NavigationManager.Uri;
         _selectionAnchor = null;
 
         // Remember the cleared selection so entering the overview later doesn't select a resource again.
         await SetStoredSelectionAsync([]);
+        if (!IsCurrentSelectionOperation(selectionVersion, location))
+        {
+            return;
+        }
 
         // On the overview, selecting everything shows the resource list. Other tabs stay where they are and list
         // every resource.
-        NavigationManager.NavigateTo(DashboardClient.IsEnabled && CurrentTab == ResourceTab.Overview ? DashboardUrls.ResourceListUrl() : GetSelectionUrl([]));
+        NavigationManager.NavigateTo(DashboardClient.IsEnabled && CurrentTab == ResourceTab.Overview ? DashboardUrls.ResourceListUrl() : GetSelectionUrl([]),
+            GetSelectionNavigationOptions([]));
     }
 
     /// <summary>
@@ -1943,9 +1986,33 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     private async Task ClearSelectionAsync()
     {
+        var selectionVersion = ++_selectionVersion;
+        var location = NavigationManager.Uri;
         _selectionAnchor = null;
         await SetStoredSelectionAsync([]);
-        NavigationManager.NavigateTo(GetSelectionUrl([]));
+        if (IsCurrentSelectionOperation(selectionVersion, location))
+        {
+            NavigationManager.NavigateTo(GetSelectionUrl([]), GetSelectionNavigationOptions([]));
+        }
+    }
+
+    // Storage interop yields the renderer: another click or navigation can take ownership before it returns.
+    // Neither clearing nor restoring a remembered selection may navigate over that newer intent.
+    private bool IsCurrentSelectionOperation(long selectionVersion, string location) =>
+        !_isDisposed && selectionVersion == _selectionVersion &&
+        string.Equals(location, NavigationManager.Uri, StringComparison.Ordinal);
+
+    private static NavigationOptions GetSelectionNavigationOptions(IReadOnlyList<string> selection) =>
+        new() { HistoryEntryState = selection.Count == 0 ? AllResourcesHistoryEntryState : null };
+
+    private void SynchronizeSelectionForClick()
+    {
+        // NavigateTo changes the URL before the router supplies the next layout Body. A second click must use
+        // that URL, not mistake a row selected in the previous render for the currently selected row.
+        if (!string.Equals(_selectionLocation, NavigationManager.Uri, StringComparison.Ordinal))
+        {
+            UpdateFromLocation(NavigationManager.Uri);
+        }
     }
 
     /// <summary>
@@ -2026,7 +2093,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             || newTab?.Id is not { } id
             || !id.StartsWith("tab-", StringComparison.Ordinal)
             || !Enum.TryParse<ResourceTab>(id["tab-".Length..], out var tab)
-            || tab == CurrentTab
+            || tab == CurrentNavigationTab
             // A navigation started from the tab strip is still in flight. The layout re-renders when this handler
             // returns, before the router reaches the new location, and that render must not put the previous tab
             // back: the strip would report it as a change once the new page shows, and navigate back to it, forever.
@@ -2039,7 +2106,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is { } href)
         {
             _navigatingToTab = tab;
-            NavigationManager.NavigateTo(href);
+            NavigationManager.NavigateTo(href, GetSelectionNavigationOptions(_selectedResourceNames));
         }
     }
 
@@ -2062,8 +2129,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             isVisible: DashboardClient.IsEnabled && !isTelemetryOnly && (resource is not null || isMultiSelection || _selectedItems.Count == 0));
         yield return CreateTab(ResourceTab.Console, Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)], new Icons.Regular.Size24.SlideText(),
             isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
-        yield return CreateTab(ResourceTab.Terminal, TerminalLoc[nameof(TerminalStrings.TerminalTitle)], new Icons.Regular.Size20.WindowConsole(),
-            isVisible: IsTabAvailable(ResourceTab.Terminal) || CurrentTab == ResourceTab.Terminal);
         yield return CreateTab(ResourceTab.StructuredLogs, StructuredLogsLoc[nameof(Resources.StructuredLogs.StructuredLogsHeader)], new Icons.Regular.Size24.SlideTextSparkle(),
             isVisible: true, errorCount);
         yield return CreateTab(ResourceTab.Traces, Loc[nameof(Resources.Layout.NavMenuTracesTab)], new Icons.Regular.Size24.GanttChart(),
@@ -2098,9 +2163,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 Text = tab.Text,
                 StartIcon = tab.Icon,
                 Role = MenuItemRole.Radio,
-                Checked = tab.Tab == CurrentTab,
+                Checked = tab.Tab == CurrentNavigationTab,
                 Tooltip = tab.IsAvailable ? null : Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
-                OnClick = () => { NavigationManager.NavigateTo(tab.Href); return Task.CompletedTask; }
+                OnClick = () => { NavigationManager.NavigateTo(tab.Href, GetSelectionNavigationOptions(_selectedResourceNames)); return Task.CompletedTask; }
             });
         }
 

@@ -88,9 +88,7 @@ public partial class MainLayoutTests
         });
         Assert.Equal(2, client.ResourceSubscriptionCount);
 
-        bool HasTerminals() => isDesktop
-            ? shortcuts.IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals)
-            : cut.FindComponent<MobileNavMenu>().Instance.HasResourceTerminals;
+        bool HasTerminals() => cut.Find(".header-overflow").GetAttribute("data-has-secondary-actions") == "true";
     }
 
     [Theory]
@@ -107,10 +105,6 @@ public partial class MainLayoutTests
             new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
         var shortcuts = Services.GetRequiredService<ShortcutManager>();
         var navigationManager = Services.GetRequiredService<NavigationManager>();
-        if (!isDesktop)
-        {
-            await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
-        }
         AssertNavigation(false);
         await AssertShortcutNavigationAsync(false);
         var resource = TerminalSetupHelpers.CreateTerminalResource("shell", hidden: hidden);
@@ -131,10 +125,7 @@ public partial class MainLayoutTests
         {
             Assert.Equal(expected, cut.Instance.SubscribedShortcuts.Contains(AspireKeyboardShortcut.GoToTerminals));
             Assert.Equal(expected, shortcuts.IsShortcutAvailable(AspireKeyboardShortcut.GoToTerminals));
-            if (!isDesktop)
-            {
-                Assert.Equal(expected, cut.FindComponent<MobileNavMenu>().Instance.HasResourceTerminals);
-            }
+            Assert.Equal(expected ? "true" : "false", cut.Find(".header-overflow").GetAttribute("data-has-secondary-actions"));
         }
 
         async Task AssertShortcutNavigationAsync(bool expected)

@@ -74,7 +74,7 @@
        height never reflows the content when a scrollbar appears. */
     scrollbar-gutter: stable;
     scrollbar-width: thin;
-    scrollbar-color: var(--colorNeutralStroke1) transparent;
+    scrollbar-color: var(--colorNeutralStroke1) var(--scrollbar-track-color);
     padding: 6px 4px 8px 8px;
 }
 

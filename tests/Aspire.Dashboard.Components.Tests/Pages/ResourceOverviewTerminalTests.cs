@@ -59,6 +59,13 @@ public class ResourceOverviewTerminalTests : DashboardTestContext
         Assert.Equal(terminalActionLabel, terminalAction.GetAttribute("aria-label"));
         Assert.Equal(terminalActionLabel, terminalAction.GetAttribute("data-tooltip"));
 
+        cut.Find(".overview-panel-selector [aria-label='Hide empty panels']").Click();
+        Assert.Equal("true", cut.Find(".overview-panel-selector [aria-label='Hide empty panels']").GetAttribute("aria-pressed"));
+        Assert.Same(viewer, cut.FindComponent<TerminalView>().Instance);
+        Assert.False(page.Find(".overview-terminal-card").HasAttribute("hidden"));
+        Assert.True(page.Find("[aria-labelledby='overview-endpoints-title']").HasAttribute("hidden"));
+        Assert.Equal("http://localhost" + (initiallyFocused ? focused : overview), navigation.Uri);
+
         if (!initiallyFocused)
         {
             page.Find(".overview-terminal-card .overview-card-action:not([href])").Click();
@@ -80,6 +87,9 @@ public class ResourceOverviewTerminalTests : DashboardTestContext
         Assert.Equal(ResourceTab.Overview, cut.Instance.CurrentTab);
         Assert.Equal(["shell"], cut.Instance.SelectedResourceNames);
         Assert.Equal(cards, page.FindAll(".overview-card").Count);
+        Assert.Equal("true", cut.Find(".overview-panel-selector [aria-label='Hide empty panels']").GetAttribute("aria-pressed"));
+        cut.Find(".overview-panel-selector [aria-label='Show all panels']").Click();
+        Assert.Empty(page.FindAll(".overview-card[hidden]"));
         Assert.Equal("https://aka.ms/aspire/dashboard-terminal",
             page.Find(".overview-terminal-card .overview-card-actions [href]").GetAttribute("href"));
         Assert.Same(viewer, cut.FindComponent<TerminalView>().Instance);
@@ -92,6 +102,18 @@ public class ResourceOverviewTerminalTests : DashboardTestContext
         cut.Render();
         Assert.Contains("terminal-focused", page.Find(".resource-overview").ClassList);
         Assert.Same(viewer, cut.FindComponent<TerminalView>().Instance);
+
+        var dock = Services.GetRequiredService<TerminalDockState>();
+        await cut.InvokeAsync(() => dock.Update(true, "shell"));
+        Assert.Same(viewer, cut.FindComponent<TerminalView>().Instance);
+        navigation.NavigateTo(overview);
+        cut.Render();
+        Assert.Empty(page.FindComponents<TerminalView>());
+        cut.Find(".overview-panel-selector [aria-label='Hide empty panels']").Click();
+        Assert.Empty(page.FindComponents<TerminalView>());
+        Assert.True(dock.IsResourceOpen("shell"));
+        Assert.Equal(["shell"], cut.Instance.SelectedResourceNames);
+
         await cut.InvokeAsync(() => page.Instance.DisposeAsync().AsTask());
     }
 }

@@ -1,8 +1,9 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
@@ -12,6 +13,7 @@ using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Pages;
 
@@ -22,7 +24,7 @@ namespace Aspire.Dashboard.Components.Pages;
 /// </summary>
 public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 {
-    private const int ConsolePreviewLineCount = 10;
+    private const int ConsolePreviewLineCount = 12;
     private const int RecentItemCount = 5;
     private const int MetricsPreviewCount = 8;
     // Matches the metrics page's default duration, so a tile's sparkline looks like the card it opens.
@@ -52,6 +54,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private IDisposable? _consoleLogsFiltersChangedSubscription;
     private TerminalView? _terminalView;
     private bool? _renderedTerminalFocus;
+    private bool _hideEmptyPanels = true;
 
     [Parameter]
     public string? ResourceName { get; set; }
@@ -125,6 +128,18 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private void ToggleTerminalFocus() =>
         NavigationManager.NavigateTo(DashboardUrls.SetResourceTerminalFocus(NavigationManager.Uri, !IsTerminalFocused));
+
+    private IReadOnlyList<IconToggleOption<bool>> PanelOptions =>
+    [
+        new(true, new AspireIcons.Size20.HideEmptyPanels(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewHideEmptyPanels)]),
+        new(false, new Icons.Regular.Size20.Grid(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewShowAllPanels)])
+    ];
+
+    private Task SetHideEmptyPanelsAsync(bool value)
+    {
+        _hideEmptyPanels = value;
+        return InvokeAsync(StateHasChanged);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -388,6 +403,14 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
                 var filterDate = ConsoleLogsManager.GetFilterDate(resourceName);
                 lock (_consoleLock)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    // A replayed line can predate the pause timestamp. Freeze receipt, not just timestamps,
+                    // so queued historical batches cannot advance the paused twelve-line snapshot.
+                    if (PauseManager.ConsoleLogsPaused)
+                    {
+                        continue;
+                    }
+
                     foreach (var line in batch)
                     {
                         var previewLine = CreatePreviewLine(line);
@@ -458,7 +481,10 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     /// </summary>
     private void OnConsolePausedChanged(bool isPaused)
     {
-        PauseManager.SetConsoleLogsPaused(isPaused, TimeProvider.GetUtcNow().UtcDateTime);
+        lock (_consoleLock)
+        {
+            PauseManager.SetConsoleLogsPaused(isPaused, TimeProvider.GetUtcNow().UtcDateTime);
+        }
     }
 
     private string? ConsolePauseText => PauseManager.ConsoleLogPauseIntervals.LastOrDefault() is { End: null } pause
@@ -744,17 +770,17 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     /// <summary>
     /// Packs cards into rows of a 12 column grid in page order. Each card requests a span based on its content, and the
-    /// spare columns at the end of a row are shared between that row's cards so rows never have trailing gaps.
+    /// spare columns at the end of a row are shared between its cards, except for a lone card.
     /// Medium widths use a separate two-per-row packing where wide cards take the full row.
     /// </summary>
     internal sealed class OverviewCardLayout
     {
         private const int Columns = 12;
 
-        private readonly Dictionary<OverviewCard, int> _spans;
-        private readonly Dictionary<OverviewCard, int> _mediumSpans;
+        private readonly Dictionary<OverviewCard, (int Span, int Height)> _spans;
+        private readonly Dictionary<OverviewCard, (int Span, int Height)> _mediumSpans;
 
-        private OverviewCardLayout(Dictionary<OverviewCard, int> spans, Dictionary<OverviewCard, int> mediumSpans)
+        private OverviewCardLayout(Dictionary<OverviewCard, (int Span, int Height)> spans, Dictionary<OverviewCard, (int Span, int Height)> mediumSpans)
         {
             _spans = spans;
             _mediumSpans = mediumSpans;
@@ -762,30 +788,44 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
         public static OverviewCardLayout Create(IReadOnlyList<(OverviewCard Card, int Span)> cards)
         {
+            var mediumCards = cards.Select(c => (c.Card, Span: c.Span >= 7 ? Columns : Columns / 2)).ToList();
+            // When empty endpoints/telemetry disappear, keep the small status card beside the terminal.
+            // Promoting that terminal to a whole row would leave the preceding half-row unused.
+            if (cards.Count >= 2 && cards[1].Span >= 7 && cards[0].Span + cards[1].Span <= Columns)
+            {
+                mediumCards[0] = cards[0];
+                mediumCards[1] = cards[1];
+            }
+
             return new OverviewCardLayout(
                 Pack(cards),
-                Pack(cards.Select(c => (c.Card, c.Span >= 7 ? Columns : Columns / 2)).ToList()));
+                Pack(mediumCards));
         }
 
         public string Style(OverviewCard card)
         {
-            return string.Create(CultureInfo.InvariantCulture, $"--overview-span: {_spans.GetValueOrDefault(card, Columns)}; --overview-span-md: {_mediumSpans.GetValueOrDefault(card, Columns)}; --overview-card-height: {GetHeight(card)}px;");
+            var height = GetHeight(card);
+            var (span, rowHeight) = _spans.GetValueOrDefault(card, (Columns, height));
+            var (mediumSpan, mediumRowHeight) = _mediumSpans.GetValueOrDefault(card, (Columns, height));
+            return string.Create(CultureInfo.InvariantCulture, $"--overview-span: {span}; --overview-span-md: {mediumSpan}; --overview-card-height: {height}px; --overview-row-height: {rowHeight}px; --overview-row-height-md: {mediumRowHeight}px;");
         }
 
-        // Each card has a fixed height, so a card is the same size for every resource and the cards below it don't
-        // move. Content that doesn't fit scrolls inside the card. Cards on the same row share a height.
+        // These are preferred heights. Packing raises shorter cards to their row's height after empty cards
+        // are hidden, while the single-column layout keeps each card's own height.
         private static int GetHeight(OverviewCard card) => card switch
         {
             OverviewCard.Status or OverviewCard.Endpoints or OverviewCard.Metrics => 260,
-            OverviewCard.Console or OverviewCard.Logs => 300,
+            // Twelve 18.4px console rows, their padding and the card header need slightly more than 300px.
+            OverviewCard.Console => 304,
+            OverviewCard.Logs => 300,
             OverviewCard.Traces or OverviewCard.Relationships => 300,
             OverviewCard.Properties or OverviewCard.Environment => 340,
             _ => 240
         };
 
-        private static Dictionary<OverviewCard, int> Pack(IReadOnlyList<(OverviewCard Card, int Span)> cards)
+        private static Dictionary<OverviewCard, (int Span, int Height)> Pack(IReadOnlyList<(OverviewCard Card, int Span)> cards)
         {
-            var result = new Dictionary<OverviewCard, int>();
+            var result = new Dictionary<OverviewCard, (int Span, int Height)>();
             var row = new List<(OverviewCard Card, int Span)>();
             var used = 0;
 
@@ -805,10 +845,16 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
             void CompleteRow()
             {
-                var spare = Columns - used;
+                if (row.Count == 0)
+                {
+                    return;
+                }
+
+                var spare = row.Count > 1 ? Columns - used : 0;
+                var height = row.Max(c => GetHeight(c.Card));
                 for (var i = 0; i < row.Count; i++)
                 {
-                    result[row[i].Card] = row[i].Span + (spare / row.Count) + (i < spare % row.Count ? 1 : 0);
+                    result[row[i].Card] = (row[i].Span + (spare / row.Count) + (i < spare % row.Count ? 1 : 0), height);
                 }
                 row.Clear();
                 used = 0;

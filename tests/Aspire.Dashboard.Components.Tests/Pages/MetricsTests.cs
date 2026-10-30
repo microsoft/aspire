@@ -27,6 +27,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
 using OpenTelemetry.Proto.Metrics.V1;
 using Aspire.Tests;
 using Xunit;
@@ -38,6 +39,30 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public partial class MetricsTests : DashboardTestContext
 {
+    [Fact]
+    public async Task MeterOverview_DisposalWaitsForPendingObserverInitialization()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        MetricsSetupHelpers.SetupPlotlyChart(this);
+        var module = JSInterop.SetupModule("/Components/Controls/Chart/MeterOverview.razor.js");
+        var observe = new PendingJSObjectReferenceInvocationHandler(invocation => invocation.Identifier == "observeCards");
+        module.AddInvocationHandler(observe);
+        var observer = JSInterop.SetupModule("createObserver", _ => true);
+        var cleanup = observer.SetupVoid("dispose", _ => true).SetVoidResult();
+        var reference = await JSInterop.JSRuntime.InvokeAsync<IJSObjectReference>("createObserver");
+        var cut = Render<MeterOverview>(builder => builder
+            .Add(component => component.Instruments, [])
+            .Add(component => component.Duration, TimeSpan.FromMinutes(5))
+            .Add(component => component.ShowMeterName, false)
+            .Add(component => component.GetInstrumentUrl, instrument => $"/metrics/{instrument.Name}"));
+        cut.WaitForAssertion(() => Assert.Single(observe.Invocations));
+
+        var disposal = cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
+        observe.SetResult(reference);
+        await disposal;
+        cut.WaitForAssertion(() => Assert.Single(cleanup.Invocations));
+    }
+
     [Theory]
     [InlineData(AspireDataType.StructuredLogs)]
     [InlineData(AspireDataType.Traces)]

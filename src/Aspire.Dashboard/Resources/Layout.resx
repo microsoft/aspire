@@ -129,6 +129,9 @@
   <data name="MainLayoutHelp" xml:space="preserve">
     <value>Help</value>
   </data>
+  <data name="MainLayoutMoreActions" xml:space="preserve">
+    <value>More actions</value>
+  </data>
   <data name="MainLayoutLaunchSettings" xml:space="preserve">
     <value>Settings</value>
   </data>

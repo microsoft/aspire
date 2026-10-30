@@ -11,13 +11,17 @@ using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Layout;
 
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
-    private bool _isNavMenuOpen;
     private bool _isDisposing;
+    private long _allResourcesNavigationVersion;
+    private ElementReference _header;
+    private IJSObjectReference? _headerModule;
+    private string[] _overflowActionIds = [];
 
     private bool _runSelectionChanged;
     private bool _isSwitchingRuns;
@@ -43,6 +47,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     internal const string HelpButtonId = "dashboard-help-button";
     internal const string SettingsButtonId = "dashboard-settings-button";
     internal const string NavigationButtonId = "dashboard-navigation-button";
+    internal const string NotificationsButtonId = "dashboard-notifications-button";
     internal const string RunSelectButtonId = "dashboard-run-select-button";
     internal const string DashboardDocumentationUrl = "https://aspire.dev/dashboard/overview/";
     internal const string AspireRepoUrl = "https://aka.ms/aspire/repo";
@@ -119,6 +124,77 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private Task ToggleTerminalDockAsync() => _terminalDock?.ToggleAsync() ?? Task.CompletedTask;
 
+    private IList<MenuButtonItem> GetHeaderActions()
+    {
+        var actions = new List<MenuButtonItem>();
+        if (_navigationAvailability.HasResourceTerminals)
+        {
+            actions.Add(new()
+            {
+                Id = "dashboard-terminal-dock-button",
+                Text = TerminalLoc[nameof(Resources.TerminalStrings.MainLayoutToggleTerminalDock)],
+                Icon = new Icons.Regular.Size20.WindowConsole(),
+                OnClick = ToggleTerminalDockAsync,
+                AdditionalAttributes = new Dictionary<string, object> { ["aria-keyshortcuts"] = "`" }
+            });
+        }
+        actions.Add(new()
+        {
+            Id = HelpButtonId,
+            Text = Loc[nameof(Resources.Layout.MainLayoutHelp)],
+            Icon = new Icons.Regular.Size24.QuestionCircle(),
+            OnClick = () => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId), HelpDialogTab.Documentation),
+            AdditionalAttributes = new Dictionary<string, object> { ["aria-haspopup"] = "dialog", ["aria-keyshortcuts"] = "?" }
+        });
+        actions.Add(new()
+        {
+            Id = NotificationsButtonId,
+            Text = Loc[nameof(Resources.Layout.MainLayoutLaunchNotifications)],
+            Icon = new Icons.Regular.Size24.Alert(),
+            Count = NotificationService.UnreadCount > 0 ? NotificationService.UnreadCount : null,
+            OnClick = LaunchNotificationsAsync
+        });
+        actions.Add(new()
+        {
+            Id = SettingsButtonId,
+            Text = Loc[nameof(Resources.Layout.MainLayoutLaunchSettings)],
+            Icon = new Icons.Regular.Size24.Settings(),
+            OnClick = LaunchSettingsAsync
+        });
+        return actions;
+    }
+
+    private IList<MenuButtonItem> GetHeaderOverflowItems()
+    {
+        var items = GetHeaderActions().Where(action => _overflowActionIds.Contains(action.Id)).ToList();
+        if (_navigationAvailability.HasResourceTerminals)
+        {
+            items.Add(new()
+            {
+                Id = "dashboard-terminals-menu-item",
+                Text = Loc[nameof(Resources.Layout.NavMenuTerminalsTab)],
+                Icon = DesktopNavMenu.TerminalsIcon(),
+                OnClick = () =>
+                {
+                    NavigationManager.NavigateTo(DashboardUrls.TerminalsUrl());
+                    return Task.CompletedTask;
+                }
+            });
+        }
+        return items;
+    }
+
+    [JSInvokable]
+    public void SetHeaderOverflowActions(string[] actionIds)
+    {
+        var ids = GetHeaderActions().Select(action => action.Id).Intersect(actionIds).ToArray();
+        if (!_isDisposing && !_overflowActionIds.SequenceEqual(ids))
+        {
+            _overflowActionIds = ids;
+            StateHasChanged();
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         ViewPreferences.Changed += OnViewPreferencesChanged;
@@ -160,20 +236,19 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             }
         });
 
-        // Redirect to the structured logs page if the dashboard has no resource service.
-        if (!DashboardClient.IsEnabled)
+        _locationChangingRegistration = NavigationManager.RegisterLocationChangingHandler((context) =>
         {
-            _locationChangingRegistration = NavigationManager.RegisterLocationChangingHandler((context) =>
+            _allResourcesNavigationVersion++;
+            // Redirect to the structured logs page if the dashboard has no resource service.
+            if (!DashboardClient.IsEnabled &&
+                TargetLocationInterceptor.InterceptTargetLocation(NavigationManager.BaseUri, context.TargetLocation, out var newTargetLocation))
             {
-                if (TargetLocationInterceptor.InterceptTargetLocation(NavigationManager.BaseUri, context.TargetLocation, out var newTargetLocation))
-                {
-                    context.PreventNavigation();
-                    NavigationManager.NavigateTo(newTargetLocation);
-                }
+                context.PreventNavigation();
+                NavigationManager.NavigateTo(newTargetLocation);
+            }
 
-                return ValueTask.CompletedTask;
-            });
-        }
+            return ValueTask.CompletedTask;
+        });
 
         try
         {
@@ -336,6 +411,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
                 await ApplyThemeAsync(ThemeManager.SelectedTheme ?? ThemeManager.ThemeSettingSystem);
                 _shortcutManagerReference = DotNetObjectReference.Create(ShortcutManager);
                 _layoutReference = DotNetObjectReference.Create(this);
+                _headerModule = await JS.InvokeAsync<IJSObjectReference>("import", $"./{Assets["Components/Layout/MainLayout.razor.js"]}");
+                await _headerModule.InvokeVoidAsync("observeHeader", _header, _layoutReference);
                 _keyboardHandlers = await JS.InvokeAsync<IJSObjectReference>("window.registerGlobalKeydownListener", _shortcutManagerReference);
                 ShortcutManager.AddGlobalKeydownListener(this);
             }
@@ -356,16 +433,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
     }
 
-    protected override void OnParametersSet()
-    {
-        if (ViewportInformation.IsDesktop && _isNavMenuOpen)
-        {
-            _isNavMenuOpen = false;
-            CloseMobileNavMenu();
-        }
-    }
-
-    private string GetDefaultReturnFocusElementId(string desktopButtonId) => ViewportInformation.IsDesktop ? desktopButtonId : NavigationButtonId;
+    private string GetDefaultReturnFocusElementId(string desktopButtonId) =>
+        _overflowActionIds.Contains(desktopButtonId) ? NavigationButtonId : desktopButtonId;
 
     internal async Task SwitchDashboardRunAsync(string? runId)
     {
@@ -405,8 +474,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private string? GetVisibleReturnFocusElementId(string? returnFocusElementId, string desktopButtonId)
     {
-        // Dialog launchers move between the desktop header and the mobile navigation menu.
-        // Resolve the target when the dialog closes so viewport changes do not focus a removed element.
+        // Resize or localization can move a launcher into overflow while its dialog is open.
+        // Resolve the target on close rather than focusing the now-hidden button.
         return returnFocusElementId is null ? null : GetDefaultReturnFocusElementId(desktopButtonId);
     }
 
@@ -511,7 +580,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Alignment = HorizontalAlignment.Right,
             Width = "350px",
             Id = NotificationsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<IDialogInstance>(this, _ => HandleDialogClose())
+            OnDialogClosing = EventCallback.Factory.Create<IDialogInstance>(this, _ => HandleDialogClose(GetDefaultReturnFocusElementId(NotificationsButtonId)))
         };
 
         if (!await CloseOpenPageDialogForReplacementAsync(NotificationsDialogId).ConfigureAwait(true))
@@ -529,8 +598,14 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     {
         if (DashboardClient.IsEnabled)
         {
+            var version = ++_allResourcesNavigationVersion;
             await SessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, new List<string>());
-            NavigationManager.NavigateTo(DashboardUrls.ResourceListUrl());
+            // Storage interop must not let an earlier brand click replace a newer resource or history navigation.
+            if (!_isDisposing && version == _allResourcesNavigationVersion)
+            {
+                NavigationManager.NavigateTo(DashboardUrls.ResourceListUrl(),
+                    new NavigationOptions { HistoryEntryState = ResourcesLayout.AllResourcesHistoryEntryState });
+            }
         }
         else
         {
@@ -648,12 +723,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
     }
 
-    private void CloseMobileNavMenu()
-    {
-        _isNavMenuOpen = false;
-        StateHasChanged();
-    }
-
     private void HandleNotificationsChanged()
     {
         // Resource command toasts and notification-center entries are updated together. Use that notification
@@ -685,6 +754,10 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             {
                 await JS.InvokeVoidAsync("window.unregisterGlobalKeydownListener", keyboardHandlers);
             }
+            if (_headerModule is not null)
+            {
+                await _headerModule.InvokeVoidAsync("disconnectHeader", _header);
+            }
         }
         catch (JSDisconnectedException ex)
         {
@@ -693,5 +766,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);
         await JSInteropHelpers.SafeDisposeAsync(_keyboardHandlers);
+        await JSInteropHelpers.SafeDisposeAsync(_headerModule);
     }
 }

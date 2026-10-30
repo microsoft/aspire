@@ -15,6 +15,7 @@ using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Sections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
@@ -406,10 +407,12 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("Container (persistent)", cache.QuerySelector(".resource-row-type")!.TextContent);
     }
 
-    [Fact]
-    public async Task TerminalTab_NavigatesWithinTheSelectionAndFallsBackForNonTerminalResources()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ResourceTerminalActions_PreserveSelectionWithoutTopLevelTerminalTab(bool desktop)
     {
-        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var viewport = new ViewportInformation(IsDesktop: desktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources:
@@ -420,23 +423,28 @@ public class ResourcesLayoutTests : DashboardTestContext
             ], resourceChannelProvider: () => channel));
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("shell"));
+        var headerOutlet = Render<SectionOutlet>(p => p.Add(p => p.SectionName, MainLayout.HeaderContextSectionName));
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        IRenderedComponent<IComponent> header = desktop ? headerOutlet : cut;
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         Assert.True(cut.Instance.IsTabAvailable(ResourceTab.Terminal));
-        var terminalTab = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Terminal");
-        Assert.True(terminalTab.Instance.Visible);
-        await cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(terminalTab.Instance));
+        string[] expectedTabs = ["tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"];
+        Assert.Equal(expectedTabs, header.FindComponents<FluentTab>().Select(t => t.Instance.Id));
+        var compactTabs = header.FindComponents<AspireMenuButton>().Single(b => b.Instance.ButtonClass == "resource-tabs-compact-button");
+        Assert.Equal(expectedTabs.Select(id => $"{id}-menu-item"), compactTabs.Instance.ItemsProvider().Select(item => item.Id));
+        await cut.InvokeAsync(() => cut.Find(".resource-row-terminal[aria-label='Open terminal for shell']").Click());
         Assert.Equal("http://localhost/resources/shell?terminal=true", navigation.Uri);
         cut.Render();
-        Assert.Equal("tab-Terminal", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
-        var previousTabs = cut.FindComponent<FluentTabs>().Instance;
-        var previousTabChanged = cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged;
-        var overviewTab = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance;
+        Assert.Equal("tab-Overview", header.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        Assert.True(compactTabs.Instance.ItemsProvider().Single(item => item.Id == "tab-Overview-menu-item").Checked);
+        var previousTabs = header.FindComponent<FluentTabs>().Instance;
+        var previousTabChanged = header.FindComponent<FluentTabs>().Instance.ActiveTabChanged;
+        var overviewTab = header.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance;
 
         cut.Find(".resource-row-link[aria-label='other-shell']").Click();
         Assert.Equal("http://localhost/resources/other-shell?terminal=true", navigation.Uri);
         cut.Render();
-        Assert.NotSame(previousTabs, cut.FindComponent<FluentTabs>().Instance);
+        Assert.NotSame(previousTabs, header.FindComponent<FluentTabs>().Instance);
         Assert.Equal(["other-shell"], cut.Instance.SelectedResourceNames);
         await cut.InvokeAsync(() => previousTabChanged.InvokeAsync(overviewTab));
         Assert.Equal("http://localhost/resources/other-shell?terminal=true", navigation.Uri);
@@ -445,11 +453,11 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("http://localhost/resources/api", navigation.Uri);
         cut.Render();
         Assert.False(cut.Instance.IsTabAvailable(ResourceTab.Terminal));
-        Assert.False(cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Terminal").Instance.Visible);
+        Assert.Equal(expectedTabs, header.FindComponents<FluentTab>().Select(t => t.Instance.Id));
     }
 
     [Fact]
-    public async Task TerminalTab_FocusAndOverviewPreservePaneQueryAndFragment()
+    public async Task ResourceTerminalUrls_PreservePaneQueryAndFragment()
     {
         var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
@@ -459,12 +467,13 @@ public class ResourcesLayoutTests : DashboardTestContext
         navigation.NavigateTo("/resources/shell?pane=tags#output");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        var terminal = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Terminal").Instance;
-        await cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(terminal));
+        await cut.InvokeAsync(() => cut.Find(".resource-row-terminal").Click());
         Assert.Equal("http://localhost/resources/shell?pane=tags&terminal=true#output", navigation.Uri);
         cut.Render();
         var overview = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance;
         await cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(overview));
+        Assert.Equal("http://localhost/resources/shell?pane=tags&terminal=true#output", navigation.Uri);
+        navigation.NavigateTo(cut.Instance.GetTabUrl(ResourceTab.Overview));
         Assert.Equal("http://localhost/resources/shell?pane=tags#output", navigation.Uri);
     }
 
@@ -532,6 +541,38 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.Render();
         await SelectTabAsync("tab-Overview");
         Assert.Equal("http://localhost/resources/api", navigation.Uri);
+    }
+
+    [Fact]
+    public async Task Tabs_OverflowRejectsPreviousLocationAndViewportCallbacks()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/resources/api");
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        var oldLocation = navigation.Uri;
+        await cut.InvokeAsync(() => cut.Instance.SetOverflowTabs(["tab-Traces", "tab-Metrics"], oldLocation, false));
+        Assert.Equal(["tab-Traces-menu-item", "tab-Metrics-menu-item"], OverflowIds());
+
+        await cut.InvokeAsync(() => navigation.NavigateTo("/resources/cache"));
+        cut.Render();
+        Assert.Empty(OverflowIds());
+        await cut.InvokeAsync(() => cut.Instance.SetOverflowTabs(["tab-Metrics"], oldLocation, false));
+        Assert.Empty(OverflowIds());
+        await cut.InvokeAsync(() => cut.Instance.SetOverflowTabs(["tab-Metrics"], navigation.Uri, true));
+        Assert.Empty(OverflowIds());
+        await cut.InvokeAsync(() => cut.Instance.SetOverflowTabs(["tab-Metrics"], navigation.Uri, false));
+        Assert.Equal(["tab-Metrics-menu-item"], OverflowIds());
+        await cut.InvokeAsync(() => cut.Instance.SetOverflowTabs([], navigation.Uri, false));
+        Assert.Empty(OverflowIds());
+
+        string[] OverflowIds() => cut.FindComponents<AspireMenuButton>()
+            .Single(button => button.Instance.ButtonClass == "resource-tabs-overflow-button")
+            .Instance.ItemsProvider!().Select(item => item.Id).ToArray();
     }
 
     [Fact]
@@ -929,6 +970,145 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         await cut.InvokeAsync(() => cut.Find(".resource-select-all-toggle").Click());
         Assert.Equal("http://localhost/metrics", navigation.Uri);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Selection_ClicksBeforeRouterRenderUseLatestLocation(bool selectAllFirst, bool controlClick)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/api");
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        await cut.InvokeAsync(() => selectAllFirst
+            ? cut.Find(".resource-select-all-toggle").ClickAsync(new())
+            : cut.Find("[data-resource-name='cache'] .resource-row-link").ClickAsync(new()));
+        // The URL changed, but the router has not supplied the layout's next Body yet.
+        await cut.InvokeAsync(() => cut.Find("[data-resource-name='api'] .resource-row-link").ClickAsync(new() { CtrlKey = controlClick }));
+        cut.Render();
+
+        Assert.Equal(controlClick ? ["cache", "api"] : ["api"], cut.Instance.SelectedResourceNames);
+        Assert.Equal("false", cut.Find(".resource-select-all-toggle").GetAttribute("aria-pressed"));
+    }
+
+    [Theory]
+    [InlineData("all")]
+    [InlineData("clear")]
+    [InlineData("toggle")]
+    public async Task Selection_PendingClearDoesNotOverrideLaterResourceClick(string action)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/resources/api?pane=resources#details");
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        var storage = Assert.IsType<TestSessionStorage>(Services.GetRequiredService<ISessionStorage>());
+        var writeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishWrite = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.OnSetTaskAsync = async (key, value) =>
+        {
+            if (key == BrowserStorageKeys.LastSelectedResources && value is List<string> { Count: 0 })
+            {
+                writeStarted.TrySetResult();
+                await finishWrite.Task;
+            }
+        };
+
+        var pendingClick = cut.InvokeAsync(() => action == "all"
+            ? cut.Find(".resource-select-all-toggle").ClickAsync(new())
+            : cut.Find("[data-resource-name='api'] .resource-row-link")
+                .ClickAsync(new() { CtrlKey = action == "toggle" }));
+        await writeStarted.Task.WaitAsync(DefaultWaitTimeout);
+        try
+        {
+            await cut.InvokeAsync(() => cut.Find("[data-resource-name='cache'] .resource-row-link").Click());
+            cut.Render();
+            Assert.Equal(["cache"], cut.Instance.SelectedResourceNames);
+        }
+        finally
+        {
+            finishWrite.TrySetResult();
+        }
+        await pendingClick.WaitAsync(DefaultWaitTimeout);
+        cut.Render();
+
+        Assert.Equal("/resources/cache", new Uri(navigation.Uri).AbsolutePath);
+        Assert.Equal(["cache"], cut.Instance.SelectedResourceNames);
+        Assert.Equal("false", cut.Find(".resource-select-all-toggle").GetAttribute("aria-pressed"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Landing_ExplicitAllHistoryEntryDoesNotRestoreRememberedRow(bool explicitAllEntry)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var storage = Assert.IsType<TestSessionStorage>(Services.GetRequiredService<ISessionStorage>());
+        storage.OnGetAsync = key => key == BrowserStorageKeys.LastSelectedResources
+            ? (true, new List<string> { "api" })
+            : (false, null);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/resources", new NavigationOptions
+        {
+            HistoryEntryState = explicitAllEntry ? ResourcesLayout.AllResourcesHistoryEntryState : null
+        });
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() => Assert.Equal(explicitAllEntry ? [] : ["api"], cut.Instance.SelectedResourceNames));
+        Assert.Equal(explicitAllEntry ? "resources" : "resources/api", navigation.ToBaseRelativePath(navigation.Uri));
+    }
+
+    [Theory]
+    [InlineData("/resources/cache?pane=resources#details")]
+    [InlineData("/metrics/resource/cache?meter=custom#chart")]
+    public async Task Landing_PendingRestoreDoesNotOverrideLaterNavigation(string destination)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/resources");
+        var readStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishRead = new TaskCompletionSource<(bool, object?)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var storage = Assert.IsType<TestSessionStorage>(Services.GetRequiredService<ISessionStorage>());
+        storage.OnGetTaskAsync = key =>
+        {
+            if (key != BrowserStorageKeys.LastSelectedResources)
+            {
+                return Task.FromResult<(bool, object?)>((false, null));
+            }
+            readStarted.TrySetResult();
+            return finishRead.Task;
+        };
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        await readStarted.Task.WaitAsync(DefaultWaitTimeout);
+        try
+        {
+            await cut.InvokeAsync(() => navigation.NavigateTo(destination));
+            cut.Render();
+        }
+        finally
+        {
+            finishRead.TrySetResult((true, new List<string> { "api" }));
+        }
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.InvokeAsync(async () => await Task.Yield());
+        cut.Render();
+        Assert.Equal(destination, navigation.ToBaseRelativePath(navigation.Uri).Insert(0, "/"));
+        Assert.Equal(["cache"], cut.Instance.SelectedResourceNames);
     }
 
     [Theory]

@@ -55,21 +55,30 @@ public partial class MeterOverview : LiveSparklinesBase
     private IJSObjectReference? _jsModule;
     private IJSObjectReference? _cardObserver;
     private DotNetObjectReference<MeterOverview>? _selfReference;
+    private Task? _observerInitialization;
+    private bool _isDisposing;
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender)
-        {
-            return;
-        }
+        return firstRender && !_isDisposing
+            ? _observerInitialization = InitializeObserverAsync()
+            : Task.CompletedTask;
+    }
 
+    private async Task InitializeObserverAsync()
+    {
         // The browser reports which cards are near the viewport, so only those keep refreshing. Without the report,
         // for example when the module fails to load, every card keeps refreshing.
         try
         {
             _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["Components/Controls/Chart/MeterOverview.razor.js"]}");
+            if (_isDisposing)
+            {
+                return;
+            }
+
             _selfReference = DotNetObjectReference.Create(this);
-            _cardObserver = await _jsModule.InvokeAsync<IJSObjectReference>("observeCards", _container, _selfReference);
+            _cardObserver = await _jsModule.InvokeAsync<IJSObjectReference?>("observeCards", _container, _selfReference);
         }
         catch (JSDisconnectedException)
         {
@@ -81,8 +90,16 @@ public partial class MeterOverview : LiveSparklinesBase
 
     protected override async ValueTask DisposeCoreAsync()
     {
+        _isDisposing = true;
         try
         {
+            // Navigation can remove the container while import or observer creation is awaiting the browser.
+            // Finish acquiring references before releasing them, including an observer returned after disposal starts.
+            if (_observerInitialization is { } initialization)
+            {
+                await initialization;
+            }
+
             if (_cardObserver is not null)
             {
                 await _cardObserver.InvokeVoidAsync("dispose");

@@ -14,6 +14,29 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 
 public sealed class AspireFluentDataGridTests : DashboardTestContext
 {
+    [Fact]
+    public async Task Disposal_WaitsForInFlightRenderInteropBeforeReleasingItsModule()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        var module = JSInterop.SetupModule("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/DataGrid/FluentDataGrid.razor.js");
+        var resize = module.SetupVoid("Microsoft.FluentUI.Blazor.DataGrid.EnableColumnResizing", _ => true);
+        var controller = module.SetupModule("Microsoft.FluentUI.Blazor.DataGrid.Initialize", _ => true);
+        controller.SetupVoid("stop", _ => true).SetVoidResult();
+        var cut = Render<AspireFluentDataGrid<string>>(builder => builder.Add(grid => grid.ResizableColumns, true));
+        cut.WaitForAssertion(() => Assert.Single(resize.Invocations));
+
+        var disposal = cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
+        try
+        {
+            Assert.False(disposal.IsCompleted);
+        }
+        finally
+        {
+            resize.SetVoidResult();
+        }
+        await disposal;
+    }
+
     [Theory]
     [InlineData(true, "b,a,c")]
     [InlineData(false, "c,a,b")]

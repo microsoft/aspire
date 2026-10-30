@@ -11,6 +11,22 @@
 
 <PageTitle><ApplicationName AdditionalText="@(Resource is { } r ? GetResourceName(r) : null)" ResourceName="@nameof(Dashboard.Resources.Resources.ResourceOverviewPageTitle)" Loc="@Loc" /></PageTitle>
 
+@if (ResourceName is not null && ResourcesLayout is { IsMultiSelection: false } && Resource is { IsParameter: false })
+{
+    <StableSectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.HeaderActionsSectionName">
+        <div class="overview-panel-selector">
+            <IconToggleGroup TValue="bool"
+                             Label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewPanelsLabel)]"
+                             Options="@PanelOptions"
+                             Value="@_hideEmptyPanels"
+                             ValueChanged="@SetHideEmptyPanelsAsync"
+                             ShowLabel="true"
+                             ShowCurrentLabel="false"
+                             TooltipPositioning="Positioning.Before" />
+        </div>
+    </StableSectionContent>
+}
+
 <div class="resource-overview @(IsTerminalFocused ? "terminal-focused" : null)" tabindex="-1">
     @if (ResourcesLayout is null || !ResourcesLayout.IsLoaded)
     {
@@ -78,34 +94,37 @@
         var consoleLines = GetConsoleLines();
         var showEndpoints = urls.Count > 0;
         var showTerminal = ResourceSelectHelpers.HasUsableTerminal(resource);
+        var showTerminalCard = showTerminal && (IsTerminalFocused || !TerminalDockState.IsResourceOpen(resource.Name));
         var showConsole = !showTerminal;
         var properties = GetVisibleProperties();
         var environmentVariables = GetVisibleEnvironmentVariables(resource);
         var healthReports = GetHealthReports(resource);
-        // Resources with no health checks configured never report any, so (unlike properties/environment
-        // variables) an empty list means this resource structurally doesn't support health checks.
         var showHealth = healthReports.Count > 0;
         var hasVolumes = resource.Volumes.Length > 0;
 
-        // Every resource gets the same cards, in the same order and at the same size, so moving between resources
-        // keeps each block where the eye expects it. A card with nothing to show says so instead of disappearing.
-        // The rows are: status, endpoints and metrics; console and logs; traces and relationships; properties and
-        // environment; volumes and health.
-        List<(OverviewCard Card, int Span)> cardSpans =
+        // Keep loading panels and panels with filtered content: their controls still need to be reachable.
+        // By default every resource keeps the same cards; hiding empty panels repacks only the visible cards.
+        List<(OverviewCard Card, int Span, bool HasContent)> cardSpans =
         [
-            (OverviewCard.Status, 3),
-            (OverviewCard.Endpoints, 4),
-            (OverviewCard.Metrics, 5),
-            (OverviewCard.Console, 7),
-            (OverviewCard.Logs, 5),
-            (OverviewCard.Traces, 6),
-            (OverviewCard.Relationships, 6),
-            (OverviewCard.Properties, 6),
-            (OverviewCard.Environment, 6),
-            (OverviewCard.Volumes, 6),
-            (OverviewCard.Health, 6)
+            (OverviewCard.Status, 3, true),
+            (OverviewCard.Endpoints, 4, showEndpoints),
+            (OverviewCard.Metrics, 5, showMetrics),
+            (OverviewCard.Console, _hideEmptyPanels && !showTerminal ? 6 : 7, showTerminal || !_consoleLogsLoaded || consoleLines.Count > 0 || ConsolePauseText is not null),
+            (OverviewCard.Logs, 5, showLogs),
+            (OverviewCard.Traces, 6, showTraces),
+            (OverviewCard.Relationships, 6, relatedResources.Count > 0),
+            (OverviewCard.Properties, 6, _properties.Count > 0),
+            (OverviewCard.Environment, 6, resource.Environment.Length > 0),
+            (OverviewCard.Volumes, 6, hasVolumes),
+            (OverviewCard.Health, 6, showHealth)
         ];
-        var cardLayout = OverviewCardLayout.Create(cardSpans);
+        if (showTerminal && !showTerminalCard)
+        {
+            // A terminal hosted by the global dock doesn't occupy an overview grid cell.
+            cardSpans.RemoveAll(c => c.Card == OverviewCard.Console);
+        }
+        var hiddenCards = cardSpans.Where(c => _hideEmptyPanels && !c.HasContent).Select(c => c.Card).ToHashSet();
+        var cardLayout = OverviewCardLayout.Create(cardSpans.Where(c => !hiddenCards.Contains(c.Card)).Select(c => (c.Card, c.Span)).ToList());
 
         <div class="overview-grid">
             @TagsCard(resource)
@@ -275,7 +294,7 @@
                 @EmptyCard(OverviewCard.Metrics, cardLayout, "overview-metrics-title", new Icons.Regular.Size16.ChartMultiple(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)])
             }
 
-            @if (showTerminal && (IsTerminalFocused || !TerminalDockState.IsResourceOpen(resource.Name)))
+            @if (showTerminalCard)
             {
             <section class="overview-card overview-terminal-card" style="@cardLayout.Style(OverviewCard.Console)" aria-labelledby="overview-terminal-title">
                 <div class="overview-card-header">
@@ -311,7 +330,7 @@
             }
             else if (showConsole)
             {
-            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Console)" aria-labelledby="overview-console-title">
+            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Console)" aria-labelledby="overview-console-title" hidden="@hiddenCards.Contains(OverviewCard.Console)">
                 <div class="overview-card-header">
                     <span class="card-header-icon" aria-hidden="true">
                         <FluentIcon Value="@(new Icons.Regular.Size16.SlideText())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
@@ -502,7 +521,7 @@
                 @EmptyCard(OverviewCard.Traces, cardLayout, "overview-traces-title", new Icons.Regular.Size16.GanttChart(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)])
             }
 
-            <section class="overview-card overview-relationships-card" style="@cardLayout.Style(OverviewCard.Relationships)" aria-labelledby="overview-relationships-title">
+            <section class="overview-card overview-relationships-card" style="@cardLayout.Style(OverviewCard.Relationships)" aria-labelledby="overview-relationships-title" hidden="@hiddenCards.Contains(OverviewCard.Relationships)">
                 <div class="overview-card-header">
                     <span class="card-header-icon" aria-hidden="true">
                         <FluentIcon Value="@(new Icons.Regular.Size16.BranchFork())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
@@ -525,7 +544,7 @@
                 }
             </section>
 
-            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Properties)" aria-labelledby="overview-properties-title">
+            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Properties)" aria-labelledby="overview-properties-title" hidden="@hiddenCards.Contains(OverviewCard.Properties)">
                 <div class="overview-card-header">
                     <span class="card-header-icon" aria-hidden="true">
                         <FluentIcon Value="@(new Icons.Regular.Size16.TextBulletListSquare())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
@@ -567,7 +586,7 @@
                 }
             </section>
 
-            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Environment)" aria-labelledby="overview-environment-title">
+            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Environment)" aria-labelledby="overview-environment-title" hidden="@hiddenCards.Contains(OverviewCard.Environment)">
                 <div class="overview-card-header">
                     <span class="card-header-icon" aria-hidden="true">
                         <FluentIcon Value="@(new Icons.Regular.Size16.Braces())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
@@ -726,7 +745,7 @@
     // A card that has nothing to show for this resource, so the layout stays the same from one resource to the next.
     private RenderFragment EmptyCard(OverviewCard card, OverviewCardLayout cardLayout, string titleId, Icon icon, string title, string message) => __builder =>
     {
-        <section class="overview-card overview-card-empty" style="@cardLayout.Style(card)" aria-labelledby="@titleId">
+        <section class="overview-card overview-card-empty" style="@cardLayout.Style(card)" aria-labelledby="@titleId" hidden="@_hideEmptyPanels">
             <div class="overview-card-header">
                 <span class="card-header-icon" aria-hidden="true">
                     <FluentIcon Value="@icon" Width="16px" Color="Color.Custom" CustomColor="currentColor" />

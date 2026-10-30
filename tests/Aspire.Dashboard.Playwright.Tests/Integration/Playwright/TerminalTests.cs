@@ -25,6 +25,101 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ModernSelection_RapidAllResourceAndHistoryKeepContentInteractive()
+    {
+        await RunTestAsync(async page =>
+        {
+            await fixture.TerminalResolver.DiscardPendingConnectionsAsync();
+            var errors = new List<string>();
+            page.PageError += (_, error) => errors.Add(error);
+            page.Console += (_, message) =>
+            {
+                if (message.Type == "error")
+                {
+                    errors.Add(message.Text);
+                }
+            };
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.GotoAsync($"/resources/{ResourceName}").DefaultTimeout();
+            var row = page.Locator($"[data-resource-name='{ResourceName}'] .resource-row-link");
+            var all = page.Locator(".resource-select-all-toggle");
+            for (var iteration = 0; iteration < 3; iteration++)
+            {
+                await all.ClickAsync();
+                await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "All resources", Exact = true })).ToBeVisibleAsync();
+                await row.ClickAsync();
+                await Assertions.Expect(page.Locator(".overview-panel-selector")).ToBeVisibleAsync();
+                await Assertions.Expect(all).ToHaveAttributeAsync("aria-pressed", "false");
+                await page.GoBackAsync();
+                await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "All resources", Exact = true })).ToBeVisibleAsync();
+                await Assertions.Expect(all).ToHaveAttributeAsync("aria-pressed", "true");
+                await page.GoForwardAsync();
+                await Assertions.Expect(page.Locator(".overview-panel-selector")).ToBeVisibleAsync();
+                await Assertions.Expect(all).ToHaveAttributeAsync("aria-pressed", "false");
+            }
+            var showAll = page.GetByRole(AriaRole.Button, new() { Name = "Show all panels", Exact = true });
+            await showAll.ClickAsync();
+            await Assertions.Expect(showAll).ToHaveAttributeAsync("aria-pressed", "true");
+            await page.GetByRole(AriaRole.Button, new() { Name = "Hide empty panels", Exact = true }).ClickAsync();
+            await Assertions.Expect(showAll).ToHaveAttributeAsync("aria-pressed", "false");
+            await page.Locator("#dashboard-settings-button").ClickAsync();
+            await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Appearance", Exact = true })).ToBeVisibleAsync();
+            Assert.Empty(errors);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ModernNavigation_OverflowOwnsOnlyHiddenTabsAcrossResizeAndNavigation()
+    {
+        await RunTestAsync(async page =>
+        {
+            await fixture.TerminalResolver.DiscardPendingConnectionsAsync();
+            await page.GotoAsync($"/resources/{ResourceName}").DefaultTimeout();
+            var navigation = page.Locator(".resource-tabs-nav");
+            var tabs = navigation.Locator("fluent-tab");
+            await Assertions.Expect(tabs).ToHaveCountAsync(5);
+
+            foreach (var width in new[] { 320, 390, 720, 768, 769, 1024, 1440, 320 })
+            {
+                await page.SetViewportSizeAsync(width, 900);
+                var overflow = navigation.Locator(".resource-tabs-overflow-button");
+                if (width <= 390)
+                {
+                    await Assertions.Expect(overflow).ToBeVisibleAsync();
+                    var hidden = await navigation.Locator("fluent-tab[data-tab-overflow]").AllTextContentsAsync();
+                    Assert.NotEmpty(hidden);
+                    await overflow.ClickAsync();
+                    var items = page.Locator("fluent-menu-item:visible");
+                    await Assertions.Expect(items).ToHaveTextAsync(hidden.Select(text => text.Trim()));
+                    await page.Keyboard.PressAsync("Escape");
+                }
+                else if (width >= 1440 || width is >= 720 and <= 768)
+                {
+                    await Assertions.Expect(navigation.Locator("fluent-tab:visible")).ToHaveCountAsync(5);
+                    await Assertions.Expect(overflow).ToBeHiddenAsync();
+                }
+
+                await Assertions.Expect(page.Locator("#dashboard-help-button")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("#dashboard-notifications-button")).ToBeVisibleAsync();
+            }
+
+            await navigation.GetByRole(AriaRole.Tab, new() { Name = "Console logs", Exact = true }).ClickAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs"));
+            await Assertions.Expect(navigation.Locator(".resource-tabs-overflow-button")).ToBeVisibleAsync();
+            var hiddenAfterNavigation = await navigation.Locator("fluent-tab[data-tab-overflow]").AllTextContentsAsync();
+            await navigation.Locator(".resource-tabs-overflow-button").ClickAsync();
+            await Assertions.Expect(page.Locator("fluent-menu-item:visible"))
+                .ToHaveTextAsync(hiddenAfterNavigation.Select(text => text.Trim()));
+            await page.Locator("fluent-menu-item:visible").Filter(new() { HasText = "Metrics" }).ClickAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/metrics"));
+            await page.GoBackAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs"));
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ModernResourceTerminal_FocusDocumentationAndShortcutsPreserveViewer()
     {
         await RunTestAsync(async page =>
@@ -37,6 +132,8 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await connection.WaitForPeerHandshakesAsync(CancellationToken.None).DefaultTimeout();
             var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
             await Assertions.Expect(input).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".resources-tab-header").GetByRole(AriaRole.Tab)).ToHaveTextAsync(
+                ["Overview", "Console logs", "Structured logs", "Traces", "Metrics"]);
             var viewer = await input.ElementHandleAsync();
             Assert.NotNull(viewer);
             var connectionCount = connection.ConnectionCount;
@@ -48,6 +145,39 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
                 await Assertions.Expect(overview).ToHaveClassAsync(focused
                     ? new Regex("terminal-focused")
                     : new Regex("^(?!.*terminal-focused)"));
+                if (!focused)
+                {
+                    var panels = page.GetByRole(AriaRole.Group, new() { Name = "Panels", Exact = true });
+                    var all = panels.GetByRole(AriaRole.Button, new() { Name = "Show all panels", Exact = true });
+                    var withContent = panels.GetByRole(AriaRole.Button, new() { Name = "Hide empty panels", Exact = true });
+                    var endpoints = page.Locator("[aria-labelledby='overview-endpoints-title']");
+                    await Assertions.Expect(withContent).ToHaveAttributeAsync("data-tooltip-positioning", "before");
+                    await Assertions.Expect(all).ToHaveAttributeAsync("data-tooltip-positioning", "before");
+                    await Assertions.Expect(panels.Locator("button").First).ToHaveAccessibleNameAsync("Hide empty panels");
+                    await Assertions.Expect(withContent).ToHaveAttributeAsync("aria-pressed", "true");
+                    await Assertions.Expect(all).ToHaveAttributeAsync("aria-pressed", "false");
+                    await Assertions.Expect(endpoints).ToBeHiddenAsync();
+                    await all.ClickAsync();
+                    await Assertions.Expect(endpoints).ToBeVisibleAsync();
+                    await withContent.ClickAsync();
+                    await withContent.ClickAsync();
+                    await Assertions.Expect(withContent).ToHaveAttributeAsync("aria-pressed", "true");
+                    await Assertions.Expect(all).ToHaveAttributeAsync("aria-pressed", "false");
+                    await Assertions.Expect(endpoints).ToBeHiddenAsync();
+                    await Assertions.Expect(input).ToBeVisibleAsync();
+                    await Assertions.Expect(page.Locator("[aria-labelledby='overview-status-title']")).ToBeVisibleAsync();
+                    await all.FocusAsync();
+                    await page.Keyboard.PressAsync("Space");
+                    await Assertions.Expect(endpoints).ToBeVisibleAsync();
+                    await Assertions.Expect(all).ToHaveAttributeAsync("aria-pressed", "true");
+                    await withContent.FocusAsync();
+                    await page.Keyboard.PressAsync("Enter");
+                    await Assertions.Expect(endpoints).ToBeHiddenAsync();
+                    Assert.Equal($"/resources/{ResourceName}", new Uri(page.Url).AbsolutePath);
+                    Assert.True(await viewer.EvaluateAsync<bool>("element => element.isConnected"));
+                    Assert.Equal(connectionCount, connection.ConnectionCount);
+                }
+
                 await Assertions.Expect(documentation).ToHaveAttributeAsync("href", "https://aka.ms/aspire/dashboard-terminal");
                 await Assertions.Expect(documentation).ToHaveAttributeAsync("aria-label", "More information");
                 foreach (var keyboard in new[] { false, true })

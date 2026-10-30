@@ -602,7 +602,25 @@ fluent-popover-b::part(dialog)::-webkit-scrollbar {
 ::-webkit-scrollbar-track,
 fluent-dialog-body::part(content)::-webkit-scrollbar-track,
 fluent-popover-b::part(dialog)::-webkit-scrollbar-track {
-    background: var(--scrollbar-track-color);
+    background: transparent;
+}
+
+/* Transparent ends blend with the local surface, including nested cards and popups.
+   Painting the track rather than the scrolling element leaves unused reserved gutters alone. */
+@media (forced-colors: none) {
+    ::-webkit-scrollbar-track,
+    fluent-dialog-body::part(content)::-webkit-scrollbar-track,
+    fluent-popover-b::part(dialog)::-webkit-scrollbar-track,
+    ::part(listbox)::-webkit-scrollbar-track {
+        background: linear-gradient(to bottom, transparent, var(--scrollbar-track-color) 5%, var(--scrollbar-track-color) 95%, transparent);
+    }
+
+    ::-webkit-scrollbar-track:horizontal,
+    fluent-dialog-body::part(content)::-webkit-scrollbar-track:horizontal,
+    fluent-popover-b::part(dialog)::-webkit-scrollbar-track:horizontal,
+    ::part(listbox)::-webkit-scrollbar-track:horizontal {
+        background-image: linear-gradient(to right, transparent, var(--scrollbar-track-color) 5%, var(--scrollbar-track-color) 95%, transparent);
+    }
 }
 
 ::-webkit-scrollbar-thumb,

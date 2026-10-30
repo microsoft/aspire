@@ -12,6 +12,9 @@ namespace Aspire.Dashboard.Components.Controls.Grid;
 [CascadingTypeParameter(nameof(TGridItem))]
 public class AspireFluentDataGrid<TGridItem> : FluentDataGrid<TGridItem>
 {
+    private readonly HashSet<Task> _pendingRenders = [];
+    private bool _isDisposing;
+
     public AspireFluentDataGrid(LibraryConfiguration configuration) : base(configuration)
     {
         LoadingContent = RenderLoadingContent;
@@ -19,6 +22,46 @@ public class AspireFluentDataGrid<TGridItem> : FluentDataGrid<TGridItem>
 
     [Inject]
     public required IStringLocalizer<ControlsStrings> Loc { get; init; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_isDisposing)
+        {
+            return;
+        }
+
+        var render = base.OnAfterRenderAsync(firstRender);
+        _pendingRenders.Add(render);
+        try
+        {
+            await render;
+        }
+        finally
+        {
+            _pendingRenders.Remove(render);
+        }
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        if (_isDisposing)
+        {
+            return;
+        }
+
+        _isDisposing = true;
+        // Fluent 5.0.1's render callback awaits several JS calls without checking disposal between them.
+        // Rapid All/resources/history navigation must let those calls finish before releasing their module.
+        // https://github.com/microsoft/fluentui-blazor/blob/v5.0.1/src/Core/Components/DataGrid/FluentDataGrid.razor.cs
+        try
+        {
+            await Task.WhenAll(_pendingRenders);
+        }
+        finally
+        {
+            await base.DisposeAsync();
+        }
+    }
 
     protected override void BuildRenderTree(RenderTreeBuilder builder)
     {

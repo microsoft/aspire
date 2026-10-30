@@ -179,20 +179,11 @@ public partial class MainLayoutTests
 
         var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
-        var label = Services.GetRequiredService<IStringLocalizer<Resources.TerminalStrings>>()[
-            isDesktop ? nameof(Resources.TerminalStrings.MainLayoutToggleTerminalDock) : nameof(Resources.TerminalStrings.TerminalTitle)].Value;
-        var toggleSelector = isDesktop ? $"header fluent-button[aria-label='{label}']" : $"fluent-menu-item[data-tooltip='{label}']";
+        var label = Services.GetRequiredService<IStringLocalizer<Resources.TerminalStrings>>()[nameof(Resources.TerminalStrings.MainLayoutToggleTerminalDock)].Value;
+        var toggleSelector = $"header fluent-button[aria-label='{label}']";
         var shortcuts = Services.GetRequiredService<ShortcutManager>();
         var dock = cut.FindComponent<TerminalDock>().Instance;
         Assert.Empty(cut.FindAll(".terminal-dock"));
-
-        if (!isDesktop)
-        {
-            await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
-            Assert.Single(cut.FindAll(".mobile-nav-menu"));
-            Assert.Empty(cut.FindAll(toggleSelector));
-            await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
-        }
 
         foreach (var visible in new[] { true, false, true })
         {

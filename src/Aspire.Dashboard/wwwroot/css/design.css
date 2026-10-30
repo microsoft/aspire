@@ -173,7 +173,7 @@
     --scrollbar-size: 8px;
     --scrollbar-thumb-color: rgba(0, 0, 0, 0.22);
     --scrollbar-thumb-hover-color: rgba(0, 0, 0, 0.38);
-    --scrollbar-track-color: transparent;
+    --scrollbar-track-color: rgba(0, 0, 0, 0.05);
 
     --trace-tick-background-color: #d8d8d8;
 
@@ -344,6 +344,7 @@
 
     --scrollbar-thumb-color: rgba(255, 255, 255, 0.20);
     --scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.34);
+    --scrollbar-track-color: rgba(255, 255, 255, 0.06);
 
     --trace-tick-background-color: #717171;
 

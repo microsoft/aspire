@@ -50,6 +50,13 @@ public class DashboardTerminalScriptTests(ITestOutputHelper output)
         await RunScriptAsync("TerminalDock.test.mjs");
     }
 
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ResponsiveNavigationOverflowAndCleanup()
+    {
+        await RunScriptAsync("ResponsiveNavigation.test.mjs");
+    }
+
     private async Task RunScriptAsync(string script)
     {
         using var command = new NodeCommand(output)

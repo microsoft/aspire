@@ -30,6 +30,40 @@ public partial class MainLayoutTests : DashboardTestContext
 {
     private IRenderedComponent<FluentMessageBarProvider>? _messageBarProvider;
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HeaderActions_ShareOrderAndOverflowOwnershipAcrossViewports(bool isDesktop)
+    {
+        DialogParameters? capturedParameters = null;
+        SetupMainLayoutServices(dialogService: new TestDialogService(onShowDialog: (_, parameters) =>
+        {
+            capturedParameters = parameters;
+            return Task.CompletedTask;
+        }));
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
+        var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        Assert.Equal([MainLayout.HelpButtonId, MainLayout.NotificationsButtonId, MainLayout.SettingsButtonId],
+            cut.FindAll("[data-header-action]").Select(action => action.GetAttribute("data-header-action")));
+        var overflow = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.MenuButtonId == MainLayout.NavigationButtonId);
+        Assert.Empty(overflow.Instance.ItemsProvider!());
+
+        await cut.InvokeAsync(() => cut.Instance.SetHeaderOverflowActions([MainLayout.SettingsButtonId, "unknown", MainLayout.SettingsButtonId]));
+        var item = Assert.Single(overflow.Instance.ItemsProvider!());
+        Assert.Equal(MainLayout.SettingsButtonId, item.Id);
+        await cut.InvokeAsync(item.OnClick!);
+        Assert.NotNull(capturedParameters);
+        Assert.Equal("SettingsDialog", capturedParameters.Id);
+        await cut.InvokeAsync(() => capturedParameters.OnDialogClosing.InvokeAsync(null!));
+        cut.WaitForAssertion(() => Assert.Contains(JSInterop.Invocations, invocation =>
+            invocation.Identifier == "focusElement" && Equals(invocation.Arguments[0], MainLayout.NavigationButtonId)));
+
+        await cut.InvokeAsync(() => cut.Instance.SetHeaderOverflowActions([]));
+        Assert.Empty(overflow.Instance.ItemsProvider!());
+        Assert.Single(cut.FindAll($"#{MainLayout.SettingsButtonId}"));
+    }
+
     [Fact]
     public async Task HeaderHelp_IsSingleActionThatOpensHelpDialog()
     {
@@ -72,6 +106,33 @@ public partial class MainLayoutTests : DashboardTestContext
 
         Assert.Equal(DashboardUrls.ResourceListUrl(), "/" + navigationManager.ToBaseRelativePath(navigationManager.Uri));
         Assert.Empty(Assert.IsType<List<string>>(stored[BrowserStorageKeys.LastSelectedResources]));
+    }
+
+    [Theory]
+    [InlineData(".logo", false)]
+    [InlineData(".application-name", false)]
+    [InlineData(".logo", true)]
+    public async Task Logo_PendingClearDoesNotOverrideLaterNavigation(string selector, bool returnToOriginalLocation)
+    {
+        var storageWrite = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        SetupMainLayoutServices(
+            sessionStorage: new TestSessionStorage { OnSetTaskAsync = (_, _) => storageWrite.Task },
+            dashboardClient: new TestDashboardClient(isEnabled: true, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo("/resources/api");
+        var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        var click = cut.InvokeAsync(() => cut.Find($"header {selector}").ClickAsync(new()));
+        await cut.InvokeAsync(() => navigationManager.NavigateTo("/resources/cache"));
+        if (returnToOriginalLocation)
+        {
+            await cut.InvokeAsync(() => navigationManager.NavigateTo("/resources/api"));
+        }
+
+        storageWrite.SetResult();
+        await click;
+
+        Assert.EndsWith(returnToOriginalLocation ? "/resources/api" : "/resources/cache", navigationManager.Uri, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -336,8 +397,8 @@ public partial class MainLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(true, "dashboard-help-button", "HelpDialog", "dashboard-help-button")]
     [InlineData(true, "dashboard-settings-button", "SettingsDialog", "dashboard-settings-button")]
-    [InlineData(false, "dashboard-navigation-button", "HelpDialog", "dashboard-navigation-button")]
-    [InlineData(false, "dashboard-navigation-button", "SettingsDialog", "dashboard-navigation-button")]
+    [InlineData(false, "dashboard-help-button", "HelpDialog", "dashboard-help-button")]
+    [InlineData(false, "dashboard-settings-button", "SettingsDialog", "dashboard-settings-button")]
     public async Task HeaderDialogClose_RestoresFocusToLaunchButton(bool isDesktop, string launchButtonId, string expectedDialogId, string expectedFocusId)
     {
         DialogParameters? capturedParameters = null;
@@ -356,20 +417,7 @@ public partial class MainLayoutTests : DashboardTestContext
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
 
-        if (isDesktop)
-        {
-            await cut.InvokeAsync(() => cut.Find($"#{launchButtonId}").Click());
-        }
-        else
-        {
-            var menuItemName = expectedDialogId == "HelpDialog"
-                ? Resources.Layout.MainLayoutKeyboardShortcuts
-                : "Settings";
-
-            await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
-            var menuItem = cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase));
-            await cut.InvokeAsync(() => menuItem.TriggerEvent("onmenuitemchange", new MenuItemEventArgs { Id = menuItem.Id, Text = menuItem.TextContent }));
-        }
+        await cut.InvokeAsync(() => cut.Find($"#{launchButtonId}").Click());
 
         Assert.NotNull(capturedParameters);
         Assert.Equal(expectedDialogId, capturedParameters.Id);
@@ -950,10 +998,10 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(true, false, "dashboard-help-button", "HelpDialog", "dashboard-navigation-button")]
-    [InlineData(true, false, "dashboard-settings-button", "SettingsDialog", "dashboard-navigation-button")]
-    [InlineData(false, true, "dashboard-navigation-button", "HelpDialog", "dashboard-help-button")]
-    [InlineData(false, true, "dashboard-navigation-button", "SettingsDialog", "dashboard-settings-button")]
+    [InlineData(true, false, "dashboard-help-button", "HelpDialog", "dashboard-help-button")]
+    [InlineData(true, false, "dashboard-settings-button", "SettingsDialog", "dashboard-settings-button")]
+    [InlineData(false, true, "dashboard-help-button", "HelpDialog", "dashboard-help-button")]
+    [InlineData(false, true, "dashboard-settings-button", "SettingsDialog", "dashboard-settings-button")]
     public async Task HeaderDialogClose_AfterViewportChange_RestoresFocusToVisibleLaunchButton(
         bool initialIsDesktop,
         bool closingIsDesktop,
@@ -978,20 +1026,7 @@ public partial class MainLayoutTests : DashboardTestContext
             builder.AddChildContent<MainLayout>();
         });
 
-        if (initialIsDesktop)
-        {
-            await cut.InvokeAsync(() => cut.Find($"#{launchButtonId}").Click());
-        }
-        else
-        {
-            var menuItemName = expectedDialogId == "HelpDialog"
-                ? Resources.Layout.MainLayoutKeyboardShortcuts
-                : "Settings";
-
-            await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
-            var menuItem = cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase));
-            await cut.InvokeAsync(() => menuItem.TriggerEvent("onmenuitemchange", new MenuItemEventArgs { Id = menuItem.Id, Text = menuItem.TextContent }));
-        }
+        await cut.InvokeAsync(() => cut.Find($"#{launchButtonId}").Click());
 
         Assert.NotNull(capturedParameters);
         Assert.Equal(expectedDialogId, capturedParameters.Id);
@@ -1126,6 +1161,9 @@ public partial class MainLayoutTests : DashboardTestContext
         FluentUISetupHelpers.SetupAspireMenuButtonModule(this);
 
         var themeModule = JSInterop.SetupModule("/js/app-theme.js");
+        var headerModule = JSInterop.SetupModule(invocation => invocation.Arguments[0] is string path && path.Contains("MainLayout.razor.js", StringComparison.Ordinal));
+        headerModule.SetupVoid("observeHeader", _ => true).SetVoidResult();
+        headerModule.SetupVoid("disconnectHeader", _ => true).SetVoidResult();
         themeModule.Setup<string>("updateTheme", _ => true).SetResult(ThemeManager.ThemeSettingSystem);
         JSInterop.SetupVoid("Blazor.theme.setThemeMode", _ => true).SetVoidResult();
 

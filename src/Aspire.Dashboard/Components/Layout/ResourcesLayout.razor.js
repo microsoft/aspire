@@ -16,9 +16,9 @@ let tabOverflow = null;
 export function registerTabOverflow(dotNetRef) {
     unregisterTabOverflow();
 
-    const state = { dotNetRef, nav: null, resizeObserver: null, tabsObserver: null, reported: "", frame: 0 };
+    const state = { dotNetRef, nav: null, resizeObserver: null, tabsObserver: null, reported: "", frame: 0, disposed: false };
     const schedule = () => {
-        if (!state.frame) {
+        if (!state.disposed && !state.frame) {
             state.frame = requestAnimationFrame(() => {
                 state.frame = 0;
                 attach();
@@ -36,11 +36,10 @@ export function registerTabOverflow(dotNetRef) {
             state.reported = "";
             if (nav) {
                 state.resizeObserver.observe(nav);
-                const tablist = nav.querySelector(".resources-tab-header");
-                if (tablist) {
-                    // Attributes are filtered so setting data-tab-overflow below doesn't re-trigger a measurement.
-                    state.tabsObserver.observe(tablist, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["hidden", "style", "class"] });
-                }
+                // Navigation replaces the keyed FluentTabs host without replacing its nav. Observing the old
+                // host loses subsequent measurements and leaves a stale menu beside the newly visible tabs.
+                // Exclude data-tab-overflow so our own visibility changes don't schedule another measurement.
+                state.tabsObserver.observe(nav, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["hidden", "style", "class", "data-overflow-location", "data-overflow-desktop"] });
             }
         }
         measure();
@@ -49,7 +48,7 @@ export function registerTabOverflow(dotNetRef) {
     function measure() {
         const nav = state.nav;
         const tablist = nav?.querySelector(".resources-tab-header");
-        if (!nav || !tablist) {
+        if (!nav?.isConnected || !tablist) {
             return;
         }
 
@@ -59,12 +58,15 @@ export function registerTabOverflow(dotNetRef) {
         const visibleTabs = tabs.filter(tab => tab.offsetWidth > 0);
         let hiddenIds = [];
         if (visibleTabs.length > 1 && getComputedStyle(tablist).display !== "none") {
-            const left = visibleTabs[0].getBoundingClientRect().left;
+            const left = nav.getBoundingClientRect().left;
             const widthThrough = index => visibleTabs[index].getBoundingClientRect().right - left;
             const available = nav.clientWidth;
             if (widthThrough(visibleTabs.length - 1) > available) {
                 // Reserve room for the "..." button, then keep as many tabs from the left as fit.
-                const budget = available - 44;
+                nav.setAttribute("data-has-tab-overflow", "");
+                const overflow = nav.querySelector(".resource-tabs-overflow");
+                const gap = parseFloat(getComputedStyle(nav).columnGap) || 0;
+                const budget = available - overflow.getBoundingClientRect().width - gap;
                 let keep = 1;
                 while (keep < visibleTabs.length && widthThrough(keep) <= budget) {
                     keep++;
@@ -74,10 +76,17 @@ export function registerTabOverflow(dotNetRef) {
             }
         }
 
-        const key = hiddenIds.join(",");
+        nav.toggleAttribute("data-has-tab-overflow", hiddenIds.length > 0);
+        const location = nav.getAttribute("data-overflow-location");
+        const isDesktop = nav.getAttribute("data-overflow-desktop") === "true";
+        const key = JSON.stringify([location, isDesktop, hiddenIds]);
         if (key !== state.reported) {
             state.reported = key;
-            state.dotNetRef.invokeMethodAsync("SetOverflowTabs", hiddenIds).catch(() => { });
+            state.dotNetRef.invokeMethodAsync("SetOverflowTabs", hiddenIds, location, isDesktop).catch(error => {
+                if (!state.disposed) {
+                    console.error("Failed to update resource tab overflow.", error);
+                }
+            });
         }
     }
 
@@ -91,6 +100,8 @@ export function registerTabOverflow(dotNetRef) {
     });
     state.bodyObserver.observe(document.body, { childList: true, subtree: true });
     window.addEventListener("resize", schedule);
+    document.fonts?.addEventListener("loadingdone", schedule);
+    document.fonts?.ready.then(schedule);
     state.schedule = schedule;
     tabOverflow = state;
     schedule();
@@ -102,11 +113,13 @@ export function unregisterTabOverflow() {
         return;
     }
     tabOverflow = null;
+    state.disposed = true;
     cancelAnimationFrame(state.frame);
     state.resizeObserver.disconnect();
     state.tabsObserver.disconnect();
     state.bodyObserver.disconnect();
     window.removeEventListener("resize", state.schedule);
+    document.fonts?.removeEventListener("loadingdone", state.schedule);
 }
 
 export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maximumWidth) {
