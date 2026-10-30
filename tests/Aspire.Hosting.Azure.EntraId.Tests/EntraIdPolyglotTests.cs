@@ -168,6 +168,28 @@ public class EntraIdPolyglotTests
         Assert.Empty(entra.Resource.ClientCredentials);
     }
 
+    [Fact]
+    public async Task KeyVaultCertificate_ExportAcceptsUrlAndResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vault = builder.AddAzureKeyVault("vault");
+        var entra = builder.AddExistingEntraApplicationForExport("entra", TenantId, ClientId);
+        var method = ScanExports().Methods["Aspire.Hosting.Azure.EntraId/withCertificateFromKeyVault"];
+
+        Assert.Same(entra, method.Invoke(null, [entra, "https://vault.vault.azure.net", "literal-certificate"]));
+        Assert.Same(entra, method.Invoke(null, [entra, vault, "resource-certificate"]));
+        var consumer = builder.AddContainer("consumer", "image");
+        DispatchReference(consumer, entra);
+
+        await Verify(await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            consumer.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance));
+
+        Assert.Throws<ArgumentException>(() => entra.WithCertificateFromKeyVaultForExport(42, "certificate"));
+        Assert.Throws<ArgumentNullException>(() => entra.WithCertificateFromKeyVaultForExport(null!, "certificate"));
+        Assert.Throws<ArgumentException>(() => entra.WithCertificateFromKeyVaultForExport(vault, ""));
+        Assert.Equal(2, entra.Resource.ClientCredentials.Count);
+    }
+
     [Theory]
     [InlineData(DistributedApplicationOperation.Run)]
     [InlineData(DistributedApplicationOperation.Publish)]

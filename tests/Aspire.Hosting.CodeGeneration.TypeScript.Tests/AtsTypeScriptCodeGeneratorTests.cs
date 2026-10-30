@@ -1924,6 +1924,22 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public async Task KeyVaultCertificate_GeneratesSingleTypeScriptMethodWithUrlOrResource()
+    {
+        var result = AtsCapabilityScanner.ScanAssemblies(
+            [typeof(DistributedApplication).Assembly, typeof(AzureProvisioningResource).Assembly,
+             typeof(AzureKeyVaultResource).Assembly, typeof(EntraIdApplicationResource).Assembly]);
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == "Aspire.Hosting.Azure.EntraId/withCertificateFromKeyVault");
+        var files = _generator.GenerateDistributedApplication(result.ToAtsContext());
+        var signatures = files["aspire.mts"].Split('\n')
+            .Where(line => line.Contains("withCertificateFromKeyVault(", StringComparison.Ordinal));
+
+        await Verify(string.Join('\n', signatures), "ts");
+        Assert.Equal(2, capability.Parameters.Count);
+    }
+
+    [Fact]
     public void Scanner_AzureExistingResourceScopes_ExposeTypeScriptCapabilities()
     {
         var capabilities = ScanCapabilitiesFromAzureAssemblies();

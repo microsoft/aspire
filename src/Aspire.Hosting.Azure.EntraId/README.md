@@ -533,9 +533,47 @@ Federation authenticates as the app registration using a managed identity assert
 
 ### Certificate from Azure Key Vault
 
+Reference a Key Vault modeled in the AppHost instead of hard-coding its URL:
+
+**C#**
+
 ```csharp
+var vault = builder.AddAzureKeyVault("vault");
 var entraWeb = builder.AddExistingEntraApplication("entra-web", tenantId: tenantId, clientId: webClientId)
-                      .WithCertificateFromKeyVault("https://myvault.vault.azure.net", "MyCert");
+                      .WithCertificateFromKeyVault(vault, "MyCert");
+
+builder.AddProject<Projects.Web>("web").WithReference(entraWeb);
+```
+
+**TypeScript**
+
+```typescript
+const vault = await builder.addAzureKeyVault("vault");
+const entraWeb = await builder.addExistingEntraApplication("entra-web", tenantId, webClientId)
+    .withCertificateFromKeyVault(vault, "MyCert");
+
+await builder.addContainer("web", "my-web-image").withReference(entraWeb);
+```
+
+The vault URI remains a deferred resource reference: local runs resolve the vault output (or its emulator
+endpoint), while published configuration retains the vault output reference. Referencing workloads receive
+the **Key Vault Certificate User** role, which allows reading certificates and their private keys.
+Use `WithRoleAssignments` on a workload to override this assignment, including an empty role list to manage
+access yourself. Local provisioning grants the required access to the developer identity; Azure deployment
+uses the workload's managed identity. An existing vault can be modeled with `RunAsExisting` or
+`PublishAsExisting`, and its access policies or RBAC configuration must allow certificate retrieval.
+
+The certificate must already exist in the vault, have an exportable private key, and have its public key
+registered on the Entra application. This helper neither creates the certificate nor uploads it to the
+registration. Microsoft.Identity.Web retrieves the latest certificate version. Selecting a specific
+version is not supported by its Key Vault credential loader; Aspire does not emit an unsupported version
+configuration key. See the [Microsoft.Identity.Web Key Vault loader](https://github.com/AzureAD/microsoft-identity-web/blob/master/src/Microsoft.Identity.Web.Certificate/KeyVaultCertificateLoader.cs).
+
+The existing URL overload is still available when the vault is managed outside the AppHost. In that case,
+configure access and identity yourself:
+
+```csharp
+entraWeb.WithCertificateFromKeyVault("https://myvault.vault.azure.net", "MyCert");
 ```
 
 ### Certificate from the certificate store
