@@ -21,6 +21,22 @@ internal sealed class Locations
 
     public string DcpLogSocket => Path.Combine(DcpSessionDir, "output.sock");
 
+    /// <summary>
+    /// Hands ownership of the session directory to DCP, which was started with it as <c>DCP_SESSION_FOLDER</c>.
+    /// </summary>
+    /// <remarks>
+    /// DCP runs detached, still reads files such as the kubeconfig from the session directory during its own
+    /// cleanup after the AppHost has shut down, and deletes the directory when it is done. The managed side must
+    /// therefore stop tracking the directory so that disposing the file system service does not delete it first.
+    /// </remarks>
+    public void TransferDcpSessionDirOwnershipToDcp()
+    {
+        if (_dcpSessionDir is not null && _directoryService is FileSystemService fileSystemService)
+        {
+            fileSystemService.UntrackItem(_dcpSessionDir);
+        }
+    }
+
     private string GetOrCreateDcpSessionDir()
     {
         if (_dcpSessionDir == null)

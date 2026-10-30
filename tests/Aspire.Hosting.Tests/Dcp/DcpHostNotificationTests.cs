@@ -714,6 +714,59 @@ public sealed class DcpHostNotificationTests
         Assert.Equal("vendor=value", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupTraceState]);
     }
 
+    [Fact]
+    public async Task EnsureDcpHostRunning_TransfersSessionFolderOwnershipToDcp()
+    {
+        // DCP is started with --detach and DCP_SESSION_FOLDER, so it outlives the AppHost and still reads
+        // the kubeconfig in the session folder during its own cleanup before deleting the folder itself.
+        // Disposing the managed file system service must therefore not delete the folder once DCP has started.
+        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        var locations = new Locations(fileSystemService);
+        var dcpOptions = new DcpOptions { CliPath = DotnetFileAppProcess.ResolvedExecutablePath };
+        var dcpHost = new DcpHost(
+            new NullLoggerFactory(),
+            Options.Create(dcpOptions),
+            new TestDcpDependencyCheckService(),
+            new TestInteractionService(),
+            locations,
+            new DistributedApplicationModel(new ResourceCollection()),
+            new FakeTimeProvider(),
+            new TestDeveloperCertificateService([], false, false, false),
+            new ConfigurationBuilder().Build());
+
+        var sessionDir = locations.DcpSessionDir;
+        try
+        {
+            dcpHost.EnsureDcpHostRunning();
+            await File.WriteAllTextAsync(locations.DcpKubeconfigPath, "kubeconfig written by DCP");
+
+            fileSystemService.Dispose();
+
+            Assert.True(File.Exists(locations.DcpKubeconfigPath), "The DCP session folder must be left for DCP to clean up once DCP has started.");
+        }
+        finally
+        {
+            await dcpHost.StopAsync();
+            if (Directory.Exists(sessionDir))
+            {
+                Directory.Delete(sessionDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void DcpSessionFolder_IsDeletedOnDisposeWhenDcpWasNotStarted()
+    {
+        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        var locations = new Locations(fileSystemService);
+        var sessionDir = locations.DcpSessionDir;
+        File.WriteAllText(locations.DcpKubeconfigPath, "kubeconfig");
+
+        fileSystemService.Dispose();
+
+        Assert.False(Directory.Exists(sessionDir));
+    }
+
     private static DcpHost CreateDcpHostForProcessSpecTests(
         IDeveloperCertificateService? developerCertificateService = null,
         IConfiguration? configuration = null,

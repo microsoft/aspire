@@ -258,7 +258,7 @@ internal sealed class DcpHost
         await TaskHelpers.WaitIgnoreCancelAsync(_logProcessorTask, _logger, "Error in logging socket processor.").ConfigureAwait(false);
     }
 
-    private void EnsureDcpHostRunning()
+    internal void EnsureDcpHostRunning()
     {
         var dcpProcessSpec = CreateDcpProcessSpec(_locations);
 
@@ -282,6 +282,9 @@ internal sealed class DcpHost
         }
 
         _ = ProcessUtil.Run(dcpProcessSpec);
+
+        // DCP started successfully and now owns DCP_SESSION_FOLDER, deleting it after its own cleanup.
+        _locations.TransferDcpSessionDirOwnershipToDcp();
     }
 
     public ProcessSpec CreateDcpProcessSpec(Locations locations)
