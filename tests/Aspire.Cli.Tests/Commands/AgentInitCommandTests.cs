@@ -1104,58 +1104,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             homeDirectory: homeDirectory);
     }
 
-    private sealed class DiagnosticGitBoundaryCapture(ITestOutputHelper output) : IDisposable
-    {
-        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _stages = new();
-
-        public void Record(string stage)
-        {
-            _stages.Enqueue($"[agent-init-git] stage={stage} ticks={System.Diagnostics.Stopwatch.GetTimestamp()} frequency={System.Diagnostics.Stopwatch.Frequency}");
-        }
-
-        public void Dispose()
-        {
-            Record("test-scope-ended");
-            foreach (var stage in _stages)
-            {
-                output.WriteLine(stage);
-            }
-        }
-    }
-
-    private sealed class DiagnosticGitBoundaryRepository(IGitRepository inner, DiagnosticGitBoundaryCapture capture) : IGitRepository
-    {
-        public async Task<DirectoryInfo?> GetRootAsync(CancellationToken cancellationToken)
-        {
-            capture.Record("root-entered");
-            try
-            {
-                var result = await inner.GetRootAsync(cancellationToken);
-                capture.Record(result is null ? "root-returned-null" : "root-returned-directory");
-                return result;
-            }
-            finally
-            {
-                capture.Record("root-finally");
-            }
-        }
-
-        public async Task<IReadOnlySet<string>?> GetIncludedFilesAsync(DirectoryInfo searchRoot, CancellationToken cancellationToken)
-        {
-            capture.Record("files-entered");
-            try
-            {
-                var result = await inner.GetIncludedFilesAsync(searchRoot, cancellationToken);
-                capture.Record(result is null ? "files-returned-null" : "files-returned-set");
-                return result;
-            }
-            finally
-            {
-                capture.Record("files-finally");
-            }
-        }
-    }
-
     [Theory]
     [InlineData("copilot", "project", ".github/copilot/settings.json")]
     [InlineData("copilot", "global", ".copilot/settings.json")]
@@ -1436,4 +1384,55 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(context.Home.EnumerateFileSystemInfos());
     }
 
+    private sealed class DiagnosticGitBoundaryCapture(ITestOutputHelper output) : IDisposable
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _stages = new();
+
+        public void Record(string stage)
+        {
+            _stages.Enqueue($"[agent-init-git] stage={stage} ticks={System.Diagnostics.Stopwatch.GetTimestamp()} frequency={System.Diagnostics.Stopwatch.Frequency}");
+        }
+
+        public void Dispose()
+        {
+            Record("test-scope-ended");
+            foreach (var stage in _stages)
+            {
+                output.WriteLine(stage);
+            }
+        }
+    }
+
+    private sealed class DiagnosticGitBoundaryRepository(IGitRepository inner, DiagnosticGitBoundaryCapture capture) : IGitRepository
+    {
+        public async Task<DirectoryInfo?> GetRootAsync(CancellationToken cancellationToken)
+        {
+            capture.Record("root-entered");
+            try
+            {
+                var result = await inner.GetRootAsync(cancellationToken);
+                capture.Record(result is null ? "root-returned-null" : "root-returned-directory");
+                return result;
+            }
+            finally
+            {
+                capture.Record("root-finally");
+            }
+        }
+
+        public async Task<IReadOnlySet<string>?> GetIncludedFilesAsync(DirectoryInfo searchRoot, CancellationToken cancellationToken)
+        {
+            capture.Record("files-entered");
+            try
+            {
+                var result = await inner.GetIncludedFilesAsync(searchRoot, cancellationToken);
+                capture.Record(result is null ? "files-returned-null" : "files-returned-set");
+                return result;
+            }
+            finally
+            {
+                capture.Record("files-finally");
+            }
+        }
+    }
 }
