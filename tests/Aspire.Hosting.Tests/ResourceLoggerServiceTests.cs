@@ -790,6 +790,60 @@ public class ResourceLoggerServiceTests
         await logWatchEnumerator.DisposeAsync().DefaultTimeout();
     }
 
+    [Fact]
+    public async Task WatchAnySubscribersAsync_RegisteredWhileLoggerIsBeingAdded_ObservesSubscribers()
+    {
+        var service = ConsoleLoggingTestHelpers.GetResourceLoggerService();
+        IAsyncEnumerator<LogSubscriber>? lateWatcher = null;
+        Task<bool>? lateWatcherMoveNext = null;
+
+        // Start a watcher while the service is announcing a newly created logger. This deterministically
+        // reproduces a concurrent WatchAnySubscribersAsync caller registering after the announcement
+        // snapshot was taken but before the new logger could be replayed to late registrations.
+        void OnLoggerAdded((string, ResourceLoggerService.ResourceLoggerState) _)
+        {
+            if (lateWatcher is null)
+            {
+                lateWatcher = service.WatchAnySubscribersAsync().GetAsyncEnumerator();
+                lateWatcherMoveNext = lateWatcher.MoveNextAsync().AsTask();
+            }
+        }
+
+        service.LoggerAdded += OnLoggerAdded;
+        IAsyncEnumerator<IReadOnlyList<LogLine>>? logs = null;
+        Task<bool>? logsMoveNext = null;
+        try
+        {
+            service.GetLogger("myResource");
+            service.LoggerAdded -= OnLoggerAdded;
+            Assert.NotNull(lateWatcher);
+            Assert.NotNull(lateWatcherMoveNext);
+
+            logs = service.WatchAsync("myResource").GetAsyncEnumerator();
+            logsMoveNext = logs.MoveNextAsync().AsTask();
+
+            Assert.True(await lateWatcherMoveNext.DefaultTimeout());
+            Assert.Equal(new LogSubscriber("myResource", AnySubscribers: true), lateWatcher.Current);
+        }
+        finally
+        {
+            service.LoggerAdded -= OnLoggerAdded;
+            service.Dispose();
+            if (logsMoveNext is not null)
+            {
+                await logsMoveNext.DefaultTimeout();
+            }
+            if (logs is not null)
+            {
+                await logs.DisposeAsync().DefaultTimeout();
+            }
+            if (lateWatcher is not null)
+            {
+                await lateWatcher.DisposeAsync().DefaultTimeout();
+            }
+        }
+    }
+
     private sealed class TestResource(string name) : Resource(name)
     {
 
