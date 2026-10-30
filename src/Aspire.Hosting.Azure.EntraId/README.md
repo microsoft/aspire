@@ -569,9 +569,8 @@ from granting any roles to your developer identity, and assign them yourself. An
 
 The certificate must already exist in the vault, have an exportable private key, and have its public key
 registered on the Entra application. This helper neither creates the certificate nor uploads it to the
-registration. Microsoft.Identity.Web retrieves the latest certificate version. Selecting a specific
-version is not supported by its Key Vault credential loader; Aspire does not emit an unsupported version
-configuration key. See the [Microsoft.Identity.Web Key Vault loader](https://github.com/AzureAD/microsoft-identity-web/blob/master/src/Microsoft.Identity.Web.Certificate/KeyVaultCertificateLoader.cs).
+registration. Microsoft.Identity.Web always retrieves the latest certificate version; it has no setting to select
+a specific one. See the [Microsoft.Identity.Web Key Vault loader](https://github.com/AzureAD/microsoft-identity-web/blob/master/src/Microsoft.Identity.Web.Certificate/KeyVaultCertificateLoader.cs).
 
 When the vault is managed outside the AppHost, pass its URL instead. In that case, configure access and
 identity yourself:
