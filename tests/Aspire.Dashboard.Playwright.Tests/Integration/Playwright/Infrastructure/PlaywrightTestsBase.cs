@@ -40,6 +40,22 @@ public class PlaywrightTestsBase<TDashboardServerFixture> : IClassFixture<TDashb
         }
     }
 
+    /// <summary>
+    /// Clicks a resource tab and waits until the server has rendered the tab strip for the new location.
+    /// </summary>
+    /// <remarks>
+    /// A tab click changes the URL in the browser before the server renders the destination. Until that render
+    /// reaches the browser, the tab strip on the page is the one rendered for the previous location, and
+    /// ResourcesLayout deliberately ignores changes from it. Clicking another tab in that window is dropped.
+    /// The strip is keyed by location, so the old element is removed from the DOM once the new strip is rendered.
+    /// </remarks>
+    public static async Task ClickResourceTabAndWaitForRenderAsync(IPage page, Func<Task> clickTab)
+    {
+        var tabStrip = await page.Locator(".resources-tab-header").ElementHandleAsync();
+        await clickTab();
+        await page.WaitForFunctionAsync("tabStrip => !tabStrip.isConnected", tabStrip);
+    }
+
     private async Task<IPage> CreateNewPageAsync()
     {
         if (_context is null)

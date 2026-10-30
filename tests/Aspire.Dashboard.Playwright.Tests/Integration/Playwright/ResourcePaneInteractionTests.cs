@@ -99,7 +99,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             await Assertions.Expect(overviewCards.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = resourceName, Exact = true })).ToBeVisibleAsync();
 
             // Switching tabs keeps all resources selected, including when returning to the overview.
-            await page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.NavMenuConsoleLogsTab }).ClickAsync();
+            await ClickResourceTabAndWaitForRenderAsync(page, () => page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.NavMenuConsoleLogsTab }).ClickAsync());
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs$"));
             await Assertions.Expect(page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.NavMenuConsoleLogsTab })).ToHaveAttributeAsync("aria-selected", "true");
             await Assertions.Expect(title).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
