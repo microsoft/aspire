@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREAZURE003
 
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Pipelines;
@@ -1387,6 +1388,46 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
         // For project resources without explicit target port, should use container port reference
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UserDefinedSlotConfigNames_AreMergedWithGeneratedStickySettings(bool withDeploymentSlot)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+
+        var env = builder.AddAzureAppServiceEnvironment("env");
+        if (withDeploymentSlot)
+        {
+            env.WithDeploymentSlot("stage");
+        }
+
+        var project = builder.AddProject<Project>("project1", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureAppServiceWebsite((infra, site) =>
+            {
+                infra.Add(new global::Azure.Provisioning.AppService.SlotConfigNames("slotConfigNames")
+                {
+                    Parent = site,
+                    AppSettingNames = ["MY__CUSTOM_SETTING"]
+                });
+            });
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        var website = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+
+        var (_, bicep) = await GetManifestWithBicep(website);
+
+        Assert.Single(Regex.Matches(bicep, @"^resource slotConfigNames ", RegexOptions.Multiline));
+        Assert.Contains("'MY__CUSTOM_SETTING'", bicep);
+        Assert.Contains("'OTEL_SERVICE_NAME'", bicep);
     }
 
     [Fact]

@@ -1062,6 +1062,29 @@ internal sealed class AzureAppServiceWebsiteContext(
             return;
         }
 
+        // A site can only have one slotConfigNames resource, so merge into one added by user customization if present.
+        var existingSlotConfigNames = Infra.GetProvisionableResources()
+            .OfType<SlotConfigNames>()
+            .FirstOrDefault(s => ReferenceEquals(s.Parent, parentWebSite));
+
+        if (existingSlotConfigNames is not null)
+        {
+            var existingNames = existingSlotConfigNames.AppSettingNames
+                .Where(n => ((IBicepValue)n).Kind == BicepValueKind.Literal)
+                .Select(n => n.Value)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var stickyConfig in stickyConfigNames)
+            {
+                if (existingNames.Add(stickyConfig))
+                {
+                    existingSlotConfigNames.AppSettingNames.Add(stickyConfig);
+                }
+            }
+
+            return;
+        }
+
         SlotConfigNames slotConfigNames = new("slotConfigNames")
         {
             Parent = parentWebSite
