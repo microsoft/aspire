@@ -1672,6 +1672,31 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Contains("apim.outputs.principalId", rolesManifest.ToJsonString());
     }
 
+    [Fact]
+    public async Task BackendRoleAssignmentDiscoveryUsesResourceMetadataInsteadOfGeneratedName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var account = builder.AddAzureOpenAI("openai")
+            .PublishAsExisting("shared-openai", resourceGroup: "ai-resources");
+        var deployment = account.AddDeployment("chat", "gpt-5-mini", "2025-08-07");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        apim.AddAzureOpenAIBackend("openai-backend", deployment);
+        var roleAssignments = new AzureRoleAssignmentResource("custom-roles", account.Resource, null, null, _ => { });
+        roleAssignments.References.Add(apim.Resource);
+        builder.AddResource(roleAssignments);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Same(
+            roleAssignments,
+            Assert.Single(builder.Resources.OfType<AzureRoleAssignmentResource>(),
+                resource => resource.TargetAzureResource == account.Resource && resource.References.Contains(apim.Resource)));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

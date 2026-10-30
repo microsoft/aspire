@@ -182,7 +182,7 @@ When you add a private endpoint to an Azure resource:
 3. A DNS Zone Group is created on the private endpoint for automatic DNS registration
 4. The target resource is automatically configured to deny public network access when supported by its integration
 
-API Management is an exception: adding a private endpoint leaves its public network access unchanged. Disable public access separately after configuring and approving the private endpoint if you need a private-only gateway.
+Check the target integration's documentation for exceptions and any separate configuration required to restrict public access. Adding a private endpoint alone does not guarantee private-only access.
 
 To override the automatic network lockdown, use `ConfigureInfrastructure`:
 

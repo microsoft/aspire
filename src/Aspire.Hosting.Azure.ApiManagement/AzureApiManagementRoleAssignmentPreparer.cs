@@ -21,6 +21,11 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 internal static class AzureApiManagementRoleAssignmentPreparer
 {
+    // Backend policies use APIM's system-assigned identity, including for read-only adopted services.
+    // The standard targeted-role path requires a user-assigned identity; switching would change
+    // backend authentication and require attaching that identity to services we do not own.
+    // Key Vault role modules also need explicit references so they finish before APIM consumes secrets.
+
     /// <summary>
     /// Registers publish preparation after the application model has its final backend and Key Vault configuration.
     /// </summary>
@@ -137,15 +142,17 @@ internal static class AzureApiManagementRoleAssignmentPreparer
                 $"{apiManagement.Name}-roles-{target.Name}",
                 64);
 
-            if (context.Model.Resources.TryGetByName(resourceName, out var existingResource))
+            var existingRoleAssignments = context.Model.Resources.OfType<AzureRoleAssignmentResource>()
+                .SingleOrDefault(resource =>
+                    resource.TargetAzureResource == target &&
+                    resource.References.Contains(apiManagement));
+            if (existingRoleAssignments is not null)
             {
-                if (existingResource is AzureRoleAssignmentResource existingRoleAssignments &&
-                    existingRoleAssignments.TargetAzureResource == target &&
-                    existingRoleAssignments.References.Contains(apiManagement))
-                {
-                    continue;
-                }
+                continue;
+            }
 
+            if (context.Model.Resources.TryGetByName(resourceName, out _))
+            {
                 throw new DistributedApplicationException(
                     $"Cannot create API Management role assignments '{resourceName}' because a resource with that name already exists.");
             }

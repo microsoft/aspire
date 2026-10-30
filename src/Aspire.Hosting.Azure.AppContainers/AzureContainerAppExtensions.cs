@@ -951,16 +951,16 @@ public static class AzureContainerAppExtensions
             Value = containerAppEnvironment.DefaultDomain.ToBicepExpression()
         });
 
-        // Always emitted, regardless of whether this environment is internal: this property reads
-        // directly from the managed environment resource (including "existing" references), which
-        // simply returns null/empty when the environment has no internal ingress. Internal load
-        // balancer consumers (IAzureInternalIngressResource.StaticIp) can only read this output
-        // after WithInternalLoadBalancer has configured the environment to be internal, so the output
-        // being unconditionally present does not change observable behavior for external environments.
-        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", typeof(string))
+        // Express environments do not expose properties.staticIp; ARM fails output evaluation
+        // when a missing property is read. Only internal environments need this DNS output.
+        if (infra.AspireResource is AzureContainerAppEnvironmentResource { IsExpress: false } appEnvironment &&
+            appEnvironment.HasAnnotationOfType<InternalLoadBalancerAnnotation>())
         {
-            Value = containerAppEnvironment.StaticIP.ToBicepExpression()
-        });
+            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", typeof(string))
+            {
+                Value = containerAppEnvironment.StaticIP.ToBicepExpression()
+            });
+        }
 
         // The region of the environment, for resources that connect to it, such as the private endpoint that
         // Azure Front Door Private Link creates. A managed environment returns a display name such as 'West US 2',

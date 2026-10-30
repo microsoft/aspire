@@ -29,9 +29,9 @@ public static class AzurePrivateEndpointExtensions
     /// </para>
     /// <para>
     /// When supported by the target integration, the target resource (or its parent) is automatically
-    /// configured to deny public network access. API Management leaves public network access unchanged;
-    /// disabling it requires a separate update after the private endpoint is configured and approved.
-    /// To override automatic lockdown for other targets, use
+    /// configured to deny public network access. Check the target integration's documentation for
+    /// exceptions and any separate configuration required to restrict public access.
+    /// To override automatic lockdown, use
     /// <see cref="AzureProvisioningResourceExtensions.ConfigureInfrastructure{T}"/> to customize
     /// the network settings.
     /// </para>
