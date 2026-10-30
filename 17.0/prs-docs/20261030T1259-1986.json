@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "aspire.dev site/docs fix with no matching changelog entry",
+  "mergedAt": "2026-10-30T12:59:24Z",
+  "number": 1986,
+  "runDate": "2026-10-30T18:10:00Z",
+  "status": "excluded",
+  "title": "Isolate Developer Hub E2E layout tests from the region-gated WCP banner"
+}

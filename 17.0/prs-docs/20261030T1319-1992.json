@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "aspire.dev site/docs fix with no matching changelog entry",
+  "mergedAt": "2026-10-30T13:19:13Z",
+  "number": 1992,
+  "runDate": "2026-10-30T18:10:00Z",
+  "status": "excluded",
+  "title": "Keep the dashboard tour view chosen before it activates"
+}

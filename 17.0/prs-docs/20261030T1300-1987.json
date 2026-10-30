@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "aspire.dev site/docs fix with no matching changelog entry",
+  "mergedAt": "2026-10-30T13:00:07Z",
+  "number": 1987,
+  "runDate": "2026-10-30T18:10:00Z",
+  "status": "excluded",
+  "title": "Drop 404 hreflang alternates on English-only pages"
+}

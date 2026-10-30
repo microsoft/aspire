@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "aspire.dev site/docs fix with no matching changelog entry",
+  "mergedAt": "2026-10-30T15:44:29Z",
+  "number": 1998,
+  "runDate": "2026-10-30T18:10:00Z",
+  "status": "excluded",
+  "title": "Replace removed AddNpmApp in the What is Aspire C# AppHost sample"
+}

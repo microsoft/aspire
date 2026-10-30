@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Interactive template prompts can now show a default derived from the project name via an opt-in `defaultValueSource` setting, so optional parameters no longer appear empty when pressing Enter generates a meaningful value.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udc40",
+  "firstMergedAt": "2026-10-30T14:43:34Z",
+  "lastMergedAt": "2026-10-30T14:43:34Z",
+  "name": "Project-derived defaults in template prompts",
+  "owner": "mitchdenny",
+  "prs": [
+    21420
+  ]
+}

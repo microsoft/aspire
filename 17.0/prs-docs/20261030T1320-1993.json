@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "aspire.dev site/docs fix with no matching changelog entry",
+  "mergedAt": "2026-10-30T13:20:41Z",
+  "number": 1993,
+  "runDate": "2026-10-30T18:10:00Z",
+  "status": "excluded",
+  "title": "Start the homepage environment fade even when a long task delays the next frame"
+}

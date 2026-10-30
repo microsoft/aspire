@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only (VS Code E2E) stability fix",
+  "mergedAt": "2026-10-30T17:51:00Z",
+  "number": 21444,
+  "runDate": "2026-10-30T18:10:00Z",
+  "status": "excluded",
+  "title": "Wait for breakpoint removal before detaching in resource debug attach proof"
+}

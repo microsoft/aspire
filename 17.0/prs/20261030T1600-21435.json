@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "DCP stop hang fix",
+  "mergedAt": "2026-10-30T16:00:05Z",
+  "number": 21435,
+  "runDate": "2026-10-30T18:10:00Z",
+  "status": "included",
+  "title": "Complete DCP stop when the API server exits before acknowledging the stop request"
+}

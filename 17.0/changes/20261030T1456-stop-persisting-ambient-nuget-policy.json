@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Creating or updating an AppHost no longer copies machine-specific NuGet feeds, mappings, or a mapping `<clear />` into the project's `nuget.config`, so generated projects no longer depend on the generating machine's configuration.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\uddf9",
+  "firstMergedAt": "2026-10-30T14:56:27Z",
+  "lastMergedAt": "2026-10-30T14:56:27Z",
+  "name": "Stop persisting ambient NuGet policy into AppHost configs",
+  "owner": "danegsta",
+  "prs": [
+    21373
+  ]
+}

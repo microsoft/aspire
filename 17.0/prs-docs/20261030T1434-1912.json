@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents #20856, which was excluded as non-user-facing",
+  "mergedAt": "2026-10-30T14:34:15Z",
+  "number": 1912,
+  "runDate": "2026-10-30T18:10:00Z",
+  "status": "excluded",
+  "title": "[docs] Update StorageMinimumTlsVersion.Tls1_2 to Tls12 for Azure.Provisioning.Storage 1.2.0"
+}

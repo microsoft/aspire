@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed an intermittent hang in `DistributedApplication.StopAsync` when the DCP API server exits before acknowledging the stop request.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\uded1",
+  "firstMergedAt": "2026-10-30T16:00:05Z",
+  "lastMergedAt": "2026-10-30T16:00:05Z",
+  "name": "Complete DCP stop when API server exits early",
+  "owner": "davidfowl",
+  "prs": [
+    21435
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Stops dotnet CLI OTLP export",
+  "mergedAt": "2026-10-30T15:50:19Z",
+  "number": 21454,
+  "runDate": "2026-10-30T18:10:00Z",
+  "status": "included",
+  "title": "Stop dotnet CLI from exporting its own OTLP telemetry for project resources"
+}

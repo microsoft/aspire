@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Aspire now falls back to the default container host name when DCP reports an empty one, avoiding malformed endpoints such as `http://:4317` for containers exporting telemetry.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc33",
+  "firstMergedAt": "2026-10-30T15:51:53Z",
+  "lastMergedAt": "2026-10-30T15:51:53Z",
+  "name": "Fall back to default container host name",
+  "owner": "davidfowl",
+  "prs": [
+    21432
+  ]
+}

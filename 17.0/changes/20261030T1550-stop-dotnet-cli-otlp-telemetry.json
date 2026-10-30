@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Project resources launched on the .NET 11 SDK no longer show unattributed `dotnet-cli-<id>` resources and spans in the dashboard from the dotnet CLI exporting its own OTLP telemetry.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd07",
+  "firstMergedAt": "2026-10-30T15:50:19Z",
+  "lastMergedAt": "2026-10-30T15:50:19Z",
+  "name": "Stop dotnet CLI exporting its own OTLP telemetry",
+  "owner": "davidfowl",
+  "prs": [
+    21454
+  ]
+}

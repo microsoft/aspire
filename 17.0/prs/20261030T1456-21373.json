@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "NuGet config persistence fix",
+  "mergedAt": "2026-10-30T14:56:27Z",
+  "number": 21373,
+  "runDate": "2026-10-30T18:10:00Z",
+  "status": "included",
+  "title": "Stop persisting ambient NuGet policy into AppHost configs"
+}

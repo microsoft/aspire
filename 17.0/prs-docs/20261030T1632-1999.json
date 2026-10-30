@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "aspire.dev site/docs fix with no matching changelog entry",
+  "mergedAt": "2026-10-30T16:32:36Z",
+  "number": 1999,
+  "runDate": "2026-10-30T18:10:00Z",
+  "status": "excluded",
+  "title": "Fix the Keycloak Admin Client NuGet link"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Container host name fallback",
+  "mergedAt": "2026-10-30T15:51:53Z",
+  "number": 21432,
+  "runDate": "2026-10-30T18:10:00Z",
+  "status": "included",
+  "title": "Fall back to default container host name when DCP reports an empty one"
+}
