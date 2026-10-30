@@ -2811,6 +2811,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             foreach (var completedResource in completedResources)
             {
                 var properties = completedResource.Snapshot.Properties;
+                Assert.Equal("Project", completedResource.Snapshot.ResourceType);
+                Assert.Equal(
+                    resource.Resource.GetProjectMetadata().ProjectPath,
+                    Assert.Single(properties, property => property.Name == "project.path").Value);
                 Assert.Equal("direct", Assert.Single(properties, property => property.Name == "project.launchCommand").Value);
                 Assert.Equal(
                     KnownLaunchConfigurationTypes.ProjectWithExternalBuild,
