@@ -434,28 +434,55 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         );
     }
 
-    public Task StopServerAsync(string resourceCleanup = ResourceCleanup.Full, CancellationToken cancellationToken = default)
+    public async Task StopServerAsync(string resourceCleanup = ResourceCleanup.Full, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        return ExecuteWithRetry(
-            DcpApiOperationType.ServerStop,
-            DcpExecutionResourceType,
-            async (kubernetes, operationCancellationToken) =>
+        // DCP shuts down its API server while handling the stop request, so the response can be lost
+        // even though the request took effect. A server that accepted a connection for an earlier attempt
+        // and now refuses connections has stopped; retrying would only wait for the full API timeout.
+        var apiServerWasReachable = false;
+
+        bool IsRetryable(Exception ex)
+        {
+            if (ex is HttpRequestException { HttpRequestError: HttpRequestError.ConnectionError })
             {
-                await kubernetes.PatchExecutionDocumentAsync(
-                    new ApiServerExecution
-                    {
-                        ApiServerStatus = ApiServerStatus.Stopping,
-                        ShutdownResourceCleanup = ResourceCleanup.Full
-                    },
-                    operationCancellationToken
-                    ).ConfigureAwait(false);
-                return (object?)null;
-            },
-            RetryOnConnectivityErrors,
-            cancellationToken
-        );
+                return !apiServerWasReachable;
+            }
+
+            if (ex is HttpRequestException)
+            {
+                apiServerWasReachable = true;
+            }
+
+            return RetryOnConnectivityErrors(ex);
+        }
+
+        try
+        {
+            await ExecuteWithRetry(
+                DcpApiOperationType.ServerStop,
+                DcpExecutionResourceType,
+                async (kubernetes, operationCancellationToken) =>
+                {
+                    await kubernetes.PatchExecutionDocumentAsync(
+                        new ApiServerExecution
+                        {
+                            ApiServerStatus = ApiServerStatus.Stopping,
+                            ShutdownResourceCleanup = ResourceCleanup.Full
+                        },
+                        operationCancellationToken
+                        ).ConfigureAwait(false);
+                    return (object?)null;
+                },
+                IsRetryable,
+                cancellationToken
+            ).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex) when (apiServerWasReachable && ex.HttpRequestError == HttpRequestError.ConnectionError)
+        {
+            logger.LogDebug(ex, "The DCP API server stopped before acknowledging the stop request.");
+        }
     }
 
     public async Task CleanupResourcesAsync(CancellationToken cancellationToken = default)

@@ -162,9 +162,17 @@ internal sealed class InitCommand : BaseCommand
         var configSource = await ConfigSources.SelectForInitializationAsync(configurationDirectory, parseResult, cancellationToken);
 
         // Step 3: Drop the skeleton AppHost and any related config files needed for that mode.
-        var dropResult = isCSharp
-            ? await DropCSharpSkeletonAsync(workingDirectory, solutionFile, cancellationToken)
-            : await DropPolyglotSkeletonAsync(selectedProject.LanguageId, workingDirectory, cancellationToken);
+        int dropResult;
+        try
+        {
+            dropResult = isCSharp
+                ? await DropCSharpSkeletonAsync(workingDirectory, solutionFile, cancellationToken)
+                : await DropPolyglotSkeletonAsync(selectedProject.LanguageId, workingDirectory, cancellationToken);
+        }
+        catch (ProjectUpdaterException ex)
+        {
+            return CommandResult.Failure(CliExitCodes.FailedToCreateNewProject, ex.Message);
+        }
 
         if (dropResult != CliExitCodes.Success)
         {

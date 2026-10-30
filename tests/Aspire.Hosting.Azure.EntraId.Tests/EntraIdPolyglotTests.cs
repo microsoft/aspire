@@ -17,6 +17,7 @@ public class EntraIdPolyglotTests
 {
     private const string TenantId = "aaaabbbb-0000-cccc-1111-dddd2222eeee";
     private const string ClientId = "00001111-aaaa-2222-bbbb-3333cccc4444";
+    private const string CertificateCapabilityId = "Aspire.Hosting.Azure.EntraId/runWithLocalDeveloperCertificateCredential";
 
     [Theory]
     [InlineData(false, false)]
@@ -166,6 +167,44 @@ public class EntraIdPolyglotTests
         Assert.Throws<ArgumentException>(() => entra.WithCertificateFromFileForExport(""));
         Assert.Throws<ArgumentException>(() => entra.WithSignedAssertionFileForExport(""));
         Assert.Empty(entra.Resource.ClientCredentials);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public void LocalDeveloperCertificate_ExportMatchesTheCSharpMethod(DistributedApplicationOperation operation)
+    {
+        var exports = ScanExports();
+        var capability = Assert.Single(exports.Capabilities, c => c.CapabilityId == CertificateCapabilityId);
+        Assert.Equal("runWithLocalDeveloperCertificateCredential", capability.MethodName);
+        var method = exports.Methods[CertificateCapabilityId];
+
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        var entra = builder.AddEntraIdApplication("entra-web");
+        Assert.Same(entra, method.Invoke(null, [entra]));
+        Assert.Same(entra, method.Invoke(null, [entra]));
+
+        if (operation == DistributedApplicationOperation.Run)
+        {
+            Assert.IsType<EntraIdLocalDeveloperCertificateCredential>(Assert.Single(entra.Resource.ClientCredentials));
+        }
+        else
+        {
+            Assert.Empty(entra.Resource.ClientCredentials);
+        }
+    }
+
+    [Fact]
+    public void LocalDeveloperCertificate_ExportRejectsExistingApplicationsWithoutMutation()
+    {
+        var method = ScanExports().Methods[CertificateCapabilityId];
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var existing = builder.AddExistingEntraApplicationForExport("existing", TenantId, ClientId);
+
+        var exception = Assert.Throws<TargetInvocationException>(() => method.Invoke(null, [existing]));
+
+        Assert.IsType<InvalidOperationException>(exception.GetBaseException());
+        Assert.Empty(existing.Resource.ClientCredentials);
     }
 
     [Theory]

@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
@@ -12,6 +12,7 @@ using Aspire.Dashboard.Authentication.Connection;
 using Aspire.Dashboard.Authentication.OpenIdConnect;
 using Aspire.Dashboard.Authentication.OtlpApiKey;
 using Aspire.Dashboard.Components;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Shared;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Configuration;
@@ -136,14 +137,20 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     /// <param name="preConfigureBuilder">Configuration for the internal app builder *before* normal dashboard configuration is done. This is for unit testing.</param>
     /// <param name="options">Environment configuration for the internal app builder. This is for unit testing</param>
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Layout.MainLayout))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Layout.ResourcesLayout))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(ConsoleLogs))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Error))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Pages.Extensions))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(GraphRedirect))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Home))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Login))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Metrics))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(NotFound))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(ParametersRedirect))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(ResourceOverview))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Pages.Resources))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(StructuredLogs))]
-    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Terminals))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Pages.Terminals))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(TerminalWindow))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(TraceDetail))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Traces))]
@@ -152,6 +159,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         Action<WebApplicationBuilder>? preConfigureBuilder = null,
         WebApplicationOptions? options = null)
     {
+        DashboardExperienceComponents.PreserveLegacyComponents();
+
         var startupTimestamp = Stopwatch.GetTimestamp();
 
         // Workaround MaxItemCount regression. In .NET 8 the value is set via AppContext.
@@ -224,6 +233,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Telemetry must be available before options validation so failed startup attempts
         // can be recorded even though the host never starts.
         builder.Services.TryAddScoped<ComponentTelemetryContextProvider>();
+        builder.Services.TryAddSingleton(new DashboardExperienceAvailability(DashboardExperienceComponents.IsLegacyAvailable));
         builder.Services.TryAddSingleton<DashboardTelemetryService>();
         builder.Services.TryAddSingleton(services => DashboardTelemetryConfiguration.Create(
             services.GetRequiredService<IConfiguration>()));
@@ -379,6 +389,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddGrpc();
         builder.Services.AddSingleton<DashboardRunStore>();
         builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
+        builder.Services.AddSingleton<ResourceTagStore>();
+        builder.Services.AddSingleton<ResourceOrderStore>();
+        builder.Services.AddSingleton<MetricPinStore>();
         // TryAdd for the same reason as IDashboardClient above: the factory decides which resource repository the
         // dashboard reads from, so a substituted client is only actually reachable if its factory survives too.
         builder.Services.TryAddSingleton<IRepositoryFactory, RepositoryFactory>();
@@ -408,6 +421,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddScoped<IDialogService>(services => services.GetRequiredService<NavigationDialogService>());
 
         builder.Services.AddSingleton<IconResolver>();
+        builder.Services.AddSingleton<IVolumePathLauncher, VolumePathLauncher>();
 
         builder.Services.AddScoped<IThemeResolver, BrowserThemeResolver>();
         builder.Services.AddScoped<ThemeManager>();
@@ -440,7 +454,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             () => _otlpServiceGrpcEndPointAccessor?.Invoke(),
             () => _otlpServiceHttpEndPointAccessor?.Invoke()));
         builder.Services.AddScoped<DashboardMessageBarService>();
+        builder.Services.AddScoped<ParameterInteractionState>();
         builder.Services.AddScoped<ResourceMenuBuilder>();
+        builder.Services.AddScoped<ResourcePaneState>();
+        builder.Services.AddScoped<TerminalDockState>();
+        builder.Services.AddScoped<DashboardViewPreferences>();
         builder.Services.AddScoped<StructuredLogMenuBuilder>();
         builder.Services.AddScoped<SpanMenuBuilder>();
         builder.Services.AddScoped<TraceMenuBuilder>();
@@ -532,12 +550,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // This is done to avoid immediately navigating in the Blazor app.
         _app.Use(async (context, next) =>
         {
-            if (context.Request.Path.Equals(TargetLocationInterceptor.ResourcesPath, StringComparisons.UrlPath))
+            if (context.Request.Path.Value is { } requestPath && TargetLocationInterceptor.GetStandaloneLocation(requestPath) is { } standaloneLocation)
             {
                 var client = context.RequestServices.GetRequiredService<IDashboardClient>();
                 if (!client.IsEnabled)
                 {
-                    context.Response.Redirect(TargetLocationInterceptor.StructuredLogsPath);
+                    context.Response.Redirect(standaloneLocation);
                     return;
                 }
             }
@@ -560,6 +578,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
 
         _app.UseMiddleware<ValidateTokenMiddleware>();
+        _app.UseMiddleware<DashboardExperienceRedirectMiddleware>();
 
         // Configure the HTTP request pipeline.
         if (!_app.Environment.IsDevelopment())

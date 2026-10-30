@@ -713,7 +713,15 @@ internal sealed class NewCommand : BaseCommand
             Channel = resolvedChannelName,
             Language = selectedLanguageId
         };
-        var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
+        TemplateResult templateResult;
+        try
+        {
+            templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
+        }
+        catch (ProjectUpdaterException ex)
+        {
+            return CommandResult.Failure(CliExitCodes.FailedToCreateNewProject, ex.Message);
+        }
 
         return await CompleteTemplateAsync(templateResult, configSource, parseResult, cancellationToken);
     }
@@ -767,6 +775,10 @@ internal sealed class NewCommand : BaseCommand
         catch (TemplateDiscoveryException ex)
         {
             return CommandResult.Failure(ex.ExitCode, ex.Message);
+        }
+        catch (ProjectUpdaterException ex)
+        {
+            return CommandResult.Failure(CliExitCodes.FailedToCreateNewProject, ex.Message);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {

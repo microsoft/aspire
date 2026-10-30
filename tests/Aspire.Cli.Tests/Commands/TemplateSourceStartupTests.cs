@@ -64,8 +64,8 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("--log-level Debug template source add company --repository https://example.com/other", false, CliExitCodes.InvalidCommand)]
-    [InlineData("--log-level Debug template source add company --repository https://example.com/other", true, CliExitCodes.InvalidCommand)]
+    [InlineData("--log-level Debug template source add company --repository https://example.com/other --yes", false, CliExitCodes.InvalidCommand)]
+    [InlineData("--log-level Debug template source add company --repository https://example.com/other --yes", true, CliExitCodes.InvalidCommand)]
     [InlineData("template --nologo source remove missing", false, CliExitCodes.ConfigNotFound)]
     [InlineData("template --nologo source remove missing", true, CliExitCodes.InvalidCommand)]
     public void RejectedCommand_PreservesGlobalAndProjectConfigurationBytes(string arguments, bool legacyGlobal, int exitCode)
@@ -105,7 +105,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
         var (arguments, expected) = action switch
         {
             "add" => (
-                "template source add extra --repository https://example.com/other",
+                "template source add extra --repository https://example.com/other --yes",
                 """{"features":{"defaultWatchEnabled":true},"templateSources":{"company":{"repository":"https://example.com/templates"},"extra":{"repository":"https://example.com/other"}}}"""),
             "remove" => (
                 "template source remove company",
@@ -131,13 +131,13 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
             """{"features":{"defaultWatchEnabled":false}}""");
 
         RunStartup(home.FullName, workspace.Path,
-            "template source add company --repository https://example.com/templates", CliExitCodes.InvalidCommand);
+            "template source add company --repository https://example.com/templates --yes", CliExitCodes.InvalidCommand);
         Assert.False(File.Exists(migratedPath));
         var legacy = File.ReadAllText(legacyPath);
 
         RunStartup(home.FullName, workspace.Path, "config info", CliExitCodes.Success);
         RunStartup(home.FullName, workspace.Path,
-            "template source add company --repository https://example.com/templates", CliExitCodes.Success,
+            "template source add company --repository https://example.com/templates --yes", CliExitCodes.Success,
             expectedSourceRepository: "https://example.com/templates");
 
         Assert.True(File.Exists(migratedPath));
@@ -169,7 +169,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("template source list")]
-    [InlineData("template source add extra --repository https://example.com/extra")]
+    [InlineData("template source add extra --repository https://example.com/extra --yes")]
     [InlineData("template source remove company")]
     public void SourceCommands_RejectLegacyConfigurationWithoutWaitingForMutationLock(string arguments)
     {

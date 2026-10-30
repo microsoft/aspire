@@ -145,6 +145,11 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
             },
             env =>
             {
+                Assert.Equal("DOTNET_CLI_TELEMETRY_OPTOUT", env.Key);
+                Assert.Equal("true", env.Value);
+            },
+            env =>
+            {
                 Assert.Equal("OTEL_DOTNET_EXPERIMENTAL_ASPNETCORE_DISABLE_URL_QUERY_REDACTION", env.Key);
                 Assert.Equal("true", env.Value);
             },

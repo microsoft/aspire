@@ -156,6 +156,25 @@ public class AtsGoDerivedBuilderTests
     }
 
     [Fact]
+    public void ApiExport_UnionAllowedTypesListTheAcceptingInterfaceOfABaseHandle()
+    {
+        var model = new AtsGoCodeGenerator().BuildApiModel(
+            DerivedBuilderFixture.CreateContext(),
+            "Tests.Derived",
+            "1.0.0",
+            ["Tests.Derived"],
+            CancellationToken.None);
+
+        var workload = Assert.Single(model.Modules.Single().Items, item => item.Id == "interface:WorkloadResource");
+        var pool = Assert.Single(Assert.Single(workload.Members, member => member.Name == "WithPoolOrName").Parameters);
+
+        // The union holds the base handle type, so the guard accepts derived builders through its accepting
+        // interface and the reference has to list that interface, not the concrete handle type.
+        Assert.Equal<string>(["AnyPoolResource", "string"], pool.AllowedTypes);
+        Assert.Contains($"case {string.Join(", ", pool.AllowedTypes)}:", GenerateFixtureSdk(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void GeneratedCode_ReturnTypesStayConcreteAndFluent()
     {
         var generated = GenerateFixtureSdk();

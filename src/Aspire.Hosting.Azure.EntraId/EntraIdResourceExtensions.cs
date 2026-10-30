@@ -7,6 +7,7 @@ using System.Collections.Immutable;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -507,6 +508,7 @@ public static class EntraIdResourceExtensions
     /// <param name="tenantId">A parameter containing the registration's home tenant ID.</param>
     /// <param name="clientId">A parameter containing the registration's application (client) ID.</param>
     /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="InvalidOperationException">A local developer certificate is configured on the registration.</exception>
     /// <remarks>
     /// <para>
     /// Parameter values are validated when the application starts. The tenant ID must be a GUID or a domain such as
@@ -535,9 +537,10 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(tenantId);
         ArgumentNullException.ThrowIfNull(clientId);
 
+        ConfigureExistingApplication(builder);
         builder.Resource.TenantIdParameter = tenantId.Resource;
         builder.Resource.ClientIdParameter = clientId.Resource;
-        return ConfigureExistingApplication(builder);
+        return builder;
     }
 
     /// <summary>
@@ -548,6 +551,7 @@ public static class EntraIdResourceExtensions
     /// <param name="clientId">The registration's application (client) ID.</param>
     /// <returns>The resource builder for chaining.</returns>
     /// <exception cref="ArgumentException">A tenant ID or client ID is empty or invalid.</exception>
+    /// <exception cref="InvalidOperationException">A local developer certificate is configured on the registration.</exception>
     /// <remarks>
     /// <para>
     /// Pass the home tenant ID, not a sign-in keyword such as <c>organizations</c>.
@@ -577,9 +581,10 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ValidateExistingApplicationIds(tenantId, clientId);
 
+        ConfigureExistingApplication(builder);
         builder.Resource.TenantId = tenantId;
         builder.Resource.ClientId = clientId;
-        return ConfigureExistingApplication(builder);
+        return builder;
     }
 
     /// <summary>
@@ -600,6 +605,8 @@ public static class EntraIdResourceExtensions
         [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object clientId)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        // Reject incompatible registrations before touching any state, so a failed conversion leaves the IDs unchanged.
+        builder.Resource.EnsureCanBeExistingApplication();
         SetExistingApplicationIds(builder.Resource, tenantId, clientId);
         return ConfigureExistingApplication(builder);
     }
@@ -632,6 +639,64 @@ public static class EntraIdResourceExtensions
     {
         builder.Resource.SetExistingApplication();
         return builder.ExcludeFromManifest();
+    }
+
+    /// <summary>
+    /// Creates and provisions a short-lived certificate credential for local development.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="InvalidOperationException">The registration is an existing application, which Aspire never modifies.</exception>
+    /// <remarks>
+    /// <para>
+    /// Each application gets a dedicated certificate in the AppHost's local store. Certificates last two days;
+    /// on a subsequent run, a certificate with one day or less remaining is replaced by overwriting its PFX file.
+    /// Only the public certificate is provisioned in Entra. Referencing applications receive the private
+    /// credential as a secret <c>Base64EncodedValue</c> in Microsoft.Identity.Web's <c>ClientCredentials</c> configuration.
+    /// Aspire replaces the registration's entire <c>keyCredentials</c> collection with the selected certificate.
+    /// Existing certificate credentials are not retained, so older sessions must restart after renewal.
+    /// </para>
+    /// <para>
+    /// Development and production must use separate Entra registrations. Never register developer certificates
+    /// on a production application. Different resource groups do not isolate tenant-scoped registrations:
+    /// use distinct registration names or tenant-resource suffixes. This method has no effect when publishing;
+    /// omitting a credential from publish does not revoke a key previously registered against the same application.
+    /// </para>
+    /// <para>
+    /// Renewal is checked at AppHost startup, not in the background. Restart long-running development sessions
+    /// before the certificate expires. Use <c>PublishWithFederatedManagedIdentityCredential</c> for deployed workloads.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// // Use different Azure:TenantResourceSuffix values for development and production.
+    /// var entra = builder.AddEntraIdApplication("entra-web")
+    ///     .RunWithLocalDeveloperCertificateCredential()
+    ///     .PublishWithFederatedManagedIdentityCredential();
+    ///
+    /// builder.AddProject&lt;Projects.Web&gt;("web").WithReference(entra);
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<EntraIdApplicationResource> RunWithLocalDeveloperCertificateCredential(
+        this IResourceBuilder<EntraIdApplicationResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        if (builder.Resource.IsExistingApplication)
+        {
+            throw new InvalidOperationException("Local developer certificates can only be provisioned for registrations created by Aspire. Existing registrations remain caller-managed.");
+        }
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode ||
+            builder.Resource.ClientCredentials.OfType<EntraIdLocalDeveloperCertificateCredential>().Any())
+        {
+            return builder;
+        }
+
+        builder.ApplicationBuilder.Services.TryAddSingleton(TimeProvider.System);
+        builder.ApplicationBuilder.Services.TryAddSingleton<LocalDeveloperCertificateStore>();
+        builder.Resource.ClientCredentials.Add(new EntraIdLocalDeveloperCertificateCredential(builder.Resource, builder.ApplicationBuilder.ExecutionContext));
+        return builder;
     }
 
     /// <summary>

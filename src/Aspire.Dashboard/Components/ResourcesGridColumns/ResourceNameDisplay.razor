@@ -5,28 +5,41 @@
 @inject IStringLocalizer<Columns> Loc
 @inject IconResolver IconResolver
 
-<span class="resource-name-container">
-    @* Do this to trim significant whitespace so there isn't a space added between icon and text *@
-    @{
-        <FluentIcon Width="16px"
+@{
+    var showBadge = Resource.IsPersistentContainer && !DashboardExperienceComponents.IsLegacyLocation(NavigationManager);
+    RenderFragment resourceIcon = @<FluentIcon Width="16px"
                     Class="resource-icon"
                     Color="Color.Custom"
                     CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(FormatName(Resource))"
-                    Value="@ResourceIconHelpers.GetIconForResource(IconResolver, Resource, IconSize.Size16)" />
+                    Value="@ResourceIconHelpers.GetIconForResource(IconResolver, Resource, IconSize.Size16)" />;
+}
+
+<span class="resource-name-container">
+    @* Do this to trim significant whitespace so there isn't a space added between icon and text *@
+    @{
+        @if (showBadge)
+        {
+            <span class="modern-resource-icon">
+                @resourceIcon
+                <PersistentContainerBadge Resource="@Resource" />
+            </span>
+        }
+        else
+        {
+            @resourceIcon
+        }
     }
     @{
         <span class="resource-name-text"><FluentHighlighter HighlightedText="@FilterText" Text="@FormatName(Resource)" /></span>
     }
-    @if (Resource.Properties.TryGetValue(KnownProperties.Container.Lifetime, out var value) &&
-        value.Value.HasStringValue &&
-        string.Equals(value.Value.StringValue, KnownContainerLifetimes.Persistent, StringComparison.Ordinal))
+    @if (Resource.IsPersistentContainer && !showBadge)
     {
-        <FluentIcon Icon="Icons.Regular.Size16.Pin" Title="@Loc[nameof(Columns.PersistentContainerIconTooltip)]"
+        <FluentIcon Icon="Icons.Regular.Size16.Pin" data-tooltip="@Loc[nameof(Columns.PersistentContainerIconTooltip)]" aria-label="@Loc[nameof(Columns.PersistentContainerIconTooltip)]"
             Color="Color.Default" Class="persistent-container-icon" />
     }
     @if (ShowHiddenIndicator && Resource.IsResourceHidden(showHiddenResources: false))
     {
-        <FluentIcon Icon="Icons.Regular.Size16.EyeOff" Title="@Loc[nameof(Columns.HiddenResourceIconTooltip)]"
+        <FluentIcon Icon="Icons.Regular.Size16.EyeOff" data-tooltip="@Loc[nameof(Columns.HiddenResourceIconTooltip)]" aria-label="@Loc[nameof(Columns.HiddenResourceIconTooltip)]"
             Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" Class="resource-hidden-icon" />
     }
 </span>
@@ -46,10 +59,4 @@
     [Parameter, EditorRequired]
     public required bool ShowHiddenIndicator { get; set; }
 
-    private static class KnownContainerLifetimes
-    {
-        // Matches members from Aspire.Hosting.ApplicationModel.ContainerLifetime
-        public const string Session = nameof(Session);
-        public const string Persistent = nameof(Persistent);
-    }
 }

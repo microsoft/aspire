@@ -49,6 +49,7 @@
     "workspaceContains:**/apphost.mjs",
     "workspaceContains:**/apphost.cjs",
     "workspaceContains:**/apphost.rs",
+    "workspaceContains:**/apphost.go",
     "workspaceContains:**/AppHost.java",
     "workspaceContains:**/apphost.java",
     "workspaceContains:**/src/main/java/AppHost.java",
@@ -869,12 +870,12 @@
       "explorer/context": [
         {
           "command": "aspire-vscode.runAppHostFromExplorer",
-          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs|rs|java)$/i",
+          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs|rs|java|go)$/i",
           "group": "aspire_actions@1"
         },
         {
           "command": "aspire-vscode.debugAppHostFromExplorer",
-          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs|rs|java)$/i",
+          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs|rs|java|go)$/i",
           "group": "aspire_actions@2"
         }
       ],

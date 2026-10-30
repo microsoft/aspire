@@ -2,44 +2,129 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../Layout.resx">
     <body>
-      <trans-unit id="DashboardRunSelectAccessibleLabel">
+      <trans-unit id="DashboardRunMenuAccessibleLabel">
         <source>Select run: {0}</source>
         <target state="translated">Selecionar execução: {0}</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardRunSelectCurrent">
+      <trans-unit id="DashboardRunMenuCurrent">
         <source>Live run</source>
         <target state="translated">Execução em tempo real</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardRunSelectHelp">
+      <trans-unit id="DashboardRunMenuHelp">
         <source>Learn about runs</source>
         <target state="translated">Saiba mais sobre as execuções</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardRunSelectHelpTooltip">
+      <trans-unit id="DashboardRunMenuHelpTooltip">
         <source>Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</source>
         <target state="translated">Alterne entre a execução em tempo real e os dados de somente leitura de execuções anteriores. Fixe uma execução para impedir que ela seja excluída automaticamente.</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardRunSelectIncompatibleTooltip">
+      <trans-unit id="DashboardRunMenuIncompatibleTooltip">
         <source>This run can't be viewed because it was created by an incompatible version of the dashboard.</source>
         <target state="translated">Esta execução não pode ser exibida porque foi criada por uma versão incompatível do dashboard.</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardRunSelectPin">
+      <trans-unit id="DashboardRunMenuPin">
         <source>Pin run</source>
         <target state="translated">Fixar execução</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardRunSelectTitle">
+      <trans-unit id="DashboardRunMenuTitle">
         <source>Select dashboard run</source>
         <target state="translated">Selecionar a execução de painel</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardRunSelectUnpin">
+      <trans-unit id="DashboardRunMenuUnpin">
         <source>Unpin run</source>
         <target state="translated">Desafixar execução</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectAccessibleLabel">
+        <source>Recordings, viewing {0}</source>
+        <target state="new">Recordings, viewing {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectCurrent">
+        <source>Live view</source>
+        <target state="new">Live view</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectDayAgo">
+        <source>1 day ago</source>
+        <target state="new">1 day ago</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectDaysAgo">
+        <source>{0} days ago</source>
+        <target state="new">{0} days ago</target>
+        <note>{0} is the number of days</note>
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectHelp">
+        <source>Learn about recordings</source>
+        <target state="new">Learn about recordings</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectHelpTooltip">
+        <source>Switch between the live view and read-only recordings of previous runs. Protect a recording from deletion to keep it when older recordings are automatically removed.</source>
+        <target state="new">Switch between the live view and read-only recordings of previous runs. Protect a recording from deletion to keep it when older recordings are automatically removed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectHoursAgo">
+        <source>{0}h ago</source>
+        <target state="new">{0}h ago</target>
+        <note>{0} is the number of hours</note>
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectIncompatibleTooltip">
+        <source>This recording can't be viewed because it was created by an incompatible version of the dashboard.</source>
+        <target state="new">This recording can't be viewed because it was created by an incompatible version of the dashboard.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectMinuteAgo">
+        <source>1 minute ago</source>
+        <target state="new">1 minute ago</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectMinutesAgo">
+        <source>{0} minutes ago</source>
+        <target state="new">{0} minutes ago</target>
+        <note>{0} is the number of minutes</note>
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectMomentAgo">
+        <source>a moment ago</source>
+        <target state="new">a moment ago</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectNoRecordings">
+        <source>No existing recordings</source>
+        <target state="new">No existing recordings</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectPin">
+        <source>Protect from deletion</source>
+        <target state="new">Protect from deletion</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectRecordings">
+        <source>Past recordings</source>
+        <target state="new">Past recordings</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectTitle">
+        <source>Recordings</source>
+        <target state="new">Recordings</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectUnpin">
+        <source>Allow deletion</source>
+        <target state="new">Allow deletion</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtensionsPageDescription">
+        <source>Extend the dashboard with views and tools for your app.</source>
+        <target state="new">Extend the dashboard with views and tools for your app.</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutAspire">
@@ -48,13 +133,23 @@
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutAspireDashboardHelpLink">
-        <source>Help</source>
-        <target state="translated">Ajuda</target>
+        <source>Dashboard documentation</source>
+        <target state="needs-review-translation">Ajuda</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutAspireRepoLink">
         <source>Aspire repo</source>
         <target state="translated">Repositório do Aspire</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutHelp">
+        <source>Help</source>
+        <target state="new">Help</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutKeyboardShortcuts">
+        <source>Keyboard shortcuts</source>
+        <target state="new">Keyboard shortcuts</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutLaunchAIAgents">
@@ -122,9 +217,34 @@
         <target state="translated">Logs do console</target>
         <note />
       </trans-unit>
+      <trans-unit id="NavMenuExtensionsTab">
+        <source>Extensions</source>
+        <target state="new">Extensions</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuGraphTab">
+        <source>Graph</source>
+        <target state="new">Graph</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuLandmark">
+        <source>Main navigation</source>
+        <target state="new">Main navigation</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NavMenuMetricsTab">
         <source>Metrics</source>
         <target state="translated">Métricas</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuNoParameters">
+        <source>No parameters</source>
+        <target state="new">No parameters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuParametersTab">
+        <source>Parameters</source>
+        <target state="new">Parameters</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuResourcesTab">
@@ -137,9 +257,19 @@
         <target state="translated">Logs estruturados</target>
         <note />
       </trans-unit>
+      <trans-unit id="NavMenuTelemetrySourcesTab">
+        <source>Telemetry sources</source>
+        <target state="new">Telemetry sources</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NavMenuTerminalsTab">
         <source>Terminals</source>
         <target state="translated">Terminais</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuTagsTab">
+        <source>Tags</source>
+        <target state="new">Tags</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuToggleCollapse">
@@ -160,6 +290,281 @@
       <trans-unit id="PageLayoutViewFilters">
         <source>View filters</source>
         <target state="translated">Exibir filtros</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaceholderPageComingSoon">
+        <source>Coming soon</source>
+        <target state="new">Coming soon</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceHeaderAllResources">
+        <source>All resources</source>
+        <target state="new">All resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceHeaderNotFound">
+        <source>Resource not found</source>
+        <target state="new">Resource not found</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceHeaderSelectedParameters">
+        <source>{0} selected parameters</source>
+        <target state="new">{0} selected parameters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceHeaderSelectedResources">
+        <source>{0} selected resources</source>
+        <target state="new">{0} selected resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceHeaderStarted">
+        <source>Started</source>
+        <target state="new">Started</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneAllSelected">
+        <source>All selected</source>
+        <target state="new">All selected</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneClose">
+        <source>Hide resource list</source>
+        <target state="new">Hide resource list</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneCollapse">
+        <source>Collapse resource list</source>
+        <target state="new">Collapse resource list</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneCountPlural">
+        <source>{0} resources</source>
+        <target state="new">{0} resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneCountSingular">
+        <source>{0} resource</source>
+        <target state="new">{0} resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneExpand">
+        <source>Expand resource list</source>
+        <target state="new">Expand resource list</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneFilterDone">
+        <source>OK</source>
+        <target state="new">OK</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneFilterReset">
+        <source>Reset</source>
+        <target state="new">Reset</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneGroupReorderFailed">
+        <source>Unable to save the group order. Try again.</source>
+        <target state="new">Unable to save the group order. Try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneGroupReorderUnavailable">
+        <source>Clear search and filters, and try reordering groups again.</source>
+        <target state="new">Clear search and filters, and try reordering groups again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneGrouping">
+        <source>Group resources</source>
+        <target state="new">Group resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneGroupingNone">
+        <source>None</source>
+        <target state="new">None</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneGroupingResourceType">
+        <source>Resource type</source>
+        <target state="new">Resource type</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneGroupingState">
+        <source>State</source>
+        <target state="new">State</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneKindHide">
+        <source>Select to hide {0}</source>
+        <target state="new">Select to hide {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneKindShow">
+        <source>Select to show {0}</source>
+        <target state="new">Select to show {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneKindsLandmark">
+        <source>Types to show</source>
+        <target state="new">Types to show</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneLandmark">
+        <source>Resources</source>
+        <target state="new">Resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneMixedCount">
+        <source>{0}, {1}</source>
+        <target state="new">{0}, {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneMovedAfter">
+        <source>{0} moved after {1}.</source>
+        <target state="new">{0} moved after {1}.</target>
+        <note>{0} is the moved resource name; {1} is the target resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneMovedBefore">
+        <source>{0} moved before {1}.</source>
+        <target state="new">{0} moved before {1}.</target>
+        <note>{0} is the moved resource name; {1} is the target resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoKindsHint">
+        <source>Turn on a type above to list it.</source>
+        <target state="new">Turn on a type above to list it.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoKindsShown">
+        <source>Nothing shown</source>
+        <target state="new">Nothing shown</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoTagsDescription">
+        <source>Add tags to a resource from its overview to group related resources here.</source>
+        <target state="new">Add tags to a resource from its overview to group related resources here.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoTagsTitle">
+        <source>No tags yet</source>
+        <target state="new">No tags yet</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneOpen">
+        <source>Show resource list</source>
+        <target state="new">Show resource list</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterCountPlural">
+        <source>{0} parameters</source>
+        <target state="new">{0} parameters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterCountSingular">
+        <source>{0} parameter</source>
+        <target state="new">{0} parameter</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneReorderFailed">
+        <source>Unable to save the resource order. Try again.</source>
+        <target state="new">Unable to save the resource order. Try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneReorderUnavailable">
+        <source>Clear search, filters and grouping, and move resources within the same parent.</source>
+        <target state="new">Clear search, filters and grouping, and move resources within the same parent.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneResize">
+        <source>Resize resource list</source>
+        <target state="new">Resize resource list</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneResourceActions">
+        <source>Actions for {0}</source>
+        <target state="new">Actions for {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectAll">
+        <source>Select all</source>
+        <target state="new">Select all</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneTagGroupLabel">
+        <source>{0}, {1}</source>
+        <target state="new">{0}, {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneTagGroupToggle">
+        <source>Expand or collapse {0}</source>
+        <target state="new">Expand or collapse {0}</target>
+        <note>{0} is the group name</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneTelemetryOnly">
+        <source>Telemetry sources</source>
+        <target state="new">Telemetry sources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneTelemetryOnlyGroup">
+        <source>Telemetry sources</source>
+        <target state="new">Telemetry sources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneUntaggedGroup">
+        <source>Untagged</source>
+        <target state="new">Untagged</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneUnviewedErrors">
+        <source>{0} unviewed error logs</source>
+        <target state="new">{0} unviewed error logs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTabOverview">
+        <source>Overview</source>
+        <target state="new">Overview</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTabUnavailable">
+        <source>Not available for this resource</source>
+        <target state="new">Not available for this resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTabsLandmark">
+        <source>Resource views</source>
+        <target state="new">Resource views</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTabsMore">
+        <source>More views</source>
+        <target state="new">More views</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHeaderAllSources">
+        <source>All sources</source>
+        <target state="new">All sources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHeaderSelectedSources">
+        <source>{0} sources selected</source>
+        <target state="new">{0} sources selected</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryPaneCountPlural">
+        <source>{0} telemetry sources</source>
+        <target state="new">{0} telemetry sources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryPaneCountSingular">
+        <source>{0} telemetry source</source>
+        <target state="new">{0} telemetry source</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryPaneNoSources">
+        <source>No telemetry sources</source>
+        <target state="new">No telemetry sources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalsPageDescription">
+        <source>Open and switch between the terminals of your resources from one place.</source>
+        <target state="new">Open and switch between the terminals of your resources from one place.</target>
         <note />
       </trans-unit>
     </body>

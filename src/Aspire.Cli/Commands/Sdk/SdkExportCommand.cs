@@ -34,7 +34,7 @@ internal sealed class SdkExportCommand : BaseCommand
 
     private static readonly Option<string> s_languageOption = new("--language", "-l")
     {
-        Description = "Target language for the API export (e.g., typescript).",
+        Description = "Target language for the API export (e.g., typescript, go).",
         Required = true
     };
 

@@ -1,0 +1,8 @@
+﻿[data-theme="dark"] .error-backdrop {
+    background-color: var(--colorNeutralBackground3);
+}
+
+.error-container {
+    --standalone-padding: var(--spacingHorizontalXXXL);
+    --standalone-content-width: 450px;
+}

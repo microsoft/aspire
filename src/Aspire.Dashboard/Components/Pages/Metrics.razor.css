@@ -9,13 +9,31 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-family: var(--aspire-font-display);
-    font-size: 24px;
-    font-weight: 500;
-    line-height: 32px;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 22px;
+}
+
+/* The title takes the row so the pin button sits at the top-right, like other header icon buttons. The row is exactly
+   as tall as its title and buttons, so they share one center line; the space below it is the row's margin rather than
+   the heading's, which would make the row taller than the title and push the centered buttons below it. */
+::deep .metrics-chart-title {
+    display: flex;
+    align-items: center;
+    gap: var(--spacingHorizontalS);
+    min-width: 0;
+    margin-bottom: var(--spacingVerticalM);
+}
+
+::deep .metrics-chart-title h3 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    transform: translateY(1px);
 }
 
 ::deep .meter-name-title {
-    margin-left: 10px;
+    margin: 0 0 var(--spacingVerticalM) 0;
 }
 
 ::deep .main-toolbar.filter-toolbar .toolbar-select,
@@ -23,8 +41,39 @@
     width: 250px;
 }
 
-::deep .metrics-instrument-link {
-    --aspire-link-button-background: var(--aspire-page-background);
+.toolbar-organize {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+::deep .toolbar-organize .metrics-organize-button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding-inline: 0;
+}
+
+.toolbar-organize ::deep .aspire-menu-container fluent-menu-list {
+    min-width: 220px;
+    padding: 4px;
+    border: 1px solid var(--colorNeutralStroke1);
+}
+
+.toolbar-organize ::deep fluent-menu-item.metrics-organize-menu-item {
+    width: calc(100% - 8px);
+    height: 34px;
+    min-height: 34px;
+}
+
+.toolbar-organize ::deep fluent-menu-item.metrics-organize-menu-item[checked] {
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground1);
+}
+
+.toolbar-organize ::deep fluent-menu-item.metrics-organize-menu-item > .aspire-menu-item-indicator {
+    color: var(--colorBrandForeground1);
 }
 
 /* Metrics chart SVG */
@@ -37,7 +86,9 @@
 }
 
 ::deep .metrics-chart {
-    --metrics-chart-horizontal-offset: 20px;
+    /* The plot reserves its own left margin for the y-axis labels, so the chart no longer needs an outer
+       offset. An offset indented the instrument's title past the content's left margin. */
+    --metrics-chart-horizontal-offset: 0px;
 
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
@@ -63,19 +114,15 @@
     padding: 0 6px;
 }
 
-@media (min-width: 768px) {
-    ::deep .metrics-chart {
-        --metrics-chart-horizontal-offset: 40px;
-
-        padding-left: var(--metrics-chart-horizontal-offset);
-    }
-}
-
+/* The header spans the content's width so its title row ends at the right edge, where the pin button
+   lines up with the toolbar's action buttons. Long text below the title keeps a readable width. */
 ::deep .metrics-chart-header {
     grid-area: header;
-    max-width: 800px;
-    margin-right: 8px;
     overflow-x: hidden;
+}
+
+::deep .metrics-chart-header > :not(.metrics-chart-title) {
+    max-width: 800px;
 }
 
 ::deep .metrics-chart-footer {
@@ -107,64 +154,224 @@
     line-height: 22px;
 }
 
-::deep .metrics-tree {
-    min-width: auto;
+/* Keep the chart actions at the dashboard's compact control size so they match the filter controls beside the list. */
+::deep .metrics-chart-title {
+    --aspire-control-height: 28px;
 }
 
-::deep .metrics-tree fluent-tree-item::part(positioning-region) {
-    height: 29px;
+/* The list starts at the same top edge as the instrument's content beside it, so their first rows line up. Only the
+   mobile panel's label above the row needs space between them. */
+::deep .metric-groups-filter-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacingHorizontalXS);
 }
 
-::deep .metrics-tree fluent-tree-item::part(content) {
+::deep label + .metric-groups-filter-row {
+    margin-top: var(--layout-top-padding);
+}
+
+::deep .metric-groups-search {
+    display: block;
+    flex: 1;
     min-width: 0;
 }
 
-::deep .metrics-tree fluent-tree-item.nested::part(positioning-region) {
-    padding-inline-start: 20px;
+::deep .metric-groups-search > fluent-text-input,
+::deep fluent-text-input.metric-groups-search {
+    width: 100%;
 }
 
-::deep .metrics-tree fluent-tree-item[selected]::part(positioning-region),
-::deep .metrics-tree fluent-tree-item::part(positioning-region):hover {
+::deep .metric-groups {
+    display: flex;
+    flex-direction: column;
+    margin-top: var(--spacingVerticalS);
+}
+
+::deep .metric-groups-empty,
+::deep .metrics-limit-notice {
+    padding: var(--spacingVerticalM) var(--spacingHorizontalS);
+    color: var(--colorNeutralForeground3);
+}
+
+::deep .metrics-pinned-empty {
+    padding: var(--spacingVerticalM) var(--spacingHorizontalS);
+    color: var(--colorNeutralForeground3);
+}
+
+::deep .metric-groups-divider {
+    margin: 4px 8px;
+    border-top: 1px solid var(--colorNeutralStroke2);
+}
+
+::deep .metric-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 32px;
+    padding: 0 8px 0 12px;
+    border-radius: 4px;
+    color: var(--colorNeutralForeground1);
+    text-decoration: none;
+}
+
+::deep .metric-group svg {
+    flex: none;
+    color: var(--colorNeutralForeground3);
+}
+
+::deep .metric-group.pinned svg {
+    color: var(--colorBrandForeground1);
+}
+
+::deep .metric-group:hover,
+::deep .metric-group.selected {
     background-color: var(--colorNeutralBackground3);
 }
 
-::deep .metrics-tree fluent-tree-item [part="text"] {
-    min-width: 0;
-    overflow: hidden;
-    color: var(--colorNeutralForeground1);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+::deep .metric-group:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
 }
 
-::deep .metrics-tree fluent-tree-item[selected] {
-    position: relative;
-}
-
-::deep .metrics-tree fluent-tree-item[selected]::after {
+/* Same selection indicator as the resource list, so both panes read as one navigation. */
+::deep .metric-group.selected::after {
     position: absolute;
     left: 2px;
-    top: 7.5px;
+    top: 9px;
     width: 3px;
     height: 14px;
     content: "";
     background-color: var(--colorBrandBackground);
 }
 
+::deep .metric-group-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Same emphasis as the resource list's "All resources" row, so it reads as the list's overview rather than a meter. */
+::deep .metric-group-all .metric-group-name {
+    font-weight: 600;
+}
+
+::deep .metric-group-count {
+    flex: none;
+    min-width: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background-color: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: var(--type-ramp-minus-1-font-size);
+    line-height: 18px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
 ::deep .fluent-multi-splitter-pane:has(> .metrics-content),
-::deep .fluent-multi-splitter-pane:has(> .metrics-tree) {
+::deep .fluent-multi-splitter-pane:has(> .metric-groups) {
     overflow: auto;
+}
+
+.metrics-splitter {
+    width: 100%;
+    height: 100%;
+}
+
+/* Reserve the scrollbar's space even when the content fits, so the content's width (and the pin button's
+   alignment with the toolbar above) doesn't shift when a scrollbar appears. A thinner scrollbar keeps the
+   reserved space small. --scrollbar-size sizes the dashboard's WebKit scrollbars; Firefox already uses thin. */
+::deep .fluent-multi-splitter-pane:has(> .metrics-content) {
+    --scrollbar-size: 6px;
+    scrollbar-gutter: stable;
+}
+
+/* Keep common meter names such as "System.Net.Http" readable: the group list is the only place that
+   tells meters apart. The splitter's own Min only applies while dragging, not to the initial 20% size.
+   The horizontal padding keeps the filter box and the selected group off the pane's edges. */
+::deep .fluent-multi-splitter-pane:has(> .metric-groups) {
+    min-width: 220px;
+    /* 12px on the left lines the filter up with the section selector above it. */
+    padding: 0 var(--spacingHorizontalS) 0 12px;
+}
+
+::deep .metrics-filter-results-group {
+    margin-bottom: var(--spacingVerticalM);
+}
+
+::deep .metrics-filter-results-meter {
+    margin: 0 0 var(--spacingVerticalS) 0;
+    color: var(--colorNeutralForeground2);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.metrics-section-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 24px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: 20px;
+    text-align: start;
+    cursor: pointer;
+}
+
+.metrics-section-toggle:hover {
+    background: light-dark(
+        var(--colorNeutralBackground3),
+        color-mix(in srgb, var(--aspire-control-background) 96%, var(--colorNeutralForeground1)));
+}
+
+.metrics-section-toggle:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+.metrics-section-count {
+    color: var(--colorNeutralForeground3);
+    font-size: 12px;
+    font-weight: 400;
+}
+
+/* The dotted rule runs to the chevron at the end, so the header reads as one collapsible row. */
+.metrics-section-rule {
+    flex: 1 1 auto;
+    min-width: 16px;
+    border-top: 2px dotted var(--colorNeutralStroke2);
+}
+
+.metrics-section-toggle ::deep .metrics-section-chevron {
+    flex: 0 0 auto;
+    color: var(--colorNeutralForeground3);
 }
 
 ::deep .metrics-content {
     height: 100%;
     min-height: 0;
-    /* Match left padding of the page header */
-    margin-left: 18px;
+    /* Same left margin as the group list's items, so both panes start their content at the same inset.
+       The right margin plus the 6px scrollbar gutter puts the content's right edge at the toolbar's
+       right edge (12px from the page edge), aligning the chart's pin with the toolbar's action buttons. */
+    margin-left: 12px;
+    margin-right: 6px;
 }
 
 ::deep .plotly-chart-container {
+    /* Let the graph grow to fill the available row alongside the filters panel instead of
+       being capped at a fixed width that leaves large unused gaps on wide viewports. */
+    flex: 1 1 500px;
     width: 100%;
-    max-width: 650px;
+    max-width: 1100px;
     aspect-ratio: 13 / 9;
     margin-left: calc(-1 * var(--metrics-chart-horizontal-offset));
 }

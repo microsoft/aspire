@@ -106,8 +106,7 @@ internal sealed class IntegrationRestorePlanResolver(
             effectivePackageSourceOverride,
             effectivePackageSourceOverridePattern,
             requestedPolicyChannel,
-            sourceDiscoveryChannel,
-            executionContext.NuGetServiceIndexOverride);
+            sourceDiscoveryChannel);
         restoreSources = NormalizeSources(restoreSources, new DirectoryInfo(appDirectoryPath));
 
         var configuration = nugetService.BuildConfiguration(
@@ -155,8 +154,7 @@ internal sealed class IntegrationRestorePlanResolver(
         string? packageSourceOverride,
         string? packageSourceOverridePattern,
         PackageChannel? requestedPolicyChannel,
-        PackageChannel? sourceDiscoveryChannel,
-        string? nugetServiceIndexOverride)
+        PackageChannel? sourceDiscoveryChannel)
     {
         var additionalSources = new List<string>();
         var hasOverride = !string.IsNullOrWhiteSpace(packageSourceOverride);
@@ -224,7 +222,6 @@ internal sealed class IntegrationRestorePlanResolver(
             packageSourceMappings = PackageSourceOverrideMappings.Create(
                 packageSourceOverride!,
                 sourcePolicyChannel,
-                nugetServiceIndexOverride,
                 packageSourceOverridePattern)
                 .Where(mapping =>
                     mapping.PackageFilter != PackageMapping.AllPackages ||

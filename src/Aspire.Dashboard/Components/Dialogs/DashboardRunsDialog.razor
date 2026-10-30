@@ -1,0 +1,90 @@
+@using Aspire.Dashboard.Components.Controls
+@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Resources
+
+<FluentDialogBody Class="navigation-dialog-body">
+    <div class="runs-container">
+        <p class="runs-description">@Loc[nameof(Layout.DashboardRunSelectHelpTooltip)]</p>
+
+        @{
+            var runs = DashboardRunSelect.GetSortedRuns(RunStore.GetRuns());
+            var liveRuns = runs.Where(r => r.IsCurrent).ToList();
+            var recordings = runs.Where(r => !r.IsCurrent).ToList();
+        }
+
+        @* Each row is a radio of one group, so assistive technology announces which run is being viewed. *@
+        <div class="runs-list" role="radiogroup" aria-label="@Loc[nameof(Layout.DashboardRunSelectTitle)]">
+            @foreach (var run in liveRuns)
+            {
+                @RunRow(run)
+            }
+
+            <h3 class="runs-group-header" id="@RecordingsHeaderId">@Loc[nameof(Layout.DashboardRunSelectRecordings)]</h3>
+            @if (recordings.Count == 0)
+            {
+                <div class="runs-empty">@Loc[nameof(Layout.DashboardRunSelectNoRecordings)]</div>
+            }
+            @foreach (var run in recordings)
+            {
+                @RunRow(run)
+            }
+        </div>
+
+        <a class="runs-help-link" href="@DashboardRunsHelpUrl" target="_blank" rel="noreferrer noopener">
+            <FluentIcon Value="@(new Icons.Regular.Size16.QuestionCircle())" Color="Color.Custom" CustomColor="currentColor" />
+            @Loc[nameof(Layout.DashboardRunSelectHelp)]
+        </a>
+    </div>
+</FluentDialogBody>
+
+@code {
+    private RenderFragment RunRow(DashboardRunDescriptor run) => __builder =>
+    {
+        var isSelected = string.Equals(run.RunId, Content.SelectedRunId, StringComparison.Ordinal);
+        var tooltip = !run.IsCompatible
+            ? Loc[nameof(Layout.DashboardRunSelectIncompatibleTooltip)].Value
+            : run.IsCurrent ? null : FormatRunDate(run.StartedAtUtc);
+        var pinLabel = Loc[run.IsPinned ? nameof(Layout.DashboardRunSelectUnpin) : nameof(Layout.DashboardRunSelectPin)];
+        var description = DashboardRunSelect.FormatRunDuration(run);
+
+        <div class="run-row @(isSelected ? "selected" : null) @(run.IsCompatible ? null : "disabled")" @key="run.RunId" data-run-id="@run.RunId">
+            <button type="button"
+                    class="run-select"
+                    role="radio"
+                    aria-checked="@(isSelected.ToString().ToLowerInvariant())"
+                    disabled="@(!run.IsCompatible)"
+                    data-tooltip="@tooltip"
+                    @onclick="@(() => SelectRunAsync(run))">
+                @* The same dot as the header button marks the run being viewed: green for live, orange for a
+                   recording. The slot keeps every row's label aligned. *@
+                <span class="run-indicator-slot">
+                    @if (isSelected)
+                    {
+                        <DashboardRunIndicator IsLive="@run.IsCurrent" />
+                    }
+                </span>
+                <span class="run-label">@FormatRunOption(run)</span>
+                @if (description is not null)
+                {
+                    <span class="run-description">@description</span>
+                }
+            </button>
+            <button type="button"
+                    id="@GetPinButtonId(run)"
+                    class="run-pin @(run.IsPinned ? "pinned" : null)"
+                    aria-pressed="@(run.IsPinned.ToString().ToLowerInvariant())"
+                    aria-label="@pinLabel"
+                    data-tooltip="@pinLabel"
+                    @onclick="@(() => SetRunPinned(run, !run.IsPinned))">
+                @if (run.IsPinned)
+                {
+                    <FluentIcon Value="@(new Icons.Filled.Size16.Pin())" Color="Color.Custom" CustomColor="currentColor" />
+                }
+                else
+                {
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Pin())" Color="Color.Custom" CustomColor="currentColor" />
+                }
+            </button>
+        </div>
+    };
+}

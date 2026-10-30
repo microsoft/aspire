@@ -579,6 +579,42 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         await CancelTokenAndAwaitTask(cts, task).DefaultTimeout();
     }
 
+    [Fact]
+    public async Task WatchInteractions_PromptNotificationAsync_SendsUnresolvedParameterNames()
+    {
+        var interactionService = new InteractionService(
+            NullLogger<InteractionService>.Instance,
+            new DistributedApplicationOptions(),
+            new ServiceCollection().BuildServiceProvider(),
+            new ConfigurationBuilder().Build(),
+            new TestInteractionFileUploadStore());
+        using var dashboardServiceData = CreateDashboardServiceData(interactionService: interactionService);
+        var dashboardService = CreateDashboardService(dashboardServiceData);
+
+        var cts = new CancellationTokenSource();
+        var context = TestServerCallContext.Create(cancellationToken: cts.Token);
+        var writer = new TestServerStreamWriter<WatchInteractionsResponseUpdate>(context);
+        var reader = new TestAsyncStreamReader<WatchInteractionsRequestUpdate>(context);
+        var task = dashboardService.WatchInteractions(reader, writer, context);
+
+        _ = interactionService.PromptNotificationAsync(
+            title: "Title!",
+            message: "Message!",
+            new NotificationInteractionOptions
+            {
+                PrimaryButtonText = "Enter values",
+                UnresolvedParameterNames = ["first", "second"]
+            });
+
+        var update = await writer.ReadNextAsync().DefaultTimeout();
+
+        Assert.Equal(WatchInteractionsResponseUpdate.KindOneofCase.Notification, update.KindCase);
+        Assert.Equal("Enter values", update.PrimaryButtonText);
+        Assert.Equal(["first", "second"], update.Notification.UnresolvedParameterNames);
+
+        await CancelTokenAndAwaitTask(cts, task).DefaultTimeout();
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

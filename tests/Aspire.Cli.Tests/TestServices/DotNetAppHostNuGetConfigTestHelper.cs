@@ -72,8 +72,7 @@ internal static class DotNetAppHostNuGetConfigTestHelper
         => $"{mapping.SourceKey.ToUpperInvariant()}:{string.Join(",", mapping.Patterns.Select(static pattern => pattern.ToUpperInvariant()).Order())}";
 
     private static NuGetConfiguration BuildConfiguration(BundleNuGetService service, DirectoryInfo directory, PackageMapping[] mappings)
-        => service.BuildConfiguration(
+        => service.BuildAppHostConfiguration(
             directory, "test", mappings.Length == 0 ? null : mappings,
-            restrictToSelectedSources: false, hasAuthoritativeAspirePolicy: true,
             cancellationToken: TestContext.Current.CancellationToken);
 }
