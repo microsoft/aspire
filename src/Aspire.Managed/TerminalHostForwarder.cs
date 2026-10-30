@@ -61,6 +61,7 @@ internal static partial class TerminalHostForwarder
             try
             {
                 await process.WaitForExitAsync(shutdownCts.Token).ConfigureAwait(false);
+                TraceStage("forwarder-observed-child-exit");
                 return process.ExitCode;
             }
             catch (OperationCanceledException) when (shutdownCts.IsCancellationRequested)
@@ -74,7 +75,7 @@ internal static partial class TerminalHostForwarder
                         using var shutdownTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                         try
                         {
-                            await RequestShutdownAsync(args, shutdownTimeout.Token).ConfigureAwait(false);
+                            await RequestShutdownAsync(args, shutdownTimeout.Token, Console.Error.WriteLine).ConfigureAwait(false);
                         }
                         catch (Exception ex) when (ex is SocketException or IOException or ArgumentException or OperationCanceledException or ConnectionLostException)
                         {
@@ -118,10 +119,11 @@ internal static partial class TerminalHostForwarder
             {
                 await watchdog.DisposeAsync().ConfigureAwait(false);
             }
+            TraceStage("forwarder-finally-complete");
         }
     }
 
-    internal static async Task RequestShutdownAsync(string[] args, CancellationToken cancellationToken)
+    internal static async Task RequestShutdownAsync(string[] args, CancellationToken cancellationToken, Action<string> capture)
     {
         // TerminalHost receives the control socket as two arguments: --control-uds <path>.
         var controlPathIndex = Array.IndexOf(args, "--control-uds");
@@ -130,12 +132,31 @@ internal static partial class TerminalHostForwarder
             throw new ArgumentException("A terminal host control socket path is required for graceful shutdown.", nameof(args));
         }
 
-        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        await socket.ConnectAsync(new UnixDomainSocketEndPoint(args[controlPathIndex + 1]), cancellationToken).ConfigureAwait(false);
-        using var stream = new NetworkStream(socket);
-        using var rpc = new JsonRpc(stream);
-        rpc.StartListening();
-        await rpc.NotifyAsync("shutdown").WaitAsync(cancellationToken).ConfigureAwait(false);
+        long connected;
+        long notified;
+        using (var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
+        {
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint(args[controlPathIndex + 1]), cancellationToken).ConfigureAwait(false);
+            connected = Stopwatch.GetTimestamp();
+            using var stream = new NetworkStream(socket);
+            using var rpc = new JsonRpc(stream);
+            rpc.StartListening();
+            await rpc.NotifyAsync("shutdown").WaitAsync(cancellationToken).ConfigureAwait(false);
+            notified = Stopwatch.GetTimestamp();
+        }
+        // Emit only after disposal so logging cannot keep the notification connection open.
+        var disposed = Stopwatch.GetTimestamp();
+        capture($"[terminal-stage] stage=control-connected pid={Environment.ProcessId} ticks={connected} frequency={Stopwatch.Frequency}");
+        capture($"[terminal-stage] stage=notification-write-completed pid={Environment.ProcessId} ticks={notified} frequency={Stopwatch.Frequency}");
+        capture($"[terminal-stage] stage=client-connection-disposed pid={Environment.ProcessId} ticks={disposed} frequency={Stopwatch.Frequency}");
+    }
+
+    private static void TraceStage(string stage)
+    {
+        if (Environment.GetEnvironmentVariable("ASPIRE_TERMINAL_STAGE_CAPTURE") == "1")
+        {
+            Console.Error.WriteLine($"[terminal-stage] stage={stage} pid={Environment.ProcessId} ticks={Stopwatch.GetTimestamp()} frequency={Stopwatch.Frequency}");
+        }
     }
 
     [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]

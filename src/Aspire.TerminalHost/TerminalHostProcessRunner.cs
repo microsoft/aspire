@@ -104,6 +104,10 @@ public static class TerminalHostProcessRunner
             {
                 await parentWatchdog.DisposeAsync().ConfigureAwait(false);
             }
+            if (Environment.GetEnvironmentVariable("ASPIRE_TERMINAL_STAGE_CAPTURE") == "1")
+            {
+                Console.Error.WriteLine($"[terminal-stage] stage=child-runner-finally-complete pid={Environment.ProcessId} ticks={System.Diagnostics.Stopwatch.GetTimestamp()} frequency={System.Diagnostics.Stopwatch.Frequency}");
+            }
         }
     }
 }

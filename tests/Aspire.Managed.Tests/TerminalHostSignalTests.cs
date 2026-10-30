@@ -8,7 +8,7 @@ using Aspire.Hosting;
 
 namespace Aspire.Managed.Tests;
 
-public partial class TerminalHostSignalTests
+public partial class TerminalHostSignalTests(ITestOutputHelper outputHelper)
 {
     private const int SigTerm = 15;
 
@@ -107,25 +107,37 @@ public partial class TerminalHostSignalTests
             var paths = new[] { "p.sock", "h.sock", "c.sock" }
                 .Select(name => Path.Combine(root.FullName, "terminals", name)).ToArray();
             var startInfo = CreateTerminalHostStartInfo(paths[0], paths[1], paths[2]);
+            startInfo.Environment["ASPIRE_TERMINAL_STAGE_CAPTURE"] = "1";
             using var process = Process.Start(startInfo)!;
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
             try
             {
                 await WaitForFilesAsync(paths, TimeSpan.FromSeconds(10));
+                outputHelper.WriteLine($"[terminal-stage] stage=sockets-present ticks={Stopwatch.GetTimestamp()} frequency={Stopwatch.Frequency}");
                 using var shutdownTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                await TerminalHostForwarder.RequestShutdownAsync(startInfo.ArgumentList.ToArray(), shutdownTimeout.Token);
+                await TerminalHostForwarder.RequestShutdownAsync(startInfo.ArgumentList.ToArray(), shutdownTimeout.Token, outputHelper.WriteLine);
+                outputHelper.WriteLine($"[terminal-stage] stage=request-returned ticks={Stopwatch.GetTimestamp()} frequency={Stopwatch.Frequency}");
                 await process.WaitForExitAsync().WaitAsync(shutdownTimeout.Token);
+                outputHelper.WriteLine($"[terminal-stage] stage=test-observed-forwarder-exit ticks={Stopwatch.GetTimestamp()} frequency={Stopwatch.Frequency}");
                 Assert.True(process.ExitCode == 0,
                     $"Terminal host exited with code {process.ExitCode}.{Environment.NewLine}stdout: {await stdout}{Environment.NewLine}stderr: {await stderr}");
                 Assert.All(paths, path => Assert.False(File.Exists(path), $"Expected '{path}' to be unlinked."));
             }
             finally
             {
+                outputHelper.WriteLine($"[terminal-stage] stage=test-finally-before-cleanup exited={process.HasExited} ticks={Stopwatch.GetTimestamp()} frequency={Stopwatch.Frequency}");
                 if (!process.HasExited)
                 {
                     process.Kill(entireProcessTree: true);
                     await process.WaitForExitAsync();
+                }
+                foreach (var line in (await stderr).Split('\n'))
+                {
+                    if (line.StartsWith("[terminal-stage]", StringComparison.Ordinal))
+                    {
+                        outputHelper.WriteLine(line.TrimEnd('\r'));
+                    }
                 }
             }
         }

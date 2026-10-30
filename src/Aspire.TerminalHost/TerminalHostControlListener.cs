@@ -192,6 +192,7 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
         // reservation if anything between accept and the conversion lock throws.
         var reservationOwned = true;
         JsonRpc? rpc = null;
+        long listening = 0;
         try
         {
             await using var stream = new NetworkStream(client, ownsSocket: true);
@@ -229,6 +230,7 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
             }
 
             rpc.StartListening();
+            listening = System.Diagnostics.Stopwatch.GetTimestamp();
             await rpc.Completion.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -259,6 +261,10 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
             }
 
             rpc?.Dispose();
+            if (Environment.GetEnvironmentVariable("ASPIRE_TERMINAL_STAGE_CAPTURE") == "1")
+            {
+                Console.Error.WriteLine($"[terminal-stage] stage=server-connection-ended pid={Environment.ProcessId} listeningTicks={listening} ticks={System.Diagnostics.Stopwatch.GetTimestamp()} frequency={System.Diagnostics.Stopwatch.Frequency}");
+            }
         }
     }
 

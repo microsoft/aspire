@@ -58,8 +58,13 @@ internal sealed class TerminalHostControlRpcTarget
     /// </summary>
     public Task ShutdownAsync(CancellationToken cancellationToken = default)
     {
+        var entered = System.Diagnostics.Stopwatch.GetTimestamp();
         _ = cancellationToken;
         _app.RequestShutdown();
+        if (Environment.GetEnvironmentVariable("ASPIRE_TERMINAL_STAGE_CAPTURE") == "1")
+        {
+            Console.Error.WriteLine($"[terminal-stage] stage=server-shutdown-entered pid={Environment.ProcessId} ticks={entered} frequency={System.Diagnostics.Stopwatch.Frequency}");
+        }
         return Task.CompletedTask;
     }
 }
