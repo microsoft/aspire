@@ -51,7 +51,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         // persist it. Reevaluate the real project after SDK repair inside the transaction.
         var configuration = hasExplicitChannelPolicy
             ? channel.Name == PackageChannelNames.Stable && executionContext.NuGetServiceIndexOverride is null
-                ? NuGetConfigurationBuilder.BuildStableAppHostConfiguration(
+                ? DotNetAppHostNuGetConfigBuilder.BuildStable(
                     ambientSettings, AppHostWorkloadId.Create(projectFile.DirectoryName!), channel)
                 : nuGetService.BuildChannelConfiguration(
                     projectFile.Directory!,
@@ -61,10 +61,6 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                     executionContext.NuGetServiceIndexOverride,
                     cancellationToken)
             : null;
-        if (configuration is not null)
-        {
-            configuration = NuGetConfigurationBuilder.RepairAspireOnlyAppHostMappings(configuration);
-        }
         if (configuration is { HasSourcePolicyChanges: false })
         {
             if (!channel.ConfigureGlobalPackagesFolder)

@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Seq` integration with the A
 
 ```bash
 aspire add Aspire.Hosting.Seq
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -21,7 +22,7 @@ In the AppHost, add a Seq resource and reference it from another resource with e
 ```csharp
 var seq = builder.AddSeq("seq");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(seq);
 ```
 

@@ -19,6 +19,8 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)DirectoryHelper.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)CertificateFactory.cs" LinkBase="Shared" />
   </ItemGroup>
 
 </Project>

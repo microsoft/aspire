@@ -246,6 +246,29 @@ public class ExpressionResolverTests
     }
 
     [Fact]
+    public async Task HostUrlInOtlpExporterEndpointUsesFallbackHostWhenDcpReportsEmptyHostName()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var test = builder.AddContainer("testSource", "someimage")
+            .WithOtlpExporter();
+
+        // This is what DCP reports when querying the container runtime times out.
+        var dcpInfo = new DcpInfo
+        {
+            VersionString = DcpVersion.Dev.ToString(),
+            Version = DcpVersion.Dev,
+            Containers = new DcpContainersInfo { Runtime = "", HostName = "", Error = "context deadline exceeded" }
+        };
+        var serviceProvider = new TestServiceProvider(dcpInfo: dcpInfo)
+            .AddService(Options.Create(new DcpOptions()))
+            .AddService(new DistributedApplicationModel(builder.Resources));
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(test.Resource, DistributedApplicationOperation.Run, serviceProvider).DefaultTimeout();
+        Assert.Equal("http://host.docker.internal:18889", config["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+    }
+
+    [Fact]
     public async Task ContainerToContainerEndpointShouldResolve()
     {
         var builder = DistributedApplication.CreateBuilder();

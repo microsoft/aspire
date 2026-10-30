@@ -1743,7 +1743,9 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var projectPath = CreateBuildOutputTestProject(workspace.WorkspaceRoot.FullName, rebuildOutputMarker);
 
         using var builder = CreateBuilder();
+#pragma warning disable CS0618 // Retain supported legacy project command invocation.
         var project = builder.AddProject("myProject", projectPath, options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
 
         // The project itself is launched with `dotnet run`, which also builds it. Whether that build reaches
         // the counting target depends on how quickly the rebuild command stops the process (slow on Windows),

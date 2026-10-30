@@ -45,7 +45,6 @@ internal static class PackageSourceOverrideMappings
     public static PackageMapping[] Create(
         string packageSourceOverride,
         PackageChannel? requestedChannel,
-        string? nugetServiceIndexOverride,
         string? packagePattern = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageSourceOverride);
@@ -79,19 +78,6 @@ internal static class PackageSourceOverrideMappings
 
                 mappings.Add(mapping);
             }
-        }
-
-        if (!mappings.Any(mapping =>
-            mapping.PackageFilter == PackageMapping.AllPackages &&
-            !PackageSourceIdentity.Comparer.Equals(mapping.Source, packageSourceOverride)))
-        {
-            // Honor the runtime service-index override (env / sidecar) when the
-            // CLI emits a fresh fallback mapping. Reads from existing user
-            // configs are not rewritten — see docs/specs/cli-identity-sidecar.md.
-            var fallbackSource = string.IsNullOrEmpty(nugetServiceIndexOverride)
-                ? PackageSources.NuGetOrg
-                : nugetServiceIndexOverride;
-            mappings.Add(new PackageMapping(PackageMapping.AllPackages, fallbackSource));
         }
 
         // Equivalent mappings must not select different isolated restore caches. Preserve the

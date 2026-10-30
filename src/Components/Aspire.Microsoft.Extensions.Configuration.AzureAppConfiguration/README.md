@@ -136,6 +136,7 @@ In your AppHost project, install the Aspire Azure App Configuration Hosting libr
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.AppConfiguration
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _Program.cs_ file of `AppHost`, add a App Configuration connection and consume the connection using the following methods:
@@ -145,7 +146,7 @@ Then, in the _Program.cs_ file of `AppHost`, add a App Configuration connection 
 var appConfig = builder.AddAzureAppConfiguration("appConfig");
 
 // Service consumption
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(appConfig);
 ```
 

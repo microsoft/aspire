@@ -57,6 +57,9 @@
   <data name="ChannelUpdateRequiresAmbientNuGetConfigurationFormat" xml:space="preserve">
     <value>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported.</value>
   </data>
+  <data name="ChannelFeedAlreadyConfiguredFormat" xml:space="preserve">
+    <value>Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</value>
+  </data>
   <data name="FailedFetchItemsAndPropertiesFormat" xml:space="preserve">
     <value>Failed to fetch items and properties for project: {0}</value>
   </data>

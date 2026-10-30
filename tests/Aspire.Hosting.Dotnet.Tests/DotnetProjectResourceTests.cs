@@ -86,25 +86,16 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(1, false, false)]
-    [InlineData(3, false, false)]
-    [InlineData(3, true, false)]
-    [InlineData(1, false, true)]
-    [InlineData(3, false, true)]
-    [InlineData(3, true, true)]
-    public void AddDotnetProject_ReplicasRenderEveryDcpInstance(int replicas, bool polyglot, bool fileBased)
+    [InlineData(1, false)]
+    [InlineData(3, false)]
+    [InlineData(1, true)]
+    [InlineData(3, true)]
+    public void AddDotnetProject_ReplicasRenderEveryDcpInstance(int replicas, bool fileBased)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var resource = builder.AddDotnetProject("svc", fileBased ? "service.cs" : "Service.csproj", options => options.ExcludeLaunchProfile = true)
             .WithExplicitStart();
-        if (polyglot)
-        {
-            resource.WithReplicasForPolyglot(replicas);
-        }
-        else
-        {
-            resource.WithReplicas(replicas);
-        }
+        resource.WithReplicas(replicas);
 
         using var app = builder.Build();
         var rendered = app.Services.GetRequiredService<ExecutableCreator>()
@@ -159,6 +150,8 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("project")]
+    [InlineData("fsharp-project")]
+    [InlineData("visualbasic-project")]
     [InlineData("directory")]
     [InlineData("file")]
     public async Task AddDotnetProject_InPublishMode_ProducesProjectManifest(string appKind)
@@ -167,6 +160,8 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         var appPath = appKind switch
         {
             "project" => CreateFile(workspace.Path, "MyService.csproj"),
+            "fsharp-project" => CreateFile(workspace.Path, "MyService.fsproj"),
+            "visualbasic-project" => CreateFile(workspace.Path, "MyService.vbproj"),
             "directory" => CreateProjectDirectory(workspace.Path),
             "file" => CreateFile(workspace.Path, "service.cs"),
             _ => throw new ArgumentOutOfRangeException(nameof(appKind), appKind, null)
@@ -374,46 +369,24 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.Equal(marker, containerOutput);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
     [RequiresFeature(TestFeature.ContainerImageBuild)]
-    public async Task AddDotnetProject_ProjectBuildEnvironmentFlowsToSdkPublish()
+    public Task AddDotnetProject_ProjectBuildEnvironmentFlowsToSdkPublish(string extension)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "project"));
-        var projectPath = Path.Combine(projectDirectory.FullName, "Project.csproj");
-        await File.WriteAllTextAsync(projectPath, """
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup>
-                <OutputType>Exe</OutputType>
-                <TargetFramework>net10.0</TargetFramework>
-              </PropertyGroup>
-              <Target Name="ValidateBuildFlavor" BeforeTargets="Publish">
-                <Error Condition="'$(BUILD_FLAVOR)' != 'custom'" Text="BUILD_FLAVOR was not provided." />
-              </Target>
-            </Project>
-            """);
-        await File.WriteAllTextAsync(
-            Path.Combine(projectDirectory.FullName, "Program.cs"),
-            """System.Console.WriteLine("project");""");
-        var archivePath = Path.Combine(workspace.Path, "project.tar.gz");
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var resource = builder.AddDotnetProject("project", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithBuildEnvironment("BUILD_FLAVOR", "custom")
-            .WithContainerBuildOptions(context =>
-            {
-                context.Destination = ContainerImageDestination.Archive;
-                context.ImageFormat = ContainerImageFormat.Docker;
-                context.OutputPath = archivePath;
-                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
-            });
-        using var app = builder.Build();
-        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+        return VerifySdkProjectPublishAsync(extension, runContainer: false);
+    }
 
-        await imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
-
-        Assert.True(File.Exists(archivePath));
-        Assert.Empty(resource.Resource.GetProjectMetadata().BuildEnvironment);
-        Assert.Null(resource.Resource.GetProjectMetadata().BuildWorkingDirectory);
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
+    public Task AddDotnetProject_SdkContainerArchiveRunsPublishedProgram(string extension)
+    {
+        return VerifySdkProjectPublishAsync(extension, runContainer: true);
     }
 
     [Fact]
@@ -516,6 +489,8 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("MyService.csproj")]
+    [InlineData("MyService.fsproj")]
+    [InlineData("MyService.vbproj")]
     [InlineData("service.cs")]
     public async Task AddDotnetProject_RebuilderUsesConfiguredBuildConfiguration(string projectFileName)
     {
@@ -541,7 +516,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             "build",
             projectPath,
         };
-        var isProjectBuild = projectFileName.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase);
+        var isProjectBuild = !projectFileName.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
         if (isProjectBuild)
         {
             expected.Add("-mt");
@@ -629,14 +604,17 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.Contains(resource.Annotations.OfType<ResourceCommandAnnotation>(), a => a.Name == KnownResourceCommands.RebuildCommand);
     }
 
-    [Fact]
-    public async Task AddDotnetProject_DebugAnnotator_ProducesProjectLaunchConfiguration()
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task AddDotnetProject_DebugAnnotator_ProducesProjectLaunchConfiguration(string extension)
     {
         // The versioned external-build capability prevents an older IDE from accepting the resource while ignoring
         // coordinated-build metadata. The producer still resolves the full project launch configuration.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
-        var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
+        var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", $"MyService{extension}");
         var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true);
 
         Assert.True(app.Resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
@@ -1110,6 +1088,76 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             cts.Token);
 
         await pipeline.ExecuteAsync(context).WaitAsync(cts.Token);
+    }
+
+    private async Task VerifySdkProjectPublishAsync(string extension, bool runContainer)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "project"));
+        var projectPath = Path.Combine(projectDirectory.FullName, $"Project{extension}");
+        await File.WriteAllTextAsync(projectPath, $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+              {{DotnetProjectTestHelpers.GetCompileItems(extension)}}
+              <Target Name="ValidateBuildFlavor" BeforeTargets="Publish">
+                <Error Condition="'$(BUILD_FLAVOR)' != 'custom'" Text="BUILD_FLAVOR was not provided." />
+              </Target>
+            </Project>
+            """);
+        DotnetProjectTestHelpers.WriteProgram(
+            projectPath,
+            """System.Console.WriteLine("project");""",
+            """
+            printfn "project"
+            """,
+            """
+            Module Program
+                Sub Main()
+                    System.Console.WriteLine("project")
+                End Sub
+            End Module
+            """);
+        var archivePath = Path.Combine(workspace.Path, "project.tar.gz");
+        var imageName = $"localhost/dotnet-project-{Guid.NewGuid():N}";
+        var imageReference = $"{imageName}:sdk-test";
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var resource = builder.AddDotnetProject("project", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment("BUILD_FLAVOR", "custom")
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.ImageFormat = ContainerImageFormat.Docker;
+                context.LocalImageName = imageName;
+                context.LocalImageTag = "sdk-test";
+                context.OutputPath = archivePath;
+                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
+            });
+        using var app = builder.Build();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        cancellation.CancelAfter(TestConstants.ExtraLongTimeoutTimeSpan);
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await imageBuilder.BuildImageAsync(resource.Resource, cancellation.Token);
+
+        Assert.True(File.Exists(archivePath));
+        Assert.Equal([imageReference], TestContainerImageArchive.ReadDockerImageReferences(archivePath));
+        Assert.Empty(resource.Resource.GetProjectMetadata().BuildEnvironment);
+        Assert.Null(resource.Resource.GetProjectMetadata().BuildWorkingDirectory);
+
+        if (runContainer)
+        {
+            var runtime = await app.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(cancellation.Token);
+            var processRunner = app.Services.GetRequiredService<IProcessRunner>();
+            var logger = app.Services.GetRequiredService<ILogger<DotnetProjectResourceTests>>();
+            await using var imageCleanup = new TemporaryContainerImage(runtime, imageReference, logger);
+            await RunContainerRuntimeAsync(processRunner, runtime, ["image", "load", "--input", archivePath], cancellation.Token);
+            var containerOutput = await RunContainerRuntimeAsync(
+                processRunner, runtime, ["run", "--rm", "--platform", "linux/amd64", imageReference], cancellation.Token);
+            Assert.Equal("project", containerOutput);
+        }
     }
 
     private static async Task<string> RunContainerRuntimeAsync(

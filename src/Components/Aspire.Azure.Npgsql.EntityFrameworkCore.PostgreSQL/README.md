@@ -118,6 +118,7 @@ In your AppHost project, install the `Aspire.Hosting.Azure.PostgreSQL` library w
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.PostgreSQL
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, register Azure Database for PostgreSQL instance and consume the connection using the following methods:
@@ -125,7 +126,7 @@ Then, in the _AppHost.cs_ file of `AppHost`, register Azure Database for Postgre
 ```csharp
 var postgresdb = builder.AddAzurePostgresFlexibleServer("pg").AddDatabase("postgresdb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(postgresdb);
 ```
 

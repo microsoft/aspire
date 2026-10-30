@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Kubernetes projection alongside executable/V2 deployment coverage.
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIRECOMPUTE003
 #pragma warning disable ASPIREPIPELINES003
@@ -2092,3 +2093,4 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         Assert.Equal("podinfo", stateSection.Data["ReleaseName"]?.ToString());
     }
 }
+#pragma warning restore CS0618

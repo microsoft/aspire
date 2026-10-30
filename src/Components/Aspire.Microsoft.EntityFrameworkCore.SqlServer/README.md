@@ -114,6 +114,7 @@ In your AppHost project, install the `Aspire.Hosting.SqlServer` library with [Nu
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.SqlServer
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, register a SqlServer database and consume the connection using the following methods:
@@ -121,7 +122,7 @@ Then, in the _AppHost.cs_ file of `AppHost`, register a SqlServer database and c
 ```csharp
 var sql = builder.AddSqlServer("sql").AddDatabase("sqldata");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(sql);
 ```
 

@@ -128,21 +128,24 @@ In your AppHost project, install the Aspire Azure Storage Hosting library with [
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.Storage
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, add a DataLake Storage connection and consume the connection using the following methods:
 
 ```csharp
+using Aspire.Hosting.ApplicationModel;
+
 var storage = builder.AddAzureStorage("azure-storage");
-var dataLake = builder.ExecutionContext.IsPublishMode
+IResourceBuilder<IResourceWithConnectionString> dataLake = builder.ExecutionContext.IsPublishMode
     ? storage.AddDataLake("data-lake")
     : builder.AddConnectionString("data-lake");
 
-var fileSystem = builder.ExecutionContext.IsPublishMode
-? storage.AddDataLakeFileSystem("data-lake-file-system");
-: builder.AddConnectionString("data-lake-file-system");
+IResourceBuilder<IResourceWithConnectionString> fileSystem = builder.ExecutionContext.IsPublishMode
+    ? storage.AddDataLakeFileSystem("data-lake-file-system")
+    : builder.AddConnectionString("data-lake-file-system");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(dataLake)
                        .WithReference(fileSystem);
 ```

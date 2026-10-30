@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.CosmosDB` integration
 
 ```bash
 aspire add Aspire.Hosting.Azure.CosmosDB
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Configure Azure Provisioning for local development
@@ -40,7 +41,7 @@ In the AppHost, add a Cosmos DB connection and reference it from another resourc
 ```csharp
 var cosmosdb = builder.AddAzureCosmosDB("cdb").AddCosmosDatabase("cosmosdb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(cosmosdb);
 ```
 
