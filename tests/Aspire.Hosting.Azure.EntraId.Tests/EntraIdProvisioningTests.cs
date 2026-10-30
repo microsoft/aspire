@@ -25,6 +25,181 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     private const string TenantId = "aaaabbbb-0000-cccc-1111-dddd2222eeee";
     private const string ClientId = "00001111-aaaa-2222-bbbb-3333cccc4444";
 
+    public static IEnumerable<object[]> RegistrationOnlyApiCases()
+    {
+        string[] apis =
+        [
+            "redirect-literal", "redirect-parameter", "redirect-endpoint", "redirect-host",
+            "redirect-export-literal", "redirect-export-parameter", "redirect-export-endpoint", "redirect-export-host",
+            "application-owner-literal", "application-owner-parameter", "application-owner-export-literal", "application-owner-export-parameter",
+            "service-principal-owner-literal", "service-principal-owner-parameter", "service-principal-owner-export-literal", "service-principal-owner-export-parameter",
+            "owners-literal", "owners-parameter", "owners-export-literal", "owners-export-parameter",
+            "id-token", "role", "role-export", "default-uri", "default-uri-export", "local-certificate",
+            "federation-consumer", "federation-compute", "federation-identity",
+            "federation-export-consumer", "federation-export-compute", "federation-export-identity",
+            "pre-authorization", "consent-api", "consent-external", "consent-external-export"
+        ];
+        foreach (var operation in new[] { DistributedApplicationOperation.Run, DistributedApplicationOperation.Publish })
+        {
+            foreach (var api in apis)
+            {
+                yield return [operation, api];
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(RegistrationOnlyApiCases))]
+    public void RegistrationOnlyApis_RejectExistingReceiversWithoutMutation(DistributedApplicationOperation operation, string api)
+    {
+        foreach (var fluent in new[] { false, true })
+        {
+            using var builder = TestDistributedApplicationBuilder.Create(operation);
+            var entra = fluent
+                ? builder.AddEntraIdApplication("entra").AsExistingApplication(TenantId, ClientId)
+                : builder.AddExistingEntraApplication("entra", TenantId, ClientId);
+            var configure = PrepareRegistrationOnlyApi(builder, entra, api);
+            var annotations = entra.Resource.Annotations.ToArray();
+            var templateParameters = entra.Resource.Parameters.ToArray();
+            var permissions = entra.Resource.ApiAccess.SelectMany(a => a.Declared).ToArray();
+
+            var exception = Assert.Throws<InvalidOperationException>(configure);
+
+            Assert.StartsWith("Entra ID application 'entra' is an existing registration, and Aspire does not modify existing registrations. ", exception.Message);
+            var remediation = api switch
+            {
+                var name when name.StartsWith("redirect", StringComparison.Ordinal) => "Configure web redirect URIs",
+                var name when name.Contains("owner", StringComparison.Ordinal) => "owners",
+                "id-token" => "Enable 'ID tokens",
+                "role" or "role-export" => "Configure application roles",
+                "default-uri" or "default-uri-export" => "Call WithApplicationIdUri with the URI",
+                "local-certificate" => "Configure a certificate",
+                var name when name.StartsWith("federation", StringComparison.Ordinal) => "then call WithFederatedManagedIdentityCredential with the identity's client ID",
+                "pre-authorization" => "Configure pre-authorized client applications",
+                _ => "Grant admin consent"
+            };
+            Assert.Contains(remediation, exception.Message);
+            Assert.Equal(annotations, entra.Resource.Annotations);
+            Assert.Equal(templateParameters, entra.Resource.Parameters);
+            Assert.Equal(permissions, entra.Resource.ApiAccess.SelectMany(a => a.Declared));
+            Assert.Empty(entra.Resource.RedirectUris);
+            Assert.Empty(entra.Resource.RedirectUriParameters);
+            Assert.Empty(entra.Resource.ApplicationOwners);
+            Assert.Empty(entra.Resource.ServicePrincipalOwners);
+            Assert.Empty(entra.Resource.AppRoles);
+            Assert.Empty(entra.Resource.PreAuthorizedClients);
+            Assert.Empty(entra.Resource.ApiAccess.SelectMany(a => a.Consented));
+            Assert.Empty(entra.Resource.ClientCredentials);
+            Assert.False(entra.Resource.EnableIdTokenIssuance);
+            Assert.False(entra.Resource.UsesDefaultApplicationIdUri);
+            Assert.False(entra.Resource.HasLocalDeveloperCertificateConfiguration);
+            Assert.False(entra.Resource.HasPublishFederationConfiguration);
+            Assert.Equal("api://existing", entra.Resource.ApplicationIdUri);
+            Assert.True(entra.Resource.IsExistingApplication);
+            Assert.Null(entra.Resource.ProvisioningTaskCompletionSource);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(RegistrationOnlyApiCases))]
+    public void AsExistingApplication_RejectsRegistrationOnlySettingsBeforeMutation(DistributedApplicationOperation operation, string api)
+    {
+        foreach (var conversion in new[] { "literal", "parameter", "export" })
+        {
+            using var builder = TestDistributedApplicationBuilder.Create(operation);
+            var entra = builder.AddEntraIdApplication("entra");
+            PrepareRegistrationOnlyApi(builder, entra, api)();
+            var tenant = builder.AddParameter("tenant", TenantId);
+            var client = builder.AddParameter("client", ClientId);
+            var annotations = entra.Resource.Annotations.ToArray();
+            var task = entra.Resource.ProvisioningTaskCompletionSource;
+            entra.Resource.TenantId = "original.onmicrosoft.com";
+            entra.Resource.ClientId = ClientId;
+
+            var exception = Assert.Throws<InvalidOperationException>(() =>
+            {
+                _ = conversion switch
+                {
+                    "literal" => entra.AsExistingApplication(TenantId, ClientId),
+                    "parameter" => entra.AsExistingApplication(tenant, client),
+                    _ => entra.AsExistingApplicationForExport(tenant, ClientId)
+                };
+            });
+
+            Assert.StartsWith("Entra ID application 'entra' cannot be converted to an existing registration", exception.Message);
+            Assert.Contains("before calling AsExistingApplication", exception.Message);
+            Assert.False(entra.Resource.IsExistingApplication);
+            Assert.Same(task, entra.Resource.ProvisioningTaskCompletionSource);
+            Assert.Equal(annotations, entra.Resource.Annotations);
+            Assert.Equal("original.onmicrosoft.com", entra.Resource.TenantId);
+            Assert.Equal(ClientId, entra.Resource.ClientId);
+            Assert.Null(entra.Resource.TenantIdParameter);
+            Assert.Null(entra.Resource.ClientIdParameter);
+        }
+    }
+
+    private static Action PrepareRegistrationOnlyApi(
+        IDistributedApplicationBuilder builder,
+        IResourceBuilder<EntraIdApplicationResource> entra,
+        string api)
+    {
+        var parameter = builder.AddParameter("value", ClientId);
+        var targetApi = builder.AddExistingEntraApplication("target-api", TenantId, ClientId)
+            .WithApplicationIdUri("api://target")
+            .WithScope("read", "Read data.", scope => scope.Id = Guid.Parse(ClientId));
+        entra.WithApplicationIdUri("api://existing")
+            .WithScope("read", "Read data.", scope => scope.Id = Guid.Parse(ClientId))
+            .WithApiPermissions(targetApi, "read")
+            .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read"));
+        var consumer = builder.AddContainer("consumer", "image").WithHttpsEndpoint(targetPort: 8080).WithReference(entra);
+        var endpoint = consumer.GetEndpoint("https");
+        var identity = builder.AddAzureUserAssignedIdentity("identity");
+
+        return () =>
+        {
+            _ = api switch
+            {
+                "redirect-literal" => entra.WithRedirectUris("https://example.com/signin"),
+                "redirect-parameter" => entra.WithRedirectUris(parameter),
+                "redirect-endpoint" => entra.WithRedirectUris(endpoint, "/signin"),
+                "redirect-host" => entra.WithRedirectUris(parameter, "/signin"),
+                "redirect-export-literal" => entra.WithRedirectUrisForExport("https://example.com/signin"),
+                "redirect-export-parameter" => entra.WithRedirectUrisForExport(parameter),
+                "redirect-export-endpoint" => entra.WithRedirectUrisForExport(endpoint, ["/signin"]),
+                "redirect-export-host" => entra.WithRedirectUrisForExport(parameter, ["/signin"]),
+                "application-owner-literal" => entra.WithApplicationOwners(ClientId),
+                "application-owner-parameter" => entra.WithApplicationOwners(parameter),
+                "application-owner-export-literal" => entra.WithApplicationOwnersForExport(ClientId),
+                "application-owner-export-parameter" => entra.WithApplicationOwnersForExport(parameter),
+                "service-principal-owner-literal" => entra.WithServicePrincipalOwners(ClientId),
+                "service-principal-owner-parameter" => entra.WithServicePrincipalOwners(parameter),
+                "service-principal-owner-export-literal" => entra.WithServicePrincipalOwnersForExport(ClientId),
+                "service-principal-owner-export-parameter" => entra.WithServicePrincipalOwnersForExport(parameter),
+                "owners-literal" => entra.WithOwners(ClientId),
+                "owners-parameter" => entra.WithOwners(parameter),
+                "owners-export-literal" => entra.WithOwnersForExport(ClientId),
+                "owners-export-parameter" => entra.WithOwnersForExport(parameter),
+                "id-token" => entra.WithIdTokenIssuance(),
+                "role" => entra.WithAppRole(new EntraIdAppRole("Reader", "Reader", "Read data.")),
+                "role-export" => entra.WithAppRoleForExport("Reader", "Reader", "Read data."),
+                "default-uri" => entra.WithApplicationIdUri(),
+                "default-uri-export" => entra.WithApplicationIdUriForExport(),
+                "local-certificate" => entra.RunWithLocalDeveloperCertificateCredential(),
+                "federation-consumer" => entra.PublishWithFederatedManagedIdentityCredential(),
+                "federation-compute" => entra.PublishWithFederatedManagedIdentityCredential(consumer),
+                "federation-identity" => entra.PublishWithFederatedManagedIdentityCredential(identity),
+                "federation-export-consumer" => entra.PublishWithFederatedManagedIdentityCredentialForExport(),
+                "federation-export-compute" => entra.PublishWithFederatedManagedIdentityCredentialForExport(consumer),
+                "federation-export-identity" => entra.PublishWithFederatedManagedIdentityCredentialForExport(identity),
+                "pre-authorization" => entra.WithPreAuthorizedApplication(targetApi, "read"),
+                "consent-api" => entra.WithAdminConsent(targetApi, "read"),
+                "consent-external" => entra.WithAdminConsent(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read")),
+                "consent-external-export" => entra.WithExternalApiAdminConsentForExport(EntraIdWellKnownApi.MicrosoftGraph, [new() { Name = "User.Read" }]),
+                _ => throw new ArgumentOutOfRangeException(nameof(api))
+            };
+        };
+    }
+
     [Fact]
     public async Task WithOwners_GeneratesOwnerRelationships()
     {
@@ -1098,11 +1273,18 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(DistributedApplicationOperation.Run)]
     [InlineData(DistributedApplicationOperation.Publish)]
-    public async Task WithIdTokenIssuance_DoesNotProvisionExistingApplication(DistributedApplicationOperation operation)
+    public async Task WithIdTokenIssuance_ThrowsWithoutProvisioningExistingApplication(DistributedApplicationOperation operation)
     {
         using var builder = TestDistributedApplicationBuilder.Create(operation);
-        var entra = builder.AddExistingEntraApplication("entra-web", tenantId: TenantId, clientId: ClientId)
-            .WithIdTokenIssuance();
+        var entra = builder.AddExistingEntraApplication("entra-web", tenantId: TenantId, clientId: ClientId);
+
+        var exception = Assert.Throws<InvalidOperationException>(entra.WithIdTokenIssuance);
+
+        Assert.Equal(
+            "Entra ID application 'entra-web' is an existing registration, and Aspire does not modify existing registrations. " +
+            "Enable 'ID tokens (used for implicit and hybrid flows)' in the registration's Authentication settings in the Microsoft Entra admin center.",
+            exception.Message);
+        Assert.False(entra.Resource.EnableIdTokenIssuance);
 
         Assert.True(entra.Resource.IsExistingApplication);
         Assert.Equal(TenantId, entra.Resource.TenantId);

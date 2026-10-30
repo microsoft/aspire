@@ -387,12 +387,14 @@ public class EntraIdPolyglotTests
         Assert.Equal(nativeWeb.Resource.GetBicepTemplateString(), exportedWeb.Resource.GetBicepTemplateString());
     }
 
-    [Fact]
-    public async Task ApiExports_ExistingRegistrationsFlowToConsumerConfiguration()
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public async Task ApiExports_ExistingRegistrationsFlowToConsumerConfiguration(DistributedApplicationOperation operation)
     {
-        static async Task<Dictionary<string, string>> Evaluate(bool export)
+        async Task<Dictionary<string, string>> Evaluate(bool export)
         {
-            using var builder = TestDistributedApplicationBuilder.Create();
+            using var builder = TestDistributedApplicationBuilder.Create(operation);
             var scopeId = new Guid("11112222-aaaa-3333-bbbb-4444cccc5555");
             var api = builder.AddExistingEntraApplicationForExport("entra-api", TenantId, ClientId);
             var web = builder.AddExistingEntraApplicationForExport("entra-web", TenantId, "22223333-aaaa-4444-bbbb-5555cccc6666");
@@ -417,7 +419,7 @@ public class EntraIdPolyglotTests
             }
 
             return await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-                consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+                consumer.Resource, operation, TestServiceProvider.Instance);
         }
 
         var exported = await Evaluate(export: true);
