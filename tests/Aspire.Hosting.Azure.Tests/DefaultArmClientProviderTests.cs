@@ -10,6 +10,7 @@ using Azure;
 using Azure.Core;
 using Azure.Core.Pipeline;
 using Azure.ResourceManager;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -25,6 +26,33 @@ public class DefaultArmClientProviderTests
     private static readonly TimeSpan s_keyVaultPollInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan s_keyVaultDeleteTimeout = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan s_keyVaultPurgeTimeout = TimeSpan.FromMinutes(10);
+
+    [Fact]
+    public async Task ProvisioningResourceCreatesArmClientWithConfiguredEnvironmentAndTransport()
+    {
+        var transport = new ProviderMetadataTransport();
+        var credential = new CapturingTokenCredential();
+        var environment = new ArmEnvironment(
+            new Uri("https://management.contoso.example"),
+            "https://management.contoso.example");
+        var services = new ServiceCollection();
+        services.AddSingleton<ITokenCredentialProvider>(new TestTokenCredentialProvider(credential));
+        services.AddSingleton<IArmClientProvider>(new DefaultArmClientProvider(new ArmClientOptions
+        {
+            Environment = environment,
+            Transport = transport
+        }, TimeProvider.System));
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var armClient = TestAzureProvisioningResource.CreateArmClientForTest(serviceProvider);
+        var subscription = await armClient.GetSubscriptions().GetAsync(SubscriptionId);
+
+        Assert.Equal(SubscriptionId, subscription.Value.Data.SubscriptionId);
+        Assert.NotEmpty(transport.RequestUris);
+        Assert.All(transport.RequestUris, static uri => Assert.Equal("management.contoso.example", uri.Host));
+        Assert.NotEmpty(credential.Scopes);
+        Assert.All(credential.Scopes, static scope => Assert.Equal("https://management.contoso.example/.default", scope));
+    }
 
     [Fact]
     public async Task GetSupportedLocationsAsyncUsesConfiguredArmEnvironment()

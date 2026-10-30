@@ -4,13 +4,52 @@
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
+using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Utils;
+using Azure.ResourceManager;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureProvisioningResourceTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public void CreateArmClientUsesProvisioningCredentialAndClientProvider()
+    {
+        var credential = ProvisioningTestHelpers.CreateTokenCredential();
+        var expectedClient = new ArmClient(credential);
+        var services = new ServiceCollection();
+        services.AddSingleton<ITokenCredentialProvider>(new TestTokenCredentialProvider(credential));
+        services.AddSingleton<IArmClientProvider>(new TestArmClientProvider(suppliedCredential =>
+        {
+            Assert.Same(credential, suppliedCredential);
+            return expectedClient;
+        }));
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var client = TestAzureProvisioningResource.CreateArmClientForTest(serviceProvider);
+
+        Assert.Same(expectedClient, client);
+    }
+
+    [Fact]
+    public void CreateArmClientRequiresServices()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            TestAzureProvisioningResource.CreateArmClientForTest(null!));
+
+        Assert.Equal("services", exception.ParamName);
+    }
+
+    [Fact]
+    public void CreateArmClientRequiresAzureProvisioning()
+    {
+        using var serviceProvider = new ServiceCollection().BuildServiceProvider();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            TestAzureProvisioningResource.CreateArmClientForTest(serviceProvider));
+    }
+
     [Fact]
     public async Task PublishAsAzureContainerApp_CreatesAzureContainerAppResource()
     {

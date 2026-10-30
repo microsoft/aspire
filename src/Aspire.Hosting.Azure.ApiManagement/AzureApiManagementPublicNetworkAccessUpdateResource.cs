@@ -9,7 +9,6 @@
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Hosting.Azure.ApiManagement.Provisioning;
-using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Pipelines;
 using Azure;
 using Azure.Core;
@@ -20,7 +19,6 @@ using Azure.Provisioning.Network;
 using Azure.Provisioning.Resources;
 using Azure.Provisioning.Roles;
 using Azure.ResourceManager;
-using Microsoft.Extensions.DependencyInjection;
 using ArmGenericResourceData = global::Azure.ResourceManager.Resources.GenericResourceData;
 
 namespace Aspire.Hosting.Azure;
@@ -90,8 +88,7 @@ internal sealed class AzureApiManagementPublicNetworkAccessUpdateResource
                         ?? throw new InvalidOperationException($"Missing resource ID output for private endpoint '{privateEndpoint.Name}'.");
                     privateEndpointIds.Add(privateEndpointId);
                 }
-                var credential = context.Services.GetRequiredService<ITokenCredentialProvider>().TokenCredential;
-                var armClient = context.Services.GetRequiredService<IArmClientProvider>().GetRawArmClient(credential);
+                var armClient = CreateArmClient(context.Services);
 
                 await AzureApiManagementPublicNetworkAccessUpdater.DisableAsync(
                     armClient,
