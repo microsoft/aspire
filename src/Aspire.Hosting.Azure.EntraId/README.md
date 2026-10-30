@@ -312,7 +312,51 @@ Role IDs are derived from the resource name and role value (or supplied with the
 
 Whenever the application declares at least one role, Aspire sends the complete `appRoles` collection and Microsoft Graph replaces what is stored, so include every role you want to keep, including ones that were added outside the AppHost. A role that is left out fails the deployment if it is still enabled (`CannotDeleteOrUpdateEnabledEntitlement`) and is deleted if it is already disabled. When the application declares no roles, Aspire doesn't send `appRoles`, so roles that the AppHost never declared are left alone.
 
-To retire a role, deploy it with `isEnabled: false` and leave it declared. A disabled role can't be assigned to anyone new, but Microsoft Entra [keeps issuing it in tokens for existing assignments](https://learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps#app-roles-ui), so disabling isn't access revocation; remove the existing assignments separately. A role can be removed from the AppHost only after a deployment has disabled it, and only while other roles remain declared. Existing registrations are never modified, and role assignments are not provisioned yet.
+To retire a role, remove its `PublishWithAppRoleAssignment` calls, deploy it with `isEnabled: false` and leave it declared. A disabled role can't be assigned to anyone new, but Microsoft Entra [keeps issuing it in tokens for existing assignments](https://learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps#app-roles-ui), so disabling isn't access revocation; remove the existing assignments separately. A role can be removed from the AppHost only after a deployment has disabled it, and only while other roles remain declared. Existing registrations are never modified.
+
+### Assign API roles directly to managed identities
+
+`PublishWithAppRoleAssignment` grants a user-assigned managed identity (UAMI) an application role on an Aspire-created API registration. The role must be declared, enabled, and allow `Application` members. Callers authenticate directly as their managed identities; no caller registration or federated credential is needed.
+
+**C#**
+
+```csharp
+var callerIdentity = builder.AddAzureUserAssignedIdentity("caller-identity");
+var caller = builder.AddProject<Projects.Worker>("worker")
+    .WithAzureUserAssignedIdentity(callerIdentity);
+
+var entraApi = builder.AddEntraIdApplication("entra-api")
+    .WithApplicationIdUri()
+    .WithAppRole(new EntraIdAppRole("Orders.Read", "Read orders", "Read orders.", ["Application"]))
+    .PublishWithAppRoleAssignment(callerIdentity, "Orders.Read");
+
+var api = builder.AddProject<Projects.Api>("api").WithReference(entraApi);
+
+// Alternatively, pass the workload instead of callerIdentity.
+entraApi.PublishWithAppRoleAssignment(caller, "Orders.Read");
+```
+
+**TypeScript**
+
+```typescript
+const caller = await builder.addContainer("worker", "my-worker-image");
+const entraApi = await builder.addEntraIdApplication("entra-api")
+    .withApplicationIdUri()
+    .withAppRole("Orders.Read", "Read orders", "Read orders.", {
+        allowedMemberTypes: ["Application"],
+    })
+    .publishWithAppRoleAssignment(caller, ["Orders.Read"]);
+```
+
+Assignments apply **only during publish/deploy**, not local run. The workload overload uses its attached UAMI or lets a supported Azure deployment environment create one.
+
+Configure the caller to use its UAMI and request a token for the API's application ID URI plus `/.default` (by default, `api://{apiClientId}/.default`). Reference `entraApi` from the API workload, not the caller: its settings identify the API registration. Pass the API URL and target application ID URI separately to the caller.
+
+The API must validate tokens and require the assigned role on protected routes. An unassigned identity can receive a token without roles, so authentication alone does not grant access.
+
+**Deployment privileges.** The deployer needs `AppRoleAssignment.ReadWrite.All` and `Application.Read.All` (or a higher permission covering reads). Application permissions require administrator consent; delegated deployments also require a [supported Entra directory role](https://learn.microsoft.com/graph/api/serviceprincipal-post-approleassignedto#permissions). Azure subscription Owner/Contributor alone is insufficient. Callers do not need these Graph permissions.
+
+**Revoking access.** Removing an assignment call, changing its target, or excluding a caller **does not revoke existing grants**. Remove them explicitly through Microsoft Graph or the Entra admin center. Disabling a role is not revocation. Existing tokens remain valid until expiration, and managed-identity token caches can delay observed changes.
 
 ### Clean up created registrations
 

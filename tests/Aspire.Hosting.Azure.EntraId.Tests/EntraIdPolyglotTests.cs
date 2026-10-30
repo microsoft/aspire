@@ -504,6 +504,41 @@ public class EntraIdPolyglotTests
         Assert.Empty(entra.Resource.Consumers);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AppRoleAssignments_ExportAcceptsIdentityAndCompute(bool compute)
+    {
+        const string CapabilityId = "Aspire.Hosting.Azure.EntraId/publishWithAppRoleAssignment";
+        var exports = ScanExports();
+        var capability = Assert.Single(exports.Capabilities, c => c.CapabilityId == CapabilityId);
+        Assert.Equal("publishWithAppRoleAssignment", capability.MethodName);
+        var method = exports.Methods[CapabilityId];
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var identity = builder.AddAzureUserAssignedIdentity("caller-identity");
+        var worker = builder.AddContainer("worker", "image").WithAzureUserAssignedIdentity(identity);
+        var api = builder.AddEntraIdApplication("entra-api")
+            .WithAppRoleForExport("Read", "Read", "Read.", ["Application"]);
+        object target = compute ? worker : identity;
+
+        Assert.Same(api, method.Invoke(null, [api, target, new[] { "Read" }]));
+        var assignment = Assert.Single(api.Resource.GetManagedIdentityRoleAssignments(requireIdentity: true));
+        Assert.Same(identity.Resource, assignment.Identity);
+        Assert.Equal("Read", assignment.Role.Value);
+        await Verify(api.Resource.GetBicepTemplateString(), "bicep").UseParameters(compute);
+    }
+
+    [Fact]
+    public void AppRoleAssignments_ExportRejectsUnsupportedTargets()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var api = builder.AddEntraIdApplication("entra-api")
+            .WithAppRoleForExport("Read", "Read", "Read.", ["Application"]);
+        Assert.Throws<ArgumentException>(() => api.PublishWithAppRoleAssignmentForExport(42, ["Read"]));
+        Assert.Throws<ArgumentNullException>(() => api.PublishWithAppRoleAssignmentForExport(null!, ["Read"]));
+        Assert.Empty(api.Resource.AppRoleAssignments);
+    }
+
     private static AtsCapabilityScanner.ScanResult ScanExports() => AtsCapabilityScanner.ScanAssemblies(
         [typeof(DistributedApplication).Assembly, typeof(AzureProvisioningResource).Assembly, typeof(EntraIdApplicationResource).Assembly]);
 

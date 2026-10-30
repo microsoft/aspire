@@ -1826,6 +1826,152 @@ public static class EntraIdResourceExtensions
     }
 
     /// <summary>
+    /// When published, assigns application roles of this API to a user-assigned managed identity.
+    /// </summary>
+    /// <param name="builder">The API registration builder.</param>
+    /// <param name="identity">The managed identity receiving the roles. Workloads attach it with <c>WithAzureUserAssignedIdentity</c>.</param>
+    /// <param name="roleValues">The values of enabled roles declared with <c>WithAppRole</c> that allow <c>Application</c> members.</param>
+    /// <returns>The API registration builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when an argument is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when no roles are supplied or a role is unknown, disabled, or does not allow application members.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the API references an existing registration.</exception>
+    /// <remarks>
+    /// <para>
+    /// This explicitly grants access to the identity's service-principal object ID, not its client ID. The caller authenticates
+    /// directly as its managed identity; no caller registration or federated credential is created. This does not attach the
+    /// identity to a workload or configure its token acquisition. The API must validate tokens and enforce the required role.
+    /// </para>
+    /// <para>
+    /// Assignments are published only; this has no effect during local run. Removing this call does not revoke a deployed
+    /// assignment: remove it explicitly with Microsoft Graph or the Entra admin center. Already-issued tokens remain valid
+    /// until expiration, and managed-identity token caches can delay revocation.
+    /// </para>
+    /// <para>
+    /// Deployment requires the Microsoft Graph permissions <c>AppRoleAssignment.ReadWrite.All</c> and <c>Application.Read.All</c>
+    /// (or a higher permission covering application reads), with administrator consent. Delegated deployments also need a
+    /// supported Entra directory role. Azure RBAC permissions alone do not authorize directory assignments.
+    /// See <see href="https://learn.microsoft.com/graph/api/serviceprincipal-post-approleassignedto"/>.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var identity = builder.AddAzureUserAssignedIdentity("worker-identity");
+    /// var api = builder.AddEntraIdApplication("orders-api")
+    ///     .WithApplicationIdUri()
+    ///     .WithAppRole(new EntraIdAppRole("Orders.Read", "Read orders", "Read orders.", ["Application"]))
+    ///     .PublishWithAppRoleAssignment(identity, "Orders.Read");
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "The publishWithAppRoleAssignment export accepts an identity or compute resource using a union.")]
+    public static IResourceBuilder<EntraIdApplicationResource> PublishWithAppRoleAssignment(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<AzureUserAssignedIdentityResource> identity,
+        params string[] roleValues)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(identity);
+        return PublishWithAppRoleAssignmentCore(builder, identity.Resource, roleValues);
+    }
+
+    /// <summary>
+    /// When published, assigns application roles of this API to a compute resource's user-assigned managed identity.
+    /// </summary>
+    /// <typeparam name="T">The type of the compute resource.</typeparam>
+    /// <param name="builder">The API registration builder.</param>
+    /// <param name="computeResource">The compute resource whose managed identity receives the roles.</param>
+    /// <param name="roleValues">The values of enabled roles declared with <c>WithAppRole</c> that allow <c>Application</c> members.</param>
+    /// <returns>The API registration builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when an argument is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when no roles are supplied or a role is unknown, disabled, or does not allow application members.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the API references an existing registration or the published compute resource has no user-assigned managed identity.</exception>
+    /// <remarks>
+    /// The Azure environment reuses the compute resource's attached identity or creates one during deployment preparation.
+    /// The identity is resolved after preparation; the compute resource need not reference this registration.
+    /// An excluded compute resource receives no assignment. This does not configure federation or token acquisition.
+    /// Like the explicit-identity overload, this is publish-only, requires directory assignment privileges, and does not
+    /// revoke assignments when a call is removed.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var worker = builder.AddProject&lt;Projects.Worker&gt;("worker");
+    /// api.PublishWithAppRoleAssignment(worker, "Orders.Read");
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "The publishWithAppRoleAssignment export accepts an identity or compute resource using a union.")]
+    public static IResourceBuilder<EntraIdApplicationResource> PublishWithAppRoleAssignment<T>(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<T> computeResource,
+        params string[] roleValues)
+        where T : IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(computeResource);
+        return PublishWithAppRoleAssignmentCore(builder, computeResource.Resource, roleValues);
+    }
+
+    /// <summary>
+    /// Publishes explicit application-role assignments to a managed identity or a compute resource's managed identity.
+    /// </summary>
+    /// <param name="builder">The API registration builder.</param>
+    /// <param name="identity">The user-assigned identity or compute resource receiving the roles.</param>
+    /// <param name="roleValues">Enabled role values declared on this API that allow Application members.</param>
+    /// <returns>The API registration builder.</returns>
+    /// <remarks>
+    /// Has no effect during local run. Existing registrations are not modified. No caller registration or federation is created.
+    /// Requires Graph AppRoleAssignment.ReadWrite.All and Application.Read.All (or higher application-read permission), administrator
+    /// consent and, for delegated deployment, a supported Entra directory role. Removing a call does not revoke a deployed grant.
+    /// </remarks>
+    [AspireExport("publishWithAppRoleAssignment")]
+    internal static IResourceBuilder<EntraIdApplicationResource> PublishWithAppRoleAssignmentForExport(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        [AspireUnion(typeof(IResourceBuilder<AzureUserAssignedIdentityResource>), typeof(IResourceBuilder<IComputeResource>))] object identity,
+        string[] roleValues)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        return identity switch
+        {
+            IResourceBuilder<AzureUserAssignedIdentityResource> managedIdentity => builder.PublishWithAppRoleAssignment(managedIdentity, roleValues),
+            IResourceBuilder<IComputeResource> compute => builder.PublishWithAppRoleAssignment(compute, roleValues),
+            _ => throw new ArgumentException("Expected a user-assigned managed identity or a compute resource.", nameof(identity))
+        };
+    }
+
+    private static IResourceBuilder<EntraIdApplicationResource> PublishWithAppRoleAssignmentCore(
+        IResourceBuilder<EntraIdApplicationResource> builder,
+        IResource target,
+        string[] roleValues)
+    {
+        ArgumentNullException.ThrowIfNull(roleValues);
+        if (builder.Resource.IsExistingApplication)
+        {
+            throw new InvalidOperationException(
+                $"Entra ID application '{builder.Resource.Name}' is an existing registration. Application role assignments can only be published for registrations created by Aspire.");
+        }
+
+        if (roleValues.Length == 0)
+        {
+            throw new ArgumentException("At least one application role value is required.", nameof(roleValues));
+        }
+
+        foreach (var value in roleValues)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(value, nameof(roleValues));
+            _ = builder.Resource.GetAssignableAppRole(value);
+        }
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            builder.Resource.AppRoleAssignments.Add(new EntraIdAppRoleAssignment(target, [.. roleValues.Distinct(StringComparer.Ordinal)]));
+            if (target is IComputeResource)
+            {
+                EnsureManagedIdentityRequired(target);
+            }
+        }
+
+        return builder;
+    }
+
+    /// <summary>
     /// Enables ID-token issuance through implicit and hybrid flows for a registration created by Aspire.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
