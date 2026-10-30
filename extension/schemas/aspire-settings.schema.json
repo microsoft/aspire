@@ -13,6 +13,22 @@
       "description": "Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).",
       "type": "object",
       "properties": {
+        "appHostServerV2": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Use AppHost Server v2 for this AppHost. Requires an explicit project configuration setting.",
+          "default": false
+        },
         "defaultWatchEnabled": {
           "anyOf": [
             {
@@ -27,6 +43,22 @@
             }
           ],
           "description": "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
+          "default": false
+        },
+        "experimentalHostingIntegrations": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable experimental hosting integrations authored outside .NET",
           "default": false
         },
         "experimentalPolyglotGo": {

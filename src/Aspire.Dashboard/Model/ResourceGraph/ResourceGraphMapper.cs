@@ -62,7 +62,10 @@ public static class ResourceGraphMapper
             },
             ReferencedNames = resolvedNames.Distinct().OrderBy(n => n).ToImmutableArray(),
             EndpointUrl = r.IsParameter ? null : endpoint?.Url,
-            EndpointText = resolvedEndpointText
+            EndpointText = resolvedEndpointText,
+            // Resources marked hidden are included only while "Show hidden resources" is enabled.
+            // Preserve that distinction for graph rendering, where there is no row treatment.
+            IsHidden = r.IsResourceHidden(showHiddenResources: false)
         };
 
         return dto;

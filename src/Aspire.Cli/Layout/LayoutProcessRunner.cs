@@ -3,7 +3,7 @@
 
 using System.Text;
 using Aspire.Cli.DotNet;
-using Aspire.Cli.Processes;
+using Aspire.Shared;
 
 namespace Aspire.Cli.Layout;
 
@@ -30,23 +30,15 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
             StandardOutputCallback = line => outputBuilder.AppendLine(line),
             StandardErrorCallback = line => errorBuilder.AppendLine(line),
             KillOnParentExit = killOnParentExit,
+            Lifetime = ChildProcessLifetime.OwnedTree,
         };
 
         var args = arguments.ToArray();
         var workDir = new DirectoryInfo(workingDirectory ?? Directory.GetCurrentDirectory());
 
-        // The Windows kill-on-close job (KillOnParentExit, above) and the cross-platform cooperative
-        // parent-liveness watchdog (activated by the ASPIRE_CLI_PID identity that
-        // WithOrphanDetectionEnvironment stamps) are two implementations of the SAME "don't outlive the
-        // CLI" policy. Arming BOTH on one child races the job's kernel TerminateProcess against the
-        // watchdog's Environment.Exit(124) when the CLI exits, which can get the child stuck mid-teardown.
-        // So we use exactly one mechanism per child: on Windows the kill-on-close
-        // job is authoritative (kernel-enforced), and we do not use the watchdog.
-        // Everywhere else KillOnParentExit is a no-op, and the cooperative watchdog remains the sole mechanism 
-        // and MUST have relevant environment variables set.
-        var effectiveEnvironment = options.KillOnParentExit && OperatingSystem.IsWindows()
-            ? CopyEnvironment(environmentVariables)
-            : WithOrphanDetectionEnvironment(environmentVariables);
+        // Parent-death protection belongs to the shared guardian, not the helper's
+        // event loop. In particular, a stopped or blocked helper cannot run a watchdog.
+        var effectiveEnvironment = CopyEnvironment(environmentVariables);
 
         await using var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, options);
 
@@ -81,10 +73,11 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
             effectiveOptions.KillOnParentExit = true;
         }
 
-        // Compare with RunAsync: the same logic applies here.
-        var effectiveEnvironment = effectiveOptions.KillOnParentExit && OperatingSystem.IsWindows()
-            ? CopyEnvironment(environmentVariables)
-            : WithOrphanDetectionEnvironment(environmentVariables);
+        if (!effectiveOptions.Detached && effectiveOptions.Lifetime != ChildProcessLifetime.AppHost)
+        {
+            effectiveOptions.Lifetime = ChildProcessLifetime.OwnedTree;
+        }
+        var effectiveEnvironment = CopyEnvironment(environmentVariables);
 
         var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, effectiveOptions);
 
@@ -98,17 +91,6 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
         }
 
         return execution;
-    }
-
-    private static IDictionary<string, string> WithOrphanDetectionEnvironment(IDictionary<string, string>? environmentVariables)
-    {
-        var environment = CopyEnvironment(environmentVariables);
-
-        // Stamp the launching CLI's identity, but never override values the caller already supplied
-        // so an explicit caller override always wins.
-        OrphanDetectionEnvironment.ApplyCurrentProcess(environment, overwrite: false);
-
-        return environment;
     }
 
     private static IDictionary<string, string> CopyEnvironment(IDictionary<string, string>? environmentVariables)

@@ -169,7 +169,9 @@ internal sealed class LayoutBuilder : IDisposable
 
         // Copy components
         CopyManaged();
+        CopyAppHostServer();
         CopyDashboard();
+        CopyTerminalHost();
         CopyTray();
         await CopyDcpAsync().ConfigureAwait(false);
 
@@ -258,25 +260,56 @@ internal sealed class LayoutBuilder : IDisposable
 
         File.Copy(managedExePath, Path.Combine(managedDir, managedExeName), overwrite: true);
 
-        if (isWindows)
-        {
-            // Hex1b launches hex1bpty.exe beside the app; conpty.dll must stay beside that helper.
-            // ConPTY selects OpenConsole by OS architecture, so win-x64 also needs the ARM64 host
-            // when running under emulation. These files cannot live inside the managed single-file.
-            // https://github.com/microsoft/terminal/blob/main/src/winconpty/winconpty.cpp
-            string[] ptyFiles = _rid == "win-x64"
-                ? ["hex1bpty.exe", "conpty.dll", "x64/OpenConsole.exe", "arm64/OpenConsole.exe"]
-                : ["hex1bpty.exe", "conpty.dll", "arm64/OpenConsole.exe"];
+        Log($"  Copied aspire-managed to managed/");
+    }
 
-            foreach (var relativePath in ptyFiles)
+    internal void CopyTerminalHost()
+    {
+        var publishPath = FindPublishPath("Aspire.TerminalHost", "net11.0", requireRidSpecific: true)
+            ?? throw new InvalidOperationException("Aspire.TerminalHost RID-specific publish output not found.");
+        foreach (var file in TerminalHostPayload.GetRequiredFiles(_rid))
+        {
+            var path = Path.Combine(publishPath, file);
+            if (!File.Exists(path) || new FileInfo(path).Length == 0)
             {
-                var destination = Path.Combine(managedDir, relativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                File.Copy(Path.Combine(managedPublishPath, relativePath), destination, overwrite: true);
+                throw new InvalidOperationException($"Required Native AOT terminal host payload missing or empty at {path}");
             }
         }
 
-        Log($"  Copied aspire-managed to managed/");
+        CopyDirectory(publishPath, Path.Combine(_outputPath, "terminalhost"), excludeSymbols: true);
+
+        // Existing Hosting versions discover DCP's ConPTY provider beside the configured terminal
+        // executable. Compatibility launches point at managed/aspire-managed.exe, so retain the
+        // Windows PTY sidecars there as well; otherwise DCP falls back to inbox ConPTY and loses Kitty graphics.
+        foreach (var file in TerminalHostPayload.GetWindowsPtyFiles(_rid))
+        {
+            var destination = Path.Combine(_outputPath, "managed", file);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(Path.Combine(publishPath, file), destination, overwrite: true);
+        }
+
+        Log("  Copied Native AOT terminal host to terminalhost/");
+    }
+
+    internal void CopyAppHostServer()
+    {
+        var publishPath = FindPublishPath("Aspire.Hosting.Native.Server", "net11.0", requireRidSpecific: true)
+            ?? throw new InvalidOperationException("AppHost Server v2 publish output not found.");
+        var extension = _rid.StartsWith("win-", StringComparison.Ordinal) ? ".exe" : "";
+        var source = Path.Combine(publishPath, "Aspire.Hosting.Native.Server" + extension);
+        foreach (var requiredFile in new[] { source, Path.Combine(publishPath, "ats-contract.json") })
+        {
+            if (!File.Exists(requiredFile) || new FileInfo(requiredFile).Length == 0)
+            {
+                throw new InvalidOperationException($"AppHost Server v2 payload missing or empty at {requiredFile}");
+            }
+        }
+        var destination = Path.Combine(_outputPath, "apphost-server");
+        CopyDirectory(publishPath, destination, excludeSymbols: true);
+        // Product naming is independent of the assembly identity used in ATS type IDs.
+        File.Move(Path.Combine(destination, Path.GetFileName(source)),
+            Path.Combine(destination, "aspire-apphost-server" + extension), overwrite: true);
+        Log("Copied AppHost Server v2 to apphost-server/");
     }
 
     internal void CopyDashboard()

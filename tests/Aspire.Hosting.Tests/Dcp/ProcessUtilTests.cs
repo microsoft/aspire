@@ -4,6 +4,7 @@
 using System.Text.Json;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Tests.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
@@ -16,26 +17,33 @@ public class ProcessUtilTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var callbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var processStarted = new TaskCompletionSource<System.Diagnostics.Process>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var spec = CreateSingleLineOutputProcessSpec(workspace, output =>
         {
             Assert.Equal("final-line", output);
             callbackStarted.TrySetResult();
             releaseCallback.Task.GetAwaiter().GetResult();
-        });
+        }, pid => processStarted.TrySetResult(System.Diagnostics.Process.GetProcessById(pid)));
 
         var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
 
         await using (processDisposable)
         {
-            await callbackStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
-            await Task.Delay(200);
+            using var process = await processStarted.Task.DefaultTimeout(TestConstants.LongTimeoutDuration);
+            try
+            {
+                await callbackStarted.Task.DefaultTimeout(TestConstants.LongTimeoutDuration);
+                // Observe actual process exit while its output callback is still blocked.
+                await process.WaitForExitAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
+                Assert.False(pendingProcessResult.IsCompleted);
+            }
+            finally
+            {
+                releaseCallback.TrySetResult();
+            }
 
-            Assert.False(pendingProcessResult.IsCompleted);
-
-            releaseCallback.TrySetResult();
-
-            var result = await pendingProcessResult.WaitAsync(TimeSpan.FromSeconds(30));
+            var result = await pendingProcessResult.DefaultTimeout(TestConstants.LongTimeoutDuration);
             Assert.Equal(0, result.ExitCode);
         }
     }
@@ -48,7 +56,7 @@ public class ProcessUtilTests(ITestOutputHelper outputHelper)
 
         await using (processDisposable)
         {
-            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pendingProcessResult).WaitAsync(TimeSpan.FromSeconds(30));
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pendingProcessResult).DefaultTimeout(TestConstants.LongTimeoutDuration);
 
             Assert.Contains("returned non-zero exit code 1", exception.Message);
             Assert.Contains("stdout-final-line", exception.Message);
@@ -71,7 +79,7 @@ public class ProcessUtilTests(ITestOutputHelper outputHelper)
 
         await using (processDisposable)
         {
-            var processResult = await pendingProcessResult.WaitAsync(TimeSpan.FromSeconds(30));
+            var processResult = await pendingProcessResult.DefaultTimeout(TestConstants.LongTimeoutDuration);
             var normalizedOutput = processResult.ProcessOutput.Select(static line => line.TrimEnd()).ToArray();
 
             Assert.Equal(1, processResult.ExitCode);
@@ -97,7 +105,7 @@ public class ProcessUtilTests(ITestOutputHelper outputHelper)
 
         await using (processDisposable)
         {
-            var result = await pendingProcessResult.WaitAsync(TimeSpan.FromSeconds(30));
+            var result = await pendingProcessResult.DefaultTimeout(TestConstants.LongTimeoutDuration);
 
             Assert.Equal(0, result.ExitCode);
             Assert.Contains("argument-list-value", outputLines);
@@ -121,7 +129,7 @@ public class ProcessUtilTests(ITestOutputHelper outputHelper)
 
         await using (processDisposable)
         {
-            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pendingProcessResult).WaitAsync(TimeSpan.FromSeconds(30));
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pendingProcessResult).DefaultTimeout(TestConstants.LongTimeoutDuration);
 
             Assert.Contains("returned non-zero exit code 7", exception.Message);
             Assert.Contains("failure-argument", exception.Message);
@@ -157,7 +165,7 @@ public class ProcessUtilTests(ITestOutputHelper outputHelper)
 
         await using (processDisposable)
         {
-            var result = await pendingProcessResult.WaitAsync(TimeSpan.FromSeconds(30));
+            var result = await pendingProcessResult.DefaultTimeout(TestConstants.LongTimeoutDuration);
 
             Assert.Equal(0, result.ExitCode);
             Assert.Contains("path-executable-output", outputLines);
@@ -189,7 +197,7 @@ public class ProcessUtilTests(ITestOutputHelper outputHelper)
 
         await using (processDisposable)
         {
-            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pendingProcessResult).WaitAsync(TimeSpan.FromSeconds(30));
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pendingProcessResult).DefaultTimeout(TestConstants.LongTimeoutDuration);
             var outputLines = exception.Message.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
             var normalizedOutputLines = outputLines.Select(static line => line.TrimEnd()).ToArray();
 
@@ -201,14 +209,14 @@ public class ProcessUtilTests(ITestOutputHelper outputHelper)
         }
     }
 
-    private static ProcessSpec CreateSingleLineOutputProcessSpec(TemporaryWorkspace workspace, Action<string> onOutputData)
+    private static ProcessSpec CreateSingleLineOutputProcessSpec(TemporaryWorkspace workspace, Action<string> onOutputData, Action<int> onStart)
     {
         var appPath = DotnetFileAppProcess.WriteApp(workspace.WorkspaceRoot.FullName, "single-line.cs", """
             #:sdk Microsoft.NET.Sdk
             Console.WriteLine("final-line");
             """);
 
-        return DotnetFileAppProcess.CreateDcpProcessSpec(appPath, onOutputData: onOutputData);
+        return DotnetFileAppProcess.CreateDcpProcessSpec(appPath, onOutputData: onOutputData, onStart: onStart);
     }
 
     private static ProcessSpec CreateFailingProcessSpec(

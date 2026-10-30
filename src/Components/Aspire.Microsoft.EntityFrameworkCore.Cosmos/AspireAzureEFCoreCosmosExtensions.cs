@@ -190,25 +190,14 @@ public static class AspireAzureEFCoreCosmosExtensions
 
         configureSettings?.Invoke(settings);
 
+        builder.CheckDbContextRegistered<TContext>();
+
         if (settings.RequestTimeout.HasValue)
         {
-            builder.CheckDbContextRegistered<TContext>();
-
-#if NET9_0_OR_GREATER
             builder.Services.ConfigureDbContext<TContext>(optionsBuilder =>
             {
                 ConfigureRequestTimeout<TContext>(optionsBuilder, settings);
             });
-#else
-            builder.PatchServiceDescriptor<TContext>(optionsBuilder =>
-            {
-                ConfigureRequestTimeout<TContext>(optionsBuilder, settings);
-            });
-#endif
-        }
-        else
-        {
-            builder.PatchServiceDescriptor<TContext>();
         }
 
         ConfigureInstrumentation<TContext>(builder, settings);

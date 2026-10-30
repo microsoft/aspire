@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	helmNamespace := builder.AddParameter("helm-namespace")
@@ -52,7 +52,7 @@ func main() {
 	_, _ = kubernetes.DefaultStorageClassName()
 	_, _ = kubernetes.DefaultServiceType()
 	if err = kubernetes.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	gateway := kubernetes.AddGateway("public-gateway")
@@ -88,14 +88,14 @@ func main() {
 		})
 	})
 	if err = serviceContainer.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

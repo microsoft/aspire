@@ -86,6 +86,34 @@ public class TemplatePackageLockTests
     }
 
     [Theory]
+    [InlineData("Aspire.Cli", "ts-starter")]
+    [InlineData("Aspire.Cli", "py-starter")]
+    [InlineData("Aspire.Cli", "java-starter")]
+    [InlineData("Aspire.ProjectTemplates", "aspire-ts-cs-starter")]
+    public void StarterFrontendPackageLock_UsesPatchedSourceMapJs(string projectName, string templateName)
+    {
+        var filePath = Path.Combine(
+            GetTemplateDirectory(projectName, templateName),
+            "frontend",
+            "package-lock.json");
+
+        using var packageLock = JsonDocument.Parse(File.ReadAllText(filePath));
+        var packages = packageLock.RootElement.GetProperty("packages").EnumerateObject()
+            .Where(package => package.Name.EndsWith("/source-map-js", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.NotEmpty(packages);
+        var minimumVersion = new Version(1, 2, 2);
+        Assert.All(packages, package =>
+        {
+            var version = Version.Parse(package.Value.GetProperty("version").GetString()!);
+            Assert.True(
+                version >= minimumVersion,
+                $"{package.Name} resolves source-map-js {version}, below the patched minimum {minimumVersion}.");
+        });
+    }
+
+    [Theory]
     [InlineData("ts-starter")]
     [InlineData("py-starter")]
     [InlineData("java-starter")]

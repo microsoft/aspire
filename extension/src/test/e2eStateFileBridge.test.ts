@@ -10,9 +10,13 @@ import WebSocket from 'ws';
 
 import { AspireExtensionContext } from '../AspireExtensionContext';
 import { registerTreeViewCommands } from '../activation/registerTreeViewCommands';
-import { csharpExtensionId, getCsharpBlazorWasmDebuggingSupport, useCsharpExtensionVersionProviderForTests } from '../capabilities';
+import { csharpExtensionId, getCsharpBlazorWasmDebuggingSupport, minimumCsharpBlazorWasmDebuggingVersion, useCsharpExtensionVersionProviderForTests } from '../capabilities';
 import { AppHostDataRepository, ViewMode } from '../data/AppHostDataRepository';
+import type { BrowserLaunchConfiguration } from '../dcp/types';
+import type { ResourceDebugger } from '../debugger/resourceDebugContracts';
+import { csharpExtensionMissingForBlazorDebugging } from '../loc/strings';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { executeE2eControlCommand, isBrowserDebugSessionType } from '../testing/e2eStateFileBridge';
 import { pipelineInteractionCapability } from '../types/configInfo';
 import { AspireExtensionE2EControlCommand } from '../types/extensionApi';
@@ -22,6 +26,7 @@ import * as configInfoProvider from '../utils/configInfoProvider';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import * as workspaceModule from '../utils/workspace';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
+import { EndpointUrlItem } from '../views/treeItems/resourceItems';
 
 import { createMockExtension, createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 
@@ -29,6 +34,13 @@ function createLaunchService(): AppHostLaunchService {
     return new AppHostLaunchService({
         getCapabilityStatus: async () => 'supported',
     });
+}
+
+function createResourceDebugger(): ResourceDebugger {
+    return {
+        canAttachToResource: () => false,
+        debug: async () => ({ outcome: 'unsupportedResource' }),
+    };
 }
 
 suite('E2E state file bridge', () => {
@@ -45,6 +57,113 @@ suite('E2E state file bridge', () => {
         sandbox.restore();
         removeDirectorySafely(runRoot);
     });
+
+    for (const route of [
+        { invocation: 'vscode.lm.invokeTool', direct: false, canceled: false },
+        { invocation: 'registeredToolDirect', direct: true, canceled: false },
+        { invocation: 'registeredToolCanceled', direct: false, canceled: true },
+        { invocation: 'registeredToolCanceled', direct: true, canceled: true },
+    ]) {
+        test(`reports the actual tool invocation route: ${route.invocation}, direct=${route.direct}`, async () => {
+            const repository = createRepository([]);
+            const terminalProvider = {} as AspireTerminalProvider;
+            const launchService = createLaunchService();
+            const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService, createResourceDebugger());
+            const result = new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('{"success":true}')]);
+            const invoke = sandbox.stub().callsFake(async (_options, token: vscode.CancellationToken) => {
+                assert.strictEqual(token.isCancellationRequested, route.canceled);
+                return result;
+            });
+            const publicInvoke = sandbox.stub(vscode.lm, 'invokeTool').resolves(result);
+            try {
+                const response = await executeE2eControlCommand(
+                    {} as vscode.ExtensionContext,
+                    {} as AspireExtensionContext,
+                    repository,
+                    launchService,
+                    provider,
+                    terminalProvider,
+                    { hasSnapshot: false },
+                    {},
+                    new Map([['aspire_test_tool', { registered: true, tool: { invoke } }]]),
+                    {
+                        name: 'invokeLanguageModelTool',
+                        toolName: 'aspire_test_tool',
+                        input: {},
+                        invokeRegisteredToolDirectly: route.direct,
+                        cancelBeforeInvocation: route.canceled,
+                    },
+                    () => { });
+
+                assert.deepStrictEqual(response, {
+                    registered: true,
+                    invocation: route.invocation,
+                    results: ['{"success":true}'],
+                    cancellations: 0,
+                    unexpectedFailures: 0,
+                });
+                assert.strictEqual(publicInvoke.callCount, route.direct || route.canceled ? 0 : 1);
+                assert.strictEqual(invoke.callCount, route.direct || route.canceled ? 1 : 0);
+            }
+            finally {
+                provider.dispose();
+            }
+        });
+    }
+
+    for (const direct of [false, true]) {
+        test(`cancels concurrent timed tool invocations with direct=${direct}`, async () => {
+            const repository = createRepository([]);
+            const terminalProvider = {} as AspireTerminalProvider;
+            const launchService = createLaunchService();
+            const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService, createResourceDebugger());
+            const invoke = (_options: unknown, token: vscode.CancellationToken): Promise<vscode.LanguageModelToolResult> =>
+                new Promise((_resolve, reject) => {
+                    const subscription = token.onCancellationRequested(() => {
+                        subscription.dispose();
+                        reject(new vscode.CancellationError());
+                    });
+                });
+            const publicInvoke = sandbox.stub(vscode.lm, 'invokeTool').callsFake((_name, options, token) => {
+                assert.ok(token);
+                return invoke(options, token);
+            });
+            try {
+                const response = await executeE2eControlCommand(
+                    {} as vscode.ExtensionContext,
+                    {} as AspireExtensionContext,
+                    repository,
+                    launchService,
+                    provider,
+                    terminalProvider,
+                    { hasSnapshot: false },
+                    {},
+                    new Map([['aspire_test_tool', { registered: true, tool: { invoke } }]]),
+                    {
+                        name: 'invokeLanguageModelTool',
+                        toolName: 'aspire_test_tool',
+                        input: {},
+                        times: 2,
+                        cancelAfterMs: 0,
+                        invokeRegisteredToolDirectly: direct,
+                    },
+                    () => { });
+
+                assert.deepStrictEqual(response, {
+                    registered: true,
+                    invocation: direct ? 'registeredToolDirect' : 'vscode.lm.invokeTool',
+                    results: [],
+                    cancellations: 2,
+                    unexpectedFailures: 0,
+                    cancelled: true,
+                });
+                assert.strictEqual(publicInvoke.callCount, direct ? 0 : 2);
+            }
+            finally {
+                provider.dispose();
+            }
+        });
+    }
 
     test('routes every AppHost action through the exact secondary tree element', async () => {
         const primaryPath = '/repo/primary/AppHost/AppHost.csproj';
@@ -83,7 +202,7 @@ suite('E2E state file bridge', () => {
                 pipelineInteractionCapability,
             ],
         });
-        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService);
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService, createResourceDebugger());
         const registeredCommands = captureRegisteredTreeCommands(sandbox, provider, repository);
         sandbox.stub(vscode.commands, 'executeCommand').callsFake(async (commandId: string, ...args: unknown[]) => {
             const command = registeredCommands.get(commandId);
@@ -120,7 +239,7 @@ suite('E2E state file bridge', () => {
         const repository = createRepository(['/repo/primary/AppHost/AppHost.csproj']);
         const terminalProvider = {} as AspireTerminalProvider;
         const launchService = createLaunchService();
-        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService);
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService, createResourceDebugger());
         const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
 
         await assert.rejects(
@@ -144,7 +263,7 @@ suite('E2E state file bridge', () => {
         const terminalProvider = {} as AspireTerminalProvider;
         const launchService = createLaunchService();
         const launchStub = sandbox.stub(launchService, 'launch').resolves();
-        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService);
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService, createResourceDebugger());
         const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves('refreshed');
         const markStarted = sandbox.spy();
 
@@ -221,6 +340,35 @@ suite('E2E state file bridge', () => {
         }
     });
 
+    test('checks expected resource configuration diagnostics without returning errors', async () => {
+        const launchConfig: BrowserLaunchConfiguration = {
+            type: 'browser',
+            url: 'https://localhost:7001',
+            browser: 'chrome',
+            web_root: path.resolve(__dirname, '..', '..', '..', 'src', 'Aspire.Cli', 'Aspire.Cli.csproj'),
+        };
+        const command = {
+            name: 'createResourceDebugConfiguration',
+            launchConfig,
+            expectedErrorMessage: csharpExtensionMissingForBlazorDebugging(csharpExtensionId, minimumCsharpBlazorWasmDebuggingVersion),
+        } satisfies AspireExtensionE2EControlCommand;
+        const repository = createRepository([]);
+        const launchService = createLaunchService();
+        const provider = {} as AspireAppHostTreeProvider;
+        const terminalProvider = {} as AspireTerminalProvider;
+
+        const result = await dispatchControlCommand({
+            ...command,
+            csharpExtensionVersion: null,
+        }, repository, launchService, provider, terminalProvider);
+        assert.strictEqual(result, undefined);
+
+        await assert.rejects(dispatchControlCommand({
+            ...command,
+            csharpExtensionVersion: '2.145.15',
+        }, repository, launchService, provider, terminalProvider), assert.AssertionError);
+    });
+
     test('recognizes managed Blazor roots and supported browser children without recognizing Firefox', () => {
         assert.strictEqual(isBrowserDebugSessionType('blazorwasm'), true);
         assert.strictEqual(isBrowserDebugSessionType('pwa-msedge'), true);
@@ -229,6 +377,33 @@ suite('E2E state file bridge', () => {
         assert.strictEqual(isBrowserDebugSessionType('msedge'), true);
         assert.strictEqual(isBrowserDebugSessionType('firefox'), false);
         assert.strictEqual(isBrowserDebugSessionType('coreclr'), false);
+    });
+
+    test('waits for the browser command to be enabled before starting the managed proof', async () => {
+        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+        const harness = createBlazorProofHarness(sandbox);
+        harness.setBrowserCommandState('Disabled');
+        const pending = dispatchControlCommand(
+            harness.command, harness.repository, harness.launchService, harness.provider, harness.terminalProvider);
+        await clock.tickAsync(100);
+        assert.deepStrictEqual(harness.executedResourceCommands, []);
+
+        harness.setBrowserCommandState('Enabled');
+        await clock.tickAsync(500);
+        await pending;
+        assert.deepStrictEqual(harness.executedResourceCommands, ['debug-in-browser', 'stop-browser-debug']);
+    });
+
+    test('reports an unavailable browser command instead of waiting for a nonexistent session', async () => {
+        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+        const harness = createBlazorProofHarness(sandbox);
+        harness.setBrowserCommandState('Disabled');
+        const pending = captureError(() => dispatchControlCommand(
+            harness.command, harness.repository, harness.launchService, harness.provider, harness.terminalProvider));
+        await clock.tickAsync(1100);
+
+        assert.match((await pending).message, /enabled 'debug-in-browser' command/);
+        assert.deepStrictEqual(harness.executedResourceCommands, []);
     });
 
     test('isolates consecutive Blazor proofs from a profile lock left by the previous browser', async () => {
@@ -752,7 +927,179 @@ suite('E2E state file bridge', () => {
         assert.strictEqual(harness.breakpoints.length, 0);
         assert.strictEqual(harness.stopDebugging.callCount, 3);
     });
+    for (const sessionKind of ['AppHost', 'child'] as const) {
+        test(`fails the AppHost/resource proof immediately when the ${sessionKind} session terminates`, async () => {
+            const harness = createAppHostAndResourceProofHarness(sandbox, runRoot);
+            try {
+                harness.launch.callsFake(async () => {
+                    const session = sessionKind === 'AppHost' ? harness.appHostSession : harness.childSession;
+                    harness.startSession(session).onDidSendMessage?.({
+                        type: 'event', event: 'output',
+                        body: { output: "Program.cs(2,15): error CS0103: The name 'DistributedApplication' does not exist in the current context" },
+                    });
+                    harness.terminateSession(session);
+                });
+                const error = await captureError(harness.run);
+                assert.match(error.message, /terminated while waiting for breakpoint/);
+                assert.match(error.message, /CS0103/);
+                assert.match(error.message, /"terminatedSessions"/);
+                harness.assertCleanedUp();
+            }
+            finally {
+                harness.provider.dispose();
+            }
+        });
+    }
+
+    for (const command of ['launch', 'attach']) {
+        test(`fails the AppHost/resource proof immediately on a rejected ${command} before the session starts`, async () => {
+            const harness = createAppHostAndResourceProofHarness(sandbox, runRoot);
+            try {
+                harness.launch.callsFake(async () => {
+                    harness.trackSession(harness.childSession).onDidSendMessage?.({
+                        type: 'response', command, success: false, message: 'AppHost build failed',
+                    });
+                });
+                const error = await captureError(harness.run);
+                assert.ok(error.message.includes(`${command} failed`));
+                assert.match(error.message, /AppHost build failed/);
+                harness.assertCleanedUp();
+            }
+            finally {
+                harness.provider.dispose();
+            }
+        });
+    }
+
+    test('fails the AppHost/resource proof during endpoint discovery when the AppHost exits', async () => {
+        const harness = createAppHostAndResourceProofHarness(sandbox, runRoot);
+        try {
+            harness.launch.callsFake(async () => harness.hitAppHostBreakpoint());
+            harness.appHostSession.customRequest = async request => {
+                if (request === 'stackTrace') {
+                    return { stackFrames: [{ source: { path: harness.command.appHostSourcePath }, line: 1 }] };
+                }
+                harness.terminateSession(harness.appHostSession);
+                return {};
+            };
+            const error = await captureError(harness.run);
+            assert.match(error.message, /terminated while waiting for an HTTP endpoint/);
+            harness.assertCleanedUp();
+        }
+        finally {
+            harness.provider.dispose();
+        }
+    });
+
+    test('completes the AppHost/resource proof despite unrelated session failures and termination', async () => {
+        const harness = createAppHostAndResourceProofHarness(sandbox, runRoot);
+        try {
+            const unrelated = createDebugSession('unrelated', 'coreclr', 'Other AppHost', { program: path.join(runRoot, 'Other.csproj') });
+            harness.launch.callsFake(async () => {
+                harness.startSession(unrelated).onDidSendMessage?.({
+                    type: 'response', command: 'launch', success: false, message: 'Unrelated failure',
+                });
+                harness.terminateSession(unrelated);
+                harness.hitAppHostBreakpoint();
+                harness.startSession(harness.childSession).onDidSendMessage?.({
+                    type: 'event', event: 'stopped', body: { reason: 'breakpoint', threadId: 2 },
+                });
+            });
+            harness.childSession.customRequest = async request => request === 'stackTrace'
+                ? { stackFrames: [{ source: { path: harness.command.resourceSourcePath }, line: 1 }] } : {};
+            sandbox.stub(harness.provider, 'findEndpointElement').returns(new EndpointUrlItem('http://localhost:12345', 'HTTP'));
+            sandbox.stub(globalThis, 'fetch').resolves(new Response());
+            fs.writeFileSync(harness.command.appHostSourcePath, 'AppHost breakpoint');
+            fs.writeFileSync(harness.command.resourceSourcePath, 'Resource breakpoint');
+            const proof = await harness.run() as { proof: string };
+            assert.strictEqual(proof.proof, 'aspire-apphost-and-resource-debug-breakpoints-hit');
+            harness.assertCleanedUp();
+        }
+        finally {
+            harness.provider.dispose();
+        }
+    });
 });
+
+function createAppHostAndResourceProofHarness(sandbox: sinon.SinonSandbox, workspaceRoot: string) {
+    const appHostPath = path.join(workspaceRoot, 'AppHost.csproj');
+    const command: Extract<AspireExtensionE2EControlCommand, { name: 'proveAppHostAndResourceDebugging' }> = {
+        name: 'proveAppHostAndResourceDebugging',
+        appHostPath,
+        appHostSourcePath: path.join(workspaceRoot, 'Program.cs'),
+        appHostBreakpointLine: 0,
+        resourceName: 'functions',
+        resourceSourcePath: path.join(workspaceRoot, 'index.js'),
+        resourceBreakpointLine: 0,
+        timeoutMs: 300000,
+    };
+    const repository = createRepository([appHostPath], appHostPath);
+    const launchService = createLaunchService();
+    const terminalProvider = {} as AspireTerminalProvider;
+    const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService, createResourceDebugger());
+    const aspireContext = new AspireExtensionContext();
+    const proofSession = sandbox.createStubInstance(AspireDebugSession);
+    sandbox.stub(proofSession, 'startupCompleted').get(() => true);
+    sandbox.stub(proofSession, 'appHostPath').get(() => appHostPath);
+    sandbox.stub(aspireContext, 'aspireDebugSessions').get(() => [proofSession]);
+    const disposals = [sandbox.spy(), sandbox.spy(), sandbox.spy()];
+    let startListener: ((session: vscode.DebugSession) => unknown) | undefined;
+    let terminateListener: ((session: vscode.DebugSession) => unknown) | undefined;
+    let trackerFactory: vscode.DebugAdapterTrackerFactory | undefined;
+    const breakpoints: vscode.Breakpoint[] = [];
+    sandbox.stub(vscode.workspace, 'workspaceFolders').value([createWorkspaceFolder('repo', workspaceRoot)]);
+    sandbox.stub(vscode.debug, 'onDidStartDebugSession').callsFake(listener => {
+        startListener = listener;
+        return { dispose: disposals[0] };
+    });
+    sandbox.stub(vscode.debug, 'onDidTerminateDebugSession').callsFake(listener => {
+        terminateListener = listener;
+        return { dispose: disposals[1] };
+    });
+    sandbox.stub(vscode.debug, 'registerDebugAdapterTrackerFactory').callsFake((_type, factory) => {
+        trackerFactory = factory;
+        return { dispose: disposals[2] };
+    });
+    sandbox.stub(vscode.debug, 'addBreakpoints').callsFake(added => breakpoints.push(...added));
+    sandbox.stub(vscode.debug, 'removeBreakpoints').callsFake(removed => {
+        for (const breakpoint of removed) {
+            breakpoints.splice(breakpoints.indexOf(breakpoint), 1);
+        }
+    });
+    const stopDebugging = sandbox.stub(vscode.debug, 'stopDebugging').resolves();
+    const launch = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+    const appHostSession = createDebugSession('apphost', 'aspire', 'AppHost', { program: appHostPath });
+    const childSession = createDebugSession('child', 'coreclr', 'AppHost child', {}, appHostSession);
+    appHostSession.customRequest = async request => request === 'stackTrace'
+        ? { stackFrames: [{ source: { path: command.appHostSourcePath }, line: 1 }] } : {};
+    const trackSession = (session: vscode.DebugSession) => {
+        const tracker = trackerFactory?.createDebugAdapterTracker(session);
+        assert.ok(tracker && !('then' in tracker));
+        return tracker;
+    };
+    const startSession = (session: vscode.DebugSession) => {
+        const tracker = trackSession(session);
+        startListener?.(session);
+        return tracker;
+    };
+    return {
+        command, provider, launch, appHostSession, childSession, trackSession, startSession,
+        terminateSession: (session: vscode.DebugSession) => terminateListener?.(session),
+        hitAppHostBreakpoint: () => startSession(appHostSession).onDidSendMessage?.({
+            type: 'event', event: 'stopped', body: { reason: 'breakpoint', threadId: 1 },
+        }),
+        run: () => executeE2eControlCommand(
+            {} as vscode.ExtensionContext,
+            aspireContext,
+            repository, launchService, provider, terminalProvider,
+            { hasSnapshot: false }, {}, new Map(), command, () => { }),
+        assertCleanedUp: () => {
+            assert.strictEqual(breakpoints.length, 0);
+            disposals.forEach(dispose => sinon.assert.calledOnce(dispose));
+            sinon.assert.calledOnce(stopDebugging);
+        },
+    };
+}
 
 function createRepository(candidatePaths: readonly string[], selectedPath?: string): AppHostDataRepository {
     const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });

@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Configuration;
 
@@ -39,6 +40,38 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LoadAndSave_PreservesTypedTemplateSourcesAndUnmodeledSettings()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(path, """
+            {
+              "TemplateSources": {
+                "local": { "Path": "/templates" },
+                "git": { "repository": "https://example.test/templates", "ref": null, "path": null },
+                "unfinished": { "ref": "main" }
+              },
+              "unrelated": { "enabled": true }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.Path);
+
+        Assert.NotNull(config);
+        Assert.NotNull(config.TemplateSources);
+        Assert.Equal(["local", "git", "unfinished"], config.TemplateSources.Keys);
+        Assert.Equal("/templates", config.TemplateSources["local"]?.Path);
+        Assert.Equal("https://example.test/templates", config.TemplateSources["git"]?.Repository);
+        Assert.Null(config.TemplateSources["git"]?.Ref);
+        Assert.Null(config.TemplateSources["git"]?.Path);
+        Assert.Equal("main", config.TemplateSources["unfinished"]?.Ref);
+
+        config.Save(workspace.Path);
+
+        await Verify(await File.ReadAllTextAsync(path), "json");
+    }
+
+    [Fact]
     public void Load_ReturnsConfig_WhenFileContainsDocsSourceConfiguration()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -60,6 +93,31 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.NotNull(result);
         Assert.Equal("http://localhost:4321/llms-small.txt", result.Docs?.LlmsTxtUrl);
         Assert.Equal("http://localhost:4321/sitemap-0.xml", result.Docs?.Api?.SitemapUrl);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"repository":"https://git.example/configuration"}""")]
+    [InlineData("""{"path":"aspire.config.json"}""")]
+    public void Load_DoesNotValidateIncompleteConfigSource(string binding)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), $$"""
+            {
+              "appHost": { "path": "apphost.cs" },
+              "docs": { "llmsTxtUrl": "https://local.example/llms.txt" },
+              "configSource": {{binding}}
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.Path);
+
+        Assert.NotNull(result);
+        Assert.Equal("apphost.cs", result.AppHost?.Path);
+        Assert.Equal("https://local.example/llms.txt", result.Docs?.LlmsTxtUrl);
+        Assert.NotNull(result.ConfigSource);
+        var error = Assert.Throws<ConfigSourceException>(result.ConfigSource.Validate);
+        Assert.Equal(Aspire.Cli.Resources.ConfigSourceStrings.InvalidBinding, error.Message);
     }
 
     [Fact]
@@ -205,6 +263,22 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void Save_WritesOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var config = new AspireConfigFile
+        {
+            AppHost = new AspireConfigAppHost { Path = "src/AppHost/AppHost.csproj" },
+            Channel = "daily"
+        };
+
+        config.Save(workspace.WorkspaceRoot.FullName);
+
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName));
+    }
+
+    [Fact]
     public void Exists_ReturnsFalse_WhenFileDoesNotExist()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -279,7 +353,9 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         config.AddOrUpdatePackage("Aspire.Hosting.Redis", "13.2.0");
 
         Assert.NotNull(config.Packages);
-        Assert.Equal("13.2.0", config.Packages["Aspire.Hosting.Redis"]);
+        var entry = config.Packages["Aspire.Hosting.Redis"];
+        Assert.Equal(IntegrationSource.Nuget, entry.Source);
+        Assert.Equal("13.2.0", entry.Version);
     }
 
     [Fact]
@@ -287,12 +363,12 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     {
         var config = new AspireConfigFile
         {
-            Packages = new Dictionary<string, string> { ["Aspire.Hosting.Redis"] = "13.1.0" }
+            Packages = new Dictionary<string, PackageEntry> { ["Aspire.Hosting.Redis"] = PackageEntry.Nuget("13.1.0") }
         };
 
         config.AddOrUpdatePackage("Aspire.Hosting.Redis", "13.2.0");
 
-        Assert.Equal("13.2.0", config.Packages["Aspire.Hosting.Redis"]);
+        Assert.Equal("13.2.0", config.Packages["Aspire.Hosting.Redis"].Version);
     }
 
     [Fact]
@@ -300,10 +376,10 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     {
         var config = new AspireConfigFile
         {
-            Packages = new Dictionary<string, string>
+            Packages = new Dictionary<string, PackageEntry>
             {
-                ["Aspire.Hosting.Redis"] = "13.2.0",
-                ["Aspire.Hosting.PostgreSQL"] = "13.2.0"
+                ["Aspire.Hosting.Redis"] = PackageEntry.Nuget("13.2.0"),
+                ["Aspire.Hosting.PostgreSQL"] = PackageEntry.Nuget("13.2.0")
             }
         };
 
@@ -340,9 +416,9 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     {
         var config = new AspireConfigFile
         {
-            Packages = new Dictionary<string, string>
+            Packages = new Dictionary<string, PackageEntry>
             {
-                ["Aspire.Hosting.Redis"] = "13.2.0"
+                ["Aspire.Hosting.Redis"] = PackageEntry.Nuget("13.2.0")
             }
         };
 
@@ -351,6 +427,167 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, refs.Count);
         Assert.Contains(refs, r => r.Name == "Aspire.Hosting");
         Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis");
+    }
+
+    [Fact]
+    public void Load_ParsesStringCsprojShorthandAsProjectReference()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        // Legacy/shorthand: a bare string value ending in ".csproj" is a local project reference,
+        // not a NuGet version. Regression coverage for the polyglot AppHost restore path, where a
+        // value like "DeadlockExtension/DeadlockExtension.csproj" must not be treated as a NuGet
+        // package version (which would fail with "not a valid version string").
+        File.WriteAllText(configPath, """
+            {
+              "packages": {
+                "DeadlockExtension": "DeadlockExtension/DeadlockExtension.csproj"
+              }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(config);
+        var entry = config.Packages!["DeadlockExtension"];
+        Assert.Equal(IntegrationSource.Project, entry.Source);
+        Assert.Equal("DeadlockExtension/DeadlockExtension.csproj", entry.Path);
+        Assert.Null(entry.Version);
+
+        var projectRef = config.GetIntegrationReferences("13.2.0", workspace.WorkspaceRoot.FullName)
+            .Single(r => r.Name == "DeadlockExtension");
+        Assert.Equal(IntegrationSource.Project, projectRef.Source);
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine(workspace.WorkspaceRoot.FullName, "DeadlockExtension/DeadlockExtension.csproj")),
+            projectRef.Path);
+    }
+
+    [Fact]
+    public void Load_ParsesStringShorthandAsNugetVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": "9.2.0",
+                "Aspire.Hosting.Kafka": ""
+              }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(config);
+        var redis = config.Packages!["Aspire.Hosting.Redis"];
+        Assert.Equal(IntegrationSource.Nuget, redis.Source);
+        Assert.Equal("9.2.0", redis.Version);
+
+        // Empty string short form means "use the SDK version" (stored as null).
+        var kafka = config.Packages!["Aspire.Hosting.Kafka"];
+        Assert.Equal(IntegrationSource.Nuget, kafka.Source);
+        Assert.Null(kafka.Version);
+    }
+
+    [Theory]
+    [InlineData("null", "13.2.0")]
+    [InlineData("\" 9.2.0 \"", "9.2.0")]
+    [InlineData("""{ "source": "nuget" }""", "13.2.0")]
+    [InlineData("""{ "source": "nuget", "version": null }""", "13.2.0")]
+    [InlineData("""{ "source": "nuget", "version": " " }""", "13.2.0")]
+    [InlineData("""{ "source": "nuget", "version": " 9.2.0 " }""", "9.2.0")]
+    public void Load_NormalizesNugetVersions(string packageValue, string expectedVersion)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, $$"""
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": {{packageValue}}
+              }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(config);
+        var reference = Assert.Single(
+            config.GetIntegrationReferences("13.2.0", workspace.WorkspaceRoot.FullName),
+            reference => reference.Name == "Aspire.Hosting.Redis");
+        Assert.Equal(IntegrationSource.Nuget, reference.Source);
+        Assert.Equal(expectedVersion, reference.Version);
+
+        config.Save(workspace.WorkspaceRoot.FullName);
+        var reloaded = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Equal(config.Packages!["Aspire.Hosting.Redis"].Version, reloaded.Packages!["Aspire.Hosting.Redis"].Version);
+    }
+
+    [Theory]
+    [InlineData("""{ "source": 42 }""")]
+    [InlineData("""{ "source": true }""")]
+    [InlineData("""{ "source": false }""")]
+    [InlineData("""{ "source": {} }""")]
+    [InlineData("""{ "source": [] }""")]
+    [InlineData("""{ "source": null }""")]
+    [InlineData("""{ "source": "nuget", "version": 42 }""")]
+    [InlineData("""{ "source": "nuget", "version": true }""")]
+    [InlineData("""{ "source": "nuget", "version": false }""")]
+    [InlineData("""{ "source": "nuget", "version": {} }""")]
+    [InlineData("""{ "source": "nuget", "version": [] }""")]
+    [InlineData("""{ "source": "npm", "path": 42 }""")]
+    [InlineData("""{ "source": "npm", "path": true }""")]
+    [InlineData("""{ "source": "npm", "path": false }""")]
+    [InlineData("""{ "source": "npm", "path": {} }""")]
+    [InlineData("""{ "source": "npm", "path": [] }""")]
+    [InlineData("""{ "source": "npm", "path": null }""")]
+    [InlineData("""{ "source": "project", "path": null }""")]
+    public void Load_ThrowsJsonException_WithFilePath_WhenPackageObjectIsInvalid(string packageValue)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, $$"""
+            {
+              "packages": {
+                "Test": {{packageValue}}
+              }
+            }
+            """);
+
+        var ex = Assert.Throws<JsonException>(() => AspireConfigFile.Load(workspace.WorkspaceRoot.FullName));
+
+        Assert.Contains(configPath, ex.Message);
+        Assert.Equal("$.packages.Test", ex.Path);
+        Assert.IsType<JsonException>(ex.InnerException);
+    }
+
+    [Fact]
+    public void Load_IgnoresUnknownPackageFields()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "packages": {
+                "Test": {
+                  "unknown": { "source": 42, "nested": [true, null, {}] },
+                  "source": "npm",
+                  "path": "./host.ts"
+                }
+              }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(config);
+        var package = Assert.Single(config.Packages!);
+        Assert.Equal("Test", package.Key);
+        Assert.Equal(IntegrationSource.Npm, package.Value.Source);
+        Assert.Equal("./host.ts", package.Value.Path);
+        Assert.Null(package.Value.Version);
     }
 
     [Fact]

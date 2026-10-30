@@ -3,8 +3,6 @@
 
 #pragma warning disable ASPIREDENO001 // AddDenoApp and its implementation use the experimental Deno resource
 
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIRECOMMAND001

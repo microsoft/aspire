@@ -1,11 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREUSERSECRETS001
-
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Security.Cryptography;
@@ -21,6 +16,7 @@ using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -300,21 +296,70 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
     public void PolyglotAppHostUsesAspireUserSecretsIdForUserSecretsManager()
     {
         var userSecretsId = Guid.NewGuid().ToString("N");
-        var userSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+        var legacyUserSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+        var aspireSecretsPath = AspireSecretsPathHelper.GetSecretsFilePath(
+            AspireSecretsPathHelper.GetDefaultHomeDirectory(),
+            userSecretsId,
+            "Production");
 
-        if (File.Exists(userSecretsPath))
+        DeleteUserSecretsFile(legacyUserSecretsPath);
+        DeleteFileIfExists(aspireSecretsPath);
+
+        try
         {
-            File.Delete(userSecretsPath);
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"],
+                DisableDashboard = true,
+            });
+
+            Assert.True(appBuilder.UserSecretsManager.IsAvailable);
+            Assert.Equal(aspireSecretsPath, appBuilder.UserSecretsManager.FilePath);
         }
-
-        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        finally
         {
-            Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"],
-            DisableDashboard = true,
-        });
+            DeleteFileIfExists(aspireSecretsPath);
+        }
+    }
 
-        Assert.True(appBuilder.UserSecretsManager.IsAvailable);
-        Assert.Equal(userSecretsPath, appBuilder.UserSecretsManager.FilePath);
+    [Fact]
+    public void UserSecretsManagerDoesNotDeleteLegacyUserSecretsOutsideDevelopment()
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var legacyUserSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+        var aspireSecretsPath = AspireSecretsPathHelper.GetSecretsFilePath(
+            AspireSecretsPathHelper.GetDefaultHomeDirectory(),
+            userSecretsId,
+            "Production");
+
+        DeleteUserSecretsFile(legacyUserSecretsPath);
+        DeleteFileIfExists(aspireSecretsPath);
+
+        File.WriteAllText(legacyUserSecretsPath, """
+            {
+              "LegacyOnly": "legacy"
+            }
+            """);
+
+        try
+        {
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"],
+                DisableDashboard = true,
+            });
+
+            Assert.Equal(aspireSecretsPath, appBuilder.UserSecretsManager.FilePath);
+            Assert.True(appBuilder.UserSecretsManager.TryDeleteSecret("LegacyOnly"));
+
+            var legacyJson = File.ReadAllText(legacyUserSecretsPath);
+            Assert.Contains("LegacyOnly", legacyJson, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteFileIfExists(legacyUserSecretsPath);
+            DeleteFileIfExists(aspireSecretsPath);
+        }
     }
 
     [Fact]
@@ -384,6 +429,370 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(KnownConfigNames.AspireSecretsFile, "SECRETS_FILE")]
+    [InlineData(KnownConfigNames.AspireUserSecretsId, "USER_SECRETS_ID")]
+    public void AspirePrefixedConfigurationValueReadsOnlyCapturedEnvironmentProvider(string key, string strippedKey)
+    {
+        var provider = new TestEnvironmentVariablesConfigurationProvider(
+            new Dictionary<string, string?> { [strippedKey] = "from-aspire-environment" });
+        provider.Load();
+        var configuration = new ConfigurationManager
+        {
+            [strippedKey] = "unrelated-value"
+        };
+
+        Assert.Equal("from-aspire-environment", DistributedApplicationBuilder.GetAspirePrefixedConfigurationValue(configuration, key, provider));
+    }
+
+    [Theory]
+    [InlineData(KnownConfigNames.AspireSecretsFile, "SECRETS_FILE")]
+    [InlineData(KnownConfigNames.AspireUserSecretsId, "USER_SECRETS_ID")]
+    public void AspirePrefixedConfigurationValuePrefersExactConfigurationKey(string key, string strippedKey)
+    {
+        var provider = new TestEnvironmentVariablesConfigurationProvider(
+            new Dictionary<string, string?> { [strippedKey] = "from-aspire-environment" });
+        provider.Load();
+        var configuration = new ConfigurationManager
+        {
+            [strippedKey] = "unrelated-value",
+            [key] = "from-exact-key"
+        };
+
+        Assert.Equal("from-exact-key", DistributedApplicationBuilder.GetAspirePrefixedConfigurationValue(configuration, key, provider));
+    }
+
+    [Theory]
+    [InlineData("json")]
+    [InlineData("command-line")]
+    [InlineData("in-memory")]
+    public void AspirePrefixedConfigurationValueIgnoresUnrelatedStrippedKeys(string source)
+    {
+        var configuration = new ConfigurationManager();
+        var values = new Dictionary<string, string?>
+        {
+            ["SECRETS_FILE"] = "unrelated-file",
+            ["USER_SECRETS_ID"] = "unrelated-id"
+        };
+        using var json = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("""
+            {
+              "SECRETS_FILE": "unrelated-file",
+              "USER_SECRETS_ID": "unrelated-id"
+            }
+            """));
+        switch (source)
+        {
+            case "json":
+                configuration.AddJsonStream(json);
+                break;
+            case "command-line":
+                configuration.AddCommandLine(["SECRETS_FILE=unrelated-file", "USER_SECRETS_ID=unrelated-id"]);
+                break;
+            case "in-memory":
+                configuration.AddInMemoryCollection(values);
+                break;
+        }
+
+        var provider = new TestEnvironmentVariablesConfigurationProvider(new Dictionary<string, string?>());
+        provider.Load();
+        Assert.Equal("unrelated-file", configuration["SECRETS_FILE"]);
+        Assert.Equal("unrelated-id", configuration["USER_SECRETS_ID"]);
+        Assert.Null(DistributedApplicationBuilder.GetAspirePrefixedConfigurationValue(configuration, KnownConfigNames.AspireSecretsFile, provider));
+        Assert.Null(DistributedApplicationBuilder.GetAspirePrefixedConfigurationValue(configuration, KnownConfigNames.AspireUserSecretsId, provider));
+        Assert.Null(DistributedApplicationBuilder.ResolveUserSecretsId(null, configuration, provider));
+    }
+
+    [Fact]
+    public void AspireUserSecretsIdReadsCapturedEnvironmentProvider()
+    {
+        var configuration = new ConfigurationManager
+        {
+            ["USER_SECRETS_ID"] = "unrelated-id"
+        };
+        var provider = new TestEnvironmentVariablesConfigurationProvider(
+            new Dictionary<string, string?> { ["USER_SECRETS_ID"] = "aspire-id" });
+        provider.Load();
+
+        Assert.Equal("aspire-id", DistributedApplicationBuilder.ResolveUserSecretsId(null, configuration, provider));
+    }
+
+    [Fact]
+    public void UnrelatedSecretsFileDoesNotAffectAppHostStartup()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var unrelatedFile = Path.Combine(tempDirectory.FullName, "unrelated.json");
+            File.WriteAllText(unrelatedFile, "not JSON");
+
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"SECRETS_FILE={unrelatedFile}"],
+                DisableDashboard = true,
+            });
+
+            Assert.Equal(unrelatedFile, appBuilder.Configuration["SECRETS_FILE"]);
+            Assert.NotEqual(unrelatedFile, appBuilder.UserSecretsManager.FilePath);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void AspireSecretsFileLoadsInProduction()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var secretsFile = Path.Combine(tempDirectory.FullName, "Production.json");
+            File.WriteAllText(secretsFile, """
+                {
+                  "Parameters:api_key": "from-secret"
+                }
+                """);
+
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireSecretsFile}={secretsFile}"],
+                DisableDashboard = true,
+            });
+
+            Assert.Equal("Production", appBuilder.Environment.EnvironmentName);
+            Assert.Equal("from-secret", appBuilder.Configuration["Parameters:api_key"]);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    [InlineData("development")]
+    [InlineData("STAGING")]
+    [InlineData("production")]
+    public void AspireSecretsIdentityUsesFinalHostEnvironment(string environment)
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var homeDirectory = AspireSecretsPathHelper.GetDefaultHomeDirectory();
+        var secretsDirectory = AspireSecretsPathHelper.GetSecretsDirectoryPath(homeDirectory, userSecretsId);
+        try
+        {
+            foreach (var name in new[] { "Development", "Staging", "Production" })
+            {
+                var store = new SecretsStore(AspireSecretsPathHelper.GetSecretsFilePath(homeDirectory, userSecretsId, name));
+                store.Set("Parameters:api_key", $"{name}-secret");
+                store.Save();
+            }
+
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}", "--environment", environment],
+                DisableDashboard = true,
+            });
+
+            var storedEnvironment = new[] { "Development", "Staging", "Production" }
+                .Single(name => name.Equals(environment, StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(environment, appBuilder.Environment.EnvironmentName);
+            Assert.Equal($"{storedEnvironment}-secret", appBuilder.Configuration["Parameters:api_key"]);
+            Assert.Equal(AspireSecretsPathHelper.GetSecretsFilePath(homeDirectory, userSecretsId, storedEnvironment),
+                appBuilder.UserSecretsManager.FilePath);
+        }
+        finally
+        {
+            Directory.Delete(secretsDirectory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("prod/eu")]
+    [InlineData("Production.")]
+    [InlineData("CON")]
+    [InlineData("Local Development")]
+    public void AspireSecretsIdentitySkipsUnsupportedEnvironmentNames(string environment)
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        Assert.Null(DistributedApplicationBuilder.ResolveAspireSecretsFilePath(null, userSecretsId, environment));
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}", "--environment", environment],
+            DisableDashboard = true,
+        });
+        Assert.Equal(environment, appBuilder.Environment.EnvironmentName);
+        Assert.False(appBuilder.UserSecretsManager.IsAvailable);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("set")]
+    [InlineData("delete")]
+    public async Task UserSecretsStatePreservesJsonTypesAcrossReload(string? secretOperation)
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var path = Path.Combine(directory.FullName, "state.json");
+            var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireSecretsFile}={path}", "--environment", "QA.EU"],
+                DisableDashboard = true,
+            });
+            var state = System.Text.Json.Nodes.JsonNode.Parse("""
+                {
+                  "Parameters:Target": "original",
+                  "Resource": {
+                    "Count": 42,
+                    "Enabled": true,
+                    "Ratio": 1.25,
+                    "Missing": null,
+                    "Text": "value"
+                  }
+                }
+                """)!.AsObject();
+            await builder.UserSecretsManager.SaveStateAsync(state);
+
+            if (secretOperation == "set")
+            {
+                Assert.True(builder.UserSecretsManager.TrySetSecret("parameters:TARGET", "updated"));
+            }
+            else if (secretOperation == "delete")
+            {
+                Assert.True(builder.UserSecretsManager.TryDeleteSecret("parameters:TARGET"));
+            }
+
+            var manager = new Aspire.Hosting.Pipelines.Internal.UserSecretsDeploymentStateManager(
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Aspire.Hosting.Pipelines.Internal.UserSecretsDeploymentStateManager>.Instance,
+                builder.UserSecretsManager);
+            var section = await manager.AcquireSectionAsync("Resource");
+            Assert.Equal(42, section.Data["Count"]!.GetValue<int>());
+            Assert.True(section.Data["Enabled"]!.GetValue<bool>());
+            Assert.Equal(1.25, section.Data["Ratio"]!.GetValue<double>());
+            Assert.True(section.Data.ContainsKey("Missing"));
+            Assert.Null(section.Data["Missing"]);
+            Assert.Equal("value", section.Data["Text"]!.GetValue<string>());
+            Assert.Equal(path, builder.UserSecretsManager.FilePath);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LegacyDevelopmentImportPreservesDeploymentStateTypes()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var legacyPath = Path.Combine(directory.FullName, "legacy.json");
+            var aspirePath = Path.Combine(directory.FullName, "Development.json");
+            const string legacyJson = """
+                {
+                  "Resource": {
+                    "Count": 42,
+                    "Enabled": true,
+                    "Ratio": 1.25,
+                    "Missing": null,
+                    "Text": "value"
+                  }
+                }
+                """;
+            await File.WriteAllTextAsync(legacyPath, legacyJson);
+
+            DistributedApplicationBuilder.ImportLegacyUserSecretsIfNeeded(legacyPath, aspirePath, isDevelopment: true);
+
+            var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireSecretsFile}={aspirePath}", "--environment", "Development"],
+                DisableDashboard = true,
+            });
+            var manager = new Aspire.Hosting.Pipelines.Internal.UserSecretsDeploymentStateManager(
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Aspire.Hosting.Pipelines.Internal.UserSecretsDeploymentStateManager>.Instance,
+                builder.UserSecretsManager);
+            var section = await manager.AcquireSectionAsync("Resource");
+            Assert.Equal(42, section.Data["Count"]!.GetValue<int>());
+            Assert.True(section.Data["Enabled"]!.GetValue<bool>());
+            Assert.Equal(1.25, section.Data["Ratio"]!.GetValue<double>());
+            Assert.True(section.Data.ContainsKey("Missing"));
+            Assert.Null(section.Data["Missing"]);
+            Assert.Equal("value", section.Data["Text"]!.GetValue<string>());
+            Assert.Equal(legacyJson, await File.ReadAllTextAsync(legacyPath));
+
+            await File.WriteAllTextAsync(legacyPath, """{"Resource:Count":0}""");
+            DistributedApplicationBuilder.ImportLegacyUserSecretsIfNeeded(legacyPath, aspirePath, isDevelopment: true);
+            Assert.Equal(42, System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(aspirePath))!["Resource:Count"]!.GetValue<int>());
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CommandLineOverridesAspireSecretsFile()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var secretsFile = Path.Combine(tempDirectory.FullName, "Production.json");
+            File.WriteAllText(secretsFile, """
+                {
+                  "Parameters:api_key": "from-secret"
+                }
+                """);
+
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args =
+                [
+                    $"{KnownConfigNames.AspireSecretsFile}={secretsFile}",
+                    "Parameters:api_key=from-command-line"
+                ],
+                DisableDashboard = true,
+            });
+
+            Assert.Equal("from-command-line", appBuilder.Configuration["Parameters:api_key"]);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EnvironmentVariableOverridesAspireSecretsFile()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var secretsFile = Path.Combine(tempDirectory.FullName, "Production.json");
+            File.WriteAllText(secretsFile, """
+                {
+                  "Parameters:api_key": "from-secret"
+                }
+                """);
+
+            var configuration = new ConfigurationManager();
+            configuration.Sources.Add(new TestEnvironmentVariablesConfigurationSource(
+                new Dictionary<string, string?>
+                {
+                    ["Parameters:api_key"] = "from-environment"
+                }));
+
+            DistributedApplicationBuilder.AddConfiguredAspireSecretsFile(configuration, secretsFile);
+
+            Assert.Equal("from-environment", configuration["Parameters:api_key"]);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
     [InlineData(KnownConfigNames.DashboardUnsecuredAllowAnonymous)]
     [InlineData(KnownConfigNames.Legacy.DashboardUnsecuredAllowAnonymous)]
     public void ResourceServiceConfig_Unsecured(string dashboardUnsecuredAllowAnonymousKey)
@@ -398,15 +807,37 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
 
     private static void DeleteUserSecretsFile(string userSecretsPath)
     {
-        if (File.Exists(userSecretsPath))
-        {
-            File.Delete(userSecretsPath);
-        }
+        DeleteFileIfExists(userSecretsPath);
 
         var directory = Path.GetDirectoryName(userSecretsPath);
         if (!string.IsNullOrEmpty(directory))
         {
             Directory.CreateDirectory(directory);
+        }
+    }
+
+    private static void DeleteFileIfExists(string path)
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+
+    private sealed class TestEnvironmentVariablesConfigurationSource(IReadOnlyDictionary<string, string?> values) : EnvironmentVariablesConfigurationSource, IConfigurationSource
+    {
+        IConfigurationProvider IConfigurationSource.Build(IConfigurationBuilder builder) =>
+            new TestEnvironmentVariablesConfigurationProvider(values);
+    }
+
+    private sealed class TestEnvironmentVariablesConfigurationProvider(IReadOnlyDictionary<string, string?> values) : ConfigurationProvider
+    {
+        public override void Load()
+        {
+            foreach (var (key, value) in values)
+            {
+                Data[key] = value;
+            }
         }
     }
 

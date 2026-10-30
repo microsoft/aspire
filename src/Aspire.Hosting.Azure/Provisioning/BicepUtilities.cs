@@ -1,14 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using System.IO.Hashing;
 using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Provisioning;
 
@@ -45,6 +46,23 @@ internal static class BicepUtilities
         {
             // Execute parameter values which are deferred.
             var parameterValue = parameter.Value is Func<object?> f ? f() : parameter.Value;
+
+            if (parameter.Key == AzureBicepResource.KnownParameters.TenantResourceSuffix && parameterValue is null)
+            {
+                // Unlike principal parameters, the suffix must resolve even during checksum evaluation:
+                // changing it targets a different tenant-wide resource and must invalidate cached outputs.
+                if (executionContext.IsRunMode)
+                {
+                    var optionsManager = executionContext.Services.GetRequiredService<IAzureProvisioningOptionsManager>();
+                    await optionsManager.EnsureProvisioningOptionsAsync(forcePrompt: false, cancellationToken).ConfigureAwait(false);
+                    parameterValue = (await optionsManager.GetProvisioningOptionsAsync(cancellationToken).ConfigureAwait(false))
+                        .TenantResourceSuffix ?? string.Empty;
+                }
+                else
+                {
+                    parameterValue = executionContext.Services.GetRequiredService<IOptions<AzureProvisionerOptions>>().Value.TenantResourceSuffix ?? string.Empty;
+                }
+            }
 
             // Skip known parameters with 'null' values, like PrincipalType and PrincipalId, since they are filled in by the provisioner
             // and are not available at this time. If we don't do this, the "roles" resources will be re-deployed every run.

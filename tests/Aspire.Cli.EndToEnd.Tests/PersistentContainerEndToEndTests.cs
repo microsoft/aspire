@@ -47,7 +47,7 @@ public sealed class PersistentContainerEndToEndTests(ITestOutputHelper output)
                 .RunAsEmulator(container => container.WithPersistentLifetime());
             var blobs = storage.AddBlobs("blobs");
 
-            builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+            builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                 .WithReference(redis)
                 .WithReference(postgresDatabase)
                 .WithReference(blobs)

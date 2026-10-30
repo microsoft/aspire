@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Dashboard.Otlp.Model;
@@ -135,7 +136,9 @@ internal sealed class TelemetrySpansCommand : BaseCommand
 
             var url = DashboardUrls.TelemetrySpansApiUrl(baseUrl, resolvedResources, traceId: traceId, hasError: hasError, limit: effectiveLimit, follow: follow ? true : null, search: search);
 
-            _logger.LogDebug("Fetching spans from {Url}", url);
+            _logger.LogDebug(
+                "Fetching spans from {Url}",
+                McpToolHelpers.SanitizeDashboardRequestUrl(url));
 
             if (follow)
             {
@@ -148,7 +151,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Failed to fetch spans from Dashboard API");
+            _logger.LogError("Failed to fetch spans from Dashboard API");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
             TelemetryCommandHelpers.DisplayTelemetryError(InteractionService, errorInfo);
             return CliExitCodes.DashboardFailure;

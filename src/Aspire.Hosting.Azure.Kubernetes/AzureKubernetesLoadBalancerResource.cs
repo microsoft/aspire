@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation/PipelineStep are evaluation-only
 #pragma warning disable ASPIREAZURE003 // AzureSubnetResource is evaluation-only
 
 using Aspire.Hosting.ApplicationModel;

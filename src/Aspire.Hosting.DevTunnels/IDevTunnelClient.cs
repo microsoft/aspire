@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.DevTunnels;
@@ -37,9 +38,13 @@ internal enum LoginProvider
     GitHub
 }
 
-internal sealed record DevTunnelStatus(string TunnelId, int HostConnections, int ClientConnections, string Description, IReadOnlyList<string> Labels)
+internal sealed record DevTunnelStatus(string TunnelId, int HostConnections, int ClientConnections, string Description, IReadOnlyList<string>? Labels)
 {
     public IReadOnlyList<DevTunnelPort> Ports { get; init; } = [];
+
+    public string? TunnelExpiration { get; init; }
+
+    public IReadOnlyList<DevTunnelAccessStatus.AccessControlEntry>? AccessControl { get; init; }
 }
 
 internal sealed record DevTunnelPortList
@@ -54,36 +59,55 @@ internal sealed record DevTunnelPort(int PortNumber, string Protocol)
     public int? ClientConnections { get; init; }
 }
 
-internal sealed record DevTunnelPortStatus(string TunnelId, int PortNumber, string Protocol, int ClientConnections);
+internal sealed record DevTunnelPortStatus(string TunnelId, int PortNumber, string Protocol, int ClientConnections)
+{
+    public string? Description { get; init; }
+
+    public IReadOnlyList<string> Labels { get; init; } = [];
+
+    public IReadOnlyList<DevTunnelAccessStatus.AccessControlEntry>? AccessControl { get; init; }
+}
 
 internal sealed record DevTunnelPortDeleteResult(string DeletedPort);
 
 internal sealed record DevTunnelAccessStatus
 {
+    [JsonRequired]
     public IReadOnlyList<AccessControlEntry> AccessControlEntries { get; init; } = [];
 
-    public sealed record AccessControlEntry(string Type, bool IsDeny, bool IsInherited, IReadOnlyList<string> Subjects, IReadOnlyList<string> Scopes);
-
-    internal string LogAnonymousAccessPolicy(ILogger logger)
+    public sealed record AccessControlEntry(string Type, bool IsDeny, bool IsInherited, IReadOnlyList<string> Subjects, IReadOnlyList<string> Scopes)
     {
-        const string AnonymousType = "Anonymous";
-        const string ConnectScope = "connect";
+        public bool IsInverse { get; init; }
 
-        static bool HasConnectScope(AccessControlEntry entry) => entry.Scopes is { } scopes && scopes.Any(s => string.Equals(s, ConnectScope, StringComparison.OrdinalIgnoreCase));
+        public DateTimeOffset? Expiration { get; init; }
 
-        var entries = AccessControlEntries;
+        // Inverse Anonymous rules apply to authenticated users, not anonymous callers.
+        // A finite-lived rule may affect access now, but cannot satisfy a permanent modeled policy.
+        // https://github.com/microsoft/dev-tunnels/blob/main/cs/src/Contracts/TunnelAccessControlEntry.cs
+        private bool IsAnonymousConnectRule =>
+            !IsInverse
+            && string.Equals(Type, "Anonymous", StringComparison.OrdinalIgnoreCase)
+            && Subjects.Count == 0
+            && Scopes.Any(s => string.Equals(s, "connect", StringComparison.OrdinalIgnoreCase));
 
-        var portHasInheritedAnonymousAllow = entries.Any(e => string.Equals(e.Type, AnonymousType, StringComparison.OrdinalIgnoreCase)
-                                                              && !e.IsDeny
-                                                              && e.IsInherited
-                                                              && HasConnectScope(e));
-        var portHasExplicitAnonymousAllow = entries.Any(e => string.Equals(e.Type, AnonymousType, StringComparison.OrdinalIgnoreCase)
-                                                             && !e.IsDeny
-                                                             && !e.IsInherited
-                                                             && HasConnectScope(e));
-        var portHasExplicitAnonymousDeny = entries.Any(e => string.Equals(e.Type, AnonymousType, StringComparison.OrdinalIgnoreCase)
-                                                            && e.IsDeny
-                                                            && HasConnectScope(e));
+        internal bool IsPermanentAnonymousConnectRule(bool deny) =>
+            IsAnonymousConnectRule && IsDeny == deny && Expiration is null;
+
+        internal bool IsActiveAnonymousConnectRule(DateTimeOffset now) =>
+            IsAnonymousConnectRule && (Expiration is null || Expiration > now);
+    }
+
+    internal string GetAnonymousAccessPolicy(DateTimeOffset now) => EvaluateAnonymousAccessPolicy(logger: null, now);
+
+    internal string LogAnonymousAccessPolicy(ILogger logger, DateTimeOffset now) => EvaluateAnonymousAccessPolicy(logger, now);
+
+    private string EvaluateAnonymousAccessPolicy(ILogger? logger, DateTimeOffset now)
+    {
+        var entries = AccessControlEntries.Where(e => e.IsActiveAnonymousConnectRule(now)).ToArray();
+
+        var portHasInheritedAnonymousAllow = entries.Any(e => !e.IsDeny && e.IsInherited);
+        var portHasExplicitAnonymousAllow = entries.Any(e => !e.IsDeny && !e.IsInherited);
+        var portHasExplicitAnonymousDeny = entries.Any(e => e.IsDeny);
 
         // Derive tunnel-level allow from presence of inherited allow (since we don't receive tunnel access status directly here)
         var tunnelHasAnonymousAllow = portHasInheritedAnonymousAllow;
@@ -92,44 +116,44 @@ internal sealed record DevTunnelAccessStatus
         if (tunnelHasAnonymousAllow && portHasInheritedAnonymousAllow && !portHasExplicitAnonymousDeny && !portHasExplicitAnonymousAllow)
         {
             // Case 1: tunnel allows anonymous; port inherits allow; no deny override
-            logger.LogInformation("!! Anonymous access is allowed (inherited from tunnel) !!");
+            logger?.LogInformation("!! Anonymous access is allowed (inherited from tunnel) !!");
             effective = "Allowed";
         }
         else if (tunnelHasAnonymousAllow && portHasExplicitAnonymousDeny)
         {
             // Case 2: tunnel allows anonymous but port explicitly denies
-            logger.LogInformation("Anonymous access is not allowed (tunnel allows it but port explicitly denies it)");
+            logger?.LogInformation("Anonymous access is not allowed (tunnel allows it but port explicitly denies it)");
             effective = "Denied";
         }
         else if (!tunnelHasAnonymousAllow && portHasExplicitAnonymousAllow && !portHasExplicitAnonymousDeny)
         {
             // Case 3: tunnel does not allow but port explicitly allows
-            logger.LogInformation("!! Anonymous access is allowed (port explicitly allows it) !!");
+            logger?.LogInformation("!! Anonymous access is allowed (port explicitly allows it) !!");
             effective = "Allowed";
         }
         else if (!tunnelHasAnonymousAllow && portHasExplicitAnonymousDeny)
         {
             // Case 4: tunnel does not allow and port explicitly denies
-            logger.LogInformation("Anonymous access is not allowed (tunnel does not allow it and port explicitly denies it)");
+            logger?.LogInformation("Anonymous access is not allowed (tunnel does not allow it and port explicitly denies it)");
             effective = "Denied";
         }
         else if (tunnelHasAnonymousAllow && portHasExplicitAnonymousAllow && !portHasExplicitAnonymousDeny)
         {
             // Case 5: tunnel allows anonymous; port allows anonymous; no deny override
-            logger.LogInformation("!! Anonymous access is allowed (tunnel allows it and port allows it) !!");
+            logger?.LogInformation("!! Anonymous access is allowed (tunnel allows it and port allows it) !!");
             effective = "Allowed";
         }
         else if (!tunnelHasAnonymousAllow && !portHasExplicitAnonymousAllow && !portHasExplicitAnonymousDeny)
         {
             // Case 6: tunnel does not allow; port does not explicitly allow or deny
-            logger.LogInformation("Anonymous access is not allowed (tunnel does not allow it and port does not explicitly allow or deny it)");
+            logger?.LogInformation("Anonymous access is not allowed (tunnel does not allow it and port does not explicitly allow or deny it)");
             effective = "Denied";
         }
         else
         {
             // Fallback / other combinations
             effective = "Unknown";
-            logger.LogDebug("Anonymous access: TunnelAllow={TunnelAllow} InheritedAllow={InheritedAllow} ExplicitAllow={ExplicitAllow} ExplicitDeny={ExplicitDeny} Effective={Effective}",
+            logger?.LogDebug("Anonymous access: TunnelAllow={TunnelAllow} InheritedAllow={InheritedAllow} ExplicitAllow={ExplicitAllow} ExplicitDeny={ExplicitDeny} Effective={Effective}",
                 tunnelHasAnonymousAllow, portHasInheritedAnonymousAllow, portHasExplicitAnonymousAllow, portHasExplicitAnonymousDeny, effective);
         }
 

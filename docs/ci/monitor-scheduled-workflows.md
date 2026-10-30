@@ -54,7 +54,7 @@ second marker):
 
 - `tests-outerloop`, `tests-quarantine` (see
   [specialized-test-failure-issues.md](specialized-test-failure-issues.md))
-- `tests-daily-smoke`, `deployment-tests` (see
+- `tests-daily-smoke`, `deployment-tests`, `update-actionlint` (see
   [pipeline-failure-issues.md](pipeline-failure-issues.md))
 
 - **To add a full-watch workflow:** add a `{ "file", "name" }` entry (entries
@@ -150,7 +150,7 @@ The reusable issue mechanics (marker dedup, the comment-recording loop with
 per-run dedup, octokit primitives) live in the generic, repo-agnostic engine
 [`tracking-issue.js`](../../.github/workflows/tracking-issue.js), shared with the
 [specialized-test failure reporter](specialized-test-failure-issues.md), the
-[nightly-pipeline failure reporter](pipeline-failure-issues.md), the
+[scheduled-pipeline failure reporter](pipeline-failure-issues.md), the
 [red-main CI reporter](ci-failure-issues.md), and
 unit-tested by
 [`TrackingIssueTests`](../../tests/Infrastructure.Tests/WorkflowScripts/TrackingIssueTests.cs).

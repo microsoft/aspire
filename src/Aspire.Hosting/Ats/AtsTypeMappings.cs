@@ -1,4 +1,3 @@
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPROJECTS001
 

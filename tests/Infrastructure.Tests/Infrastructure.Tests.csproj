@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- net11.0 (not DefaultTargetFramework=net8.0): references tools/SelectTests, which runs on
+    <!-- net11.0 (not DefaultTargetFramework=net10.0): references tools/SelectTests, which runs on
          the repo SDK's runtime and loads its Microsoft.Build ProjectGraph at runtime. -->
     <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

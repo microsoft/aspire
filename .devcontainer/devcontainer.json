@@ -14,7 +14,7 @@
 		"ghcr.io/devcontainers/features/github-cli:1": {},
 		"ghcr.io/devcontainers/features/dotnet:2": {
 			"version": "none", // SDK is provided by base image
-			"aspNetCoreRuntimeVersions": "8.0, 9.0"
+			"aspNetCoreRuntimeVersions": "10.0"
 		},
 		"ghcr.io/devcontainers/features/node:1": {},
 		"ghcr.io/devcontainers/features/python:1": {},
@@ -63,7 +63,7 @@
 			}
 		}
 	},
-	"onCreateCommand": "dotnet restore",
+	"onCreateCommand": "./restore.sh",
 	"postStartCommand": "dotnet dev-certs https --trust",
 
 	"remoteEnv": {

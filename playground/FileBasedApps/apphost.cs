@@ -17,12 +17,14 @@ var userSecretsId = Environment.GetEnvironmentVariable("DOTNET_USER_SECRETS_ID")
     ?? "not set";
 Console.WriteLine($"UserSecretsId: {userSecretsId}");
 
+#pragma warning disable CS0618 // Exercise legacy AddCSharpApp file and directory handling.
 // C# File-based app
 // NOTE: This is in a sub-folder to ensure it doesn't pickup .razor files from the FrontEnd project
 builder.AddCSharpApp("api", "./api/api.cs");
 
 // Traditional C# project added via same API just specifying project directory
 builder.AddCSharpApp("frontend", "./FileBasedApps.WebFrontEnd/");
+#pragma warning restore CS0618
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging

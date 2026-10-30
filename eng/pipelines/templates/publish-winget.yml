@@ -186,14 +186,13 @@ steps:
         eq(variables['_IsProductionBranch'], 'true')
       )
 
-  # The latest standalone wingetcreate executable targets .NET 9 and is not
-  # self-contained. Install its runtime whenever the WinGet job is selected so
-  # dry-run and non-production builds also verify that the CLI can start.
+  # wingetcreate still targets .NET 9. Both the startup probe and submission
+  # opt into major roll-forward to run on .NET 10 without an older runtime.
   - task: UseDotNet@2
-    displayName: '🟣Install .NET 9 runtime for wingetcreate'
+    displayName: '🟣Install .NET 10 runtime for wingetcreate'
     inputs:
       packageType: 'runtime'
-      version: '9.0.x'
+      version: '10.0.x'
     condition: succeeded()
 
   - powershell: |
@@ -207,6 +206,8 @@ steps:
       }
       Write-Host "wingetcreate downloaded and verified successfully"
     displayName: '🟣Install wingetcreate'
+    env:
+      DOTNET_ROLL_FORWARD: Major
     # This is side-effect free; the Submit step below retains the production gate.
     condition: succeeded()
 
@@ -290,4 +291,5 @@ steps:
         eq(variables['_IsProductionBranch'], 'true')
       )
     env:
+      DOTNET_ROLL_FORWARD: Major
       WINGET_CREATE_GITHUB_TOKEN: $(aspire-winget-bot-pat)

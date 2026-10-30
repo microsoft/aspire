@@ -1,5 +1,13 @@
 # Aspire VS Code Extension Changelog
 
+## v1.24.0
+
+<!-- aspire-ext-changelog-done from=41d7fa2c42761b63a694099fdca7eab49718ffd5 to=d2b0c75dd0648beecb6d5f51e25b57930f370ac4 base=1.23.0 -->
+
+### Features
+
+- Add Aspire editor assistance tools for AI agents, including inspecting AppHost and resource debug status, explaining launch failures, opening the Dashboard and Output panel, listing active editor-managed AppHost sessions, and checking Hot Reload applicability ([#19460](https://github.com/microsoft/aspire/issues/19460), [#19414](https://github.com/microsoft/aspire/pull/19414)).
+
 ## v1.23.0
 
 <!-- aspire-ext-changelog-done from=039a7c58f11a01521e49882e26d0d6593b87d9cf to=a7d8508b8e2f240580e17b6f97ffc663aeadc026 base=1.22.0 -->

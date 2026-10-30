@@ -1,0 +1,9 @@
+.telemetry-help-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacingVerticalM);
+}
+
+.telemetry-help-content ::deep .telemetry-import-button {
+    align-self: flex-start;
+}

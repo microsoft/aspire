@@ -14,4 +14,6 @@ public static class TelemetryEventKeys
     public const string Error = AspireDashboardEventPrefix + "error";
 
     public const string ExecuteCommand = AspireDashboardEventPrefix + "command";
+
+    public const string Startup = AspireDashboardEventPrefix + "startup";
 }

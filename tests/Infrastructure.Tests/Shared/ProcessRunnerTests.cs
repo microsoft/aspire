@@ -30,6 +30,26 @@ public sealed class ProcessRunnerTests(ITestOutputHelper output)
 
     [Fact]
     [RequiresTools(["bash"])]
+    public async Task AppliesEnvironmentOverridesOnTopOfInheritedEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+
+        var result = await ProcessRunner.RunAsync(
+            output,
+            "bash",
+            // HOME is never synthesized by bash itself, so it is only set when the
+            // parent environment was inherited (PATH lookup would still succeed via
+            // bash's built-in default search path).
+            ["-c", """printf '%s|%s' "$RUNNER_TEST_VALUE" "${HOME:+inherited-home}" """],
+            workspace.Path,
+            new Dictionary<string, string> { ["RUNNER_TEST_VALUE"] = "override" });
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("override|inherited-home", result.StandardOutput);
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
     public async Task DrainsBothOutputStreamsConcurrently()
     {
         using var workspace = TemporaryWorkspace.Create(output);

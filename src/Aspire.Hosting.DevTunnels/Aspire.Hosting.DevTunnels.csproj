@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)CoalescingAsyncOperation.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)ConsoleLogs\TimestampParser.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)StringComparers.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)ResourceNameComparer.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" LinkBase="Shared" />
@@ -21,21 +22,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.DevTunnels.Tests" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Update="Resources\MessageStrings.Designer.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>MessageStrings.resx</DependentUpon>
-    </Compile>
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Update="Resources\MessageStrings.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>MessageStrings.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

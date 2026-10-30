@@ -1,21 +1,103 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Encodings.Web;
+using System.Web;
 
 namespace Aspire.Dashboard.Utils;
 
 internal static class DashboardUrls
 {
     public const string ResourcesBasePath = "";
-    public const string ConsoleLogBasePath = "consolelogs";
+    public const string ResourceOverviewBasePath = "resources";
+    public const string ParametersBasePath = "parameters";
+    public const string GraphBasePath = "graph";
     public const string TerminalsBasePath = "terminals";
+    public const string ExtensionsBasePath = "extensions";
+    public const string ConsoleLogBasePath = "consolelogs";
     public const string MetricsBasePath = "metrics";
     public const string StructuredLogsBasePath = "structuredlogs";
     public const string TracesBasePath = "traces";
     public const string LoginBasePath = "login";
     public const string HealthBasePath = "health";
+
+    /// <summary>
+    /// Normalizes a dashboard URL for an outbound request without removing authentication data.
+    /// </summary>
+    public static string? NormalizeDashboardRequestUrl(string? url, bool stripLoginPath)
+    {
+        if (!TryCreateHttpUri(url, out var uri))
+        {
+            return null;
+        }
+
+        var isLoginPath = uri.AbsolutePath.EndsWith("/login", StringComparison.OrdinalIgnoreCase);
+        var path = stripLoginPath && isLoginPath
+            ? uri.AbsolutePath[..^"/login".Length]
+            : uri.AbsolutePath;
+        var builder = new UriBuilder(uri)
+        {
+            Host = uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)
+                ? "localhost"
+                : uri.Host,
+            Path = path
+        };
+        var normalizedUri = builder.Uri;
+        if (normalizedUri.AbsolutePath == "/")
+        {
+            return normalizedUri.GetLeftPart(UriPartial.Authority) + normalizedUri.Query + normalizedUri.Fragment;
+        }
+
+        return normalizedUri.AbsoluteUri;
+    }
+
+    /// <summary>
+    /// Removes the browser login token from an HTTP or HTTPS dashboard URL while preserving every
+    /// other query value.
+    /// </summary>
+    public static string? RemoveDashboardLoginToken(string? url)
+    {
+        if (!TryCreateHttpUri(url, out var uri))
+        {
+            return null;
+        }
+
+        var query = HttpUtility.ParseQueryString(uri.Query);
+        query.Remove("t");
+        var builder = new UriBuilder(uri)
+        {
+            Query = query.ToString()
+        };
+        var normalizedUri = builder.Uri;
+        return normalizedUri.AbsolutePath == "/"
+            ? normalizedUri.GetLeftPart(UriPartial.Authority) + normalizedUri.Query + normalizedUri.Fragment
+            : normalizedUri.AbsoluteUri;
+    }
+
+    /// <summary>
+    /// Extracts the browser token from a dashboard login URL.
+    /// </summary>
+    public static string? ExtractDashboardLoginToken(string? url)
+    {
+        if (url is not null &&
+            Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+            uri.AbsolutePath.EndsWith("/login", StringComparison.OrdinalIgnoreCase))
+        {
+            var token = HttpUtility.ParseQueryString(uri.Query)["t"];
+            return string.IsNullOrEmpty(token) ? null : token;
+        }
+
+        return null;
+    }
+
+    private static bool TryCreateHttpUri(string? value, [NotNullWhen(true)] out Uri? uri)
+    {
+        return Uri.TryCreate(value, UriKind.Absolute, out uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+            !string.IsNullOrEmpty(uri.Host);
+    }
 
     public static string ResourcesUrl(string? resource = null, string? view = null, string? hiddenTypes = null, string? hiddenStates = null, string? hiddenHealthStates = null)
     {
@@ -28,6 +110,163 @@ internal static class DashboardUrls
         {
             url = AddQueryString(url, "view", view);
         }
+        if (hiddenTypes != null)
+        {
+            url = AddQueryString(url, "hiddenTypes", hiddenTypes);
+        }
+        if (hiddenStates != null)
+        {
+            url = AddQueryString(url, "hiddenStates", hiddenStates);
+        }
+        if (hiddenHealthStates != null)
+        {
+            url = AddQueryString(url, "hiddenHealthStates", hiddenHealthStates);
+        }
+
+        return url;
+    }
+
+    /// <summary>
+    /// The query string parameter that lists the resources selected in the dashboard's resource list when more than
+    /// one resource is selected, for example <c>/structuredlogs?resource=api&amp;resource=worker</c>. A single selected
+    /// resource is part of the URL path instead.
+    /// </summary>
+    public const string ResourceSelectionQueryName = "resource";
+
+    /// <summary>
+    /// The query string parameter that switches the dashboard's resource list between listing resources and grouping
+    /// them by tag, for example <c>/resources?pane=tags</c>.
+    /// </summary>
+    public const string ResourcePaneQueryName = "pane";
+
+    /// <summary>
+    /// The query string parameter that focuses the selected resource's terminal instead of its overview cards.
+    /// </summary>
+    public const string ResourceTerminalQueryName = "terminal";
+
+    /// <summary>
+    /// Changes terminal focus without changing the resource, resource pane, other query parameters or fragment.
+    /// </summary>
+    public static string SetResourceTerminalFocus(string url, bool focused)
+    {
+        var fragmentIndex = url.IndexOf('#');
+        var fragment = fragmentIndex >= 0 ? url[fragmentIndex..] : string.Empty;
+        var pathAndQuery = fragmentIndex >= 0 ? url[..fragmentIndex] : url;
+        var queryIndex = pathAndQuery.IndexOf('?');
+        var path = queryIndex >= 0 ? pathAndQuery[..queryIndex] : pathAndQuery;
+        var query = HttpUtility.ParseQueryString(queryIndex >= 0 ? pathAndQuery[(queryIndex + 1)..] : string.Empty);
+        if (focused)
+        {
+            query[ResourceTerminalQueryName] = "true";
+        }
+        else
+        {
+            query.Remove(ResourceTerminalQueryName);
+        }
+
+        return $"{path}{(query.Count > 0 ? $"?{query}" : string.Empty)}{fragment}";
+    }
+
+    /// <summary>
+    /// The <see cref="ResourcePaneQueryName"/> value that lists resources.
+    /// </summary>
+    public const string ResourcePaneResourcesValue = "resources";
+
+    /// <summary>
+    /// The <see cref="ResourcePaneQueryName"/> value that groups resources by tag.
+    /// </summary>
+    public const string ResourcePaneTagsValue = "tags";
+
+    public const string ResourcePaneTelemetryValue = "telemetry";
+
+    public static string TelemetrySourcesUrl() => AddTelemetryPane(StructuredLogsUrl());
+
+    public static string AddTelemetryPane(string url)
+    {
+        var fragmentIndex = url.IndexOf('#');
+        var fragment = fragmentIndex >= 0 ? url[fragmentIndex..] : string.Empty;
+        var pathAndQuery = fragmentIndex >= 0 ? url[..fragmentIndex] : url;
+        var queryIndex = pathAndQuery.IndexOf('?');
+        if (queryIndex >= 0)
+        {
+            var query = HttpUtility.ParseQueryString(pathAndQuery[(queryIndex + 1)..]);
+            if (query[ResourcePaneQueryName] == ResourcePaneTelemetryValue)
+            {
+                return url;
+            }
+            if (query[ResourcePaneQueryName] is not null)
+            {
+                query[ResourcePaneQueryName] = ResourcePaneTelemetryValue;
+                return $"{pathAndQuery[..queryIndex]}?{query}{fragment}";
+            }
+        }
+
+        return AddQueryString(pathAndQuery, ResourcePaneQueryName, ResourcePaneTelemetryValue) + fragment;
+    }
+
+    /// <summary>
+    /// Adds the selected resources to a URL using <see cref="ResourceSelectionQueryName"/>.
+    /// </summary>
+    public static string AddResourceSelection(string url, IEnumerable<string> resources)
+    {
+        foreach (var resource in resources)
+        {
+            url = AddQueryString(url, ResourceSelectionQueryName, resource);
+        }
+
+        return url;
+    }
+
+    /// <summary>
+    /// Gets the URL of the dashboard home page.
+    /// </summary>
+    public static string HomeUrl() => "/";
+
+    /// <summary>
+    /// Gets the URL of the resource overview. Without a resource, the URL lands on the resources view,
+    /// which selects the most recently viewed resource.
+    /// </summary>
+    public static string ResourceOverviewUrl(string? resource = null)
+    {
+        var url = $"/{ResourceOverviewBasePath}";
+        if (resource != null)
+        {
+            url += $"/{Uri.EscapeDataString(resource)}";
+        }
+
+        return url;
+    }
+
+    /// <summary>
+    /// Gets the URL of the resources view with the resource list listing resources.
+    /// </summary>
+    public static string ResourceListUrl() => $"/{ResourceOverviewBasePath}";
+
+    /// <summary>
+    /// Gets the URL of the resources view with the resource list grouped by tag.
+    /// </summary>
+    public static string TagsUrl() => AddQueryString($"/{ResourceOverviewBasePath}", ResourcePaneQueryName, ResourcePaneTagsValue);
+
+    public static string ExtensionsUrl() => $"/{ExtensionsBasePath}";
+
+    public static string ParametersUrl(string? hiddenStates = null, string? hiddenHealthStates = null)
+    {
+        var url = $"/{ParametersBasePath}";
+        if (hiddenStates != null)
+        {
+            url = AddQueryString(url, "hiddenStates", hiddenStates);
+        }
+        if (hiddenHealthStates != null)
+        {
+            url = AddQueryString(url, "hiddenHealthStates", hiddenHealthStates);
+        }
+
+        return url;
+    }
+
+    public static string GraphUrl(string? hiddenTypes = null, string? hiddenStates = null, string? hiddenHealthStates = null)
+    {
+        var url = $"/{GraphBasePath}";
         if (hiddenTypes != null)
         {
             url = AddQueryString(url, "hiddenTypes", hiddenTypes);
@@ -66,14 +305,24 @@ internal static class DashboardUrls
         return url;
     }
 
-    public static string MetricsUrl(string? resource = null, string? meter = null, string? instrument = null, int? duration = null, string? view = null)
+    public static string MetricsUrl(string? resource = null, string? meter = null, string? instrument = null, int? duration = null, string? view = null, bool pinned = false, bool total = false, bool all = false)
     {
         var url = $"/{MetricsBasePath}";
         if (resource != null)
         {
             url += $"/resource/{Uri.EscapeDataString(resource)}";
         }
-        if (meter is not null)
+        if (pinned)
+        {
+            // The pinned group lists pinned instruments from every meter, so it replaces a meter selection.
+            url = AddQueryString(url, "pinned", "true");
+        }
+        else if (all)
+        {
+            // Every instrument, grouped by meter. Like the pinned group, it replaces a meter selection.
+            url = AddQueryString(url, "all", "true");
+        }
+        else if (meter is not null)
         {
             // Meter and instrument must be querystring parameters because it's valid for the name to contain forward slashes.
             url = AddQueryString(url, "meter", meter);
@@ -89,6 +338,11 @@ internal static class DashboardUrls
         if (view != null)
         {
             url = AddQueryString(url, "view", view);
+        }
+        if (total)
+        {
+            // A counter shows its change per interval by default; this keeps the running total in links.
+            url = AddQueryString(url, "total", "true");
         }
 
         return url;
@@ -193,11 +447,47 @@ internal static class DashboardUrls
     /// <returns>The combined URL.</returns>
     public static string CombineUrl(string baseUrl, string path)
     {
-        // Remove trailing slash from base URL and leading slash from path to avoid double slashes
-        var trimmedBase = baseUrl.TrimEnd('/');
-        var trimmedPath = path.TrimStart('/');
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
+        {
+            var trimmedBase = baseUrl.TrimEnd('/');
+            var trimmedPath = path.TrimStart('/');
+            return $"{trimmedBase}/{trimmedPath}";
+        }
 
-        return $"{trimmedBase}/{trimmedPath}";
+        // Inputs can carry query values on both sides:
+        //   baseUrl: https://localhost:18888/base?view=resources
+        //   path:    /api/telemetry/logs?limit=100
+        // Append the path first, then merge queries so a base query cannot swallow the path.
+        var fragmentIndex = path.IndexOf('#');
+        var pathWithoutFragment = fragmentIndex >= 0 ? path[..fragmentIndex] : path;
+        var pathFragment = fragmentIndex >= 0 ? path[(fragmentIndex + 1)..] : null;
+        var queryIndex = pathWithoutFragment.IndexOf('?');
+        var pathWithoutQuery = queryIndex >= 0 ? pathWithoutFragment[..queryIndex] : pathWithoutFragment;
+        var pathQuery = queryIndex >= 0 ? pathWithoutFragment[(queryIndex + 1)..] : string.Empty;
+
+        var builder = new UriBuilder(baseUri)
+        {
+            Path = $"{baseUri.AbsolutePath.TrimEnd('/')}/{pathWithoutQuery.TrimStart('/')}",
+            Query = CombineQuery(baseUri.Query, pathQuery)
+        };
+
+        if (pathFragment is not null)
+        {
+            builder.Fragment = pathFragment;
+        }
+
+        return builder.Uri.AbsoluteUri;
+    }
+
+    private static string CombineQuery(string first, string second)
+    {
+        first = first.TrimStart('?');
+        return (first.Length, second.Length) switch
+        {
+            (0, _) => second,
+            (_, 0) => first,
+            _ => $"{first}&{second}"
+        };
     }
 
     #region Telemetry API URLs

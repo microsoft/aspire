@@ -1,13 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using Aspire.Cli.Resources;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
 
 /// <summary>
-/// Checks if a container runtime (Docker or Podman) is available and running.
+/// Checks if a supported container runtime is available and running.
 /// </summary>
 internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logger, IEnvironment environment) : IEnvironmentCheck
 {
@@ -23,64 +25,81 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
     /// </summary>
     public const string MinimumPodmanVersion = "5.0.0";
 
+    // Matches DCP's minimum supported WSLc client and session manager version.
+    public const string MinimumWslcVersion = "3.0.2.0";
+
     public int Order => 40; // Process check - more expensive
 
     public async Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            // Probe all runtimes in parallel
-            var dockerTask = ContainerRuntimeDetector.CheckRuntimeAsync(KnownContainerRuntimes.Docker, "Docker", isDefault: true, logger, cancellationToken);
-            var podmanTask = ContainerRuntimeDetector.CheckRuntimeAsync(KnownContainerRuntimes.Podman, "Podman", isDefault: false, logger, cancellationToken);
-            var runtimes = await Task.WhenAll(dockerTask, podmanTask);
-
             var configuredRuntime = environment.GetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME")
                 ?? environment.GetEnvironmentVariable("DOTNET_ASPIRE_CONTAINER_RUNTIME");
+            configuredRuntime = string.IsNullOrEmpty(configuredRuntime) ? null : configuredRuntime;
 
-            // Select best from already-probed results (no re-probing)
-            ContainerRuntimeInfo? selected;
+            if (!environment.IsWindows() &&
+                string.Equals(configuredRuntime, KnownContainerRuntimes.Wslc, StringComparisons.ContainerRuntime))
+            {
+                return [new EnvironmentCheckResult
+                {
+                    Category = EnvironmentCheckCategories.Container,
+                    Name = KnownContainerRuntimes.Wslc,
+                    Status = EnvironmentCheckStatus.Fail,
+                    Message = DoctorCommandStrings.ContainerRuntimeWslcUnsupportedHostMessage + DoctorCommandStrings.ContainerRuntimeExplicitSelectionSuffix,
+                    Fix = DoctorCommandStrings.ContainerRuntimeSelectAlternativeFix,
+                    Link = "https://aka.ms/aspire/containers"
+                }];
+            }
+
             if (configuredRuntime is not null)
             {
-                selected = runtimes.FirstOrDefault(r =>
-                    string.Equals(r.Executable, configuredRuntime, StringComparison.OrdinalIgnoreCase));
-            }
-            else
-            {
-                selected = ContainerRuntimeDetector.FindBestRuntime(runtimes);
+                var runtime = await ContainerRuntimeDetector.FindAvailableRuntimeAsync(configuredRuntime, logger, cancellationToken)
+                    ?? throw new InvalidOperationException($"No detection result was returned for configured container runtime '{configuredRuntime}'.");
+
+                return [BuildRuntimeResult(runtime, isSelected: true, hasHealthyRuntime: false, configuredRuntime, cancellationToken)];
             }
 
+            var dockerTask = ContainerRuntimeDetector.CheckRuntimeAsync(KnownContainerRuntimes.Docker, logger, cancellationToken);
+            var podmanTask = ContainerRuntimeDetector.CheckRuntimeAsync(KnownContainerRuntimes.Podman, logger, cancellationToken);
+            var runtimes = environment.IsWindows()
+                ? await Task.WhenAll(dockerTask, podmanTask, ContainerRuntimeDetector.CheckRuntimeAsync(KnownContainerRuntimes.Wslc, logger, cancellationToken))
+                : await Task.WhenAll(dockerTask, podmanTask);
+
+            // Select best from already-probed results (no re-probing)
+            var healthyRuntime = ContainerRuntimeDetector.FindBestRuntime(
+                runtimes.Where(info => info.IsHealthy && CheckRuntimePolicy(info)?.Status != EnvironmentCheckStatus.Fail));
+            var selected = ContainerRuntimeDetector.FindBestRuntime(runtimes);
             var results = new List<EnvironmentCheckResult>();
-
-            // Only report runtimes that are installed (or explicitly configured)
-            foreach (var info in runtimes)
+            foreach (var info in runtimes.OrderBy(info => info.Priority))
             {
-                if (!info.IsInstalled && (configuredRuntime is null ||
-                    !string.Equals(info.Executable, configuredRuntime, StringComparison.OrdinalIgnoreCase)))
+                if (!info.IsInstalled)
                 {
                     continue;
                 }
 
                 var isSelected = selected is not null &&
-                    string.Equals(info.Executable, selected.Executable, StringComparison.OrdinalIgnoreCase);
+                    string.Equals(info.Key, selected.Key, StringComparisons.ContainerRuntime);
 
-                results.Add(BuildRuntimeResult(info, isSelected, configuredRuntime, cancellationToken));
+                results.Add(BuildRuntimeResult(info, isSelected, healthyRuntime is not null, configuredRuntime, cancellationToken));
             }
 
-            // If nothing is available, show a single failure
-            if (results.Count == 0)
+            if (results.Count > 0)
             {
-                results.Add(new EnvironmentCheckResult
-                {
-                    Category = EnvironmentCheckCategories.Container,
-                    Name = CheckName,
-                    Status = EnvironmentCheckStatus.Fail,
-                    Message = "No container runtime detected",
-                    Fix = "Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation",
-                    Link = "https://aka.ms/aspire/containers"
-                });
+                return results;
             }
 
-            return results;
+            return [new EnvironmentCheckResult
+            {
+                Category = EnvironmentCheckCategories.Container,
+                Name = CheckName,
+                Status = EnvironmentCheckStatus.Fail,
+                Message = DoctorCommandStrings.ContainerRuntimeNotDetectedMessage,
+                Fix = environment.IsWindows()
+                    ? DoctorCommandStrings.ContainerRuntimeInstallWindowsFix
+                    : DoctorCommandStrings.ContainerRuntimeInstallFix,
+                Link = "https://aka.ms/aspire/containers"
+            }];
         }
         catch (Exception ex)
         {
@@ -90,7 +109,7 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
                 Category = EnvironmentCheckCategories.Container,
                 Name = CheckName,
                 Status = EnvironmentCheckStatus.Fail,
-                Message = "Failed to check container runtime",
+                Message = DoctorCommandStrings.ContainerRuntimeCheckFailedMessage,
                 Details = ex.Message
             }];
         }
@@ -100,50 +119,78 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
     /// Applies Aspire-specific policy checks (minimum version, Windows containers)
     /// using version info already gathered by the detector. No process spawning.
     /// </summary>
-    private static EnvironmentCheckResult? CheckRuntimePolicy(ContainerRuntimeInfo info)
+    internal static EnvironmentCheckResult? CheckRuntimePolicy(ContainerRuntimeInfo info)
     {
-        var minimumVersion = GetMinimumVersion(info.Name);
-
-        // Check minimum client version
-        if (info.ClientVersion is not null && minimumVersion is not null && info.ClientVersion < minimumVersion)
+        if (info.VersionError is not null)
         {
-            return WarningResult(
-                $"{info.Name} client version {info.ClientVersion} is below minimum required {GetMinimumVersionString(info.Name)}",
-                GetContainerRuntimeUpgradeAdvice(info.Name));
+            return new EnvironmentCheckResult
+            {
+                Category = EnvironmentCheckCategories.Container,
+                Name = info.Key,
+                Status = EnvironmentCheckStatus.Fail,
+                Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeVersionUnavailableMessageFormat, info.Name),
+                Details = info.VersionError,
+                Fix = GetContainerRuntimeUpgradeAdvice(info.Key, info.Name),
+                Link = "https://aka.ms/aspire/containers"
+            };
         }
 
-        // Check minimum server version (Docker only)
-        if (info.Name == "Docker" && info.ServerVersion is not null && minimumVersion is not null && info.ServerVersion < minimumVersion)
+        // Blocking compatibility failures take precedence over advisory version warnings.
+        if (string.Equals(info.Key, KnownContainerRuntimes.Docker, StringComparisons.ContainerRuntime) &&
+            string.Equals(info.ServerOs, "windows", StringComparison.OrdinalIgnoreCase))
         {
-            return WarningResult(
-                $"{info.Name} server version {info.ServerVersion} is below minimum required {GetMinimumVersionString(info.Name)}",
-                GetContainerRuntimeUpgradeAdvice(info.Name));
-        }
-
-        // Docker-specific: check Windows container mode
-        if (info.Name == "Docker" && string.Equals(info.ServerOs, "windows", StringComparison.OrdinalIgnoreCase))
-        {
-            var runtimeName = info.IsDockerDesktop ? "Docker Desktop" : "Docker";
+            var runtimeName = info.IsDockerDesktop ? "Docker Desktop" : info.Name;
             return new EnvironmentCheckResult
             {
                 Category = EnvironmentCheckCategories.Container,
                 Name = CheckName,
                 Status = EnvironmentCheckStatus.Fail,
-                Message = $"{runtimeName} is running in Windows container mode",
-                Details = "Aspire requires Linux containers. Windows containers are not supported.",
-                Fix = "Switch Docker Desktop to Linux containers mode (right-click Docker tray icon → 'Switch to Linux containers...')",
+                Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeWindowsModeMessageFormat, runtimeName),
+                Details = DoctorCommandStrings.ContainerRuntimeWindowsModeDetails,
+                Fix = DoctorCommandStrings.ContainerRuntimeWindowsModeFix,
                 Link = "https://aka.ms/aspire/containers"
             };
+        }
+
+        var minimumVersion = GetMinimumVersion(info.Key);
+
+        // Check minimum client version
+        if (info.ClientVersion is not null && minimumVersion is not null &&
+            (info.ClientVersion < minimumVersion || IsUnsupportedPrerelease(info.ClientVersion, info.IsClientPrerelease, minimumVersion)))
+        {
+            return VersionPolicyResult(info.Key,
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeClientVersionWarningFormat,
+                    info.Name, info.ClientVersionText ?? info.ClientVersion.ToString(), GetMinimumVersionString(info.Key)),
+                GetContainerRuntimeUpgradeAdvice(info.Key, info.Name));
+        }
+
+        // Podman does not always expose a separate server version.
+        if (info.Key is KnownContainerRuntimes.Docker or KnownContainerRuntimes.Wslc && info.ServerVersion is not null && minimumVersion is not null &&
+            (info.ServerVersion < minimumVersion || IsUnsupportedPrerelease(info.ServerVersion, info.IsServerPrerelease, minimumVersion)))
+        {
+            return VersionPolicyResult(info.Key,
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeServerVersionWarningFormat,
+                    info.Name, info.ServerVersionText ?? info.ServerVersion.ToString(), GetMinimumVersionString(info.Key)),
+                GetContainerRuntimeUpgradeAdvice(info.Key, info.Name));
         }
 
         return null; // No issues
     }
 
-    private static EnvironmentCheckResult WarningResult(string message, string fix) => new()
+    private static bool IsUnsupportedPrerelease(Version version, bool isPrerelease, Version minimumVersion)
+    {
+        return isPrerelease &&
+            new Version(version.Major, version.Minor, Math.Max(version.Build, 0), Math.Max(version.Revision, 0)) <=
+            new Version(minimumVersion.Major, minimumVersion.Minor, Math.Max(minimumVersion.Build, 0), Math.Max(minimumVersion.Revision, 0));
+    }
+
+    private static EnvironmentCheckResult VersionPolicyResult(string runtimeKey, string message, string fix) => new()
     {
         Category = EnvironmentCheckCategories.Container,
         Name = CheckName,
-        Status = EnvironmentCheckStatus.Warning,
+        Status = string.Equals(runtimeKey, KnownContainerRuntimes.Wslc, StringComparisons.ContainerRuntime)
+            ? EnvironmentCheckStatus.Fail
+            : EnvironmentCheckStatus.Warning,
         Message = message,
         Fix = fix,
         Link = "https://aka.ms/aspire/containers"
@@ -152,10 +199,13 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
     private static EnvironmentCheckResult BuildRuntimeResult(
         ContainerRuntimeInfo info,
         bool isSelected,
+        bool hasHealthyRuntime,
         string? configuredRuntime,
         CancellationToken _)
     {
-        var selectedSuffix = isSelected ? " ← active" : "";
+        var selectedSuffix = isSelected
+            ? configuredRuntime is not null ? DoctorCommandStrings.ContainerRuntimeExplicitSelectionSuffix : DoctorCommandStrings.ContainerRuntimeActiveSuffix
+            : "";
 
         if (!info.IsInstalled)
         {
@@ -163,10 +213,11 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
             return new EnvironmentCheckResult
             {
                 Category = EnvironmentCheckCategories.Container,
-                Name = info.Executable,
+                Name = info.Key,
                 Status = EnvironmentCheckStatus.Fail,
-                Message = $"{info.Name}: not found (configured via ASPIRE_CONTAINER_RUNTIME={configuredRuntime})",
-                Fix = GetContainerRuntimeInstallationLink(info.Name)
+                Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeNotFoundMessageFormat,
+                    info.Name, configuredRuntime, selectedSuffix),
+                Fix = GetContainerRuntimeInstallationLink(info.Key, info.Name)
             };
         }
 
@@ -175,10 +226,12 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
             return new EnvironmentCheckResult
             {
                 Category = EnvironmentCheckCategories.Container,
-                Name = info.Executable,
+                Name = info.Key,
                 Status = EnvironmentCheckStatus.Warning,
-                Message = $"{info.Name}: installed but not running{selectedSuffix}",
-                Fix = GetContainerRuntimeStartupAdvice(info.Name, info.IsDockerDesktop)
+                Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeStoppedMessageFormat,
+                    info.Name, selectedSuffix),
+                Details = info.Error,
+                Fix = GetContainerRuntimeStartupAdvice(info.Key, info.Name, info.IsDockerDesktop)
             };
         }
 
@@ -191,7 +244,9 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
             {
                 Category = policyResult.Category,
                 Name = policyResult.Name,
-                Status = policyResult.Status,
+                Status = !isSelected && hasHealthyRuntime && policyResult.Status == EnvironmentCheckStatus.Fail
+                    ? EnvironmentCheckStatus.Warning
+                    : policyResult.Status,
                 Message = policyResult.Message + selectedSuffix,
                 Fix = policyResult.Fix,
                 Details = policyResult.Details,
@@ -199,31 +254,28 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
             };
         }
 
-        // Explain why this runtime was chosen
-        var reason = configuredRuntime is not null && isSelected
-            ? $"configured via ASPIRE_CONTAINER_RUNTIME={configuredRuntime}"
-            : isSelected && info.IsDefault ? "auto-detected (default)"
-            : isSelected ? "auto-detected (only runtime running)"
-            : "available";
-
-        var versionSuffix = info.ClientVersion is not null ? $" v{info.ClientVersion}" : "";
+        var versionSuffix = info.ClientVersion is not null
+            ? string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeVersionSuffixFormat, info.ClientVersionText ?? info.ClientVersion.ToString())
+            : "";
 
         return new EnvironmentCheckResult
         {
             Category = EnvironmentCheckCategories.Container,
-            Name = info.Executable,
+            Name = info.Key,
             Status = EnvironmentCheckStatus.Pass,
-            Message = $"{info.Name}{versionSuffix}: running ({reason}){selectedSuffix}"
+            Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeRunningMessageFormat,
+                info.Name, versionSuffix, selectedSuffix)
         };
     }
 
-    private static string GetContainerRuntimeInstallationLink(string runtime)
+    private static string GetContainerRuntimeInstallationLink(string runtimeKey, string runtimeName)
     {
-        return runtime switch
+        return runtimeKey switch
         {
-            "Docker" => "Install Docker Desktop: https://www.docker.com/products/docker-desktop",
-            "Podman" => "Install Podman: https://podman.io/getting-started/installation",
-            _ => $"Install {runtime}"
+            KnownContainerRuntimes.Docker => DoctorCommandStrings.ContainerRuntimeInstallDockerFix,
+            KnownContainerRuntimes.Podman => DoctorCommandStrings.ContainerRuntimeInstallPodmanFix,
+            KnownContainerRuntimes.Wslc => DoctorCommandStrings.ContainerRuntimeInstallWslcFix,
+            _ => string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeInstallGenericFixFormat, runtimeName)
         };
     }
 
@@ -236,6 +288,13 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
 
         if (versionString is not null && Version.TryParse(versionString, out var version))
         {
+            if (string.Equals(runtime, KnownContainerRuntimes.Wslc, StringComparisons.ContainerRuntime) && version.Revision == 0)
+            {
+                // WSLc reports clients as 3.0.2.0 and session managers as 3.0.2.
+                // Omit a zero revision from the minimum so either form compares correctly.
+                version = new Version(version.Major, version.Minor, version.Build);
+            }
+
             return version;
         }
 
@@ -249,30 +308,34 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
     {
         return runtime switch
         {
-            "Docker" => MinimumDockerVersion,
-            "Podman" => MinimumPodmanVersion,
+            KnownContainerRuntimes.Docker => MinimumDockerVersion,
+            KnownContainerRuntimes.Podman => MinimumPodmanVersion,
+            KnownContainerRuntimes.Wslc => MinimumWslcVersion,
             _ => null
         };
     }
 
-    private static string GetContainerRuntimeUpgradeAdvice(string runtime)
+    private static string GetContainerRuntimeUpgradeAdvice(string runtimeKey, string runtimeName)
     {
-        return runtime switch
+        return runtimeKey switch
         {
-            "Docker" => $"Upgrade Docker to version {MinimumDockerVersion} or later from: https://www.docker.com/products/docker-desktop",
-            "Podman" => $"Upgrade Podman to version {MinimumPodmanVersion} or later from: https://podman.io/getting-started/installation",
-            _ => $"Upgrade {runtime} to a newer version"
+            KnownContainerRuntimes.Docker => string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeUpgradeFixFormat,
+                runtimeName, MinimumDockerVersion, "https://www.docker.com/products/docker-desktop"),
+            KnownContainerRuntimes.Podman => string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeUpgradeFixFormat,
+                runtimeName, MinimumPodmanVersion, "https://podman.io/getting-started/installation"),
+            KnownContainerRuntimes.Wslc => string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeUpgradeWslcFixFormat, MinimumWslcVersion),
+            _ => string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeUpgradeGenericFixFormat, runtimeName)
         };
     }
 
-    private static string GetContainerRuntimeStartupAdvice(string runtime, bool isDockerDesktop = false)
+    private static string GetContainerRuntimeStartupAdvice(string runtimeKey, string runtimeName, bool isDockerDesktop)
     {
-        return runtime switch
+        return runtimeKey switch
         {
-            "Docker" when isDockerDesktop => "Start Docker Desktop",
-            "Docker" => "Start Docker daemon",
-            "Podman" => "Start Podman service: sudo systemctl start podman",
-            _ => $"Start {runtime} daemon"
+            KnownContainerRuntimes.Docker when isDockerDesktop => DoctorCommandStrings.ContainerRuntimeStartDockerDesktopFix,
+            KnownContainerRuntimes.Podman => DoctorCommandStrings.ContainerRuntimeStartPodmanFix,
+            KnownContainerRuntimes.Wslc => DoctorCommandStrings.ContainerRuntimeStartWslcFix,
+            _ => string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ContainerRuntimeStartDaemonFixFormat, runtimeName)
         };
     }
 }

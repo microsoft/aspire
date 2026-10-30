@@ -1,11 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECONTAINERRUNTIME001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREACAEXPRESS001
@@ -25,6 +21,7 @@ using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Aspire.TestUtilities;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -36,6 +33,193 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     private static readonly Guid s_testTenantId = Guid.Parse("87654321-4321-4321-4321-210987654321");
 
     private static string GetTestResourceId(string resourcePath) => $"/subscriptions/{TestSubscriptionId}/resourceGroups/{TestResourceGroupName}{resourcePath}";
+
+    [Theory]
+    [InlineData("provision-azure-bicep-resources", false)]
+    [InlineData("login-to-acr-registry", true)]
+    [InlineData("push", true)]
+    [InlineData("publish", false)]
+    [InlineData("build", false)]
+    [InlineData("destroy", false)]
+    [InlineData("deploy", false)]
+    public async Task DeployAsync_PreAcquiresOnlySelectedTokenScopes(string target, bool requiresAcr)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper, step: target);
+        var reporter = new TestPipelineActivityReporter(testOutputHelper);
+        var credential = new FederatedTokenCredential();
+        ConfigureTestServices(builder, activityReporter: reporter, armClientProvider: CreateRegistryArmClientProvider());
+        builder.Services.AddSingleton<ITokenCredentialProvider>(new TestTokenCredentialProvider(credential));
+        builder.Services.AddSingleton<IAzurePrincipalProvider, DefaultAzurePrincipalProvider>();
+        builder.AddAzureContainerRegistry("registry").PublishAsExisting("existing-registry", "existing-rg");
+        builder.AddAzureContainerRegistry("other-registry").PublishAsExisting("other-registry", "existing-rg");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.NotEqual(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        var expected = target is "publish" or "build" or "destroy"
+            ? Array.Empty<string>()
+            : requiresAcr
+                ? ["https://management.azure.com/.default", AcrLoginService.AcrScope, "https://graph.windows.net/.default"]
+                : ["https://management.azure.com/.default", "https://graph.windows.net/.default"];
+        Assert.Equal(expected.Order(StringComparer.Ordinal), credential.Requests.Order(StringComparer.Ordinal));
+        if (expected.Length > 0)
+        {
+            Assert.Contains(reporter.CompletedSteps, step =>
+                step.StepTitle == "validate-azure-login" &&
+                step.CompletionText == "Azure authentication validated successfully");
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeployAsync_TokenPreAcquisitionFailurePreventsProvisioning(bool cancel)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper, step: "login-to-acr-registry");
+        var reporter = new TestPipelineActivityReporter(testOutputHelper);
+        var credential = new FederatedTokenCredential
+        {
+            FailingScope = cancel ? null : AcrLoginService.AcrScope,
+            OnRequest = (scope, token) =>
+            {
+                if (cancel && scope == AcrLoginService.AcrScope)
+                {
+                    throw new OperationCanceledException(token);
+                }
+            }
+        };
+        var subscription = new TestSubscriptionResource([], resourceGroup: null, resourceGroupLookupReturnsNotFound: true);
+        ConfigureTestServices(builder, activityReporter: reporter, armClientProvider: new TestArmClientProvider(new TestArmClient(subscription)));
+        builder.Services.AddSingleton<ITokenCredentialProvider>(new TestTokenCredentialProvider(credential));
+        builder.AddAzureContainerRegistry("registry");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var environment = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<AzureEnvironmentResource>());
+        Assert.False(environment.ProvisioningContextTask.Task.IsCompleted);
+        Assert.Equal(0, subscription.ResourceGroups.CreateOrUpdateCallCount);
+        var runtime = Assert.IsType<FakeContainerRuntime>(app.Services.GetRequiredService<IContainerRuntime>());
+        Assert.False(runtime.WasLoginToRegistryCalled);
+        Assert.Equal(0, runtime.ResolveAsyncCallCount);
+        Assert.Equal(["https://management.azure.com/.default", AcrLoginService.AcrScope], credential.Requests);
+        if (!cancel)
+        {
+            var failedStep = reporter.CompletedSteps.First(step => step.StepTitle == "validate-azure-login");
+            Assert.Contains(AcrLoginService.AcrScope, failedStep.CompletionText);
+        }
+    }
+
+    [Fact]
+    public async Task DeployAsync_PreAcquisitionUsesSelectedTenant()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper, step: "login-to-acr-registry");
+        var reporter = new TestPipelineActivityReporter(testOutputHelper);
+        var interactionService = new TestInteractionService();
+        ConfigureTestServices(builder, activityReporter: reporter, interactionService: interactionService, armClientProvider: CreateRegistryArmClientProvider(), setDefaultProvisioningOptions: false);
+        var requestedTenants = new List<string?>();
+        builder.Services.AddSingleton<ITokenCredentialProvider>(sp => new TestTokenCredentialProvider(new FederatedTokenCredential
+        {
+            OnRequest = (_, _) => requestedTenants.Add(sp.GetRequiredService<IOptions<AzureProvisionerOptions>>().Value.TenantId)
+        }));
+        builder.AddAzureContainerRegistry("registry").PublishAsExisting("existing-registry", "existing-rg");
+
+        using var app = builder.Build();
+        var runTask = app.RunAsync();
+        foreach (var value in new[] { s_testTenantId.ToString(), TestSubscriptionId, TestResourceGroupName, "westus2" })
+        {
+            var interaction = await interactionService.Interactions.Reader.ReadAsync();
+            interaction.Inputs[0].Value = value;
+            interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
+        }
+        await runTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.NotEqual(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.Equal([s_testTenantId.ToString(), s_testTenantId.ToString()], requestedTenants);
+    }
+
+    private static IArmClientProvider CreateRegistryArmClientProvider() => new TestArmClientProvider(new Dictionary<string, object>
+    {
+        ["name"] = new { type = "String", value = "testregistry" },
+        ["loginServer"] = new { type = "String", value = "testregistry.azurecr.io" }
+    });
+
+    [Theory]
+    [InlineData(16, true, false)]
+    [InlineData(61, false, false)]
+    [InlineData(16, true, true)]
+    public async Task DeployAsync_PreAcquiresTokensBeforeResourceGroupCreation(int provisioningMinutes, bool succeeds, bool automaticRegistry)
+    {
+        var loginStepName = automaticRegistry ? "login-to-acr-env-acr" : "login-to-acr-registry";
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper, step: loginStepName);
+        var reporter = new TestPipelineActivityReporter(testOutputHelper);
+        var credential = new FederatedTokenCredential();
+        var subscription = new TestSubscriptionResource(new Dictionary<string, object>
+        {
+            ["name"] = new { type = "String", value = "testregistry" },
+            ["loginServer"] = new { type = "String", value = "testregistry.azurecr.io" }
+        }, resourceGroup: null, resourceGroupLookupReturnsNotFound: true);
+        subscription.ResourceGroups.OnCreateOrUpdate = () =>
+        {
+            Assert.Equal(
+                new[] { "https://management.azure.com/.default", AcrLoginService.AcrScope, "https://graph.windows.net/.default" }.Order(StringComparer.Ordinal),
+                credential.Requests.Order(StringComparer.Ordinal));
+            credential.Advance(TimeSpan.FromMinutes(provisioningMinutes));
+        };
+        ConfigureTestServices(builder, activityReporter: reporter, armClientProvider: new TestArmClientProvider(new TestArmClient(subscription)));
+        builder.Services.AddSingleton<ITokenCredentialProvider>(new TestTokenCredentialProvider(credential));
+        builder.Services.AddSingleton<IAzurePrincipalProvider, DefaultAzurePrincipalProvider>();
+        if (automaticRegistry)
+        {
+            builder.AddAzureContainerAppEnvironment("env");
+        }
+        else
+        {
+            builder.AddAzureContainerRegistry("registry");
+        }
+        builder.Pipeline.AddStep("request-delayed-acr-token", async context =>
+        {
+            await credential.GetTokenAsync(new TokenRequestContext([AcrLoginService.AcrScope]), context.CancellationToken);
+        }, dependsOn: AzureEnvironmentResource.CreateProvisioningContextStepName, requiredBy: loginStepName);
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(1, subscription.ResourceGroups.CreateOrUpdateCallCount);
+        if (succeeds)
+        {
+            Assert.Contains(reporter.CompletedSteps, step => step.StepTitle == "pipeline-execution" && step.CompletionState == CompletionState.Completed);
+        }
+        else
+        {
+            Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        }
+        var runtime = Assert.IsType<FakeContainerRuntime>(app.Services.GetRequiredService<IContainerRuntime>());
+        Assert.Equal(succeeds, runtime.WasLoginToRegistryCalled);
+    }
+
+    [Fact]
+    public async Task DeployAsync_PrincipalAuthenticationFailurePreventsResourceGroupCreation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper, step: AzureEnvironmentResource.CreateProvisioningContextStepName);
+        var reporter = new TestPipelineActivityReporter(testOutputHelper);
+        var subscription = new TestSubscriptionResource([], resourceGroup: null, resourceGroupLookupReturnsNotFound: true);
+        var credential = new FederatedTokenCredential { FailingScope = "https://graph.windows.net/.default" };
+        ConfigureTestServices(builder, activityReporter: reporter, armClientProvider: new TestArmClientProvider(new TestArmClient(subscription)));
+        builder.Services.AddSingleton<ITokenCredentialProvider>(new TestTokenCredentialProvider(credential));
+        builder.Services.AddSingleton<IAzurePrincipalProvider, DefaultAzurePrincipalProvider>();
+        builder.AddAzureProvisioning();
+        builder.AddAzureEnvironment();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(0, subscription.ResourceGroups.CreateOrUpdateCallCount);
+        Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.Equal(["https://management.azure.com/.default", "https://graph.windows.net/.default"], credential.Requests);
+        Assert.Contains(reporter.CompletedSteps, step => step.CompletionText.Contains("https://graph.windows.net/.default", StringComparison.Ordinal));
+    }
 
     [Fact]
     public async Task DeployAsync_PromptsViaInteractionService()

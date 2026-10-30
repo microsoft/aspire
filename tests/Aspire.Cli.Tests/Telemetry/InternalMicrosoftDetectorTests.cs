@@ -6,7 +6,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.DotNet;
-using Aspire.Cli.Telemetry;
+using Aspire.Shared.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -882,6 +882,57 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal(["platform", "-s"], Assert.IsType<string[]>(processFactory.LastArguments));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CheckMacPlatformSsoAsync_CapturesRedirectedProcessOutput(bool useStderr)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputPath = Path.Combine(workspace.Path, "platform-sso-output.txt");
+        await File.WriteAllTextAsync(outputPath, MacPlatformSsoOutputFixture);
+        var processFactory = new TestProcessExecutionFactory
+        {
+            CreateExecutionFromStartInfoCallback = (startInfo, options) =>
+            {
+                Assert.True(startInfo.RedirectStandardOutput);
+                Assert.True(startInfo.RedirectStandardError);
+                Assert.Equal(Encoding.UTF8.WebName, startInfo.StandardOutputEncoding?.WebName);
+                Assert.Equal(Encoding.UTF8.WebName, startInfo.StandardErrorEncoding?.WebName);
+                startInfo.ArgumentList.Clear();
+
+                // Replay synthetic probe output through a real child without inspecting account state.
+                if (OperatingSystem.IsWindows())
+                {
+                    startInfo.FileName = "cmd.exe";
+                    startInfo.Arguments = $"/d /c type \"{outputPath}\"{(useStderr ? " 1>&2" : string.Empty)}";
+                }
+                else
+                {
+                    startInfo.FileName = "/bin/sh";
+                    startInfo.ArgumentList.Add("-c");
+                    startInfo.ArgumentList.Add(useStderr ? "cat \"$1\" 1>&2" : "cat \"$1\"");
+                    startInfo.ArgumentList.Add("probe");
+                    startInfo.ArgumentList.Add(outputPath);
+                }
+
+                return new ProcessExecution(startInfo, NullLogger.Instance, options, new TestEnvironment());
+            }
+        };
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            processFactory: processFactory,
+            macPlatformSsoPath: outputPath);
+
+        var result = await detector.CheckMacPlatformSsoAsync(TestContext.Current.CancellationToken);
+
+        Assert.Null(result.Failure);
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("test.alias", result.Alias);
+        Assert.Equal("REDMOND", result.Domain);
+    }
+
     [Fact]
     public async Task CheckMacPlatformSsoAsync_ReportsMissingCommand()
     {
@@ -1669,16 +1720,19 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
             new DirectoryInfo(Path.GetDirectoryName(cacheFilePath) ?? AppContext.BaseDirectory),
             homeDirectory: homeDirectory);
         var effectiveEnvironment = environment ?? new TestEnvironment(environmentVariables);
-        var ciEnvironmentDetector = new CIEnvironmentDetector(effectiveEnvironment);
+        var ciEnvironmentDetector = new Aspire.Cli.Telemetry.CIEnvironmentDetector(effectiveEnvironment);
+        var effectiveProcessFactory = processFactory ?? new TestProcessExecutionFactory();
 
         return new InternalMicrosoftDetector(
-            executionContext,
+            executionContext.HomeDirectory,
+            executionContext.WorkingDirectory,
             effectiveEnvironment,
             cacheFilePath,
             timeProvider ?? new FixedTimeProvider(now),
             NullLogger<InternalMicrosoftDetector>.Instance,
-            processFactory ?? new TestProcessExecutionFactory(),
-            ciEnvironmentDetector,
+            (startInfo, stdout, stderr) => effectiveProcessFactory.CreateExecution(startInfo,
+                new ProcessInvocationOptions { SuppressLogging = true, StandardOutputCallback = stdout, StandardErrorCallback = stderr }),
+            ciEnvironmentDetector.IsCIEnvironment(),
             macPlatformSsoPath ?? "/usr/bin/app-sso",
             probeStages,
             gitHubHttpMessageHandler,

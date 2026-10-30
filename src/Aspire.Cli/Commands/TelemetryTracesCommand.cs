@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Dashboard.Otlp.Model;
@@ -106,7 +107,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Failed to fetch traces from Dashboard API");
+            _logger.LogError("Failed to fetch traces from Dashboard API");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, dashboardUrl is not null, _httpClientFactory, _logger, cancellationToken);
             TelemetryCommandHelpers.DisplayTelemetryError(InteractionService, errorInfo);
             return CommandResult.Failure(CliExitCodes.DashboardFailure);
@@ -132,7 +133,10 @@ internal sealed class TelemetryTracesCommand : BaseCommand
 
         var url = DashboardUrls.TelemetryTraceDetailApiUrl(baseUrl, traceId);
 
-        _logger.LogDebug("Fetching trace {TraceId} from {Url}", traceId, url);
+        _logger.LogDebug(
+            "Fetching trace {TraceId} from {Url}",
+            traceId,
+            McpToolHelpers.SanitizeDashboardRequestUrl(url));
 
         var response = await client.GetAsync(url, cancellationToken);
 
@@ -201,7 +205,9 @@ internal sealed class TelemetryTracesCommand : BaseCommand
 
         var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources, hasError: hasError, limit: limit, search: search);
 
-        _logger.LogDebug("Fetching traces from {Url}", url);
+        _logger.LogDebug(
+            "Fetching traces from {Url}",
+            McpToolHelpers.SanitizeDashboardRequestUrl(url));
 
         var response = await client.GetAsync(url, cancellationToken);
         TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);

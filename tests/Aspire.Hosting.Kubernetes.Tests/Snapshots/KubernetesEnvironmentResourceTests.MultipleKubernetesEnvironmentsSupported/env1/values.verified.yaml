@@ -4,6 +4,8 @@
     ServiceA_image: "ServiceA:latest"
 secrets: {}
 config:
+  env1_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
   ServiceA:
     OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
     ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"

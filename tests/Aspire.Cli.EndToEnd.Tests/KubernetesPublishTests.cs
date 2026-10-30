@@ -346,7 +346,7 @@ builder.Build().Run();
         File.WriteAllText(
             appHostFilePath,
             """
-            #pragma warning disable ASPIRECOMPUTE003, ASPIREPIPELINES001
+            #pragma warning disable ASPIRECOMPUTE003
             using Aspire.Hosting;
             using Aspire.Hosting.Kubernetes;
 

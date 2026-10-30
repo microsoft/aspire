@@ -172,11 +172,7 @@ public static partial class AspireEFMySqlExtensions
             {
                 builder.CheckDbContextRegistered<TContext>();
 
-#if NET9_0_OR_GREATER
                 builder.Services.ConfigureDbContext<TContext>(ConfigureRetryAndTimeout);
-#else
-                builder.PatchServiceDescriptor<TContext>(ConfigureRetryAndTimeout);
-#endif
 
                 void ConfigureRetryAndTimeout(DbContextOptionsBuilder optionsBuilder)
                 {

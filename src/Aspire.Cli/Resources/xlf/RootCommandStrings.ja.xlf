@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="BannerArgumentDescription">
         <source>Display the animated Aspire CLI welcome banner</source>
-        <target state="needs-review-translation">アニメーション化された Aspire CLI のウェルカム バナーを表示します。</target>
+        <target state="translated">アニメーション化された Aspire CLI のウェルカム バナーを表示します</target>
         <note />
       </trans-unit>
       <trans-unit id="BannerVersionFormat">
@@ -19,42 +19,42 @@
       </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">デバッガーがアタッチされるまで待ってから、コマンドを実行します。</target>
+        <target state="translated">デバッガーがアタッチされるまで待ってから、コマンドを実行します</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionScriptDescription">
         <source>Write a shell completion script to standard output</source>
-        <target state="new">Write a shell completion script to standard output</target>
+        <target state="translated">シェル補完スクリプトを標準出力に書き込みます</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellDescription">
         <source>Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</source>
-        <target state="new">Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</target>
+        <target state="translated">スクリプトを生成するシェル (bash、fish、pwsh、zsh)。既定値は SHELL です。Windows では pwsh が既定値です。</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellRequired">
         <source>Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</source>
-        <target state="new">Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</target>
+        <target state="translated">サポートされているシェルを検出できませんでした。bash、fish、pwsh、または zsh を指定します: aspire completions script &lt;shell&gt;。</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionsDescription">
         <source>Generate shell completion scripts</source>
-        <target state="new">Generate shell completion scripts</target>
+        <target state="translated">シェル補完スクリプトを生成します</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
         <source>Enable debug logging to the console</source>
-        <target state="needs-review-translation">コンソールへのデバッグ ログを有効にします。</target>
+        <target state="translated">コンソールへのデバッグ ログを有効にします</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugLevelArgumentDescription">
         <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
-        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
+        <target state="translated">コンソール出力の最小ログ レベル (トレース、デバッグ、情報、警告、エラー、クリティカル) を設定します</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
-        <target state="needs-review-translation">Aspire CLI を使用して、Aspire ベースのアプリケーションを作成、実行、発行できます。</target>
+        <target state="translated">Aspire CLI を使用して、Aspire ベースのアプリケーションを作成、実行、発行できます</target>
         <note />
       </trans-unit>
       <trans-unit id="FirstTimeUseTelemetryNotice">
@@ -64,37 +64,37 @@
 The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
 
 Read more about Aspire CLI telemetry: {0}</source>
-        <target state="new">Telemetry
+        <target state="translated">テレメトリ
 ---------
 
-The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
+Aspire CLI は使用状況データを収集します。これは Microsoft によって収集され、エクスペリエンスを向上させるために役立てられます。テレメトリをオプトアウトするには、お好きなシェルを使って、ASPIRE_CLI_TELEMETRY_OPTOUT 環境変数を '1' または 'true' に設定します。
 
-Read more about Aspire CLI telemetry: {0}</target>
+Aspire CLI テレメトリの詳細情報: {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
       <trans-unit id="IdentityOverrideNotice">
         <source>Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</source>
-        <target state="new">Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</target>
+        <target state="translated">Aspire CLI は ID '{0}' のバージョン '{1}' をエミュレートしています。動作がインストール済みのビルドと異なる場合があります。ID は環境変数またはインストール サイドカーによって上書きされています。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidCompletionRequest">
         <source>Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</source>
-        <target state="new">Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</target>
+        <target state="translated">[suggest] または [suggest:&lt;cursor&gt;] の後に 1 つのコマンド ライン文字列が続き、その文字列内にカーソルが置かれている必要があります。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
         <source>Suppress the startup banner and telemetry notice</source>
-        <target state="needs-review-translation">スタートアップ バナーとテレメトリ通知を非表示にします。</target>
+        <target state="translated">スタートアップ バナーとテレメトリ通知を非表示にします</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveArgumentDescription">
         <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
-        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
+        <target state="translated">非対話型モードでコマンドを実行し、すべての対話型プロンプトとスピナーを無効にします</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">デバッガーがアタッチされるまで待ってから、コマンドを実行します。</target>
+        <target state="translated">デバッガーがアタッチされるまで待ってから、コマンドを実行します</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

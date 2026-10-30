@@ -29,6 +29,9 @@ The Aspire client integration must support [all supported versions of .NET](http
 | 8.x                 | `net8.0`                      |
 | 9.x                 | `net8.0` (+`net9.0` optional) |
 | 13.x                | `net8.0` (+`net9.0`, `net10.0` optional) |
+| 17.x                | `net10.0` (+`net11.0` for multitargeted packages) |
+
+Framework-aligned dependencies follow each target's major version. EF providers that do not yet support EF Core 11 (MongoDB and Oracle) target only `net10.0` with their EF Core 10 provider. Npgsql targets both frameworks with the matching EF provider. Pomelo is an explicit exception: its integration targets `net10.0` while retaining the EF Core 9 provider and matching EF health checks.
 
 ### Dependency Versioning
 

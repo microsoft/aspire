@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Shared;
+using Aspire.Shared.Telemetry;
 
 namespace Aspire.Cli.Telemetry;
 
@@ -15,14 +16,14 @@ internal static class AgentTelemetryUploader
     private const string UploaderName = "agent-telemetry";
     private const string LockFileName = UploaderName + ".lock";
 
-    internal static string LockPath => Path.Combine(Path.GetDirectoryName(TelemetryManager.GetTelemetryStoragePath())!, LockFileName);
+    internal static string LockPath => Path.Combine(Path.GetDirectoryName(AspireTelemetryExporter.GetTelemetryStoragePath("cli"))!, LockFileName);
 
     internal static bool HasPendingTelemetry(string storagePath)
         => Directory.Exists(storagePath) && Directory.EnumerateFiles(storagePath, "*", SearchOption.AllDirectories).Any();
 
     internal static void EnsureRunning()
     {
-        if (!HasPendingTelemetry(TelemetryManager.GetTelemetryStoragePath()))
+        if (!HasPendingTelemetry(AspireTelemetryExporter.GetTelemetryStoragePath("cli")))
         {
             return;
         }

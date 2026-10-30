@@ -118,13 +118,8 @@ public static class AspireSqlServerEFCoreSqlClientExtensions
             {
                 builder.CheckDbContextRegistered<TContext>();
 
-#if NET9_0_OR_GREATER
                 builder.Services.ConfigureDbContext<TContext>(optionsBuilder => optionsBuilder.ConfigureSqlEngine(options =>
                 {
-#else
-                builder.PatchServiceDescriptor<TContext>(optionsBuilder => optionsBuilder.UseSqlServer(options =>
-                {
-#endif
                     var extension = optionsBuilder.Options.FindExtension<SqlServerOptionsExtension>();
 
                     if (!settings.DisableRetry)

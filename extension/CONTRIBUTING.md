@@ -48,6 +48,10 @@ Source lives under `extension/src/`:
 
 Also: `package.json` declares commands, settings, and contribution points; `walkthrough/` holds the Get Started Markdown; `package.nls.json` (+ `package.nls.*.json`) hold localized `package.json` strings.
 
+## AppHost discovery
+
+Candidate discovery and default selection are separate. Successful `aspire ls` results are authoritative, including an empty result, for both buffered and streaming output. Configuration can select a returned candidate, but never manufactures one. The legacy `extension get-apphosts` adapter preserves the CLI's `selected_project_file`, including older results where that project is absent from the enumerated candidate list. If both CLI discovery paths fail, file discovery applies the same AppHost-project content check to scanned projects and configured .NET projects outside the workspace. File aliases use filesystem identity when available; case-only paths with distinct identities remain separate. Missing, unreadable, and non-AppHost files do not become buildable candidates.
+
 ## Building the full repository (extension + CLI)
 
 Run `build.ps1` (Windows) or `build.sh` (Mac/Linux) from the repository root to compile the CLI, install extension dependencies, and localize. Use this when debugging the extension and CLI together. See [docs/contributing.md](/docs/contributing.md) and [docs/machine-requirements.md](/docs/machine-requirements.md) for the .NET prerequisites.
@@ -99,9 +103,23 @@ corepack yarn unit-test --grep "parseConfigInfoOutput"
 corepack yarn unit-test --run out/test/configInfoProvider.test.js --run out/test/extensionApi.test.js
 ```
 
+Editor-assistance regressions live in `editorAssistanceTools.test.ts`; shared ordinal name matching is covered by `strings.test.ts` and `launchProfiles.test.ts`. Model-facing resource sources must reject the same unsafe Unicode categories as metadata, including leading and trailing controls before trimming container images. Keep their separate length limits: 256 Unicode scalar values for sources and 128 UTF-16 code units for metadata. `dotnetDebugger.test.ts` covers both emitted process errors and synchronous Node argument-validation errors.
+
+Multi-root lifecycle tests must round-trip returned `appHostPath` selectors through subsequent operations. MCP registration tests must cover ownership changes between nested workspace folders while preserving labels and definitions for unaffected pins.
+
+Start/stop confirmations expire against monotonic time. Expiry regressions must vary wall time independently, checking just before and exactly at the deadline for both tools.
+
+The launch-failure store retains one sanitized failure per AppHost for 30 minutes using monotonic time, with a global limit of 50 AppHosts. A replacement refreshes expiry and write-order eviction; reads do not. Cover reads and writes, including the production singleton, when testing clock changes. Verify duplicate-capture suppression by counting writes, not retained entries. CLI filesystem normalization coverage must include caseless Unicode names such as Hangul, not only names with upper/lowercase variants.
+
+The store is a fallback for failures that can outlive a debug session or happen before one exists, not a second logging system. It keeps only the six bounded failure fields; detailed errors remain in the existing Output, CLI, and resource logs.
+
+The CLI's shared resource-wait budget is covered by `ResourceWaitServiceTests` and `WaitForResourcesToolTests` under `tests/Aspire.Cli.Tests/`. Clock-jump regressions must vary UTC independently of monotonic elapsed time; advancing both clocks together does not test this failure.
+
 ### End-to-end tests
 
 UI end-to-end tests live under `src/test-e2e`. They run a packaged VSIX in a real VS Code instance through ExTester, using a real Aspire CLI and a generated AppHost workspace.
+
+The `apphost-tree` group checks native follower ownership through panel visibility, background AppHost tabs, view switches, polling restarts, and window reload. A hidden panel can retain a follower through an open AppHost tab or the debugger-install hint service's background lease. Assert live process ownership, not just spawn counts. Restore settings through orderly reload/shutdown, never by signalling historical PIDs, and confirm follow mode remains active for subsequent scenarios.
 
 For read-only AppHosts tree assertions, use `waitForAppHostsTreePath` with exact labels (for example, `[appHostLabel, 'Run AppHost']`). It captures visible labels and parent/child relationships together; a `TreeItem` returned by a lookup can refer to a recycled row by the time a later `getLabel()` or child lookup runs. Repository readiness alone does not prevent this UI race. Keep handle-returning helpers for interactions, and do not wait for discovery completion when asserting streamed candidates.
 
@@ -128,7 +146,7 @@ ASPIRE_EXTENSION_E2E_SHARD=debug-dashboard ASPIRE_EXTENSION_E2E_SPEC=out/test-e2
 ASPIRE_EXTENSION_E2E_SHARD=zero-to-running ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/zeroToRunning.e2e.test.js ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 ASPIRE_EXTENSION_E2E_SHARD=package-surface ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/packageSurface.e2e.test.js ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 ASPIRE_EXTENSION_E2E_SHARD=edge-cases ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/edgeCases.e2e.test.js ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
-ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=/path/to/vscode-dotnet-runtime.vsix ASPIRE_EXTENSION_E2E_CSHARP_VSIX=/path/to/vscode-csharp.vsix ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX=/path/to/vscode-azureresourcegroups.vsix ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX=/path/to/vscode-azurefunctions.vsix ASPIRE_EXTENSION_E2E_SHARD=azure-functions ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/azureFunctions.e2e.test.js ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
+ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true ASPIRE_EXTENSION_E2E_INSTALL_AZURE_FUNCTIONS_VSIX=true ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=/path/to/vscode-dotnet-runtime.vsix ASPIRE_EXTENSION_E2E_CSHARP_VSIX=/path/to/vscode-csharp.vsix ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX=/path/to/vscode-azureresourcegroups.vsix ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX=/path/to/vscode-azurefunctions.vsix ASPIRE_EXTENSION_E2E_SHARD=azure-functions ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/azureFunctions.e2e.test.js ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 ASPIRE_EXTENSION_E2E_ENABLE_WINUI=true ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=/path/to/vscode-dotnet-runtime.vsix ASPIRE_EXTENSION_E2E_CSHARP_VSIX=/path/to/vscode-csharp-win32-x64.vsix ASPIRE_EXTENSION_E2E_SHARD=winui-debug ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/winUiDebug.e2e.test.js ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 ```
 
@@ -146,13 +164,33 @@ corepack yarn test:e2e
 
 Linux exercises Chrome, while Windows exercises Edge. The shard generates standalone, hosted-global, and hosted-per-page `net11.0` fixtures. Both VSIX files must match the current platform, and C# must be 2.145.15-prerelease or newer.
 
+Missing and outdated C# checks send their expected localized diagnostic to the test bridge. The bridge compares it to the thrown message inside the extension host and fails if the message differs or configuration unexpectedly succeeds; raw errors and stacks remain out of exported test state.
+
 Before starting the AppHost, the shard awaits C# activation, which installs its runtime dependencies, and checks that `VSWebAssemblyBridge` is present. It does not wait for language-server project import to check this runtime component. If the component is missing, setup reloads the isolated extension host to let C# reacquire and validate it, with at most three activation attempts. Other activation errors fail immediately, and a component that remains missing fails setup explicitly instead of falling back to the legacy proxy. The managed-breakpoint scenarios themselves are never retried.
 
 Each managed proof uses a separate browser profile under the test run's temporary root. A browser lock left by another scenario therefore cannot block its launch. Profiles are removed by the runner after VS Code exits and are not included in uploaded diagnostics; the breakpoint, debug-session shutdown, and command-reset assertions still have to pass.
 
 The Windows shard launches VS Code with `__COMPAT_LAYER=DetectorsAppHealth` to cover [Edge's compatibility-layer relaunch](https://github.com/microsoft/aspire/issues/20151). The extension explicitly unsets this variable only in Edge's browser-launch environment so js-debug can track the original browser process through managed breakpoint discovery.
 
-The E2E fixtures target .NET 10, matching the SDK pinned by the repository's `global.json`. The Azure Functions shard additionally requires Azure Functions Core Tools v4 (`func`) on `PATH`. It installs the real .NET Install Tool, C#, Azure Resource Groups, and Azure Functions extensions into the isolated VS Code instance, generates a dedicated HTTPS certificate with shell-sensitive arguments, and activates the Azure Functions extension so it registers its `func` task definition and listeners. Aspire then creates and runs a registered `func: host start` task for the generated .NET isolated Functions resource; the shard probes its HTTPS endpoint and verifies that stopping the Aspire resource ends the same VS Code task. CI runs this shard on Linux with pinned, checksum-verified copies of Core Tools 4.12.1, .NET Install Tool 3.1.0, C# 2.148.23 for Linux x64, Azure Resource Groups 0.12.7, and Azure Functions 1.22.0.
+The browser debugger fixtures target the .NET version pinned by the repository's `global.json`. Their NuGet sources must include the matching daily feed because the standalone Blazor gateway is acquired as a .NET tool at run time.
+
+Both Azure Functions shards require Azure Functions Core Tools v4 (`func`) on `PATH`, plus the real .NET Install Tool and C# extensions because they debug the generated C# AppHost. The .NET Functions shard additionally installs Azure Resource Groups and Azure Functions into the isolated VS Code instance, generates a dedicated HTTPS certificate with shell-sensitive arguments, and activates the Azure Functions extension so it registers its `func` task definition and listeners. Aspire then creates and runs a registered `func: host start` task for the generated .NET isolated Functions resource; the shard probes its HTTPS endpoint and verifies that stopping the Aspire resource ends the same VS Code task.
+
+The separate `azure-functions-node` shard runs `azureFunctionsNode.e2e.test.ts`, which uses a dependency-free Node v3 HTTP Functions fixture and the source-built hosting integration to verify Core Tools startup, a real `pwa-node` inspector attachment, an HTTP-handler breakpoint with a matching source stack frame, and task/process/inspector cleanup. It does not install the Azure Resource Groups or Azure Functions extensions because the Node worker attaches directly through VS Code's built-in JavaScript debugger. With Core Tools on `PATH`, run that proof using:
+
+```bash
+ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true \
+ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=/path/to/vscode-dotnet-runtime.vsix \
+ASPIRE_EXTENSION_E2E_CSHARP_VSIX=/path/to/vscode-csharp.vsix \
+ASPIRE_EXTENSION_E2E_SHARD=azure-functions-node \
+ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/azureFunctionsNode.e2e.test.js \
+ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire \
+corepack yarn test:e2e
+```
+
+CI runs both shards on Linux with pinned, checksum-verified copies of Core Tools 4.12.1, .NET Install Tool 3.1.0, and C# 2.148.23 for Linux x64. Only the .NET Functions shard also installs Azure Resource Groups 0.12.7 and Azure Functions 1.22.0.
+
+The offline E2E settings disable Go's language server. The pinned Go extension otherwise [awaits installation of `gopls` during activation](https://github.com/golang/vscode-go/blob/v0.56.0/extension/src/goMain.ts#L138) before registering its debug adapter, which can block resource startup and shutdown. The resource-debug scenarios exercise real .NET and Go debuggers without requiring language-server features.
 
 The `winui-debug` shard is Windows-only. It installs pinned .NET Install Tool and C# VSIX files into the offline VS Code instance, generates a self-contained unpackaged WinUI project, and debugs it as an Aspire project resource. The fixture puts design-time intermediate outputs under `obj\design-time\` while keeping normal build outputs and NuGet restore assets at their standard paths. This separates the XAML compiler's JSON inputs, generated code, and saved state even when the C# language server reloads the project during Aspire's build. Waiting for initial project-load completion alone cannot prevent those later reloads from racing the real build. Before starting Aspire, the shard verifies that the C# definition provider resolves the XAML-generated `InitializeComponent` method from the isolated design-time directory. The app then writes a readiness marker from `Application.OnLaunched`; reaching that marker proves WinUI passed the `Application.Start` failure point covered by the regression. Dependabot does not update the raw Marketplace VSIX URLs or checksums. Treat them as regression inputs rather than current-version dependencies: rebaseline them manually only when VS Code compatibility requires it or the fixture is deliberately moved, and before changing the C# version verify that the old `TargetPath` launch still reproduces [the original crash](https://github.com/microsoft/aspire/issues/19091) while the `RunCommand` launch passes.
 
@@ -174,6 +212,8 @@ Each source and file is attempted independently, and text is redacted before bei
 Linux CI shards also record the Xvfb display with `ffmpeg`. The default workflow mode is `ASPIRE_EXTENSION_E2E_RECORDING_MODE=always`, which keeps and uploads `extension/.test-recordings/<shard>/*.mp4` for both successful and failing Linux shards. Set `ASPIRE_EXTENSION_E2E_RECORDING_MODE=failure` when you only want failed-run videos, or `off` to disable recording. The default capture size is `1280x1024`, matching the hosted Xvfb display; override with `ASPIRE_EXTENSION_E2E_RECORDING_SIZE` if you run under a larger display. Recording is intentionally Linux-only because the Windows E2E jobs do not run under Xvfb and hosted desktop capture is less reliable.
 
 E2E tests should avoid fixed sleeps for readiness. Prefer the observation state written by the extension test bridge, ExTester wait APIs, unique generated workspaces, explicit per-phase timeouts, and cleanup through `aspire stop --apphost`. This is intentionally stricter than a normal smoke test because the suite runs a real VS Code, CLI, AppHost, terminal, and dashboard path. See https://github.com/microsoft/aspire/issues/17727 for the original tracking issue.
+
+Language-model tool tests must assert the bridge's `invocation` field before counting a call as public API coverage. `vscode.lm.invokeTool` identifies the public API; `registeredToolDirect` and `registeredToolCanceled` identify direct adapter calls that bypass it. The lifecycle suite also injects a real compiler error and checks that `aspire_explain_launch_failure` reports it after CLI-initiated shutdown.
 
 ## Localizing user-facing strings
 

@@ -2,7 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIRECOMPUTE003
+#pragma warning disable ASPIREPIPELINES003
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Resources;
@@ -16,6 +17,52 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 
 public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishAsync_SupportsFileKeyRef(bool? optional)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "nginx:alpine")
+            .PublishAsKubernetesService(resource =>
+            {
+                var pod = resource.Workload!.PodTemplate.Spec;
+                pod.Volumes.Add(new VolumeV1 { Name = "generated-env", EmptyDir = new() });
+                pod.InitContainers.Add(new ContainerV1
+                {
+                    Name = "prepare-env",
+                    Image = "docker.io/library/busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e",
+                    Command = { "sh", "-ec" },
+                    Args = { "printf \"SOURCE_KEY='generated-value'\\nOTHER_KEY='other-value'\\n\" > /out/app.env" },
+                    VolumeMounts = { new VolumeMountV1 { Name = "generated-env", MountPath = "/out" } }
+                });
+                pod.Containers[0].Env.Add(new EnvVarV1
+                {
+                    Name = "APP_VALUE",
+                    ValueFrom = new EnvVarSourceV1
+                    {
+                        FileKeyRef = new FileKeySelectorV1
+                        {
+                            VolumeName = "generated-env",
+                            Path = "app.env",
+                            Key = "SOURCE_KEY",
+                            Optional = optional
+                        }
+                    }
+                });
+            });
+
+        using var app = builder.Build();
+        app.Run();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates/myapp/deployment.yaml")), "yaml")
+            .UseParameters(optional);
+    }
+
     [Fact]
     public async Task PublishAsync_GeneratesValidHelmChart()
     {
@@ -61,7 +108,8 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             "templates/myapp/deployment.yaml",
             "templates/myapp/service.yaml",
             "templates/myapp/config.yaml",
-            "templates/myapp/secrets.yaml"
+            "templates/myapp/secrets.yaml",
+            "templates/env-dashboard/config.yaml"
         };
 
         SettingsTask settingsTask = default!;
@@ -317,7 +365,6 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         builder.AddKubernetesEnvironment("env");
 
         // Add a container to the application
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         var api = builder
             .AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
             .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
@@ -330,7 +377,6 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             .WithHttpsEndpoint()
             .WithHttpProbe(ProbeType.Readiness, "/ready", initialDelaySeconds: 60)
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         var app = builder.Build();
 
@@ -744,6 +790,185 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         await settingsTask;
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PublishUsesConfiguredContainerRegistry(bool explicitRegistry, bool customizeImage)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var registry = builder.AddContainerRegistry("registry", "default.example.com", "default");
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint();
+
+        if (explicitRegistry)
+        {
+            var assignedRegistry = builder.AddContainerRegistry("assigned-registry", "registry.example.com", "apps");
+            environment.WithContainerRegistry(registry);
+            project.WithContainerRegistry(registry).WithContainerRegistry(assignedRegistry);
+        }
+
+        var callbackCount = 0;
+        if (customizeImage)
+        {
+            project.WithImagePushOptions(context =>
+            {
+                callbackCount++;
+                context.Options.RemoteImageName = "services/backend";
+                context.Options.RemoteImageTag = "v2";
+            });
+        }
+
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        Assert.Equal(customizeImage ? 1 : 0, callbackCount);
+        Assert.Same(project.Resource, Assert.Single(environment.Resource.CapturedHelmImageReferences).Resource);
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "api", "deployment.yaml")), "yaml")
+            .UseParameters(explicitRegistry, customizeImage);
+    }
+
+    [Fact]
+    public async Task PublishUsesContainerRegistryParameterDefaults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var endpoint = builder.AddParameter("registry-endpoint", "registry.example.com", publishValueAsDefault: true);
+        var repository = builder.AddParameter("registry-repository", "apps", publishValueAsDefault: true);
+        var registry = builder.AddContainerRegistry("registry", endpoint, repository);
+        builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry);
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PublishDefersContainerRegistryParameters(bool repositoryParameter, bool secret)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var endpoint = builder.AddParameter("registry-endpoint", "registry.example.com", publishValueAsDefault: true);
+        var repository = builder.AddParameter("registry-repository", "apps", publishValueAsDefault: true);
+        var deferredValue = repositoryParameter ? "apps" : "registry.example.com";
+        var deferred = builder.AddParameter("deferred", deferredValue, secret: secret);
+        var registry = builder.AddContainerRegistry("registry",
+            repositoryParameter ? endpoint : deferred,
+            repositoryParameter ? deferred : repository);
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry);
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        Assert.Same(project.Resource, Assert.Single(environment.Resource.CapturedHelmImageReferences).Resource);
+        var publishedValues = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml"));
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(workspace.Path, environment.Resource, CancellationToken.None);
+
+        await Verify(publishedValues, "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"))), "yaml")
+            .UseParameters(repositoryParameter, secret);
+    }
+
+    [Fact]
+    public async Task PublishDefersSecretContainerRegistryDefaults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var endpoint = builder.AddResource(ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, "registry-endpoint"));
+        var registry = builder.AddContainerRegistry("registry", endpoint);
+        builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry);
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishDefersMissingContainerRegistryParameters(bool repositoryParameter)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var endpoint = builder.AddParameter("registry-endpoint", "registry.example.com", publishValueAsDefault: true);
+        var missing = builder.AddParameter("missing");
+        var registry = builder.AddContainerRegistry("registry",
+            repositoryParameter ? endpoint : missing,
+            repositoryParameter ? missing : null);
+        builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry)
+            .WithImagePushOptions(_ => throw new InvalidOperationException("Deferred image must not be resolved during publish."));
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .UseParameters(repositoryParameter);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishDefersContainerRegistryOutputs(bool repositoryOutput)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var output = ReferenceExpression.Create($"{new TestValueProvider("provisioned-value")}");
+        var registry = builder.AddResource(new ContainerRegistryResource("registry",
+            repositoryOutput ? ReferenceExpression.Create($"registry.example.com") : output,
+            repositoryOutput ? output : null));
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithContainerRegistry(registry)
+            .WithImagePushOptions(_ => throw new InvalidOperationException("Deferred image must not be resolved during publish."));
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        Assert.Same(project.Resource, Assert.Single(environment.Resource.CapturedHelmImageReferences).Resource);
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .UseParameters(repositoryOutput);
+    }
+
+    [Fact]
+    public async Task PublishUsesContainerRegistryForDockerfileWithoutChangingPrebuiltImages()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var registry = builder.AddContainerRegistry("registry", "registry.example.com");
+        builder.AddExecutable("worker", "node", ".")
+            .PublishAsDockerFile()
+            .WithContainerRegistry(registry);
+        builder.AddContainer("cache", "redis", "7")
+            .WithContainerRegistry(registry);
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "worker", "deployment.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "cache", "deployment.yaml")), "yaml");
+    }
+
     [Fact]
     public async Task KubernetesWithDotnetProjectUsesImageParameterAndProjectEndpoint()
     {
@@ -977,11 +1202,9 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.AddKubernetesEnvironment("k8s");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder.AddContainer("api", "questdb/questdb:9.4.1")
             .WithHttpEndpoint(port: 9002, targetPort: 9000, name: "http")
             .WithHttpProbe(ProbeType.Readiness, "/ready");
-#pragma warning restore ASPIREPROBES001
 
         var app = builder.Build();
         app.Run();

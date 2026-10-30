@@ -55,7 +55,7 @@ public sealed class KubernetesDeployWithValkeyTests(ITestOutputHelper output)
 
                 var cache = builder.AddValkey("cache");
 
-                var api = builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+                var api = builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                     .WithReference(cache)
                     .WaitFor(cache)
                     .WithExternalHttpEndpoints();

@@ -1,19 +1,81 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only
-
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Azure.Tests;
 
 public class BicepUtilitiesTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, null, "", null)]
+    [InlineData(DistributedApplicationOperation.Run, "dev-a", "dev-a", null)]
+    [InlineData(DistributedApplicationOperation.Publish, "production", "production", null)]
+    [InlineData(DistributedApplicationOperation.Run, "dev-a", "explicit", "explicit")]
+    [InlineData(DistributedApplicationOperation.Publish, "production", "explicit", "explicit")]
+    public async Task TenantResourceSuffix_ResolvesConfigurationAndExplicitOverrides(
+        DistributedApplicationOperation operation, string? configuredSuffix, string expectedSuffix, string? parameterOverride)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
+        builder.Configuration["Azure:TenantResourceSuffix"] = configuredSuffix;
+        var resource = builder.AddBicepTemplateString("registration", "param tenantResourceSuffix string = ''");
+        if (parameterOverride is null)
+        {
+            resource.WithParameter(AzureBicepResource.KnownParameters.TenantResourceSuffix);
+        }
+        else
+        {
+            resource.WithParameter(AzureBicepResource.KnownParameters.TenantResourceSuffix, parameterOverride);
+        }
+        using var app = builder.Build();
+        var parameters = new JsonObject();
+
+        await BicepUtilities.SetParametersAsync(parameters, resource.Resource, builder.ExecutionContext, skipKnownValues: true);
+
+        Assert.Equal(expectedSuffix, parameters["tenantResourceSuffix"]!["value"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task TenantResourceSuffix_ChangesInvalidateDeploymentChecksum()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration["Azure:TenantResourceSuffix"] = "dev-a";
+        var deploymentState = ProvisioningTestHelpers.CreateUserSecretsManager();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentState);
+        var resource = builder.AddBicepTemplateString("registration", "param tenantResourceSuffix string = ''")
+            .WithParameter(AzureBicepResource.KnownParameters.TenantResourceSuffix);
+        using var app = builder.Build();
+        var parameters = new JsonObject();
+        await BicepUtilities.SetParametersAsync(parameters, resource.Resource, builder.ExecutionContext);
+        var originalChecksum = BicepUtilities.GetChecksum(resource.Resource, parameters, null);
+        var cached = await deploymentState.AcquireSectionAsync("Azure:Deployments:registration");
+        cached.Data[BicepUtilities.DeploymentStateParametersKey] = parameters.ToJsonString();
+
+        Assert.Equal(originalChecksum, await BicepUtilities.GetCurrentChecksumAsync(
+            resource.Resource, cached, builder.ExecutionContext, NullLogger.Instance));
+
+        var azureState = await deploymentState.AcquireSectionAsync("Azure");
+        azureState.Data["TenantResourceSuffix"] = "dev-b";
+        await deploymentState.SaveSectionAsync(azureState);
+
+        var changedChecksum = await BicepUtilities.GetCurrentChecksumAsync(
+            resource.Resource, cached, builder.ExecutionContext, NullLogger.Instance);
+        Assert.NotNull(changedChecksum);
+        Assert.NotEqual(originalChecksum, changedChecksum);
+
+        azureState.Data["TenantResourceSuffix"] = string.Empty;
+        await deploymentState.SaveSectionAsync(azureState);
+        parameters.Clear();
+        await BicepUtilities.SetParametersAsync(parameters, resource.Resource, builder.ExecutionContext);
+        Assert.Equal(string.Empty, parameters["tenantResourceSuffix"]!["value"]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task SetParametersTranslatesParametersToARMCompatibleJsonParameters()
     {

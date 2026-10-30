@@ -1,12 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
@@ -24,7 +22,6 @@ namespace Aspire.Hosting.Azure;
 /// publisher options, and execution context. It handles resource configuration and ensures
 /// that the bicep template is created in the specified output path.
 /// </remarks>
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzurePublishingContext(
     string outputPath,
     AzureProvisioningOptions provisioningOptions,
@@ -178,7 +175,7 @@ public sealed class AzurePublishingContext(
             Location = locationParam,
         };
 
-        var moduleMap = new Dictionary<AzureBicepResource, ModuleImport>();
+        var moduleMap = new Dictionary<AzureBicepResource, DependencyAwareModuleImport>();
 
         foreach (var resource in bicepResourcesToPublish)
         {
@@ -192,9 +189,11 @@ public sealed class AzurePublishingContext(
 
             var identifier = Infrastructure.NormalizeBicepIdentifier(resource.Name);
 
-            var module = new ModuleImport(identifier, $"{resource.Name}/{resource.Name}.bicep")
+            var module = new DependencyAwareModuleImport(identifier, $"{resource.Name}/{resource.Name}.bicep")
             {
-                Name = resource.Name
+                // ARM deployment names are limited to 64 characters, independently of logical resource names.
+                // https://learn.microsoft.com/azure/azure-resource-manager/management/resource-name-rules#microsoftresources
+                Name = ResourceNameHelpers.TruncateWithHash(resource.Name, 64)
             };
 
             moduleMap[resource] = module;
@@ -223,6 +222,22 @@ public sealed class AzurePublishingContext(
             foreach (var parameter in resource.Parameters)
             {
                 await VisitAsync(parameter.Value, MapParameterAsync, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        ProvisioningParameter? tenantResourceSuffix = null;
+        if (bicepResourcesToPublish.Any(resource =>
+            resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.TenantResourceSuffix, out var suffix) && suffix is null))
+        {
+            tenantResourceSuffix = ParameterLookup.Values.FirstOrDefault(parameter =>
+                parameter.BicepIdentifier == AzureBicepResource.KnownParameters.TenantResourceSuffix);
+            if (tenantResourceSuffix is null)
+            {
+                tenantResourceSuffix = new ProvisioningParameter(AzureBicepResource.KnownParameters.TenantResourceSuffix, typeof(string))
+                {
+                    Value = string.Empty
+                };
+                MainInfrastructure.Add(tenantResourceSuffix);
             }
         }
 
@@ -274,6 +289,9 @@ public sealed class AzurePublishingContext(
             IResourceWithConnectionString cs => Eval(cs.ConnectionStringExpression),
             ReferenceExpression { IsConditional: true } re => EvalConditionalExpr(re),
             ReferenceExpression re => EvalExpr(re),
+#pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
+            IBicepOutputReferenceProvider p when p.GetOutputReference() is { } b => Eval(b),
+#pragma warning restore ASPIREAZURE003
             string s => s,
             _ => ""
         };
@@ -347,10 +365,27 @@ public sealed class AzurePublishingContext(
 
             var module = moduleMap[resource];
             module.Scope = GetScopeExpression(resource);
-            module.Parameters.Add("location", locationParam);
+            if (resource.HasLocationParameter)
+            {
+                module.Parameters.Add("location", locationParam);
+            }
+
+            // Role grants have no outputs consumed by their dependents. Preserve these explicit
+            // prerequisites when deploying main.bicep, not just in Aspire's per-resource pipeline.
+            foreach (var prerequisite in resource.References.OfType<AzureRoleAssignmentResource>()
+                .OrderBy(prerequisite => prerequisite.Name, StringComparer.Ordinal))
+            {
+                module.Dependencies.Add(moduleMap[prerequisite]);
+            }
 
             foreach (var parameter in resource.Parameters)
             {
+                if (parameter.Key == AzureBicepResource.KnownParameters.TenantResourceSuffix && parameter.Value is null)
+                {
+                    module.Parameters.Add(parameter.Key, tenantResourceSuffix!);
+                    continue;
+                }
+
                 if (parameter.Key == AzureBicepResource.KnownParameters.UserPrincipalId && parameter.Value is null)
                 {
                     module.Parameters.Add(parameter.Key, principalId);
@@ -575,5 +610,29 @@ public sealed class AzurePublishingContext(
 
         var bicepPath = Path.Combine(outputDirectoryPath, $"{MainInfrastructure.BicepName}.bicep");
         await File.WriteAllTextAsync(bicepPath, compiledBicep.Value).ConfigureAwait(false);
+    }
+
+    // Azure.Provisioning's ModuleImport does not expose or emit dependsOn. Extend its compiled
+    // body so parameter, scope, and name generation remain owned by the provisioning SDK.
+    private sealed class DependencyAwareModuleImport(string identifier, string path) : ModuleImport(identifier, path)
+    {
+        public List<ModuleImport> Dependencies { get; } = [];
+
+        protected override IEnumerable<BicepStatement> Compile()
+        {
+            if (Dependencies.Count == 0)
+            {
+                return base.Compile();
+            }
+
+            var module = (ModuleStatement)base.Compile().Single();
+            var body = (ObjectExpression)module.Body;
+            return
+            [
+                new ModuleStatement(module.Name, module.Type, new ObjectExpression(
+                    [.. body.Properties, new PropertyExpression("dependsOn", new ArrayExpression(
+                        [.. Dependencies.Select(dependency => new IdentifierExpression(dependency.BicepIdentifier))]))]))
+            ];
+        }
     }
 }

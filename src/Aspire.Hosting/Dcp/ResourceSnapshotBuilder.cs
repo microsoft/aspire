@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREEXTENSION001 // Debug support annotations are experimental.
+#pragma warning disable ASPIREEXTENSION001 // Launch configuration metadata is experimental but needed for snapshot serialization.
 
 using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
@@ -170,9 +170,15 @@ internal class ResourceSnapshotBuilder
         }
 
         var launchArguments = GetLaunchArgs(executable, effectiveArgs);
-        var properties = GetLaunchConfigurationType(appModelResource) is { } launchConfigurationType
+        var launchConfigurationType = GetLaunchConfigurationType(appModelResource);
+        var properties = launchConfigurationType is not null
             ? previous.Properties.SetResourceProperty(KnownProperties.Resource.LaunchConfigurationType, launchConfigurationType)
             : previous.Properties.RemoveResourceProperty(KnownProperties.Resource.LaunchConfigurationType);
+        properties = properties
+            .RemoveResourceProperty(KnownProperties.Project.LaunchCommand)
+            .RemoveResourceProperty(KnownProperties.Project.Configuration)
+            .RemoveResourceProperty(KnownProperties.Project.TargetFramework);
+        var dotNetLaunchProperties = GetDotNetLaunchProperties(executable, launchConfigurationType, effectiveArgs);
 
         if (projectPath is not null)
         {
@@ -190,6 +196,7 @@ internal class ResourceSnapshotBuilder
                     ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile, launchProfileName),
                     new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
                     new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
+                    .. dotNetLaunchProperties,
                 ]),
                 EnvironmentVariables = environment,
                 CreationTimeStamp = executable.Metadata.CreationTimestamp?.ToUniversalTime(),
@@ -240,6 +247,227 @@ internal class ResourceSnapshotBuilder
     private static bool IsNotStartedExecutableState(string? state)
     {
         return string.IsNullOrEmpty(state) || state == ExecutableState.Unknown;
+    }
+
+    private static ImmutableArray<ResourcePropertySnapshot> GetDotNetLaunchProperties(
+        Executable resource,
+        string? launchConfigurationType,
+        IReadOnlyList<string>? effectiveArgs)
+    {
+        var executableName = Path.GetFileName(resource.Spec.ExecutablePath);
+        if (!string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(executableName, "dotnet.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            return [];
+        }
+
+        // IDE launches report the application PID rather than a dotnet run/watch launcher.
+        // Their effective arguments belong to the application, so use structured project metadata.
+        if (resource.Spec.ExecutionType == ExecutionType.IDE &&
+            KnownLaunchConfigurationTypes.IsProject(launchConfigurationType) &&
+            resource.TryGetProjectLaunchConfiguration(out var launchConfiguration) &&
+            KnownLaunchConfigurationTypes.IsProject(launchConfiguration.Type))
+        {
+            return launchConfiguration.BuildConfiguration is { } buildConfiguration
+                ? [new(KnownProperties.Project.LaunchCommand, "ide"), new(KnownProperties.Project.Configuration, buildConfiguration)]
+                : [new(KnownProperties.Project.LaunchCommand, "ide")];
+        }
+
+        if (effectiveArgs is null ||
+            FindDotNetProjectCommand(effectiveArgs) is not { } commandInfo)
+        {
+            return [new(KnownProperties.Project.LaunchCommand, null)];
+        }
+
+        var (command, commandIndex) = commandInfo;
+        var sensitiveArgumentIndexes = GetSensitiveEffectiveArgumentIndexes(resource);
+        if (sensitiveArgumentIndexes.Contains(commandIndex))
+        {
+            return [new(KnownProperties.Project.LaunchCommand, null)];
+        }
+
+        string? configuration = null;
+        string? targetFramework = null;
+
+        // DCP reports dotnet launch arguments as:
+        //   ["watch", "--project", "/repo/api.csproj", "--configuration", "Release", "--framework=net10.0", "--", ...appArgs]
+        //   ["run", "--configuration:Release", "-f:net10.0", "--", ...appArgs]
+        //   ["[env:NAME=value]", "--diagnostics", "run", "--project", "/repo/api.csproj"]
+        //   ["-d", "watch", "--project", "/repo/api.csproj"]
+        // Application arguments can contain unrelated values and remain sensitive in executable.args.
+        // Watch's forwarding separator is checked separately before treating "--" as the application boundary.
+        // See https://learn.microsoft.com/dotnet/core/tools/dotnet and
+        // https://github.com/dotnet/command-line-api/blob/main/src/System.CommandLine/EnvironmentVariablesDirective.cs.
+        for (var index = commandIndex + 1; index < effectiveArgs.Count; index++)
+        {
+            var argument = effectiveArgs[index];
+            if (argument == "--")
+            {
+                // Example: watch --no-hot-reload run -- --configuration Release.
+                // Older watch implementations strip the first "--"; newer ones retain the application boundary.
+                // Without the selected SDK, even preceding target options cannot disambiguate a nonempty suffix.
+                // See https://github.com/dotnet/sdk/blob/v8.0.426/src/BuiltInTools/dotnet-watch/CommandLineOptions.cs#L248-L314
+                // and https://github.com/dotnet/sdk/blob/v10.0.100/src/BuiltInTools/dotnet-watch/CommandLine/CommandLineOptions.cs#L262-L307.
+                if (command == "watch" && index + 1 < effectiveArgs.Count)
+                {
+                    return [new(KnownProperties.Project.LaunchCommand, null)];
+                }
+
+                break;
+            }
+
+            // Runtime, artifact layout, and MSBuild property overrides can change the output path or assembly identity.
+            // A hidden launcher input cannot be replaced by the evaluator's default either.
+            if (sensitiveArgumentIndexes.Contains(index) || ChangesUnreportedTargetInputs(argument))
+            {
+                return [new(KnownProperties.Project.LaunchCommand, null)];
+            }
+
+            if (TryReadOptionValue(argument, "--configuration", "-c", out var inlineConfiguration))
+            {
+                configuration = inlineConfiguration;
+                continue;
+            }
+
+            if (TryReadOptionValue(argument, "--framework", "-f", out var inlineTargetFramework))
+            {
+                targetFramework = inlineTargetFramework;
+                continue;
+            }
+
+            if (argument is "--configuration" or "-c")
+            {
+                configuration = ReadNextValue(effectiveArgs, sensitiveArgumentIndexes, ref index);
+                if (configuration is null)
+                {
+                    return [new(KnownProperties.Project.LaunchCommand, null)];
+                }
+                continue;
+            }
+
+            if (argument is "--framework" or "-f")
+            {
+                targetFramework = ReadNextValue(effectiveArgs, sensitiveArgumentIndexes, ref index);
+                if (targetFramework is null)
+                {
+                    return [new(KnownProperties.Project.LaunchCommand, null)];
+                }
+            }
+        }
+
+        var launchCommand = command.ToLowerInvariant();
+        var properties = ImmutableArray.CreateBuilder<ResourcePropertySnapshot>(3);
+        properties.Add(new(KnownProperties.Project.LaunchCommand, launchCommand));
+        if (configuration is not null)
+        {
+            properties.Add(new(KnownProperties.Project.Configuration, configuration));
+        }
+
+        if (targetFramework is not null)
+        {
+            properties.Add(new(KnownProperties.Project.TargetFramework, targetFramework));
+        }
+
+        return properties.ToImmutable();
+
+        static bool ChangesUnreportedTargetInputs(string argument)
+        {
+            // Examples: --runtime win-x64, --artifacts-path=custom, -p:OutputPath=custom, /property:AssemblyName=Custom.
+            // Both colon and equals spellings are accepted by the dotnet/MSBuild launchers.
+            var option = argument.Split(['=', ':'], 2)[0].ToLowerInvariant();
+            return option is "--runtime" or "-r" or "--arch" or "-a" or "--os" or "--artifacts-path"
+                or "--property" or "--properties" or "-p" or "/p" or "-property" or "/property";
+        }
+
+        static (string Command, int Index)? FindDotNetProjectCommand(IReadOnlyList<string> arguments)
+        {
+            var index = 0;
+            var hasEnvironmentVariableDirective = false;
+            while (index < arguments.Count &&
+                (string.Equals(arguments[index], "[env]", StringComparison.OrdinalIgnoreCase) ||
+                 arguments[index].StartsWith("[env:", StringComparison.OrdinalIgnoreCase) && arguments[index].EndsWith(']')))
+            {
+                hasEnvironmentVariableDirective = true;
+                index++;
+            }
+
+            while (index < arguments.Count && arguments[index] is "-d" or "--diagnostics")
+            {
+                index++;
+            }
+
+            if (index >= arguments.Count)
+            {
+                return null;
+            }
+
+            return arguments[index].ToLowerInvariant() switch
+            {
+                "run" => ("run", index),
+                // .NET 10 cannot resolve the external watch command through an environment directive.
+                "watch" when !hasEnvironmentVariableDirective => ("watch", index),
+                _ => null,
+            };
+        }
+
+        static bool TryReadOptionValue(string argument, string longOption, string shortOption, out string? value)
+        {
+            foreach (var option in new[] { longOption, shortOption })
+            {
+                if (argument.Length > option.Length &&
+                    argument.StartsWith(option, StringComparison.Ordinal) &&
+                    argument[option.Length] is '=' or ':')
+                {
+                    value = NormalizeValue(argument[(option.Length + 1)..]);
+                    return true;
+                }
+            }
+
+            value = null;
+            return false;
+        }
+
+        static string? ReadNextValue(IReadOnlyList<string> arguments, HashSet<int> sensitiveArgumentIndexes, ref int index)
+        {
+            var optionIsSensitive = sensitiveArgumentIndexes.Contains(index);
+            if (index + 1 >= arguments.Count || arguments[index + 1] == "--")
+            {
+                return null;
+            }
+
+            index++;
+            return optionIsSensitive || sensitiveArgumentIndexes.Contains(index)
+                ? null
+                : NormalizeValue(arguments[index]);
+        }
+
+        static string? NormalizeValue(string value)
+        {
+            var normalized = value.Trim();
+            return normalized.Length > 0 ? normalized : null;
+        }
+    }
+
+    private static HashSet<int> GetSensitiveEffectiveArgumentIndexes(CustomResource resource)
+    {
+        if (resource.TryGetAnnotationAsObjectList(
+            Executable.SensitiveEffectiveArgumentIndexesAnnotation,
+            out List<int>? sensitiveEffectiveArgumentIndexes))
+        {
+            return sensitiveEffectiveArgumentIndexes.ToHashSet();
+        }
+
+        if (!resource.TryGetAnnotationAsObjectList(
+            CustomResource.ResourceAppArgsAnnotation,
+            out List<AppLaunchArgumentAnnotation>? launchArgumentAnnotations))
+        {
+            return [];
+        }
+
+        return launchArgumentAnnotations
+            .Where(static annotation => annotation.IsSensitive && annotation.EffectiveArgumentIndex is not null)
+            .Select(static annotation => annotation.EffectiveArgumentIndex!.Value)
+            .ToHashSet();
     }
 
     private static (ImmutableArray<string> Args, ImmutableArray<int>? ArgsAreSensitive, bool IsSensitive)? GetLaunchArgs(CustomResource resource, IReadOnlyList<string>? effectiveArgs)

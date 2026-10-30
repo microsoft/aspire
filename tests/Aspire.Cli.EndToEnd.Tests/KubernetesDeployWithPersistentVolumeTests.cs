@@ -86,7 +86,7 @@ public sealed class KubernetesDeployWithPersistentVolumeTests(ITestOutputHelper 
                     .WithDataVolume("pg-data")
                     .WithPersistentVolume(pgData);
 
-                builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+                builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                     .WithReference(postgres)
                     .WaitFor(postgres)
                     .WithExternalHttpEndpoints();

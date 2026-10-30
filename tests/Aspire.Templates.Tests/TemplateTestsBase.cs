@@ -354,25 +354,13 @@ public partial class TemplateTestsBase
 
     public static TheoryData<string, string, TestSdk, TestTargetFramework, string?> TestDataForNewAndBuildTemplateTests(string templateName, string extraArgs) => new()
         {
-            { templateName, extraArgs, TestSdk.Net8, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net8, TestTargetFramework.Net9, "The current .NET SDK does not support targeting .NET 9.0" },
 
-            { templateName, extraArgs, TestSdk.Net9, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net9, TestTargetFramework.Net9, null },
-            { templateName, extraArgs, TestSdk.Net9, TestTargetFramework.Net10, "The current .NET SDK does not support targeting .NET 10.0" },
-
-            { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net9, null },
             { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net10, null },
             { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net11, "The current .NET SDK does not support targeting .NET 11.0" },
 
-            { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net9, null },
             { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net10, null },
             { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net11, null },
 
-            { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net9, null },
             { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net10, null },
             { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net11, null },
         };

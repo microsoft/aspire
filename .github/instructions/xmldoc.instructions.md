@@ -6,7 +6,7 @@ applyTo: "src/**/*.cs"
 
 This document provides comprehensive guidelines for writing high-quality XML documentation comments in the Aspire repository.
 
-**Note:** This guide applies to all C# source files in the `src/` directory. API files under `src/*/api/*.cs` are auto-generated and should not be manually edited.
+**Scope:** This guide's documentation requirements apply to library code in the `src/` directory. `src/Aspire.Dashboard/` and `src/Aspire.Cli/` are applications, not libraries: XML documentation is optional for their types and members, regardless of accessibility. Do not flag missing XML documentation or require it when adding or changing application code. API files under `src/*/api/*.cs` are auto-generated and should not be manually edited.
 
 ## Purpose
 

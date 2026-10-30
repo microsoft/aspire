@@ -140,6 +140,11 @@ the existing table, JSON array, and follow-mode delta output described below.
 {"appHostPath":"/path/to/MyApp.AppHost/MyApp.AppHost.csproj","appHostPid":12345,"status":"stopped"}
 ```
 
+Unchanged backchannel-connection notifications do not refetch AppHost metadata or
+dashboard URLs. A genuinely changed connection set is enriched again, including
+a replacement connection for the same AppHost path and PID. Identical serialized
+AppHost records are still omitted from the default follow stream.
+
 #### Snapshot output
 
 `--output snapshot` is a public, opt-in stream for tools that need complete
@@ -292,6 +297,17 @@ Every outcome other than `stopped` has a nonzero exit code. Without
 
 ### `aspire describe`
 
+`aspire resources` is an alias for `aspire describe`. Use `--format mermaid` to export a resource graph snapshot directly to stdout:
+
+```bash
+aspire resources --format mermaid >> file.txt
+aspire describe --format mermaid > resources.mmd
+```
+
+The output is an unfenced `flowchart LR` diagram with deterministic node identifiers, escaped resource labels, and directed relationships. Hidden resources are excluded unless `--include-hidden` is supplied or a specific resource is requested. Parameters, endpoints, configuration values, and resource state are not exported. References outside the selected resource set and self-references are omitted. Replicas appear as separate nodes.
+
+Progress and informational messages go to stderr, so redirection captures only Mermaid source. When no AppHost is running, the command preserves the existing successful empty-result behavior and writes no diagram. `--follow` is not supported with Mermaid output; each invocation captures one snapshot. Appending multiple invocations with `>>` produces multiple diagrams, not a merged diagram.
+
 `aspire describe --format json` emits a snapshot wrapper with one or more resources:
 
 ```json
@@ -353,10 +369,14 @@ Every outcome other than `stopped` has a nonzero exit code. Without
 | `relationships` | Related resources as `{ "type": "...", "resourceName": "..." }`. |
 | `urls` | Endpoint objects with `name`, `displayName`, `url`, and `isInternal`. |
 | `volumes` | Volume objects with `source`, `target`, `mountType`, and `isReadOnly`. |
-| `properties` | Resource properties keyed by property name. |
+| `properties` | Resource properties keyed by property name. Common debug-related keys include `project.path`, `project.launchProfile`, `project.launchCommand`, `project.configuration`, `project.targetFramework`, and `resource.launchConfigurationType`. For current AppHosts, `project.launchCommand` is `run`, `watch`, `ide`, or `null` when a .NET project launch command cannot be classified. |
 | `environment` | Environment variables keyed by variable name. |
 | `healthReports` | Health report objects keyed by report name. |
 | `commands` | Resource command metadata keyed by command name. |
+
+For recognized IDE-managed .NET project launches, `project.launchCommand` is `ide`. In that mode,
+`executable.pid`, when present, identifies the application process rather than a `dotnet run` or
+`dotnet watch` launcher.
 
 ## Logs
 
@@ -523,6 +543,8 @@ Every outcome other than `stopped` has a nonzero exit code. Without
 
 ### `aspire docs api`
 
+The `language` field in `aspire docs api` output is one of `csharp`, `typescript`, or `go`.
+
 `aspire docs api list <scope> --format json` emits an array of API items:
 
 ```json
@@ -590,6 +612,12 @@ Every outcome other than `stopped` has a nonzero exit code. Without
 
 ### `aspire secret list`
 
+Secret commands accept `--environment` / `-e`, defaulting to `Development`. Names contain 1-80 ASCII letters, digits, hyphens, or underscores and must start with a letter or digit. Dots, path separators, whitespace, and Windows reserved device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, and `LPT1`-`LPT9`) are rejected. For example, use `prod-eu`, not `prod/eu`.
+
+Environment names are case-insensitive. Subsequent commands reuse an existing file regardless of the requested casing, preserving the filename's spelling for display. The same resolution applies when Hosting loads secrets for the final AppHost environment.
+
+These restrictions apply to secret commands, not to existing AppHost environment names. Run and deployment commands with names such as `QA.EU` or `Local Development` continue to work, but do not automatically select an Aspire secrets file. Existing configuration inputs remain available. Set `ASPIRE_SECRETS_FILE` to an explicit JSON file path to load and persist Aspire secrets for such environments; explicit file selection takes precedence over automatic environment-file selection.
+
 `aspire secret list --format json` emits a JSON object whose property names are secret keys and whose values are secret values:
 
 ```json
@@ -601,7 +629,9 @@ Every outcome other than `stopped` has a nonzero exit code. Without
 
 The JSON form includes secret values. Do not redirect it to logs or files unless that destination is allowed to contain secrets.
 
-`aspire secret get <key>` emits the secret value as raw text on stdout. `aspire secret path` emits the user-secrets file path as raw text on stdout.
+`aspire secret list --all --format json` groups the same secret objects by environment name. `--all` cannot be combined with `--environment`.
+
+`aspire secret get <key>` emits the secret value as raw text on stdout. `aspire secret path` emits the Aspire environment secrets file path as raw text on stdout.
 
 ### `aspire doctor`
 
@@ -694,6 +724,8 @@ The `devtools` category surfaces development-tooling recommendations. The `vscod
 
 The `isolated-launch.v1` capability indicates that `aspire run` accepts the `--isolated` option.
 
+The `agent-mcp.v1` capability indicates that `aspire agent mcp` is supported. Tooling gates automatic MCP server registration on this capability being advertised explicitly: a CLI that omits it — including one old enough not to emit `capabilities` at all — is never handed the command.
+
 ## MCP tooling
 
 ### `aspire mcp tools`
@@ -776,3 +808,5 @@ Each entry in `capabilities` includes an `isExperimental` boolean indicating whe
 `aspire sdk export --package Name@Version --language typescript` restores the exact integration package version and writes one canonical JSON document to standard output. `Aspire.Hosting` can only be exported at the CLI's SDK version. The selected language's code-generation package cannot be exported because it supplies the generator instead of an integration API surface. Omit `--package` to export `Aspire.Hosting` at the running CLI's SDK version. Diagnostics are written to standard error.
 
 The top-level fields are `schemaVersion`, `language`, `generator`, `package`, `modules`, and `declarations`. The language exporter owns the schema; the CLI passes it through without reshaping it.
+
+TypeScript (`--language typescript`) and Go (`--language go`) ship exporters. The Go exporter projects through the same code paths as the Go SDK generator, so every `declaration` is the Go the generator emits, including the surface that is written by hand rather than discovered from capabilities: `Build()` on the builder, the `Get`, `Required`, `Value`, and `RequiredValue` helpers on interaction input collections, `Err()` on every handle, `ToMap()` on options and DTO structs, and the runtime types. Go `modules[].items[]` have kind `function`, `interface`, `augmentation`, `dto`, `options`, `enum`, `variable`, or `type`; an `augmentation` lists the members a package adds to a type that another package declares. Capability-backed members carry `capabilityId`, and members that the generator writes itself are marked `synthesized`. The top-level `declarations` hold the Go fragments that signatures refer to. Go names are resolved over the exported package and the types it references, not over a whole app host. When an app host combines integrations whose names collide, the generated SDK can qualify a name that this reference gives bare, and an `options` struct that several packages could share is documented by each package under its own `typeId`. The `Any<Type>` interfaces, which accept a handle type or any type derived from it, follow the same rule: one exists only when the set holds a type derived from its base, so a signature here can name a handle interface where an app host that includes the derived type's integration accepts `Any<Type>`.

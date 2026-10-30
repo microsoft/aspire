@@ -79,7 +79,6 @@ public sealed class RadiusAzureResourcesDeploymentTests(ITestOutputHelper output
             // Licensed to the .NET Foundation under one or more agreements.
             // The .NET Foundation licenses this file to you under the MIT license.
 
-            #pragma warning disable ASPIREPIPELINES001
             #pragma warning disable ASPIRERADIUS003
 
             var builder = DistributedApplication.CreateBuilder(args);

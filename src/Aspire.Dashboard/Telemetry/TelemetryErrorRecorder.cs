@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Utils;
-
 namespace Aspire.Dashboard.Telemetry;
 
 /// <summary>
@@ -10,6 +8,9 @@ namespace Aspire.Dashboard.Telemetry;
 /// </summary>
 public interface ITelemetryErrorRecorder
 {
+    /// <summary>
+    /// Records an error, reporting distinct leaf exceptions for aggregates by type, message, and stack trace.
+    /// </summary>
     void RecordError(string message, Exception exception, bool writeToLogging = false);
 }
 
@@ -31,17 +32,23 @@ public sealed class TelemetryErrorRecorder : ITelemetryErrorRecorder
             _logger.LogError(exception, message);
         }
 
-        _telemetryService.PostFault(
-            TelemetryEventKeys.Error,
-            $"{exception.GetType().FullName}: {exception.Message}",
-            FaultSeverity.Critical,
-            new Dictionary<string, AspireTelemetryProperty>
+        // Blazor passes newly created disposal aggregates to its error handler without throwing them,
+        // so only the child exceptions have the original stacks.
+        // https://github.com/dotnet/aspnetcore/blob/v10.0.0/src/Components/Components/src/RenderTree/Renderer.cs#L1312
+        if (exception is AggregateException aggregateException)
+        {
+            var innerExceptions = aggregateException.Flatten().InnerExceptions;
+            if (innerExceptions.Count > 0)
             {
-                [TelemetryPropertyKeys.ExceptionType] = new AspireTelemetryProperty(exception.GetType().FullName!),
-                [TelemetryPropertyKeys.ExceptionMessage] = new AspireTelemetryProperty(exception.Message),
-                [TelemetryPropertyKeys.ExceptionStackTrace] = new AspireTelemetryProperty(exception.StackTrace ?? string.Empty),
-                [TelemetryPropertyKeys.ExceptionRuntimeVersion] = new AspireTelemetryProperty(VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty),
+                foreach (var innerException in innerExceptions.DistinctBy(e => (e.GetType(), e.Message, e.StackTrace)))
+                {
+                    _telemetryService.RecordError(message, innerException, writeToLogging: false);
+                }
+
+                return;
             }
-        );
+        }
+
+        _telemetryService.RecordError(message, exception, writeToLogging: false);
     }
 }

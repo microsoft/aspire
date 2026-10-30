@@ -25,7 +25,10 @@ internal interface IGitHubArtifactAttestationVerifier
         CancellationToken cancellationToken);
 }
 
-internal sealed class GitHubArtifactAttestationVerifier(HttpClient httpClient, ILogger<GitHubArtifactAttestationVerifier> logger) : IGitHubArtifactAttestationVerifier
+internal sealed class GitHubArtifactAttestationVerifier(
+    HttpClient httpClient,
+    SigstoreVerifier verifier,
+    ILogger<GitHubArtifactAttestationVerifier> logger) : IGitHubArtifactAttestationVerifier
 {
     private const string GitHubApiBaseUrl = "https://api.github.com";
 
@@ -91,7 +94,6 @@ internal sealed class GitHubArtifactAttestationVerifier(HttpClient httpClient, I
 
         try
         {
-            var verifier = new SigstoreVerifier();
             var policy = new VerificationPolicy
             {
                 CertificateIdentity = CertificateIdentity.ForGitHubActions(owner, repo)

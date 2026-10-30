@@ -156,13 +156,13 @@ public class DevTunnelExpirationTests
     public async Task CreateTunnelAsync_WhenTunnelExists_PassesExpirationToUpdate(int? hours)
     {
         var cli = new TestDevTunnelCli();
-        cli.EnqueueCreateResult(DevTunnelCli.ResourceConflictsWithExistingExitCode);
-        cli.EnqueueUpdateResult(0, """{"tunnelId":"mytunnel.eun1"}""");
-        cli.EnqueueResetAccessResult(0, """{"accessControlEntries":[]}""");
+        cli.EnqueueShowResult(0, """{"tunnel":{"tunnelId":"mytunnel.eun1","description":"old","accessControl":[]}}""");
+        cli.EnqueueUpdateResult(0, """{"tunnel":{"tunnelId":"mytunnel.eun1"}}""");
         var client = new DevTunnelCliClient(new ConfigurationBuilder().Build(), cli);
         var options = new DevTunnelOptions
         {
             Region = DevTunnelRegion.NorthEurope,
+            Description = "new",
             ExpirationHours = hours
         };
 

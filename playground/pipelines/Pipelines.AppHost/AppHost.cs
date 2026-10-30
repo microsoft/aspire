@@ -1,5 +1,3 @@
-#pragma warning disable ASPIREPIPELINES001
-
 using Aspire.Hosting.Pipelines;
 using Azure.Identity;
 using Azure.Provisioning;

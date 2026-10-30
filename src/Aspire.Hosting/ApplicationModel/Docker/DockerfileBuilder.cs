@@ -1,15 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.ApplicationModel.Docker;
 
 /// <summary>
 /// Builder for creating Dockerfiles programmatically.
 /// </summary>
 [AspireExport]
-[Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class DockerfileBuilder
 {
     private readonly List<DockerfileStage> _stages = [];
@@ -36,7 +33,6 @@ public class DockerfileBuilder
     /// Global ARG statements appear before the first FROM statement and can be used
     /// to parameterize the base image selection.
     /// </remarks>
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public DockerfileBuilder Arg(string name)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -55,7 +51,6 @@ public class DockerfileBuilder
     /// Global ARG statements appear before the first FROM statement and can be used
     /// to parameterize the base image selection.
     /// </remarks>
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public DockerfileBuilder Arg(string name, string defaultValue)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -71,7 +66,6 @@ public class DockerfileBuilder
     /// <param name="image">The image reference (e.g., 'node:18' or 'alpine:latest').</param>
     /// <param name="stageName">The stage name for multi-stage builds.</param>
     /// <returns>A stage builder for the new stage.</returns>
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public DockerfileStage From(string image, string stageName)
     {
         ArgumentException.ThrowIfNullOrEmpty(image);
@@ -87,7 +81,6 @@ public class DockerfileBuilder
     /// </summary>
     /// <param name="image">The image reference (e.g., 'node:18' or 'alpine:latest').</param>
     /// <returns>A stage builder for the new stage.</returns>
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public DockerfileStage From(string image)
     {
         ArgumentException.ThrowIfNullOrEmpty(image);

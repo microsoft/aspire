@@ -5,12 +5,12 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
-using System.Text.Json;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Cli.Tests.TestServices.ProcessTestHelpers;
 
@@ -18,162 +18,38 @@ namespace Aspire.Cli.Tests.DotNet;
 
 public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 {
-    [Fact]
-    public async Task StartAsync_AfterDispose_ThrowsObjectDisposedException()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WaitForExitAsync_UsesGracefulPolicyAtShutdown(bool enabled)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
-
-        var execution = CreateExecution(
-            scriptFile,
-            new ProcessInvocationOptions());
-
-        await execution.DisposeAsync();
-
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => execution.StartAsync(CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task WaitForExitAsync_AllowsForwardersToDrainBeforeClosingStreams()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        var outputFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "output.json"));
-        await File.WriteAllTextAsync(outputFile.FullName, CreateJsonPayload(lineCount: 400));
-
-        var scriptFile = await CreateOutputScriptAsync(workspace.WorkspaceRoot, outputFile);
-
-        var stdoutBuilder = new StringBuilder();
-        var stderrBuilder = new StringBuilder();
-        var firstLineSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        var releaseTask = Task.Run(async () =>
+        using var shutdownService = new TestGracefulShutdownWindow { IsEnabled = !enabled };
+        var signaler = new RecordingGracefulSignaler(onSignal: pid =>
         {
-            await firstLineSeen.Task.WaitAsync(TimeSpan.FromSeconds(10));
-
-            await Task.Delay(TimeSpan.FromMilliseconds(500));
-            releaseCallback.SetResult();
+            TryKillProcess(pid);
+            return Task.FromResult(true);
         });
+        await using var lifetime = AsyncTestHelpers.WithDisposeTimeout(
+            () => CreateExecution(scriptFile, isolateConsole: false, signaler, shutdownService));
+        var execution = lifetime.Instance;
+        await execution.StartAsync(TestContext.Current.CancellationToken);
+        shutdownService.IsEnabled = enabled;
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
 
-        var isFirstLine = true;
-        await using var execution = CreateExecution(
-            scriptFile,
-            new ProcessInvocationOptions
-            {
-                StandardOutputCallback = line =>
-                {
-                    if (isFirstLine)
-                    {
-                        isFirstLine = false;
-                        firstLineSeen.TrySetResult();
-
-                        if (!releaseCallback.Task.Wait(TimeSpan.FromSeconds(20)))
-                        {
-                            throw new TimeoutException("Timed out waiting to release the blocked stdout callback.");
-                        }
-                    }
-
-                    stdoutBuilder.AppendLine(line);
-                },
-                StandardErrorCallback = line => stderrBuilder.AppendLine(line)
-            });
-
-        Assert.True(await execution.StartAsync(CancellationToken.None));
-
-        var exitCode = await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await releaseTask.WaitAsync(TimeSpan.FromSeconds(1));
-
-        Assert.Equal(0, exitCode);
-        Assert.True(string.IsNullOrWhiteSpace(stderrBuilder.ToString()));
-
-        using var jsonDocument = JsonDocument.Parse(stdoutBuilder.ToString());
-        var values = jsonDocument.RootElement.GetProperty("values");
-        Assert.Equal(400, values.GetArrayLength());
-        Assert.Equal("value-399", values[399].GetString());
-    }
-
-    [Fact]
-    public async Task WaitForExitAsync_AllowsBufferedTailOutputAfterLongIdlePeriod()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        var outputFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "output.json"));
-        await File.WriteAllTextAsync(outputFile.FullName, CreateJsonPayload(lineCount: 400));
-
-        var scriptFile = await CreateDelayedOutputScriptAsync(workspace.WorkspaceRoot, outputFile);
-
-        var stdoutBuilder = new StringBuilder();
-        var stderrBuilder = new StringBuilder();
-        var firstLineSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        var releaseTask = Task.Run(async () =>
+        try
         {
-            await firstLineSeen.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cancellation.Token)).DefaultTimeout();
 
-            await Task.Delay(TimeSpan.FromMilliseconds(6500));
-            releaseCallback.SetResult();
-        });
-
-        await using var execution = CreateExecution(
-            scriptFile,
-            new ProcessInvocationOptions
-            {
-                StandardOutputCallback = line =>
-                {
-                    stdoutBuilder.AppendLine(line);
-
-                    if (line == "ready")
-                    {
-                        firstLineSeen.TrySetResult();
-
-                        if (!releaseCallback.Task.Wait(TimeSpan.FromSeconds(20)))
-                        {
-                            throw new TimeoutException("Timed out waiting to release the blocked stdout callback.");
-                        }
-                    }
-                },
-                StandardErrorCallback = line => stderrBuilder.AppendLine(line)
-            });
-
-        Assert.True(await execution.StartAsync(CancellationToken.None));
-
-        var exitCode = await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await releaseTask.WaitAsync(TimeSpan.FromSeconds(1));
-
-        Assert.Equal(0, exitCode);
-        Assert.True(string.IsNullOrWhiteSpace(stderrBuilder.ToString()));
-
-        var stdout = stdoutBuilder.ToString();
-        var jsonStart = stdout.IndexOf('{', StringComparison.Ordinal);
-        Assert.True(jsonStart >= 0, stdout);
-
-        using var jsonDocument = JsonDocument.Parse(stdout[jsonStart..]);
-        var values = jsonDocument.RootElement.GetProperty("values");
-        Assert.Equal(400, values.GetArrayLength());
-        Assert.Equal("value-399", values[399].GetString());
-    }
-
-    [Fact]
-    public async Task WaitForExitAsync_KillsProcessWhenCanceled()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
-
-        await using var execution = CreateExecution(
-            scriptFile,
-            new ProcessInvocationOptions());
-
-        Assert.True(await execution.StartAsync(CancellationToken.None));
-
-        using var cts = new CancellationTokenSource();
-        await cts.CancelAsync();
-
-        await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
-
-        Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to exit after cancellation.");
+            Assert.True(execution.HasExited);
+            Assert.Equal(enabled ? [execution.ProcessId] : Array.Empty<int>(), signaler.Pids);
+        }
+        finally
+        {
+            shutdownService.Expire();
+        }
     }
 
     [Theory]
@@ -192,18 +68,27 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             return Task.FromResult(true);
         });
 
-        await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
+        await using var lifetime = AsyncTestHelpers.WithDisposeTimeout(
+            () => CreateExecution(scriptFile, isolateConsole, signaler, shutdownService));
+        var execution = lifetime.Instance;
 
         Assert.True(await execution.StartAsync(CancellationToken.None));
 
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
+        try
+        {
+            await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token)).DefaultTimeout();
 
-        Assert.Single(signaler.Pids);
-        Assert.False(shutdownService.GracefulShutdownToken.IsCancellationRequested);
-        Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to exit after graceful signal.");
+            Assert.Single(signaler.Pids);
+            Assert.False(shutdownService.GracefulShutdownToken.IsCancellationRequested);
+            Assert.True(WaitForProcessExit(execution.ProcessId, TestConstants.DefaultTimeoutTimeSpan), $"Expected process {execution.ProcessId} to exit after graceful signal.");
+        }
+        finally
+        {
+            shutdownService.Expire();
+        }
     }
 
     [Theory]
@@ -223,7 +108,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             return Task.FromResult(true);
         });
 
-        await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
+        await using var lifetime = AsyncTestHelpers.WithDisposeTimeout(
+            () => CreateExecution(scriptFile, isolateConsole, signaler, shutdownService));
+        var execution = lifetime.Instance;
 
         Assert.True(await execution.StartAsync(CancellationToken.None));
 
@@ -231,14 +118,19 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         await cts.CancelAsync();
 
         var waitTask = Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
-        await signaled.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        try
+        {
+            await signaled.Task.DefaultTimeout();
+        }
+        finally
+        {
+            shutdownService.Expire();
+        }
 
-        shutdownService.Expire();
-
-        await waitTask.WaitAsync(TimeSpan.FromSeconds(30));
+        await waitTask.DefaultTimeout();
 
         Assert.Single(signaler.Pids);
-        Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to be killed after graceful expiration.");
+        Assert.True(WaitForProcessExit(execution.ProcessId, TestConstants.DefaultTimeoutTimeSpan), $"Expected process {execution.ProcessId} to be killed after graceful expiration.");
     }
 
     [Theory]
@@ -253,7 +145,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         var signaler = new RecordingGracefulSignaler(onSignal: _ =>
             throw new InvalidOperationException("simulated DCP failure"));
 
-        await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
+        await using var lifetime = AsyncTestHelpers.WithDisposeTimeout(
+            () => CreateExecution(scriptFile, isolateConsole, signaler, shutdownService));
+        var execution = lifetime.Instance;
 
         Assert.True(await execution.StartAsync(CancellationToken.None));
 
@@ -261,43 +155,10 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         await cts.CancelAsync();
         shutdownService.Expire();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token)).DefaultTimeout();
 
         Assert.Single(signaler.Pids);
-        Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to be killed after signaler failure.");
-    }
-
-    [Fact]
-    public async Task WaitForExitAsync_CallbackThrows_StillDeliversRemainingOutputAndExitCode()
-    {
-        // The callback throws on the FIRST line; every later line must still be delivered so a
-        // faulting consumer cannot leave the child blocked on a full pipe.
-        var seenLines = new List<string>();
-        var (fileName, arguments) = OperatingSystem.IsWindows()
-            ? ("cmd.exe", new[] { "/d", "/c", "echo line-one&echo line-two" })
-            : ("/bin/sh", new[] { "-c", "echo line-one; echo line-two" });
-
-        await using var execution = new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance).CreateExecution(
-            fileName,
-            arguments,
-            env: null,
-            new DirectoryInfo(Environment.CurrentDirectory),
-            new ProcessInvocationOptions
-            {
-                StandardOutputCallback = line =>
-                {
-                    seenLines.Add(line.Trim());
-                    if (line.Contains("line-one"))
-                    {
-                        throw new InvalidOperationException("intentional callback failure");
-                    }
-                }
-            });
-
-        Assert.True(await execution.StartAsync(CancellationToken.None));
-
-        Assert.Equal(0, await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout());
-        Assert.Equal(["line-one", "line-two"], seenLines);
+        Assert.True(WaitForProcessExit(execution.ProcessId, TestConstants.DefaultTimeoutTimeSpan), $"Expected process {execution.ProcessId} to be killed after signaler failure.");
     }
 
     [Theory]
@@ -350,10 +211,12 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
     [SupportedOSPlatform("windows")]
-    public async Task StartAsync_OnWindows_IsolateConsole_ChildReceivesCtrlCThroughItsOwnConsole(bool killOnParentExit)
+    public async Task StartAsync_OnWindows_IsolateConsole_ChildReceivesCtrlCThroughItsOwnConsole(bool killOnParentExit, bool ownedTree)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows-only test.");
 
@@ -363,7 +226,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         WindowsProcessInterop.SetConsoleCtrlHandler(nint.Zero, add: false);
 
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var execution = new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance).CreateExecution(
+        using var loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddXunit(outputHelper));
+        await using var execution = TestProcessExecutionFactory.CreateForCliGuardian(
+            new TestEnvironment(), loggerFactory.CreateLogger<ProcessExecutionFactory>()).CreateExecution(
             "ping.exe",
             ["-n", "120", "127.0.0.1"],
             env: null,
@@ -372,17 +237,18 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             {
                 IsolateConsole = true,
                 KillOnParentExit = killOnParentExit,
+                Lifetime = ownedTree ? Aspire.Shared.ChildProcessLifetime.OwnedTree : Aspire.Shared.ChildProcessLifetime.AppHost,
                 StandardOutputCallback = _ => started.TrySetResult()
             });
 
         Assert.True(await execution.StartAsync(CancellationToken.None));
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await started.Task.DefaultTimeout();
 
         var signal = await SendCtrlCThroughAttachedConsoleAsync(execution.ProcessId);
         Assert.True(signal.ExitStatus.ExitCode == 0, $"Signaler exited with {signal.ExitStatus.ExitCode}: {signal.StandardError}");
 
         // STATUS_CONTROL_C_EXIT: ping handled CTRL+C and exited, rather than being killed.
-        Assert.Equal(unchecked((int)0xC000013A), await execution.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Equal(unchecked((int)0xC000013A), await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout());
     }
 
     /// <summary>
@@ -419,89 +285,8 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             RedirectStandardError = true,
         };
 
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        using var timeout = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
         return await Process.RunAndCaptureTextAsync(startInfo, timeout.Token);
-    }
-
-    private static string CreateJsonPayload(int lineCount)
-    {
-        var builder = new StringBuilder();
-        builder.AppendLine("{");
-        builder.AppendLine("  \"values\": [");
-
-        for (var i = 0; i < lineCount; i++)
-        {
-            var suffix = i == lineCount - 1 ? string.Empty : ",";
-            builder.AppendLine($"    \"value-{i}\"{suffix}");
-        }
-
-        builder.AppendLine("  ]");
-        builder.AppendLine("}");
-        return builder.ToString();
-    }
-
-    private static async Task<FileInfo> CreateOutputScriptAsync(DirectoryInfo workspaceRoot, FileInfo outputFile)
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            var scriptFile = new FileInfo(Path.Combine(workspaceRoot.FullName, "emit-output.cmd"));
-            var content =
-                "@echo off" + Environment.NewLine +
-                $"type \"{outputFile.FullName}\"" + Environment.NewLine;
-            await File.WriteAllTextAsync(scriptFile.FullName, content);
-            return scriptFile;
-        }
-        else
-        {
-            var scriptFile = new FileInfo(Path.Combine(workspaceRoot.FullName, "emit-output.sh"));
-            var content =
-                "#!/usr/bin/env bash" + Environment.NewLine +
-                $"cat \"{outputFile.FullName}\"" + Environment.NewLine;
-            await File.WriteAllTextAsync(scriptFile.FullName, content);
-
-            File.SetUnixFileMode(
-                scriptFile.FullName,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
-                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
-                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
-
-            return scriptFile;
-        }
-    }
-
-    private static async Task<FileInfo> CreateDelayedOutputScriptAsync(DirectoryInfo workspaceRoot, FileInfo outputFile)
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            var scriptFile = new FileInfo(Path.Combine(workspaceRoot.FullName, "emit-delayed-output.cmd"));
-            var content =
-                "@echo off" + Environment.NewLine +
-                "echo ready" + Environment.NewLine +
-                // Use ping instead of powershell to avoid variable PowerShell
-                // cold-start overhead on loaded CI agents (can add 10-20s).
-                "ping -n 7 127.0.0.1 > nul" + Environment.NewLine +
-                $"type \"{outputFile.FullName}\"" + Environment.NewLine;
-            await File.WriteAllTextAsync(scriptFile.FullName, content);
-            return scriptFile;
-        }
-        else
-        {
-            var scriptFile = new FileInfo(Path.Combine(workspaceRoot.FullName, "emit-delayed-output.sh"));
-            var content =
-                "#!/usr/bin/env bash" + Environment.NewLine +
-                "echo ready" + Environment.NewLine +
-                "sleep 6" + Environment.NewLine +
-                $"cat \"{outputFile.FullName}\"" + Environment.NewLine;
-            await File.WriteAllTextAsync(scriptFile.FullName, content);
-
-            File.SetUnixFileMode(
-                scriptFile.FullName,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
-                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
-                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
-
-            return scriptFile;
-        }
     }
 
     private static async Task<FileInfo> CreateLongRunningScriptAsync(DirectoryInfo workspaceRoot)

@@ -13,6 +13,40 @@ namespace Aspire.Hosting.RemoteHost.Tests;
 public class RemoteHostProfilingTelemetryTests
 {
     [Fact]
+    public void IntegrationStartupPhasesCaptureIdentityDeadlineAndFailure()
+    {
+        using var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration(
+            (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
+        var activities = new List<Activity>();
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
+        using (telemetry.StartIntegrationHostStartup())
+        {
+            using var phase = telemetry.StartIntegrationHostPhase("registration", "example", "typescript", TimeSpan.FromMinutes(2));
+            phase.SetIntegrationHostProcessId(1234);
+            phase.SetError(new TimeoutException("Registration deadline exceeded."));
+        }
+
+        Assert.Collection(activities,
+            phase =>
+            {
+                Assert.Equal(RemoteHostProfilingTelemetry.Activities.IntegrationHostPhase, phase.OperationName);
+                Assert.Equal("registration", phase.GetTagItem(RemoteHostProfilingTelemetry.Tags.IntegrationPhase));
+                Assert.Equal("example", phase.GetTagItem(RemoteHostProfilingTelemetry.Tags.IntegrationPackage));
+                Assert.Equal("typescript", phase.GetTagItem(RemoteHostProfilingTelemetry.Tags.Language));
+                Assert.Equal(120000d, phase.GetTagItem(RemoteHostProfilingTelemetry.Tags.IntegrationTimeout));
+                Assert.Equal(1234, phase.GetTagItem(RemoteHostProfilingTelemetry.Tags.IntegrationProcessId));
+                Assert.Equal(ActivityStatusCode.Error, phase.Status);
+                Assert.Equal("System.TimeoutException", Assert.Single(phase.Events).Tags.Single(tag => tag.Key == "exception.type").Value);
+            },
+            startup =>
+            {
+                Assert.Equal(RemoteHostProfilingTelemetry.Activities.IntegrationHostStartup, startup.OperationName);
+                Assert.Equal(startup.SpanId, activities[0].ParentSpanId);
+                Assert.Equal(startup.TraceId, activities[0].TraceId);
+            });
+    }
+
+    [Fact]
     public void StartRemoteHostRun_RestoresConfiguredParentAndSession()
     {
         using var parentSource = new ActivitySource("test-remotehost-parent");

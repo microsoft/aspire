@@ -115,7 +115,7 @@
         We do not care whether the project is multi-targeting, we're only generating a command to kick off the testing sequence,
         which in turn will run the tests for all the target frameworks.
 
-        So, instead of using "%(TestToRun.ResultsFilePathWithoutExtension)" (which looks something like "Aspire.Cli.Tests_net8.0_x64")
+        So, instead of using "%(TestToRun.ResultsFilePathWithoutExtension)" (which looks something like "Aspire.Cli.Tests_net10.0_x64")
         we use the project name (which looks something like "Aspire.Cli.Tests").
         -->
       <_TestRunsheet>$([System.String]::Copy('$(MSBuildProjectName)').Replace('Aspire.', '').Replace('.Tests', ''))</_TestRunsheet>

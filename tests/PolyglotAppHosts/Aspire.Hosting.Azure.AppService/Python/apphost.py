@@ -45,14 +45,14 @@ def configure_environment(infrastructure: AzureResourceInfrastructure) -> None:
 
 
 def configure_app_service(infrastructure: AzureResourceInfrastructure, app_service: WebSite):
-    app_service.configure_site_config({"IsAlwaysOn": True})
+    app_service.configure_site_config({"isAlwaysOn": True})
     site = infrastructure.get_web_site_by_identifier("webapp")
     site.is_https_only = True
     _https_only = site.is_https_only
 
 
 def configure_app_service_slot(_infrastructure: AzureResourceInfrastructure, app_service_slot: WebSiteSlot):
-    app_service_slot.configure_slot_site_config({"IsAlwaysOn": False})
+    app_service_slot.configure_slot_site_config({"isAlwaysOn": False})
 
 
 with create_builder() as builder:

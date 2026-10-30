@@ -49,6 +49,24 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("describe --apphost-pid 42")]
+    [InlineData("describe --apphost missing.csproj --apphost-pid 0")]
+    [InlineData("describe --apphost missing.csproj --apphost-pid -1")]
+    public async Task DescribeCommand_AppHostPid_RejectsUnboundOrInvalidValues(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
+    }
+
+    [Theory]
     [InlineData("json")]
     [InlineData("Json")]
     [InlineData("JSON")]
@@ -255,6 +273,98 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(deserialized);
         Assert.Equal(2, deserialized.Resources.Length);
         Assert.Equal("frontend", deserialized.Resources[0].Name);
+    }
+
+    [Fact]
+    public void DescribeCommand_SnapshotFormat_IncludesDebugPropertiesForParentedProjectAndMauiResources()
+    {
+        var resourcesOutput = new ResourcesOutput
+        {
+            Resources =
+            [
+                new ResourceJson
+                {
+                    Name = "api-grouped",
+                    DisplayName = "API",
+                    ResourceType = "Project",
+                    State = "Running",
+                    Source = "Api.csproj",
+                    Properties = new Dictionary<string, JsonNode?>
+                    {
+                        [KnownProperties.Executable.Args] = null,
+                        [KnownProperties.Executable.Path] = JsonValue.Create("dotnet"),
+                        [KnownProperties.Project.Configuration] = JsonValue.Create("Release"),
+                        [KnownProperties.Project.LaunchCommand] = JsonValue.Create("watch"),
+                        [KnownProperties.Project.LaunchProfile] = JsonValue.Create("https"),
+                        [KnownProperties.Project.Path] = JsonValue.Create("/repo/api/Api.csproj"),
+                        [KnownProperties.Project.TargetFramework] = JsonValue.Create("net10.0"),
+                        [KnownProperties.Resource.LaunchConfigurationType] = JsonValue.Create("project"),
+                        [KnownProperties.Resource.ParentName] = JsonValue.Create("group"),
+                    }
+                },
+                new ResourceJson
+                {
+                    Name = "mauiapp-android-emulator",
+                    DisplayName = "MAUI",
+                    ResourceType = "Project",
+                    State = "Running",
+                    Source = "MauiApp.csproj",
+                    Properties = new Dictionary<string, JsonNode?>
+                    {
+                        [KnownProperties.Executable.Args] = null,
+                        [KnownProperties.Executable.Path] = JsonValue.Create("dotnet"),
+                        [KnownProperties.Executable.Pid] = JsonValue.Create(1234),
+                        [KnownProperties.Project.LaunchProfile] = JsonValue.Create("AndroidEmulator"),
+                        [KnownProperties.Project.Path] = JsonValue.Create("/repo/maui/MauiApp.csproj"),
+                        [KnownProperties.Resource.LaunchConfigurationType] = JsonValue.Create("maui"),
+                        [KnownProperties.Resource.ParentName] = JsonValue.Create("mauiapp"),
+                    }
+                }
+            ]
+        };
+
+        var json = JsonSerializer.Serialize(resourcesOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+
+        Assert.Equal("""
+            {
+              "resources": [
+                {
+                  "name": "api-grouped",
+                  "displayName": "API",
+                  "resourceType": "Project",
+                  "state": "Running",
+                  "source": "Api.csproj",
+                  "properties": {
+                    "executable.args": null,
+                    "executable.path": "dotnet",
+                    "project.configuration": "Release",
+                    "project.launchCommand": "watch",
+                    "project.launchProfile": "https",
+                    "project.path": "/repo/api/Api.csproj",
+                    "project.targetFramework": "net10.0",
+                    "resource.launchConfigurationType": "project",
+                    "resource.parentName": "group"
+                  }
+                },
+                {
+                  "name": "mauiapp-android-emulator",
+                  "displayName": "MAUI",
+                  "resourceType": "Project",
+                  "state": "Running",
+                  "source": "MauiApp.csproj",
+                  "properties": {
+                    "executable.args": null,
+                    "executable.path": "dotnet",
+                    "executable.pid": 1234,
+                    "project.launchProfile": "AndroidEmulator",
+                    "project.path": "/repo/maui/MauiApp.csproj",
+                    "resource.launchConfigurationType": "maui",
+                    "resource.parentName": "mauiapp"
+                  }
+                }
+              ]
+            }
+            """, json);
     }
 
     [Fact]
@@ -925,6 +1035,159 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, jsonLines.Count);
         Assert.Contains(jsonLines, l => l.Contains("redis"));
         Assert.Contains(jsonLines, l => l.Contains("aspire-dashboard"));
+    }
+
+    [Theory]
+    [InlineData("resources --format mermaid", false)]
+    [InlineData("describe --format=Mermaid", false)]
+    [InlineData("resources --format MERMAID --include-hidden", true)]
+    public async Task DescribeCommand_MermaidFormat_ExportsTopology(string args, bool includeHidden)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot
+            {
+                Name = "frontend", DisplayName = "frontend", ResourceType = "Project", State = "Running",
+                Relationships =
+                [
+                    new() { ResourceName = "API", Type = "Reference" },
+                    new() { ResourceName = "api", Type = "WaitFor" },
+                    new() { ResourceName = "frontend", Type = "Reference" },
+                    new() { ResourceName = "Frontend", Type = "Reference" },
+                    new() { ResourceName = "FRONTEND", Type = "WaitFor" },
+                    new() { ResourceName = "cache", Type = "Reference" },
+                    new() { ResourceName = "connection", Type = "Reference" },
+                    new() { ResourceName = "missing", Type = "Reference" }
+                ]
+            },
+            new ResourceSnapshot { Name = "api-2", DisplayName = "api", ResourceType = "Project", State = "Running" },
+            new ResourceSnapshot { Name = "api-1", DisplayName = "api", ResourceType = "Project", State = "Running" },
+            new ResourceSnapshot { Name = "cache", DisplayName = "cache", ResourceType = "Container", State = "Running", IsHidden = true },
+            new ResourceSnapshot { Name = "connection", DisplayName = "connection", ResourceType = "Parameter", State = "Running" }
+        ], disableAnsi: true, errorTextWriter: errorWriter);
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(args);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("", outputWriter.Logs), "mmd")
+            .UseParameters(args.StartsWith("resources", StringComparison.Ordinal) ? "resources" : "describe", includeHidden);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_MermaidFormat_EscapesLabels()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot
+            {
+                Name = "end", DisplayName = "api\" # & <b> \\ `\nnext", ResourceType = "Project", State = "Running",
+                EnvironmentVariables = [new() { Name = "SECRET", Value = "do-not-export", IsFromSpec = true }],
+                Urls = [new() { Name = "http", Url = "http://private.example.test", IsInternal = false }]
+            }
+        ], disableAnsi: true);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("resources --format mermaid").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("", outputWriter.Logs), "mmd");
+    }
+
+    [Theory]
+    [InlineData("api-1")]
+    [InlineData("API-2")]
+    public async Task DescribeCommand_MermaidFormat_PreservesSelectedReplicaNames(string resource)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot
+            {
+                Name = "frontend", DisplayName = "frontend", ResourceType = "Project", State = "Running",
+                Relationships = [new() { ResourceName = "api", Type = "Reference" }]
+            },
+            new ResourceSnapshot { Name = "api-2", DisplayName = "api", ResourceType = "Project", State = "Running" },
+            new ResourceSnapshot { Name = "api-1", DisplayName = "api", ResourceType = "Project", State = "Running" }
+        ], disableAnsi: true);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse($"resources {resource} --format mermaid").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("", outputWriter.Logs), "mmd").UseParameters(resource);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("cache")]
+    public async Task DescribeCommand_MermaidFormat_FiltersResources(string resource)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot { Name = "cache", DisplayName = "cache", ResourceType = "Container", State = "Hidden" },
+            new ResourceSnapshot { Name = "connection", DisplayName = "connection", ResourceType = "Parameter", State = "Running" }
+        ], disableAnsi: true);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse($"resources {resource} --format mermaid").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("", outputWriter.Logs), "mmd").UseParameters(resource.Length == 0 ? "empty" : resource);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_MermaidFormat_RejectsFollow()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [], disableAnsi: true, errorTextWriter: errorWriter);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("resources --format mermaid --follow").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal("", string.Join("", outputWriter.Logs));
+        Assert.Contains(DescribeCommandStrings.MermaidFollowNotSupported, errorWriter.ToString());
+    }
+
+    [Fact]
+    public async Task DescribeCommand_MermaidFormat_MissingResourceKeepsStandardOutputEmpty()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot { Name = "cache", DisplayName = "cache", ResourceType = "Container", State = "Running" }
+        ], disableAnsi: true, errorTextWriter: errorWriter);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("resources missing --format mermaid").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+        Assert.Equal("", string.Join("", outputWriter.Logs));
+        Assert.Contains("Resource 'missing' not found.", errorWriter.ToString());
+    }
+
+    [Fact]
+    public async Task DescribeCommand_MermaidFormat_NoAppHostKeepsStandardOutputEmpty()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.ErrorTextWriter = errorWriter;
+            options.DisableAnsi = true;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("resources --format mermaid").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal("", string.Join("", outputWriter.Logs));
+        Assert.NotEmpty(errorWriter.ToString());
     }
 
     private ServiceProvider CreateDescribeTestServices(

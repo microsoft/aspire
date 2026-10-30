@@ -209,9 +209,9 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
     /// <param name="workingDirectory">Working directory for the npm process.</param>
     /// <param name="environment">Environment used to detect the host platform.</param>
     /// <param name="standardInput">
-    /// Handle given to npm as stdin; callers pass a null-device handle and keep it alive until the process starts.
+    /// Null-device handle kept alive until launch, or null when the shared process runner assigns stdin.
     /// </param>
-    internal static ProcessStartInfo CreateNpmProcessStartInfo(string npmPath, string[] args, string workingDirectory, IEnvironment environment, SafeFileHandle standardInput)
+    internal static ProcessStartInfo CreateNpmProcessStartInfo(string npmPath, string[] args, string workingDirectory, IEnvironment environment, SafeFileHandle? standardInput)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -225,26 +225,7 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
             WorkingDirectory = workingDirectory
         };
 
-        // On Windows, npm resolves to npm.cmd (a batch wrapper). Launching
-        // .cmd files via Process.Start with redirected stdout can produce empty
-        // output. Use cmd.exe /c to invoke the batch file reliably.
-        // Note: cmd.exe /c has special quote-stripping rules that are incompatible
-        // with ArgumentList (which individually quotes each argument). We must use
-        // the Arguments string property and wrap the entire command in an outer set
-        // of quotes so cmd.exe preserves interior quoting correctly.
-        if (environment.IsWindows() && npmPath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
-        {
-            startInfo.FileName = "cmd.exe";
-            startInfo.Arguments = @$"/c """"{npmPath}"" {string.Join(" ", args.Select(a => @$"""{a}"""))}""";
-        }
-        else
-        {
-            startInfo.FileName = npmPath;
-            foreach (var arg in args)
-            {
-                startInfo.ArgumentList.Add(arg);
-            }
-        }
+        ProcessStartInfoHelper.SetCommand(startInfo, npmPath, args, environment.IsWindows());
 
         return startInfo;
     }

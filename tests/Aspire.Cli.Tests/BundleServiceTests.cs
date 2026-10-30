@@ -315,6 +315,13 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
 
     private static void CreateFakeBundleLayout(string root)
     {
+        foreach (var file in TerminalHostPayload.GetRequiredFiles(System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier))
+        {
+            var path = Path.Combine(root, "terminalhost", file);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "terminal-host");
+        }
+
         var managedDir = Path.Combine(root, BundleDiscovery.ManagedDirectoryName);
         Directory.CreateDirectory(managedDir);
         File.WriteAllText(

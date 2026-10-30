@@ -35,7 +35,7 @@ public class DotnetToolFunctionalTests(ITestOutputHelper testOutputHelper)
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
         var resource = builder
-            .AddDotnetTool("tool", "dotnet-ef")
+            .AddDotnetTool("tool", "aspire-nonexistent-dotnet-tool")
             .WithArgs("--help")
             .WithToolSource("./fake-package-feed")
             .WithToolIgnoreExistingFeeds();

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Trace;
 using Xunit;
 
@@ -87,6 +88,7 @@ public class HealthTests(HealthTests.Fixture fixture) : IClassFixture<HealthTest
     [InlineData(null, "service.name=resource-dashboard,service.instance.id=stable-instance", "resource-dashboard", "stable-instance")]
     [InlineData("custom-dashboard", "service.name=resource-dashboard,service.instance.id=stable-instance", "custom-dashboard", "stable-instance")]
     [InlineData(null, "service.instance.id=stable-instance", "aspire-dashboard", "stable-instance")]
+    [InlineData(null, "service.name=custom-dashboard,application.secret=must-stay-local", "custom-dashboard", null)]
     public async Task OtlpExporterConfigured_ConfiguresResourceIdentity(
         string? configuredServiceName,
         string? configuredResourceAttributes,
@@ -114,6 +116,8 @@ public class HealthTests(HealthTests.Fixture fixture) : IClassFixture<HealthTest
         {
             Assert.Equal(expectedServiceInstanceId, resourceAttributes["service.instance.id"]);
         }
+
+        Assert.Null(app.Services.GetService<LoggerProvider>());
     }
 
     public sealed class Fixture : IAsyncLifetime

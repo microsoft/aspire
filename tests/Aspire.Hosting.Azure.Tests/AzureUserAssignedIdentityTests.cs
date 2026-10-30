@@ -1,5 +1,4 @@
-#pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREAZURE003 // ManagedIdentityRequiredAnnotation is experimental.
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -96,6 +95,55 @@ public class AzureUserAssignedIdentityTests(ITestOutputHelper testOutputHelper)
         await Verify(identityBicep, "bicep")
             .AppendContentAsFile(registryBicep, "bicep")
             .AppendContentAsFile(identityRoleAssignmentsBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ManagedIdentityRequiredAnnotation_CreatesIdentityWithoutRoleAssignments()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+        builder.AddAzureContainerAppEnvironment("cae");
+        var project = builder.AddProject<TestProject>("myapp", launchProfileName: null)
+            .WithAnnotation(new ManagedIdentityRequiredAnnotation());
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var identity = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<AzureUserAssignedIdentityResource>());
+        Assert.Equal("myapp-identity", identity.Name);
+        var annotation = Assert.Single(project.Resource.Annotations.OfType<AppIdentityAnnotation>());
+        Assert.Same(identity, annotation.IdentityResource);
+    }
+
+    [Fact]
+    public async Task ManagedIdentityRequiredAnnotation_ReusesExplicitIdentity()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+        builder.AddAzureContainerAppEnvironment("cae");
+        var identity = builder.AddAzureUserAssignedIdentity("myidentity");
+        var project = builder.AddProject<TestProject>("myapp", launchProfileName: null)
+            .WithAzureUserAssignedIdentity(identity)
+            .WithAnnotation(new ManagedIdentityRequiredAnnotation());
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var resource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<AzureUserAssignedIdentityResource>());
+        Assert.Same(identity.Resource, resource);
+        var annotation = Assert.Single(project.Resource.Annotations.OfType<AppIdentityAnnotation>());
+        Assert.Same(identity.Resource, annotation.IdentityResource);
+    }
+
+    [Fact]
+    public async Task ComputeResourceWithoutManagedIdentityRequiredAnnotation_GetsNoIdentity()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+        builder.AddAzureContainerAppEnvironment("cae");
+        builder.AddProject<TestProject>("myapp", launchProfileName: null);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Empty(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<AzureUserAssignedIdentityResource>());
     }
 
     [Fact]

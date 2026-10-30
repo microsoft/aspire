@@ -12,7 +12,6 @@ namespace Aspire.Cli.Npm;
 /// Verifies a Sigstore bundle after the caller constructs the expected identity policy.
 /// </summary>
 internal delegate Task<(bool Success, VerificationResult? Result)> SigstoreBundleVerificationHandler(
-    SigstoreVerifier verifier,
     SigstoreBundle bundle,
     VerificationPolicy policy,
     string? sriIntegrity,
@@ -37,8 +36,10 @@ internal sealed class SigstoreNpmProvenanceChecker : INpmProvenanceChecker
     /// </summary>
     public SigstoreNpmProvenanceChecker(
         HttpClient httpClient,
+        SigstoreVerifier verifier,
         ILogger<SigstoreNpmProvenanceChecker> logger)
-        : this(httpClient, logger, VerifyBundleWithPolicyAsync)
+        : this(httpClient, logger, (bundle, policy, sriIntegrity, cancellationToken) =>
+            VerifyBundleWithPolicyAsync(verifier, bundle, policy, sriIntegrity, cancellationToken))
     {
     }
 
@@ -255,7 +256,6 @@ internal sealed class SigstoreNpmProvenanceChecker : INpmProvenanceChecker
             return (new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.SourceRepositoryMismatch }, null);
         }
 
-        var verifier = new SigstoreVerifier();
         var identityPolicy = CertificateIdentity.ForGitHubActions(owner, repo);
         var policy = new VerificationPolicy
         {
@@ -265,7 +265,7 @@ internal sealed class SigstoreNpmProvenanceChecker : INpmProvenanceChecker
         try
         {
             var (success, result) = await _verifyBundleWithPolicyAsync(
-                verifier, bundle, policy, sriIntegrity, cancellationToken).ConfigureAwait(false);
+                bundle, policy, sriIntegrity, cancellationToken).ConfigureAwait(false);
 
             if (!success)
             {

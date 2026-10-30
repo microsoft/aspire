@@ -1,11 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers;
+using System.IO.Pipelines;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 using Aspire.Hosting.Dcp.Model;
 using k8s;
 using k8s.Autorest;
+using k8s.Models;
 
 namespace Aspire.Hosting.Dcp;
 
@@ -18,6 +23,71 @@ internal sealed class DcpKubernetesClient : k8s.Kubernetes
 
     public DcpKubernetesClient(KubernetesClientConfiguration config, params DelegatingHandler[] handlers) : base(config, handlers)
     {
+        // KubernetesService supplies the operation deadlines. The KubernetesClient NuGet package's
+        // separate HttpClientTimeout timer defaults to 100 seconds and would otherwise truncate
+        // configured budgets and surface as an unrelated cancellation.
+        HttpClientTimeout = Timeout.InfiniteTimeSpan;
+    }
+
+    /// <summary>
+    /// Opens a DCP resource watch without waiting for its first event.
+    /// This avoids KubernetesClient's setup-cancellation path that can leave an unread response open.
+    /// </summary>
+    /// <typeparam name="T">The resource type returned by watch events.</typeparam>
+    /// <param name="group">The Kubernetes API group.</param>
+    /// <param name="version">The resource API version.</param>
+    /// <param name="plural">The plural resource name, e.g. "executables".</param>
+    /// <param name="namespaceParameter">The namespace, or null/empty for a cluster-scoped watch.</param>
+    /// <param name="connectionCancellationToken">Closes the watch response on cancellation, even before enumeration starts.</param>
+    /// <param name="cancellationToken">Cancels connection establishment only; does not affect the returned stream.</param>
+    /// <returns>
+    /// A single-use event stream, returned once response headers arrive.
+    /// Ending enumeration closes its HTTP response.
+    /// </returns>
+    public async Task<IAsyncEnumerable<(WatchEventType, T)>> CreateWatchAsync<T>(
+        string group,
+        string version,
+        string plural,
+        string? namespaceParameter,
+        CancellationToken connectionCancellationToken,
+        CancellationToken cancellationToken)
+    {
+        var collectionPath = string.IsNullOrEmpty(namespaceParameter)
+            ? $"apis/{group}/{version}/{plural}"
+            : $"apis/{group}/{version}/namespaces/{Uri.EscapeDataString(namespaceParameter)}/{plural}";
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(BaseUri, $"{collectionPath}?watch=true"));
+        request.Version = HttpVersion.Version20;
+        if (Credentials is not null)
+        {
+            await Credentials.ProcessHttpRequestAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+
+        // KubernetesClient's list-and-watch adapter peeks the first event during setup and
+        // can abandon its reader when that wait is canceled. Own the raw response instead.
+        // https://github.com/microsoft/dcp/issues/286
+        var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                throw new HttpOperationException($"Operation returned an invalid status code '{response.StatusCode}', response body {content}")
+                {
+                    Request = new HttpRequestMessageWrapper(request, string.Empty),
+                    Response = new HttpResponseMessageWrapper(response, content)
+                };
+            }
+
+            var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            return new WatchConnection<T>(response, stream, connectionCancellationToken);
+        }
+        catch
+        {
+            response.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -48,10 +118,6 @@ internal sealed class DcpKubernetesClient : k8s.Kubernetes
         ArgumentException.ThrowIfNullOrWhiteSpace(plural, nameof(plural));
         ArgumentException.ThrowIfNullOrWhiteSpace(name, nameof(name));
         ArgumentException.ThrowIfNullOrWhiteSpace(subResource, nameof(subResource));
-
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(HttpClientTimeout);
-        cancellationToken = cts.Token;
 
         string url;
         if (string.IsNullOrEmpty(namespaceParameter))
@@ -89,10 +155,6 @@ internal sealed class DcpKubernetesClient : k8s.Kubernetes
     /// </summary>
     public async Task<ApiServerExecution> GetExecutionDocumentAsync(CancellationToken cancellationToken = default)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(HttpClientTimeout);
-        cancellationToken = cts.Token;
-
         var httpRequest = new HttpRequestMessage
         {
             Method = HttpMethod.Get,
@@ -115,10 +177,6 @@ internal sealed class DcpKubernetesClient : k8s.Kubernetes
         ApiServerExecution apiServerExecution,
         CancellationToken cancellationToken = default)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(HttpClientTimeout);
-        cancellationToken = cts.Token;
-
         var httpRequest = new HttpRequestMessage
         {
             Method = HttpMethod.Patch,
@@ -145,6 +203,177 @@ internal sealed class DcpKubernetesClient : k8s.Kubernetes
         {
             var responseContent = await httpResponse.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             return KubernetesJson.Deserialize<ApiServerExecution>(responseContent);
+        }
+    }
+
+    private sealed class WatchConnection<T> : IAsyncEnumerable<(WatchEventType, T)>
+    {
+        private readonly HttpResponseMessage _response;
+        private readonly PipeReader _reader;
+        private readonly CancellationToken _connectionToken;
+        private readonly CancellationTokenRegistration _cancellationRegistration;
+        private bool _firstLine = true;
+
+        public WatchConnection(HttpResponseMessage response, Stream stream, CancellationToken cancellationToken)
+        {
+            _response = response;
+            _reader = PipeReader.Create(stream);
+            _connectionToken = cancellationToken;
+            // A canceled body read does not necessarily reset an HTTP/2 stream. Close the
+            // response even when enumeration is paused in the consumer or has not started.
+            _cancellationRegistration = cancellationToken.Register(static state => ((HttpResponseMessage)state!).Dispose(), response);
+        }
+
+        public async IAsyncEnumerator<(WatchEventType, T)> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+        {
+            using var response = _response;
+            using var cancellationRegistration = _cancellationRegistration;
+            using var consumerCancellation = cancellationToken.Register(static state => ((HttpResponseMessage)state!).Dispose(), response);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_connectionToken, cancellationToken);
+            var receivedEvent = false;
+
+            try
+            {
+                while (true)
+                {
+                    string? line;
+                    bool terminated;
+                    try
+                    {
+                        (line, terminated) = await ReadEventLineAsync(linkedCts.Token).ConfigureAwait(false);
+                    }
+                    catch (Exception) when (linkedCts.IsCancellationRequested)
+                    {
+                        // Disposing the response can surface as IOException or ObjectDisposedException.
+                        // Preserve the original token so the periodic-restart helper recognizes its deadline.
+                        _connectionToken.ThrowIfCancellationRequested();
+                        cancellationToken.ThrowIfCancellationRequested();
+                        throw;
+                    }
+
+                    _connectionToken.ThrowIfCancellationRequested();
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (line is null)
+                    {
+                        if (!receivedEvent)
+                        {
+                            // An empty response is a failed watch, not a successful short poll.
+                            // Surface it to the retry pipeline rather than reconnecting in a tight loop.
+                            throw new EndOfStreamException("DCP watch ended before returning an event.");
+                        }
+
+                        yield break;
+                    }
+
+                    if (DeserializeEvent(line, terminated) is { } watchEvent)
+                    {
+                        receivedEvent = true;
+                        yield return watchEvent;
+                    }
+                }
+            }
+            finally
+            {
+                await _reader.CompleteAsync().ConfigureAwait(false);
+            }
+        }
+
+        private async ValueTask<(string? Line, bool Terminated)> ReadEventLineAsync(CancellationToken cancellationToken)
+        {
+            SequencePosition? searchedTo = null;
+            while (true)
+            {
+                var result = await _reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                var buffer = result.Buffer;
+                var unsearched = searchedTo is { } position ? buffer.Slice(position) : buffer;
+                if (unsearched.PositionOf((byte)'\n') is { } newline)
+                {
+                    var line = DecodeLine(buffer.Slice(0, newline));
+                    _reader.AdvanceTo(buffer.GetPosition(1, newline));
+
+                    return (line, true);
+                }
+                if (result.IsCompleted)
+                {
+                    var line = buffer.IsEmpty ? null : DecodeLine(buffer);
+                    _reader.AdvanceTo(buffer.End);
+
+                    return (line, false);
+                }
+
+                // No bytes are consumed until a complete record is found, so this position
+                // stays valid across reads and avoids rescanning the retained prefix.
+                searchedTo = buffer.IsEmpty ? null : buffer.End;
+                _reader.AdvanceTo(buffer.Start, buffer.End);
+            }
+        }
+
+        private string DecodeLine(in ReadOnlySequence<byte> buffer)
+        {
+            var line = Encoding.UTF8.GetString(buffer);
+            if (_firstLine)
+            {
+                _firstLine = false;
+                if (line.Length > 0 && line[0] == '\uFEFF')
+                {
+                    line = line[1..];
+                }
+            }
+
+            return line;
+        }
+
+        private static (WatchEventType, T)? DeserializeEvent(string line, bool terminated)
+        {
+            // Kubernetes watches contain newline-delimited events:
+            // {"type":"MODIFIED","object":{"kind":"Executable","metadata":{...},...}}
+            // An ERROR can contain a Status instead; BOOKMARK objects contain only metadata.
+            // https://kubernetes.io/docs/reference/using-api/api-concepts/#efficient-detection-of-changes
+            if (!terminated)
+            {
+                // A missing newline does not make a complete payload such as null truncated.
+                // Validate syntax separately so resource shape errors remain non-retryable.
+                try
+                {
+                    using var document = JsonDocument.Parse(line);
+                }
+                catch (JsonException ex)
+                {
+                    var reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(line), isFinalBlock: false, state: default);
+                    if (!JsonDocument.TryParseValue(ref reader, out var document))
+                    {
+                        // EOF can leave a partial record such as {"type":"MODIFIED","object":
+                        throw new EndOfStreamException("DCP watch ended in an incomplete event.", ex);
+                    }
+                    document.Dispose();
+                    throw;
+                }
+            }
+
+            var envelope = KubernetesJson.Deserialize<Watcher<KubernetesObject>.WatchEvent>(line);
+            if (envelope?.Object is null)
+            {
+                throw new JsonException("DCP watch event does not contain an object.");
+            }
+            if (envelope.Object.Kind == "Status")
+            {
+                var status = KubernetesJson.Deserialize<Watcher<V1Status>.WatchEvent>(line).Object;
+                if (status.Status == "Failure")
+                {
+                    throw new KubernetesException(status);
+                }
+                if (status.Status != "Success")
+                {
+                    throw new JsonException("DCP watch Status does not report Success or Failure.");
+                }
+
+                // A successful Status is not a resource update and must not be deserialized as T.
+                return null;
+            }
+
+            var watchEvent = KubernetesJson.Deserialize<Watcher<T>.WatchEvent>(line);
+
+            return (watchEvent.Type, watchEvent.Object);
         }
     }
 

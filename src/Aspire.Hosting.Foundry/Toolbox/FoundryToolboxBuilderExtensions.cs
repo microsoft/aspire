@@ -23,7 +23,9 @@ public static class FoundryToolboxBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the Toolbox resource.</returns>
     /// <remarks>
     /// Aspire reuses the current default version when its configuration matches. Otherwise, it
-    /// creates and promotes a new immutable version. The <see cref="FoundryToolboxResource.Version"/>
+    /// creates and promotes a new immutable version. The fingerprint includes the full integration
+    /// build version, so upgrading the integration also refreshes the default.
+    /// The <see cref="FoundryToolboxResource.Version"/>
     /// property pins the version used by consumers in the MCP endpoint URI; the version selected
     /// by the most recent reconciliation is exposed via
     /// <see cref="FoundryToolboxResource.DeployedVersion"/>.

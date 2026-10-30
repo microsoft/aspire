@@ -5,7 +5,7 @@
     <UserSecretsId>16965dbf-c1f8-4682-b7d8-e250ac520544</UserSecretsId>
     <LangVersion>preview</LangVersion>
     <ContainerRepository>catalog-service</ContainerRepository>
-    <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:8.0</ContainerBaseImage>
+    <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:10.0</ContainerBaseImage>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,11 +15,6 @@
   <ItemGroup>
     <ProjectReference Include="..\CatalogModel\CatalogModel.csproj" />
     <ProjectReference Include="..\TestShop.ServiceDefaults\TestShop.ServiceDefaults.csproj" />
-
-    <!-- Npgsql EF needs to match the same major version as the underlying Npgsql assemblies. -->
-    <!-- This is to override CentralPackageTransitivePinningEnabled -->
-    <PackageReference Include="Npgsql.DependencyInjection" VersionOverride="$(Npgsql8Version)" />
-    <PackageReference Include="Npgsql.OpenTelemetry" VersionOverride="$(Npgsql8Version)" />
   </ItemGroup>
 
 </Project>

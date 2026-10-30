@@ -12,7 +12,7 @@
                     Style="width:100%"
                     GenerateHeader="@GenerateHeader"
                     GridTemplateColumns="@GridTemplateColumns"
-                    RowSize="DataGridRowSize.Medium"
+                    RowSize="@RowSize"
                     ShowHover="true"
                     Class="@Class"
                     MultiLine="@Multiline">
@@ -33,9 +33,9 @@
                        IsMaskedChanged="(isMasked) => OnIsValueMaskedChanged(context, isMasked)"
                        TextVisualizerTitle="@context.Name"
                        ValueToVisualize="@(context.ValueToVisualize ?? context.Value)"
+                       TextVisualizerFormat="@context.TextVisualizerFormat"
                        ComponentMetadata="@GetComponentMetadata(context)"/>
             @ExtraValueContent(context)
         </AspireTemplateColumn>
     </FluentDataGrid>
 </div>
-

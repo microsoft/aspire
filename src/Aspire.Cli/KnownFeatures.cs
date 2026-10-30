@@ -18,7 +18,8 @@ namespace Aspire.Cli;
 /// available-features listing and <c>aspire config info</c> / its generated VS Code schemas). The
 /// flag still works if set directly in configuration; hiding only removes it from discovery.
 /// </param>
-internal sealed record FeatureMetadata(string Name, string Description, bool DefaultValue, bool Hidden = false);
+/// <param name="ProjectOnly">Whether the feature requires explicit project configuration.</param>
+internal sealed record FeatureMetadata(string Name, string Description, bool DefaultValue, bool Hidden = false, bool ProjectOnly = false);
 
 // this is a copy of Shared/KnownResourceNames.cs
 internal static class KnownFeatures
@@ -33,6 +34,13 @@ internal static class KnownFeatures
     public static string ExperimentalPolyglotJava => "experimentalPolyglotJava";
     public static string ExperimentalPolyglotGo => "experimentalPolyglotGo";
     public static string ExperimentalPolyglotPython => "experimentalPolyglotPython";
+    public static string ExperimentalHostingIntegrations => "experimentalHostingIntegrations";
+    public static string AppHostServerV2 => "appHostServerV2";
+
+    // Server selection is an AppHost migration, not an ambient CLI preference.
+    // A global flag must not silently switch existing applications.
+    public static bool IsAppHostServerV2Enabled(AspireConfigFile? config)
+        => config?.Features is { } features && features.TryGetValue(AppHostServerV2, out var enabled) && enabled;
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
     public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
     public static string PolyglotIntegrationFilterEnabled => "polyglotIntegrationFilterEnabled";
@@ -84,6 +92,17 @@ internal static class KnownFeatures
             "Enable or disable experimental Python language support for polyglot Aspire applications",
             DefaultValue: false),
 
+        [ExperimentalHostingIntegrations] = new(
+            ExperimentalHostingIntegrations,
+            "Enable experimental hosting integrations authored outside .NET",
+            DefaultValue: false),
+
+        [AppHostServerV2] = new(
+            AppHostServerV2,
+            "Use AppHost Server v2 for this AppHost. Requires an explicit project configuration setting.",
+            DefaultValue: false,
+            ProjectOnly: true),
+
         [NuGetSignatureVerificationEnabled] = new(
             NuGetSignatureVerificationEnabled,
             "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for NuGet operations",
@@ -126,6 +145,23 @@ internal static class KnownFeatures
     public static IEnumerable<string> GetAllFeatureNames()
     {
         return s_featureMetadata.Keys.OrderBy(name => name);
+    }
+
+    /// <summary>
+    /// Resolves external hosting integration opt-in for the target AppHost.
+    /// </summary>
+    public static bool IsHostingIntegrationsEnabled(IFeatures features, AspireConfigFile config)
+    {
+        if (IsAppHostServerV2Enabled(config))
+        {
+            return true;
+        }
+        // --apphost can target a different directory than the CLI's configuration scope.
+        // Honor that AppHost's explicit setting before falling back to CLI/global settings.
+        return config.Features is { } projectFeatures
+            && projectFeatures.TryGetValue(ExperimentalHostingIntegrations, out var enabled)
+            ? enabled
+            : features.IsFeatureEnabled(ExperimentalHostingIntegrations, defaultValue: false);
     }
 
     /// <summary>

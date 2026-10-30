@@ -1,0 +1,17 @@
+{
+  "name": "@spike/aspire-kafka-lib",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Reusable Kafka integration authored as an in-process TypeScript library (Model A)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "vscode-jsonrpc": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.3.0"
+  }
+}

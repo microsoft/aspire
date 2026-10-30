@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREUSERSECRETS001
-
 using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
@@ -213,6 +211,38 @@ public static class ParameterResourceBuilderExtensions
 
         builder.Resource.Description = description;
         builder.Resource.EnableDescriptionMarkdown = enableMarkdown;
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Marks the parameter resource as optional.
+    /// </summary>
+    /// <param name="builder">Resource builder for the parameter.</param>
+    /// <returns>The configured resource builder.</returns>
+    /// <remarks>
+    /// Optional parameters that do not have values are not prompted for during run or publish operations.
+    /// When referenced as environment variables or other value providers, unset optional parameters resolve to <see langword="null"/>.
+    /// The manifest publisher does not currently support optional parameters and throws a <see cref="DistributedApplicationException"/>.
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<ParameterResource> WithOptional(this IResourceBuilder<ParameterResource> builder)
+    {
+        return builder.WithRequired(required: false);
+    }
+
+    /// <summary>
+    /// Sets whether the parameter resource requires a value.
+    /// </summary>
+    /// <param name="builder">Resource builder for the parameter.</param>
+    /// <param name="required">A value indicating whether the parameter must have a value before it can be resolved.</param>
+    /// <returns>The configured resource builder.</returns>
+    [AspireExport]
+    public static IResourceBuilder<ParameterResource> WithRequired(this IResourceBuilder<ParameterResource> builder, bool required = true)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.Required = required;
 
         return builder;
     }

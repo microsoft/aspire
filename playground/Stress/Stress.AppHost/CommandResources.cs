@@ -911,6 +911,83 @@ internal static class CommandResources
         serviceBuilder.WithHttpCommand("/overflow-counter", "Overflow counter", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/nested-trace-spans", "Out of order nested spans", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/exemplars-no-span", "Examplars with no span", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand(
+            "/incompatible-histogram-bounds",
+            "Generate incompatible histogram bounds",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new()
+            {
+                Method = HttpMethod.Post,
+                IconName = "ContentViewGalleryLightning",
+                ResultMode = HttpCommandResultMode.Text,
+                Description = "Send five minutes of histogram data with disjoint bucket bounds. View incompatible.histogram.bounds on incompatible-histogram-metrics with both stress.layout dimensions selected to see the percentile warning."
+            });
+        serviceBuilder.WithHttpCommand(
+            "/unavailable-histogram-percentiles",
+            "Generate unavailable histogram percentiles",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new()
+            {
+                Method = HttpMethod.Post,
+                IconName = "ContentViewGalleryLightning",
+                ResultMode = HttpCommandResultMode.Text,
+                Description = "Send five minutes of histogram data with an unavailable middle interval. View histogram.unavailable.percentiles on unavailable-histogram-percentiles with both stress.layout dimensions selected, a five-minute duration, and Show count off to see the gap."
+            });
+        serviceBuilder.WithHttpCommand(
+            "/unavailable-histogram-exemplars",
+            "Generate unavailable histogram exemplars",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new()
+            {
+                Method = HttpMethod.Post,
+                IconName = "ContentViewGalleryLightning",
+                ResultMode = HttpCommandResultMode.Text,
+                Description = "Send five minutes of histogram data with exemplars and matching traces, including two samples in the percentile gap. View histogram.unavailable.exemplars on unavailable-histogram-exemplars with both stress.layout dimensions selected, a five-minute duration, and Show count off."
+            });
+        serviceBuilder.WithHttpCommand(
+            "/delta-histogram-intervals",
+            "Generate delta histogram intervals",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new()
+            {
+                Method = HttpMethod.Post,
+                IconName = "ContentViewGalleryLightning",
+                ResultMode = HttpCommandResultMode.Text,
+                Description = "Send five minutes of equal-count delta intervals with changing distributions. View histogram.delta.intervals on delta-histogram-intervals; Show count sums all observations."
+            });
+        serviceBuilder.WithHttpCommand(
+            "/cumulative-histogram-resets",
+            "Generate cumulative histogram resets",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new()
+            {
+                Method = HttpMethod.Post,
+                IconName = "ContentViewGalleryLightning",
+                ResultMode = HttpCommandResultMode.Text,
+                Description = "Send five minutes of cumulative data with two resets and changed bucket layouts. View histogram.cumulative.resets on cumulative-histogram-resets; Show count displays three rising ramps."
+            });
+        serviceBuilder.WithHttpCommand(
+            "/delta-histogram-without-start",
+            "Generate delta histograms without start timestamps",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new()
+            {
+                Method = HttpMethod.Post,
+                IconName = "ContentViewGalleryLightning",
+                ResultMode = HttpCommandResultMode.Text,
+                Description = "Send five minutes of delta points that omit StartTimeUnixNano. View histogram.delta.without.start on delta-histogram-without-start to verify both count and percentile chart placement."
+            });
+        serviceBuilder.WithHttpCommand(
+            "/shared-histogram-bounds",
+            "Generate shared histogram bounds",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new()
+            {
+                Method = HttpMethod.Post,
+                IconName = "ContentViewGalleryLightning",
+                ResultMode = HttpCommandResultMode.Text,
+                Description = "Send five minutes of cumulative data across different layouts with shared bounds. View histogram.shared.bounds on shared-histogram-bounds with both stress.layout dimensions selected."
+            });
         serviceBuilder.WithHttpCommand("/genai-trace", "Gen AI trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/genai-langchain-trace", "Gen AI LangChain trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/genai-trace-display-error", "Gen AI trace display error", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
@@ -1459,4 +1536,3 @@ internal static class CommandResources
 }
 
 #pragma warning restore ASPIREPROCESSCOMMAND001
-

@@ -3,8 +3,6 @@
 
 #pragma warning disable ASPIRECOMPUTE003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
 
 using System.Diagnostics;
@@ -534,6 +532,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
 
         var (stepsToExecute, stepsByName) = FilterStepsForExecution(allSteps, context);
+        context.SelectedSteps = stepsToExecute.AsReadOnly();
 
         // Build dependency graph and execute with readiness-based scheduler
         await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
@@ -566,6 +565,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
 
         var stepsToExecute = ComputeTransitiveDependencies(targetStep, allStepsByName);
+        context.SelectedSteps = stepsToExecute.AsReadOnly();
 
         await ExecuteStepsSequentially(stepsToExecute, context).ConfigureAwait(false);
     }

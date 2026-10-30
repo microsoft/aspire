@@ -4,167 +4,167 @@
     <body>
       <trans-unit id="CaptureScreenshotDescription">
         <source>Capture a screenshot from the active tracked browser session and save it as a PNG artifact.</source>
-        <target state="new">Capture a screenshot from the active tracked browser session and save it as a PNG artifact.</target>
+        <target state="translated">從使用中追蹤的瀏覽器工作階段擷取螢幕擷取畫面，並將它儲存為 PNG 成品。</target>
         <note />
       </trans-unit>
       <trans-unit id="CaptureScreenshotName">
         <source>Capture screenshot</source>
-        <target state="new">Capture screenshot</target>
+        <target state="translated">擷取螢幕擷取畫面</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserApplied">
         <source>Applied tracked browser settings for {0}.</source>
-        <target state="new">Applied tracked browser settings for {0}.</target>
+        <target state="translated">已針對 {0} 套用追蹤的瀏覽器設定。</target>
         <note>{0} is the resource name or scope that the settings apply to</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserBrowserDescription">
         <source>Choose an installed Chromium-based browser or enter an executable path.</source>
-        <target state="new">Choose an installed Chromium-based browser or enter an executable path.</target>
+        <target state="translated">選擇已安裝的 Chromium 型瀏覽器或輸入可執行檔路徑。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserBrowserLabel">
         <source>Browser</source>
-        <target state="new">Browser</target>
+        <target state="translated">瀏覽器</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserBrowserRequired">
         <source>Browser is required.</source>
-        <target state="new">Browser is required.</target>
+        <target state="translated">需要瀏覽器。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserChromeOption">
         <source>Google Chrome (chrome)</source>
-        <target state="new">Google Chrome (chrome)</target>
+        <target state="translated">Google Chrome (chrome)</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserChromiumOption">
         <source>Chromium (chromium)</source>
-        <target state="new">Chromium (chromium)</target>
+        <target state="translated">Chromium (chromium)</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserDefaultProfileOption">
         <source>Browser default profile</source>
-        <target state="new">Browser default profile</target>
+        <target state="translated">瀏覽器預設設定檔</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserDescription">
         <source>Choose the browser, profile, user data mode, and scope used by tracked browser sessions.</source>
-        <target state="new">Choose the browser, profile, user data mode, and scope used by tracked browser sessions.</target>
+        <target state="translated">選擇追蹤的瀏覽器工作階段所使用的瀏覽器、設定檔、使用者資料模式和範圍。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserEdgeOption">
         <source>Microsoft Edge (msedge)</source>
-        <target state="new">Microsoft Edge (msedge)</target>
+        <target state="translated">Microsoft Edge (msedge)</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserGlobalScopeOption">
         <source>All BrowserLogs resources</source>
-        <target state="new">All BrowserLogs resources</target>
+        <target state="translated">所有 BrowserLogs 資源</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserGlobalScopeResult">
         <source>all BrowserLogs resources</source>
-        <target state="new">all BrowserLogs resources</target>
+        <target state="translated">所有 BrowserLogs 資源</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserInteractionUnavailable">
         <source>Tracked browser settings cannot be configured because dashboard interactions are not available.</source>
-        <target state="new">Tracked browser settings cannot be configured because dashboard interactions are not available.</target>
+        <target state="translated">無法設定追蹤的瀏覽器設定，因為無法使用儀表板互動。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserName">
         <source>Configure tracked browser</source>
-        <target state="new">Configure tracked browser</target>
+        <target state="translated">設定追蹤的瀏覽器</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserProfileDescription">
         <source>Choose a Chromium profile from the Aspire-managed browser hive, or enter a profile directory/name.</source>
-        <target state="new">Choose a Chromium profile from the Aspire-managed browser hive, or enter a profile directory/name.</target>
+        <target state="translated">從 Aspire 管理的瀏覽器登錄區選擇 Chromium 設定檔，或輸入設定檔目錄/名稱。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserProfileLabel">
         <source>Profile</source>
-        <target state="new">Profile</target>
+        <target state="translated">設定檔</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserProfileOptionWithDisplayName">
         <source>{0} ({1})</source>
-        <target state="new">{0} ({1})</target>
+        <target state="translated">{0} ({1})</target>
         <note>{0} is the Chromium profile directory name, {1} is the Chromium profile display name</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserProfileRequiresShared">
         <source>Profiles can only be selected when user data mode is Shared.</source>
-        <target state="new">Profiles can only be selected when user data mode is Shared.</target>
+        <target state="translated">只有當使用者資料模式為共用時，才能選取設定檔。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserPromptMessage">
         <source>Choose tracked browser settings. Resource-specific settings override global BrowserLogs settings.</source>
-        <target state="new">Choose tracked browser settings. Resource-specific settings override global BrowserLogs settings.</target>
+        <target state="translated">選擇追蹤的瀏覽器設定。資源特有設定會覆寫全域 BrowserLogs 設定。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserResourceScopeOption">
         <source>This resource only ({0})</source>
-        <target state="new">This resource only ({0})</target>
+        <target state="translated">僅限此資源 ({0})</target>
         <note>{0} is the Aspire resource name</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaveButton">
         <source>Apply</source>
-        <target state="new">Apply</target>
+        <target state="translated">套用</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaveFailed">
         <source>Tracked browser settings could not be saved to user secrets for key '{0}'.</source>
-        <target state="new">Tracked browser settings could not be saved to user secrets for key '{0}'.</target>
+        <target state="translated">無法將追蹤的瀏覽器設定儲存至金鑰 '{0}' 的使用者秘密。</target>
         <note>{0} is the user secrets configuration key</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaveToUserSecretsDescriptionConfigured">
         <source>Save these settings to [user secrets](https://aka.ms/aspire/user-secrets) so future AppHost runs use them.</source>
-        <target state="new">Save these settings to [user secrets](https://aka.ms/aspire/user-secrets) so future AppHost runs use them.</target>
+        <target state="translated">將這些設定儲存至 [user secrets](https://aka.ms/aspire/user-secrets)，讓未來的 AppHost 執行使用這些設定。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaveToUserSecretsDescriptionNotConfigured">
         <source>User secrets are not configured for this AppHost, so settings can only apply to this running AppHost.</source>
-        <target state="new">User secrets are not configured for this AppHost, so settings can only apply to this running AppHost.</target>
+        <target state="translated">未針對此 AppHost 設定使用者秘密，所以設定只能套用至這個執行中 AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaveToUserSecretsLabel">
         <source>Save to AppHost user secrets</source>
-        <target state="new">Save to AppHost user secrets</target>
+        <target state="translated">儲存至 AppHost 使用者秘密</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaved">
         <source>Saved tracked browser settings for {0}.</source>
-        <target state="new">Saved tracked browser settings for {0}.</target>
+        <target state="translated">已針對 {0} 儲存追蹤的瀏覽器設定。</target>
         <note>{0} is the resource name or scope that the settings apply to</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserScopeLabel">
         <source>Scope</source>
-        <target state="new">Scope</target>
+        <target state="translated">範圍</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserUserDataModeLabel">
         <source>User data mode</source>
-        <target state="new">User data mode</target>
+        <target state="translated">使用者資料模式</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserUserDataModeRequired">
         <source>User data mode must be Shared or Isolated.</source>
-        <target state="new">User data mode must be Shared or Isolated.</target>
+        <target state="translated">使用者資料模式必須是共用或隔離。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserUserSecretsUnavailable">
         <source>Tracked browser settings cannot be saved because the AppHost does not have user secrets configured.</source>
-        <target state="new">Tracked browser settings cannot be saved because the AppHost does not have user secrets configured.</target>
+        <target state="translated">無法儲存追蹤的瀏覽器設定，因為 AppHost 未設定使用者秘密。</target>
         <note />
       </trans-unit>
       <trans-unit id="OpenTrackedBrowserDescription">
         <source>Open the app in a tracked browser session and stream browser logs to this resource.</source>
-        <target state="new">Open the app in a tracked browser session and stream browser logs to this resource.</target>
+        <target state="translated">在追蹤的瀏覽器工作階段中開啟應用程式，並將瀏覽器記錄串流至此資源。</target>
         <note />
       </trans-unit>
       <trans-unit id="OpenTrackedBrowserName">
         <source>Open tracked browser</source>
-        <target state="new">Open tracked browser</target>
+        <target state="translated">開啟追蹤的瀏覽器</target>
         <note />
       </trans-unit>
     </body>

@@ -156,7 +156,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Failed to fetch logs from Dashboard API");
+            _logger.LogError("Failed to fetch logs from Dashboard API");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
             TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
             return CliExitCodes.DashboardFailure;

@@ -10,6 +10,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -30,7 +31,7 @@ internal sealed class AspireSkillsInstaller(
     AspireCliTelemetry telemetry,
     ILogger<AspireSkillsInstaller> logger) : IAspireSkillsInstaller
 {
-    internal const string Version = "0.0.3";
+    internal const string Version = "0.0.4";
     internal const string GitHubRepository = "microsoft/aspire-skills";
     internal const string ExpectedSourceRepository = $"https://github.com/{GitHubRepository}";
     internal const string ExpectedWorkflowPath = ".github/workflows/publish.yml";
@@ -72,7 +73,7 @@ internal sealed class AspireSkillsInstaller(
             effectiveVersion = Version;
         }
 
-        activity?.SetTag("aspire.skills.version", effectiveVersion);
+        telemetry.SetActivityProperty(activity, "aspire.skills.version", effectiveVersion);
 
         var cacheRoot = GetCacheRoot();
         Directory.CreateDirectory(cacheRoot);
@@ -97,7 +98,7 @@ internal sealed class AspireSkillsInstaller(
         var remoteFetchEnabled = features.IsFeatureEnabled(
             KnownFeatures.AspireSkillsRemoteFetchEnabled,
             KnownFeatures.GetFeatureMetadata(KnownFeatures.AspireSkillsRemoteFetchEnabled)!.DefaultValue);
-        activity?.SetTag("aspire.skills.remote_fetch_enabled", remoteFetchEnabled);
+        telemetry.SetActivityProperty(activity, "aspire.skills.remote_fetch_enabled", remoteFetchEnabled);
 
         AcquisitionResult? githubResult = null;
         if (remoteFetchEnabled)
@@ -255,8 +256,8 @@ internal sealed class AspireSkillsInstaller(
                     githubArchiveSha256,
                     validationDisabled ? BundleArchiveSource.UnverifiedGitHub : BundleArchiveSource.VerifiedGitHub,
                     cancellationToken).ConfigureAwait(false);
-                activity?.SetTag("aspire.skills.source", "github");
-                activity?.SetTag("aspire.skills.cache_hit", false);
+                telemetry.SetActivityProperty(activity, "aspire.skills.source", "github");
+                telemetry.SetActivityProperty(activity, "aspire.skills.cache_hit", false);
                 return AcquisitionResult.Installed(bundle, archiveSha512, githubArchiveSha256);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
@@ -353,8 +354,8 @@ internal sealed class AspireSkillsInstaller(
                 version: version,
                 source: BundleArchiveSource.Embedded,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
-            activity?.SetTag("aspire.skills.source", "embedded");
-            activity?.SetTag("aspire.skills.cache_hit", false);
+            telemetry.SetActivityProperty(activity, "aspire.skills.source", "embedded");
+            telemetry.SetActivityProperty(activity, "aspire.skills.cache_hit", false);
             return AcquisitionResult.Installed(bundle, expectedArchiveSha512);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
@@ -559,7 +560,7 @@ internal sealed class AspireSkillsInstaller(
         Activity? activity,
         CancellationToken cancellationToken)
     {
-        activity?.SetTag("aspire.skills.cache_hit", false);
+        telemetry.SetActivityProperty(activity, "aspire.skills.cache_hit", false);
         if (expectedArchiveSha512 is null &&
             expectedGitHubArchiveSha256 is null &&
             !requireVerifiedGitHubSource)
@@ -709,7 +710,7 @@ internal sealed class AspireSkillsInstaller(
                 skipCompatibilityCheck).ConfigureAwait(false);
             ValidateBundleVersion(bundle, version);
             TouchLastUsed(cacheDirectory);
-            activity?.SetTag("aspire.skills.cache_hit", true);
+            telemetry.SetActivityProperty(activity, "aspire.skills.cache_hit", true);
             logger.LogDebug("Using cached Aspire skills bundle from {CacheDirectory}.", cacheDirectory);
             return AcquisitionResult.Installed(bundle, cachedArchiveSha512, cachedGitHubArchiveSha256);
         }

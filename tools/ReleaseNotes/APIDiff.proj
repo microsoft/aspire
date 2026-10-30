@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <Configuration>Release</Configuration>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <NoIncremental>true</NoIncremental>
   </PropertyGroup>
 

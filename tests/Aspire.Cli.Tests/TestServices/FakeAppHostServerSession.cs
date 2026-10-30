@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Processes;
@@ -83,7 +84,11 @@ internal sealed class FakeAppHostServerSessionFactory : IAppHostServerSessionFac
 {
     public IAppHostServerSession? Session { get; init; }
 
+    public Func<IAppHostServerSession>? CreateCallback { get; init; }
+
     public Dictionary<string, string>? CapturedEnvironmentVariables { get; private set; }
+
+    public ConcurrentQueue<Dictionary<string, string>?> CreatedSessionEnvironments { get; } = new();
 
     public static FakeAppHostServerSessionFactory CreateForScaffolding(
         IReadOnlyDictionary<string, string>? scaffoldFiles = null)
@@ -109,10 +114,12 @@ internal sealed class FakeAppHostServerSessionFactory : IAppHostServerSessionFac
         IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler,
         IGracefulShutdownWindow? shutdownService,
         bool isolateConsole,
+        bool ownsProject,
         CancellationToken stopRequested)
     {
         CapturedEnvironmentVariables = environmentVariables is null ? null : new Dictionary<string, string>(environmentVariables);
-        return Session ?? new FakeAppHostServerSession();
+        CreatedSessionEnvironments.Enqueue(CapturedEnvironmentVariables);
+        return CreateCallback?.Invoke() ?? Session ?? new FakeAppHostServerSession();
     }
 }
 
@@ -125,6 +132,8 @@ internal class FakeAppHostRpcClient : IAppHostRpcClient
 {
     public RuntimeSpec? RuntimeSpec { get; init; }
     public Func<string, string, string?, CancellationToken, Task<Dictionary<string, string>>>? ScaffoldAppHostAsyncCallback { get; init; }
+    public Func<string, CancellationToken, Task<Dictionary<string, string>>>? GenerateCodeAsyncCallback { get; init; }
+    public Func<string, object?[], CancellationToken, Task<object?>>? InvokeAsyncCallback { get; init; }
 
     public virtual Task<RuntimeSpec> GetRuntimeSpecAsync(string languageId, CancellationToken cancellationToken)
         => Task.FromResult(RuntimeSpec ?? new RuntimeSpec
@@ -142,7 +151,8 @@ internal class FakeAppHostRpcClient : IAppHostRpcClient
             : throw new NotSupportedException();
 
     public virtual Task<Dictionary<string, string>> GenerateCodeAsync(string languageId, CancellationToken cancellationToken)
-        => Task.FromResult(new Dictionary<string, string>());
+        => GenerateCodeAsyncCallback?.Invoke(languageId, cancellationToken)
+            ?? Task.FromResult(new Dictionary<string, string>());
 
     public virtual Task<Dictionary<string, string>> GenerateCodeForAssemblyAsync(string languageId, string assemblyName, CancellationToken cancellationToken)
         => Task.FromResult(new Dictionary<string, string>());
@@ -156,11 +166,18 @@ internal class FakeAppHostRpcClient : IAppHostRpcClient
     public virtual Task<JsonElement> ExportApiAsync(string languageId, string packageName, string packageVersion, CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
-    public virtual Task<T> InvokeAsync<T>(string methodName, object?[] parameters, CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    public virtual async Task<T> InvokeAsync<T>(string methodName, object?[] parameters, CancellationToken cancellationToken)
+    {
+        var invoke = InvokeAsyncCallback ?? throw new NotSupportedException();
+        var result = await invoke(methodName, parameters, cancellationToken);
+        return result is T value ? value : throw new InvalidOperationException("Fake RPC result has an unexpected type.");
+    }
 
-    public virtual Task InvokeAsync(string methodName, object?[] parameters, CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    public virtual async Task InvokeAsync(string methodName, object?[] parameters, CancellationToken cancellationToken)
+    {
+        var invoke = InvokeAsyncCallback ?? throw new NotSupportedException();
+        await invoke(methodName, parameters, cancellationToken);
+    }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

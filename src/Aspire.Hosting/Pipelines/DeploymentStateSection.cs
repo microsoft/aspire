@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 
 namespace Aspire.Hosting.Pipelines;
@@ -15,7 +14,6 @@ namespace Aspire.Hosting.Pipelines;
 /// <param name="sectionName">The name of the section.</param>
 /// <param name="data">The JSON data for this section.</param>
 /// <param name="version">The current version of this section.</param>
-[Experimental("ASPIREPIPELINES002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class DeploymentStateSection(string sectionName, JsonObject? data, long version)
 {
     /// <summary>

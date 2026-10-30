@@ -300,7 +300,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TelemetryLogsCommand_WithInvalidDashboardUrl_ReturnsInvalidCommand()
+    public async Task TelemetryLogsCommand_WithInvalidDashboardUrl_ReturnsBoundedInvalidCommand()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -313,13 +313,18 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("otel logs --dashboard-url not-a-url");
+        var result = command.Parse(["otel", "logs", "--dashboard-url", "not a URL user:password token=secret-value"]);
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
-        Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, "not-a-url"), errorMessage);
+        Assert.Equal(
+            string.Format(
+                CultureInfo.CurrentCulture,
+                TelemetryCommandStrings.DashboardUrlInvalid,
+                "not an absolute HTTP(S) URL"),
+            errorMessage);
     }
 
     [Fact]

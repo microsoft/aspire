@@ -55,7 +55,7 @@ public sealed class KubernetesDeployWithMySqlTests(ITestOutputHelper output)
 
                 var mysql = builder.AddMySql("mysql");
 
-                var api = builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+                var api = builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                     .WithReference(mysql)
                     .WaitFor(mysql)
                     .WithExternalHttpEndpoints();

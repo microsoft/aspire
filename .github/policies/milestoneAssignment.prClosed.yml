@@ -12,6 +12,7 @@ configuration:
       - payloadType: Pull_Request
       - isAction:
           action: Closed
+      - isMerged
       - targetsBranch:
           branch: main
       then:

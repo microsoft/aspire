@@ -64,9 +64,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         string? logFilePath = null,
         string? restoreRootConfigDirectory = null)
     {
-        _appPath = Path.GetFullPath(appPath);
-        _appPath = new Uri(_appPath).LocalPath;
-        _appPath = OperatingSystem.IsWindows() ? _appPath.ToLowerInvariant() : _appPath;
+        (_appPath, var pathHash) = GetAppPathIdentity(appPath);
         _socketPath = socketPath;
         _repoRoot = Path.GetFullPath(repoRoot) + Path.DirectorySeparatorChar;
         _dotNetCliRunner = dotNetCliRunner;
@@ -77,17 +75,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         _logFilePath = logFilePath;
         _restoreRootConfigDirectory = restoreRootConfigDirectory is not null ? Path.GetFullPath(restoreRootConfigDirectory) : null;
 
-        var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appPath));
-
-        if (projectModelPath is not null)
-        {
-            _projectModelPath = projectModelPath;
-        }
-        else
-        {
-            var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
-            _projectModelPath = Path.Combine(CliPathHelper.GetAspireHomeDirectory(), AppsFolder, pathDir);
-        }
+        _projectModelPath = projectModelPath ?? GetDefaultProjectModelPath(pathHash);
 
         // Create a stable UserSecretsId based on the app path hash
         _userSecretsId = new Guid(pathHash[..16]).ToString();
@@ -108,6 +96,29 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     /// Gets the full path to the AppHost server project file.
     /// </summary>
     public string GetProjectFilePath() => Path.Combine(_projectModelPath, ProjectFileName);
+
+    internal static string GetDefaultInstanceIdentifier(string appPath)
+    {
+        var (_, pathHash) = GetAppPathIdentity(appPath);
+
+        return Path.Combine(GetDefaultProjectModelPath(pathHash), ProjectFileName);
+    }
+
+    private static (string AppPath, byte[] Hash) GetAppPathIdentity(string appPath)
+    {
+        appPath = new Uri(Path.GetFullPath(appPath)).LocalPath;
+        appPath = OperatingSystem.IsWindows() ? appPath.ToLowerInvariant() : appPath;
+
+        // Keep the existing identity so discovery finds servers started by earlier CLIs.
+        return (appPath, SHA256.HashData(Encoding.UTF8.GetBytes(appPath)));
+    }
+
+    private static string GetDefaultProjectModelPath(byte[] pathHash)
+    {
+        var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
+
+        return Path.Combine(CliPathHelper.GetAspireHomeDirectory(), AppsFolder, pathDir);
+    }
 
     private string GetProjectHash()
     {
@@ -166,7 +177,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // Add project references for Aspire.Hosting.* packages, NuGet for others
         var addedProjects = new HashSet<string>(StringComparers.FileSystemPath);
         projectFile.AddIntegrationReferences(
-            integrations,
+            integrations.Where(static integration => integration.Source is not IntegrationSource.Npm),
             _repoRoot,
             isAspireProjectResource: false,
             addedProjectPaths: addedProjects,
@@ -220,7 +231,6 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var programCs = """
             await Aspire.Hosting.RemoteHost.RemoteHostServer.RunAsync(args);
             """;
-        File.WriteAllText(Path.Combine(_projectModelPath, "Program.cs"), programCs);
 
         // Create appsettings.json with ATS assemblies
         var atsAssemblies = new List<string> { "Aspire.Hosting" };
@@ -233,27 +243,21 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                 continue;
             }
 
+            // Only NuGet packages and local .NET project references contribute assemblies the
+            // server will load via CLR reflection. Non-.NET integration hosts (npm, future pip,
+            // etc.) are listed under IntegrationHosts and spawned as separate processes.
+            if (integration.Source != IntegrationSource.Nuget && integration.Source != IntegrationSource.Project)
+            {
+                continue;
+            }
+
             if (!atsAssemblies.Contains(integration.Name, StringComparer.OrdinalIgnoreCase))
             {
                 atsAssemblies.Add(integration.Name);
             }
         }
 
-        var assembliesJson = string.Join(",\n      ", atsAssemblies.Select(a => $"\"{a}\""));
-        var appSettingsJson = $$"""
-            {
-              "Logging": {
-                "LogLevel": {
-                  "Default": "Information",
-                  "Microsoft.AspNetCore": "Warning",
-                  "Aspire.Hosting.Dcp": "Warning"
-                }
-              },
-              "AtsAssemblies": [
-                {{assembliesJson}}
-              ]
-            }
-            """;
+        var appSettingsJson = AppHostServerAppSettingsWriter.Generate(atsAssemblies, integrations);
 
         // Handle NuGet config and channel resolution
         string? channelName = null;
@@ -507,9 +511,16 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         IEnumerable<IntegrationReference> integrations,
         string? requestedChannel = null,
         string? packageSourceOverride = null,
+        string? packageSourceOverridePattern = null,
         CancellationToken cancellationToken = default)
     {
-        var (_, channelName) = await CreateProjectFilesAsync(integrations, requestedChannel, packageSourceOverride, cancellationToken);
+        _ = packageSourceOverridePattern;
+
+        var (_, channelName) = await CreateProjectFilesAsync(
+            integrations,
+            requestedChannel,
+            packageSourceOverride,
+            cancellationToken);
         var (buildSuccess, buildOutput) = await BuildAsync(cancellationToken);
 
         if (!buildSuccess)
@@ -585,13 +596,15 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // would always resolve to <unresolved-aspire-terminalhost> in repo mode.
         // Mirrors the same injection that DotNetAppHostProject performs for .NET AppHosts.
         // Skipped when the caller pre-populates the path so a user-side override always wins.
-        if (BundleDiscovery.TryGetRepoLocalManagedPath(_repoRoot) is { } terminalHostPath
-            && !ContainsKey(environmentVariables, BundleDiscovery.TerminalHostPathEnvVar))
+        if (BundleDiscovery.TryGetRepoLocalTerminalHostPath(_repoRoot) is { } terminalHostPath
+            && !ContainsKey(environmentVariables, BundleDiscovery.TerminalHostPathEnvVar)
+            && !startInfo.Environment.ContainsKey(BundleDiscovery.TerminalHostPathEnvVar))
         {
             startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar] = terminalHostPath;
-            if (!ContainsKey(environmentVariables, BundleDiscovery.TerminalHostInvocationArgsEnvVar))
+            if (!ContainsKey(environmentVariables, BundleDiscovery.TerminalHostInvocationArgsEnvVar)
+                && !startInfo.Environment.ContainsKey(BundleDiscovery.TerminalHostInvocationArgsEnvVar))
             {
-                startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "terminalhost";
+                startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = string.Empty;
             }
         }
 
@@ -624,13 +637,13 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         void OnStdout(string line)
         {
-            _logger.LogTrace("AppHostServer({ProcessId}) stdout: {Line}", execution.ProcessId, line);
+            _logger.LogDebug("AppHostServer({ProcessId}) stdout: {Line}", execution.ProcessId, line);
             outputCollector.AppendOutput(line);
         }
 
         void OnStderr(string line)
         {
-            _logger.LogTrace("AppHostServer({ProcessId}) stderr: {Line}", execution.ProcessId, line);
+            _logger.LogDebug("AppHostServer({ProcessId}) stderr: {Line}", execution.ProcessId, line);
             outputCollector.AppendError(line);
         }
 
@@ -640,6 +653,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             StandardErrorCallback = OnStderr,
             IsolateConsole = runControl?.IsolateConsole ?? false,
             KillOnParentExit = runControl?.KillOnParentExit ?? false,
+            Lifetime = ChildProcessLifetime.AppHost,
             GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
             ShutdownService = runControl?.ShutdownService,
             // The graceful ladder always tree-kills on escalation; this fallback only matters when

@@ -9,27 +9,17 @@
     ##else
     <base href="/" />
     ##endif*@
-    @*#if (Framework == 'net8.0')
-    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="app.css" />
-    <link rel="stylesheet" href="Aspire-StarterApplication.1.Web.styles.css" />
-    ##else
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["Aspire-StarterApplication.1.Web.styles.css"]" />
     <ImportMap />
-    ##endif*@
     <link rel="icon" type="image/png" href="favicon.png" />
     <HeadOutlet />
 </head>
 
 <body>
     <Routes />
-    @*#if (Framework == 'net8.0')
-    <script src="_framework/blazor.web.js"></script>
-    ##else
     <script src="@Assets["_framework/blazor.web.js"]"></script>
-    ##endif*@
 </body>
 
 </html>

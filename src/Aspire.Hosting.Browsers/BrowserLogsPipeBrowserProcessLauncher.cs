@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-
 namespace Aspire.Hosting;
 
 // Starts Chromium with a private CDP pipe. This cannot use ProcessStartInfo today because the repo's target frameworks

@@ -14,13 +14,12 @@ using Aspire.Tests;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
 
 public class GuestRuntimeTests(ITestOutputHelper outputHelper)
 {
-    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddXunit(outputHelper));
 
     private ProcessGuestLauncher CreateLauncher(
         FileLoggerProvider? fileLoggerProvider = null)
@@ -28,7 +27,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             "test",
             _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
             fileLoggerProvider: fileLoggerProvider,
-            processExecutionFactory: new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance));
+            processExecutionFactory: TestProcessExecutionFactory.CreateForCliGuardian(
+                new TestEnvironment(), _loggerFactory.CreateLogger<ProcessExecutionFactory>()));
 
     private GuestRuntime CreateRuntime(
         RuntimeSpec? spec = null,
@@ -40,6 +40,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             _loggerFactory.CreateLogger<GuestRuntime>(),
             new TestEnvironment(),
             profilingTelemetry ?? new ProfilingTelemetry(new ConfigurationBuilder().Build()),
+            TestProcessExecutionFactory.CreateForCliGuardian(
+                new TestEnvironment(), _loggerFactory.CreateLogger<ProcessExecutionFactory>()),
             installDependencies: installDependencies);
     }
 

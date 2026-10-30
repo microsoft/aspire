@@ -180,11 +180,6 @@ public sealed class ValidateDashboardOptions : IValidateOptions<DashboardOptions
             }
         }
 
-        if (!options.DebugSession.TryParseOptions(out var debugSessionParseErrorMessage))
-        {
-            errorMessages.Add(debugSessionParseErrorMessage);
-        }
-
         return errorMessages.Count > 0
             ? ValidateOptionsResult.Fail(errorMessages)
             : ValidateOptionsResult.Success;

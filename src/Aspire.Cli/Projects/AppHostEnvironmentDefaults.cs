@@ -47,6 +47,17 @@ internal static class AppHostEnvironmentDefaults
         }
     }
 
+    internal static string? ResolveEffectiveEnvironment(
+        IDictionary<string, string> environmentVariables,
+        string? defaultEnvironment = null,
+        IReadOnlyDictionary<string, string?>? inheritedEnvironmentVariables = null,
+        string[]? args = null)
+    {
+        return TryResolveEnvironment(environmentVariables, inheritedEnvironmentVariables, args, out var environment)
+            ? environment
+            : defaultEnvironment;
+    }
+
     private static bool TryResolveEnvironment(
         IDictionary<string, string> environmentVariables,
         IReadOnlyDictionary<string, string?>? inheritedEnvironmentVariables,

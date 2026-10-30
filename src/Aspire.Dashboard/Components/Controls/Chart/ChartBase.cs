@@ -29,7 +29,9 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
     private OtlpInstrumentKey? _renderedInstrument;
     private string? _renderedTheme;
     private bool _renderedShowCount;
+    private bool _renderedShowRunningTotal;
     private DateTimeOffset? _previousDataEndTime;
+    private bool? _renderedHasOverflow;
 
     // Full updates always run. This interval only throttles recurring tick updates.
     protected virtual TimeSpan UpdateInterval => TimeSpan.FromSeconds(0.2);
@@ -62,6 +64,12 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
 
     [Parameter]
     public DateTimeOffset? DataEndTime { get; set; }
+
+    /// <summary>
+    /// Gets or sets the callback reporting changes to instrument warnings.
+    /// </summary>
+    [Parameter]
+    public EventCallback InstrumentChanged { get; set; }
 
     // Stores a cache of the last set of spans returned as exemplars.
     // This dictionary is replaced each time the chart is updated.
@@ -99,15 +107,17 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
 
         var dimensionAttributes = InstrumentViewModel.MatchedDimensions.Select(d => d.Attributes).ToList();
         if (_renderedInstrument is null || _renderedInstrument != InstrumentViewModel.Instrument.GetKey() ||
-            _renderedDimensionAttributes is null || !_renderedDimensionAttributes.SequenceEqual(dimensionAttributes) ||
+            _renderedDimensionAttributes is null || !DimensionAttributesEqual(_renderedDimensionAttributes, dimensionAttributes) ||
             _renderedTheme != InstrumentViewModel.Theme ||
-            _renderedShowCount != InstrumentViewModel.ShowCount)
+            _renderedShowCount != InstrumentViewModel.ShowCount ||
+            _renderedShowRunningTotal != InstrumentViewModel.ShowRunningTotal)
         {
             // Dimensions (or entire chart) has changed. Re-render the entire chart.
             _renderedInstrument = InstrumentViewModel.Instrument.GetKey();
             _renderedDimensionAttributes = dimensionAttributes;
             _renderedTheme = InstrumentViewModel.Theme;
             _renderedShowCount = InstrumentViewModel.ShowCount;
+            _renderedShowRunningTotal = InstrumentViewModel.ShowRunningTotal;
             await UpdateChartAsync(tickUpdate: false, inProgressDataTime).ConfigureAwait(false);
             _lastUpdateTime = TimeProvider.GetUtcNow();
             // Derived components can update Blazor-rendered state during OnAfterRenderAsync.
@@ -131,6 +141,28 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
         }
     }
 
+    // Compares attribute values, not array references. Refreshing instrument data merges it into new
+    // DimensionScope instances with new attribute arrays even when the dimensions are unchanged. Comparing
+    // references made every refresh look like a dimension change, so the chart was fully re-initialized
+    // about every second under traffic: it flickered, lost hover state and could reset the page's scroll.
+    private static bool DimensionAttributesEqual(List<KeyValuePair<string, string>[]> left, List<KeyValuePair<string, string>[]> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (!MetricInstrumentDataCache.AttributesEqual(left[i], right[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private Task OnInstrumentDataUpdate()
     {
         return CancellationToken.IsCancellationRequested ? Task.CompletedTask : InvokeAsync(StateHasChanged);
@@ -138,7 +170,7 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
 
     private string FormatTooltip(string name, double yValue, DateTimeOffset xValue)
     {
-        return $"<b>{HttpUtility.HtmlEncode(InstrumentViewModel.Instrument?.Name)}</b><br />{HttpUtility.HtmlEncode(name)}: {FormatHelpers.FormatNumberWithOptionalDecimalPlaces(yValue, maxDecimalPlaces: 6, CultureInfo.CurrentCulture)}<br />Time: {FormatHelpers.FormatTime(TimeProvider, TimeProvider.ToLocal(xValue))}";
+        return $"<b>{HttpUtility.HtmlEncode(InstrumentViewModel.Instrument?.Name)}</b><br />{HttpUtility.HtmlEncode(name)}: {FormatHelpers.FormatNumberWithOptionalDecimalPlaces(yValue, maxDecimalPlaces: 6, CultureInfo.CurrentCulture)}<br />Time: {FormatHelpers.FormatTime(TimeProvider, xValue)}";
     }
 
     private async Task UpdateChartAsync(bool tickUpdate, DateTimeOffset inProgressDataTime)
@@ -154,6 +186,13 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
             ? GetDisplayedUnit(InstrumentViewModel.Instrument)
             : CountUnit;
 
+        var showChangePerInterval = ChartDataCalculator.IsMonotonicCounter(InstrumentViewModel.Instrument) && !InstrumentViewModel.ShowRunningTotal;
+        if (showChangePerInterval)
+        {
+            // e.g. "Requests per interval", so the legend and table header say these aren't totals.
+            unit = string.Format(CultureInfo.CurrentCulture, Loc[nameof(ControlsStrings.ChartContainerUnitPerInterval)], unit);
+        }
+
         var calculator = new ChartDataCalculator(GraphPointCount, Duration);
         ChartData data;
 
@@ -163,10 +202,32 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
 
             // TODO: Exemplars on non-histogram charts doesn't work well. Don't display for now.
             data.Exemplars.Clear();
+
+            if (showChangePerInterval)
+            {
+                // A counter reports a running total. Convert it to the increase in each interval, using the same
+                // calculation as the counter's card. The table reads these traces too, so both views agree.
+                var trace = data.Traces.Single();
+                var increases = calculator.CalculateCounterIncreaseValues(InstrumentViewModel.MatchedDimensions, _currentDataStartTime, InstrumentViewModel.Instrument!.AggregationTemporality);
+                trace.Values.Clear();
+                trace.Values.AddRange(increases);
+                trace.DiffValues.Clear();
+                trace.DiffValues.AddRange(increases);
+            }
         }
         else
         {
             data = calculator.CalculateHistogramValues(InstrumentViewModel.MatchedDimensions, _currentDataStartTime, TimeProvider.ToLocalDateTimeOffset, unit);
+        }
+
+        var instrumentChanged = InstrumentViewModel.HasIncompatibleHistogramBounds != data.HasIncompatibleHistogramBounds ||
+            _renderedHasOverflow != InstrumentViewModel.HasOverflow;
+        InstrumentViewModel.HasIncompatibleHistogramBounds = data.HasIncompatibleHistogramBounds;
+        _renderedHasOverflow = InstrumentViewModel.HasOverflow;
+
+        if (instrumentChanged)
+        {
+            await InstrumentChanged.InvokeAsync();
         }
 
         // Add tooltips to traces. The calculator produces values and diff values
@@ -236,7 +297,7 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
                 // ChartExemplar properties are init-only, so replace with a new instance.
                 exemplars[i] = new ChartExemplar
                 {
-                    Start = exemplar.Start,
+                    TimeUnixNano = exemplar.TimeUnixNano,
                     Value = exemplar.Value,
                     TraceId = exemplar.TraceId,
                     SpanId = exemplar.SpanId,

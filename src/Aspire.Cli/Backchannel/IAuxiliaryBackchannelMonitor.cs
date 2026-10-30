@@ -19,17 +19,6 @@ internal interface IAuxiliaryBackchannelMonitor
     string? SelectedAppHostPath { get; set; }
 
     /// <summary>
-    /// Gets the currently selected AppHost connection based on the selection logic.
-    /// Returns the explicitly selected AppHost, or the single in-scope AppHost, or null if none available.
-    /// </summary>
-    IAppHostAuxiliaryBackchannel? SelectedConnection { get; }
-
-    /// <summary>
-    /// Gets the AppHost path of the currently resolved connection, or <c>null</c> if no connection is available.
-    /// </summary>
-    string? ResolvedAppHostPath => SelectedConnection?.AppHostInfo?.AppHostPath;
-
-    /// <summary>
     /// Gets all connections that are within the scope of the specified working directory.
     /// </summary>
     /// <param name="workingDirectory">The working directory to check against.</param>
@@ -46,7 +35,7 @@ internal interface IAuxiliaryBackchannelMonitor
     Task ScanAsync(CancellationToken cancellationToken = default, bool pruneOrphanedSockets = true, bool throwOnDiscoveryFailure = false);
 
     /// <summary>
-    /// Watches for AppHost connection changes and yields the full active connection set after each change.
+    /// Yields the initial active connection set and subsequent connection reference changes.
     /// </summary>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <param name="readOnly">Whether to avoid filesystem cleanup and report discovery failures instead of ignoring them.</param>

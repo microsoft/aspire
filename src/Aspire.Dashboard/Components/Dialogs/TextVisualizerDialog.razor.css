@@ -18,25 +18,34 @@
     margin-left: auto;
 }
 
-.copy-button-icon {
-    margin-right: 11px;
-    display: flex;
-}
-
 .text-visualizer-container {
     display: flex;
     flex-direction: column;
     width: 100%;
-    min-height: 120px;
+    height: 100%;
+    min-height: 0;
+}
+
+.text-visualizer-description {
+    flex-shrink: 0;
+    margin-bottom: 8px;
+    overflow-wrap: anywhere;
 }
 
 .text-visualizer-container ::deep.log-overflow,
 .markdown-content {
     max-height: 60vh;
+    min-height: 0;
     margin-bottom: 16px;
 }
 
 .markdown-content {
     overflow-y: auto;
     overflow-wrap: anywhere;
+}
+
+.markdown-content-no-wrap {
+    overflow-x: auto;
+    white-space: nowrap;
+    overflow-wrap: normal;
 }

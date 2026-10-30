@@ -55,14 +55,13 @@ public class NpmRunnerTests
             ["view", "@playwright/cli@0.1.1", "version", "--registry", "https://registry.npmjs.org/"],
             @"C:\temp\workdir", new TestEnvironment(), stdin);
 
-        Assert.Equal("cmd.exe", startInfo.FileName);
+        Assert.Equal(Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", startInfo.FileName);
         Assert.Empty(startInfo.ArgumentList);
-        Assert.Contains("npm.cmd", startInfo.Arguments);
-        Assert.Contains("view", startInfo.Arguments);
-        Assert.Contains("@playwright/cli@0.1.1", startInfo.Arguments);
-        Assert.Contains("version", startInfo.Arguments);
-        Assert.Contains("--registry", startInfo.Arguments);
-        Assert.StartsWith("/c ", startInfo.Arguments);
+        Assert.Equal(@"C:\Program Files\nodejs\npm.cmd", startInfo.Environment["ASPIRE_COMMAND_SHIM_PATH"]);
+        Assert.Equal(
+            ["view", "@playwright/cli@0.1.1", "version", "--registry", "https://registry.npmjs.org/"],
+            Enumerable.Range(0, 5).Select(index => startInfo.Environment[$"ASPIRE_COMMAND_SHIM_ARGUMENT_{index}"]));
+        Assert.StartsWith("/D /V:OFF /S /C ", startInfo.Arguments);
         Assert.Equal(@"C:\temp\workdir", startInfo.WorkingDirectory);
     }
 
@@ -77,11 +76,10 @@ public class NpmRunnerTests
             ["view", "express", "version"],
             @"C:\temp", new TestEnvironment(), stdin);
 
-        // cmd.exe /c requires outer quotes wrapping the entire command:
-        // /c ""C:\Program Files\nodejs\npm.cmd" "view" "express" "version""
         var args = startInfo.Arguments;
-        Assert.StartsWith(@"/c """, args);
-        Assert.EndsWith(@"""", args);
+        Assert.Equal(
+            "/D /V:OFF /S /C \"\"%ASPIRE_COMMAND_SHIM_PATH%\" \"%ASPIRE_COMMAND_SHIM_ARGUMENT_0%\" \"%ASPIRE_COMMAND_SHIM_ARGUMENT_1%\" \"%ASPIRE_COMMAND_SHIM_ARGUMENT_2%\"\"",
+            args);
     }
 
     [Fact]
@@ -153,15 +151,16 @@ public class NpmRunnerTests
         using var stdin = File.OpenNullHandle();
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(@"C:\Program Files\nodejs\npm.cmd", [], @"C:\temp", new TestEnvironment(), stdin);
 
-        Assert.Equal("cmd.exe", startInfo.FileName);
-        Assert.Contains("npm.cmd", startInfo.Arguments);
+        Assert.Equal(Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", startInfo.FileName);
+        Assert.Equal(@"C:\Program Files\nodejs\npm.cmd", startInfo.Environment["ASPIRE_COMMAND_SHIM_PATH"]);
+        Assert.Equal("/D /V:OFF /S /C \"\"%ASPIRE_COMMAND_SHIM_PATH%\"\"", startInfo.Arguments);
         Assert.Equal(@"C:\temp", startInfo.WorkingDirectory);
     }
 
     [Fact]
     public async Task InstallGlobalAsync_UsesPublicRegistryForDependencies()
     {
-        var tempDirectory = Directory.CreateTempSubdirectory("aspire-npm-runner-test-");
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-npm-%TEMP%! test-");
 
         try
         {
@@ -173,7 +172,7 @@ public class NpmRunnerTests
             using var argumentsPathOverride = new EnvVarOverride("NPM_ARGS_FILE", argumentsPath);
             using var profilingTelemetry = new ProfilingTelemetry(new ConfigurationBuilder().Build());
             var runner = new NpmRunner(new TestEnvironment(), NullLogger<NpmRunner>.Instance, profilingTelemetry);
-            var tarballPath = Path.Combine(tempDirectory.FullName, "playwright-cli.tgz");
+            var tarballPath = Path.Combine(tempDirectory.FullName, "playwright-%PATH%! cli.tgz");
 
             var result = await runner.InstallGlobalAsync(tarballPath, TestContext.Current.CancellationToken);
 

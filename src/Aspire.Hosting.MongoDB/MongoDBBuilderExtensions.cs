@@ -11,7 +11,6 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 
 #pragma warning disable ASPIRECERTIFICATES001
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIREMONGODB001
 #pragma warning disable ASPIRETERMINAL001
 
@@ -327,6 +326,11 @@ public static class MongoDBBuilderExtensions
             .WithHttpEndpoint(targetPort: 8081, name: MongoExpressContainerResource.PrimaryEndpointName)
             .WithParentRelationship(builder)
             .WithRelationship(builder.Resource, KnownRelationshipTypes.Manages)
+            // NOTE: Mongo Express lists collections as soon as it connects and exits if that fails. The image's entrypoint
+            // only waits for the TCP port, which a replica set member opens before it is initialized or elected primary,
+            // and the member rejects reads until then (`NotPrimaryNoSecondaryOk`). For single-member sets, the server's
+            // health check covers initialization and primary election.
+            .WaitFor(builder)
             .ExcludeFromManifest();
 
         resourceBuilder.WithHidden();
@@ -337,6 +341,20 @@ public static class MongoDBBuilderExtensions
         });
 
         configureContainer?.Invoke(resourceBuilder);
+
+        builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((@event, ct) =>
+        {
+            // WithMember can be called after WithMongoExpress. Resolve membership once the model is complete:
+            // advanced members' health checks only ping, so the companion must also wait for the set to be healthy.
+            var replicaSet = @event.Model.Resources.OfType<MongoDBReplicaSetResource>()
+                .SingleOrDefault(r => r.Members.Contains(builder.Resource));
+            if (replicaSet is not null)
+            {
+                resourceBuilder.WaitFor(builder.ApplicationBuilder.CreateResourceBuilder(replicaSet));
+            }
+
+            return Task.CompletedTask;
+        });
 
         return builder;
     }
@@ -714,6 +732,55 @@ public static class MongoDBBuilderExtensions
 
     private static void ConfigureMongoExpressContainer(EnvironmentCallbackContext context, MongoDBServerResource resource)
     {
+        if (resource.HasAnnotationOfType<MongoDBSingleMemberReplicaSetAnnotation>())
+        {
+            ConfigureMongoExpressConnectionUrl(context, resource);
+        }
+        else
+        {
+            ConfigureMongoExpressServerAndPort(context, resource);
+        }
+
+        if (resource.TlsEnabled)
+        {
+            // NOTE: The server only accepts TLS connections, and Mongo Express defaults to plain TCP, so it has to be told
+            // to speak TLS as well or it cannot connect at all. These are driver options, so Mongo Express applies them
+            // whether it builds its connection string from the individual variables or takes `ME_CONFIG_MONGODB_URL`.
+            context.EnvironmentVariables["ME_CONFIG_MONGODB_SSL"] = "true";
+            // NOTE: Mongo Express reaches the server at its resource name on the container network, which is not a name that
+            // any certificate Aspire can issue for the server will carry, and it exposes no way to keep chain validation
+            // while relaxing only the host name check. This mirrors the relaxation that replica set members need for the
+            // connections they make to each other.
+            context.EnvironmentVariables["ME_CONFIG_MONGODB_SSLVALIDATE"] = "false";
+        }
+    }
+
+    private static void ConfigureMongoExpressConnectionUrl(EnvironmentCallbackContext context, MongoDBServerResource resource)
+    {
+        // NOTE: A single-member replica set is initialized with a `localhost:<port>` member address (see
+        // `MongoDBSingleMemberReplicaSet`), so a client that performs replica set discovery replaces its seed with that
+        // address and, from inside the Mongo Express container, ends up connecting to itself. Mongo Express has to use
+        // `directConnection=true`, so it is given the same connection string that Aspire gives to applications. The
+        // endpoint in that expression resolves to the server's address on the container network, because it is
+        // evaluated for the Mongo Express container.
+        //
+        // Mongo Express 1.0.2 only honors `ME_CONFIG_MONGODB_URL` when `ME_CONFIG_MONGODB_SERVER` is unset, and it builds
+        // its own URL without any options otherwise, so the individual server, port and credential variables must not be
+        // set here. See https://github.com/mongo-express/mongo-express/blob/v1.0.2/config.default.js
+        //
+        // The image's entrypoint also parses this URL to wait for the server before starting Mongo Express. It strips the
+        // scheme, then everything from the first '/', then everything up to the first '@', and treats the remainder as
+        // `host:port`, e.g.:
+        //   mongodb://admin:p%40ss@mongo.dev.internal:27017/?authSource=admin&...  ->  mongo.dev.internal:27017
+        // The connection string URI-escapes the credentials, and it puts a '/' before the query whenever the server has a
+        // password, which `AddMongoDB` always assigns.
+        // See https://github.com/mongo-express/mongo-express-docker/blob/master/docker-entrypoint.sh
+        context.EnvironmentVariables["ME_CONFIG_MONGODB_URL"] = resource.BuildConnectionString();
+        context.EnvironmentVariables["ME_CONFIG_BASICAUTH"] = "false";
+    }
+
+    private static void ConfigureMongoExpressServerAndPort(EnvironmentCallbackContext context, MongoDBServerResource resource)
+    {
         // Mongo Express assumes Mongo is being accessed over a default Aspire container network and hardcodes the resource address
         // This will need to be refactored once updated service discovery APIs are available
         context.EnvironmentVariables["ME_CONFIG_MONGODB_SERVER"] = resource.Name;
@@ -735,18 +802,6 @@ public static class MongoDBBuilderExtensions
         {
             context.EnvironmentVariables["ME_CONFIG_MONGODB_ADMINUSERNAME"] = resource.UserNameReference;
             context.EnvironmentVariables["ME_CONFIG_MONGODB_ADMINPASSWORD"] = resource.PasswordParameter;
-        }
-
-        if (resource.TlsEnabled)
-        {
-            // NOTE: The server only accepts TLS connections, and Mongo Express defaults to plain TCP, so it has to be told
-            // to speak TLS as well or it cannot connect at all.
-            context.EnvironmentVariables["ME_CONFIG_MONGODB_SSL"] = "true";
-            // NOTE: Mongo Express reaches the server at its resource name on the container network, which is not a name that
-            // any certificate Aspire can issue for the server will carry, and it exposes no way to keep chain validation
-            // while relaxing only the host name check. This mirrors the relaxation that replica set members need for the
-            // connections they make to each other.
-            context.EnvironmentVariables["ME_CONFIG_MONGODB_SSLVALIDATE"] = "false";
         }
     }
 }

@@ -1,0 +1,11 @@
+﻿---
+apiVersion: "v1"
+kind: "ConfigMap"
+metadata:
+  name: "env1-dashboard-config"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "env1-dashboard"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+data:
+  ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "{{ .Values.config.env1_dashboard.ASPIRE_DASHBOARD_TELEMETRY_OPTOUT }}"

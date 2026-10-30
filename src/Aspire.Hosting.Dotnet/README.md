@@ -68,6 +68,17 @@ project-based resources. Use the Rebuild command after source changes to rebuild
 Endpoints, environment variables, and service discovery are configured from the project's
 `launchSettings.json` and Kestrel configuration, matching `AddProject<T>`.
 
+### Migrating from AddCSharpApp
+
+`AddCSharpApp` (and the polyglot `addCSharpApp` export) is obsolete. Add the
+`Aspire.Hosting.Dotnet` integration and replace it with `AddDotnetProject` / `addDotnetProject`.
+The replacement accepts the same kinds of paths: `.cs`, `.csproj`, or a directory containing
+a single `.csproj`.
+
+The new API returns a `DotnetProjectResource`, not a `ProjectResource` / `CSharpAppResource`.
+Update explicitly typed resource builders and project-specific customizations accordingly.
+Legacy `AddCSharpApp` calls retain their existing launch and publishing behavior.
+
 ### Restoring projects individually
 
 Coordinated project builds restore all projects in a compatible group together, without introducing

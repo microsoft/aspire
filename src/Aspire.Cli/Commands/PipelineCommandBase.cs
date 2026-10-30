@@ -13,6 +13,8 @@ using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
+using Aspire.Shared.UserSecrets;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
 using Aspire.Dashboard.Utils;
@@ -46,6 +48,8 @@ internal abstract class PipelineCommandBase : BaseCommand
     private readonly IConfiguration _configuration;
     private readonly IFeatures _features;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly AspireSecretsStoreResolver _aspireSecretsStoreResolver;
+    private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly IAnsiConsole _ansiConsole;
 
@@ -78,6 +82,24 @@ internal abstract class PipelineCommandBase : BaseCommand
         Description = SharedCommandStrings.PipelineListStepsOptionDescription
     };
 
+    protected static readonly Option<OutputFormat> s_listStepsFormatOption = new("--format")
+    {
+        Description = SharedCommandStrings.PipelineFormatOptionDescription,
+        CustomParser = result =>
+        {
+            // Enum binding also accepts numbers ("1") and composite names ("table,json").
+            // Use the same name-only parsing as forwarding commands' unmatched --format tokens.
+            if (result.Tokens.Count != 1 ||
+                !TryExtractListStepsFormat(["--format", result.Tokens[0].Value], out var format, out _))
+            {
+                result.AddError(InvalidListStepsFormatMessage);
+                return OutputFormat.Table;
+            }
+
+            return format;
+        }
+    };
+
     protected abstract string OperationCompletedPrefix { get; }
     protected abstract string OperationFailedPrefix { get; }
 
@@ -90,7 +112,7 @@ internal abstract class PipelineCommandBase : BaseCommand
     private static bool IsCompletionStateWarning(string completionState) =>
         completionState == CompletionStates.CompletedWithWarning;
 
-    protected PipelineCommandBase(string name, string description, IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger logger, IAnsiConsole ansiConsole, CommonCommandServices services)
+    protected PipelineCommandBase(string name, string description, IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, IEnvironment environment, AspireSecretsStoreResolver aspireSecretsStoreResolver, ILogger logger, IAnsiConsole ansiConsole, CommonCommandServices services)
         : base(name, description, services)
     {
         _runner = runner;
@@ -99,6 +121,8 @@ internal abstract class PipelineCommandBase : BaseCommand
         _configuration = configuration;
         _features = features;
         _projectFactory = projectFactory;
+        _aspireSecretsStoreResolver = aspireSecretsStoreResolver;
+        _environment = environment;
         _logger = logger;
         _ansiConsole = ansiConsole;
 
@@ -268,6 +292,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             {
                 runArguments = [.. runArguments, "--operation", "inspect", "--list-steps", "true"];
             }
+            await AddAspireSecretsFileEnvironmentVariableAsync(effectiveAppHostFile, project, env, runArguments, cancellationToken);
 
             // Create the publish context and delegate to IAppHostProject
             publishContext = new PublishContext
@@ -486,6 +511,46 @@ internal abstract class PipelineCommandBase : BaseCommand
         }
     }
 
+    private async Task AddAspireSecretsFileEnvironmentVariableAsync(
+        FileInfo appHostFile,
+        IAppHostProject project,
+        IDictionary<string, string> environmentVariables,
+        string[] args,
+        CancellationToken cancellationToken)
+    {
+        // Pipeline commands run deployment-oriented operations, so default to Production while still
+        // honoring environment values supplied by the command line or ambient process. This keeps the
+        // CLI-selected Aspire secrets file aligned with the environment the AppHost will observe.
+        var effectiveEnvironment = AppHostEnvironmentDefaults.ResolveEffectiveEnvironment(
+            environmentVariables,
+            AppHostEnvironmentDefaults.ProductionEnvironmentName,
+            _environment.GetEnvironmentVariables().ToDictionary(pair => pair.Name, pair => pair.Value),
+            args);
+
+        // Keep existing custom host environments working, even if secret commands
+        // cannot address them. An explicit file also takes precedence over automatic selection.
+        environmentVariables.TryGetValue(KnownConfigNames.AspireSecretsFile, out var explicitSecretsFile);
+        explicitSecretsFile ??= _environment.GetEnvironmentVariable(KnownConfigNames.AspireSecretsFile);
+        if (!string.IsNullOrWhiteSpace(explicitSecretsFile))
+        {
+            environmentVariables[KnownConfigNames.AspireSecretsFile] = explicitSecretsFile;
+            return;
+        }
+
+        if (!AspireSecretsPathHelper.IsValidEnvironmentName(effectiveEnvironment))
+        {
+            return;
+        }
+
+        var result = await _aspireSecretsStoreResolver.ResolveAsync(appHostFile, project, effectiveEnvironment, cancellationToken);
+        if (result is not null)
+        {
+            // The secrets file may not exist yet; deployment parameter prompts can create it later.
+            // Passing the path up front lets the AppHost and any deployment steps share the same store.
+            environmentVariables[KnownConfigNames.AspireSecretsFile] = result.AspireSecretsFilePath;
+        }
+    }
+
     private static bool IsKnownIncompatibleWithListSteps(string? aspireHostingVersion)
     {
         if (string.IsNullOrWhiteSpace(aspireHostingVersion) ||
@@ -573,6 +638,13 @@ internal abstract class PipelineCommandBase : BaseCommand
         if (!TryExtractListStepsFormat(unmatchedTokens, out outputFormat, out unmatchedTokens))
         {
             return false;
+        }
+
+        // Strict commands register --format so the parser can reject other unknown arguments.
+        // Forwarding commands leave it unmatched for the list-only extraction above.
+        if (parseResult.GetResult(s_listStepsFormatOption) is not null)
+        {
+            outputFormat = parseResult.GetValue(s_listStepsFormatOption);
         }
 
         if (formatTokenParsedAsTarget)

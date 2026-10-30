@@ -15,12 +15,16 @@ public enum LayoutComponent
     Cli = 0,
     /// <summary>Developer Control Plane.</summary>
     Dcp = 1,
-    /// <summary>Unified managed binary (server, NuGet, terminal host).</summary>
+    /// <summary>Managed server and compatibility forwarders.</summary>
     Managed = 2,
     /// <summary>Dashboard executable and static assets.</summary>
     Dashboard = 3,
     /// <summary>Optional native tray executable.</summary>
-    Tray = 4
+    Tray = 4,
+    /// <summary>Standalone terminal host and native dependencies.</summary>
+    TerminalHost = 5,
+    /// <summary>Opt-in AppHost Server v2.</summary>
+    AppHostServer = 6
 }
 
 /// <summary>
@@ -71,6 +75,8 @@ public sealed class LayoutConfiguration
             LayoutComponent.Dashboard => Components.Dashboard,
             LayoutComponent.Managed => Components.Managed,
             LayoutComponent.Tray => Components.Tray,
+            LayoutComponent.AppHostServer => Components.AppHostServer,
+            LayoutComponent.TerminalHost => Components.TerminalHost,
             _ => null
         };
 
@@ -87,6 +93,15 @@ public sealed class LayoutConfiguration
     /// </summary>
     /// <returns>The executable path, or <see langword="null"/> when the layout has no tray.</returns>
     public string? GetTrayPath() => GetComponentPath(LayoutComponent.Tray);
+
+    /// <summary>Gets the AppHost Server v2 executable path, if the layout declares it.</summary>
+    public string? GetAppHostServerPath()
+    {
+        var directory = GetComponentPath(LayoutComponent.AppHostServer);
+
+        return directory is null ? null : Path.Combine(directory,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.AppHostServerExecutableName));
+    }
 
     /// <summary>
     /// Gets the path to the aspire-managed executable.
@@ -117,6 +132,16 @@ public sealed class LayoutConfiguration
 
         return Path.Combine(dashboardDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
     }
+
+    /// <summary>
+    /// Gets the standalone terminal host executable path.
+    /// </summary>
+    /// <returns>The executable path, or <see langword="null"/> when no component is configured.</returns>
+    public string? GetTerminalHostPath()
+    {
+        var directory = GetComponentPath(LayoutComponent.TerminalHost);
+        return directory is null ? null : Path.Combine(directory, BundleDiscovery.GetExecutableFileName(BundleDiscovery.TerminalHostExecutableName));
+    }
 }
 
 /// <summary>
@@ -146,10 +171,43 @@ public sealed class LayoutComponents
     /// </summary>
     public string? Managed { get; set; } = BundleDiscovery.ManagedDirectoryName;
 
+    /// <summary>Path to the optional AppHost Server v2 component.</summary>
+    public string? AppHostServer { get; set; } = BundleDiscovery.AppHostServerDirectoryName;
+
+    /// <summary>
+    /// Path to the standalone terminal host directory.
+    /// </summary>
+    public string? TerminalHost { get; set; } = BundleDiscovery.TerminalHostDirectoryName;
+
     /// <summary>
     /// Path to the optional native tray executable, relative to the layout root.
     /// </summary>
     public string? Tray { get; set; }
+}
+
+/// <summary>
+/// Selects a terminal launch contract compatible with the AppHost's Hosting version.
+/// </summary>
+internal static class TerminalHostLaunchHelper
+{
+    private static readonly SemVersion s_minimumDirectHostingVersion = SemVersion.Parse("17.0.0-0");
+
+    public static bool SupportsDirectLaunch(SemVersion? hostingVersion)
+        => hostingVersion is not null && hostingVersion.ComparePrecedenceTo(s_minimumDirectHostingVersion) >= 0;
+
+    public static (string Path, string InvocationArgs)? GetLaunch(LayoutConfiguration layout, bool supportsDirectLaunch)
+    {
+        if (supportsDirectLaunch)
+        {
+            var path = layout.GetTerminalHostPath();
+            return File.Exists(path) ? (path, string.Empty) : null;
+        }
+
+        // Older Hosting ignores empty invocation overrides and falls back to SDK metadata.
+        // Keep its executable and dispatcher argument paired rather than passing that argument to the native host.
+        var managedPath = layout.GetManagedPath();
+        return File.Exists(managedPath) ? (managedPath, "terminalhost") : null;
+    }
 }
 
 /// <summary>

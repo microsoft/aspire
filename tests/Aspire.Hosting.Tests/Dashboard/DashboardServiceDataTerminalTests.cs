@@ -27,6 +27,23 @@ namespace Aspire.Hosting.Tests.Dashboard;
 public class DashboardServiceDataTerminalTests
 {
     [Fact]
+    public async Task Snapshot_WithRepeatedTraits_PreservesAllValuesAlongsideTerminalMetadata()
+    {
+        var (data, notifications, resource) = CreateHarness(addTerminal: true);
+        using var _ = data;
+        resource.Annotations.Add(new TraitAnnotation("Owner", "Finance, Inc."));
+        resource.Annotations.Add(new TraitAnnotation("Owner", "Platform"));
+        resource.Annotations.Add(new TraitAnnotation("Aspire_Dashboard_Tag", "Backend"));
+        await notifications.PublishUpdateAsync(resource, s => s with { State = new ResourceStateSnapshot("Running", null) }).DefaultTimeout();
+
+        var snapshot = await data.WaitForResourceAsync(resource.Name, r => r.Properties.Any(p => p.Name == "resource.trait.Owner")).DefaultTimeout();
+        var owner = Assert.Single(snapshot.Properties, p => p.Name == "resource.trait.Owner");
+        Assert.Equal(["Finance, Inc.", "Platform"], owner.Value.ListValue.Values.Select(v => v.StringValue));
+        Assert.Equal(["Backend"], Assert.Single(snapshot.Properties, p => p.Name == "resource.trait.Aspire_Dashboard_Tag").Value.ListValue.Values.Select(v => v.StringValue));
+        Assert.Equal("true", GetTerminalProperty(snapshot, "terminal.enabled").Value.StringValue);
+    }
+
+    [Fact]
     public async Task Snapshot_WithoutTerminalAnnotation_HasNoTerminalProperties()
     {
         var (data, notifications, resource) = CreateHarness(addTerminal: false);
@@ -40,7 +57,7 @@ public class DashboardServiceDataTerminalTests
     }
 
     [Fact]
-    public async Task Snapshot_WithTerminal_SingleReplica_StampsAllFourPropertiesAndMarksUdsPathSensitive()
+    public async Task Snapshot_WithTerminal_SingleReplica_StampsTerminalPropertiesAndMarksUdsPathSensitive()
     {
         var (data, notifications, resource) = CreateHarness(
             addTerminal: true,
@@ -52,12 +69,15 @@ public class DashboardServiceDataTerminalTests
         var snapshot = await data.WaitForResourceAsync(resource.Name, r => HasTerminalProperty(r, "terminal.enabled")).DefaultTimeout();
 
         var enabled = GetTerminalProperty(snapshot, "terminal.enabled");
+        var autoFit = GetTerminalProperty(snapshot, "terminal.autoFit");
         var index = GetTerminalProperty(snapshot, "terminal.replicaIndex");
         var count = GetTerminalProperty(snapshot, "terminal.replicaCount");
         var path = GetTerminalProperty(snapshot, "terminal.consumerUdsPath");
 
         Assert.Equal("true", enabled.Value.StringValue);
         Assert.False(enabled.IsSensitive);
+        Assert.Equal("false", autoFit.Value.StringValue);
+        Assert.False(autoFit.IsSensitive);
         Assert.Equal("0", index.Value.StringValue);
         Assert.False(index.IsSensitive);
         Assert.Equal("1", count.Value.StringValue);

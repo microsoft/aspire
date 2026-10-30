@@ -279,6 +279,13 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             return (AllocateParameter(output, secretType: secretType), secretType);
         }
 
+#pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
+        if (value is IBicepOutputReferenceProvider outputProvider && outputProvider.GetOutputReference() is { } providedOutput)
+        {
+            return ProcessValue(providedOutput, secretType, parent);
+        }
+#pragma warning restore ASPIREAZURE003
+
 #pragma warning disable CS0618 // Type or member is obsolete
         if (value is BicepSecretOutputReference)
         {
@@ -551,7 +558,6 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
         ]);
     }
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     protected void AddProbes(ContainerAppContainer containerAppContainer)
     {
         if (!Resource.TryGetAnnotationsOfType<ProbeAnnotation>(out var probeAnnotations))
@@ -603,7 +609,6 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             }
         }
     }
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
     protected enum SecretType
     {

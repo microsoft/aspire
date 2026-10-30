@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -8,7 +8,6 @@ using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Controls.Grid;
-using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
@@ -17,8 +16,11 @@ using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Serialization;
+using Aspire.Dashboard.Telemetry;
+using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
+using Aspire.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using ProtobufValue = Google.Protobuf.WellKnownTypes.Value;
@@ -27,6 +29,8 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using OpenTelemetry.Proto.Logs.V1;
@@ -38,6 +42,76 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public partial class ResourcesTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData("Persistent", "Container (persistent)")]
+    [InlineData("Session", "Container")]
+    [InlineData(null, "Container")]
+    public void Resources_TypeColumnIncludesPersistentLifetime(string? lifetime, string expectedType)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resource = ModelTestHelpers.CreateResource("cache", properties: lifetime is null ? [] : new()
+        {
+            [KnownProperties.Container.Lifetime] = new(KnownProperties.Container.Lifetime, ProtobufValue.ForString(lifetime), false, null, 0, null, false)
+        });
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [resource], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var cut = Render<Components.Pages.Resources>(p => p.AddCascadingValue(viewport));
+        var column = Assert.Single(cut.FindComponents<AspirePropertyColumn<ResourceGridViewModel, string>>(),
+            column => column.Instance.Title == "Type").Instance;
+        var row = new ResourceGridViewModel { Resource = resource };
+
+        Assert.Equal(expectedType, column.Property!.Compile()(row));
+        Assert.Equal(expectedType, column.TooltipText!(row));
+    }
+
+    [Theory]
+    [InlineData(Components.Pages.Resources.ResourceViewKind.Graph)]
+    [InlineData(Components.Pages.Resources.ResourceViewKind.Parameters)]
+    public async Task Resources_TelemetryRecordsSelectedView(Components.Pages.Resources.ResourceViewKind viewKind)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources:
+        [
+            CreateResource("private-resource-a", "private-type-a", "Running", null),
+            CreateResource("private-resource-b", "private-type-b", "Running", null)
+        ], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+        using var fixture = new DashboardTelemetryFixture();
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        await cut.InvokeAsync(() => cut.Instance.TelemetryContext.Initialize(fixture.Telemetry, browserUserAgent: null));
+        Assert.True(fixture.LogChannel.Reader.TryRead(out var initializeLog));
+        Assert.Equal(TelemetryEventKeys.ComponentInitialize, initializeLog.Message);
+
+        using var activity = fixture.Telemetry.StartReportedActivity("resources");
+        Assert.NotNull(activity);
+        await cut.InvokeAsync(() =>
+        {
+            cut.Instance.PageViewModel.SelectedViewKind = viewKind;
+            cut.Instance.UpdateTelemetryProperties();
+        });
+
+        var expectedView = viewKind.ToString();
+        Assert.Collection(cut.Instance.TelemetryContext.Properties.OrderBy(p => p.Key, StringComparer.Ordinal),
+            property => Assert.Equal(TelemetryPropertyKeys.DashboardComponentId, property.Key),
+            property => Assert.Equal(TelemetryPropertyKeys.DashboardComponentType, property.Key),
+            property => Assert.Equal(new KeyValuePair<string, AspireTelemetryProperty>(TelemetryPropertyKeys.ResourceView,
+                new AspireTelemetryProperty(expectedView, AspireTelemetryPropertyType.UserSetting)), property));
+        Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
+        Assert.Equal(TelemetryEventKeys.ParametersSet, log.Message);
+        fixture.AssertAttributes(log.Attributes,
+            new(TelemetryPropertyKeys.DashboardComponentId, TelemetryComponentIds.Resources),
+            new(TelemetryPropertyKeys.DashboardComponentType, nameof(Components.ComponentType.Page)),
+            new(TelemetryPropertyKeys.ResourceView, expectedView),
+            new("microsoft.operation_name", TelemetryEventKeys.ParametersSet),
+            new("{OriginalFormat}", TelemetryEventKeys.ParametersSet));
+        Assert.Equal(activity.TraceId, log.TraceId);
+        Assert.Equal(activity.SpanId, log.SpanId);
+        Assert.Empty(activity.Events);
+        await cut.InvokeAsync(cut.Instance.UpdateTelemetryProperties);
+        Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
+        cut.Dispose();
+    }
+
     [Fact]
     public void ResourceOptions_SelectionChanges_UpdateAllCheckboxState()
     {
@@ -56,8 +130,8 @@ public partial class ResourcesTests : DashboardTestContext
         var allCheckbox = cut.FindComponents<FluentCheckbox>()[0].Instance;
         Assert.True(allCheckbox.Value);
         Assert.True(allCheckbox.CheckState);
-        Assert.NotNull(cut.Find("fluent-checkbox[title='Container']"));
-        Assert.NotNull(cut.Find("fluent-checkbox[title='Project']"));
+        Assert.NotNull(cut.Find("fluent-checkbox[data-tooltip='Container']"));
+        Assert.NotNull(cut.Find("fluent-checkbox[data-tooltip='Project']"));
 
         values["Container"] = false;
         cut.Render(builder => builder.Add(component => component.Values, values));
@@ -310,6 +384,8 @@ public partial class ResourcesTests : DashboardTestContext
             this,
             viewport,
             dashboardClient);
+        SetupResourceGraphModule();
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.GraphUrl());
 
         var cut = Render<Components.Pages.Resources>(builder =>
         {
@@ -372,7 +448,7 @@ public partial class ResourcesTests : DashboardTestContext
         resourceGraphModule.SetupVoid("updateResourcesGraphSelected", _ => true).SetVoidResult();
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
-        navigationManager.NavigateTo(DashboardUrls.ResourcesUrl(view: "Graph"));
+        navigationManager.NavigateTo(DashboardUrls.GraphUrl());
 
         // Act
         var cut = Render<Components.Pages.Resources>(builder =>
@@ -402,6 +478,195 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task ResourceGraph_UpdatesWaitForInitializationAndHandleCircuitDisconnect()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var testSink = new TestSink();
+        Services.AddSingleton<ILogger<Components.Pages.Resources>>(new TestLogger<Components.Pages.Resources>(new TestLoggerFactory(testSink, enabled: true)));
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport);
+        var initializeGraph = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var disconnected = false;
+        Exception exception = new JSDisconnectedException("The circuit disconnected.");
+        Func<Task>? disposeOnInvoke = null;
+        var module = new TestJSObjectReference
+        {
+            BeforeInvokeAsync = async identifier =>
+            {
+                if (identifier == "initializeResourcesGraph")
+                {
+                    await initializeGraph.Task;
+                    return;
+                }
+
+                if (disposeOnInvoke is { } dispose)
+                {
+                    await dispose();
+                }
+
+                if (disconnected)
+                {
+                    throw exception;
+                }
+            }
+        };
+        var import = TestJSObjectReference.SetupImport(this, "/js/app-resourcegraph.js");
+        import.SetResult(module);
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.GraphUrl());
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        try
+        {
+            await cut.InvokeAsync(() => navigationManager.NavigateTo(DashboardUrls.ParametersUrl()));
+            await cut.InvokeAsync(() => navigationManager.NavigateTo(DashboardUrls.GraphUrl()));
+
+            Assert.Equal(["initializeResourcesGraph"], module.Invocations.Select(i => i.Identifier));
+        }
+        finally
+        {
+            initializeGraph.TrySetResult();
+        }
+        cut.WaitForAssertion(() => Assert.Equal(
+            ["initializeResourcesGraph", "updateResourcesGraph", "updateResourcesGraphSelected"],
+            module.Invocations.Select(i => i.Identifier)));
+
+        await cut.InvokeAsync(() => navigationManager.NavigateTo(DashboardUrls.ParametersUrl()));
+        disconnected = true;
+        await cut.InvokeAsync(() => navigationManager.NavigateTo(DashboardUrls.GraphUrl()));
+
+        Assert.Equal(2, testSink.Writes.Count(record => record.LogLevel == LogLevel.Debug && ReferenceEquals(record.Exception, exception)));
+
+        await cut.InvokeAsync(() => navigationManager.NavigateTo(DashboardUrls.ParametersUrl()));
+        exception = new ObjectDisposedException(nameof(Components.Pages.Resources));
+        disposeOnInvoke = () => cut.Instance.DisposeAsync().AsTask();
+        await cut.InvokeAsync(() => navigationManager.NavigateTo(DashboardUrls.GraphUrl()));
+
+        cut.WaitForAssertion(() => Assert.Single(testSink.Writes, record => record.LogLevel == LogLevel.Debug && ReferenceEquals(record.Exception, exception)));
+        Assert.False(Renderer.UnhandledException.IsCompleted);
+    }
+
+    [Theory]
+    [InlineData(true, false, 0)]
+    [InlineData(true, true, 0)]
+    [InlineData(false, false, 0)]
+    [InlineData(false, true, 0)]
+    [InlineData(true, false, 1)]
+    [InlineData(true, true, 1)]
+    [InlineData(false, false, 1)]
+    [InlineData(false, true, 1)]
+    [InlineData(true, false, 2)]
+    [InlineData(true, true, 2)]
+    [InlineData(false, false, 2)]
+    [InlineData(false, true, 2)]
+    public async Task ResourceGraph_ExportMermaid_UsesVisibleGraph(bool isDesktop, bool showHiddenResources, int initializationStage)
+    {
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var initialResources = new List<ResourceViewModel>
+        {
+            ModelTestHelpers.CreateResource("api", displayName: "api", relationships:
+            [
+                new RelationshipViewModel("cache", "Reference"),
+                new RelationshipViewModel("hidden", "Reference"),
+                new RelationshipViewModel("parameter", "Reference"),
+                new RelationshipViewModel("excluded", "Reference")
+            ]),
+            ModelTestHelpers.CreateResource("cache", displayName: "cache"),
+            ModelTestHelpers.CreateResource("hidden", displayName: "hidden", hidden: true),
+            ModelTestHelpers.CreateResource("parameter", resourceType: KnownResourceTypes.Parameter),
+            ModelTestHelpers.CreateResource("excluded", resourceType: "Excluded")
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: () => channel);
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key => key == BrowserStorageKeys.ResourcesShowHiddenResources ? (true, showHiddenResources) : (false, null)
+        };
+        var dialogs = new List<TextVisualizerDialogViewModel>();
+        var dialogService = new TestDialogService((content, parameters) =>
+        {
+            dialogs.Add(Assert.IsType<TextVisualizerDialogViewModel>(content));
+            Assert.Equal("min(1000px, 75vw)", parameters.Width);
+            Assert.Equal(Aspire.Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton, parameters.Title);
+            return Task.CompletedTask;
+        });
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient, sessionStorage: sessionStorage, dialogService: dialogService);
+        // Export while import (1) or graph initialization (2) is pending, as well as after both complete (0).
+        var initializeGraph = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var module = new TestJSObjectReference
+        {
+            BeforeInvokeAsync = identifier => identifier == "initializeResourcesGraph" ? initializeGraph.Task : Task.CompletedTask
+        };
+        var import = TestJSObjectReference.SetupImport(this, "/js/app-resourcegraph.js");
+        if (initializationStage != 1)
+        {
+            import.SetResult(module);
+        }
+        if (initializationStage != 2)
+        {
+            initializeGraph.SetResult();
+        }
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(
+            DashboardUrls.GraphUrl(hiddenTypes: "Excluded"));
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() =>
+        {
+            if (initializationStage == 1)
+            {
+                Assert.Single(import.Invocations);
+            }
+            else
+            {
+                Assert.Contains(module.Invocations, i => i.Identifier == (initializationStage == 2 ? "initializeResourcesGraph" : "updateResourcesGraph"));
+            }
+        });
+
+        await cut.Find(".graph-export").ClickAsync(new());
+
+        var dialog = Assert.Single(dialogs);
+        Assert.Equal("resources.mmd", dialog.DownloadFileName);
+        Assert.Equal(Aspire.Dashboard.Resources.Resources.ResourcesGraphExportMermaidDescription, dialog.MarkdownDescription);
+        Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.FixedFormat);
+        Assert.False(dialog.ContainsSecret);
+        Assert.Empty(JSInterop.Invocations["downloadStreamAsFile"]);
+        var expectedMermaid = showHiddenResources
+            ? "flowchart LR\n    resource0[\"api\"]\n    resource1[\"cache\"]\n    resource2[\"hidden\"]\n    resource0 --> resource1\n    resource0 --> resource2\n"
+            : "flowchart LR\n    resource0[\"api\"]\n    resource1[\"cache\"]\n    resource0 --> resource1\n";
+        Assert.Equal(expectedMermaid, dialog.Text);
+        await dialogService.LastInstance!.CloseAsync();
+
+        if (initializationStage == 1)
+        {
+            import.SetResult(module);
+        }
+        if (initializationStage == 2)
+        {
+            initializeGraph.SetResult();
+        }
+        cut.WaitForAssertion(() => Assert.Contains(module.Invocations, i => i.Identifier == "updateResourcesGraph"));
+
+        if (isDesktop)
+        {
+            var search = Assert.Single(cut.FindComponents<FluentTextInput>(), input => input.Instance.Name == "resources-search");
+            await cut.InvokeAsync(() => search.Instance.ValueChanged.InvokeAsync("api"));
+        }
+        else
+        {
+            await cut.InvokeAsync(() => cut.Instance.PageViewModel.TextFilter = "api");
+        }
+
+        await channel.Writer.WriteAsync([new ResourceViewModelChange(
+            ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("api", displayName: "api"))]);
+        cut.WaitForAssertion(() => Assert.Single(Assert.IsType<List<ResourceDto>>(module.Invocations.Last(i => i.Identifier == "updateResourcesGraph").Arguments[0])));
+        await cut.Find(".graph-export").ClickAsync(new());
+
+        Assert.Equal(2, dialogs.Count);
+        Assert.Equal("flowchart LR\n    resource0[\"api\"]\n", dialogs[1].Text);
+        Assert.Equal(expectedMermaid, dialog.Text);
+        await dialogService.LastInstance!.CloseAsync();
+    }
+
+    [Fact]
     public async Task ResourceGraphContextMenu_OpensWithoutWaitingForClose()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -416,20 +681,26 @@ public partial class ResourcesTests : DashboardTestContext
             viewport,
             dashboardClient);
 
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
         var resourceGraphModule = JSInterop.SetupModule("/js/app-resourcegraph.js");
-        resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true);
-        resourceGraphModule.SetupVoid("updateResourcesGraph", _ => true);
-        resourceGraphModule.SetupVoid("selectResource", _ => true);
+        resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true).SetVoidResult();
+        resourceGraphModule.SetupVoid("updateResourcesGraph", _ => true).SetVoidResult();
+        resourceGraphModule.SetupVoid("selectResource", _ => true).SetVoidResult();
+        resourceGraphModule.SetupVoid("updateResourcesGraphSelected", _ => true).SetVoidResult();
         var menuStateHandler = resourceGraphModule.SetupVoid("updateResourcesGraphContextMenu", _ => true);
         menuStateHandler.SetVoidResult();
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
-        navigationManager.NavigateTo(DashboardUrls.ResourcesUrl(view: "Graph"));
+        navigationManager.NavigateTo(DashboardUrls.GraphUrl());
 
         var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
+
+        // The graph module is loaded after the first render completes.
+        cut.Render();
+        cut.WaitForAssertion(() => Assert.Contains(JSInterop.Invocations, i => i.Identifier == "import"));
 
         var showContextMenuAsync = typeof(Components.Pages.Resources)
             .GetMethod("ShowContextMenuAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -519,136 +790,14 @@ public partial class ResourcesTests : DashboardTestContext
             builder.AddCascadingValue(viewport);
         });
 
-        var filterGroup = cut.Find(".resource-tabs-toolbar");
+        var header = cut.Find("header.content-header");
         var loc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.ControlsStrings>>();
 
-        Assert.Equal("group", filterGroup.GetAttribute("role"));
-        Assert.Equal(loc[nameof(Dashboard.Resources.ControlsStrings.PageToolbarLandmark)].Value, filterGroup.GetAttribute("aria-label"));
-    }
-
-    [Theory]
-    [InlineData(false, true, "vertical")]
-    [InlineData(true, true, "vertical")]
-    [InlineData(false, false, "horizontal")]
-    [InlineData(true, false, "horizontal")]
-    public void ResourceTabs_OrientationRespondsToUltraLowWidth(bool isDesktop, bool isUltraLowWidth, string expectedOrientation)
-    {
-        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: isUltraLowWidth);
-        var initialResources = new List<ResourceViewModel>
-        {
-            CreateResource(
-                "Resource1",
-                "Type1",
-                "Running",
-                ImmutableArray.Create(new HealthReportViewModel("Null", null, "Description1", null))),
-        };
-        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
-        ResourceSetupHelpers.SetupResourcesPage(
-            this,
-            viewport,
-            dashboardClient);
-
-        var cut = Render<Components.Pages.Resources>(builder =>
-        {
-            builder.AddCascadingValue(viewport);
-        });
-
-        var tabs = cut.FindComponent<FluentTabs>();
-        Assert.Equal(expectedOrientation, tabs.Instance.Orientation?.ToString().ToLowerInvariant());
-        Assert.All(cut.FindAll("fluent-tab"), tab => Assert.False(tab.HasAttribute("fixed")));
-    }
-
-    [Fact]
-    public async Task MobileParametersTab_UpdatesUrlWithoutOpeningFilterPanel()
-    {
-        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        ResourceSetupHelpers.SetupResourcesPage(this, viewport);
-
-        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
-        var layout = cut.FindComponent<AspirePageContentLayout>().Instance;
-        var tabs = cut.FindComponent<FluentTabs>().Instance;
-        var parametersTab = cut.FindComponents<FluentTab>().Single(tab => tab.Instance.Id == "tab-Parameters");
-
-        Assert.False(layout.IsToolbarPanelOpen);
-
-        await cut.InvokeAsync(() => tabs.ActiveTabChanged.InvokeAsync(parametersTab.Instance));
-
-        Assert.EndsWith("/?view=Parameters", Services.GetRequiredService<NavigationManager>().Uri, StringComparison.Ordinal);
-        Assert.Empty(layout.DialogCloseListeners);
-    }
-
-    [Fact]
-    public async Task MobileParametersTab_DoesNotNavigateAfterCircuitDisconnects()
-    {
-        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var sessionStorage = new TestSessionStorage
-        {
-            OnSetAsync = (_, _) => throw new JSDisconnectedException("The circuit disconnected.")
-        };
-        ResourceSetupHelpers.SetupResourcesPage(this, viewport, sessionStorage: sessionStorage);
-
-        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
-        var tabs = cut.FindComponent<FluentTabs>().Instance;
-        var parametersTab = cut.FindComponents<FluentTab>().Single(tab => tab.Instance.Id == "tab-Parameters");
-        var navigation = Services.GetRequiredService<NavigationManager>();
-        var initialUri = navigation.Uri;
-
-        await cut.InvokeAsync(() => tabs.ActiveTabChanged.InvokeAsync(parametersTab.Instance));
-
-        Assert.Equal(initialUri, navigation.Uri);
-    }
-
-    [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public async Task MobileToolbar_PendingViewChangeOnlyNavigatesWhenToolbarCloses(bool navigateAway, bool dispose)
-    {
-        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        ResourceSetupHelpers.SetupResourcesPage(this, viewport);
-        FluentUISetupHelpers.SetupFluentDialogProvider(this);
-        var provider = Render<DashboardDialogProvider>(builder => builder.AddCascadingValue(viewport));
-        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
-        var layout = cut.FindComponent<AspirePageContentLayout>().Instance;
-        var tabs = cut.FindComponent<FluentTabs>().Instance;
-        var parametersTab = cut.FindComponents<FluentTab>().Single(tab => tab.Instance.Id == "tab-Parameters");
-        var navigation = Services.GetRequiredService<NavigationManager>();
-        var initialUri = navigation.Uri;
-
-        var opening = cut.InvokeAsync(layout.OpenMobileToolbarAsync);
-        var dialog = provider.WaitForComponent<FluentDialog>();
-        await provider.InvokeAsync(() => dialog.Find($"#{dialog.Instance.Id}").TriggerEvent("ondialogbeforetoggle", new DialogToggleEventArgs
-        {
-            Id = dialog.Instance.Id,
-            Type = "beforetoggle",
-            OldState = "closed",
-            NewState = "open"
-        }));
-        await opening;
-        Assert.True(layout.IsToolbarPanelOpen);
-
-        await cut.InvokeAsync(() => tabs.ActiveTabChanged.InvokeAsync(parametersTab.Instance));
-        Assert.Equal(initialUri, navigation.Uri);
-        Assert.Single(layout.DialogCloseListeners);
-
-        if (dispose)
-        {
-            await DisposeComponentsAsync();
-            Assert.Equal(initialUri, navigation.Uri);
-        }
-        else if (navigateAway)
-        {
-            await cut.InvokeAsync(() => navigation.NavigateTo("/traces"));
-            provider.WaitForAssertion(() => Assert.False(layout.IsToolbarPanelOpen));
-            Assert.EndsWith("/traces", navigation.Uri, StringComparison.Ordinal);
-        }
-        else
-        {
-            await cut.InvokeAsync(layout.CloseMobileToolbarAsync);
-            Assert.EndsWith("/?view=Parameters", navigation.Uri, StringComparison.Ordinal);
-        }
-
-        Assert.Empty(layout.DialogCloseListeners);
+        Assert.Equal(loc[nameof(Dashboard.Resources.ControlsStrings.PageToolbarLandmark)].Value, header.GetAttribute("aria-label"));
+        var toolbar = header.QuerySelector(".main-toolbar");
+        Assert.NotNull(toolbar);
+        Assert.Equal("toolbar", toolbar.GetAttribute("role"));
+        Assert.NotNull(toolbar.QuerySelector("#resourceFilterButton"));
     }
 
     [Fact]
@@ -665,12 +814,14 @@ public partial class ResourcesTests : DashboardTestContext
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources,
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+        SetupResourceGraphModule();
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.GraphUrl());
 
         var sessionStorage = (TestSessionStorage)Services.GetRequiredService<ISessionStorage>();
         // Simulate existing filters in session storage
         sessionStorage.OnGetAsync = key =>
         {
-            if (key is BrowserStorageKeys.ResourcesPageState)
+            if (key is BrowserStorageKeys.GraphPageState)
             {
                 return (true,
                     new Components.Pages.Resources.ResourcesPageState
@@ -762,6 +913,8 @@ public partial class ResourcesTests : DashboardTestContext
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: () => channel);
 
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+        SetupResourceGraphModule();
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.GraphUrl());
 
         var cut = Render<Components.Pages.Resources>(builder =>
         {
@@ -1275,5 +1428,11 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.NotEqual(default, collapsedResourceNamesCall);
         Assert.True(collapsedResourceNamesCall.ConnectionCompleted,
             "CollapsedResourceNames was fetched before the dashboard client was connected");
+    }
+
+    private void SetupResourceGraphModule()
+    {
+        var resourceGraphModule = JSInterop.SetupModule("/js/app-resourcegraph.js");
+        resourceGraphModule.Mode = JSRuntimeMode.Loose;
     }
 }

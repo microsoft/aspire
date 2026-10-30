@@ -21,7 +21,7 @@ namespace Aspire.Cli.Projects;
 /// <see cref="IAppHostServerProject.RunAsync"/>. Termination is requested either by cancelling the
 /// <c>stopRequested</c> token passed to the constructor, or by calling <see cref="DisposeAsync"/>.
 /// Both routes cancel the same internal linked CTS, which the drive loop passes to
-/// <see cref="IProcessExecution.WaitForExitAsync(CancellationToken)"/>; the execution runs the
+/// <see cref="Aspire.Shared.IChildProcess.WaitForExitAsync(CancellationToken)"/>; the execution runs the
 /// shared shutdown ladder (graceful signal → bounded wait → tree-kill, or force-kill fallback)
 /// from inside that call. The session itself never spawns or kills — there is exactly one shutdown
 /// driver, and it lives in <see cref="ProcessExecution"/>.
@@ -57,6 +57,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private TaskCompletionSource<int>? _completion;
     private ProfilingTelemetry.ActivityScope _activity;
     private IAppHostRpcClient? _rpcClient;
+    private readonly bool _ownsProject;
 
     public AppHostServerSession(
         IAppHostServerProject project,
@@ -68,6 +69,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler,
         IGracefulShutdownWindow? shutdownService,
         bool isolateConsole,
+        bool ownsProject,
         CancellationToken stopRequested)
     {
         _project = project ?? throw new ArgumentNullException(nameof(project));
@@ -80,6 +82,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _gracefulShutdownSignaler = gracefulShutdownSignaler;
         _shutdownService = shutdownService;
         _isolateConsole = isolateConsole;
+        _ownsProject = ownsProject;
 
         // Linked CTS so caller-initiated cancellation AND DisposeAsync both flow through the same
         // stop trigger. The drive loop (DriveAsync) passes _stopCts.Token to WaitForExitAsync, and
@@ -212,7 +215,10 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             {
                 _activity.SetError(ex.Message);
                 _activity.Dispose();
-                (_project as IDisposable)?.Dispose();
+                if (_ownsProject)
+                {
+                    (_project as IDisposable)?.Dispose();
+                }
                 // Trip the completion so DisposeAsync (which awaits it unconditionally) doesn't hang.
                 completion.TrySetException(ex);
                 throw;
@@ -321,6 +327,14 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         // cancellation/failure it reports so the losing task cannot raise an unobserved exception.
         connectCts.Cancel();
         ObserveFaultedTask(connectTask);
+        // The exit task drains stdout/stderr. Surface that output even when the server
+        // died too quickly to return its startup failure through RPC.
+        var outputLines = _output?.GetLines().ToArray();
+        if (outputLines is { Length: > 0 })
+        {
+            _logger.LogError("AppHost server startup output:\n{Output}", string.Join(Environment.NewLine, outputLines.Select(line => line.Line)));
+        }
+
         var exitCode = TryGetServerExitCode();
         throw new InvalidOperationException(
             exitCode is { } code
@@ -433,7 +447,10 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         }
 
         _stopCts.Dispose();
-        (_project as IDisposable)?.Dispose();
+        if (_ownsProject)
+        {
+            (_project as IDisposable)?.Dispose();
+        }
         _activity.Dispose();
     }
 
@@ -477,6 +494,7 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
         IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler,
         IGracefulShutdownWindow? shutdownService,
         bool isolateConsole,
+        bool ownsProject,
         CancellationToken stopRequested) =>
         new AppHostServerSession(
             appHostServerProject,
@@ -488,5 +506,6 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
             gracefulShutdownSignaler,
             shutdownService,
             isolateConsole,
+            ownsProject,
             stopRequested);
 }

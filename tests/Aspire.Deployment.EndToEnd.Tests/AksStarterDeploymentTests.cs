@@ -192,30 +192,21 @@ public sealed class AksStarterDeploymentTests(ITestOutputHelper output)
             output.WriteLine($"Modifying AppHost.cs at: {appHostFilePath}");
 
             var content = File.ReadAllText(appHostFilePath);
-            const string apiServiceDeclarationPattern = "var apiService = builder.AddProject";
+            const string apiServiceDeclarationPattern = "var apiService = builder.AddDotnetProject";
             const string apiServiceHealthCheckPattern = "    .WithHttpHealthCheck(\"/health\");";
-            if (!content.Contains(apiServiceDeclarationPattern, StringComparison.Ordinal) ||
-                !content.Contains(apiServiceHealthCheckPattern, StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException("Could not find the API service resource in the generated AppHost.");
-            }
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
+                apiServiceDeclarationPattern,
+                $$"""
+                var deploymentTest = builder.AddConnectionString("{{TestConnectionStringName}}", expression => expression.AppendLiteral("{{TestConnectionStringValue}}"));
 
-            content = content
-                .Replace(
-                    apiServiceDeclarationPattern,
-                    $$"""
-                    var deploymentTest = builder.AddConnectionString("{{TestConnectionStringName}}", expression => expression.AppendLiteral("{{TestConnectionStringValue}}"));
-
-                    {{apiServiceDeclarationPattern}}
-                    """,
-                    StringComparison.Ordinal)
-                .Replace(
-                    apiServiceHealthCheckPattern,
-                    $"""
-                        .WithHttpHealthCheck("/health")
-                        .WithReference(deploymentTest);
-                    """,
-                    StringComparison.Ordinal);
+                {{apiServiceDeclarationPattern}}
+                """);
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
+                apiServiceHealthCheckPattern,
+                """
+                    .WithHttpHealthCheck("/health")
+                    .WithReference(deploymentTest);
+                """);
 
             // Insert the Kubernetes environment before builder.Build().Run();
             var buildRunPattern = "builder.Build().Run();";
@@ -226,13 +217,7 @@ builder.AddKubernetesEnvironment("k8s");
 builder.Build().Run();
 """;
 
-            content = content.Replace(buildRunPattern, replacement);
-
-            // Add required pragma to suppress experimental warning
-            if (!content.Contains("#pragma warning disable ASPIREPIPELINES001"))
-            {
-                content = "#pragma warning disable ASPIREPIPELINES001\n" + content;
-            }
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, buildRunPattern, replacement);
 
             File.WriteAllText(appHostFilePath, content);
 

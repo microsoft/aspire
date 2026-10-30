@@ -11,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIRECERTIFICATES001
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIRETERMINAL001
 
 namespace Aspire.Hosting;

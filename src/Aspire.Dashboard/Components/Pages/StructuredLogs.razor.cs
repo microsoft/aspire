@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
@@ -36,7 +36,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private const string TraceColumn = nameof(TraceColumn);
     private const string ActionsColumn = nameof(ActionsColumn);
 
-    private readonly EndAnchorItemsProviderState _endAnchorItemsProviderState = new();
     private SelectViewModel<ResourceTypeDetails> _allResource = default!;
 
     private TotalItemsFooter _totalItemsFooter = default!;
@@ -104,8 +103,22 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
+    /// <summary>
+    /// The resources layout hosting this page. When present, the layout's resource pane selects the resource
+    /// and displays resource commands, so the page doesn't display its own resource selector.
+    /// </summary>
+    [CascadingParameter]
+    public ResourcesLayout? ResourcesLayout { get; set; }
+
     [Parameter]
     public string? ResourceName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the resources selected in the resource list when several resources are selected.
+    /// </summary>
+    [Parameter]
+    [SupplyParameterFromQuery(Name = DashboardUrls.ResourceSelectionQueryName)]
+    public string[]? SelectedResourceNames { get; set; }
 
     [Parameter]
     [SupplyParameterFromQuery]
@@ -129,6 +142,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private async ValueTask<GridItemsProviderResult<LogSummary>> GetData(GridItemsProviderRequest<LogSummary> request)
     {
+        ViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
         ViewModel.StartIndex = request.StartIndex;
         ViewModel.Count = request.Count is > 0 ? request.Count.Value : DashboardUIHelpers.DefaultDataGridResultCount;
 
@@ -161,11 +175,16 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _totalItemsCount = logs.TotalItemCount;
         _totalItemsFooter?.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
 
-        TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
-
-        if (_endAnchorItemsProviderState.GetInitialResult(request.StartIndex, logs.Items, virtualizedLogCount) is { } initialResult)
+        if (ViewModel.ResourceKeys is { } resourceKeys)
         {
-            return GridItemsProviderResult.From(initialResult.Items, initialResult.TotalItemCount);
+            foreach (var resourceKey in resourceKeys)
+            {
+                TelemetryRepository.MarkViewedErrorLogs(resourceKey);
+            }
+        }
+        else
+        {
+            TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
         }
 
         return GridItemsProviderResult.From(logs.Items, virtualizedLogCount);
@@ -251,7 +270,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             // Navigate to remove ?logEntryId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
             await Task.Delay(200, _cts.Token);
 
-            NavigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
+            NavigationManager.NavigateTo(ResourcesLayout?.GetTabUrl(ResourceTab.StructuredLogs) ?? DashboardUrls.StructuredLogsUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
         }
     }
 
@@ -441,10 +460,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
         }
 
-        if (_endAnchorItemsProviderState.TryBeginRefresh())
-        {
-            await _dataGrid!.RefreshDataAndRenderAsync();
-        }
     }
 
     private string? PauseText => PauseManager.AreStructuredLogsPaused(out var startTime)
@@ -466,12 +481,14 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         var filters = (serializable.Filters.Count > 0) ? TelemetryFilterFormatter.SerializeFiltersToString(serializable.Filters) : null;
 
+        // In the resources layout, the resource list owns the selection, so a resource remembered in the session
+        // doesn't replace it.
         var url = DashboardUrls.StructuredLogsUrl(
-            resource: serializable.SelectedResource,
+            resource: ResourcesLayout is { } layout ? layout.SelectedResourceName : serializable.SelectedResource,
             logLevel: serializable.LogLevelText,
             filters: filters);
 
-        return url;
+        return ResourcesLayout?.AddSelectionToUrl(url) ?? url;
     }
 
     public StructuredLogsPageState ConvertViewModelToSerializable()
@@ -488,6 +505,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         viewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource);
         ViewModel.ResourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
+        ViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
 
         if (LogLevelText is not null && Enum.TryParse<LogLevel>(LogLevelText, ignoreCase: true, out var logLevel))
         {
@@ -565,6 +583,10 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private Task ClearStructureLogs(ResourceKey? key)
     {
         DataSource.EnsureWritable();
+        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is { } keys)
+        {
+            return Task.WhenAll(keys.Select(resourceKey => TelemetryRepositoryWriter.ClearStructuredLogsAsync(resourceKey)));
+        }
         return TelemetryRepositoryWriter.ClearStructuredLogsAsync(key);
     }
 

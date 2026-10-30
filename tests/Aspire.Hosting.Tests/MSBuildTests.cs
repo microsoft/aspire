@@ -34,7 +34,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
                 <IsAspireHost>true</IsAspireHost>
@@ -91,7 +91,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
                 <IsAspireHost>true</IsAspireHost>
@@ -123,7 +123,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         var output = BuildProject(appHostDirectory);
 
-        var metadataDirectory = Path.Combine(appHostDirectory, "obj", "Debug", "net8.0", "Aspire", "references");
+        var metadataDirectory = Path.Combine(appHostDirectory, "obj", "Debug", "net10.0", "Aspire", "references");
         var appHostMetadata = await File.ReadAllTextAsync(Path.Combine(metadataDirectory, "_AppHost.ProjectMetadata.g.cs"));
         var appMetadata = await File.ReadAllTextAsync(Path.Combine(metadataDirectory, "App.ProjectMetadata.g.cs"));
 
@@ -152,13 +152,16 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         var config = "Release";
 #endif
 
+        var bundle = CreateFakeCliBundle(basePath);
         File.WriteAllText(Path.Combine(basePath, "Directory.Build.props"),
         $"""
         <Project>
           <PropertyGroup>
             <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
-            <AspireUseCliBundle>false</AspireUseCliBundle>
-            <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
+            <AspireUseCliBundle>true</AspireUseCliBundle>
+            <_AspireSuppressCliRunHook>true</_AspireSuppressCliRunHook>
+            <DcpDir>{bundle.DcpDir}</DcpDir>
+            <AspireDashboardPath>{bundle.DashboardPath}</AspireDashboardPath>
           </PropertyGroup>
 
           <Import Project="{repoRoot}\src\Aspire.Hosting.AppHost\build\Aspire.Hosting.AppHost.props" />
@@ -168,7 +171,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         $"""
         <Project>
           <PropertyGroup>
-            <_AspireTasksAssembly>{repoRoot}\artifacts\bin\Aspire.Hosting.Tasks\{config}\net8.0\Aspire.Hosting.Tasks.dll</_AspireTasksAssembly>
+            <_AspireTasksAssembly>{repoRoot}\artifacts\bin\Aspire.Hosting.Tasks\{config}\net10.0\Aspire.Hosting.Tasks.dll</_AspireTasksAssembly>
+            <_AspireAppHostPackageVersion>17.0.0</_AspireAppHostPackageVersion>
           </PropertyGroup>
 
           <Import Project="{repoRoot}\src\Aspire.Hosting.AppHost\build\Aspire.Hosting.AppHost.in.targets" />
@@ -187,7 +191,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
 
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
               </PropertyGroup>
@@ -213,7 +217,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
             """
             <Project Sdk="Microsoft.NET.Sdk.Web">
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
               </PropertyGroup>
@@ -329,7 +333,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         File.WriteAllText(projectPath, """
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
               </PropertyGroup>
             </Project>
             """);
@@ -420,25 +424,27 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void CliBundleDefaultEmitsWarning()
+    public async Task CliBundleDefaultResolvesBundleWithoutOptIn()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var bundle = CreateFakeCliBundle(workspace.WorkspaceRoot.FullName);
 
         var appHostDirectory = CreateSdkBundleAppHostProject(
             workspace.WorkspaceRoot.FullName,
             repoRoot,
-            additionalProperties: "",
+            additionalProperties: $"<AspireCliBundlePath>{bundle.LayoutRoot}</AspireCliBundlePath>",
             optIntoCliBundle: false);
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
         var output = BuildProject(appHostDirectory);
 
-        Assert.Contains("warning ASPIRE010", output);
-        Assert.Contains("Some Aspire features require the Aspire CLI bundle", output);
-        Assert.Contains("Set AspireUseCliBundle=true", output);
-        Assert.Contains("suppress ASPIRE010", output);
+        Assert.DoesNotContain("ASPIRE010", output);
+        var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
+        Assert.Equal(bundle.DcpDir, resolvedPaths[0]);
+        Assert.Equal(bundle.DashboardDir, resolvedPaths[1]);
+        Assert.Equal(bundle.DashboardPath, resolvedPaths[2]);
     }
 
     [Fact]
@@ -842,7 +848,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
             """
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <IsAspireHost>true</IsAspireHost>
               </PropertyGroup>
 
@@ -883,7 +889,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         BuildProject(appHostDirectory);
 
-        var metadataPath = Path.Combine(appHostDirectory, "obj", "Debug", "net8.0", "Aspire", "references", "App.ProjectMetadata.g.cs");
+        var metadataPath = Path.Combine(appHostDirectory, "obj", "Debug", "net10.0", "Aspire", "references", "App.ProjectMetadata.g.cs");
         var appMetadata = await File.ReadAllTextAsync(metadataPath);
 
         Assert.Contains("class App : global::Aspire.Hosting.IProjectMetadata", appMetadata);
@@ -905,7 +911,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
                 <IsAspireHost>true</IsAspireHost>
@@ -968,7 +974,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         $"""
         <Project>
           <PropertyGroup>
-            <_AspireTasksAssembly>{repoRoot}\artifacts\bin\Aspire.Hosting.Tasks\{config}\net8.0\Aspire.Hosting.Tasks.dll</_AspireTasksAssembly>
+            <_AspireTasksAssembly>{repoRoot}\artifacts\bin\Aspire.Hosting.Tasks\{config}\net10.0\Aspire.Hosting.Tasks.dll</_AspireTasksAssembly>
           </PropertyGroup>
 
           <Import Project="{repoRoot}\src\Aspire.Hosting.AppHost\build\Aspire.Hosting.AppHost.in.targets" />
@@ -1162,7 +1168,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
                 <IsAspireHost>true</IsAspireHost>
@@ -1221,7 +1227,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
                 <IsAspireHost>true</IsAspireHost>
@@ -1273,7 +1279,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
 
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
               </PropertyGroup>
@@ -1322,7 +1328,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
 
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
               </PropertyGroup>
@@ -1497,7 +1503,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
 
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
                 <RestoreConfigFile>{nuGetConfigPath}</RestoreConfigFile>
@@ -1588,7 +1594,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
                 <IsAspireHost>true</IsAspireHost>

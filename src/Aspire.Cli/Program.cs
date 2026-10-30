@@ -53,7 +53,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Sigstore;
 using Spectre.Console;
+using Tuf;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 
 namespace Aspire.Cli;
@@ -165,7 +167,7 @@ public class Program
         return null;
     }
 
-    private static string GetGlobalSettingsPath(ILogger logger, bool migrate)
+    private static async Task<string> GetGlobalSettingsPathAsync(ILogger logger, bool migrate, CancellationToken cancellationToken)
     {
         var usersAspirePath = GetUsersAspirePath();
         var newPath = Path.Combine(usersAspirePath, Configuration.AspireConfigFile.FileName);
@@ -185,23 +187,33 @@ public class Program
         {
             try
             {
-                var legacyJson = File.ReadAllText(legacyPath);
-                var legacyConfig = JsonSerializer.Deserialize(legacyJson, JsonSourceGenerationContext.Default.AspireJsonConfiguration);
-                var config = AspireConfigFile.FromLegacy(legacyConfig, profiles: null);
-                // Drop the legacy global identity-channel field — the CLI's channel is now
-                // baked into the binary (AspireCliChannel assembly metadata) and never read
-                // from global config. The per-project channel migration in AspireConfigFile.FromLegacy
-                // remains for project-local aspire.config.json files.
-                config.Channel = null;
-                config.Save(usersAspirePath);
+                // Legacy and modern global writers share the modern destination's lock.
+                // Recheck both files after waiting so migration reads the latest completed edit.
+                using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
+                    GetCacheDirectory(), new FileInfo(newPath), logger, cancellationToken)
+                    ?? throw new IOException("Could not acquire the global configuration lock.");
+                if (!File.Exists(newPath) && File.Exists(legacyPath))
+                {
+                    var legacyJson = await File.ReadAllTextAsync(legacyPath, cancellationToken);
+                    var legacyConfig = JsonSerializer.Deserialize(legacyJson, JsonSourceGenerationContext.Default.AspireJsonConfiguration);
+                    var config = AspireConfigFile.FromLegacy(legacyConfig, profiles: null);
+                    // Drop the legacy global identity-channel field — the CLI's channel is now
+                    // baked into the binary (AspireCliChannel assembly metadata) and never read
+                    // from global config. The per-project channel migration in AspireConfigFile.FromLegacy
+                    // remains for project-local aspire.config.json files.
+                    config.Channel = null;
+                    var settings = JsonSerializer.SerializeToNode(config, JsonSourceGenerationContext.Default.AspireConfigFile)!.AsObject();
+                    await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(newPath, settings, cancellationToken);
+                }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // If migration fails, newPath will be created on first write.
                 logger.LogError(ex, "Failed to migrate legacy globalsettings.json to {NewPath}.", newPath);
             }
         }
 
+        // If migration fails, preserve the existing recovery path: log the failure
+        // and let a subsequent configuration edit create the modern file.
         return newPath;
     }
 
@@ -234,7 +246,7 @@ public class Program
             ((args[0] == "mcp" && args[1] == "start") || (args[0] == "agent" && args[1] == "mcp"));
 
         // Create file logger provider from pre-computed path info
-        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, errorWriter);
+        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter);
 
         var factory = LoggerFactory.Create(builder =>
         {
@@ -294,6 +306,10 @@ public class Program
     internal static async Task<IHost> BuildApplicationAsync(string[] args, CliStartupContext startupContext, Dictionary<string, string?>? configurationValues = null)
     {
         var isCompletion = CompletionInvocation.Matches(args);
+        // Source management must not migrate or normalize configuration before a
+        // read-only or rejected operation. Existing config commands retain normal startup.
+        var deferSettingsWrites = isCompletion ||
+            Commands.RootCommand.MatchesCommandPath(args, "template", "source");
         // Check for --non-interactive flag early
         var nonInteractive = args?.Any(a => a == CommonOptionNames.NonInteractive) ?? false;
 
@@ -311,10 +327,12 @@ public class Program
         var builder = Host.CreateEmptyApplicationBuilder(settings);
 
         // Set up settings with appropriate paths.
-        var globalSettingsFilePath = GetGlobalSettingsPath(startupContext.Logger, migrate: !isCompletion);
+        var globalSettingsFilePath = await GetGlobalSettingsPathAsync(
+            startupContext.Logger, migrate: !deferSettingsWrites, startupContext.CancellationManager.Token);
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !isCompletion);
+        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !deferSettingsWrites);
+        builder.Services.AddSingleton<ConfigSourceService>();
 
         if (configurationValues is not null)
         {
@@ -330,8 +348,7 @@ public class Program
         }
 
 #if !DEBUG
-        // In release builds, limit shutdown wait time for telemetry flush to 200ms
-        // to ensure the CLI exits quickly even if waiting on shutdown tasks.
+        // Keep general hosted-service shutdown short. Product telemetry has its own awaited budget.
         builder.Services.Configure<HostOptions>(options =>
         {
             options.ShutdownTimeout = TimeSpan.FromMilliseconds(200);
@@ -566,6 +583,8 @@ public class Program
 
         // Git repository operations.
         builder.Services.AddSingleton<IGitRepository, GitRepository>();
+        builder.Services.AddSingleton<IGitCommandRunner, GitCommandRunner>();
+        builder.Services.AddSingleton<IGitClient, GitClient>();
 
         // OpenCode CLI operations.
         builder.Services.AddSingleton<IOpenCodeCliRunner, OpenCodeCliRunner>();
@@ -578,6 +597,38 @@ public class Program
 
         // Npm and Playwright CLI operations.
         builder.Services.AddSingleton<INpmRunner, NpmRunner>();
+        builder.Services.AddSingleton<ITrustRootProvider>(serviceProvider =>
+        {
+            var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+            var logger = serviceProvider.GetRequiredService<ILogger<TufTrustRootProvider>>();
+            // Building the command tree resolves this provider even during completion.
+            // TUF initialization seeds the cache, so completion must use memory to avoid disk writes.
+            try
+            {
+                ITufCache cache = isCompletion
+                    ? new InMemoryTufCache()
+                    : new FileSystemTufCache(Path.Combine(executionContext.CacheDirectory.FullName, "tuf"));
+
+                return new TufTrustRootProvider(
+                    TufTrustRootProvider.ProductionUrl,
+                    new TufTrustRootProviderOptions { Cache = cache });
+            }
+            catch (Exception ex) when (!isCompletion && ex is IOException or UnauthorizedAccessException)
+            {
+                // Work around https://github.com/mitchdenny/sigstore-dotnet/issues/47.
+                // Tuf 1.1.0 can throw while seeding an existing Windows cache directory whose ACL
+                // denies file creation. Keep verification enabled and lose only disk persistence.
+                logger.LogWarning(
+                    ex,
+                    "Unable to initialize the TUF disk cache. Using an in-memory cache for this process.");
+
+                return new TufTrustRootProvider(
+                    TufTrustRootProvider.ProductionUrl,
+                    new TufTrustRootProviderOptions { Cache = new InMemoryTufCache() });
+            }
+        });
+        builder.Services.AddSingleton(serviceProvider =>
+            new SigstoreVerifier(serviceProvider.GetRequiredService<ITrustRootProvider>()));
         builder.Services.AddHttpClient<INpmProvenanceChecker, SigstoreNpmProvenanceChecker>();
         builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
         builder.Services.AddSingleton<IAspireSkillsBundleProvider, AspireSkillsBundleProvider>();
@@ -585,6 +636,9 @@ public class Program
         builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
         builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
         builder.Services.AddSingleton<PlaywrightCliInstaller>();
+        builder.Services.AddSingleton<IAgentClient, CopilotAgentClient>();
+        builder.Services.AddSingleton<IAgentClient, ClaudeCodeAgentClient>();
+        builder.Services.AddSingleton<IAgentClient, OpenCodeAgentClient>();
 
         // Agent environment detection.
         builder.Services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();
@@ -594,7 +648,6 @@ public class Program
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, CopilotAgentEnvironmentScanner>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, OpenCodeAgentEnvironmentScanner>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, ClaudeCodeAgentEnvironmentScanner>());
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, DeprecatedMcpCommandScanner>());
 
         // Agent telemetry hook installation/configuration.
         builder.Services.AddSingleton<Aspire.Cli.Agents.Hooks.ITelemetryHookInstaller, Aspire.Cli.Agents.Hooks.TelemetryHookInstaller>();
@@ -603,8 +656,11 @@ public class Program
         // Template factories.
         builder.Services.AddSingleton<TemplateNuGetConfigService>();
         builder.Services.AddSingleton<ITemplateProvider, TemplateProvider>();
+        builder.Services.AddSingleton<TemplateSourceStore>();
+        builder.Services.AddSingleton<ConfiguredTemplateSourceService>();
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, DotNetTemplateFactory>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, CliTemplateFactory>());
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, TemplateEngineFactory>());
 
         // Language discovery for polyglot support.
         builder.Services.AddSingleton<ILanguageDiscovery, DefaultLanguageDiscovery>();
@@ -623,6 +679,7 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostToolingCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, GoAppHostToolingCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();
@@ -668,6 +725,7 @@ public class Program
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();
+        builder.Services.AddTransient<TemplateManagementCommand>();
         builder.Services.AddTransient<CompletionsCommand>();
         builder.Services.AddTransient<CacheCommand>();
         builder.Services.AddTransient<CertificatesCommand>();
@@ -713,7 +771,7 @@ public class Program
         builder.Services.AddTransient<SecretListCommand>();
         builder.Services.AddTransient<SecretPathCommand>();
         builder.Services.AddTransient<SecretDeleteCommand>();
-        builder.Services.AddTransient<SecretStoreResolver>();
+        builder.Services.AddTransient<AspireSecretsStoreResolver>();
         builder.Services.AddTransient<SdkCommand>();
         builder.Services.AddTransient<SdkGenerateCommand>();
         builder.Services.AddTransient<SdkDumpCommand>();
@@ -964,7 +1022,8 @@ public class Program
                 return false;
             }
 
-            if (arg.Equals("--format=json", StringComparison.OrdinalIgnoreCase))
+            if (arg.Equals("--format=json", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("--format=mermaid", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -982,7 +1041,8 @@ public class Program
 
             if (arg.Equals("--format", StringComparison.OrdinalIgnoreCase)
                 && i + 1 < args.Length
-                && args[i + 1].Equals("json", StringComparison.OrdinalIgnoreCase))
+                && (args[i + 1].Equals("json", StringComparison.OrdinalIgnoreCase) ||
+                    args[i + 1].Equals("mermaid", StringComparison.OrdinalIgnoreCase)))
             {
                 return true;
             }
@@ -1061,12 +1121,20 @@ public class Program
     {
         Console.OutputEncoding = Encoding.UTF8;
 
+        if (ProcessSupervisor.IsSupervisor)
+        {
+            await ProcessSupervisor.RunAsync().ConfigureAwait(false);
+            return Environment.ExitCode;
+        }
+
         if (CompletionInvocation.Matches(args))
         {
             return await InvokeCompletionAsync(args, Console.Out, Console.Error).ConfigureAwait(false);
         }
 
-        TelemetryManager.ConfigureExporterForProcess(AgentTelemetryInvocation.Matches(args));
+        var reportedTelemetryMode = TelemetryManager.ConfigureExporterForProcess(
+            AgentTelemetryInvocation.Matches(args),
+            CIEnvironmentDetector.IsCIEnvironment(new HostEnvironment()));
 
         // Re-enable CTRL+C delivery for ourselves and any process we subsequently spawn.
         // Per https://learn.microsoft.com/windows/console/setconsolectrlhandler, the "ignore
@@ -1142,7 +1210,7 @@ public class Program
         logger.LogInformation("CLI process ID: {ProcessId}", Environment.ProcessId);
 
         IHost? app = null;
-        TelemetryManager telemetryManager;
+        TelemetryManager? telemetryManager = null;
         ParseResult parseResult;
         try
         {
@@ -1155,10 +1223,19 @@ public class Program
         }
         catch (Exception ex)
         {
-            app?.Dispose();
-
             logger.LogError(ex, "Failed to load configuration or start CLI.");
             errorWriter.WriteLine(ex.Message);
+            try
+            {
+                if (telemetryManager is not null)
+                {
+                    await telemetryManager.TryShutdownAsync(CliExitCodes.FailedToStartCli, reportedTelemetryMode).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                app?.Dispose();
+            }
             return CliExitCodes.FailedToStartCli;
         }
 
@@ -1199,10 +1276,10 @@ public class Program
             ? null
             : StartMainActivity(telemetry, app.Services.GetRequiredService<InstallSourceDetector>());
         ProfileCaptureService.ProfileCaptureSession? profileCaptureSession = null;
+        var exitCode = CliExitCodes.Success;
 
         try
         {
-            var exitCode = CliExitCodes.Success;
             try
             {
                 if (profileCaptureOptions is not null)
@@ -1210,8 +1287,8 @@ public class Program
                     profileCaptureSession = await app.Services.GetRequiredService<ProfileCaptureService>().StartAsync(profileCaptureOptions, cancellationManager.Token).ConfigureAwait(false);
                 }
 
-                // Log command invocation details for debugging. Anything forwarded to the AppHost
-                // can contain secrets, so it is redacted.
+                // Log command invocation details for debugging. Credential-bearing HTTP values and
+                // anything forwarded to the AppHost can contain secrets, so they are redacted.
                 var loggableArgs = ParseResultHelper.GetLoggableArguments(parseResult);
                 var commandLine = loggableArgs.Length > 0 ? $"aspire {loggableArgs}" : "aspire";
                 logger.LogInformation("Command: {CommandLine}", commandLine);
@@ -1225,7 +1302,7 @@ public class Program
                 var commandName = GetCommandName(parseResult);
                 logger.LogDebug("Executing command: {CommandName}", commandName);
 
-                mainActivity?.SetTag(TelemetryConstants.Tags.CommandName, commandName);
+                telemetry.SetActivityProperty(mainActivity, TelemetryConstants.Tags.CommandName, commandName);
 
                 ProfilingTelemetry.ActivityScope profileCommandActivity = default;
                 try
@@ -1272,7 +1349,7 @@ public class Program
             }
             finally
             {
-                mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
+                telemetry.SetActivityProperty(mainActivity, TelemetryConstants.Tags.ProcessExitCode, exitCode);
                 mainActivity?.Stop();
             }
 
@@ -1305,21 +1382,30 @@ public class Program
         }
         finally
         {
-            if (profileCaptureSession is not null)
+            try
             {
-                await profileCaptureSession.DisposeAsync().ConfigureAwait(false);
+                if (profileCaptureSession is not null)
+                {
+                    await profileCaptureSession.DisposeAsync().ConfigureAwait(false);
+                }
+
+                // Finish asynchronously-created detector activities before shutting down their provider.
+                await telemetry.CompleteInternalMicrosoftDiagnosticsAsync().ConfigureAwait(false);
             }
-
-            // Finish asynchronously-created detector activities before shutting down their provider.
-            await telemetry.CompleteInternalMicrosoftDiagnosticsAsync().ConfigureAwait(false);
-
-            // Shutting down telemetry manager to flush any remaining telemetry will take time.
-            // Run it concurrently with application shutdown after all asynchronously-created telemetry
-            // has been submitted to the providers.
-            var shutdownTelemetryTask = telemetryManager.TryShutdownAsync();
-
-            await app.StopAsync().ConfigureAwait(false);
-            await shutdownTelemetryTask;
+            finally
+            {
+                // Await product persistence even if another shutdown operation fails. It runs alongside
+                // host shutdown, but its local/CI budget is independent of the host's shutdown timeout.
+                var shutdownTelemetryTask = telemetryManager.TryShutdownAsync(exitCode, reportedTelemetryMode);
+                try
+                {
+                    await app.StopAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    await shutdownTelemetryTask.ConfigureAwait(false);
+                }
+            }
         }
     }
 
@@ -1330,9 +1416,12 @@ public class Program
         {
             using var currentProcess = Process.GetCurrentProcess();
             activity.SetStartTime(currentProcess.StartTime);
-            activity.AddTag(TelemetryConstants.Tags.ProcessPid, currentProcess.Id);
-            activity.AddTag(TelemetryConstants.Tags.ProcessExecutableName, "aspire");
-            activity.SetTag(TelemetryConstants.Tags.InstallSource, installSourceDetector.Detect());
+            telemetry.SetActivityProperties(activity,
+            [
+                new(TelemetryConstants.Tags.ProcessPid, currentProcess.Id),
+                new(TelemetryConstants.Tags.ProcessExecutableName, "aspire"),
+                new(TelemetryConstants.Tags.InstallSource, installSourceDetector.Detect())
+            ]);
         }
 
         return activity;

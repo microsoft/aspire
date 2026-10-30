@@ -94,6 +94,49 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void CredentialBearingSourceIsRedactedFromInvocationLog()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "credential-source.log");
+        var source = string.Concat(
+            "https://",
+            "credential-user:credential-password",
+            "@source.example/v3/index.json?token=query-secret#fragment-secret");
+
+        using var result = RemoteExecutor.Invoke(async (logPath, packageSource) =>
+        {
+            var exitCode = await Program.Main(
+                [
+                    "add",
+                    "Aspire.Hosting.Redis",
+                    "--source",
+                    packageSource,
+                    "--log-file",
+                    logPath,
+                    "--non-interactive",
+                    "--nologo"
+                ]).DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+            var logContents = await File.ReadAllTextAsync(logPath);
+            Assert.Contains(
+                "Command: aspire add Aspire.Hosting.Redis --source https://***@source.example/v3/index.json",
+                logContents,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "Parsing arguments: add Aspire.Hosting.Redis --source https://***@source.example/v3/index.json",
+                logContents,
+                StringComparison.Ordinal);
+            Assert.False(logContents.Contains("credential-user", StringComparison.Ordinal), logContents);
+            Assert.False(logContents.Contains("credential-password", StringComparison.Ordinal), logContents);
+            Assert.False(logContents.Contains("query-secret", StringComparison.Ordinal), logContents);
+            Assert.False(logContents.Contains("fragment-secret", StringComparison.Ordinal), logContents);
+        }, logFilePath, source, options: s_remoteInvokeOptions);
+
+        outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
+    }
+
+    [Fact]
     public void VersionFlagSuppressesBanner()
     {
         using var result = RemoteExecutor.Invoke(async () =>

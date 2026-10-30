@@ -5,11 +5,10 @@
     <add key="companyfeed" value="https://companyfeed/v3/index.json" />
   </packageSources>
   <packageSourceMapping>
+    <clear />
     <packageSource key="https://api.nuget.org/v3/index.json">
       <package pattern="*" />
-    </packageSource>
-    <packageSource key="companyfeed">
-      <package pattern="*" />
+      <package pattern="Aspire*" />
     </packageSource>
   </packageSourceMapping>
 </configuration>

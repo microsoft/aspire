@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREEXTENSION001 // Debug support APIs are experimental.
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
-#pragma warning disable ASPIRECSHARPAPPS001 // AddCSharpApp is experimental.
 
 using System.Reflection;
 using System.Text.Json;
@@ -369,7 +368,9 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
         var appPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs");
         File.WriteAllText(appPath, "");
         using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Verify debugging compatibility for legacy CSharpApp resources.
         var fileApp = builder.AddCSharpApp("file-app", appPath);
+#pragma warning restore CS0618
 
         var configuration = CreateConfiguration(debugSessionInfo: debugSessionInfo);
 
@@ -383,7 +384,9 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
         var appPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs");
         File.WriteAllText(appPath, "");
         using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Verify debugging compatibility for legacy CSharpApp resources.
         var fileApp = builder.AddCSharpApp("file-app", appPath);
+#pragma warning restore CS0618
 
         var configuration = CreateConfiguration(
             debugSessionInfo: CreateDebugSessionInfo([KnownLaunchConfigurationTypes.Project]));

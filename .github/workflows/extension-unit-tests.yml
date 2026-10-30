@@ -2,15 +2,6 @@ name: VS Code extension unit tests
 
 on:
   workflow_call:
-    inputs:
-      packageVsix:
-        required: false
-        type: boolean
-        default: true
-      extensionVersionOverride:
-        required: false
-        type: string
-        default: ''
 
 permissions:
   contents: read
@@ -18,6 +9,7 @@ permissions:
 jobs:
   extension_tests_win:
     name: Run VS Code extension unit tests (Windows)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: windows-latest
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
@@ -85,32 +77,3 @@ jobs:
         run: corepack yarn install --frozen-lockfile --non-interactive
       - name: Run tests
         run: corepack yarn test
-      # The VSIX steps run even when 'Run tests' failed. The E2E workflow installs
-      # this artifact but deliberately runs independently from the unit-test result,
-      # so packaging must use !cancelled() rather than the default success() check.
-      - name: Override extension version for PR builds
-        if: ${{ inputs.packageVsix && !cancelled() && inputs.extensionVersionOverride != '' }}
-        run: corepack yarn version --new-version "${{ inputs.extensionVersionOverride }}" --no-git-tag-version
-      - name: Package VSIX
-        if: ${{ inputs.packageVsix && !cancelled() }}
-        env:
-          ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: "true"
-        run: corepack yarn run vsce package --pre-release -o out/aspire-extension.vsix
-      - name: Assert E2E VSIX contains bridge
-        if: ${{ inputs.packageVsix && !cancelled() }}
-        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension.vsix -Expected Present
-      # Packaged separately because the E2E VSIX intentionally contains the bridge.
-      # No env override here reproduces the shipping build, where webpack stubs the
-      # bridge in production mode and step-scoped env values do not leak.
-      - name: Package production VSIX
-        if: ${{ inputs.packageVsix && !cancelled() }}
-        run: corepack yarn run vsce package --pre-release -o out/aspire-extension-production.vsix
-      - name: Assert production VSIX excludes bridge
-        if: ${{ inputs.packageVsix && !cancelled() }}
-        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension-production.vsix -Expected Absent
-      - name: Upload VSIX
-        if: ${{ inputs.packageVsix && !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: aspire-extension
-          path: extension/out/aspire-extension.vsix

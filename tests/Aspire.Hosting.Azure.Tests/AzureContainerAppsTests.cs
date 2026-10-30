@@ -2,11 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREACANAMING001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREACANAMING002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
@@ -27,6 +24,27 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task EnvironmentVariableWithBicepOutputReferenceProviderIsPublishedAsItsOutput()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+
+        builder.AddAzureContainerAppEnvironment("env");
+        var identity = builder.AddAzureUserAssignedIdentity("identity");
+
+        var api = builder.AddContainer("api", "myimage")
+            .WithEnvironment(context => context.EnvironmentVariables["CLIENT_ID"] = new TestBicepOutputReferenceProvider(identity.Resource.ClientId));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var resource = Assert.IsAssignableFrom<AzureProvisioningResource>(api.Resource.GetDeploymentTargetAnnotation()?.DeploymentTarget);
+        var (_, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(bicep, "bicep");
+    }
+
     [Fact]
     public async Task AddContainerAppsInfrastructureAddsDeploymentTargetWithContainerAppToContainerResources()
     {
@@ -1533,6 +1551,17 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
               .AppendContentAsFile(bicep, "bicep");
     }
 
+    [Theory]
+    [InlineData(nameof(AzureContainerAppExtensions.WithCompactResourceNaming))]
+    [InlineData(nameof(AzureContainerAppExtensions.WithUniqueResourceNaming))]
+    public void ResourceNamingApisAreStable(string methodName)
+    {
+        var method = typeof(AzureContainerAppExtensions).GetMethod(methodName);
+
+        Assert.NotNull(method);
+        Assert.Empty(method.GetCustomAttributes(typeof(ExperimentalAttribute), inherit: false));
+    }
+
     [Fact]
     public async Task AddContainerAppEnvironmentWithCompactNamingPreservesUniqueString()
     {
@@ -2609,7 +2638,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureContainerAppEnvironment("env");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder
             .AddContainer("api", "myimage")
             .WithHttpEndpoint()
@@ -2621,7 +2649,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
             .WithHttpEndpoint()
             .WithHttpProbe(ProbeType.Readiness, "/ready", initialDelaySeconds: 60)
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var app = builder.Build();
 
@@ -2651,7 +2678,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureContainerAppEnvironment("env");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder
             .AddContainer("api", "myimage")
             .WithHttpEndpoint(targetPort: 1111)
@@ -2661,7 +2687,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
             .AddProject<Project>("project1", launchProfileName: null)
             .WithHttpEndpoint(targetPort: 1111)
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var app = builder.Build();
 
@@ -2691,7 +2716,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureContainerAppEnvironment("env");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder
             .AddContainer("api", "myimage")
             .WithHttpsEndpoint(targetPort: 1111)
@@ -2701,7 +2725,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
             .AddProject<Project>("project1", launchProfileName: null)
             .WithHttpsEndpoint(targetPort: 1111)
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var app = builder.Build();
 

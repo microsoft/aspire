@@ -17,6 +17,12 @@ internal sealed class SelectAppHostTool(IAuxiliaryBackchannelMonitor auxiliaryBa
 
     public override string Description => "Selects which AppHost to use when multiple AppHosts are running. The path can be a fully qualified path or a workspace root relative path.";
 
+    public override ToolAnnotations Annotations => new()
+    {
+        ReadOnlyHint = false,
+        DestructiveHint = false
+    };
+
     public override JsonElement GetInputSchema()
     {
         return JsonDocument.Parse("""
@@ -64,36 +70,31 @@ internal sealed class SelectAppHostTool(IAuxiliaryBackchannelMonitor auxiliaryBa
         var canonicalPath = PathNormalizer.ResolveToFilesystemPath(displayPath);
 
         // Check if there's a running AppHost with this path
-        var matchingConnection = auxiliaryBackchannelMonitor.Connections
-            .FirstOrDefault(c =>
+        IAppHostAuxiliaryBackchannel? matchingConnection;
+        try
+        {
+            matchingConnection = AppHostConnectionHelper.FindConnectionByAppHostPath(
+                auxiliaryBackchannelMonitor.Connections,
+                canonicalPath);
+        }
+        catch (InvalidOperationException)
+        {
+            return ValueTask.FromResult(new CallToolResult
             {
-                if (c.AppHostInfo?.AppHostPath is null)
-                {
-                    return false;
-                }
-                return string.Equals(
-                    PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath),
-                    canonicalPath,
-                    StringComparisons.FileSystemPath);
+                IsError = true,
+                Content = [new TextContentBlock { Text = "Multiple running AppHost instances match that path. Stop the extra instance and retry." }]
             });
+        }
 
         if (matchingConnection == null)
         {
-            // List available AppHosts
-            var availableAppHosts = auxiliaryBackchannelMonitor.Connections
-                .Where(c => c.AppHostInfo?.AppHostPath != null)
-                .Select(c => c.AppHostInfo!.AppHostPath)
-                .ToList();
-
-            var message = $"No running AppHost found at path '{displayPath}'.";
-            if (availableAppHosts.Count > 0)
-            {
-                message += $" Available AppHosts:\n{string.Join("\n", availableAppHosts.Select(p => $"  - {p}"))}";
-            }
-            else
-            {
-                message += " No AppHosts are currently running.";
-            }
+            // The requested and available paths are local machine details. Keep the model-facing
+            // error useful but path-free even when the caller supplied an absolute path.
+            var hasAvailableAppHosts = auxiliaryBackchannelMonitor.Connections
+                .Any(static connection => connection.AppHostInfo?.AppHostPath is not null);
+            var message = hasAvailableAppHosts
+                ? "No running AppHost matched 'appHostPath'. Other AppHosts are currently running."
+                : "No running AppHost matched 'appHostPath'. No AppHosts are currently running.";
 
             return ValueTask.FromResult(new CallToolResult
             {
@@ -102,8 +103,11 @@ internal sealed class SelectAppHostTool(IAuxiliaryBackchannelMonitor auxiliaryBa
             });
         }
 
-        // Set the selected AppHost path
-        auxiliaryBackchannelMonitor.SelectedAppHostPath = canonicalPath;
+        // Pin the connection's physical identity rather than the caller's spelling. A selected
+        // symlink can be retargeted after this call, but it must not redirect later MCP operations
+        // to a different running AppHost.
+        auxiliaryBackchannelMonitor.SelectedAppHostPath =
+            PathNormalizer.ResolveToFilesystemPath(matchingConnection.AppHostInfo!.AppHostPath);
 
         return ValueTask.FromResult(new CallToolResult
         {

@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text;
 using System.Threading.Channels;
 using Aspire.Cli.Interaction;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -14,6 +15,7 @@ namespace Aspire.Cli.Diagnostics;
 /// A logger provider that writes all log messages to a file on disk.
 /// This provider captures logs at all levels (Trace through Critical) for diagnostics,
 /// independent of console verbosity settings.
+/// On Unix, log files are restricted to the current user, including reused files.
 /// </summary>
 internal sealed class FileLoggerProvider : ILoggerProvider
 {
@@ -61,7 +63,7 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     /// <param name="timeProvider">The time provider for timestamp generation.</param>
     /// <param name="errorWriter">Error writer for startup error messages.</param>
     public FileLoggerProvider(string logsDirectory, TimeProvider timeProvider, IStartupErrorWriter errorWriter)
-        : this(GenerateLogFilePath(logsDirectory, timeProvider), errorWriter)
+        : this(GenerateLogFilePath(logsDirectory, timeProvider), logsDirectory, errorWriter)
     {
     }
 
@@ -71,6 +73,14 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     /// <param name="logFilePath">The full path to the log file.</param>
     /// <param name="errorWriter">Error writer for startup error messages.</param>
     internal FileLoggerProvider(string logFilePath, IStartupErrorWriter errorWriter)
+        : this(logFilePath, logsDirectory: null, errorWriter)
+    {
+    }
+
+    /// <summary>
+    /// Creates a file logger and repairs permissions when its parent is the dedicated logs directory.
+    /// </summary>
+    internal FileLoggerProvider(string logFilePath, string? logsDirectory, IStartupErrorWriter errorWriter)
     {
         _logFilePath = logFilePath;
 
@@ -79,22 +89,69 @@ internal sealed class FileLoggerProvider : ILoggerProvider
             var directory = Path.GetDirectoryName(logFilePath);
             if (!string.IsNullOrEmpty(directory))
             {
-                Directory.CreateDirectory(directory);
+                // Repair Aspire's dedicated log directory, but do not chmod arbitrary existing
+                // parents selected by --log-file (which could be the user's working directory).
+                if (logsDirectory is not null && Path.GetRelativePath(logsDirectory, directory) == ".")
+                {
+                    DirectoryHelper.CreateWithOwnerOnlyPermissions(directory);
+                }
+                else if (OperatingSystem.IsWindows())
+                {
+                    Directory.CreateDirectory(directory);
+                }
+                else
+                {
+                    Directory.CreateDirectory(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                }
             }
 
-            _writer = new StreamWriter(logFilePath, append: false, Encoding.UTF8)
-            {
-                AutoFlush = true
-            };
+            _writer = CreateWriter(logFilePath);
 
             _channel = CreateChannel();
             _writerTask = Task.Run(ProcessLogQueueAsync);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             WriteWarning(errorWriter, logFilePath, ex.Message);
             _writer = null;
             _channel = null;
+        }
+    }
+
+    private static StreamWriter CreateWriter(string logFilePath)
+    {
+        var options = new FileStreamOptions
+        {
+            Mode = OperatingSystem.IsWindows() ? FileMode.Create : FileMode.OpenOrCreate,
+            Access = FileAccess.Write,
+            Share = FileShare.Read
+        };
+        if (!OperatingSystem.IsWindows())
+        {
+            // Restrict access at creation so no log contents are ever written with broader permissions.
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        var stream = new FileStream(logFilePath, options);
+        try
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                // UnixCreateMode does not change existing files. Harden the opened file before
+                // truncating or writing, using its handle to avoid a path-replacement race.
+                File.SetUnixFileMode(stream.SafeFileHandle, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                stream.SetLength(0);
+            }
+
+            return new StreamWriter(stream, Encoding.UTF8)
+            {
+                AutoFlush = true
+            };
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
         }
     }
 

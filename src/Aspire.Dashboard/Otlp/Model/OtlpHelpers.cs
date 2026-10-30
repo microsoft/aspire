@@ -58,6 +58,7 @@ public static partial class OtlpHelpers
 
     internal static void ValidateHistogramDataPoint(HistogramDataPoint point)
     {
+        ValidateMetricTimestamps(point.StartTimeUnixNano, point.TimeUnixNano);
         if (!double.IsFinite(point.Sum))
         {
             throw new InvalidOperationException("Histogram data point sum must be finite.");
@@ -71,10 +72,36 @@ public static partial class OtlpHelpers
 
     internal static void ValidateNumberDataPoint(NumberDataPoint point)
     {
+        ValidateMetricTimestamps(point.StartTimeUnixNano, point.TimeUnixNano);
         if (point.ValueCase == NumberDataPoint.ValueOneofCase.AsDouble && !double.IsFinite(point.AsDouble))
         {
             throw new InvalidOperationException("Metric data point value must be finite.");
         }
+    }
+
+    private static void ValidateMetricTimestamps(ulong startTimeUnixNano, ulong endTimeUnixNano)
+    {
+        // Ordered SQLite metric timestamps use signed Unix nanoseconds, unlike OTLP's unsigned fields.
+        // Reject out-of-range points before dimension creation instead of wrapping them into negative dates.
+        if (startTimeUnixNano > long.MaxValue || endTimeUnixNano > long.MaxValue)
+        {
+            throw new InvalidOperationException("Metric timestamps must not exceed 2262-04-11T23:47:16.854775807Z (the signed Unix nanosecond limit).");
+        }
+    }
+
+    /// <summary>
+    /// Validates an exemplar timestamp against the supported range, logging rejected samples.
+    /// </summary>
+    internal static bool TryValidateMetricExemplarTimestamp(Exemplar exemplar, OtlpContext context)
+    {
+        if (exemplar.TimeUnixNano <= long.MaxValue)
+        {
+            return true;
+        }
+
+        // Exemplars are supplementary samples; an unsupported timestamp must not reject their parent measurement.
+        context.Logger.LogWarning("Ignoring metric exemplar with timestamp {TimeUnixNano} above the signed Unix nanosecond limit.", exemplar.TimeUnixNano);
+        return false;
     }
 
     public static ResourceKey GetResourceKey(this Resource resource)

@@ -28,8 +28,7 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
     private readonly TaskCompletionSource _workloadEnded = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _sessionEnded = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    // Aspire.Hosting targets net8.0, which predates System.Threading.Lock, so this is a plain monitor gate.
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
 
     private readonly TerminalService _owner;
     private readonly Hex1bTerminalBuilder _builder;

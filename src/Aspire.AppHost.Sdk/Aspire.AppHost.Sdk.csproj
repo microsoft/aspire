@@ -1,13 +1,18 @@
 <Project Sdk="Microsoft.Build.NoTargets">
 
-  <Import Project="$(SharedDir)Workload.targets" />
-
   <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <PackageType>DotnetPlatform</PackageType>
+    <PackageId>$(MSBuildProjectName)</PackageId>
+    <IsPackable>true</IsPackable>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <PackageTags>aspire apphost sdk</PackageTags>
     <Description>Aspire AppHost SDK. Must be referenced by Aspire AppHost projects.</Description>
     <TargetsForTfmSpecificContentInPackage>_PublishAndPackRIDTool;$(TargetsForTfmSpecificContentInPackage)</TargetsForTfmSpecificContentInPackage>
     <EnablePackageValidation>false</EnablePackageValidation>
   </PropertyGroup>
+
+  <Import Project="$(RepoRoot)eng/ContentPackage.targets" />
 
   <ItemGroup>
     <TextReplacementValue Include="DefaultTargetFramework" NewValue="$(DefaultTargetFramework)" />

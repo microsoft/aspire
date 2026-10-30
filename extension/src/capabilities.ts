@@ -16,6 +16,7 @@ export type Capability =
     | 'ms-python.python' // Older AppHost versions used this extension identifier instead of python
     | 'go' // Support for running Go projects
     | 'golang.go' // Older AppHost versions used this extension identifier instead of go
+    | 'go-apphost.v1' // Support for debugging Go AppHosts through the Go extension's Delve adapter
     | 'rust' // Support for running Rust projects
     | 'ms-vscode.cpptools' // Rust debug adapter extension identifier on Windows (cppvsdbg)
     | 'vadimcn.vscode-lldb' // Rust debug adapter extension identifier on macOS/Linux (CodeLLDB)
@@ -25,6 +26,7 @@ export type Capability =
     | 'oven.bun-vscode' // Bun debug adapter extension identifier
     | 'deno' // Support for running Deno projects (built-in to VS Code via js-debug)
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
+    | 'azure-functions-node' // Support for running Azure Functions apps on the Node worker
     | 'maui' // Support for running .NET MAUI projects
     | 'ms-dotnettools.dotnet-maui' // MAUI debug adapter extension identifier
     | 'java' // Support for running Java projects
@@ -244,6 +246,10 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
     if (isGoInstalled()) {
         capabilities.push("go");
         capabilities.push("golang.go");
+        // `go` only means "can debug Go resources", and extension builds that cannot launch a Go AppHost
+        // advertise it too. The CLI gates AppHost launching on this separate versioned name so those
+        // builds are never asked to start apphost.go (they would hand it to the .NET debugger).
+        capabilities.push("go-apphost.v1");
     }
 
     if (isRustInstalled(platform)) {
@@ -256,6 +262,7 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
         capabilities.push("node");
         capabilities.push("deno.v1");
         capabilities.push("browser");
+        capabilities.push("azure-functions-node");
     }
 
     if (isBunInstalled()) {

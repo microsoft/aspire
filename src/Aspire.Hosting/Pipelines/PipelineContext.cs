@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 
@@ -15,7 +14,6 @@ namespace Aspire.Hosting.Pipelines;
 /// <param name="serviceProvider">The service provider for dependency resolution.</param>
 /// <param name="logger">The logger for pipeline operations.</param>
 /// <param name="cancellationToken">The cancellation token for the pipeline operation.</param>
-[Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport(ExposeProperties = true)]
 public sealed class PipelineContext(
     DistributedApplicationModel model,
@@ -65,4 +63,26 @@ public sealed class PipelineContext(
     /// </code>
     /// </example>
     public PipelineSummary Summary { get; } = new();
+
+    /// <summary>
+    /// Gets the resolved steps selected for this execution, including transitive dependencies.
+    /// </summary>
+    /// <remarks>
+    /// This list is populated before step actions execute. It is empty before pipeline execution.
+    /// Unlike the application model, it excludes steps outside the selected target's dependency graph.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Pipeline.AddStep("inspect-deployment", context =>
+    /// {
+    ///     foreach (var step in context.PipelineContext.SelectedSteps)
+    ///     {
+    ///         context.Logger.LogInformation("Selected step: {StepName}", step.Name);
+    ///     }
+    ///     return Task.CompletedTask;
+    /// }, requiredBy: WellKnownPipelineSteps.Deploy);
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "The selected execution graph is runtime-only pipeline metadata.")]
+    public IReadOnlyList<PipelineStep> SelectedSteps { get; internal set; } = [];
 }

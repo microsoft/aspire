@@ -8,6 +8,45 @@ The dashboard shows:
 - Live console logs of resources.
 - Live telemetry, such as structured logs, traces and metrics.
 
+## Grouping resources
+
+Use **Group resources**, between **Filters** and **Collapse resource list** in the resources pane, to group
+the list by **Tags**, **Resource type**, or **State**. **None** restores the default nested resource list.
+Groups can be collapsed or selected to view all of their resources together. Search matches group names as
+well as resources, and the grouping preference is remembered across navigation and reloads.
+Tag grouping replaces the separate Tags navigation entry; resources with multiple tags appear under each tag,
+with untagged resources initially listed last. Telemetry sources keep their ungrouped list.
+
+When search and filters are clear, drag a group's header handle to move the entire group, or focus its
+handle and press **Alt+Up** or **Alt+Down**. Each grouping mode has its own saved order in the AppHost
+settings database. New groups are appended, and temporarily absent groups retain their position when they return.
+
+With grouping set to **None** and no search or filters active, drag a resource's reorder handle to move it
+before or after a sibling. Alternatively, focus the handle and press **Alt+Up** or **Alt+Down**.
+Children stay under their parent. Order is stored alongside tags in the AppHost's application settings database
+and survives dashboard and AppHost restarts; new resources are appended to their sibling list.
+Persistent containers show a pin after their state and resource type.
+
+## Exporting the resource graph
+
+In **Resources > Graph**, select **Export as Mermaid** in the graph controls to open a dialog showing the generated
+Mermaid source. Use **Copy to clipboard** to copy the source or **Download** to save it as `resources.mmd`.
+The diagram includes the currently visible resources and their connections, respecting search, resource filters,
+and the **Show hidden resources** setting. Parameters are not included. Resource labels match the dashboard graph,
+including replica names; resource values, endpoints, and other configuration are not exported.
+
+Paste the file contents into a `mermaid` code block in Markdown or open the file with a Mermaid-compatible viewer.
+The export captures the graph at that moment; it does not include the interactive graph's layout or live state.
+
+To export from the command line instead, run:
+
+```bash
+aspire resources --format mermaid >> file.txt
+```
+
+This exports a snapshot of the running AppHost's resources, excluding hidden resources by default. Use `--include-hidden`
+to include them. The CLI also accepts `aspire describe --format mermaid`; `--follow` is not supported for this format.
+
 ## Security considerations
 
 The dashboard can display sensitive information, including resource configuration, environment variables, console logs, and telemetry. Secure the dashboard and its endpoints whenever they are accessible beyond a trusted local development environment.
@@ -27,11 +66,29 @@ How you configure the dashboard depends on whether it's started by the Aspire Ap
 
 To export the dashboard's own traces, set `OTEL_EXPORTER_OTLP_ENDPOINT`. Exported traces use `aspire-dashboard` as the default `service.name`. Override it with `OTEL_SERVICE_NAME` or `service.name` in `OTEL_RESOURCE_ATTRIBUTES`, using environment variables, command line arguments, or JSON configuration. `OTEL_SERVICE_NAME` takes precedence when both settings specify a service name. The dashboard does not generate a `service.instance.id`, but preserves one supplied in `OTEL_RESOURCE_ATTRIBUTES`.
 
+### Tooltips in dashboard controls
+
+Use `data-tooltip` for text-only tooltips instead of HTML `title` or a Fluent control's `Title` parameter.
+The dashboard's shared provider displays the text using the Fluent UI tooltip component on hover or keyboard focus.
+Keep accessible names such as `aria-label` separate from tooltip text. Use `FluentTooltip` only for bounded UI,
+such as navigation, menus, cards, filters, and page headers. Repeated trace, log, metric, and resource items
+must use the shared provider rather than creating a tooltip component per item, including for overflow badges.
+Use `AspireTemplateColumn` and `AspirePropertyColumn` for grid columns so cell tooltips share the same behavior.
+For select option templates, add a hidden element with `data-tooltip-option` containing the tooltip text; this preserves
+the Fluent option's pointer-selection behavior.
+
 ### Aspire AppHost
 
 The AppHost automatically configures the dashboard, but you can override values if needed. The recommended way to configure the dashboard from the Aspire AppHost is by adding environment variables to the _launchSettings.json_ file. The `:` delimiter must be replaced with double underscore (`__`) in environment variable names. For example, `Dashboard:TelemetryLimits:MaxLogCount` is `DASHBOARD__TELEMETRYLIMITS__MAXLOGCOUNT` as an environment variable.
 
 ### Standalone dashboard
+
+The **Telemetry sources** navigation icon opens a dedicated sidebar for services sending OpenTelemetry data
+that aren't part of the AppHost model. This view is available in both standalone and AppHost mode; these services
+are not listed under **Resources**. AppHost resources keep their own logs, traces, and metrics tabs.
+Select one or more telemetry sources to view their logs, traces, and metrics, or select **All sources**
+for logs and traces from every telemetry-only source. AppHost-only views and actions,
+such as resource configuration, console logs, parameters, and terminals, are not shown.
 
 There are many ways to provide configuration:
 
@@ -63,7 +120,7 @@ Example JSON configuration file:
 | `ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS`<br/>Default: `false` | Configures the dashboard to not use authentication and accept anonymous access. This is a shortcut to configuring `Dashboard:Frontend:AuthMode`, `Dashboard:Otlp:AuthMode`, and `Dashboard:Api:AuthMode` to `Unsecured`. See [Dashboard security considerations](https://aspire.dev/dashboard/security-considerations/#anonymous-access) for the security implications. |
 | `ASPIRE_DASHBOARD_CONFIG_FILE_PATH`<br/>Default: `null` | The path for an optional JSON configuration file. If the dashboard is run in a Docker container, this is the path to the configuration file in a mounted volume. |
 | `ASPIRE_DASHBOARD_FILE_CONFIG_DIRECTORY`<br/>Default: `null` | The directory where the dashboard looks for key-per-file configuration. This value is optional. |
-| `ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL`<br/>Default: `null` | The gRPC endpoint to which the dashboard connects for its data. If this value is unspecified, the dashboard shows telemetry data but no resource list or console logs. This is a shortcut to `Dashboard:ResourceServiceClient:Url`. |
+| `ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL`<br/>Default: `null` | The gRPC endpoint to which the dashboard connects for its app model data. If this value is unspecified, the resource list is populated from telemetry and console logs are unavailable. This is a shortcut to `Dashboard:ResourceServiceClient:Url`. |
 
 ### Frontend
 
@@ -204,6 +261,16 @@ The software may collect information about you and your use of the software and 
 
 ### Opting out of data collection
 
-Aspire dashboard usage telemetry is collected only when the dashboard is launched through Visual Studio or Visual Studio Code as part of a running Aspire application. To opt out for all users accessing the dashboard, set the `ASPIRE_DASHBOARD_TELEMETRY_OPTOUT` environment variable to `true`. Alternatively, disable telemetry collection in the host IDE.
+Aspire dashboard usage and error telemetry uses Azure Monitor directly, independently of an IDE debug session, with a dashboard-specific Application Insights destination. This reporting path includes dashboards launched by the CLI, standalone dashboards, and deployed dashboards. To opt out for all users accessing the dashboard, set the `ASPIRE_DASHBOARD_TELEMETRY_OPTOUT` environment variable to `true` (or `1`) in the AppHost or dashboard process. IDE telemetry settings do not control this direct reporting.
+
+Startup telemetry records the startup result, duration, failure type, launch context, and configured persistence mode. Configure the context with `Dashboard:LaunchContext` or the `DASHBOARD__LAUNCHCONTEXT` environment variable. AppHost and CLI launchers set `apphost` and `cli`, respectively; container deployments can set `container`. Context values are trimmed and matched case-insensitively, and missing or unrecognized values are reported as `unknown`. Persistence mode is configured by `Dashboard:Data:PersistenceMode` or `ASPIRE_DASHBOARD_PERSISTENCE_MODE` and reported as `none`, `run`, or `resume`; invalid text and undefined values are reported as `unknown`.
+
+All product events and operations include dashboard version/build information, `deployment.environment.name` (`ci` or `local`), `os.name`, `os.type`, `os.version`, a hashed MAC address, and a persisted device ID when available. These values use the same detection and machine-information providers as the CLI. CI detection checks known CI process environment variables without reporting their values. Microsoft-internal detection also reuses the CLI's OS/account and GitHub-membership probes and cached results. It reports `aspire.dashboard.is_microsoft_internal` and the detection source when available; detected Microsoft-internal alias and domain are included only outside CI. Credentials and raw MAC addresses are not reported. Metadata detection is skipped when dashboard telemetry is opted out.
+
+Product log and trace providers use the OpenTelemetry resource name `aspire-dashboard`, which supplies their Azure cloud role. Diagnostic OTLP tracing also defaults to `aspire-dashboard` and retains its separate configured resource identity.
+
+Product telemetry uses separate providers from diagnostic OTLP tracing and does not export application logs, traces, or metrics received by the dashboard. Usage and sanitized error events are Information-level structured logs in the product event category from an isolated logger factory owned by the hosted telemetry manager and configured through shared telemetry helpers. This pipeline contains only Azure Monitor product export, with no scope export. Ordinary logs are excluded by logger-factory isolation, not by product-specific category or level filters on the logger provider or batch processor. Application logging configuration cannot disable product events or enable export of ordinary logs. Product events do not reach application file/console providers, while ordinary dashboard/framework logs are retained locally. Usage and error events create no spans or activity events, and logs use only ambient trace/span correlation. Commands remain activity-based. Reporting includes the default metadata above, bounded component and command metadata, and exception types/runtime versions. Reported properties are scalar values; strings are truncated to at most 1,024 characters, and collections are excluded. Exception messages, stack traces, raw browser user agents, resource names, unknown property keys, and PII-classified properties are excluded. Handled errors and unhandled Blazor circuit errors are recorded as sanitized logs independently of trace sampling; no fallback activity is created when there is no ambient activity.
+
+Telemetry enablement is resolved once from configuration. For backwards compatibility, the legacy AppHost-forwarded `Dashboard:DebugSession:TelemetryOptOut` setting (`DASHBOARD__DEBUGSESSION__TELEMETRYOPTOUT`) is still honored; either it or the direct opt-out setting disables reporting. The obsolete debug-session transport settings are ignored. Instrumentation is independent of provider lifecycle: a hosted telemetry manager attempts to initialize the reported providers before requests are served. Its shared telemetry provider owns both Azure Monitor signals, flushes and shuts them down concurrently, and disposes the trace provider and isolated logging services without affecting the application logger factory. Exporter or storage initialization failures are logged locally and do not prevent the dashboard from starting.
 
 For details about the data collected and how it's used, see [Microsoft-collected dashboard telemetry](https://aspire.dev/dashboard/microsoft-collected-dashboard-telemetry/).

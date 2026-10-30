@@ -98,6 +98,26 @@ public class TestResourceContext
     }
 }
 
+[AspireExport(ExposeMethods = true)]
+public class TestReturnValueContext
+{
+    public string? GetNullableString() => null;
+    public Task<string?> GetNullableStringTaskAsync() => Task.FromResult<string?>(null);
+    public ValueTask<string?> GetNullableStringValueTaskAsync() => ValueTask.FromResult<string?>(null);
+    public string GetString() => "";
+    public Task<string> GetStringTaskAsync() => Task.FromResult("");
+    public ValueTask<string> GetStringValueTaskAsync() => ValueTask.FromResult("");
+    public int? GetNullableInt() => null;
+    public Task<int?> GetNullableIntTaskAsync() => Task.FromResult<int?>(null);
+    public ValueTask<int?> GetNullableIntValueTaskAsync() => ValueTask.FromResult<int?>(null);
+    public int GetInt() => 0;
+    public Task<int> GetIntTaskAsync() => Task.FromResult(0);
+    public ValueTask<int> GetIntValueTaskAsync() => ValueTask.FromResult(0);
+
+    [AspireExport]
+    public static Task<string?> GetStaticNullableStringAsync() => Task.FromResult<string?>(null);
+}
+
 /// <summary>
 /// Test environment context used in callbacks.
 /// Verifies property-like object pattern (ctx.name.get(), ctx.name.set()).

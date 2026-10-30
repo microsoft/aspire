@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
 using Hex1b.Automation;
@@ -74,11 +73,11 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
         // must not pin a custom feed via NuGet.config. A non-stable channel (daily/staging/pr) would.
         AssertNoNuGetConfig(projectDir);
 
-        // The exact-version match against the emulated identity pins the AppHost SDK to that version.
+        // The exact-version match against the emulated identity pins the AppHost to that version.
         var appHostCsproj = Path.Combine(projectDir.FullName, $"{projectName}.AppHost", $"{projectName}.AppHost.csproj");
-        var sdkVersion = GetAppHostSdkVersionFromCsproj(appHostCsproj);
-        output.WriteLine($"Generated AppHost SDK version: {sdkVersion}");
-        Assert.Equal(stableVersion, sdkVersion);
+        var appHostVersion = CliE2ETestHelpers.GetAppHostVersion(File.ReadAllText(appHostCsproj));
+        output.WriteLine($"Generated AppHost version: {appHostVersion}");
+        Assert.Equal(stableVersion, appHostVersion);
 
         // `aspire add` must resolve a restorable version (no custom feed available) and complete.
         await auto.RunCommandAsync($"cd {projectName}/{projectName}.AppHost", counter);
@@ -223,21 +222,6 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
         Assert.True(
             nuGetConfigs.Count == 0,
             $"Emulating a stable build, 'aspire new' must not drop a NuGet.config (stable packages live on nuget.org). Found: {string.Join(", ", nuGetConfigs)}");
-    }
-
-    private static string GetAppHostSdkVersionFromCsproj(string csprojPath)
-    {
-        if (!File.Exists(csprojPath))
-        {
-            throw new FileNotFoundException($"Expected AppHost project to exist: {csprojPath}", csprojPath);
-        }
-
-        // The generated AppHost csproj opens with: <Project Sdk="Aspire.AppHost.Sdk/13.4.3">
-        var content = File.ReadAllText(csprojPath);
-        var match = Regex.Match(content, "Sdk=\"Aspire\\.AppHost\\.Sdk/(?<version>[^\"]+)\"");
-        return match.Success
-            ? match.Groups["version"].Value
-            : throw new InvalidOperationException($"Could not find an Aspire.AppHost.Sdk reference in {csprojPath}.");
     }
 
     private static string GetSdkVersionFromAspireConfig(string configPath)

@@ -9,12 +9,12 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	keyVault := builder.AddAzureKeyVault("vault")
 	if keyVault.Err() != nil {
-		log.Fatalf(aspire.FormatError(keyVault.Err()))
+		log.Fatal(aspire.FormatError(keyVault.Err()))
 	}
 	var keyVaultResource aspire.AzureKeyVaultResource = keyVault
 
@@ -22,14 +22,14 @@ func main() {
 	cache.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
 		cluster := infrastructure.GetRedisEnterpriseCluster()
 		if err := cluster.SetMinimumTlsVersion(aspire.RedisEnterpriseTlsVersionTls1_2).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if _, err := cluster.MinimumTlsVersion(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	if cache.Err() != nil {
-		log.Fatalf(aspire.FormatError(cache.Err()))
+		log.Fatal(aspire.FormatError(cache.Err()))
 	}
 
 	// The obsolete Azure Redis hosting API is not exported.
@@ -37,45 +37,45 @@ func main() {
 		redis := infrastructure.AddRedisResource("legacyRedis")
 		sku := infrastructure.CreateRedisSku()
 		if err := sku.SetName(aspire.RedisSkuNameBasic).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if err := sku.SetFamily(aspire.RedisSkuFamilyBasicOrStandard).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if err := sku.SetCapacity(float64(0)).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if err := redis.SetSku(sku).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	legacyCache.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
 		redis := infrastructure.GetRedisResource()
 		if err := redis.SetEnableNonSslPort(false).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if _, err := redis.EnableNonSslPort(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	if legacyCache.Err() != nil {
-		log.Fatalf(aspire.FormatError(legacyCache.Err()))
+		log.Fatal(aspire.FormatError(legacyCache.Err()))
 	}
 
 	accessKeyCache := builder.AddAzureManagedRedis("cache-access-key")
 	if accessKeyCache.Err() != nil {
-		log.Fatalf(aspire.FormatError(accessKeyCache.Err()))
+		log.Fatal(aspire.FormatError(accessKeyCache.Err()))
 	}
 
 	containerCache := builder.AddAzureManagedRedis("cache-container")
 	if containerCache.Err() != nil {
-		log.Fatalf(aspire.FormatError(containerCache.Err()))
+		log.Fatal(aspire.FormatError(containerCache.Err()))
 	}
 
 	accessKeyCache.WithAccessKeyAuthentication()
 	accessKeyCache.WithAccessKeyAuthentication(&aspire.WithAccessKeyAuthenticationOptions{KeyVaultBuilder: &keyVaultResource})
 	if accessKeyCache.Err() != nil {
-		log.Fatalf(aspire.FormatError(accessKeyCache.Err()))
+		log.Fatal(aspire.FormatError(accessKeyCache.Err()))
 	}
 
 	containerCache.RunAsContainer(&aspire.RunAsContainerOptions{
@@ -84,7 +84,7 @@ func main() {
 		},
 	})
 	if containerCache.Err() != nil {
-		log.Fatalf(aspire.FormatError(containerCache.Err()))
+		log.Fatal(aspire.FormatError(containerCache.Err()))
 	}
 
 	_ = cache.ConnectionStringExpression()
@@ -109,9 +109,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

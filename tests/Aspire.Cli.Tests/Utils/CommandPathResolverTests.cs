@@ -1,13 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Utils;
+using Aspire.Shared;
 
 namespace Aspire.Cli.Tests.Utils;
 
 public class CommandPathResolverTests
 {
     [Theory]
+    [InlineData("node", "node is not installed or not found in PATH. Please install Node.js and try again.")]
+    [InlineData("node.exe", "node is not installed or not found in PATH. Please install Node.js and try again.")]
     [InlineData("npm", "npm is not installed or not found in PATH. Please install Node.js and try again.")]
     [InlineData("npm.cmd", "npm is not installed or not found in PATH. Please install Node.js and try again.")]
     [InlineData("npx", "npx is not installed or not found in PATH. Please install Node.js and try again.")]
@@ -26,6 +28,21 @@ public class CommandPathResolverTests
         Assert.False(success);
         Assert.Null(resolvedCommand);
         Assert.Equal(expectedMessage, errorMessage);
+    }
+
+    [Theory]
+    [InlineData("go")]
+    [InlineData("go.exe")]
+    public void TryResolveCommand_WhenGoIsMissing_ReturnsGoInstallMessage(string command)
+    {
+        static string? MissingCommandResolver(string _) => null;
+
+        var success = CommandPathResolver.TryResolveCommand(command, MissingCommandResolver, out var resolvedCommand, out var errorMessage);
+
+        Assert.False(success);
+        Assert.Null(resolvedCommand);
+        Assert.Equal("go is not installed or not found in PATH. Please install Go and try again.", errorMessage);
+        Assert.Equal("https://go.dev/doc/install", CommandPathResolver.GetInstallationLink(command));
     }
 
     [Fact]
@@ -54,6 +71,7 @@ public class CommandPathResolverTests
 
     [Theory]
     [InlineData("npm", "https://nodejs.org/en/download")]
+    [InlineData("node", "https://nodejs.org/en/download")]
     [InlineData("npx", "https://nodejs.org/en/download")]
     [InlineData("bun", "https://bun.sh/docs/installation")]
     [InlineData("yarn", "https://yarnpkg.com/getting-started/install")]

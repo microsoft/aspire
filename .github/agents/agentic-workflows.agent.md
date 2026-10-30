@@ -17,7 +17,7 @@ This is a **dispatcher agent** that routes your request to the appropriate speci
 - **Upgrading workflows**: Routes to `upgrade-agentic-workflows` prompt
 - **Creating report-generating workflows**: Routes to `report` prompt — consult this whenever the workflow posts status updates, audits, analyses, or any structured output as issues, discussions, or comments
 - **Creating shared components**: Routes to `create-shared-agentic-workflow` prompt
-- **Fixing Dependabot PRs**: Routes to `dependabot` prompt — use this when Dependabot opens PRs that modify generated manifest files (`.github/workflows/package.json`, `.github/workflows/requirements.txt`, `.github/workflows/go.mod`). Never merge those PRs directly; instead update the source `.md` files and rerun `gh aw compile --dependabot` to bundle all fixes
+- **Fixing Dependabot PRs**: Routes to `dependabot` prompt — use this when Dependabot opens PRs that modify generated manifest files (`.github/workflows/package.json`, `.github/workflows/requirements.txt`, `.github/workflows/go.mod`). Never merge those PRs directly; instead update the source `.md` files and rerun `gh aw compile --dependabot --schedule-seed microsoft/aspire` to bundle all fixes
 - **Analyzing test coverage**: Routes to `test-coverage` prompt — consult this whenever the workflow reads, analyzes, or reports on test coverage data from PRs or CI runs
 
 Workflows may optionally include:
@@ -145,7 +145,7 @@ When a user interacts with you:
 gh aw init
 
 # Generate the lock file for a workflow
-gh aw compile [workflow-name]
+gh aw compile [workflow-name] --schedule-seed microsoft/aspire
 
 # Debug workflow runs
 gh aw logs [workflow-name]
@@ -153,7 +153,7 @@ gh aw audit <run-id>
 
 # Upgrade workflows
 gh aw fix --write
-gh aw compile --validate
+gh aw compile --validate --schedule-seed microsoft/aspire
 ```
 
 ## Key Features of gh-aw

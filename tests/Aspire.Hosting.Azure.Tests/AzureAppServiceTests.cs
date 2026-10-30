@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE003
 
 using System.Text.Json.Nodes;
@@ -20,6 +19,29 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureAppServiceTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task EnvironmentVariableWithBicepOutputReferenceProviderIsPublishedAsItsOutput()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+
+        builder.AddAzureAppServiceEnvironment("env");
+        var identity = builder.AddAzureUserAssignedIdentity("identity");
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithEnvironment(context => context.EnvironmentVariables["CLIENT_ID"] = new TestBicepOutputReferenceProvider(identity.Resource.ClientId));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var website = Assert.IsAssignableFrom<AzureProvisioningResource>(api.Resource.GetDeploymentTargetAnnotation()?.DeploymentTarget);
+        var (_, bicep) = await GetManifestWithBicep(website);
+
+        await Verify(bicep, "bicep");
+    }
+
     [Fact]
     public async Task AddContainerAppEnvironmentAddsDeploymentTargetWithContainerAppToProjectResources()
     {
@@ -819,14 +841,12 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
 
         var env1 = builder.AddAzureAppServiceEnvironment("env");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder
             .AddProject<Project>("project1", launchProfileName: null)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithHttpProbe(ProbeType.Readiness, "/ready", initialDelaySeconds: 60) // This will be ignored
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var app = builder.Build();
 

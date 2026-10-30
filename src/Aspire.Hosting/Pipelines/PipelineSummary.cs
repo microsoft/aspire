@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.ObjectModel;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Aspire.Hosting.Pipelines;
 
@@ -53,7 +52,6 @@ namespace Aspire.Hosting.Pipelines;
 ///     context.PipelineContext.Summary.Add("📦 Resource Group", new MarkdownString($"[{rgName}]({portalUrl})"));
 /// </code>
 /// </example>
-[Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 [AspireExport(ExposeMethods = true)]
 public sealed class PipelineSummary
 {

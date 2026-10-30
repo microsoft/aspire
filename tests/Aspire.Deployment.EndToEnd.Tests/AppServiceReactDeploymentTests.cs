@@ -136,43 +136,29 @@ builder.AddAzureAppServiceEnvironment("infra")
 """;
 
             var content = File.ReadAllText(appHostFilePath);
-const string serverDeclarationPattern = "var server = builder.AddProject";
-const string serverHealthCheckPattern = "    .WithHttpHealthCheck(\"/health\")";
-if (!content.Contains(serverDeclarationPattern, StringComparison.Ordinal) ||
-    !content.Contains(serverHealthCheckPattern, StringComparison.Ordinal))
-{
-    throw new InvalidOperationException("Could not find the server resource in the generated AppHost.");
-}
+            const string serverDeclarationPattern = "var server = builder.AddDotnetProject";
+            const string serverHealthCheckPattern = "    .WithHttpHealthCheck(\"/health\")";
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
+                serverDeclarationPattern,
+                $$"""
+                var deploymentTest = builder.AddConnectionString("{{TestConnectionStringName}}", expression => expression.AppendLiteral("{{TestConnectionStringValue}}"));
 
-content = content
-    .Replace(
-        serverDeclarationPattern,
-        $$"""
-        var deploymentTest = builder.AddConnectionString("{{TestConnectionStringName}}", expression => expression.AppendLiteral("{{TestConnectionStringValue}}"));
+                {{serverDeclarationPattern}}
+                """);
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
+                serverHealthCheckPattern,
+                $"""
+                    .WithReference(deploymentTest)
+                {serverHealthCheckPattern}
+                """);
 
-        {{serverDeclarationPattern}}
-        """,
-        StringComparison.Ordinal)
-    .Replace(
-        serverHealthCheckPattern,
-        $"""
-            .WithReference(deploymentTest)
-        {serverHealthCheckPattern}
-        """,
-        StringComparison.Ordinal);
-
-var initialAppHostConfiguration = $"""
+            var initialAppHostConfiguration = $"""
 // Add Azure App Service Environment with a staging slot for deployment.
 {initialEnvironmentConfiguration}
 
 {buildRunPattern}
 """;
-            if (!content.Contains(buildRunPattern, StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException($"Could not find '{buildRunPattern}' in the generated AppHost.");
-            }
-
-            content = content.Replace(buildRunPattern, initialAppHostConfiguration, StringComparison.Ordinal);
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, buildRunPattern, initialAppHostConfiguration);
             File.WriteAllText(appHostFilePath, content);
 
             var serverFilePath = Path.Combine(projectDir, $"{projectName}.Server", "Program.cs");

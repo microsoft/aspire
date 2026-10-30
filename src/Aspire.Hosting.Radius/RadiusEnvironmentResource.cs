@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRERADIUS006 // Secret-store validation/apply steps are experimental; consumed internally by the integration.
 
 using System.Diagnostics.CodeAnalysis;

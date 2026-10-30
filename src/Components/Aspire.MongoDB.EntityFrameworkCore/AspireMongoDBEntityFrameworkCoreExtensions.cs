@@ -117,9 +117,7 @@ public static class AspireMongoDBEntityFrameworkCoreExtensions
         configureSettings?.Invoke(settings);
 
         // This call validates that the DbContext is registered in DI.
-        // For net8.0, it also patches the service descriptor if needed.
-        // For net9.0+, it's a no-op when no configuration action is provided.
-        builder.PatchServiceDescriptor<TContext>();
+        builder.CheckDbContextRegistered<TContext>();
 
         ConfigureInstrumentation<TContext>(builder, settings);
     }

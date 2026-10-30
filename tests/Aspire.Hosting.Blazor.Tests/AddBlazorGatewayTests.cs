@@ -14,7 +14,6 @@ using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
-#pragma warning disable ASPIREDOCKERFILEBUILDER001 // DockerfileBuilder is experimental
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchArgsOverrideAnnotation is experimental
 #pragma warning disable ASPIRECONTAINERRUNTIME001 // Container image build and cleanup are experimental
 #pragma warning disable ASPIREPIPELINES003 // Container image manager is experimental
@@ -123,7 +122,7 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
             "Blazor/Blazor.csproj",
             ".aspire/scripts/PrefixEndpoints.cs",
             "app",
-            "11.0.100-rc.1.26425.128",
+            "11.0.100-rc.2.26504.105",
             "net11.0");
 
         await Verify(dockerfile, extension: "Dockerfile")
@@ -136,7 +135,7 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
     [InlineData("8.0.408", "net8.0")]
     [InlineData("9.0.203", "net9.0")]
     [InlineData("10.0.201", "net10.0")]
-    [InlineData("11.0.100-rc.1.26425.128", "net11.0")]
+    [InlineData("11.0.100-rc.2.26504.105", "net11.0")]
     public void BlazorWasmPublishCompanion_InstallsClientSdkAlongsideGatewaySdk(string sdkVersion, string framework)
     {
         var dockerfile = BlazorGatewayExtensions.BuildBlazorWasmPublishDockerfile(
@@ -377,33 +376,27 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task GetPublishPropertiesAsync_UsesReleaseConfiguration()
     {
-        var directory = Directory.CreateTempSubdirectory();
-        try
-        {
-            var projectPath = Path.Combine(directory.FullName, "Client.csproj");
-            await File.WriteAllTextAsync(
-                projectPath,
-                """
-                <Project Sdk="Microsoft.NET.Sdk">
-                  <PropertyGroup>
-                    <TargetFramework Condition="'$(Configuration)' == 'Debug'">net12.0</TargetFramework>
-                    <TargetFramework Condition="'$(Configuration)' == 'Release'">net11.0</TargetFramework>
-                  </PropertyGroup>
-                </Project>
-                """);
+        using var fileSystem = new TestFileSystemService();
+        using var directory = fileSystem.TempDirectory.CreateTempSubdirectory();
+        var projectPath = Path.Combine(directory.Path, "Client.csproj");
+        await File.WriteAllTextAsync(
+            projectPath,
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework Condition="'$(Configuration)' == 'Debug'">net12.0</TargetFramework>
+                <TargetFramework Condition="'$(Configuration)' == 'Release'">net11.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
 
-            var properties = await BlazorWasmAppBuilder.GetPublishPropertiesAsync(
-                projectPath,
-                NullLogger.Instance,
-                CancellationToken.None);
+        var properties = await BlazorWasmAppBuilder.GetPublishPropertiesAsync(
+            projectPath,
+            NullLogger.Instance,
+            CancellationToken.None);
 
-            Assert.NotNull(properties);
-            Assert.Equal("net11.0", properties.TargetFramework);
-        }
-        finally
-        {
-            directory.Delete(recursive: true);
-        }
+        Assert.NotNull(properties);
+        Assert.Equal("net11.0", properties.TargetFramework);
     }
 
     [Theory]

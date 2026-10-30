@@ -70,8 +70,8 @@ internal sealed class AppHostCandidateFinder(
         // VCS / IDE
         ".git", ".vs", ".idea",
 
-        // Agent skill roots ship apphost.* files as code samples, not runnable AppHosts (see
-        // SkillLocation). .agents and .claude are tool-owned, so the whole directory is excluded;
+        // Agent skill roots ship apphost.* files as code samples, not runnable AppHosts.
+        // .agents and .claude are tool-owned, so the whole directory is excluded;
         // .github and .opencode hold non-skill content too, so only the skills subpath is excluded.
         ".agents", ".claude", Path.Combine(".github", "skills"), Path.Combine(".opencode", "skill"),
 

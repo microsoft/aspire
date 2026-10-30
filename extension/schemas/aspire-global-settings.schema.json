@@ -29,6 +29,22 @@
           "description": "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
           "default": false
         },
+        "experimentalHostingIntegrations": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable experimental hosting integrations authored outside .NET",
+          "default": false
+        },
         "experimentalPolyglotGo": {
           "anyOf": [
             {
