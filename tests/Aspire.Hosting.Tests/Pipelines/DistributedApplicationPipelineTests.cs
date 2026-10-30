@@ -10,6 +10,7 @@
 
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests.Publishing;
@@ -22,8 +23,36 @@ using Microsoft.AspNetCore.InternalTesting;
 namespace Aspire.Hosting.Tests.Pipelines;
 
 [Trait("Partition", "4")]
-public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHelper)
+public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
+    // Executing the pipeline runs the built-in destroy step, which writes deployment state. Give each
+    // test its own ASPIRE_HOME so tests don't share (and repeatedly replace) one state file under the
+    // real user profile.
+    private readonly DirectoryInfo _aspireHome = Directory.CreateTempSubdirectory("aspire-pipeline-tests-");
+
+    public void Dispose()
+    {
+        _aspireHome.Delete(recursive: true);
+        GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WritesDeploymentStateUnderTestAspireHome()
+    {
+        using var builder = CreatePipelineTestBuilder();
+        var pipeline = new DistributedApplicationPipeline();
+        using var app = builder.Build();
+        var context = CreateDeployingContext(app);
+
+        var statePath = app.Services.GetRequiredService<IDeploymentStateManager>().StateFilePath;
+
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        Assert.NotNull(statePath);
+        Assert.StartsWith(_aspireHome.FullName + Path.DirectorySeparatorChar, statePath);
+        Assert.True(File.Exists(FileDeploymentStateManager.GetMigrationStatePath(statePath)));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -2590,6 +2619,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
             .Create(DistributedApplicationOperation.Publish, logLevel: logLevel, step: step)
             .WithTestAndResourceLogging(testOutputHelper);
 
+        builder.Configuration[KnownConfigNames.AspireHome] = _aspireHome.FullName;
         builder.Services.AddSingleton(testOutputHelper);
         builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
