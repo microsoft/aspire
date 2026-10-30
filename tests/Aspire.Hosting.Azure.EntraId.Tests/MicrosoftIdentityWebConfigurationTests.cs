@@ -1,14 +1,23 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
+using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.EntraId.Tests.TestServices;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Identity.Abstractions;
+using Microsoft.Identity.Client;
 using Microsoft.Identity.Web;
 
 namespace Aspire.Hosting.Azure.EntraId.Tests;
@@ -175,6 +184,87 @@ public class MicrosoftIdentityWebConfigurationTests
         Assert.Equal("/signout-callback-oidc", options.SignedOutCallbackPath.Value);
         Assert.True(options.RequireHttpsMetadata);
         Assert.Equal(ClientId, options.ClientId);
+    }
+
+    [Fact]
+    public async Task LocalCertificate_CanSignAuthorizationCodeRedemptionAndAcquireADownstreamToken()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddEntraIdApplication("entra-web").RunWithLocalDeveloperCertificateCredential();
+        using var app = builder.Build();
+        var credential = Assert.IsType<EntraIdLocalDeveloperCertificateCredential>(entra.Resource.ClientCredentials[0]);
+        var selected = await credential.GetCertificateAsync(app.Services, entra.Resource, TestContext.Current.CancellationToken);
+        var description = new CredentialDescription { SourceType = CredentialSource.Base64Encoded, Base64EncodedValue = selected.Base64EncodedValue };
+        await new DefaultCredentialsLoader().LoadCredentialsIfNeededAsync(description);
+        using var certificate = description.Certificate;
+        using var publicCertificate = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(selected.PublicCertificate));
+        using var publicKey = publicCertificate.GetRSAPublicKey();
+        Assert.NotNull(certificate);
+        Assert.NotNull(publicKey);
+        const string scope = "api://downstream/read";
+        const string authority = $"https://login.microsoftonline.com/{TenantId}";
+        var tokenRequests = 0;
+        using var handler = new CertificateTestHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            if (request.Method == HttpMethod.Get)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new
+                    {
+                        issuer = $"{authority}/v2.0",
+                        authorization_endpoint = $"{authority}/oauth2/v2.0/authorize",
+                        token_endpoint = $"{authority}/oauth2/v2.0/token"
+                    })
+                };
+            }
+
+            var form = QueryHelpers.ParseQuery(await request.Content!.ReadAsStringAsync(cancellationToken));
+            Assert.Equal("authorization_code", form["grant_type"]);
+            Assert.Equal("test-authorization-code", form["code"]);
+            Assert.Equal(ClientId, form["client_id"]);
+            Assert.Equal("urn:ietf:params:oauth:client-assertion-type:jwt-bearer", form["client_assertion_type"]);
+            var assertion = form["client_assertion"].ToString().Split('.');
+            var header = JsonNode.Parse(WebEncoders.Base64UrlDecode(assertion[0]))!;
+            var padding = header["alg"]!.GetValue<string>() == "PS256" ? RSASignaturePadding.Pss : RSASignaturePadding.Pkcs1;
+            Assert.True(publicKey.VerifyData(
+                Encoding.ASCII.GetBytes($"{assertion[0]}.{assertion[1]}"),
+                WebEncoders.Base64UrlDecode(assertion[2]), HashAlgorithmName.SHA256, padding));
+            Interlocked.Increment(ref tokenRequests);
+
+            // This is a simulated token endpoint, not a live tenant. MSAL parses the ID token for
+            // account caching; interactive OIDC signature/issuer validation is not exercised here.
+            var now = DateTimeOffset.UtcNow;
+            var idToken = $"{Encode(new { alg = "RS256" })}.{Encode(new { aud = ClientId, iss = $"{authority}/v2.0", sub = "test-user", oid = ClientId, tid = TenantId, preferred_username = "user@example.invalid", exp = now.AddHours(1).ToUnixTimeSeconds(), iat = now.ToUnixTimeSeconds() })}.signature";
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    token_type = "Bearer",
+                    access_token = "downstream-access-token",
+                    expires_in = 3600,
+                    scope,
+                    id_token = idToken,
+                    client_info = Encode(new { uid = ClientId, utid = TenantId })
+                })
+            };
+        });
+        using var httpClient = new HttpClient(handler);
+        var client = ConfidentialClientApplicationBuilder.Create(ClientId)
+            .WithAuthority(authority, validateAuthority: false)
+            .WithInstanceDiscovery(false)
+            .WithCertificate(certificate)
+            .WithHttpClientFactory(new CertificateTestMsalHttpClientFactory(httpClient))
+            .Build();
+
+        var redeemed = await client.AcquireTokenByAuthorizationCode([scope], "test-authorization-code").ExecuteAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("downstream-access-token", redeemed.AccessToken);
+        Assert.NotNull(redeemed.Account);
+        var downstream = await client.AcquireTokenSilent([scope], redeemed.Account).ExecuteAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("downstream-access-token", downstream.AccessToken);
+        Assert.Equal(1, tokenRequests);
+
+        static string Encode<T>(T value) => WebEncoders.Base64UrlEncode(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(value));
     }
 
     private static async Task<IConfigurationRoot> GetConfigurationAsync(
