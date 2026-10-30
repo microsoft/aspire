@@ -16,6 +16,7 @@ void main() throws Exception {
         var executable = builder.addExecutable("worker", "dotnet", ".", new String[] { "--info" });
         var endpoint = container.getEndpoint("http");
         var identity = builder.addAzureUserAssignedIdentity("identity");
+        var vault = builder.addAzureKeyVault("vault");
 
         // Existing registrations: configuration only, with literal or parameter IDs in any combination.
         var existingEntra = builder.addExistingEntraApplication("existing-entra", tenantId, exampleClient);
@@ -30,6 +31,7 @@ void main() throws Exception {
         tokenExchange.setTokenExchangeAuthority("https://login.microsoftonline.com/");
         existingEntra.withFederatedManagedIdentityCredential(exampleClient, tokenExchange);
         existingEntra.withCertificateFromKeyVault("https://vault.vault.azure.net", "certificate");
+        existingEntra.withCertificateFromKeyVault(vault, "vault-certificate");
         existingEntra.withCertificateThumbprint("CurrentUser/My", "thumbprint");
         existingEntra.withCertificateDistinguishedName("CurrentUser/My", "CN=certificate");
         existingEntra.withCertificateFromFile("/certs/client.pfx", certificatePassword);
