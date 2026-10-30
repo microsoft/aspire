@@ -432,7 +432,9 @@ var privateEndpointSubnet = vnet.AddSubnet("private-endpoint-subnet", "10.0.0.0/
 privateEndpointSubnet.AddPrivateEndpoint(apim);
 ```
 
-Aspire creates the service with its default public access, provisions the private endpoint and `privatelink.azure-api.net` DNS zone, waits for the connection to be approved, and then runs a staged update that disables public network access. During `aspire deploy`, Aspire uses the deployment credential to send a narrow ARM PATCH that changes only `publicNetworkAccess`. Published standalone Bicep uses a least-privilege deployment script for the same update because Bicep cannot express PATCH operations. Azure Deployment Scripts require a supporting storage account with shared-key authentication, so subscriptions that prohibit storage shared keys must use `aspire deploy` rather than deploying the published Bicep directly for this scenario. Private endpoints cannot be combined with classic or Premium v2 VNet injection. Consumption and Basic v2 do not support private endpoints.
+Aspire provisions the private endpoint and `privatelink.azure-api.net` DNS zone without changing the APIM service's public network access. **Adding a private endpoint does not make the gateway private-only:** new services retain their default public access, and existing services retain their configured access settings. To restrict gateway access to private endpoints, disable public network access separately after configuring and approving the private endpoint, as described in the [Azure API Management documentation](https://learn.microsoft.com/azure/api-management/private-endpoint#optionally-disable-public-network-access).
+
+Private endpoints can target new or existing APIM services. They cannot be combined with classic or Premium v2 VNet injection. Consumption and Basic v2 do not support private endpoints.
 
 ## Configure Azure provisioning for local development
 

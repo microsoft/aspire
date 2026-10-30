@@ -18,7 +18,6 @@ internal sealed class ApiManagementServiceProvisioningResource(string bicepIdent
     private BicepValue<string>? _skuName;
     private BicepValue<int>? _skuCapacity;
     private ManagedServiceIdentity? _identity;
-    private BicepValue<string>? _publicNetworkAccess;
     private BicepValue<string>? _virtualNetworkType;
     private BicepValue<string>? _subnetResourceId;
     private BicepList<ApiManagementHostnameConfigurationProvisioningModel>? _hostnameConfigurations;
@@ -60,12 +59,6 @@ internal sealed class ApiManagementServiceProvisioningResource(string bicepIdent
     {
         get { Initialize(); return _identity!; }
         set { Initialize(); AssignOrReplace(ref _identity, value); }
-    }
-
-    public BicepValue<string> PublicNetworkAccess
-    {
-        get { Initialize(); return _publicNetworkAccess!; }
-        set { Initialize(); _publicNetworkAccess!.Assign(value); }
     }
 
     public BicepValue<string> VirtualNetworkType
@@ -118,7 +111,6 @@ internal sealed class ApiManagementServiceProvisioningResource(string bicepIdent
         _skuName = DefineProperty<string>(nameof(SkuName), ["sku", "name"], isRequired: true);
         _skuCapacity = DefineProperty<int>(nameof(SkuCapacity), ["sku", "capacity"], isRequired: true);
         _identity = DefineModelProperty<ManagedServiceIdentity>(nameof(Identity), ["identity"]);
-        _publicNetworkAccess = DefineProperty<string>(nameof(PublicNetworkAccess), ["properties", "publicNetworkAccess"]);
         _virtualNetworkType = DefineProperty<string>(nameof(VirtualNetworkType), ["properties", "virtualNetworkType"]);
         _subnetResourceId = DefineProperty<string>(nameof(SubnetResourceId), ["properties", "virtualNetworkConfiguration", "subnetResourceId"]);
         _hostnameConfigurations = DefineListProperty<ApiManagementHostnameConfigurationProvisioningModel>(

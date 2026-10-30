@@ -180,7 +180,9 @@ When you add a private endpoint to an Azure resource:
 1. A Private DNS Zone is automatically created for the service (e.g., `privatelink.blob.core.windows.net`)
 2. A Virtual Network Link connects the DNS zone to your VNet
 3. A DNS Zone Group is created on the private endpoint for automatic DNS registration
-4. The target resource is automatically configured to deny public network access
+4. The target resource is automatically configured to deny public network access when supported by its integration
+
+API Management is an exception: adding a private endpoint leaves its public network access unchanged. Disable public access separately after configuring and approving the private endpoint if you need a private-only gateway.
 
 To override the automatic network lockdown, use `ConfigureInfrastructure`:
 

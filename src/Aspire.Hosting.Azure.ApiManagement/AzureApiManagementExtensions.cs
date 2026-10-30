@@ -1601,12 +1601,6 @@ public static class AzureApiManagementExtensions
             }
         }
 
-        if (isExisting && hasPrivateEndpoint)
-        {
-            throw new InvalidOperationException(
-                $"Existing API Management resource '{azureResource.Name}' cannot change its public network access.");
-        }
-
         if (isExisting && azureResource.VirtualNetworkConfiguration is not null)
         {
             throw new InvalidOperationException(

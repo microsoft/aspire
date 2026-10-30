@@ -6,7 +6,6 @@
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREPIPELINES001
 
-using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.ApiManagement.Provisioning;
 using Aspire.Hosting.Pipelines;
@@ -473,7 +472,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task PrivateEndpointAddsStagedPublicAccessUpdate()
+    public async Task PrivateEndpointsPreservePublicAccess()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vnet = builder.AddAzureVirtualNetwork("vnet");
@@ -489,103 +488,14 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
-        Assert.NotNull(apim.Resource.PublicNetworkAccessUpdate);
-        Assert.Equal(2, apim.Resource.PublicNetworkAccessUpdate.PrivateEndpoints.Count);
-        var (_, serviceBicep) = await GetManifestWithBicep(apim.Resource);
-        var (_, updateBicep) = await GetManifestWithBicep(apim.Resource.PublicNetworkAccessUpdate);
+        var modules = new List<string>();
+        foreach (var resource in builder.Resources.OfType<AzureProvisioningResource>())
+        {
+            var (_, bicep) = await GetManifestWithBicep(resource);
+            modules.Add($"// Resource: {resource.Name}\n{bicep}");
+        }
 
-        Assert.DoesNotContain("publicNetworkAccess:", serviceBicep);
-        Assert.Contains("Microsoft.Resources/deploymentScripts@2023-08-01", updateBicep);
-        Assert.Contains("PRIVATE_ENDPOINT_ID", updateBicep);
-        Assert.Contains("PRIVATE_ENDPOINT_ID_1", updateBicep);
-        Assert.Contains("privateLinkServiceConnectionState.status", updateBicep);
-        Assert.Contains("publicNetworkAccess", updateBicep);
-        Assert.Contains("Disabled", updateBicep);
-        await Verify(updateBicep, "bicep");
-    }
-
-    [Fact]
-    public async Task PrivateEndpointApprovalWaitsUntilApproved()
-    {
-        var states = new Queue<PrivateEndpointApprovalState>([
-            PrivateEndpointApprovalState.Pending,
-            PrivateEndpointApprovalState.Approved,
-        ]);
-
-        await AzureApiManagementPublicNetworkAccessUpdater.WaitForPrivateEndpointApprovalAsync(
-            _ => Task.FromResult(states.Dequeue()),
-            attempts: 2,
-            pollInterval: TimeSpan.Zero,
-            cancellationToken: default);
-
-        Assert.Empty(states);
-    }
-
-    [Fact]
-    public async Task PrivateEndpointApprovalRejectsRejectedConnection()
-    {
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            AzureApiManagementPublicNetworkAccessUpdater.WaitForPrivateEndpointApprovalAsync(
-                _ => Task.FromResult(PrivateEndpointApprovalState.Rejected),
-                attempts: 1,
-                pollInterval: TimeSpan.Zero,
-                cancellationToken: default));
-
-        Assert.Contains("Public network access was not disabled", exception.Message);
-    }
-
-    [Fact]
-    public async Task PrivateEndpointApprovalTimesOutWhilePending()
-    {
-        var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
-            AzureApiManagementPublicNetworkAccessUpdater.WaitForPrivateEndpointApprovalAsync(
-                _ => Task.FromResult(PrivateEndpointApprovalState.Pending),
-                attempts: 2,
-                pollInterval: TimeSpan.Zero,
-                cancellationToken: default));
-
-        Assert.Contains("Public network access was not disabled", exception.Message);
-    }
-
-    [Theory]
-    [InlineData(1, 1, 1)]
-    [InlineData(1, 0, 0)]
-    [InlineData(1, 2, 2)]
-    public void MultiplePrivateEndpointApprovalStatesAreCombined(int first, int second, int expected)
-    {
-        var actual = AzureApiManagementPublicNetworkAccessUpdater.GetCombinedPrivateEndpointApprovalState(
-            [(PrivateEndpointApprovalState)first, (PrivateEndpointApprovalState)second]);
-
-        Assert.Equal((PrivateEndpointApprovalState)expected, actual);
-    }
-
-    [Theory]
-    [InlineData("Approved", 1)]
-    [InlineData("Pending", 0)]
-    [InlineData("Rejected", 2)]
-    [InlineData("Disconnected", 2)]
-    public void PrivateEndpointApprovalReadsConnectionState(
-        string status,
-        int expected)
-    {
-        using var document = JsonDocument.Parse(
-            $$"""
-            {
-              "privateLinkServiceConnections": [
-                {
-                  "properties": {
-                    "privateLinkServiceConnectionState": {
-                      "status": "{{status}}"
-                    }
-                  }
-                }
-              ]
-            }
-            """);
-
-        Assert.Equal(
-            (PrivateEndpointApprovalState)expected,
-            AzureApiManagementPublicNetworkAccessUpdater.GetPrivateEndpointApprovalState(document.RootElement));
+        await Verify(string.Join("\n\n", modules), "bicep");
     }
 
     [Fact]
@@ -609,7 +519,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task PrivateEndpointRejectsExistingServiceMutation()
+    public async Task PrivateEndpointSupportsExistingServiceWithoutMutation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var subnet = builder.AddAzureVirtualNetwork("vnet")
@@ -619,12 +529,14 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             PublisherEmail = "api-owners@example.com",
             Sku = AzureApiManagementSku.Developer,
         }).PublishAsExisting("existing-apim", resourceGroup: null);
-        subnet.AddPrivateEndpoint(apim);
+        var privateEndpoint = subnet.AddPrivateEndpoint(apim);
 
         using var app = builder.Build();
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        await ExecuteBeforeStartHooksAsync(app, default);
 
-        Assert.Contains("cannot change its public network access", exception.Message);
+        var (_, bicep) = await GetManifestWithBicep(apim.Resource);
+        var (_, privateEndpointBicep) = await GetManifestWithBicep(privateEndpoint.Resource);
+        await Verify($"{bicep}\n{privateEndpointBicep}", "bicep");
     }
 
     [Fact]

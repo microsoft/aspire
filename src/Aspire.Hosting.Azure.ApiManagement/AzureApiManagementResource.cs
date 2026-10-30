@@ -25,7 +25,7 @@ public class AzureApiManagementResource(
     string name,
     AzureApiManagementOptions options,
     Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IAzurePrivateEndpointTargetNotification
+    : AzureProvisioningResource(name, configureInfrastructure), IAzurePrivateEndpointTarget
 {
     private readonly List<string> _inboundPolicyStatements = [];
 
@@ -120,8 +120,6 @@ public class AzureApiManagementResource(
     /// </summary>
     internal AzureApiManagementVirtualNetworkConfiguration? VirtualNetworkConfiguration { get; set; }
 
-    internal AzureApiManagementPublicNetworkAccessUpdateResource? PublicNetworkAccessUpdate { get; set; }
-
     internal AzureUserAssignedIdentityResource? KeyVaultIdentity { get; set; }
 
     internal List<BicepOutputReference> KeyVaultRoleAssignmentDependencies { get; } = [];
@@ -174,26 +172,6 @@ public class AzureApiManagementResource(
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["Gateway"];
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.azure-api.net"];
-
-    void IAzurePrivateEndpointTargetNotification.OnPrivateEndpointCreated(
-        IResourceBuilder<AzurePrivateEndpointResource> privateEndpoint)
-    {
-        if (PublicNetworkAccessUpdate is not null)
-        {
-            PublicNetworkAccessUpdate.AddPrivateEndpoint(privateEndpoint.Resource);
-            privateEndpoint.ApplicationBuilder.CreateResourceBuilder(PublicNetworkAccessUpdate)
-                .WithRelationship(privateEndpoint.Resource, "Private endpoint");
-            return;
-        }
-
-        PublicNetworkAccessUpdate = new AzureApiManagementPublicNetworkAccessUpdateResource(
-            AzureApiManagementExtensions.CreateBoundedIdentifier($"{Name}-disable-public-access", 64),
-            this,
-            privateEndpoint.Resource);
-        privateEndpoint.ApplicationBuilder.AddResource(PublicNetworkAccessUpdate)
-            .WithRelationship(this, "Disables public access")
-            .WithRelationship(privateEndpoint.Resource, "Private endpoint");
-    }
 }
 
 internal sealed record AzureApiManagementVirtualNetworkConfiguration(

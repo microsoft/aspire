@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREAZURE003 // Azure provisioning APIs are experimental.
 #pragma warning disable CS0618 // Type or member is obsolete
 
 using System.Diagnostics.CodeAnalysis;
@@ -926,7 +925,6 @@ internal sealed class MockResponse(int status) : Response
 
 internal sealed class TestArmClientProvider : IArmClientProvider
 {
-    private readonly Func<TokenCredential, ArmClient>? _rawArmClientFactory;
     private readonly IArmClient? _armClient;
     private readonly Dictionary<string, object>? _deploymentOutputs;
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
@@ -948,11 +946,6 @@ internal sealed class TestArmClientProvider : IArmClientProvider
     public TestArmClientProvider(IArmClient armClient)
     {
         _armClient = armClient;
-    }
-
-    public TestArmClientProvider(Func<TokenCredential, ArmClient> rawArmClientFactory)
-    {
-        _rawArmClientFactory = rawArmClientFactory;
     }
 
     public TestArmClientProvider(Func<string, Dictionary<string, object>> deploymentOutputsProvider)
@@ -1015,14 +1008,6 @@ internal sealed class TestArmClientProvider : IArmClientProvider
     {
         return new TestArmClient();
     }
-
-    public ArmClient GetRawArmClient(TokenCredential credential) =>
-        _rawArmClientFactory is not null ? _rawArmClientFactory(credential) : new(credential);
-}
-
-internal sealed class TestAzureProvisioningResource() : AzureProvisioningResource("test", _ => { })
-{
-    public static ArmClient CreateArmClientForTest(IServiceProvider services) => CreateArmClient(services);
 }
 
 internal sealed class TestSecretClientProvider(ITokenCredentialProvider tokenCredentialProvider) : ISecretClientProvider

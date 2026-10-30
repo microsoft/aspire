@@ -4,17 +4,13 @@
 #pragma warning disable ASPIREAZURE003 // Bicep extension declarations are experimental.
 
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning;
-using Aspire.Hosting.Azure.Provisioning.Internal;
 using Azure.Provisioning;
 using Azure.Provisioning.Authorization;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Primitives;
-using Azure.ResourceManager;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure;
 
@@ -47,27 +43,6 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
     /// functionality for building Azure resources.
     /// </summary>
     public ProvisioningBuildOptions? ProvisioningBuildOptions { get; set; }
-
-    /// <summary>
-    /// Creates an Azure Resource Manager client using Aspire's provisioning credential and client configuration.
-    /// </summary>
-    /// <param name="services">The service provider for the deployment operation.</param>
-    /// <returns>An Azure Resource Manager client configured by Aspire's Azure provisioning services.</returns>
-    /// <remarks>
-    /// Derived resources can use this method in deployment pipeline steps that call Azure APIs after
-    /// provisioning infrastructure. Do not call it while constructing the application model or generating
-    /// publish artifacts, because obtaining the provisioning credential can require Azure authentication.
-    /// </remarks>
-    /// <exception cref="ArgumentNullException"><paramref name="services"/> is <see langword="null"/>.</exception>
-    /// <exception cref="InvalidOperationException">The required Azure provisioning services are not registered.</exception>
-    [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-    protected static ArmClient CreateArmClient(IServiceProvider services)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-
-        var credential = services.GetRequiredService<ITokenCredentialProvider>().TokenCredential;
-        return services.GetRequiredService<IArmClientProvider>().GetRawArmClient(credential);
-    }
 
     /// <summary>
     /// Adds a new <see cref="ProvisionableResource"/> into <paramref name="infra"/>. The new resource
