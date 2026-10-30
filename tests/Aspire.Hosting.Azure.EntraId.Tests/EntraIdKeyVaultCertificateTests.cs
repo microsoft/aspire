@@ -53,7 +53,18 @@ public class EntraIdKeyVaultCertificateTests
 
         var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             web.Resource, operation, TestServiceProvider.Instance);
-        await Verify(environment).UseParameters(operation, configureCredentialAfterReference);
+        var expectedVaultUrl = operation == DistributedApplicationOperation.Run
+            ? "https://contoso.vault.usgovcloudapi.net/"
+            : "{vault.outputs.vaultUri}";
+        Assert.Equal(new Dictionary<string, string>
+        {
+            ["AzureAd__Instance"] = "https://login.microsoftonline.com/",
+            ["AzureAd__TenantId"] = TenantId,
+            ["AzureAd__ClientId"] = ClientId,
+            ["AzureAd__ClientCredentials__0__SourceType"] = "KeyVault",
+            ["AzureAd__ClientCredentials__0__KeyVaultUrl"] = expectedVaultUrl,
+            ["AzureAd__ClientCredentials__0__KeyVaultCertificateName"] = "web-certificate"
+        }, environment);
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(environment.Select(pair =>
             new KeyValuePair<string, string?>(pair.Key.Replace("__", ":", StringComparison.Ordinal), pair.Value))).Build();
