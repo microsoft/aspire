@@ -3052,7 +3052,50 @@ public static partial class JavaScriptHostingExtensions
                     .WithWorkingDirectory(resource.Resource.WorkingDirectory)
                     .WithArgs(installCommand.Args);
 
+                // An explicitly started app must not start its installer during AppHost startup. Evaluate this
+                // here rather than when the installer is created because WithExplicitStart() can be called after
+                // the package manager method.
+                if (ShouldDeferInstallerWithParent(resource.Resource, installer))
+                {
+                    installerBuilder.WithExplicitStart();
+                }
+
                 return Task.CompletedTask;
+            });
+
+            // When the deferred installer's parent is started, start the installer too so the parent's
+            // WaitForCompletion dependency can be satisfied. Builder-time subscriptions run before the
+            // orchestrator's WaitFor handler, which is registered when the application starts.
+            var installerStartLock = new SemaphoreSlim(1, 1);
+            resource.OnBeforeResourceStarted(async (parent, e, cancellationToken) =>
+            {
+                if (!ParentWaitsForInstaller(parent, installer) ||
+                    !installer.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _))
+                {
+                    return;
+                }
+
+                await installerStartLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    var notificationService = e.Services.GetRequiredService<ResourceNotificationService>();
+                    if (!notificationService.TryGetCurrentState(installer.Name, out var installerEvent) ||
+                        installerEvent.Snapshot.State?.Text != KnownResourceStates.NotStarted)
+                    {
+                        return;
+                    }
+
+                    var commandService = e.Services.GetRequiredService<ResourceCommandService>();
+                    var result = await commandService.ExecuteCommandAsync(installer, KnownResourceCommands.StartCommand, cancellationToken).ConfigureAwait(false);
+                    if (!result.Success)
+                    {
+                        throw new InvalidOperationException($"Failed to start installer resource '{installer.Name}' for '{parent.Name}': {result.Message}");
+                    }
+                }
+                finally
+                {
+                    installerStartLock.Release();
+                }
             });
 
             if (install)
@@ -3070,6 +3113,14 @@ public static partial class JavaScriptHostingExtensions
             resource.WithAnnotation(new JavaScriptPackageInstallerAnnotation(installer));
         }
     }
+
+    private static bool ParentWaitsForInstaller(IResource parent, JavaScriptInstallerResource installer) =>
+        parent.Annotations.OfType<WaitAnnotation>().Any(w => w.Resource == installer);
+
+    private static bool ShouldDeferInstallerWithParent(IResource parent, JavaScriptInstallerResource installer) =>
+        parent.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _) &&
+        ParentWaitsForInstaller(parent, installer) &&
+        !installer.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _);
 
     private static void DisableExistingInstaller<TResource>(IResourceBuilder<TResource> resource) where TResource : JavaScriptAppResource
     {
