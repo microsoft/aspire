@@ -1,0 +1,66 @@
+{
+  "run_id": 41004872500,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41004872500",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-30T05:45:04Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "88ff9ba57c2841cce759adffa849373f9406b0f5",
+    "failed_sha": "63c361dd3b0b32d55ab7c2276a660a8fd02dd127",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-1, Hosting-1, tests/Aspire.Hosting.Te... / Hosting-1 (windows-latest)",
+      "id": 123897944326,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41004872500/job/123897944326",
+      "classification": "flaky-test",
+      "reason": "Known flaky test failed with TaskCanceledException in StopAsync",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "id": 123897954226,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41004872500/job/123897954226",
+      "classification": "flaky-test",
+      "reason": "Known flaky cancellation race test failed",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Tests.DistributedApplicationTests.BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-1, Hosting-1, tests/Aspire.Hosting.Te... / Hosting-1 (windows-latest)",
+      "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StopAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 497\n   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in D:\\a\\aspire\\aspire\\tests\\Shared\\AsyncTestHelpers.cs:line 197\n   at Aspire.Hosting.Tests.DistributedApplicationTests.BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\\DistributedApplicationTests.cs:line 365\n--- End of stack trace from previous location ---",
+      "standard_output": "| [2026-10-30T04:53:49] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n| [2026-10-30T04:53:49] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-10-30T04:53:49] Aspire.Hosting.DistributedApplication Information: Application host directory is: D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\n| [2026-10-30T04:53:49] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-10-30T04:53:49] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-10-30T04:53:49] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-10-30T04:53:49] Aspire.Hosting.ApplicationModel.ResourceNotificationService Debug: Waiting for resource 'before-start-event-explicit-start-serviceb' to match predicate.\n| [2026-10-30T04:53:49] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: C:\\Users\\runneradmin\\.aspire\\cli\\bch\\29Lw4tyIJ44vi7ktBBe.7792\n| [2026-10-30T04:53:49] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on C:\\Users\\runneradmin\\.aspire\\cli\\bch\\29Lw4tyIJ44vi7ktBBe.7792\n| [2026-10-30T04:53:59] Aspire.Hosting.Dcp.DcpHost Warning: No trusted Aspire development certificate was found. See https://aka.ms/aspire/devcerts for more information.\n| [2026-10-30T04:53:59] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcp0rlow1j5.1a0\n| [2026-10-30T04:53:59] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 7792 --detach --kubeconfig \"C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcp0rlow1j5.1a0\\kubeconfig\"\n| [2026-10-30T04:53:59] Aspire.Hosting.Dcp.DcpHost Debug: A complete bundled ConPTY provider was not found; DCP will use the inbox Windows provider.\n| [2026-10-30T04:53:59] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: False\n| [2026-10-30T04:53:59] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource before-start-event-explicit-start-servicea/before-start-event-explicit-start-servicea-yzwwjetg-5b931088 update published: ResourceType = Project, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled rebuild (Rebuild) = Disabled }\n| [2026-10-30T04:53:59] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource before-start-event-explicit-start-servicea-rebuilder/before-start-event-explicit-start-servicea-rebuilder-fwpjmasp-5b931088 update published: ResourceType = Executable, CreationTimeStamp = (null), State = { Text = NotStarted, Style = (null) }, IsHidden = True, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = { resource.parentName = before-start-event-explicit-start-servicea-yzwwjetg-5b931088 }, HealthReports = {  }, Commands = {  }\n| [2026-10-30T04:53:59] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource before-start-event-explicit-start-serviceb/before-start-event-explicit-start-serviceb-vwgmkdbv-5b931088 update published: ResourceType = Project, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled rebuild (Rebuild) = Disabled }\n| [2026-10-30T04:53:59] A",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches known flaky prior cause; timing/cancellation race unrelated to a deterministic change"
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSandboxesTests.AzureDevComputeClientKeepsCancellationAfterRejectedCreateDefinite",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "error": "Assert.False() Failure\nExpected: False\nActual:   True",
+      "stack_trace": "at Aspire.Hosting.Azure.Tests.AzureSandboxesTests.AzureDevComputeClientKeepsCancellationAfterRejectedCreateDefinite() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Azure.Tests/AzureSandboxesTests.cs:line 1605\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches known flaky prior cause; timing/cancellation race unrelated to a deterministic change"
+    }
+  ],
+  "causes": [
+    "aspire-hosting-tests-beforeresourcestartedevent-stopasync-taskcanceled",
+    "azure-sandboxes-devcomputeclient-cancellation-race"
+  ]
+}
