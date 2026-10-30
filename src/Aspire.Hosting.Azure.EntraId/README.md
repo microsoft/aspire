@@ -556,11 +556,14 @@ await builder.addContainer("web", "my-web-image").withReference(entraWeb);
 ```
 
 The vault URI remains a deferred resource reference: local runs resolve the vault output (or its emulator
-endpoint), while published configuration retains the vault output reference. Referencing workloads receive
-the **Key Vault Certificate User** role, which allows reading certificates and their private keys.
-Use `WithRoleAssignments` on a workload to override this assignment, including an empty role list to manage
-access yourself. Local provisioning grants the required access to the developer identity; Azure deployment
-uses the workload's managed identity. An existing vault can be modeled with `RunAsExisting` or
+endpoint), while published configuration retains the vault output reference. Workloads need the
+**Key Vault Certificate User** role to read the certificate with its private key. When running locally, the
+vault's default roles are extended with it for the developer identity. When publishing, each workload that
+references the Entra application receives it, so the publish target must support role assignments (for example
+`AddAzureContainerAppEnvironment`); otherwise publishing fails.
+Use `WithRoleAssignments` on a workload before referencing the Entra application to replace its assignment, including an
+empty role list to manage access yourself. Locally, call `ClearDefaultRoleAssignments` on the vault before adding the
+certificate to manage the vault's roles yourself. An existing vault can be modeled with `RunAsExisting` or
 `PublishAsExisting`, and its access policies or RBAC configuration must allow certificate retrieval.
 
 The certificate must already exist in the vault, have an exportable private key, and have its public key

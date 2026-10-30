@@ -3,11 +3,13 @@
 
 #pragma warning disable ASPIREAZURE003 // Verifies role assignments and resource dependencies.
 
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.KeyVault;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Identity.Abstractions;
 
 namespace Aspire.Hosting.Azure.EntraId.Tests;
@@ -86,15 +88,25 @@ public class EntraIdKeyVaultCertificateTests
         Assert.Equal("https://localhost:8443", environment["AzureAd__ClientCredentials__0__KeyVaultUrl"]);
     }
 
-    [Fact]
-    public async Task ResourceCredential_DeclaresCertificateAccessForConsumers()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Publish_ConsumersReceiveCertificateAccess(bool configureCredentialAfterReference)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault");
-        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
-            .WithCertificateFromKeyVault(vault, "web-certificate");
-        var web = builder.AddResource(new ProjectResource("web")).WithReference(entra);
-        await web.Resource.GetResourceDependenciesAsync(builder.ExecutionContext);
+        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId);
+        var web = builder.AddResource(new ProjectResource("web"));
+        if (configureCredentialAfterReference)
+        {
+            web.WithReference(entra);
+            entra.WithCertificateFromKeyVault(vault, "web-certificate");
+        }
+        else
+        {
+            entra.WithCertificateFromKeyVault(vault, "web-certificate");
+            web.WithReference(entra);
+        }
 
         var annotation = Assert.Single(web.Resource.Annotations.OfType<RoleAssignmentAnnotation>());
         Assert.Same(vault.Resource, annotation.Target);
@@ -103,9 +115,9 @@ public class EntraIdKeyVaultCertificateTests
     }
 
     [Fact]
-    public async Task WithCredential_ResourceCredentialAlsoDeclaresCertificateAccess()
+    public void Publish_WithCredentialAlsoDeclaresCertificateAccess()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault");
         var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
             .WithCredential(new EntraIdKeyVaultCertificateCredential
@@ -114,32 +126,21 @@ public class EntraIdKeyVaultCertificateTests
                 CertificateNameInKeyVault = "web-certificate"
             });
         var web = builder.AddResource(new ProjectResource("web")).WithReference(entra);
-        await web.Resource.GetResourceDependenciesAsync(builder.ExecutionContext);
 
         Assert.Same(vault.Resource,
             Assert.Single(web.Resource.Annotations.OfType<RoleAssignmentAnnotation>()).Target);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ResourceCredential_RespectsExplicitRoleAssignments(bool configureRolesAfterReference)
+    [Fact]
+    public void Publish_ExplicitRoleAssignmentsOnConsumerAreRespected()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault");
         var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
             .WithCertificateFromKeyVault(vault, "certificate");
-        var web = builder.AddResource(new ProjectResource("web"));
-        if (configureRolesAfterReference)
-        {
-            web.WithReference(entra).WithRoleAssignments(vault, []);
-        }
-        else
-        {
-            web.WithRoleAssignments(vault, []).WithReference(entra);
-        }
-
-        await web.Resource.GetResourceDependenciesAsync(builder.ExecutionContext);
+        var web = builder.AddResource(new ProjectResource("web"))
+            .WithRoleAssignments(vault, [])
+            .WithReference(entra);
 
         var annotation = Assert.Single(web.Resource.Annotations.OfType<RoleAssignmentAnnotation>());
         Assert.Same(vault.Resource, annotation.Target);
@@ -147,9 +148,9 @@ public class EntraIdKeyVaultCertificateTests
     }
 
     [Fact]
-    public async Task ResourceCredential_MultipleConsumersAndCertificatesDeduplicateAccess()
+    public void Publish_MultipleConsumersAndCertificatesDeduplicateAccess()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault");
         var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId);
         var first = builder.AddResource(new ProjectResource("first")).WithReference(entra);
@@ -159,12 +160,80 @@ public class EntraIdKeyVaultCertificateTests
 
         foreach (var consumer in new[] { first.Resource, second.Resource })
         {
-            await consumer.GetResourceDependenciesAsync(builder.ExecutionContext);
             var annotation = Assert.Single(consumer.Annotations.OfType<RoleAssignmentAnnotation>());
             Assert.Same(vault.Resource, annotation.Target);
             Assert.Equal(KeyVaultBuiltInRole.KeyVaultCertificateUser.ToString(), Assert.Single(annotation.Roles).Id);
         }
     }
+
+    [Fact]
+    public void Run_CertificateAccessExtendsTheVaultDefaultRolesOnce()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var vault = builder.AddAzureKeyVault("vault");
+        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
+            .WithCertificateFromKeyVault(vault, "first-certificate")
+            .WithCertificateFromKeyVault(vault, "second-certificate");
+        var web = builder.AddResource(new ProjectResource("web")).WithReference(entra);
+
+        var defaults = Assert.Single(vault.Resource.Annotations.OfType<DefaultRoleAssignmentsAnnotation>());
+        Assert.Equal(
+            [KeyVaultBuiltInRole.KeyVaultSecretsUser.ToString(), KeyVaultBuiltInRole.KeyVaultCertificateUser.ToString()],
+            defaults.Roles.Select(r => r.Id).Order());
+        Assert.Empty(web.Resource.Annotations.OfType<RoleAssignmentAnnotation>());
+    }
+
+    [Fact]
+    public void Run_ClearedDefaultRoleAssignmentsAreNotRestored()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var vault = builder.AddAzureKeyVault("vault").ClearDefaultRoleAssignments();
+        builder.AddExistingEntraApplication("entra", TenantId, ClientId)
+            .WithCertificateFromKeyVault(vault, "certificate");
+
+        Assert.Empty(vault.Resource.Annotations.OfType<DefaultRoleAssignmentsAnnotation>());
+    }
+
+    [Fact]
+    public async Task Publish_EnvironmentWithoutRoleAssignmentSupportFails()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vault = builder.AddAzureKeyVault("vault");
+        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
+            .WithCertificateFromKeyVault(vault, "web-certificate");
+        builder.AddContainer("web", "image").WithReference(entra);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => PrepareAzureResourcesAsync(builder));
+        Assert.Contains("does not support role assignments", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Run_PlainExecutableConsumerGetsCertificateUserRole()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var vault = builder.AddAzureKeyVault("vault");
+        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
+            .WithCertificateFromKeyVault(vault, "web-certificate");
+        builder.AddExecutable("web", "node", ".").WithReference(entra);
+
+        var roleAssignments = await PrepareAzureResourcesAsync(builder);
+
+        Assert.Contains(roleAssignments, t => t.Contains(KeyVaultBuiltInRole.KeyVaultCertificateUser.ToString(), StringComparison.Ordinal));
+    }
+
+    private static async Task<string[]> PrepareAzureResourcesAsync(IDistributedApplicationBuilder builder)
+    {
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        return app.Services.GetRequiredService<DistributedApplicationModel>()
+            .Resources.OfType<AzureRoleAssignmentResource>()
+            .Select(r => r.GetBicepTemplateString())
+            .ToArray();
+    }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 
     [Fact]
     public async Task ResourceCredential_RejectsInvalidInputs()
