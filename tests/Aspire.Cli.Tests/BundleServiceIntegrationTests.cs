@@ -113,17 +113,25 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     /// Extraction must not delete persisted dashboard data (including a running dashboard's database).
     /// </summary>
     [Theory]
-    [InlineData("runs")]
-    [InlineData("resumes")]
-    [InlineData("apps")]
-    public async Task ExtractAsync_PreservesDashboardDataInLayoutRoot(string dataDirectoryName)
+    [InlineData("runs", false)]
+    [InlineData("resumes", false)]
+    [InlineData("apps", false)]
+    [InlineData("runs", true)]
+    [InlineData("resumes", true)]
+    [InlineData("apps", true)]
+    public async Task ExtractAsync_PreservesDashboardDataInLayoutRoot(string dataDirectoryName, bool includeLegacyDashboardExecutable)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var layoutRoot = workspace.WorkspaceRoot.FullName;
-        var dashboardDataDir = Path.Combine(layoutRoot, BundleDiscovery.DashboardDirectoryName, dataDirectoryName, "run-1");
+        var dashboardDir = Path.Combine(layoutRoot, BundleDiscovery.DashboardDirectoryName);
+        var dashboardDataDir = Path.Combine(dashboardDir, dataDirectoryName, "run-1");
         Directory.CreateDirectory(dashboardDataDir);
         var databasePath = Path.Combine(dashboardDataDir, "dashboard.db");
         File.WriteAllText(databasePath, "telemetry");
+        if (includeLegacyDashboardExecutable)
+        {
+            File.WriteAllText(Path.Combine(dashboardDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)), "dashboard");
+        }
 
         var provider = new TestBundlePayloadProvider(CreateFakeBundlePayload());
         var service = CreateService(provider, new TestLayoutDiscovery(layoutRoot));
