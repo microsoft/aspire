@@ -113,7 +113,9 @@ public static class PageExtensions
     /// </returns>
     public static async Task<bool> InitializeViewModelAsync<TViewModel, TSerializableViewModel>(this IPageWithSessionAndUrlState<TViewModel, TSerializableViewModel> page) where TSerializableViewModel : class
     {
-        if (string.Equals(page.BasePath, page.NavigationManager.ToBaseRelativePath(page.NavigationManager.Uri)))
+        var relativePath = page.NavigationManager.ToBaseRelativePath(page.NavigationManager.Uri);
+        var isLegacy = TryRemoveLegacyPrefix(ref relativePath);
+        if (string.Equals(page.BasePath, relativePath))
         {
             var result = await page.SessionStorage.GetAsync<TSerializableViewModel>(page.SessionStorageKey).ConfigureAwait(false);
             if (result is { Success: true, Value: not null })
@@ -126,7 +128,10 @@ public static class PageExtensions
                     // Replace the initial address with this navigation.
                     // We do this because the visit to "/{BasePath}" then redirect to the final address is automatic from the user perspective.
                     // Replacing the visit to "/{BasePath}" is good because we want to take the user back to where they started, not an intermediary address.
-                    page.NavigationManager.NavigateTo(newUrl, new NavigationOptions { ReplaceHistoryEntry = true });
+                    // The previous experience's pages share the page state and URL builders with the new pages, so their
+                    // URLs are prefixed here. Relying on the legacy layout's rewrite instead would add a history entry,
+                    // and going back would land on "/legacy/{BasePath}", which restores and redirects again.
+                    page.NavigationManager.NavigateTo(isLegacy ? ToLegacyUrl(newUrl) : newUrl, new NavigationOptions { ReplaceHistoryEntry = true });
                     return true;
                 }
             }
@@ -136,4 +141,23 @@ public static class PageExtensions
         await page.UpdateViewModelFromQueryAsync(page.PageViewModel);
         return false;
     }
+
+    // The previous experience serves the same pages below /legacy, for example "legacy/traces" for the "traces" base
+    // path and "legacy" or "legacy/" (where the legacy layout sends "/") for the resources page's empty base path.
+    private static bool TryRemoveLegacyPrefix(ref string relativePath)
+    {
+        const string LegacySegment = "legacy";
+        if (!relativePath.StartsWith(LegacySegment, StringComparison.OrdinalIgnoreCase) ||
+            (relativePath.Length > LegacySegment.Length && relativePath[LegacySegment.Length] != '/'))
+        {
+            return false;
+        }
+
+        relativePath = relativePath[LegacySegment.Length..].TrimStart('/');
+        return true;
+    }
+
+    // "/" -> "/legacy", "/?view=Graph" -> "/legacy?view=Graph", "/traces/resource/api" -> "/legacy/traces/resource/api".
+    private static string ToLegacyUrl(string url) =>
+        url.Length == 1 || url[1] == '?' ? "/legacy" + url[1..] : "/legacy" + url;
 }
