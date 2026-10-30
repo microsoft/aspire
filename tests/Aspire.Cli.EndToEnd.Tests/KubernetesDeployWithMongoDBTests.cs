@@ -53,7 +53,7 @@ public sealed class KubernetesDeployWithMongoDBTests(ITestOutputHelper output)
                 var registryEndpoint = builder.AddParameter("registryendpoint");
                 var registry = builder.AddContainerRegistry("registry", registryEndpoint);
 
-                var mongo = builder.AddMongoDB("mongo").AddDatabase("testdb");
+                var mongo = builder.AddMongoDB("mongo").WithImageTag("9.0").AddDatabase("testdb");
 
                 var api = builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                     .WithReference(mongo)
