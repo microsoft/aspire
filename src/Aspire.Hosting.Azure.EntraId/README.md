@@ -562,8 +562,9 @@ vault's default roles are extended with it for the developer identity. When publ
 references the Entra application receives it, so the publish target must support role assignments (for example
 `AddAzureContainerAppEnvironment`); otherwise publishing fails.
 Use `WithRoleAssignments` on a workload before referencing the Entra application to replace its assignment, including an
-empty role list to manage access yourself. Locally, call `ClearDefaultRoleAssignments` on the vault before adding the
-certificate to manage the vault's roles yourself. An existing vault can be modeled with `RunAsExisting` or
+empty role list to manage access yourself. When running locally, roles come from the vault's defaults instead of
+the workload, so call `ClearDefaultRoleAssignments` on the vault before `WithCertificateFromKeyVault` to stop Aspire
+from granting any roles to your developer identity, and assign them yourself. An existing vault can be modeled with `RunAsExisting` or
 `PublishAsExisting`, and its access policies or RBAC configuration must allow certificate retrieval.
 
 The certificate must already exist in the vault, have an exportable private key, and have its public key
