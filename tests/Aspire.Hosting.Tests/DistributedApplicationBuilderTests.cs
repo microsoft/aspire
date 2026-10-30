@@ -219,7 +219,9 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
             ProjectDirectory = projectDirectory,
             AppHostFilePath = Path.Combine(projectDirectory, "apphost.mts")
         });
+#pragma warning disable CS0618 // AddProject is obsolete but is still the TypeScript addProject export.
         var project = appBuilder.AddProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
 
         var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(
             await project.Resource.CreateLaunchConfigurationAsync(
