@@ -569,8 +569,8 @@ registration. Microsoft.Identity.Web retrieves the latest certificate version. S
 version is not supported by its Key Vault credential loader; Aspire does not emit an unsupported version
 configuration key. See the [Microsoft.Identity.Web Key Vault loader](https://github.com/AzureAD/microsoft-identity-web/blob/master/src/Microsoft.Identity.Web.Certificate/KeyVaultCertificateLoader.cs).
 
-The existing URL overload is still available when the vault is managed outside the AppHost. In that case,
-configure access and identity yourself:
+When the vault is managed outside the AppHost, pass its URL instead. In that case, configure access and
+identity yourself:
 
 ```csharp
 entraWeb.WithCertificateFromKeyVault("https://myvault.vault.azure.net", "MyCert");
