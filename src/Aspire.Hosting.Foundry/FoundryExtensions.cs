@@ -285,7 +285,7 @@ public static class FoundryExtensions
     ///
     /// var aiFoundry = builder.AddFoundry("aiFoundry");
     ///
-    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///   .WithRoleAssignments(aiFoundry, CognitiveServicesBuiltInRole.CognitiveServicesOpenAIContributor)
     ///   .WithReference(aiFoundry);
     /// </code>

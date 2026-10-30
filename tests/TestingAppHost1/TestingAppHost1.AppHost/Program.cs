@@ -56,7 +56,7 @@ if (args.Contains("--add-redis"))
         .WithCertificateTrustScope(CertificateTrustScope.None);
 }
 
-var webApp = builder.AddDotnetProject("mywebapp1", @"..\TestingAppHost1.MyWebApp\TestingAppHost1.MyWebApp.csproj")
+var webApp = builder.AddDotnetProject("mywebapp1", "../TestingAppHost1.MyWebApp/TestingAppHost1.MyWebApp.csproj")
     .WithEnvironment("APP_HOST_ARG", builder.Configuration["APP_HOST_ARG"])
     .WithEnvironment("LAUNCH_PROFILE_VAR_FROM_APP_HOST", builder.Configuration["LAUNCH_PROFILE_VAR_FROM_APP_HOST"]);
 
@@ -65,7 +65,7 @@ if (builder.Configuration.GetValue("USE_HTTPS", false))
     webApp.WithExternalHttpEndpoints();
 }
 
-builder.AddDotnetProject("myworker1", @"..\TestingAppHost1.MyWorker\TestingAppHost1.MyWorker.csproj")
+builder.AddDotnetProject("myworker1", "../TestingAppHost1.MyWorker/TestingAppHost1.MyWorker.csproj")
     .WithEndpoint(name: "myendpoint1", env: "myendpoint1_port");
 
 if (args.Contains("--add-unknown-container"))

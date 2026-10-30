@@ -44,7 +44,7 @@ public static class KeycloakResourceBuilderExtensions
     /// <code lang="csharp">
     /// var keycloak = builder.AddKeycloak("keycloak");
     ///
-    /// var myService = builder.AddDotnetProject("myservice", @"..\MyService\MyService.csproj")
+    /// var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
     ///                        .WithReference(keycloak);
     /// </code>
     /// </example>

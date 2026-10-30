@@ -14,11 +14,11 @@ else
     database = builder.AddSqlServer("sql1").AddDatabase("db1");
 }
 
-builder.AddDotnetProject("api", @"..\DatabaseMigration.ApiService\DatabaseMigration.ApiService.csproj")
+builder.AddDotnetProject("api", "../DatabaseMigration.ApiService/DatabaseMigration.ApiService.csproj")
        .WithExternalHttpEndpoints()
        .WithReference(database);
 
-builder.AddDotnetProject("migration", @"..\DatabaseMigration.MigrationService\DatabaseMigration.MigrationService.csproj")
+builder.AddDotnetProject("migration", "../DatabaseMigration.MigrationService/DatabaseMigration.MigrationService.csproj")
        .WithReference(database);
 
 #if !SKIP_DASHBOARD_REFERENCE
@@ -28,7 +28,7 @@ builder.AddDotnetProject("migration", @"..\DatabaseMigration.MigrationService\Da
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

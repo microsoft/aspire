@@ -29,7 +29,7 @@ var externalGateway = builder.AddYarp("gateway")
         c.AddRoute("/external-service/{**catchall}", externalService).WithTransformPathRemovePrefix("/external-service");
     });
 
-builder.AddDotnetProject("frontend", @"..\WebFrontEnd\WebFrontEnd.csproj")
+builder.AddDotnetProject("frontend", "../WebFrontEnd/WebFrontEnd.csproj")
        .WithReference(nuget)
        .WithEnvironment("EXTERNAL_SERVICE_URL", externalService)
        .WithReference(externalGateway);
@@ -41,7 +41,7 @@ builder.AddDotnetProject("frontend", @"..\WebFrontEnd\WebFrontEnd.csproj")
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

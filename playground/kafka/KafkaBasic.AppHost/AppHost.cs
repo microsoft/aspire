@@ -6,11 +6,11 @@ var builder = DistributedApplication.CreateBuilder(args);
 var kafka = builder.AddKafka("kafka")
     .WithKafkaUI(kafkaUi => kafkaUi.WithHostPort(8080));
 
-builder.AddDotnetProject("producer", @"..\Producer\Producer.csproj")
+builder.AddDotnetProject("producer", "../Producer/Producer.csproj")
     .WithReference(kafka).WaitFor(kafka)
     .WithArgs(kafka.Resource.Name);
 
-builder.AddDotnetProject("consumer", @"..\Consumer\Consumer.csproj")
+builder.AddDotnetProject("consumer", "../Consumer/Consumer.csproj")
     .WithReference(kafka).WaitFor(kafka)
     .WithArgs(kafka.Resource.Name);
 
@@ -23,7 +23,7 @@ builder.AddKafka("kafka2").WithKafkaUI();
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

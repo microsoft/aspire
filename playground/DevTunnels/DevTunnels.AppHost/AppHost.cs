@@ -3,8 +3,8 @@
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var api = builder.AddDotnetProject("api", @"..\DevTunnels.ApiService\DevTunnels.ApiService.csproj");
-var frontend = builder.AddDotnetProject("frontend", @"..\DevTunnels.WebFrontEnd\DevTunnels.WebFrontEnd.csproj");
+var api = builder.AddDotnetProject("api", "../DevTunnels.ApiService/DevTunnels.ApiService.csproj");
+var frontend = builder.AddDotnetProject("frontend", "../DevTunnels.WebFrontEnd/DevTunnels.WebFrontEnd.csproj");
 
 var publicDevTunnel = builder.AddDevTunnel("devtunnel-public")
     .WithAnonymousAccess() // All ports on this tunnel default to allowing anonymous access
@@ -30,7 +30,7 @@ api.WithReference(frontend, publicDevTunnel);
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

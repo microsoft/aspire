@@ -322,7 +322,7 @@ builder.Pipeline.AddStep("upload-bind-mounts", async (deployingContext) =>
     }
 }, requiredBy: WellKnownPipelineTags.DeployCompute, dependsOn: WellKnownPipelineTags.ProvisionInfrastructure);
 
-builder.AddDotnetProject("api-service", @"..\..\publishers\Publishers.ApiService\Publishers.ApiService.csproj")
+builder.AddDotnetProject("api-service", "../../publishers/Publishers.ApiService/Publishers.ApiService.csproj")
     .WithComputeEnvironment(aasEnv)
     .WithExternalHttpEndpoints();
 
@@ -333,7 +333,7 @@ builder.AddDotnetProject("api-service", @"..\..\publishers\Publishers.ApiService
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

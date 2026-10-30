@@ -31,7 +31,7 @@ builder.AddSqlServer("sqlserver").WithRepl();
 // own pseudo-terminal and the dashboard can attach to any of them via
 // `/api/terminal?resource=<instance-name>`. The replica index is forwarded as
 // an environment variable so the REPL can stamp it on its banner.
-builder.AddDotnetProject("repl", @"..\Terminals.Repl\Terminals.Repl.csproj")
+builder.AddDotnetProject("repl", "../Terminals.Repl/Terminals.Repl.csproj")
     .WithReplicas(2)
     .WithEnvironment("ASPIRE_RESOURCE_NAME", "repl")
     .WithTerminal(options =>
@@ -139,7 +139,7 @@ builder.AddDockerfile("notcurses", "../Terminals.Notcurses")
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

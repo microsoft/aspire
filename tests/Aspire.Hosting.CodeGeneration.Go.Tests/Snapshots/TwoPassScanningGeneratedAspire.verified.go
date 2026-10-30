@@ -2584,7 +2584,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -6098,7 +6098,7 @@ type CSharpAppResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -12256,7 +12256,7 @@ type ContainerResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -17657,7 +17657,7 @@ type DotnetToolResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -21948,7 +21948,7 @@ type ExecutableResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -31643,7 +31643,7 @@ type ProjectResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -36706,7 +36706,7 @@ type TestDatabaseResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -40443,7 +40443,7 @@ type TestRedisResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:

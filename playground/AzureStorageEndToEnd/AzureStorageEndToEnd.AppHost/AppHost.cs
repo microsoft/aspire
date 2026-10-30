@@ -21,7 +21,7 @@ var storage2 = builder.AddAzureStorage("storage2").RunAsEmulator(container =>
 
 var blobContainer2 = storage2.AddBlobContainer("foocontainer", blobContainerName: "foo-container");
 
-builder.AddDotnetProject("api", @"..\AzureStorageEndToEnd.ApiService\AzureStorageEndToEnd.ApiService.csproj")
+builder.AddDotnetProject("api", "../AzureStorageEndToEnd.ApiService/AzureStorageEndToEnd.ApiService.csproj")
        .WithExternalHttpEndpoints()
        .WithReference(blobs).WaitFor(blobs)
        .WithReference(blobContainer2).WaitFor(blobContainer2)
@@ -34,7 +34,7 @@ builder.AddDotnetProject("api", @"..\AzureStorageEndToEnd.ApiService\AzureStorag
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

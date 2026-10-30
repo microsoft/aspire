@@ -95,7 +95,7 @@ serviceBus.AddServiceBusTopic("topic2")
 
 var signalr = builder.AddAzureSignalR("signalr");
 var webpubsub = builder.AddAzureWebPubSub("wps");
-builder.AddDotnetProject("api", @"..\BicepSample.ApiService\BicepSample.ApiService.csproj")
+builder.AddDotnetProject("api", "../BicepSample.ApiService/BicepSample.ApiService.csproj")
        .WithExternalHttpEndpoints()
        .WithReference(sqlServer)
        .WithReference(pg)
@@ -121,7 +121,7 @@ builder.AddDotnetProject("api", @"..\BicepSample.ApiService\BicepSample.ApiServi
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

@@ -237,7 +237,7 @@ public static class AzureOpenAIExtensions
     ///
     /// var openai = builder.AddAzureOpenAI("openai");
     /// 
-    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///   .WithRoleAssignments(openai, CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser)
     ///   .WithReference(openai);
     /// </code>

@@ -44,7 +44,7 @@ namespace Aspire.Hosting;
 /// var builder = DistributedApplication.CreateBuilder(args);
 /// var cache = builder.AddRedis("cache");
 /// var inventoryDatabase = builder.AddPostgres("postgres").AddDatabase("inventory");
-/// builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
+/// builder.AddDotnetProject("inventoryservice", "../InventoryService/InventoryService.csproj")
 ///        .WithReference(cache)
 ///        .WithReference(inventoryDatabase);
 /// builder.Build().Run();

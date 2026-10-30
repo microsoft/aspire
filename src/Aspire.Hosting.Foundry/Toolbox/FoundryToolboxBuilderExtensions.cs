@@ -37,7 +37,7 @@ public static class FoundryToolboxBuilderExtensions
     /// var toolbox = project.AddToolbox("field-tools")
     ///     .WithWebSearchTool();
     ///
-    /// builder.AddDotnetProject("worker", @"..\Worker\Worker.csproj")
+    /// builder.AddDotnetProject("worker", "../Worker/Worker.csproj")
     ///     .WithReference(toolbox)
     ///     .WaitFor(toolbox);
     /// </code>

@@ -15683,7 +15683,7 @@ export interface ContainerResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -16541,7 +16541,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -18549,7 +18549,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -20252,7 +20252,7 @@ export interface CSharpAppResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -20950,7 +20950,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -22546,7 +22546,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -24279,7 +24279,7 @@ export interface DotnetToolResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -25013,7 +25013,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -26707,7 +26707,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -28419,7 +28419,7 @@ export interface ExecutableResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -29114,7 +29114,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -30698,7 +30698,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -37027,7 +37027,7 @@ export interface ProjectResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -37725,7 +37725,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -39322,7 +39322,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -41182,7 +41182,7 @@ export interface TestDatabaseResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -42040,7 +42040,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -44047,7 +44047,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -45927,7 +45927,7 @@ export interface TestRedisResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -46869,7 +46869,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -48980,7 +48980,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -51137,7 +51137,7 @@ export interface TestVaultResource {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -51997,7 +51997,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -54006,7 +54006,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -58979,7 +58979,7 @@ export interface ResourceWithEnvironment {
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -59097,7 +59097,7 @@ export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWith
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.
@@ -59314,7 +59314,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
      * Args = args,
      * TrustDeveloperCertificate = false,
      * });
-     * var project = builder.AddDotnetProject("my-service", @"..\MyService\MyService.csproj")
+     * var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
      * .WithDeveloperCertificateTrust(true);
      * ```
      * @param trust Indicates whether the developer certificate should be treated as trusted.

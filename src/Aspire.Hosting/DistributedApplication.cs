@@ -45,7 +45,7 @@ namespace Aspire.Hosting;
 /// <code lang="csharp">
 /// var builder = DistributedApplication.CreateBuilder(args);
 /// var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-/// builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
+/// builder.AddDotnetProject("inventoryservice", "../InventoryService/InventoryService.csproj")
 ///        .WithReference(inventoryDatabase);
 ///
 /// builder.Build().Run();
@@ -105,7 +105,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder();
     /// var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-    /// builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
+    /// builder.AddDotnetProject("inventoryservice", "../InventoryService/InventoryService.csproj")
     ///        .WithReference(inventoryDatabase);
     ///
     /// builder.Build().Run();
@@ -138,7 +138,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-    /// builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
+    /// builder.AddDotnetProject("inventoryservice", "../InventoryService/InventoryService.csproj")
     ///        .WithReference(inventoryDatabase);
     ///
     /// builder.Build().Run();
@@ -153,7 +153,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     ///     {
     ///         var builder = DistributedApplication.CreateBuilder(args);
     ///         var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-    ///         builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
+    ///         builder.AddDotnetProject("inventoryservice", "../InventoryService/InventoryService.csproj")
     ///                .WithReference(inventoryDatabase);
     ///
     ///         builder.Build().Run();
@@ -205,7 +205,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// };
     /// var builder = DistributedApplication.CreateBuilder(options);
     /// var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-    /// builder.AddDotnetProject("inventoryservice", @"..\InventoryService\InventoryService.csproj")
+    /// builder.AddDotnetProject("inventoryservice", "../InventoryService/InventoryService.csproj")
     ///        .WithReference(inventoryDatabase);
     ///
     /// builder.Build().Run();

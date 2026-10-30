@@ -11,7 +11,7 @@ var db1 = builder.AddAzurePostgresFlexibleServer("pg")
 #pragma warning restore ASPIREPOSTGRES001
 
 // .NET 
-builder.AddDotnetProject("dotnet", @"..\PostgresEndToEnd.ApiService\PostgresEndToEnd.ApiService.csproj")
+builder.AddDotnetProject("dotnet", "../PostgresEndToEnd.ApiService/PostgresEndToEnd.ApiService.csproj")
        .WithExternalHttpEndpoints()
        .WithReference(db1).WaitFor(db1);
 
@@ -46,7 +46,7 @@ mvn.WithParentRelationship(java);
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

@@ -9,11 +9,11 @@ var eventHub = builder.AddAzureEventHubs("eventhubns")
     .RunAsEmulator()
     .AddHub("eventhubOne", "eventhub");
 
-builder.AddDotnetProject("consumer", @"..\EventHubsConsumer\EventHubsConsumer.csproj")
+builder.AddDotnetProject("consumer", "../EventHubsConsumer/EventHubsConsumer.csproj")
     .WithReference(eventHub).WaitFor(eventHub)
     .WithReference(blob);
 
-builder.AddDotnetProject("api", @"..\EventHubsApi\EventHubsApi.csproj")
+builder.AddDotnetProject("api", "../EventHubsApi/EventHubsApi.csproj")
     .WithExternalHttpEndpoints()
     .WithReference(eventHub).WaitFor(eventHub);
 

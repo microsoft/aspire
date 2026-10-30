@@ -30,7 +30,7 @@ var storage = builder.AddAzureStorage("storage")
 var blobs = storage.AddBlobs("blobs");
 
 // Testing projects
-builder.AddDotnetProject("api", @"..\AzureAppService.ApiService\AzureAppService.ApiService.csproj")
+builder.AddDotnetProject("api", "../AzureAppService.ApiService/AzureAppService.ApiService.csproj")
        .WithExternalHttpEndpoints()
        .WithReference(blobs)
        .WithRoleAssignments(storage, StorageBuiltInRole.StorageBlobDataContributor)
@@ -51,7 +51,7 @@ builder.AddDotnetProject("api", @"..\AzureAppService.ApiService\AzureAppService.
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

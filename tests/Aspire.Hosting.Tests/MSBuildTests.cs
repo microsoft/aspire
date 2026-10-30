@@ -235,8 +235,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         var repoRoot = MSBuildUtils.GetRepoRoot();
         var modernReferences = includeModernReferences
             ? $"""
-                <ProjectReference Include="{repoRoot}\src\Aspire.Hosting.Dotnet\Aspire.Hosting.Dotnet.csproj" />
-                <ProjectReference Include="{repoRoot}\src\Aspire.Hosting.EntityFrameworkCore\Aspire.Hosting.EntityFrameworkCore.csproj" />
+                <ProjectReference Include="{repoRoot}/src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj" />
+                <ProjectReference Include="{repoRoot}/src/Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.csproj" />
                 """
             : "";
         File.WriteAllText(Path.Combine(directory, "Consumer.csproj"), $"""
@@ -250,7 +250,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
                 <RestoreConfigFile>{repoRoot}\NuGet.config</RestoreConfigFile>
               </PropertyGroup>
               <ItemGroup>
-                <ProjectReference Include="{repoRoot}\src\Aspire.Hosting\Aspire.Hosting.csproj" />
+                <ProjectReference Include="{repoRoot}/src/Aspire.Hosting/Aspire.Hosting.csproj" />
                 {modernReferences}
               </ItemGroup>
             </Project>

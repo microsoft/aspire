@@ -55,7 +55,7 @@ privateEndpointsSubnet.AddPrivateEndpoint(sqlServer);
 
 var db = sqlServer.AddDatabase("sqldb");
 
-builder.AddDotnetProject("api", @"..\AzureVirtualNetworkEndToEnd.ApiService\AzureVirtualNetworkEndToEnd.ApiService.csproj")
+builder.AddDotnetProject("api", "../AzureVirtualNetworkEndToEnd.ApiService/AzureVirtualNetworkEndToEnd.ApiService.csproj")
        .WithExternalHttpEndpoints()
        .WithReference(db).WaitFor(db)
        .WithReference(mycontainer).WaitFor(mycontainer)

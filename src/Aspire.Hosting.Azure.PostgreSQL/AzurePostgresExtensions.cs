@@ -131,7 +131,7 @@ public static class AzurePostgresExtensions
     ///
     /// var data = builder.AddAzurePostgresFlexibleServer("data");
     ///
-    /// builder.AddDotnetProject("productservice", @"..\ProductService\ProductService.csproj")
+    /// builder.AddDotnetProject("productservice", "../ProductService/ProductService.csproj")
     ///     .WithReference(data);
     ///
     /// builder.Build().Run();
@@ -208,7 +208,7 @@ public static class AzurePostgresExtensions
     /// var data = builder.AddAzurePostgresFlexibleServer("data")
     ///     .RunAsContainer();
     ///
-    /// builder.AddDotnetProject("productservice", @"..\ProductService\ProductService.csproj")
+    /// builder.AddDotnetProject("productservice", "../ProductService/ProductService.csproj")
     ///     .WithReference(data);
     ///
     /// builder.Build().Run();
@@ -289,7 +289,7 @@ public static class AzurePostgresExtensions
     /// var data = builder.AddAzurePostgresFlexibleServer("data")
     ///     .WithPasswordAuthentication();
     ///
-    /// builder.AddDotnetProject("productservice", @"..\ProductService\ProductService.csproj")
+    /// builder.AddDotnetProject("productservice", "../ProductService/ProductService.csproj")
     ///     .WithReference(data);
     ///
     /// builder.Build().Run();

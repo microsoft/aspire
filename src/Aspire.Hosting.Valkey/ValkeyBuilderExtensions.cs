@@ -35,7 +35,7 @@ public static class ValkeyBuilderExtensions
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
     /// var valkey = builder.AddValkey("valkey");
-    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///                  .WithReference(valkey);
     ///
     /// builder.Build().Run();
@@ -87,7 +87,7 @@ public static class ValkeyBuilderExtensions
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
     /// var valkey = builder.AddValkey("valkey");
-    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///                  .WithReference(valkey);
     ///
     /// builder.Build().Run();

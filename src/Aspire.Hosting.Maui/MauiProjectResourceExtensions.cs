@@ -35,7 +35,7 @@ public static class MauiProjectExtensions
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// 
-    /// var weatherApi = builder.AddDotnetProject("api", @"..\WeatherApi\WeatherApi.csproj");
+    /// var weatherApi = builder.AddDotnetProject("api", "../WeatherApi/WeatherApi.csproj");
     /// 
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
     /// var windowsDevice = maui.AddWindowsDevice()

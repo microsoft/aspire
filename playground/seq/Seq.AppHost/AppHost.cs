@@ -5,7 +5,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var seq = builder.AddSeq("seq");
 
-builder.AddDotnetProject("api", @"..\Seq.ApiService\Seq.ApiService.csproj")
+builder.AddDotnetProject("api", "../Seq.ApiService/Seq.ApiService.csproj")
     .WithExternalHttpEndpoints()
     .WithReference(seq);
 
@@ -16,7 +16,7 @@ builder.AddDotnetProject("api", @"..\Seq.ApiService\Seq.ApiService.csproj")
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

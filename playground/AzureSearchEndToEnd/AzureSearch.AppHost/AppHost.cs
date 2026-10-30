@@ -5,7 +5,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var azureSearch = builder.AddAzureSearch("search");
 
-builder.AddDotnetProject("api", @"..\AzureSearch.ApiService\AzureSearch.ApiService.csproj")
+builder.AddDotnetProject("api", "../AzureSearch.ApiService/AzureSearch.ApiService.csproj")
        .WithExternalHttpEndpoints()
        .WithReference(azureSearch);
 
@@ -16,7 +16,7 @@ builder.AddDotnetProject("api", @"..\AzureSearch.ApiService\AzureSearch.ApiServi
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

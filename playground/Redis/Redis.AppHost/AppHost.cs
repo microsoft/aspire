@@ -11,7 +11,7 @@ var garnet = builder.AddGarnet("garnet")
 var valkey = builder.AddValkey("valkey")
     .WithDataVolume("valkey-data");
 
-builder.AddDotnetProject("apiservice", @"..\Redis.ApiService\Redis.ApiService.csproj")
+builder.AddDotnetProject("apiservice", "../Redis.ApiService/Redis.ApiService.csproj")
     .WithExternalHttpEndpoints()
     .WithReference(redis).WaitFor(redis)
     .WithReference(garnet).WaitFor(garnet)
@@ -24,7 +24,7 @@ builder.AddDotnetProject("apiservice", @"..\Redis.ApiService\Redis.ApiService.cs
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

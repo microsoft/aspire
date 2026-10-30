@@ -12,7 +12,7 @@ var cache = builder
     .AddRedis("cache")
     .WithPassword(pass);
 
-var weatherapi = builder.AddDotnetProject("weatherapi", @"..\AspireWithNode.AspNetCoreApi\AspireWithNode.AspNetCoreApi.csproj");
+var weatherapi = builder.AddDotnetProject("weatherapi", "../AspireWithNode.AspNetCoreApi/AspireWithNode.AspNetCoreApi.csproj");
 
 #pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 var frontend = builder.AddJavaScriptApp("frontend", "../NodeFrontend", "watch")
@@ -52,7 +52,7 @@ if (builder.Environment.IsDevelopment() && launchProfile == "https")
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

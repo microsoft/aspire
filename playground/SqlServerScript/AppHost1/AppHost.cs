@@ -11,11 +11,11 @@ var dbServer = builder.AddAzureSqlServer("mysqlserver");
 
 var todosDb = dbServer.AddDatabase("todosdb");
 
-builder.AddDotnetProject("api1", @"..\WebApplication1\WebApplication1.csproj")
+builder.AddDotnetProject("api1", "../WebApplication1/WebApplication1.csproj")
     .WithExternalHttpEndpoints()
     .WithReference(todosDb).WaitFor(todosDb);
 
-builder.AddDotnetProject("api2", @"..\WebApplication2\WebApplication2.csproj")
+builder.AddDotnetProject("api2", "../WebApplication2/WebApplication2.csproj")
     .WithExternalHttpEndpoints()
     .WithReference(todosDb).WaitFor(todosDb);
 

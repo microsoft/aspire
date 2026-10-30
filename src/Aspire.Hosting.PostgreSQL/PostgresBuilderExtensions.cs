@@ -340,7 +340,7 @@ public static class PostgresBuilderExtensions
     ///    .WithPgWeb();
     /// var db = postgres.AddDatabase("db");
     ///
-    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///   .WithReference(db);
     ///
     /// builder.Build().Run();

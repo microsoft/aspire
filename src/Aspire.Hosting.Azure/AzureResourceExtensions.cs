@@ -61,7 +61,7 @@ public static class AzureResourceExtensions
     ///     .RunAsExisting("kv-dev-secrets", "rg-keyvault")
     ///     .ClearDefaultRoleAssignments();
     ///
-    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///     .WithReference(keyVault);
     /// </code>
     /// </example>

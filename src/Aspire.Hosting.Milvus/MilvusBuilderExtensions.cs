@@ -27,7 +27,7 @@ public static class MilvusBuilderExtensions
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
     /// var milvus = builder.AddMilvus("milvus");
-    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///   .WithReference(milvus);
     ///
     /// builder.Build().Run();
@@ -86,7 +86,7 @@ public static class MilvusBuilderExtensions
     /// var booksdb = builder.AddMilvus("milvus")
     ///   .AddDatabase("booksdb");
     ///
-    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///   .WithReference(booksdb);
     ///
     /// builder.Build().Run();
@@ -126,7 +126,7 @@ public static class MilvusBuilderExtensions
     ///
     /// var milvus = builder.AddMilvus("milvus")
     ///   .WithAttu();
-    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///   .WithReference(milvus);
     ///
     /// builder.Build().Run();

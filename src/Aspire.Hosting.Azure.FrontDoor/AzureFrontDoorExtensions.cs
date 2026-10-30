@@ -45,9 +45,9 @@ public static class AzureFrontDoorExtensions
     /// <example>
     /// Add an Azure Front Door resource with origins:
     /// <code lang="C#">
-    /// var api = builder.AddDotnetProject("api", @"..\Api\Api.csproj")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///     .WithExternalHttpEndpoints();
-    /// var web = builder.AddDotnetProject("web", @"..\Web\Web.csproj")
+    /// var web = builder.AddDotnetProject("web", "../Web/Web.csproj")
     ///     .WithExternalHttpEndpoints();
     /// var frontDoor = builder.AddAzureFrontDoor("frontdoor")
     ///     .WithOrigin(api)

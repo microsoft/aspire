@@ -58,7 +58,7 @@ var parameterWithCustomInput = builder.AddParameter("customInput")
         Description = p.Description,
     });
 
-builder.AddDotnetProject("api", @"..\ParameterEndToEnd.ApiService\ParameterEndToEnd.ApiService.csproj")
+builder.AddDotnetProject("api", "../ParameterEndToEnd.ApiService/ParameterEndToEnd.ApiService.csproj")
        .WithExternalHttpEndpoints()
        .WithEnvironment("InsertionRows", insertionrows)
        .WithReference(cs)
@@ -71,7 +71,7 @@ builder.AddDotnetProject("api", @"..\ParameterEndToEnd.ApiService\ParameterEndTo
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

@@ -2,9 +2,9 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 // A named endpoint isn't required. It's added here to test referencing specific endpoints from the Blazor app.
 // The gateway can also reference services without named endpoints using scheme-based resolution.
-var weatherApi = builder.AddDotnetProject("weatherapi", @"..\BlazorStandalone.WeatherApi\BlazorStandalone.WeatherApi.csproj");
+var weatherApi = builder.AddDotnetProject("weatherapi", "../BlazorStandalone.WeatherApi/BlazorStandalone.WeatherApi.csproj");
 
-var timeApi = builder.AddDotnetProject("timeapi", @"..\BlazorStandalone.TimeApi\BlazorStandalone.TimeApi.csproj")
+var timeApi = builder.AddDotnetProject("timeapi", "../BlazorStandalone.TimeApi/BlazorStandalone.TimeApi.csproj")
     .WithHttpsEndpoint(name: "api");
 
 // Register the standalone Blazor WASM app as a resource.
@@ -30,7 +30,7 @@ var gateway = builder.AddDotnetProjectBlazorGateway("gateway")
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddDotnetProject(KnownResourceNames.AspireDashboard, @"..\..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj");
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();
