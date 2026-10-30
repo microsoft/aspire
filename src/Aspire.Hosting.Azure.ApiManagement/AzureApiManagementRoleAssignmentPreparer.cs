@@ -35,15 +35,29 @@ internal static class AzureApiManagementRoleAssignmentPreparer
                 return [];
             }
 
+            // Independent pipeline steps run concurrently, but the shared resource collection is not
+            // thread-safe. Let the first APIM service register one preparation step for all services.
+            if (context.PipelineContext.Model.Resources.OfType<AzureApiManagementResource>().FirstOrDefault() != builder.Resource)
+            {
+                return [];
+            }
+
             return
             [
                 new PipelineStep
                 {
                     Name = $"prepare-api-management-role-assignments-{builder.Resource.Name}",
-                    Description = $"Prepares cross-scope role assignments for {builder.Resource.Name}.",
+                    Description = "Prepares cross-scope role assignments for API Management services.",
                     Action = stepContext =>
                     {
-                        PrepareRoleAssignments(stepContext, builder);
+                        var resources = stepContext.Model.Resources.OfType<AzureApiManagementResource>().ToArray();
+                        foreach (var resource in resources)
+                        {
+                            PrepareRoleAssignments(
+                                stepContext,
+                                builder.ApplicationBuilder.CreateResourceBuilder(resource));
+                        }
+
                         return Task.CompletedTask;
                     },
                     RequiredBySteps = [AzureEnvironmentResource.PrepareResourcesStepName]
@@ -54,11 +68,16 @@ internal static class AzureApiManagementRoleAssignmentPreparer
         return builder;
     }
 
-    internal static bool TryGetExplicitExistingScope(
+    internal static bool TryGetExplicitScope(
         AzureProvisioningResource resource,
         out AzureBicepResourceScope? scope)
     {
-        scope = null;
+        scope = resource.Scope;
+        if (scope is not null)
+        {
+            return true;
+        }
+
         if (!resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existing) ||
             (existing.ResourceGroup is null && existing.Subscription is null))
         {
@@ -79,8 +98,8 @@ internal static class AzureApiManagementRoleAssignmentPreparer
         AzureApiManagementResource apiManagement,
         AzureProvisioningResource target)
     {
-        return TryGetExplicitExistingScope(apiManagement, out _) ||
-            TryGetExplicitExistingScope(target, out _);
+        return TryGetExplicitScope(apiManagement, out _) ||
+            TryGetExplicitScope(target, out _);
     }
 
     private static void PrepareRoleAssignments(
@@ -109,7 +128,7 @@ internal static class AzureApiManagementRoleAssignmentPreparer
         foreach (var assignmentsForTarget in assignments)
         {
             var target = assignmentsForTarget.Key;
-            _ = TryGetExplicitExistingScope(target, out var scope);
+            _ = TryGetExplicitScope(target, out var scope);
 
             var roles = assignmentsForTarget
                 .Select(assignment => CreateRoleDefinition(assignment.Role))
@@ -210,7 +229,7 @@ internal static class AzureApiManagementRoleAssignmentPreparer
                         Value = new BicepValue<string>("completed"),
                     });
                 });
-            if (TryGetExplicitExistingScope(target, out var scope))
+            if (TryGetExplicitScope(target, out var scope))
             {
                 roleAssignments.Scope = scope;
             }

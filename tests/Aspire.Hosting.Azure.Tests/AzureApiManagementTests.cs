@@ -12,6 +12,7 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.Network;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -1620,12 +1621,22 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Contains("5e0bd9bd-7b93-4f28-af87-19fc36ad61bd", bicep);
     }
 
-    [Fact]
-    public async Task CrossResourceGroupAzureOpenAIBackendUsesTargetScopedRoleAssignmentModule()
+    [Theory]
+    [InlineData(false, "ai-resources")]
+    [InlineData(true, null)]
+    [InlineData(true, "ignored-resources")]
+    public async Task CrossResourceGroupAzureOpenAIBackendUsesTargetScopedRoleAssignmentModule(
+        bool overrideScope,
+        string? resourceGroup)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var account = builder.AddAzureOpenAI("openai")
-            .PublishAsExisting("shared-openai", resourceGroup: "ai-resources");
+            .PublishAsExisting("shared-openai", resourceGroup: resourceGroup);
+        if (overrideScope)
+        {
+            account.Resource.Scope = new AzureBicepResourceScope("ai-resources");
+        }
+
         var deployment = account.AddDeployment("chat", "gpt-5-mini", "2025-08-07");
         var apim = builder.AddAzureApiManagement("apim", new()
         {
@@ -1661,8 +1672,10 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Contains("apim.outputs.principalId", rolesManifest.ToJsonString());
     }
 
-    [Fact]
-    public async Task ExplicitlyScopedExistingApiManagementUsesExternalRoleModuleForDefaultScopeBackend()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExplicitlyScopedExistingApiManagementUsesExternalRoleModuleForDefaultScopeBackend(bool overrideScope)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var account = builder.AddAzureOpenAI("openai")
@@ -1672,8 +1685,13 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         {
             PublisherEmail = "api-owners@example.com",
             Sku = AzureApiManagementSku.Developer,
-        }).PublishAsExisting("shared-apim", resourceGroup: "gateway-resources")
+        }).PublishAsExisting("shared-apim", resourceGroup: overrideScope ? null : "gateway-resources")
             .WithExistingSystemAssignedIdentity();
+        if (overrideScope)
+        {
+            apim.Resource.Scope = new AzureBicepResourceScope("gateway-resources");
+        }
+
         var backend = apim.AddAzureOpenAIBackend("openai-backend", deployment);
         apim.AddOpenAIApi("chat-api", "chat").WithBackend(backend);
 
@@ -1726,12 +1744,19 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Contains("Microsoft.Authorization/roleAssignments@", apimBicep);
     }
 
-    [Fact]
-    public async Task CrossResourceGroupKeyVaultUsesStandaloneIdentityAndTargetScopedRoleAssignments()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CrossResourceGroupKeyVaultUsesStandaloneIdentityAndTargetScopedRoleAssignments(bool overrideScope)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault")
-            .PublishAsExisting("shared-vault", resourceGroup: "security-resources");
+            .PublishAsExisting("shared-vault", resourceGroup: overrideScope ? null : "security-resources");
+        if (overrideScope)
+        {
+            vault.Resource.Scope = new AzureBicepResourceScope("security-resources");
+        }
+
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
@@ -1773,6 +1798,65 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Contains("apim-kv-identity.outputs.principalId", rolesManifest.ToJsonString());
         Assert.Contains("output completed string = 'completed'", rolesBicep);
         Assert.Contains("param _apim_keyVaultRoleAssignmentDependency0_apim string", apimBicep);
+    }
+
+    [Fact]
+    public async Task MultipleApiManagementServicesUseSingleRoleAssignmentPreparationStep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var account = builder.AddAzureOpenAI("openai")
+            .PublishAsExisting("shared-openai", resourceGroup: "ai-resources");
+        var deployment = account.AddDeployment("chat", "gpt-5-mini", "2025-08-07");
+        var vault = builder.AddAzureKeyVault("vault")
+            .PublishAsExisting("shared-vault", resourceGroup: "security-resources");
+        var services = new List<IResourceBuilder<AzureApiManagementResource>>();
+        for (var index = 0; index < 2; index++)
+        {
+            var apim = builder.AddAzureApiManagement($"apim-{index}", new()
+            {
+                PublisherEmail = "api-owners@example.com",
+            });
+            apim.AddAzureOpenAIBackend($"openai-backend-{index}", deployment);
+            apim.AddKeyVaultNamedValue($"upstream-secret-{index}", vault.GetSecret("upstream-secret"));
+            services.Add(apim);
+        }
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var pipelineContext = new PipelineContext(
+            model, builder.ExecutionContext, app.Services, NullLogger.Instance, TestContext.Current.CancellationToken);
+        var steps = new List<PipelineStep>();
+        foreach (var apim in services)
+        {
+            foreach (var annotation in apim.Resource.Annotations.OfType<PipelineStepAnnotation>())
+            {
+                steps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+                {
+                    PipelineContext = pipelineContext,
+                    Resource = apim.Resource,
+                }));
+            }
+        }
+
+        var preparationStep = Assert.Single(
+            steps, step => step.Name.StartsWith("prepare-api-management-role-assignments", StringComparison.Ordinal));
+        Assert.Contains(AzureEnvironmentResource.PrepareResourcesStepName, preparationStep.RequiredBySteps);
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Equal(
+            [
+                "apim-0-kv-identity-roles-vault",
+                "apim-0-roles-openai",
+                "apim-1-kv-identity-roles-vault",
+                "apim-1-roles-openai",
+                "openai-roles",
+                "vault-roles",
+            ],
+            model.Resources.OfType<AzureRoleAssignmentResource>().Select(resource => resource.Name).Order());
+        Assert.Equal(
+            ["apim-0-kv-identity", "apim-1-kv-identity"],
+            model.Resources.OfType<AzureUserAssignedIdentityResource>().Select(resource => resource.Name).Order());
     }
 
     [Fact]
