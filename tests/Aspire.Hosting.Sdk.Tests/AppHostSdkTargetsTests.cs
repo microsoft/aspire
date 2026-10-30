@@ -910,6 +910,87 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("DnxPinned")]
+    [InlineData("Path")]
+    public async Task ResolveAspireCliBundlePathsUsesPinnedDnxBundleInsteadOfSharedAspireHomeBundle(string invocationMode)
+    {
+        // https://github.com/microsoft/aspire/issues/21463: a complete layout in the shared Aspire home can
+        // belong to a different global CLI (and DCP) version than the CLI package pinned to this AppHost.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dnxDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "dnx"));
+        await CreateFakeDnxAsync(dnxDirectory.FullName);
+        var aspireHome = Path.Combine(workspace.Path, "aspire-home");
+        var sharedBundle = CreateFakeCliBundle(aspireHome);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{invocationMode}</AspireCliInvocationMode>
+              </PropertyGroup>
+            """,
+            includeBundlePaths: false);
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = aspireHome,
+            [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(dnxDirectory.FullName)
+        };
+
+        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(project, environment, ["-warnaserror"]);
+        var pinnedLayoutDirectory = GetPinnedDnxLayoutDirectory(aspireHome);
+        var pinnedBundle = GetFakeCliBundlePaths(pinnedLayoutDirectory);
+
+        Assert.Equal("Dnx", properties["_AspireResolvedCliInvocationMode"]);
+        Assert.Equal(pinnedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
+        Assert.Equal(pinnedBundle.DashboardDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
+        Assert.Equal(pinnedBundle.DashboardPath, properties["AspireDashboardPath"]);
+        Assert.NotEqual(sharedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
+        AssertCliBundleExists(pinnedLayoutDirectory, JsonSerializer.Serialize(properties));
+        AssertCliBundleExists(aspireHome, JsonSerializer.Serialize(properties));
+    }
+
+    [Fact]
+    public async Task ResolveAspireCliBundlePathsReusesExistingPinnedDnxBundle()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dnxDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "dnx"));
+        await CreateFakeDnxWithSetupExitCodeAsync(dnxDirectory.FullName, 42);
+        var aspireHome = Path.Combine(workspace.Path, "aspire-home");
+        CreateFakeCliBundle(aspireHome);
+        var pinnedBundle = CreateFakeCliBundle(GetPinnedDnxLayoutDirectory(aspireHome));
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            """
+              <PropertyGroup>
+                <AspireCliInvocationMode>DnxPinned</AspireCliInvocationMode>
+              </PropertyGroup>
+            """,
+            includeBundlePaths: false);
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = aspireHome,
+            [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(dnxDirectory.FullName)
+        };
+
+        // The fake DNX fails setup, so success proves the existing pinned layout was used without setup.
+        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(project, environment, ["-warnaserror"]);
+
+        Assert.Equal(pinnedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
+        Assert.Equal(pinnedBundle.DashboardPath, properties["AspireDashboardPath"]);
+    }
+
+    [Theory]
+    [InlineData("13.5.0", "13.5.0")]
+    [InlineData("13.5.0-preview.1.25301.1+abc", "13.5.0-preview.1.25301.1+abc")]
+    [InlineData("../evil", ".._evil")]
+    [InlineData("..", "__")]
+    public void ResolveAspireCliBundlePinnedLayoutDirectoryStaysUnderAspireHome(string version, string expectedDirectoryName)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var directory = ResolveAspireCliBundle.GetPinnedLayoutDirectory(workspace.Path, version);
+
+        Assert.Equal(Path.Combine(workspace.Path, "dnx", "aspire.cli", expectedDirectoryName), directory);
+    }
+
+    [Theory]
     [InlineData("Dnx", false)]
     [InlineData("DnxPinned", false)]
     [InlineData("Path", false)]
@@ -976,7 +1057,9 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
         Assert.True(result.ExitCode == 0, result.Output);
         Assert.Equal(string.Empty, result.Output.Trim());
-        AssertCliBundleExists(aspireHome, result.Output);
+        // Without a usable PATH CLI, DNX is selected and pinned to the AppHost version. A failing PATH CLI
+        // keeps the Aspire invocation, so its DNX recovery setup still extracts into Aspire home.
+        AssertCliBundleExists(includeFailingPathCli ? aspireHome : GetPinnedDnxLayoutDirectory(aspireHome), result.Output);
     }
 
     [Theory]
@@ -1343,8 +1426,8 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             environment);
 
         Assert.True(buildResult.ExitCode == 0, buildResult.Output);
-        AssertCliBundleExists(environmentAspireHome, buildResult.Output);
-        Assert.False(Directory.Exists(Path.Combine(propertyAspireHome, "bundle")));
+        AssertCliBundleExists(GetPinnedDnxLayoutDirectory(environmentAspireHome), buildResult.Output);
+        Assert.False(Directory.Exists(propertyAspireHome));
     }
 
     [Fact]
@@ -2179,6 +2262,9 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedArguments, properties["RunArguments"]);
         Assert.Equal(project.ProjectDirectory, properties["RunWorkingDirectory"]);
     }
+
+    private static string GetPinnedDnxLayoutDirectory(string aspireHome)
+        => Path.Combine(aspireHome, "dnx", "aspire.cli", AspireCliVersion);
 
     private static void AssertCliBundleExists(string aspireHome, string output)
     {
