@@ -67,6 +67,7 @@ public sealed class AksExistingClusterDeploymentTests(ITestOutputHelper output)
             File.WriteAllText(appHostPath, """
                 #pragma warning disable ASPIREAZURE003
                 #pragma warning disable ASPIRECOMPUTE003
+                using Aspire.Hosting.Azure;
                 using Azure.Core;
 
                 var builder = DistributedApplication.CreateBuilder(args);
@@ -83,6 +84,9 @@ public sealed class AksExistingClusterDeploymentTests(ITestOutputHelper output)
 
                 var aks = builder.AddAzureKubernetesEnvironment("aks")
                     .AsExistingInResourceGroup(clusterId.Name, resourceGroup, subscription);
+                aks.Resource.Scope = new AzureBicepResourceScope(
+                    builder.AddParameter("supportingGroup").Resource,
+                    builder.AddParameter("supportingSubscription").Resource);
                 builder.AddDotnetProject("apiservice", "../ExistingAks.ApiService/ExistingAks.ApiService.csproj")
                     .WithComputeEnvironment(aks);
 
@@ -94,6 +98,7 @@ public sealed class AksExistingClusterDeploymentTests(ITestOutputHelper output)
                 "unset ASPIRE_PLAYGROUND Azure__Location Azure__ResourceGroup Azure__SubscriptionId && " +
                 "export AZURE__LOCATION=westus3 AZURE__RESOURCEGROUP=\"$DEPLOY_RG\" AZURE__SUBSCRIPTIONID=\"$TEST_SUBSCRIPTION\" " +
                 "Parameters__aksResourceId=\"$(cat \"$BOOTSTRAP_DIR/cluster-id\")\" " +
+                "Parameters__supportingGroup=\"$DEPLOY_RG\" Parameters__supportingSubscription=\"$TEST_SUBSCRIPTION\" " +
                 "KUBECONFIG=\"$BOOTSTRAP_DIR/ambient-kubeconfig\"",
                 counter);
             await auto.TypeAsync("aspire deploy");

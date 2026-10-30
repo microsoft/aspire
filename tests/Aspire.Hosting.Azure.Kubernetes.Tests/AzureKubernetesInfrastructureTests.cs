@@ -1424,9 +1424,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
-        // The provisioned cluster name comes from a Bicep output, and no resource group is
-        // saved in deployment state, so the step must fall back to the az resource list query.
-        aks.Resource.Outputs["name"] = clusterName;
+        // The cluster ID is authoritative even when deployment state has no resource group.
+        aks.Resource.Outputs["id"] = $"/subscriptions/{subscriptionId}/resourceGroups/queried-rg/providers/Microsoft.ContainerService/managedClusters/{clusterName}";
 
         var invocations = new List<string>();
         aks.Resource.AzCliPathResolverForTesting = () => "/usr/bin/az";
@@ -1483,7 +1482,6 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         // guard the call site: reverting either call to an unscoped invocation fails here.
         Assert.Equal(
             [
-                $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [].resourceGroup -o tsv --subscription \"{subscriptionId}\"",
                 $"aks get-credentials --resource-group \"queried-rg\" --name \"{clusterName}\" --file - --subscription \"{subscriptionId}\""
             ],
             invocations);
@@ -1527,7 +1525,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         var aks = builder.AddAzureKubernetesEnvironment("aks")
             .AsExistingInResourceGroup(clusterName, clusterResourceGroup, clusterSubscriptionId);
 
-        aks.Resource.Outputs["name"] = clusterName;
+        aks.Resource.Outputs["id"] = $"/subscriptions/{clusterSubscriptionId}/resourceGroups/{clusterResourceGroup}/providers/Microsoft.ContainerService/managedClusters/{clusterName}";
 
         var invocations = new List<string>();
         aks.Resource.AzCliPathResolverForTesting = () => "/usr/bin/az";
@@ -1752,7 +1750,12 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         }
 
         aks.Resource.Scope = new AzureBicepResourceScope(scopeResourceGroup, scopeSubscriptionId);
-        aks.Resource.Outputs["name"] = clusterName;
+        var expectedResourceGroup = crossResourceGroup ? clusterResourceGroup : scopeResourceGroup;
+        var expectedSubscriptionId = crossSubscription ? clusterSubscriptionId : scopeSubscriptionId;
+        aks.Resource.Outputs["id"] = $"/subscriptions/{expectedSubscriptionId}/resourceGroups/{expectedResourceGroup}/providers/Microsoft.ContainerService/managedClusters/{clusterName}";
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        await Verify(manifest.BicepText, "bicep").UseParameters(crossResourceGroup, crossSubscription);
 
         var invocations = new List<string>();
         aks.Resource.AzCliPathResolverForTesting = () => "/usr/bin/az";
@@ -1794,15 +1797,17 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             ReportingStep = reportingStep
         });
 
-        var expectedResourceGroup = crossResourceGroup ? clusterResourceGroup : scopeResourceGroup;
-        var expectedSubscriptionId = crossSubscription ? clusterSubscriptionId : scopeSubscriptionId;
         Assert.Equal(
             [$"aks get-credentials --resource-group \"{expectedResourceGroup}\" --name \"{clusterName}\" --file - --subscription \"{expectedSubscriptionId}\""],
             invocations);
     }
 
-    [Fact]
-    public async Task GetCredentialsStepFallsBackToDeploymentStateForSubscriptionScopedResources()
+    [Theory]
+    [InlineData("/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/app-rg/providers/Microsoft.ContainerService/managedClusters/subscription-scoped-aks", true)]
+    [InlineData("", false)]
+    [InlineData("invalid", false)]
+    [InlineData("/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/app-rg/providers/Microsoft.Storage/storageAccounts/not-aks", false)]
+    public async Task GetCredentialsStepRequiresValidClusterId(string resourceId, bool valid)
     {
         const string subscriptionId = "00000000-0000-0000-0000-000000000001";
         const string clusterName = "subscription-scoped-aks";
@@ -1821,10 +1826,9 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
-        // A subscription-scoped Scope pins no resource group, and reading AzureBicepResourceScope.ResourceGroup
-        // in that state throws, so the step must fall back rather than fail.
+        // A subscription-scoped module pins no resource group; the cluster ID supplies it.
         aks.Resource.Scope = AzureBicepResourceScope.CreateForSubscription(subscriptionId);
-        aks.Resource.Outputs["name"] = clusterName;
+        aks.Resource.Outputs["id"] = resourceId;
 
         var invocations = new List<string>();
         aks.Resource.AzCliPathResolverForTesting = () => "/usr/bin/az";
@@ -1860,13 +1864,22 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         aks.Resource.ProvisioningTaskCompletionSource.TrySetResult();
 
         await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
-        await getCredentialsStep.Action(new PipelineStepContext
+        var stepContext = new PipelineStepContext
         {
             PipelineContext = pipelineContext,
             ReportingStep = reportingStep
-        });
+        };
+        if (!valid)
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => getCredentialsStep.Action(stepContext));
+            Assert.Equal("The Azure deployment outputs for AKS environment 'aks' do not contain a valid cluster resource ID.", exception.Message);
+            Assert.Empty(invocations);
+            return;
+        }
 
-        // The scope subscription matches deployment state, so the saved resource group still applies.
+        await getCredentialsStep.Action(stepContext);
+
         Assert.Equal(
             [$"aks get-credentials --resource-group \"app-rg\" --name \"{clusterName}\" --file - --subscription \"{subscriptionId}\""],
             invocations);

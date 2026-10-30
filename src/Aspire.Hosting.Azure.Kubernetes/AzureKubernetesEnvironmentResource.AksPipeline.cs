@@ -206,17 +206,16 @@ public partial class AzureKubernetesEnvironmentResource
     /// </summary>
     private async Task GetAksCredentialsAsync(PipelineStepContext context)
     {
-        // Get the actual provisioned cluster name from the Bicep output.
-        // The Azure.Provisioning SDK may add a unique suffix to the name
-        // (e.g., take('aks-${uniqueString(resourceGroup().id)}', 63)).
-        var clusterName = await NameOutputReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false)
-            ?? Name;
+        // Use the cluster reference resolved by Bicep, not the module's supporting-infrastructure scope.
+        var resourceId = await Id.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+        var cluster = ParseAksResourceId(resourceId)
+            ?? throw new InvalidOperationException($"The Azure deployment outputs for AKS environment '{Name}' do not contain a valid cluster resource ID.");
 
         await GetAksCredentialsAsync(
             context,
-            clusterName,
-            savedResourceGroup: null,
-            subscriptionId: null,
+            cluster.Name,
+            savedResourceGroup: cluster.ResourceGroupName,
+            subscriptionId: cluster.SubscriptionId!,
             verifyClusterExists: false).ConfigureAwait(false);
     }
 
@@ -224,7 +223,7 @@ public partial class AzureKubernetesEnvironmentResource
         PipelineStepContext context,
         string clusterName,
         string? savedResourceGroup,
-        string? subscriptionId,
+        string subscriptionId,
         bool verifyClusterExists)
     {
         var getCredsTask = await context.ReportingStep.CreateTaskAsync(
@@ -240,19 +239,6 @@ public partial class AzureKubernetesEnvironmentResource
                 // Defense-in-depth: validate that values used as CLI arguments
                 // contain only expected characters (alphanumeric, hyphens, underscores, dots).
                 ValidateAzureResourceName(clusterName, "cluster name");
-
-                if (subscriptionId is null)
-                {
-                    // Resolve the scope this cluster actually lives in before touching the CLI. A cluster
-                    // adopted via AsExistingInResourceGroup(...) can sit outside the app's own
-                    // subscription/resource group, and its Bicep reference targets that scope.
-                    var (scopedSubscription, scopedResourceGroup) = GetExplicitScopeValues();
-                    (subscriptionId, savedResourceGroup) = await ResolveDeploymentScopeAsync(
-                        scopedSubscription,
-                        scopedResourceGroup,
-                        context.Services,
-                        context.CancellationToken).ConfigureAwait(false);
-                }
 
                 ValidateAzureResourceName(subscriptionId, "subscription ID");
 
@@ -401,7 +387,7 @@ public partial class AzureKubernetesEnvironmentResource
             context,
             clusterResourceId.Name,
             clusterResourceId.ResourceGroupName,
-            clusterResourceId.SubscriptionId,
+            clusterResourceId.SubscriptionId!,
             verifyClusterExists: true).ConfigureAwait(false);
     }
 
@@ -429,7 +415,11 @@ public partial class AzureKubernetesEnvironmentResource
             return null;
         }
 
-        var resourceId = JsonNode.Parse(outputsJson)?["id"]?["value"]?.GetValue<string>();
+        return ParseAksResourceId(JsonNode.Parse(outputsJson)?["id"]?["value"]?.GetValue<string>());
+    }
+
+    private static ResourceIdentifier? ParseAksResourceId(string? resourceId)
+    {
         if (!ResourceIdentifier.TryParse(resourceId, out var parsedResourceId) ||
             parsedResourceId is null ||
             string.IsNullOrEmpty(parsedResourceId.SubscriptionId) ||
@@ -693,36 +683,6 @@ public partial class AzureKubernetesEnvironmentResource
                 "Azure CLI (az) not found. Install it from https://learn.microsoft.com/cli/azure/install-azure-cli");
         }
         return azPath;
-    }
-
-    /// <summary>
-    /// Gets the subscription and resource group this resource explicitly targets, if any.
-    /// </summary>
-    /// <remarks>
-    /// Explicit existing-cluster scopes take precedence over the module's
-    /// <see cref="AzureBicepResource.Scope"/>, which controls supporting infrastructure
-    /// and locally scoped cluster references. Values are returned unresolved because they may be a literal string, a
-    /// <see cref="ParameterResource"/>, or a <see cref="BicepOutputReference"/>.
-    /// </remarks>
-    private (object? Subscription, object? ResourceGroup) GetExplicitScopeValues()
-    {
-        if (this.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existing) &&
-            !existing.IsTenantScope && (existing.ResourceGroup is not null || existing.Subscription is not null))
-        {
-            // A resource-group-only reference inherits its subscription from the Bicep module.
-            return (existing.Subscription ?? Scope?.Subscription, existing.ResourceGroup);
-        }
-
-        if (Scope is not null)
-        {
-            // A tenant-scoped resource pins neither value. HasResourceGroup must be checked first
-            // because the ResourceGroup getter throws for subscription- and tenant-scoped resources.
-            return Scope.IsTenantScope
-                ? (null, null)
-                : (Scope.Subscription, Scope.HasResourceGroup ? Scope.ResourceGroup : null);
-        }
-
-        return (null, null);
     }
 
     /// <summary>

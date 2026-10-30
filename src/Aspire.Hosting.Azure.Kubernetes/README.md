@@ -56,6 +56,8 @@ var aks = builder.AddAzureKubernetesEnvironment("aks")
 
 Use `AsExisting(clusterName, null)` when the cluster is in the application's Azure resource group. `PublishAsExisting` applies only when publishing/deploying.
 
+An explicit existing-cluster resource group and subscription select the cluster independently of `Resource.Scope`, which controls the module deploying supporting infrastructure. A resource-group-only cluster reference inherits the module's subscription; an unscoped reference inherits its resource group too. Credential retrieval uses the cluster resource ID returned by provisioning.
+
 Aspire references the cluster without changing its node pools, networking, or add-ons, and does not assign workloads to an automatically created `workload` node pool. Cluster-creation settings do not reconfigure an existing cluster. Explicit node-pool affinity must name a pool that already exists. The cluster must have a kubelet managed identity for registry access; workloads using Azure workload identity also require OIDC and workload identity to be enabled beforehand. Any ingress add-ons used by the application must already be installed and configured.
 
 Existing private clusters can have their public DNS name disabled. The cluster FQDN output falls back to the private DNS name, or an empty string if neither name is available. Deploying to a private cluster still requires network connectivity and DNS resolution from the deployment host.

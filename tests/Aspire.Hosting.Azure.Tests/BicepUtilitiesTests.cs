@@ -36,6 +36,9 @@ public class BicepUtilitiesTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal("module-rg", scope["resourceGroup"]?.GetValue<string>());
         Assert.Equal("module-subscription", scope["subscription"]?.GetValue<string>());
+
+        using var template = resource.GetBicepTemplateFile();
+        await Verify(await File.ReadAllTextAsync(template.Path), "bicep").UseParameters(appService);
     }
 
     [Fact]
