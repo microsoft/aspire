@@ -260,22 +260,12 @@ public class ExpressionResolverTests
             Version = DcpVersion.Dev,
             Containers = new DcpContainersInfo { Runtime = "", HostName = "", Error = "context deadline exceeded" }
         };
-        var testServiceProvider = new TestServiceProvider();
-        testServiceProvider.AddService(Options.Create(new DcpOptions()));
-        testServiceProvider.AddService(new DistributedApplicationModel(builder.Resources));
-        var serviceProvider = new DcpInfoServiceProvider(testServiceProvider, dcpInfo);
+        var serviceProvider = new TestServiceProvider(dcpInfo: dcpInfo)
+            .AddService(Options.Create(new DcpOptions()))
+            .AddService(new DistributedApplicationModel(builder.Resources));
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(test.Resource, DistributedApplicationOperation.Run, serviceProvider).DefaultTimeout();
         Assert.Equal("http://host.docker.internal:18889", config["OTEL_EXPORTER_OTLP_ENDPOINT"]);
-    }
-
-    private sealed class DcpInfoServiceProvider(IServiceProvider inner, DcpInfo dcpInfo) : IServiceProvider, IDcpDependencyCheckService
-    {
-        public object? GetService(Type serviceType) =>
-            serviceType == typeof(IDcpDependencyCheckService) ? this : inner.GetService(serviceType);
-
-        public Task<DcpInfo?> GetDcpInfoAsync(bool force = false, CancellationToken cancellationToken = default) =>
-            Task.FromResult<DcpInfo?>(dcpInfo);
     }
 
     [Fact]
